@@ -1,6 +1,6 @@
 # Teardown correction and retry boundary proof
 
-Status: active — independent review of `de336a7d`; F1 accepted in its reviewed scope, F2 and R50 remain partial.
+Status: evidence — named teardown/native proof obligations completed after reviewer takeover from `82354620`; remaining qualification follows the current receipt and `canopi-j571.3`.
 Tracking: `canopi-j571.1`; existing `feature/raster-rework-completion`.
 Current guidance: [sole prompt](completion-agent-prompt.md), [C0–C5](completion-design.md), [ownership contract](completion-ownership-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#final-correction-debrief-to-deliver).
 

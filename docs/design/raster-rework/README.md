@@ -1,13 +1,13 @@
 # Raster rework handoffs and debrief
 
-Status: active — continue `canopi-j571.1` from reviewed candidate `de336a7d`; previous assignments are evidence.
+Status: partial — local ownership/retry repair work completed after `82354620`; remaining qualification is tracked in `canopi-j571.3`.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [current independent review](completion-review-de336a7d.md) verifies the five
-supplied frontend repairs and scoped native proofs. A teardown correction,
-R50 boundary proof and remaining required evidence are the next bounded work.
-Whole-candidate acceptance remains partial; use the sole completion prompt.
+The [current receipt](completion-receipt.md#current-correction-acceptance) records
+reviewer execution, actual command/publication proof, final gates and scoped live
+smoke. Remaining whole-candidate qualification stays partial; do not restart the
+completed repair prompts.
 
 Start with the completion prompt and correction decisions, then C0–C5 and the
 source-import contract. The implementation agent continues all authorized repairs,

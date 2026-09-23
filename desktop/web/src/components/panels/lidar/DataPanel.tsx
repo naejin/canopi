@@ -463,7 +463,7 @@ function ImportJobStatus({
   return (
     <div className={styles.importStatus} role="status">
       <span className={styles.importState}>
-        {active ? t('canvas.lidar.data.importing') : t(`canvas.lidar.state.${job.state}`)}
+        {active ? t('canvas.lidar.data.importing') : t(`canvas.lidar.jobState.${job.state}`)}
       </span>
       {job.progress ? (
         <progress

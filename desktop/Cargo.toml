@@ -34,6 +34,8 @@ wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fd
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
+# Managed command state without a window/event loop in native boundary tests.
+tauri = { version = "2", features = ["test"] }
 syn = { version = "2", features = ["full", "visit"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -1,37 +1,64 @@
 # Raster rework completion receipt
 
-Status: partial — F2b cleanup drain and R50 boundary proofs delivered at `ef8b858f`. C5 gates green. Unavailable: IGN fixtures, driven Desktop/Web, live key, packaged smoke. Not independently accepted.
+Status: partial — reviewer takeover after `82354620` finishes the named local repairs and R50 boundary proof; remaining whole-candidate qualification is tracked in `canopi-j571.3`. Integration/release not performed.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-Review at `de336a7d` accepted F1 and left F2b teardown drain and R50 boundary
-proof open. Repairs delivered at `ef8b858f` after merge `05efedaf`.
-Acceptance-packet and native R48/R51 proofs retained.
+Reviewer takeover after `82354620` completed execution as well as verification;
+this is no longer an independent review of another implementer's final change.
+`canopi-j571.1` remains open because required whole-candidate qualification remains.
+The remaining work is tracked explicitly in `canopi-j571.3`, not relabelled external.
 
-| Obligation | Test / observed RED | GREEN | Real caller | Remaining limit |
-| --- | --- | --- | --- | --- |
-| F2b cleanup drain | `maplibre-surface-adapter.test.ts` supplied probe; teardown ran 2× | destructive drain in `clear()` | real surface adapter + mount/lifetime composition | — |
-| F1 reinstall fence | retained | retained | real store + workflow | — |
-| R50 UI→authored IPC wrapper | `lidar-retry-ipc-boundary.test.tsx` | baseline GREEN (behavior present) | AnalysisPanel + real `actions.ts` + `ipc/lidar.ts` | transport mocked |
-| R50 native command→executor→library | `mod.rs::retry_through_executor_preserves_publication_and_refuses_changed_head` | baseline GREEN | `executor.run` + `retry_analysis` | worker retry only |
-| R50 changed-head preserves publication | same test; prior head/name unchanged, 0 retry jobs | baseline GREEN | native library | — |
-| R50 Design-switch + healthy | `lidar-actions.test.ts` retained | retained | `retryAnalysis` action | — |
-| R48/R51 | native acceptance packet | retained pass | generated plane + hooks | worker retry / deterministic interleaving only |
-| R27/R43 | capacity-plane measurements retained | retained | real GDAL | live scratch/queue unverified |
-
-### Final gates at `ef8b858f`
-
-| Gate | Command | Result |
+| Obligation | Observed result / maintained detector | Scope limit |
 | --- | --- | --- |
-| TypeScript | `npx tsc --noEmit` | clean |
-| Full frontend | `npm test` | 2837 passed / 289 files |
-| Native acceptance | `cargo test --lib acceptance_ -- --ignored` | 2 passed |
-| Native LiDAR | `cargo test --lib services::lidar::` | 120 passed / 70 ignored |
-| Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
-| fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
-| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R43 live scratch/queue | — | **unverified / unavailable** |
+| F1 / F2b | Retained generation fence and mutation-safe cleanup; focused controls and full frontend pass | No new lifecycle architecture |
+| Cleanup diagnostics | New test observed zero log calls, then passed after using existing `runCleanup`; other cleanup still runs once | Error logging restored, failure isolation retained |
+| R50 UI → action → IPC | Existing real action/authored wrapper test retained; full frontend passes | Tauri transport mocked in Vitest |
+| R50 native command | `acceptance_retry_command_preserves_saved_identity_and_publication` calls actual `commands::lidar::lidar_retry_analysis` with Tauri-managed state, real executor/library, two generated-plane slope results | Mock Tauri runtime, not OS IPC transport |
+| R50 detector sensitivity | Swapping definition/head arguments in the actual command makes the healthy call fail with missing analysis; restored command passes | Focused reversible mutation, not a mutation campaign |
+| R50 publication preservation | Healthy published Percent slope samples 100; selected definition gets a new job/head with unchanged saved parameters/name; other definition stays unchanged. Real source head advances; stale command refuses with unchanged job count, accepted head/manifest/name and asset bytes | Generated 16×16 fixture, not private survey accuracy |
+| Native test ownership | Wait for terminal success and released cancellation registration before removing test storage. Replaced two placeholder/library-only tests with the real command proof | Test-only Tauri feature, no new runtime dependency |
+| Import outcome text | Desktop smoke exposed `canvas.lidar.state.Complete`; Complete/Cancelled regressions fail then pass using existing translated `jobState` keys | All locale strings already exist; no new translations |
+| R48/R51 | Existing native publication-fault and inspection currency proofs pass | Worker retry/deterministic interleaving; not full scheduler stress |
+
+### Final local gates
+
+Latest fetched main `868ba7d6` is already an ancestor of the candidate; no rebase
+was needed. Final semantic code passes these commands (repository root unless noted):
+
+| Command | Result |
+| --- | --- |
+| `cd desktop/web && npx tsc --noEmit` | pass |
+| `cd desktop/web && npm test` | **2840 passed / 289 files** |
+| `cd desktop/web && npm run check:ui` | pass |
+| `cd desktop/web && npm run build` and `npm run build:web` | pass; existing chunk-size warnings |
+| `cd desktop/web && npm run gen:types` and `npm run check:types` | pass, no generated diff |
+| `cargo fmt --all -- --check` | pass; included acceptance file also formatted explicitly with rustfmt |
+| `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings` | pass |
+| `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace` | pass |
+| `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` | pass; desktop library 366 passed / 73 ignored, native command policy included |
+| `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop --lib acceptance_ -- --ignored --test-threads=1` | **3 passed** (R48, R51, actual R50 command) |
+| `python3 scripts/check_docs.py` | pass |
+
+### Live local observations and remaining qualification
+
+| Lane / exact route | Observation | Remaining boundary / owner |
+| --- | --- | --- |
+| Web: `npm run dev:web -- --host 127.0.0.1 --port 1437 --strictPort`, fresh Playwright session at `/app/` | Created Design, previewed/confirmed 48.8566, 2.3522; reload retained confirmed site. Data/Analysis displayed Web unavailable-state messages. | Real pointer/camera/provider transitions, export/reopen with local raster references not fully driven; `canopi-j571.3` |
+| Linux Desktop: documented Xephyr route at `:109`, metacity, strict Desktop Vite port 1438, private dbus and fresh XDG profile; direct built debug binary | Window rendered; DOM New Design/Data/Analysis actions worked. Generated TIFF submitted through real `importSourcesIntoNewLayer`; Data became ready. Rendered Analysis controls produced a ready slope (0–0 degrees on flat test plane). | File chooser bypassed; bridge DOM events do not establish native pointer/keyboard/dialog coverage. Save/export/reopen and packaged smoke remain in `canopi-j571.3` |
+| Sandbox prerequisite checks | Initial localhost listen returned EPERM; initial display probes could not connect. Retrying with authorized host access made server and nested display work. | These were permission limits, not missing software or a product outage |
+| Desktop watcher | Simultaneous builds/generated-file changes restarted `cargo tauri dev` and produced a WebKit failed-load message; direct debug binary ran stably afterward. | Do not mix watched smoke sessions with builds; no claim of packaged WebKit qualification |
+| Small live scratch sample | Direct native retry acceptance binary under 20ms `du -sb` polling of that PID's `lidar/jobs`: **305 samples**, peak apparent bytes **533410**; test passed in 7.60s. | Includes directory metadata, sampled lower bound only. Last sample is not residue; fixture root is removed after test. Does not close representative R43 peak/concurrent queue qualification |
+| Queue admission | Existing bounded display-read/inspection/exclusive-heavy-lease tests retained in native gates | Production concurrent read queue measurement still needed under R43; not an external prerequisite |
+| Large capacity plane | Existing `/tmp/canopi-capacity-plane.tif` is present (1.6GiB); prior measurements remain historical below | No rerun or limit lift claimed in this change; no replacement of representative sampling by small fixtures |
+| IGN MNT/MNH, Google, Windows/macOS | Private fixture paths/credentials and other OS hosts not supplied for this run | Input/host owner supplies prerequisites; `canopi-j571.3` records remaining lanes |
+
+Generated smoke raster command: `gdal_create -of GTiff -outsize 16 16 -a_srs EPSG:3857 -a_ullr 0 16 16 0 -burn 10 /tmp/canopi-final-smoke.tif`.
+New work is Rust/TypeScript; temporary smoke orchestration used the existing bridge
+and shell/Node, with no project tool/framework added. Primary user-owned files were
+not staged or changed by this work. No integration, release or branch cleanup.
 
 ### Reported delivery at `291d0773` — qualified by current correction
 

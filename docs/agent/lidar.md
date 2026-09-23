@@ -1,6 +1,6 @@
 # LiDAR implementation guide
 
-Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `de336a7d` remains partial; follow the [current ownership repairs and remaining proof](../design/raster-rework/completion-review-de336a7d.md). The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
+Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate work after `82354620` has the named ownership repairs and real retry-command proof; whole-candidate qualification remains partial. See the [current receipt](../design/raster-rework/completion-receipt.md#current-correction-acceptance) and `canopi-j571.3`. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
 The [ownership correction](../design/raster-rework/completion-ownership-design.md)
 owns the current map-lifecycle and import-settlement repair decisions. Its TDD
@@ -10,15 +10,14 @@ repairs are not independently accepted and required local proof remains in scope
 The [acceptance packet](../design/raster-rework/completion-acceptance-tests.md) at
 `0a3a29f4` adds maintained TS caller regressions and Rust test-only fault hooks.
 R48/R51 native proof and all five repaired frontend cases pass independently at
-`592e04ed`. F1 restart ownership passes at `de336a7d`; cleanup draining still requires the
-linked correction. R50 IPC/native command and preservation proof remains incomplete. The primary docs checkout does not contain those tests.
+`592e04ed`. F1/F2b and cleanup diagnostics pass after reviewer takeover. The GDAL acceptance lane now includes the actual Tauri-managed retry command, two real published results, stale-head refusal and byte preservation. Tauri test support is dev-only; do not substitute a copied executor closure or a placeholder manifest for this proof.
 
 ## Accepted direction and current assignment
 
 The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-design.md): an ordered collection of source COGs, topmost-valid composition shared by display/analysis, whole-layer presentation visibility, and no compulsory merged-source raster for new edits. [ADR 0027](../adr/0027-ordered-cog-data-layers.md) supersedes ADR 0026 for new source composition. The correction at `34e4ded4` is [independently accepted in scope](../design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4); integration and release remain separate.
 
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
-`canopi-j571.1` from candidate `de336a7d`, with foundation integrated at `f61f8494`.
+`canopi-j571.1` after candidate `82354620`, with foundation integrated at `f61f8494`.
 The [ownership correction](../design/raster-rework/completion-ownership-design.md)
 M/L owners are delivered (`mountBasemapLifecycle`, ordered library reads); see the
 [receipt](../design/raster-rework/completion-receipt.md#current-correction-acceptance).

@@ -233,4 +233,33 @@ describe('MapLibre surface adapter', () => {
     expect(teardown).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a teardown failure and still releases unrelated resources', async () => {
+    const logError = vi.fn()
+    const cleanup = vi.fn()
+    const error = new Error('cleanup failed')
+    const adapter = createMapLibreSurfaceAdapter<FakeMap>({
+      loadMapLibre: vi.fn(async () => maplibre), logError,
+    })
+    adapter.attach(container)
+    adapter.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target, style: { version: 8, sources: {}, layers: [] },
+        interactive: false, pitchWithRotate: false, dragRotate: false, touchZoomRotate: false,
+      }) as FakeMap,
+      onCreate: ({ lifetime }) => {
+        lifetime.addCleanup(cleanup)
+        lifetime.addCleanup(() => { throw error })
+      },
+    })
+    await flushPromises()
+    adapter.destroy()
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(logError).toHaveBeenCalledWith('Failed to clean up MapLibre surface resource:', error)
+    adapter.destroy()
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(logError).toHaveBeenCalledTimes(1)
   })
+
+
+})

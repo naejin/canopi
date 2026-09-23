@@ -215,3 +215,174 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[test]
+#[ignore = "requires GDAL on PATH; real published plane and Tauri-managed command state"]
+fn acceptance_retry_command_preserves_saved_identity_and_publication() {
+    use crate::native_operation::NativeOperationExecutor;
+    use tauri::Manager;
+
+    fn await_job(library: &LidarLibrary, job: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            let state: String = library
+                .catalogue()
+                .unwrap()
+                .query_row(
+                    "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
+                    [job],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            if state == "complete" && !library.inner.cancel_flags.lock().unwrap().contains_key(job)
+            {
+                return;
+            }
+            assert!(
+                !matches!(state.as_str(), "failed" | "cancelled"),
+                "job {job}: {state}"
+            );
+            assert!(
+                std::time::Instant::now() < deadline,
+                "job {job} did not settle: {state}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    fn files(path: &Path, output: &mut Vec<(PathBuf, Vec<u8>)>) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                files(&path, output);
+            } else {
+                output.push((path.clone(), std::fs::read(path).unwrap()));
+            }
+        }
+    }
+    fn job_count(library: &LidarLibrary) -> i64 {
+        library
+            .catalogue()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM lidar_analysis_jobs", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    }
+    let root = scratch_root("acceptance-retry-command");
+    let library = LidarLibrary::open(&root).unwrap();
+    let executor = NativeOperationExecutor::production();
+    library.attach_executor(executor.clone());
+    let app = tauri::test::mock_builder()
+        .manage(library.clone())
+        .manage(executor)
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let layer = plane_layer(&library, &root, 16, 16);
+    let source = catalogue::head_generation(&library.catalogue().unwrap(), &layer)
+        .unwrap()
+        .unwrap();
+    let mut receipts = Vec::new();
+    for (name, unit) in [
+        ("North slope", LidarSlopeUnit::Degrees),
+        ("South slope", LidarSlopeUnit::Percent),
+    ] {
+        let receipt = library
+            .create_analysis(
+                &layer,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(unit),
+                    name: None,
+                },
+                Some(name.to_string()),
+            )
+            .unwrap();
+        await_job(&library, &receipt.job_id);
+        receipts.push(receipt);
+    }
+    let alpha = &receipts[0].definition_id;
+    let beta = &receipts[1].definition_id;
+    let head = |id: &str| {
+        catalogue::head_analysis_generation(&library.catalogue().unwrap(), id)
+            .unwrap()
+            .unwrap()
+    };
+    let first_alpha = head(alpha);
+    let first_beta = head(beta);
+    assert_eq!(first_beta.name.as_deref(), Some("South slope"));
+    let parameters = definition_row(&library.catalogue().unwrap(), beta)
+        .unwrap()
+        .unwrap()
+        .parameters_json;
+    // The fixture is a real published raster, readable through normal inspection.
+    let request = common_types::lidar::LidarSampleRequest {
+        kind: common_types::lidar::LidarSampleEntityKind::Analysis,
+        entity_id: beta.clone(),
+        expected_generation_id: first_beta.id.clone(),
+        request_id: "retry-control".into(),
+        longitude: (5.5_f64 / 6_378_137.0).to_degrees(),
+        latitude: (2.0 * (10.5_f64 / 6_378_137.0).exp().atan() - std::f64::consts::FRAC_PI_2)
+            .to_degrees(),
+    };
+    let sample = library.sample(&request, &AtomicBool::new(false)).unwrap();
+    assert!(
+        matches!(sample, common_types::lidar::LidarSampleOutcome::Value { value, .. } if (value - 100.0).abs() < 0.01),
+        "{sample:?}"
+    );
+
+    // This is the actual command function, with Tauri-managed State arguments.
+    let retry = tauri::async_runtime::block_on(crate::commands::lidar::lidar_retry_analysis(
+        app.state(),
+        app.state(),
+        beta.clone(),
+        source.id.clone(),
+    ))
+    .unwrap();
+    assert_eq!(&retry.definition_id, beta);
+    assert_ne!(retry.job_id, receipts[1].job_id);
+    await_job(&library, &retry.job_id);
+    assert_eq!(head(alpha).id, first_alpha.id);
+    let accepted = head(beta);
+    assert_ne!(accepted.id, first_beta.id);
+    assert_eq!(accepted.name, first_beta.name);
+    assert_eq!(
+        definition_row(&library.catalogue().unwrap(), beta)
+            .unwrap()
+            .unwrap()
+            .parameters_json,
+        parameters
+    );
+    assert_eq!(job_count(&library), 3);
+
+    // Advance the real source, then refuse the old expected generation before enqueue.
+    publish_source(&library, &layer, &root.join("plane.tif"), true);
+    assert_ne!(
+        catalogue::head_generation(&library.catalogue().unwrap(), &layer)
+            .unwrap()
+            .unwrap()
+            .id,
+        source.id
+    );
+    let mut accepted_bytes = Vec::new();
+    files(&root.join("lidar/assets"), &mut accepted_bytes);
+    assert!(!accepted_bytes.is_empty());
+    let refused = tauri::async_runtime::block_on(crate::commands::lidar::lidar_retry_analysis(
+        app.state(),
+        app.state(),
+        beta.clone(),
+        source.id.clone(),
+    ))
+    .unwrap_err();
+    assert!(refused.contains("source head changed"), "{refused}");
+    assert_eq!(job_count(&library), 3, "refusal must not enqueue work");
+    assert_eq!(head(beta).id, accepted.id);
+    assert_eq!(head(beta).manifest_json, accepted.manifest_json);
+    assert_eq!(head(beta).name, accepted.name);
+    assert_eq!(head(alpha).id, first_alpha.id);
+    for (path, bytes) in accepted_bytes {
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "{}", path.display());
+    }
+    drop(app);
+    drop(library);
+    std::fs::remove_dir_all(root).unwrap();
+}

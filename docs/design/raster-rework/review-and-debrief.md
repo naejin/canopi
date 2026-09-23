@@ -1,6 +1,6 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — independent review at `de336a7d`: F1 verified, F2b regression and R50 proof gap; current next-use evaluation governs the final synthesis.
+Status: evidence — reviewer takeover after `82354620` completed named local repairs/proofs; remaining qualification is `canopi-j571.3`.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
@@ -449,45 +449,35 @@ Broader skill or shared tooling changes need their own user authorization.
 
 
 
-**F2b/R50 synthesis at `ef8b858f` (partial).** Commands live in the
-[receipt](completion-receipt.md#current-correction-acceptance). Independent
-acceptance remains a separate entry by the main reviewer.
+**Reviewer execution closeout after `82354620`.** Exact commands, observations and
+limitations are in the [receipt](completion-receipt.md#current-correction-acceptance).
 
-1. **Product outcome.** Cleanup drain is safe when a cleanup unregisters
-   another registration; R50 retry identity holds through the authored IPC
-   wrapper and the native command→executor→library seam with prior-publication
-   preservation. Full frontend 2837, native 120, acceptance 2/2, gallery and
-   builds green. Driven Desktop/Web remains unobserved.
-2. **Escapes and causes.** F2b descending-index drain double-ran a cleanup
-   after splice: implementation. R50 fixture moved `prior_result`: test setup.
-3. **Necessity and reuse.** Reused lifetime registry, `retry_analysis`,
-   `NativeOperationExecutor`, AnalysisPanel. No new framework.
-4. **Working-method/tool changes.** Supplied F2b probe reproduced exactly (2×
-   vs 1). Keep.
-5. **Total delivery effort.** One courier-free continuation; cost unknown.
-6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
-   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
-   Integration and release separate.
-
-**F2b/R50 synthesis at `ef8b858f` (partial).** Commands live in the
-[receipt](completion-receipt.md#current-correction-acceptance). Independent
-acceptance remains a separate entry by the main reviewer.
-
-1. **Product outcome.** Cleanup drain is safe when a cleanup unregisters a
-   listener; R50 retry identity holds through the authored IPC wrapper and the
-   native command→executor→library with changed-head publication preservation.
-   Full frontend 2837, native 120, acceptance 2/2, gallery/builds/bindings
-   green. Driven Desktop/Web remains unobserved.
-2. **Escapes and causes.** F2b descending drain + splice shifted a cleanup into
-   the next index: implementation. R50 fixture move: test setup.
-3. **Necessity and reuse.** Reused surface adapter drain, `retry_analysis`,
-   `NativeOperationExecutor`, AnalysisPanel. No new framework.
-4. **Working-method/tool changes.** Supplied F2b probe reproduced exactly (2×
-   teardown); R50 IPC boundary kept the real action/wrapper. Keep.
-5. **Total delivery effort.** One courier-free continuation; cost unknown.
-6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
-   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
-   Integration and release separate.
+1. **Outcome.** Actual native retry command now has managed-state proof with real
+   publications and stale-head byte preservation. Cleanup logging is restored.
+   Live smoke found and fixed untranslated import outcomes. Required code gates
+   pass; remaining qualification is explicitly tracked, not declared complete.
+2. **Escapes/ownership.** Earlier library/executor-only tests and placeholder assets
+   were test-boundary gaps and overstated evidence. Reviewer wording calling the
+   authored IPC wrapper generated was also wrong. Main agent took over execution;
+   this final change is locally verified, not independently reviewed by itself.
+3. **Necessity/reuse.** Reused existing GDAL plane, publication/readers and Tauri's
+   test runtime; deleted 252 lines of misleading fixture tests. No new runtime
+   dependency/framework. Preserve the scoped native and caller regressions.
+4. **Method/tool evidence.** Keep the actual-command detector: reversed command
+   arguments failed as intended. Keep generated publication fixtures and healthy
+   read controls. Keep live smoke: it caught a visible translation-key defect.
+   Permission-denied server/display checks succeeded with host access; do not
+   confuse sandbox limits with external prerequisites. Avoid watched Desktop dev
+   during builds; direct binary avoids restart interference. No new skill/tool
+   platform is warranted. New logging and terminal-label tests observed real RED.
+5. **Effort.** Cost unknown. Direct execution completed the repeatedly omitted
+   native seam without another implementation-agent courier round; this is an
+   observed outcome, not a quantified savings claim.
+6. **Next.** `canopi-j571.3` owns remaining qualification (native chooser/input,
+   full persistence workflows, representative resource sampling, fixtures/keys,
+   platforms/package). Parent acceptance stays partial; integration/release remain
+   separately authorized. Retire repeated handoff prose rather than adding another
+   six-question report for the same slice.
 
 **F1/F2/R50 synthesis at `265b365c` (partial).** Commands live in the
 [receipt](completion-receipt.md#current-correction-acceptance). Independent

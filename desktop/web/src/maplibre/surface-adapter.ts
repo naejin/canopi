@@ -242,11 +242,7 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
     const pending = this.cleanups.splice(0)
     this.eventCleanups.clear()
     for (let i = pending.length - 1; i >= 0; i -= 1) {
-      try {
-        pending[i]!()
-      } catch {
-        // One throwing cleanup must not suppress the others.
-      }
+      this.runCleanup(pending[i]!)
     }
   }
 

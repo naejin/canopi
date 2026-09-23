@@ -33,6 +33,7 @@ vi.mock('../app/lidar/library-store', async () => {
 })
 
 import { DataPanel } from '../components/panels/lidar/DataPanel'
+import { lidarLibrary, openImportJob } from '../app/lidar/library-store'
 import { locale } from '../app/settings/state'
 
 function buttonByText(container: HTMLElement, text: string): HTMLButtonElement | undefined {
@@ -53,6 +54,8 @@ describe('Data panel import affordance', () => {
 
   beforeEach(() => {
     locale.value = 'en'
+    lidarLibrary.value = { layers: [], analyses: [], engine: { available: true, version: null, detail: null } }
+    openImportJob.value = null
     chooseFiles.mockReset()
     importIntoNew.mockClear()
     importIntoLayer.mockClear()
@@ -181,4 +184,19 @@ describe('Data panel import affordance', () => {
       { label: null, unknown: false },
     )
   })
+  it.each([['Complete', 'Import complete'], ['Cancelled', 'Import cancelled']] as const)(
+    'renders the translated %s import outcome', (state, label) => {
+      lidarLibrary.value = {
+        layers: [{ id: 'layer', name: 'Ground', measurement_kind: 'GroundElevation', units: 'm',
+          state: 'Ready', coverage_cells: '256', resolution_m: 1, bounds: null,
+          value_range: null, analysis_count: 0, display_range: null, tilesets: [] }],
+        analyses: [], engine: { available: true, version: null, detail: null },
+      }
+      openImportJob.value = { job_id: 'job', layer_id: 'layer', state, message: null, progress: null }
+      act(() => { render(<DataPanel />, container) })
+      expect(container.querySelector('[role="status"]')?.textContent).toContain(label)
+      expect(container.textContent).not.toContain('canvas.lidar.')
+    },
+  )
+
 })
