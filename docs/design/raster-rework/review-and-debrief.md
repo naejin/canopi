@@ -1,13 +1,13 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — review of `68852cbd` and reviewer test handoff `0a3a29f4`; implementation and independent acceptance pending.
+Status: evidence — independent review at `592e04ed`; supplied repairs verified, two ownership escapes remain; next-use evaluation below governs the final debrief.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `68852cbd` under `canopi-j571.1`.
+The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `592e04ed` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
@@ -15,7 +15,36 @@ named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
 
-### Reviewer-authored tests: next-use evaluation
+### Next-use evaluation after 592e04ed
+
+The supplied packet achieved its bounded purpose: all five frontend failures are
+repaired and both native proofs pass independently. It did not establish complete
+lifecycle ownership. Restart identity and retained cleanup were missed by the
+reviewer's packet and implementation self-review. Classify both as test gaps and
+reviewer oversights alongside the remaining implementation defects; no new
+architecture requirement or model-based cause is implied.
+
+Use the existing six-question final debrief; do not create another report. Include
+one compact row per material intervention with baseline/revision, classification,
+smallest change, observed RED or baseline GREEN, healthy control, next actual use,
+and keep/revise/drop/untested decision plus maintained test/guide or follow-up bead.
+
+| Intervention | Evidence needed before calling it effective |
+| --- | --- |
+| Generation/attempt-aware settlement | Restart and old-finally cases fail on baseline and pass with recovery and single-attempt controls |
+| Retained ownership test | Old cleanup registrations accumulate before repair; return to baseline after repair while dispatch and final clear still work |
+| R50 linked boundary proof | Selected saved identity survives actual action/adapter and command/library boundaries; mock limits stated |
+| Single consolidated execution | All feasible local proofs/gates completed before handoff; list only actual material decisions or external blockers |
+| Small tool/guide improvement | Named prior failure, smallest existing-tool change, healthy/failure controls and observed next use; otherwise mark benefit untested |
+
+Report self-review catches separately from review escapes. Report effort/cost and
+avoidable courier exchanges only when observed, otherwise unknown. Passing counts
+measure coverage outcomes, not cost savings. Keep the demonstrated native test seams
+and caller tests; extend their missing lifecycle cases. Do not add a new framework,
+skill, metrics service or generic checklist. Remove duplicated instructions instead
+of growing them. Main reviewer evaluates its own handoff omissions at acceptance.
+
+### Reviewer-authored tests: initial experiment
 
 At `68852cbd`, independent probes verified recovery/single-attempt progress, while
 map caller wiring and lifecycle gaps survived helper tests. The user selected a new

@@ -1,10 +1,29 @@
 # Raster rework completion receipt
 
-Status: partial — acceptance packet repairs delivered at `a41f76c7`; all five frontend RED cases green and native R48/R51 proofs preserved. C5 gates green. Unavailable: IGN fixtures, driven Desktop/Web, live key, packaged smoke. Not independently accepted.
+Status: partial — independent review at `592e04ed`: five supplied fixes and scoped R48/R51 proofs pass; F1/F2 ownership defects, R50 proof and required whole-candidate evidence remain.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
+
+The [current independent review and repair decisions](completion-review-592e04ed.md)
+supersede completion claims below. Reviewer rerun: **81/81 frontend acceptance,
+2/2 native proofs pass**. A separate restart probe fails; cleanup retention is
+source-confirmed. Full 2830/288 frontend and remaining C5 results below are reported
+by the implementer, not independently rerun.
+
+| Remaining boundary | Evidence / next obligation |
+| --- | --- |
+| F1 installation and attempt ownership | Old read error overwrites new status after reinstall; fence success/error/finally and replacement guard |
+| F2 cleanup retention | Explicit off retains cleanup closure; prove release before map destruction |
+| R50 retry identity | UI row proof retained; action/generated IPC/native command identity proof unfinished |
+| R43 resource evidence | Capacity-plane sampled memory and residue do not prove live peak scratch/concurrent queue behavior; run feasible existing gates or name blockers |
+| Driven app, fixtures, platforms/package | Record exact attempted route/prerequisite; distinguish local work from external absence |
+
+Update these rows in place after execution. No required local proof becomes external
+merely because it has not been written. R48/R51 scoped native proofs are complete.
+
+### Supplied packet repairs at 592e04ed
 
 Reviewer-authored acceptance packet at `0a3a29f4` reproduced 5 frontend RED
 cases and 2 passing native proofs. Repairs delivered at `a41f76c7` on the
@@ -35,6 +54,20 @@ not weakened; mocks that hid the returned-snapshot contract were corrected.
 | Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
 | fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
 | Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R50 IPC/native drive | — | **unavailable / unfinished local proof** |
+
+### Capacity plane measurements at `86c74b14` (GDAL 3.8.4)
+
+Command: `CANOPI_LIDAR_CAPACITY_PLANE=/tmp/canopi-capacity-plane.tif cargo test -p canopi-desktop --lib e2e_capacity_plane -- --ignored --test-threads=1`
+
+- Plane 20000×20000 Float32, 1,677,741,340 bytes uncompressed, synthetic z=0.25x+0.5y-100
+- Imported 396,979,300 valid cells; durable 4,951,015,369 bytes in 9 files; temporary 0; job scratch empty after settlement
+- Cold tile 8734 ms; three warm repeats 0/0/0 ms
+- Seam window: 16 samples match the analytic plane; holes: 4 declared rectangles read as exactly NoData
+- Sampled process tree every 50 ms: baseline 15 MiB, peak total 200 MiB, incremental 184 MiB (lower bound; 7177 complete samples)
+
+These are retained implementer measurements, not rerun by the reviewer. Sampled
+process memory is not peak scratch, queue or fault evidence.
+
 
 ### Reported delivery at `291d0773` — qualified by current correction
 

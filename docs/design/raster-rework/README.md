@@ -1,15 +1,13 @@
 # Raster rework handoffs and debrief
 
-Status: active — correction/source-import handoff continues `canopi-j571.1` from candidate `578a4f1c`; older assignments are evidence.
+Status: active — continue `canopi-j571.1` from reviewed candidate `592e04ed`; previous assignments are evidence.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [current independent review](completion-review-578a4f1c.md) retains R44–R51
-and supplies executable coverage cases, gated lifecycle scenarios and fixed repair
-decisions. Forty-four existing frontend tests passed; independent probes still
-found coverage, parser, attribution and settlement defects. Source-traced native
-obligations and missing final gates remain. The earlier decisions, C0–C5 and
-source-import amendment retain their scope. Whole-candidate acceptance is pending.
+The [current independent review](completion-review-592e04ed.md) verifies the five
+supplied frontend repairs and scoped native proofs. Two lifecycle ownership fixes,
+R50 boundary proof and remaining required evidence are the next bounded work.
+Whole-candidate acceptance remains partial; use the sole completion prompt.
 
 Start with the completion prompt and correction decisions, then C0–C5 and the
 source-import contract. The implementation agent continues all authorized repairs,

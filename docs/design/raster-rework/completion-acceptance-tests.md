@@ -1,10 +1,14 @@
 # Reviewer-authored raster acceptance tests
 
-Status: partial — executable handoff against `68852cbd`; five intentional frontend failures, native proof supplied; not an accepted implementation.
+Status: evidence — packet at `0a3a29f4` had five frontend failures on `68852cbd`; all five repaired and 81/81 plus both native proofs independently pass at `592e04ed`.
 Tracking: `canopi-j571.1`; tests on `test/raster-acceptance-handoff`, implementation remains `feature/raster-rework-completion`.
 Current guidance: [sole prompt](completion-agent-prompt.md), [ownership contract](completion-ownership-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md).
 
 ## Assignment boundary
+
+This packet is already merged and repaired in the current candidate. Do not replay
+its initial RED assignment. Continue with the [current review cases](completion-review-592e04ed.md);
+the original baseline procedure below is historical evidence, not a new merge task.
 
 The user approved reviewer-authored tests followed by implementation-agent repairs.
 Merge the test handoff preserving history; do not replace the candidate with the older
