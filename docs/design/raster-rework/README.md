@@ -1,11 +1,11 @@
 # Raster rework handoffs and debrief
 
-Status: active — continue `canopi-j571.1` from reviewed candidate `592e04ed`; previous assignments are evidence.
+Status: active — continue `canopi-j571.1` from reviewed candidate `de336a7d`; previous assignments are evidence.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [current independent review](completion-review-592e04ed.md) verifies the five
-supplied frontend repairs and scoped native proofs. Two lifecycle ownership fixes,
+The [current independent review](completion-review-de336a7d.md) verifies the five
+supplied frontend repairs and scoped native proofs. A teardown correction,
 R50 boundary proof and remaining required evidence are the next bounded work.
 Whole-candidate acceptance remains partial; use the sole completion prompt.
 
@@ -21,7 +21,7 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 
 | Artifact | Purpose |
 | --- | --- |
-| [Latest review and fixed repairs](completion-review-578a4f1c.md) | Current boundary decisions, reproducible counterexamples and selective GeoLibre reuse |
+| [Latest review and fixed repairs](completion-review-de336a7d.md) | Teardown reproduction, exact R50 proof boundaries and evidence classification |
 | [Prior R44–R51 review](completion-review-9208c930.md) | Retained baseline obligations; latest review refines incomplete repairs |
 | [Whole-rework execution prompt](completion-agent-prompt.md) | Sole current assignment; sustained implementation through one verified candidate |
 | [Completion contract](completion-design.md) | Existing candidate continuation, correction interfaces, workbenches, inspection, providers and final gates |

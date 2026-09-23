@@ -7,7 +7,7 @@ Current guidance: [sole prompt](completion-agent-prompt.md), [ownership contract
 ## Assignment boundary
 
 This packet is already merged and repaired in the current candidate. Do not replay
-its initial RED assignment. Continue with the [current review cases](completion-review-592e04ed.md);
+its initial RED assignment. Continue with the [current review cases](completion-review-de336a7d.md);
 the original baseline procedure below is historical evidence, not a new merge task.
 
 The user approved reviewer-authored tests followed by implementation-agent repairs.

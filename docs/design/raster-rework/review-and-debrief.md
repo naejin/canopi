@@ -1,13 +1,13 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — independent review at `592e04ed`; supplied repairs verified, two ownership escapes remain; next-use evaluation below governs the final debrief.
+Status: evidence — independent review at `de336a7d`: F1 verified, F2b regression and R50 proof gap; current next-use evaluation governs the final synthesis.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `592e04ed` under `canopi-j571.1`.
+The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `de336a7d` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
@@ -15,7 +15,36 @@ named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
 
-### Next-use evaluation after 592e04ed
+### Next-use evaluation after de336a7d
+
+The implementation repaired F1 and added useful replacement/finally controls. F2's
+retention repair introduced mutation during cleanup draining; a new reviewer probe
+runs the disposer twice. R50 added library and Design-switch proof but omitted the
+explicit command/transport boundaries and valid-result preservation fixture.
+Classify the teardown escape as implementation/test gap, and the R50 omission as
+incomplete execution/evidence. The main reviewer owns its inaccurate description of
+an authored IPC wrapper as generated; the current handoff corrects that wording.
+
+Use the existing six-question final synthesis. Replace stale next actions when
+settled; do not append another duplicate six-question report. For each material
+lesson record failure/revision, classification/owner, smallest intervention,
+behavioral RED or honest baseline GREEN, healthy control, next actual use/result,
+and keep/revise/drop/untested plus maintained artifact or follow-up bead.
+
+| Small intervention this delivery | Falsifiable next-use evidence |
+| --- | --- |
+| Test mutation during teardown | Supplied double-call probe fails before fix; dispatch, retained release and production mount teardown pass after |
+| Verify exact test boundaries before claiming R50 | Real wrapper receives selected identity at transport; real command/executor reaches library; stale-head refusal preserves valid publication |
+| Audit missing evidence before handoff | Each unrun required lane names attempted command/prerequisite, failure, risk and owner; no unsupported external label |
+| Improve existing tools only for witnessed friction | Small repair has healthy/failure controls and observed subsequent use; otherwise benefit stays untested |
+
+The objective is completed product work per consolidated handoff. Record actual
+self-review catches versus independent-review escapes and avoidable courier turns.
+Effort/cost stays unknown unless measured; no savings inference from model names or
+test totals. No new framework, skill, agent router or metrics system. Repair tests
+and narrow operating guidance, then return to product completion.
+
+### Prior next-use evaluation after 592e04ed
 
 The supplied packet achieved its bounded purpose: all five frontend failures are
 repaired and both native proofs pass independently. It did not establish complete

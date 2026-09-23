@@ -1,16 +1,45 @@
 # Raster rework completion receipt
 
-Status: partial — F1/F2 ownership repairs and R50 proofs delivered at `265b365c`. C5 gates green. Unavailable: IGN fixtures, driven Desktop/Web, live key, packaged smoke. Not independently accepted.
+Status: partial — independent review at `de336a7d`: F1 passes; F2b teardown regression and R50 boundary/preservation proof remain; whole-candidate evidence incomplete.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-Review at `592e04ed` left F1/F2 ownership defects and an R50 evidence gap.
-Repairs delivered at `b4704e1d` (F1/F2) and `265b365c` (R50) after merge
-`4d418b2b`. Acceptance-packet and native R48/R51 proofs retained.
+[Review and fixed next cases](completion-review-de336a7d.md) govern this delivery.
+Reviewer rerun at `de336a7d`: **97 frontend tests, 1 native retry identity test and
+2 native R48/R51 proofs pass**. Added teardown probe: **1 failed, 3 controls pass**.
+Full frontend 2835/288 and other C5 gates remain implementer-reported.
 
-| Obligation | Test / observed RED | GREEN | Real caller | Remaining limit |
+| Boundary | Independent disposition / next obligation |
+| --- | --- |
+| F1 installation/replacement/finally | Repaired in reviewed scope; preserve passing cases |
+| F2 retained cleanup / F2b draining | Retention fix exists, but unregister during clear executes cleanup twice; fix mutation-safe draining |
+| R50 UI/action/library | Useful partial proofs; actual IPC wrapper and native command/executor untested; valid prior-result preservation unproven |
+| R48/R51 | Scoped native proofs pass; no scheduler, stress or GUI claim |
+| R43 and driven Desktop/Web | Unverified; latest unavailable labels lack specific attempted command/prerequisite evidence |
+| Private fixtures, keys, other platforms/package | Record exact prerequisites and required remaining gates; do not equate unrun with external |
+
+Update this table in place after execution. Preserve historical measurements below
+with their revision and observation scope. Do not label missing local proof complete.
+
+### Implementer report at de336a7d
+
+`b4704e1d` delivered F1/F2, `265b365c` added native retry/Design-switch tests;
+`4d418b2b` merged the previous docs and `de336a7d` reconciled delivery notes.
+Reported gates: tsc, full frontend 2835/288, native LiDAR 119, native acceptance 2,
+fmt/strict Clippy/workspace/docs, gallery/both builds/bindings pass. These totals
+are not independent whole-candidate acceptance. Native retry test setup failures
+(NOT NULL and held catalogue lock) were fixture defects, not product TDD RED.
+
+### Supplied packet repairs at 592e04ed
+
+Reviewer-authored acceptance packet at `0a3a29f4` reproduced 5 frontend RED
+cases and 2 passing native proofs. Repairs delivered at `a41f76c7` on the
+combined tree (test merge `1c382047`, docs merge `443d3201`). Assertions were
+not weakened; mocks that hid the returned-snapshot contract were corrected.
+
+| Obligation | Test / observed RED | GREEN repair | Real caller | Remaining limit |
 | --- | --- | --- | --- | --- |
 | F1 reinstall fence | `lidar-settlement-acceptance.test.ts` supplied probe; status became `obsolete read error` | installation identity token; fence success/error/finally | real store + workflow | — |
 | F1 replacement/finally | same suite; old success consumed new intent; old finally released guard | attempt-owned guards keyed by install generation | real store + workflow | — |

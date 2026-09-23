@@ -1,13 +1,13 @@
 # Finish the raster candidate with bounded ownership repairs
 
-Status: active — sole implementation prompt; continue reviewed candidate `592e04ed`.
+Status: active — sole implementation prompt; continue reviewed candidate `de336a7d`.
 Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
-Current guidance: [current repair decisions and tests](completion-review-592e04ed.md), [C0–C5](completion-design.md), [ownership contract](completion-ownership-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#final-correction-debrief-to-deliver).
+Current guidance: [current repair decisions and tests](completion-review-de336a7d.md), [C0–C5](completion-design.md), [ownership contract](completion-ownership-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#final-correction-debrief-to-deliver).
 
 ## Assignment
 
 Finish all locally executable authorized work before one consolidated handoff.
-Repair F1 installation/attempt ownership and F2 retained listener cleanup; close
+Preserve accepted F1; repair F2b cleanup draining and finish the specified
 R50 saved-definition action/IPC/native proof; audit and complete remaining C0–C5
 and R27/R43 evidence where prerequisites exist. The linked repair decisions settle
 behavior and test boundaries. Make ordinary implementation choices locally.
@@ -21,16 +21,18 @@ remain allowed. Do not replace working existing tooling merely because it is Pyt
 
 Inspect status/worktrees and `bd show canopi-j571.1`; claim/resume the existing bead
 in the candidate checkout. Merge this documentation handoff preserving history.
-Continue from `592e04ed` or its verified successor; retain test handoff `0a3a29f4`,
+Continue from `de336a7d` or its verified successor; retain test handoff `0a3a29f4`,
 its five repairs, foundations `34e4ded4`/`f61f8494` and later accepted fixes. Do not
 start implementation from this older documentation checkout. The primary checkout's
 `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
 are user-owned; do not stage, stash or overwrite them.
 
-1. Reproduce F1 with the supplied test; write and validate F2's retention detector.
-   Repair each in a vertical RED → GREEN → refactor cycle with healthy controls.
-   Add the adjacent replacement/finally cases specified in the repair decisions.
-2. Complete R50 at the actual boundaries. Preserve passing production behavior;
+1. Reproduce F2b using the supplied teardown test; repair in a vertical
+   RED → GREEN → refactor cycle. Keep F1 and retained-cleanup controls passing;
+   exercise cleanup unregistering during whole-map teardown.
+2. Complete every R50 row in the current repair decisions, including real authored
+   IPC wrapper, native command/executor and prior-publication preservation. Do not
+   substitute isolated mocks/library tests. Preserve passing production behavior;
    record baseline GREEN honestly when no repair is necessary.
 3. Trace the changed owners and direct callers through setup, reuse, failure,
    replacement and teardown. Fix in-scope discoveries and rerun affected checks.
@@ -69,7 +71,7 @@ goes to bd follow-ups, not silent scope expansion. Keep the bead open while requ
 acceptance remains unmet; do not equate passing the supplied tests with acceptance.
 
 Commit intended files and authorized bead updates; push the candidate to both
-configured destinations and verify matching tips. Return revision/branch, F1/F2/R50
+configured destinations and verify matching tips. Return revision/branch, retained F1 and F2b/R50
 results, R27/R43 and C0–C5 disposition, gates, driven workflows, exact blockers and
 the concise debrief. Stop for independent review; do not integrate, release or clean
 branches. The user remains courier; no automatic delegation is authorized.
