@@ -344,6 +344,25 @@ pub(super) fn sample(
         });
     };
     let resolved = reader.read_window(library, &target.grid, window, cancel)?;
+    // Recheck currency after the slow read without holding the catalogue
+    // across it: a concurrent head change makes Value/NoData stale before
+    // delivery, and a disappeared target is missing rather than a stale success.
+    match resolve_target(library, request)? {
+        None => {
+            return Ok(LidarSampleOutcome::Unavailable {
+                reason: LidarSampleUnavailableReason::MissingGeneration,
+            });
+        }
+        Some(current) => {
+            if current.generation_id != request.expected_generation_id
+                || current.generation_id != target.generation_id
+            {
+                return Ok(LidarSampleOutcome::Unavailable {
+                    reason: LidarSampleUnavailableReason::StaleGeneration,
+                });
+            }
+        }
+    }
     if resolved.valid.first().copied().unwrap_or(0) == 0 {
         return Ok(LidarSampleOutcome::NoData {
             generation_id: target.generation_id,

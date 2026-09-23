@@ -1857,6 +1857,72 @@ impl LidarLibrary {
         receipt.ok_or_else(|| "analysis refresh could not be enqueued".to_string())
     }
 
+    /// Retry one existing analysis definition against its current source head.
+    ///
+    /// The definition identity, parameters and published name are preserved: a
+    /// retry is a new job for the same definition, not a second definition. A
+    /// changed source head is refused before work so the previous valid result
+    /// survives and the caller can re-aim.
+    pub fn retry_analysis(
+        &self,
+        definition_id: &str,
+        expected_source_generation_id: &str,
+    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+        let connection = self.catalogue()?;
+        let definition = analysis::definition_row(&connection, definition_id)?
+            .ok_or_else(|| format!("Analysis {definition_id} does not exist"))?;
+        let head = catalogue::head_generation(&connection, &definition.layer_id)?
+            .ok_or_else(|| "source layer has no accepted coverage to analyse yet".to_string())?;
+        if head.id != expected_source_generation_id {
+            return Err("source head changed; re-aim before retrying".to_string());
+        }
+        let active = matches!(
+            catalogue::latest_analysis_job_state(&connection, definition_id)
+                .ok()
+                .flatten()
+                .as_deref(),
+            Some("preparing") | Some("refreshing")
+        );
+        if active {
+            return Err("analysis is already running".to_string());
+        }
+        let previous = catalogue::head_analysis_generation(&connection, definition_id)
+            .ok()
+            .flatten();
+        let state = if previous.is_some() {
+            "refreshing"
+        } else {
+            "preparing"
+        };
+        let job_id = new_id("anl");
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?5)",
+                rusqlite::params![job_id, definition_id, head.id, state, now_iso()],
+            )
+            .map_err(|e| format!("Failed to enqueue analysis retry: {e}"))?;
+        let parameters_json = definition.parameters_json.clone();
+        let source_generation_id = head.id.clone();
+        let definition_id = definition_id.to_string();
+        {
+            let library = self.clone();
+            let job_id = job_id.clone();
+            let definition_id = definition_id.clone();
+            let parameters_json = parameters_json.clone();
+            let source_generation_id = source_generation_id.clone();
+            tauri::async_runtime::spawn(async move {
+                library
+                    .run_refresh(job_id, definition_id, parameters_json, source_generation_id)
+                    .await;
+            });
+        }
+        Ok(common_types::lidar::LidarAnalysisReceipt {
+            definition_id,
+            job_id,
+        })
+    }
+
     pub fn delete_analysis(&self, definition_id: &str) -> Result<(), String> {
         let job_ids = {
             let connection = self.catalogue()?;

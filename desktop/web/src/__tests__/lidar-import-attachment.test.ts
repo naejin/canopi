@@ -133,7 +133,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
     expect(upsertMock).not.toHaveBeenCalled()
   })
 
-  it('does not attach after failure or cancellation', async () => {
+  it('does not attach after failure or genuine cancellation', async () => {
     installLidarWorkflow()
     await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
       label: null,
@@ -154,6 +154,24 @@ describe('import attachment through the LiDAR workflow owner', () => {
     expect(upsertMock).not.toHaveBeenCalled()
   })
 
+  it('a cancellation request that loses to commit still attaches', async () => {
+    // R44: cancel is a request, not a decision. The observed terminal result
+    // owns attachment, so a job that already committed still attaches.
+    installLidarWorkflow()
+    await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
+      label: null,
+      unknown: false,
+    })
+    trackedJob.value = job('Staging')
+    await cancelOpenImport()
+    // Native publication won: the job settles Complete despite the request.
+    trackedJob.value = job('Complete')
+    await flush()
+    await flush()
+    expect(upsertMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'lyr-1')
+  })
+
   it('keeps attachment intent when Data closes and attaches after reopen', async () => {
     installLidarWorkflow()
     await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
@@ -167,7 +185,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
     expect(upsertMock).toHaveBeenCalledWith('Source', 'lyr-1')
   })
 
-  it('cancelling an open import discards its attachment intent', async () => {
+  it('genuine cancellation after the request consumes intent without attaching', async () => {
     installLidarWorkflow()
     await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
       label: null,

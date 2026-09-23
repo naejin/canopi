@@ -270,6 +270,24 @@ pub async fn lidar_create_analysis(
         .await
 }
 
+/// Retry one existing analysis definition against its expected source head.
+#[tauri::command]
+pub async fn lidar_retry_analysis(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    definition_id: String,
+    expected_source_generation_id: String,
+) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar retry analysis",
+            move || library.retry_analysis(&definition_id, &expected_source_generation_id),
+        )
+        .await
+}
+
 /// One bounded page of a layer's publication history.
 #[tauri::command]
 pub async fn lidar_layer_history(

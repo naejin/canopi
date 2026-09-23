@@ -98,6 +98,22 @@ export async function lidarCreateAnalysis(
   return invoke('lidar_create_analysis', { layerId, kind, parameters, resultName })
 }
 
+/**
+ * Retry one existing analysis definition against its expected source head.
+ *
+ * The definition identity, parameters and published name are preserved: a
+ * retry is a new job for the same definition, not a second definition.
+ */
+export async function lidarRetryAnalysis(
+  definitionId: string,
+  expectedSourceGenerationId: string,
+): Promise<LidarAnalysisReceipt> {
+  return invoke('lidar_retry_analysis', {
+    definitionId,
+    expectedSourceGenerationId,
+  })
+}
+
 export async function lidarGetAnalysisJobStatus(
   jobId: string,
 ): Promise<LidarAnalysisJobStatus | null> {

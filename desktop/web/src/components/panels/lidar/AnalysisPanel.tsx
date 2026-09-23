@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import {
   analyseLayerAsSlope,
   cancelAnalysisJob,
+  retryAnalysis,
   runningAnalysisJobId,
 } from '../../../app/lidar/actions'
 import {
@@ -73,7 +74,7 @@ export function AnalysisPanel() {
   const run = results.find(
     (analysis) => analysis.state === 'Preparing' || analysis.state === 'Refreshing',
   ) ?? null
-  const previousFailed = results.some((analysis) => analysis.state === 'Failed')
+  const previousFailed = results.find((analysis) => analysis.state === 'Failed') ?? null
 
   return (
     <div className={styles.panel}>
@@ -191,10 +192,27 @@ export function AnalysisPanel() {
             if (chosen === null || submitting) return
             setError(null)
             setSubmitting(true)
-            // A fresh job against the current head; the previous definition keeps
-            // its own result until this one publishes.
-            // A blank field stays unnamed rather than becoming the empty string.
-            analyseLayerAsSlope(chosen.id, unit, resultName.trim() || null)
+            // Retry the selected failed definition (same identity, new job).
+            // Creating a different analysis remains an explicit create.
+            let start: Promise<void>
+            if (previousFailed) {
+              // The expected source head is the layer's current generation: a
+              // changed head is refused before work so the previous valid
+              // result survives and the caller can re-aim.
+              const sourceLayer = layers.find((layer) => layer.id === previousFailed.source_layer_id)
+              const sourceTileset = sourceLayer?.tilesets.find(
+                (tileset) => tileset.source.kind === 'native-generation',
+              )
+              const expectedSourceGenerationId =
+                sourceTileset && 'generation_id' in sourceTileset.source
+                  ? sourceTileset.source.generation_id
+                  : ''
+              start = retryAnalysis(previousFailed.id, expectedSourceGenerationId)
+            } else {
+              // A blank field stays unnamed rather than becoming the empty string.
+              start = analyseLayerAsSlope(chosen.id, unit, resultName.trim() || null)
+            }
+            start
               .then(() => ensureLidarPolling())
               .catch((cause: unknown) =>
                 setError(cause instanceof Error ? cause.message : String(cause)),

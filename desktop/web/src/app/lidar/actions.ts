@@ -8,6 +8,7 @@ import {
   lidarCancelAnalysisJob,
   lidarCancelImport,
   lidarCreateAnalysis,
+  lidarRetryAnalysis,
   lidarCreateLayer,
   lidarDeleteAnalysis,
   lidarDeleteLayer,
@@ -39,7 +40,6 @@ import {
 } from './library-store'
 import { designSessionStore } from '../document-session/store'
 import {
-  discardImportAttachmentIntent,
   recordImportAttachmentIntent,
 } from './workflow'
 import { reconcileInspectionWithPresentation } from './inspection'
@@ -150,8 +150,10 @@ export async function cancelOpenImport(): Promise<void> {
   }
   await withLidarError(async () => {
     await lidarCancelImport(job.job_id)
-    // Cancellation must not attach; consume the intent immediately.
-    discardImportAttachmentIntent(job.job_id)
+    // Cancellation is a request, not a decision. The observed terminal result
+    // owns attachment: a job that already committed still attaches; a genuine
+    // Cancelled/Failed consumes the intent without attachment. Discarding the
+    // intent here would lose a late Complete.
     await refreshOpenImportJob()
     await refreshLidarLibrary()
   })
@@ -185,6 +187,30 @@ export async function analyseLayerAsSlope(
     // handle that can cancel *this* run. The library snapshot reports result
     // state but not job identity, so without this the Cancel action would have
     // nothing to name.
+    runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
+    await refreshLidarLibrary()
+    if (designSessionStore.sessionIdentity.value === identity) {
+      await presentEntity('Analysis', receipt.definition_id)
+    }
+    ensureLidarPolling()
+  })
+}
+
+/**
+ * Retry one existing analysis definition against its expected source head.
+ *
+ * The definition identity, parameters and published name are preserved: a
+ * retry is a new job for the same definition, not a second definition. A
+ * changed source head is refused before work so the previous valid result
+ * survives and the caller can re-aim.
+ */
+export async function retryAnalysis(
+  definitionId: string,
+  expectedSourceGenerationId: string,
+): Promise<void> {
+  const identity = designSessionStore.sessionIdentity.value
+  await withLidarError(async () => {
+    const receipt = await lidarRetryAnalysis(definitionId, expectedSourceGenerationId)
     runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
     await refreshLidarLibrary()
     if (designSessionStore.sessionIdentity.value === identity) {

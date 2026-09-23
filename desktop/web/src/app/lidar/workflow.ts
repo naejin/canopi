@@ -73,7 +73,8 @@ function isTerminal(state: LidarImportJob['state']): boolean {
  * A committed success refreshes the library first so the presentation attaches
  * against the head the job published, then attaches once if the submitting
  * Design session is still active. Failure and cancellation consume the intent
- * without attaching.
+ * without attaching. A cancellation *request* never decides attachment: the
+ * observed terminal result does, so a job that already committed still attaches.
  */
 function settleImportAttachment(job: LidarImportJob): void {
   if (!isTerminal(job.state)) return

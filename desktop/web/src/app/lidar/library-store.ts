@@ -30,24 +30,33 @@ export const openImportJob = signal<LidarImportJob | null>(null)
 export const lidarStatusMessage = signal<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
-let refreshInFlight = false
+let refreshInFlight: Promise<void> | null = null
 
+/**
+ * Refresh the library snapshot.
+ *
+ * Overlapping callers await the same real settlement read rather than
+ * returning early and observing a stale head: a terminal job and its library
+ * head must be observed as a pair.
+ */
 export async function refreshLidarLibrary(): Promise<void> {
   if (refreshInFlight) {
-    return
+    return refreshInFlight
   }
-  refreshInFlight = true
-  try {
-    const snapshot = await lidarListLibrary()
-    lidarLibrary.value = snapshot
-    lidarStatusMessage.value = null
-  } catch (error) {
-    // Passive library read failures leave the previous snapshot in place;
-    // the rest of the app keeps working (Web Edition has no library at all).
-    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    refreshInFlight = false
-  }
+  refreshInFlight = (async () => {
+    try {
+      const snapshot = await lidarListLibrary()
+      lidarLibrary.value = snapshot
+      lidarStatusMessage.value = null
+    } catch (error) {
+      // Passive library read failures leave the previous snapshot in place;
+      // the rest of the app keeps working (Web Edition has no library at all).
+      lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
 }
 
 function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
