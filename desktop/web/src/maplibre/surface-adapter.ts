@@ -161,6 +161,11 @@ class HostedMapLibreSurfaceAdapter<TMap extends MapLibreMapInstance>
 
 class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
   private readonly cleanups: Array<() => void> = []
+  /**
+   * Matching cleanup for each `on` registration, so explicit `off` releases
+   * retained ownership as well as the live map listener.
+   */
+  private readonly eventCleanups = new Map<string, Array<{ listener: MapLibreSurfaceEventListener; cleanup: () => void; retained?: () => void }>>()
   private cleared = false
 
   constructor(
@@ -171,14 +176,54 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
   on(type: string, listener: MapLibreSurfaceEventListener): void {
     const map = this.map as unknown as EventCapableMap
     map.on(type, listener)
-    this.addCleanup(() => {
-      map.off(type, listener)
-    })
+    const registration: {
+      listener: MapLibreSurfaceEventListener
+      cleanup: () => void
+      retained?: () => void
+    } = {
+      listener,
+      cleanup: () => {
+        map.off(type, listener)
+      },
+    }
+    const bucket = this.eventCleanups.get(type) ?? []
+    bucket.push(registration)
+    this.eventCleanups.set(type, bucket)
+    const retained = () => {
+      registration.cleanup()
+      this.dropEventRegistration(type, registration)
+      // Drop this retained registration itself so later clear does not re-run it.
+      const at = this.cleanups.indexOf(retained)
+      if (at >= 0) this.cleanups.splice(at, 1)
+    }
+    registration.retained = retained
+    this.addCleanup(retained)
   }
 
   off(type: string, listener: MapLibreSurfaceEventListener): void {
     const map = this.map as unknown as EventCapableMap
     map.off(type, listener)
+    const bucket = this.eventCleanups.get(type)
+    if (!bucket) return
+    const index = bucket.findIndex((entry) => entry.listener === listener)
+    if (index < 0) return
+    const [registration] = bucket.splice(index, 1)
+    if (bucket.length === 0) this.eventCleanups.delete(type)
+    if (registration?.retained) {
+      const at = this.cleanups.indexOf(registration.retained)
+      if (at >= 0) this.cleanups.splice(at, 1)
+    }
+  }
+
+  private dropEventRegistration(
+    type: string,
+    registration: { listener: MapLibreSurfaceEventListener; cleanup: () => void; retained?: () => void },
+  ): void {
+    const bucket = this.eventCleanups.get(type)
+    if (!bucket) return
+    const index = bucket.findIndex((entry) => entry === registration)
+    if (index >= 0) bucket.splice(index, 1)
+    if (bucket.length === 0) this.eventCleanups.delete(type)
   }
 
   addCleanup(cleanup: () => void): void {

@@ -166,4 +166,49 @@ describe('MapLibre surface adapter', () => {
     expect(adapter.map).toBeNull()
     expect(logError).not.toHaveBeenCalled()
   })
+
+  it('F2: explicit unregister releases retained ownership, not only the map listener', async () => {
+    const adapter = createMapLibreSurfaceAdapter<FakeMap>({
+      loadMapLibre: vi.fn(async () => maplibre),
+    })
+    adapter.attach(container)
+    const listeners: Array<() => void> = []
+    adapter.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target,
+        style: { version: 8, sources: {}, layers: [] },
+        interactive: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+        touchZoomRotate: false,
+      }) as FakeMap,
+      onCreate: (context) => {
+        // Three on/off cycles (must not retain) and three retained registrations.
+        for (let i = 0; i < 3; i++) {
+          const listener = () => {}
+          listeners.push(listener)
+          context.lifetime.on('moveend', listener)
+          context.lifetime.off?.('moveend', listener)
+        }
+        for (let i = 0; i < 3; i++) {
+          const listener = () => {}
+          listeners.push(listener)
+          context.lifetime.on('moveend', listener)
+        }
+      },
+    })
+    await flushPromises()
+    const map = maps[0]!
+    // Explicit unregister already removed the first three map listeners.
+    expect(map.off).toHaveBeenCalledTimes(3)
+
+    // Teardown must release only the three retained registrations. If off left
+    // its cleanup behind, clear would call map.off six more times instead of three.
+    adapter.destroy()
+    expect(map.off).toHaveBeenCalledTimes(6)
+    for (const listener of listeners) {
+      expect(map.off).toHaveBeenCalledWith('moveend', listener)
+    }
+  })
 })

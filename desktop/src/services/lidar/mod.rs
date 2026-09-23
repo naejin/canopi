@@ -2089,6 +2089,109 @@ mod tests {
     /// than stored, because a label like `unitless` would assert the values are
     /// dimensionless — a measurement claim nobody made.
     #[test]
+    fn retry_preserves_definition_identity_and_refuses_changed_head() {
+        let root = scratch_root("retry-identity");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+
+        // Minimal definition + head so retry has a real target without running GDAL.
+        // create_analysis enqueues work; we only need the catalogue identity.
+        let layer_id = new_id("lyr");
+        {
+            let connection = library.catalogue().expect("catalogue");
+            connection
+                .execute(
+                    "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at) VALUES(?1, 'Ground', 'ground-elevation', 'm', ?2)",
+                    rusqlite::params![layer_id, now_iso()],
+                )
+                .expect("layer row");
+            let head_id = new_id("gen");
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at) VALUES(?1, ?2, ?3)",
+                    rusqlite::params![head_id, layer_id, now_iso()],
+                )
+                .expect("generation row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)",
+                    rusqlite::params![layer_id, head_id],
+                )
+                .expect("head row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_definitions(id, layer_id, kind, version, parameters_json, created_at)
+                     VALUES(?1, ?2, 'slope', 1, ?3, ?4)",
+                    rusqlite::params![
+                        "adef-retry",
+                        layer_id,
+                        r#"{"slope_unit":"degrees","name":"North slope"}"#,
+                        now_iso()
+                    ],
+                )
+                .expect("definition row");
+        }
+
+        let head = {
+            let connection = library.catalogue().expect("catalogue");
+            catalogue::head_generation(&connection, &layer_id)
+                .expect("head query")
+                .expect("head exists")
+        };
+
+        // Changed head is refused before work.
+        let refused = library
+            .retry_analysis("adef-retry", "not-the-head")
+            .expect_err("changed head refuses");
+        assert!(refused.contains("source head changed"), "{refused}");
+
+        // Same definition identity: a new job for the saved definition.
+        let receipt = library
+            .retry_analysis("adef-retry", &head.id)
+            .expect("retry enqueues");
+        assert_eq!(receipt.definition_id, "adef-retry");
+        assert_ne!(receipt.job_id, "");
+
+        // Definition count and saved name/parameters are unchanged.
+        let connection = library.catalogue().expect("catalogue");
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1", [&layer_id], |row| row.get(0))
+            .expect("count");
+        assert_eq!(count, 1);
+        let (name, params): (String, String) = connection
+            .query_row(
+                "SELECT parameters_json, parameters_json FROM lidar_analysis_definitions WHERE id = 'adef-retry'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("definition read");
+        assert!(name.contains("North slope"), "{name}");
+        assert!(params.contains("degrees"), "{params}");
+
+        // A second retry after the first job settles is a new job, same definition.
+        connection
+            .execute(
+                "UPDATE lidar_analysis_jobs SET state = 'failed' WHERE id = ?1",
+                [&receipt.job_id],
+            )
+            .expect("settle job");
+        let second = library
+            .retry_analysis("adef-retry", &head.id)
+            .expect("second retry enqueues");
+        assert_eq!(second.definition_id, "adef-retry");
+        assert_ne!(second.job_id, receipt.job_id);
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1", [&layer_id], |row| row.get(0))
+            .expect("count");
+        assert_eq!(count, 1);
+
+        drop(connection);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn an_other_continuous_layer_must_declare_its_unit() {
         use common_types::lidar::LidarMeasurementKind;
 

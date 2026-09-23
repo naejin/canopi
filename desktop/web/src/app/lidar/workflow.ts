@@ -62,9 +62,12 @@ function settleImportAttachment(job: LidarImportJob): void {
   }
   // One attempt per job at a time. Repeated Complete observations must not
   // start concurrent settlement reads.
-  if (settlingJobs.has(job.job_id)) return
-  settlingJobs.add(job.job_id)
-  const attemptInstalled = () => installed
+  const attemptKey = `${installGeneration}:${job.job_id}`
+  if (settlingJobs.has(attemptKey) || settlingJobs.has(job.job_id)) return
+  settlingJobs.set(attemptKey, installGeneration)
+  settlingJobs.set(job.job_id, installGeneration)
+  const myGeneration = installGeneration
+  const stillOwns = () => installed && installGeneration === myGeneration
   // Fence at the terminal observation: the settlement read must start after
   // this point, never join a read already under way.
   const fence = libraryReadSequence()
@@ -72,11 +75,10 @@ function settleImportAttachment(job: LidarImportJob): void {
     .then((snapshot) => {
       // A successful post-fence read is the only path to attachment or a
       // missing-target conclusion. A failed read retains the intent.
-      if (!attemptInstalled()) return
+      if (!stillOwns()) return
       const settled = consumeImportAttachmentIntent(job.job_id)
       if (!settled) return
-      const library = snapshot
-      const present = library?.layers.some((layer) => layer.id === settled.layerId) ?? false
+      const present = snapshot.layers.some((layer) => layer.id === settled.layerId)
       if (!present) {
         lidarStatusMessage.value = `Imported layer ${settled.layerId} is no longer in the library`
         return
@@ -88,20 +90,35 @@ function settleImportAttachment(job: LidarImportJob): void {
       // error. Do not fall through to success or missing-target handling.
       // Teardown fences error callbacks so obsolete completions cannot mutate
       // document or status.
-      if (!attemptInstalled()) return
+      if (!stillOwns()) return
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
     })
     .finally(() => {
-      // A failed attempt releases the guard for the next normal tick.
-      settlingJobs.delete(job.job_id)
+      // A retired attempt must not remove a replacement attempt's guard.
+      if (!stillOwns()) return
+      settlingJobs.delete(attemptKey)
+      if (settlingJobs.get(job.job_id) === myGeneration) {
+        settlingJobs.delete(job.job_id)
+      }
     })
 }
 
-/** Jobs with a settlement attempt currently in flight. */
-const settlingJobs = new Set<string>()
+/**
+ * Jobs with a settlement attempt currently in flight, keyed by installation
+ * and job so a retired attempt cannot release a replacement attempt's guard.
+ */
+const settlingJobs = new Map<string, number>()
 
 let attachmentDisposer: (() => void) | null = null
 let installed = false
+/**
+ * Distinct identity per installation.
+ *
+ * An attempt may consume an intent, attach, publish workflow status or
+ * release its per-job guard only while its installation still owns those
+ * effects. Dispose invalidates the token; a new install cannot revive it.
+ */
+let installGeneration = 0
 
 /**
  * Install the Desktop-lifetime LiDAR workflow owner.
@@ -111,6 +128,7 @@ let installed = false
  */
 export function installLidarWorkflow(): void {
   disposeLidarWorkflow()
+  installGeneration += 1
   installed = true
   attachmentDisposer = effect(() => {
     // Retry pending settlement on each poll tick even when the job state
@@ -134,6 +152,8 @@ export function disposeLidarWorkflow(): void {
     stopLidarPolling()
     installed = false
   }
+  // Invalidate this installation's token so late callbacks cannot own effects.
+  installGeneration += 1
 }
 
 if (import.meta.hot) {
