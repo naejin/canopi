@@ -47,6 +47,25 @@ repair revision and the committed regression that now pins it.
 
 No finding needed a counterexample: each was reproduced and repaired.
 
+## Gate results at the delivered tip
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
+| `cargo test --workspace` | PASS — 364 `canopi-desktop` + 41 + 7 + 2, 0 failed |
+| `native_command_policy::tests` | PASS — 13 |
+| Frontend `npx vitest run` | PASS — 283 files / 2757 tests |
+| `npx tsc --noEmit`, `npm run check:ui` | PASS |
+| `npm run build`, `npm run build:web` | PASS |
+| `npm run gen:types` / `check:types` | PASS — no binding drift |
+| `python3 scripts/check_docs.py` | 0 errors |
+| **GDAL-backed ignored LiDAR lane** | **69 passed / 8 failed.** Run at both `5d0a5e0b` and the repaired tip, so the failures are pre-existing, not regressions: three IGN-MNT e2e tests cannot find their fixture; three import tests still assert the retired 25,000,000-cell union-envelope refusal; one asserts a finite-NoData value range this host's GDAL 3.8.4 does not produce; two resource-gate tests panicked with "incremental unavailable (no complete workload sample)" while other builds ran concurrently. Filed as `canopi-a7ot` rather than silently accepted. **The lane is not a green baseline**, so no positive capacity claim rests on it |
+
+Not run, and therefore not claimed: Windows and macOS builds, the packaged-window
+smoke, live isolated Desktop or Web sessions, live restricted-Google-key
+qualification, and any non-publishing CI dispatch.
+
 ## C1 disposition and R26
 
 C1's amendment is **not implemented** in this round. Production import still runs
