@@ -1,91 +1,111 @@
-# Finish the raster candidate and verify its production boundaries
+# Finish the raster candidate through verified production workflows
 
-Status: active — sole implementation prompt after independent review of `9208c930`.
-Tracking: `canopi-j571.1` under `canopi-j571`; continue `feature/raster-rework-completion`.
-Current guidance: [latest review and repair decisions](completion-review-9208c930.md), [earlier correction decisions](completion-correction-design.md), [completion contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md).
+Status: active — sole implementation prompt; continue reviewed candidate `578a4f1c`.
+Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
+Current guidance: [fixed repairs and reproductions](completion-review-578a4f1c.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
 
-## Mandate and first action
+## Assignment and first actions
 
-Finish the accepted whole-rework outcome on the existing candidate. Repair R44–R51,
-retain R27–R43 repairs, complete remaining C0–C5 implementation and all available
-required evidence, then deliver one self-reviewed candidate. The latest eight
-findings are minimum counterexamples, not a replacement scope. Do not stop after
-a slice, focused green suite or context checkpoint to request routine continuation.
+Finish the authorized whole-rework candidate, not just the newest review examples.
+Users must be able to import supported numeric sources, manage ordered Data Layers,
+run/retry slope, inspect physical values, save/reopen independent presentation,
+and use Web Location/shared basemaps. Preserve Float32/NoData, originals, immutable
+history, legacy compatibility and the selected GDAL/native-reader architecture.
+Acceptance, primary-checkout integration and release remain separate.
 
-Read repository rules and the latest review first. Inspect status, worktrees,
-ancestry and `bd show canopi-j571.1`; claim/resume that bead. Continue candidate
-`9208c930` or its verified successor in the candidate worktree. Merge this committed
-docs handoff with history preserved; retain candidate code and revision-labelled
-measurements. Preserve foundation `34e4ded4`, integration `f61f8494` and all accepted
-fixes. Do not restart from the older primary checkout or overwrite its user-owned
-`.beads/issues.jsonl`, `desktop/src/native_operation.rs` or `.beads.gate.lock`.
+Inspect `git status --short --branch`, worktrees, ancestry and
+`bd show canopi-j571.1`; claim/resume that bead in the candidate worktree. Merge
+this committed documentation handoff with history preserved. Start from
+`578a4f1c` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
+accepted repairs. Do not restart from the older documentation checkout. Its
+`.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
+are user-owned: do not stage, stash, overwrite or discard them.
 
-Read C0–C5 and the source-import amendment once, then only the relevant subsystem
-guides for each slice. Older Q prompts are retired. Use bd for execution checkpoints
-(last verified revision, outcome, remaining issue, next action); use `--append-notes`
-for history. Do not create another completion epic or Markdown task tracker.
+Read the latest repair decisions, C0–C5 and the source-import amendment once.
+Use relevant subsystem guides as each slice requires; older review records are
+supporting evidence, not a stack of alternate assignments. Reconcile the existing
+bead design/acceptance links to this prompt; do not create another completion bead.
+Inventory disk, existing fixture paths/generators, isolated GUI tooling, package
+assets and non-publishing platform checks early, then continue local work.
 
-## Execute without routine approval barriers
+## Execute through these internal milestones
 
-Follow the latest review's cohesive slices: lifecycle and stable identities;
-provider/adapters/coverage; native admission/timeout policy; remaining capacity,
-fault and workflow evidence; combined gates and self-review. Establish the small
-review counterexamples before repairs. Recreate them as committed regressions;
-temporary `/tmp` probes are optional hints and cannot be dependencies.
+| Order | Outcome and owned surfaces | Exit before continuing |
+| --- | --- | --- |
+| 1 | Correct provider coverage and attribution: `maplibre/basemap-*`, three map owners and their existing tests | Run the supplied coverage probe; commit ordinary regressions for its cases and malformed/bounded inputs; exercise actual control construction, withdrawal and Loading visibility |
+| 2 | Complete import settlement, targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Gated old/fresh reads, two-definition Retry, changed-head refusal, cancellation and native in-flight/early-NoData cases pass through real owners |
+| 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Capacity loss during output, real write fault, finite chunk timeout/uncapped source cancellation and retry pass; perform all available live resource/fixture measurements |
+| 4 | Demonstrate the combined product and deliver it: existing Desktop/Web/gallery recipes, receipt and guides | C0–C5 caller audit, required final-tree gates and available driven workflows complete; unsupported claims corrected and exact external gaps recorded |
 
-The existing architecture stays: library-owned jobs, Design Edit presentation,
-map-owned provider/adapters, immutable generations and operation-specific native
-resource checks. The latest review fixes ownership decisions. Choose private
-helper names, test organization and algorithms within those contracts locally.
-Do not introduce frameworks, dependencies, broad restructuring or cosmetic work.
+These are checkpoints, not requests for permission or separate deliveries.
+Dependencies may justify reordering. Keep one writer; subagents are not authorized.
+Routine helper/API organization inside the named owners, small test gates, diagnosis,
+regressions, i18n and contract-preserving fixes are delegated. Keep all eleven
+locales aligned if copy changes. Reuse accepted controls; no new analysis editor.
 
-For every repaired invariant trace its actual production caller through the owner
-to the observable result. Tests must trigger the real transition and assert final
-state: cancellation losing to commit, credit changing with the same source,
-Loading followed by binding visibility, failed-definition retry, and head change
-during read. A test fake must not provide a capability the production adapter lacks.
-After focused tests pass, examine adjacent failure/replacement/teardown paths and
-repair in-scope discoveries. No exhaustive mutation quota or repeated full-suite
-quota; record red/green only when actually observed.
+Run focused tests while editing. First reproduce each concrete failure, then fix
+it and examine its adjacent success/failure/replacement/disposal behavior. Do not
+mock away the owner or capability being verified. Record actual red/green evidence;
+source-traced findings without a reproduction are not retrospectively red tests.
+The supplied probes are starting points: committed tests must use the normal test
+runner and cannot depend on `/tmp` or ignored scratch artifacts.
 
-Attempt all available resource/fixture/GUI evidence using existing recipes and
-private disposable profiles. Inventory disk, fixtures and installed driving tools
-early. Retained source ceilings, missing admission, queue/fault tests and live
-scratch sampling are unfinished work unless a concrete prerequisite blocks them.
-Do not relabel them external or waive the amendment. Continue unrelated work around
-missing keys, hosts or fixtures. Repeat an unchanged environment failure only when
-new evidence warrants it. Never mutate the user's library/profile or buy services.
+Use the two named GeoLibre longitude references for R47 and stop there unless a
+specific remaining problem warrants another exact source. Preserve existing
+`wbgeotiff` adoption. No engine search, whole-toolkit import, geometry dependency,
+generic scheduler, new qualification harness or speculative abstraction.
 
-## Self-review, evidence and return
+## Continue independently; escalate only material decisions
 
-Perform one final caller-based C0–C5 audit, not just a review of changed lines.
-Resolve in-scope findings before handing back. Run repository-required gates on the
-combined final code, preserving merges when updating against main; earlier code-tip
-gates cannot transfer across new code changes. Record exact commands, revision,
-result and limits in the existing receipt. Distinguish deterministic boundary tests,
-real GDAL fixtures, live GUI and live-key observations. Do not claim a UI flow from
-service tests. Unknown or missing evidence stays unknown or missing.
+Work until all authorized, available implementation and verification is complete.
+Do not hand back after focused green tests, one milestone, a context checkpoint,
+or a missing unrelated fixture. Use bd checkpoints with revision, observed outcome,
+remaining blocker and next executable command, then resume. Do not create Markdown
+progress lists or a second task tracker.
 
-Reconcile the receipt's unsupported `9208c930` claims and affected operating guides
-in the same delivery. Keep one receipt and one [final debrief](review-and-debrief.md#final-correction-debrief-to-deliver).
-Record discovery stage, supported cause, smallest detector/fix, next-use outcome,
-and keep/revise/drop for meaningful interventions. Improve existing tests/scripts/
-guides where demonstrated friction justifies a small reversible change, test it,
-then resume product work. No new skills, productivity tracker or automation platform.
-Do not infer model cost or effectiveness from test totals; use measured effort only.
+Unset fixture variables are discovery work: inspect the documented existing inputs
+and reuse bounded generators where authorized. Missing real inputs, disk, keys or
+hosts block only their evidence. Small queue, capacity, clock and fault tests and
+local broad gates are work to perform, not external prerequisites by default.
+Never fabricate real-fixture accuracy from synthetic inputs or lift ceilings by
+removing guards without the amendment's bounded evidence. Record a specific failed
+command/prerequisite once; retry only after a relevant condition changes.
 
-Escalate only a demonstrated conflict with a fixed contract, scientific/compatibility
-uncertainty, material ownership/dependency change or action outside authorization.
-Supply the counterexample, impact, smallest options and recommendation; continue
-unaffected work. Routine debugging, test failures and implementation choices are
-yours to resolve. The main reviewer owns missing architectural decisions.
+Escalate only an actual conflict with fixed scientific/compatibility behavior,
+shared ownership/persistence/dependency decisions, consequential product scope,
+or authorization. Provide revision, counterexample, blocked scope, smallest
+alternatives and recommendation; continue unaffected work. Ordinary failing tests,
+local helper changes and small verification-tool repairs do not require approval.
+The main reviewer owns omitted decisions and overprescription in this handoff.
 
-Stop for one consolidated delivery when authorized available work is exhausted:
-commit and push the candidate to both configured destinations, verify identical
-tips/clean status, and report code/docs revision, R44–R51 dispositions with named
-regressions, remaining C0–C5 limits, final gates, actual user workflows observed,
-self-review discoveries and applied versus untested improvements. Track real
-follow-ups in bd. A required missing gate means partial delivery; do not close the
-implementation bead while acceptance remains unmet. Independent acceptance,
-primary-checkout integration, release and branch cleanup remain separate. No
-subagents or automatic handoff are authorized.
+## Self-review, improvement and delivery
+
+Before returning, trace each changed production caller through settlement or
+teardown and audit all remaining C0–C5 obligations. Repair in-scope defects found
+there. Optional cleanup/new features go to bd follow-ups without delaying closure.
+Run the complete [C5 gate set](completion-design.md#c5--final-candidate-independent-review-and-debrief)
+on the final combined code and after any required rebase preserving merges:
+full frontend tests/typecheck, gallery and both editions, generated bindings,
+Rust fmt/strict workspace clippy/check/tests/native policy, docs, and available
+fixture/package lanes. Earlier-tip or focused gates cannot substitute. Do not
+repeat broad gates for unchanged code solely because the receipt was edited.
+
+Use the existing [receipt](completion-receipt.md#current-correction-acceptance):
+for each obligation report code revision, named regression/caller, exact command
+and outcome, observation level and remaining limitation. Distinguish implemented,
+locally verified, independently accepted, integrated and released. Missing required
+proof remains partial. Keep code defects separate from missing proof and actual
+external prerequisites; leave the bead open while its acceptance is unmet.
+
+Apply small demonstrated improvements to existing tests/scripts/guides during work,
+verify their failure case and healthy control, then return to product work. Record
+material discoveries as they occur; finish the [six-question debrief](review-and-debrief.md#final-correction-debrief-to-deliver)
+after gates. Evaluate next-use benefit and unnecessary machinery, including this
+prompt's cost. No new skills, model router, metrics service or automation platform.
+
+Commit intended changes and bead records without touching unrelated work. Push the
+candidate to both configured destinations and verify matching tips/upstream status.
+Return one consolidated handoff with revisions/branch, R44–R51 and R27/R43/C0–C5
+dispositions, required gates, actual driven workflows, exact remaining blockers,
+self-review discoveries and tested versus proposed improvements. Stop there for
+independent acceptance. Do not integrate, release or clean branches automatically.

@@ -4,9 +4,10 @@ Status: active — implementation-ready continuation approved on 2026-09-23; ind
 Tracking: `canopi-j571.1` under `canopi-j571`; one candidate branch, no new completion epic.
 Current guidance: [prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [source-import amendment](source-import-design.md), [review R27–R43](completion-review-26eca68a.md), [protocol](collaboration-protocol.md).
 
-The [9208c930 review and repair decisions](completion-review-9208c930.md) are the
-current seam-specific addendum (R44–R51). Earlier R27–R43 repairs and remaining
-capacity/evidence requirements stay in scope; no prior report establishes acceptance.
+The [578a4f1c review and fixed repairs](completion-review-578a4f1c.md) refine
+R44–R51. Its seam-specific decisions and the sole prompt's execution order take
+precedence over the earlier sequence here. R27–R43 and remaining C0–C5 stay in
+scope; no prior report establishes acceptance.
 
 ## Mandate, authority and preservation
 
@@ -16,10 +17,10 @@ one consolidated return. The user approved repair → independent acceptance →
 integration into the normal development checkout. This assignment authorizes the
 first step only; implementation delivery must not update the user's primary code
 checkout or declare integration. The primary documentation checkout lacks candidate Data and
-Analysis; they exist on candidate `9208c930`. That difference is not a sidebar bug.
+Analysis; they exist on candidate `578a4f1c`. That difference is not a sidebar bug.
 
 Continue `feature/raster-rework-completion` in `.rq-scratch/wt-candidate` from
-`9208c930` or its verified successor. Preserve accepted foundation `34e4ded4` and
+`578a4f1c` or its verified successor. Preserve accepted foundation `34e4ded4` and
 main integration `f61f8494`, v18 migration, the source-only publication route,
 exact/display metadata split, original and history compatibility, existing real
 fixtures and all meaningful regressions. Merge this committed docs handoff with

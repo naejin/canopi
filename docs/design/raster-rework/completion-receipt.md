@@ -1,26 +1,54 @@
 # Raster rework completion receipt
 
-Status: partial — independent review of `9208c930` requires R44–R51 repairs and remaining C0–C5 evidence. Prior implementation reports are not acceptance.
+Status: partial — independent review at `578a4f1c` found incomplete R44–R51 repairs; final C0–C5 acceptance remains unmet.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-Independent review of `9208c930` found [R44–R51](completion-review-9208c930.md):
-four added diagnostic assertions failed while 16 existing tests passed. The
-review did not rerun full gates. Cancellation attachment, production attribution,
-loading visibility, viewport coverage, sparse admission, chunk timeout policy,
-same-definition Retry and native post-read currency require repairs.
+Independent review at `578a4f1c` is recorded in the [latest repair decisions](completion-review-578a4f1c.md).
+The code tip was `51511c90` (docs tip `578a4f1c`), on
+`feature/raster-rework-completion`; commits `b3c39729`, `ac7f04f5`, `51511c90`.
+The prior implementation labels are superseded by the disposition below, not erased
+from history. The review independently ran 44 existing frontend tests successfully;
+its separate probes found defects that those tests did not detect.
 
-The candidate is not independently accepted. R27 capacity ceilings and R43 live
-resource/queue/fault evidence also remain open under the accepted amendment.
-Unavailable large fixtures do not by themselves block local admission, queue or
-fault tests. Record a concrete prerequisite for each unavailable observation.
+| ID | Retained implementation at reviewed tip | Independent disposition / remaining proof | Owner |
+| --- | --- | --- | --- |
+| R44 | Late-cancel success attaches | Freshness still wrong under overlapping read; action→workflow dependency remains; gated post-commit settlement regression required | Implementer |
+| R45 | Production attribution adapter exists | Withdrawal retains credit; real control construction/ownership and mounted behavior unproved | Implementer |
+| R46 | Binding hides Loading imagery | No new defect established; retain visibility/delayed-style controls on final tree | Implementer verification |
+| R47 | Partition scan replaces five-point sampling | Wrong wrapped coverage and parser hang reproduced; normalize/bound and retain healthy controls | Implementer |
+| R48 | Checked occupied-block preflight added | No ongoing capacity checks; admission/overflow/mid-write/preservation/retry boundary tests outstanding | Implementer |
+| R49 | Chunk uses finite engine route | No new routing defect established; stalled-child timeout/cancellation cleanup unproved | Implementer verification |
+| R50 | Same-definition retry service exists | Panel guesses first failure and blocks explicit create semantics; UI/IPC/native regressions outstanding | Implementer |
+| R51 | Main read path rechecks currency | Early NoData bypass remains source-traced; gated native race/healthy controls outstanding | Implementer |
+| R27 | Old production ceilings retained | Complete bounded consumers and required safety evidence before lifting; unset variables alone do not establish missing inputs | Implementer; identify actual external fixture owner only if needed |
+| R43 | Residue distinguished from peak | Live scratch/queue/fault observations remain work; document exact missing prerequisites for any unavailable lane | Implementer |
+| C0–C5 | Candidate stack retained; partial feature delivery | Combined-tree gates and driven workflows below remain incomplete; acceptance/integration/release separate | Implementer then independent reviewer |
 
-For the next delivery replace this current disposition with a compact table of
-R44–R51 and remaining C0–C5 outcomes: code revision, named production caller/test,
-observed result, residual gap and who can resolve it. Retain prior measurements
-under their actual revisions. Do not mark a repair from suite totals or comments.
+For the next delivery update these rows in place with repair revision, exact named
+regression/command and observed result. Link detailed evidence rather than copy
+logs. Keep a required proof gap visible even when implementation exists. Record
+external gaps as **command → actual prerequisite absent → work still completed →
+residual risk → owner/closure evidence**. Not attempted is not unavailable.
+
+### Reported gates at `51511c90`
+
+These are implementer-reported prior-tip results, not final-tree verification or
+independent acceptance. Run the required combined gates under C5 after repairs.
+
+
+| Gate | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| Focused frontend (11 files) | 98 passed |
+| `cargo test -p canopi-desktop --lib services::lidar::` | 115 passed / 68 ignored (GDAL fixtures unset) |
+| `cargo fmt --all -- --check` | clean |
+| `cargo clippy -p canopi-desktop --all-targets -- -D warnings` | clean |
+| `python3 scripts/check_docs.py` | 0 errors |
+| Full `npm test`, `check:ui`, edition builds, `gen:types`/`check:types`, `cargo test --workspace` | not rerun this delivery |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke | unavailable |
 
 ### Reported correction batch at 9208c930 — superseded by independent review
 

@@ -1,12 +1,14 @@
 # Raster rework completion contract
 
-Status: active — consolidated correction handoff after independent review of candidate `9208c930`; not independently accepted.
+Status: active — consolidated correction handoff after independent review of candidate `578a4f1c`; not independently accepted.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
-Current guidance: [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [current review](completion-review-9208c930.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [current review](completion-review-578a4f1c.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [9208c930 review and repair decisions](completion-review-9208c930.md) are the
-current seam-specific addendum (R44–R51). Earlier R27–R43 repairs and remaining
-capacity/evidence requirements stay in scope; no prior report establishes acceptance.
+The [578a4f1c review and fixed repairs](completion-review-578a4f1c.md) are the
+current seam-specific addendum (R44–R51), refining the earlier repair decisions.
+Remaining R27/R43 and C0–C5 evidence stays in scope; no prior report establishes
+acceptance. The sole prompt owns execution order; the review supplies concrete
+counterexamples and fixed behavior, not a new product scope.
 
 ## Outcome, authority and exclusions
 
@@ -20,12 +22,14 @@ Exclude new engines, custom raster codecs, precision migration, reprojection/res
 
 ## Inspected baseline and reuse decisions
 
-The implementation baseline is `9208c930` on `feature/raster-rework-completion`
+The implementation baseline is `578a4f1c` on `feature/raster-rework-completion`
 in `.rq-scratch/wt-candidate`, descended from main integration `f61f8494` and
 accepted foundation `34e4ded4`. Historical gates and real-fixture measurements
 belong to `b4ab8fe6`. The `26eca68a` review found ten diagnostic failures with 44
 tests passing; the `9208c930` review found four added diagnostic failures with 16
-existing tests passing. Preserve the one-step import, v18 metadata migration,
+existing tests passing. At `578a4f1c`, 44 existing frontend tests passed but
+independent coverage/attribution/settlement probes still failed; native obligations
+remain source-traced pending dedicated tests. Preserve the one-step import, v18 metadata migration,
 R12–R43 repairs that satisfy their contracts, and revision-labelled measurements. The review still requires functional,
 resource-admission and evidence corrections; existing green totals are not acceptance.
 
@@ -53,7 +57,7 @@ bead. Do not replay completed foundation integration or create a replacement
 branch from a baseline missing candidate code. Merge this documentation handoff
 into `feature/raster-rework-completion`, resolving current guidance in favour of
 this contract and preserving revision-labelled delivered evidence. Reconcile the
-existing bead's design/acceptance with C0–C5 and R27–R43; do not reopen accepted
+existing bead's design/acceptance with C0–C5 and R27–R51; do not reopen accepted
 foundation work or erase historical evidence. Bead exports must preserve unrelated
 dirty records according to the issue workflow.
 
@@ -245,8 +249,8 @@ The [receipt](completion-receipt.md) owns measured evidence; bd owns progress; t
 
 C0 establishes preservation and prerequisite inventory. Execute the current
 [correction sequence A–D](completion-correction-design.md#a--finish-the-import-and-inspection-lifecycle-first)
-inside C1–C5: small lifecycle/workflow repairs first, provider transitions, bounded
-native admission/measurements, then combined self-review/gates. These phases do not
+as refined by the [sole prompt](completion-agent-prompt.md): provider regressions,
+lifecycle/identity, native resource evidence, then combined self-review/gates. These phases do not
 require separate prompts. A required unavailable proof yields partial delivery;
 continue independent code repairs and available gates before returning.
 

@@ -1,19 +1,64 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — review of `9208c930` requires R44–R51; final implementation synthesis and independent acceptance remain pending.
+Status: evidence — review of `578a4f1c` requires completion of R44–R51; final implementation synthesis and independent acceptance remain pending.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
-Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-9208c930.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment continues candidate `9208c930` under `canopi-j571.1`.
+The current assignment continues candidate `578a4f1c` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
 named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
+
+### Independent disposition at 578a4f1c
+
+The agent delivered narrow, useful changes and honestly left the bead open, but
+several “repaired” claims exceeded the evidence. Forty-four existing frontend
+tests passed independently; separate probes reproduced wrong wrapped coverage,
+nonterminating normalization, retained credit and attachment before a fresh read.
+The review also traced guessed Retry selection, one-time storage admission and an
+early NoData currency bypass. Native races/faults and full gates were not rerun by
+the reviewer. Details and fixed decisions live in the [current review](completion-review-578a4f1c.md).
+
+The earlier implementation synthesis is preserved at `578a4f1c` in Git. Its claim
+that all R44–R51 invariants hold is superseded; do not treat that narrative or
+focused totals as acceptance. R46 and R49 have useful code repairs to preserve,
+with their remaining evidence obligations kept separate from demonstrated bugs.
+
+The reviewer initially suspected a missing Canvas `maplibre` property, then found
+the real adapter getter and withdrew the suspicion before the final review. This
+is a reviewer correction, not an implementer defect. Review confidence must follow
+caller tracing, including inherited/getter capabilities.
+
+### Current improvement experiment and division of effort
+
+The user wants sustained implementation with fewer expensive design/review cycles.
+Use the implementation agent for reproduction, ordinary fixes, local decisions,
+full verification, self-review and small task-local tool improvements. Reserve the
+main reviewer for missing consequential decisions and consolidated independent
+acceptance; the user remains courier. No automatic delegation or model router.
+The preference is explicit; actual cost savings are not yet measured.
+
+| Observed friction / classification | Small intervention now | Next-use evidence and decision |
+| --- | --- | --- |
+| Same requirement repeatedly described but nearby cases escape; implementation/test gap | Put review inputs, expected outputs and a runnable coverage probe beside fixed decisions; turn them into ordinary tests | Did they reproduce before repair and catch adjacent cases before handoff? Revise if another escape exposes missing expectations |
+| Main review supplied prose without durable executable reproductions; handoff quality owned by reviewer | Supply runnable provider cases and exact gated settlement sequence; implementer owns normal-runner integration | Record whether reconstruction required another courier exchange; do not claim all review probes were already committed tests |
+| R50 remains ambiguous in the shipped UI despite explicit identity requirement; implementation deviation | Settle Create versus per-result Retry behavior and actual command arguments in the handoff | Two failed definitions and changed create fields select the intended action without another design exchange |
+| Focused totals labelled broader repairs; evidence/reporting gap | Receipt separates implementation, named boundary proof, final gates and unavailable prerequisites | Every final claim has its own supporting observation; independent reviewer checks the changed risk boundaries |
+| Earlier directive to trace owners did not prevent this delivery's escapes; method effectiveness unproved | Replace reminders with gated transitions and real adapter construction assertions | Keep detectors that expose the old defect; do not declare the general method successful from test count |
+| Repeated dependency research could displace product completion; risk, not measured waste | Name two small GeoLibre longitude references and retain current native dependency | Record actual reuse/deletion and regression result; broaden only for a named unresolved problem |
+
+Tool improvements need a witnessed failure: broken input → smallest existing
+script/test/guide repair → healthy and failure controls → next actual use. A fix
+with no subsequent use has untested benefit. New frameworks, skills and automation
+platforms remain separate proposals. Retain an improvement only when it reduces
+observed friction or catches a relevant defect; remove rules that duplicate an
+existing instruction without improving its execution.
 
 ### Independent disposition at 9208c930
 
@@ -28,21 +73,6 @@ although their callers did not implement them. An optional test attribution hook
 had no production implementation. These are implementation/test/claim gaps; their
 causes are not established by model identity or cost assumptions. The main reviewer
 also owns earlier missed caller boundaries and must verify these in final review.
-
-### Next-use improvement experiment
-
-Use the existing tests and receipt, not another framework. Before claiming a repair,
-trace trigger → production owner/adapter → final observable outcome. In the next
-slice, test this practice on R44 settlement, R45/R46 adapter plus binding, and
-R50/R51 native identity. Record whether it caught a defect before handoff and whether
-independent review found another escape. Adoption is pending that observation.
-A failed next use calls for revising the detector, not simply adding more prose.
-
-Tool changes are justified by a witnessed failure or repeated friction: identify
-the broken input, patch the smallest existing tool, verify that input and a healthy
-control, then record the next actual use. No observed next use means untested benefit.
-Cost/elapsed effort and courier-cycle savings stay unknown unless directly recorded;
-no synthetic cost estimate or model ranking is part of this debrief.
 
 ### Independent disposition at 26eca68a
 
@@ -222,35 +252,41 @@ Test totals and line counts are not productivity measures.
 
 ### Final correction debrief to deliver
 
-The prior implementer synthesis is retained at `9208c930` in Git; its claims are
-qualified by the independent disposition above. Replace the pending final synthesis
-with one concise evidence-based account, after
-self-review and final gates. Link the receipt instead of duplicating gate logs.
-Answer these six questions:
+After self-review and final gates, replace the pending synthesis below with one
+concise account. Retain this question set as the evaluation contract; link the
+receipt for commands and results instead of duplicating it. Prior implementation
+syntheses remain revision-labelled history, not current proof.
 
-1. What now works through production callers and actual driven app workflows?
-   Separate those evidence levels and identify remaining acceptance/integration gaps.
-2. Which invariant families escaped, and which were found before delivery? For each
-   material case classify supported design omission, implementation deviation,
-   test/oracle gap, reviewer oversight or environment/tool limitation; allow overlap.
-3. Which ownership changes fixed the escapes, and what existing machinery was reused
-   or removed? Identify unnecessary prescription owned by the main reviewer too.
-4. Which detector or small tooling change actually helped on its next use? Record
-   failure/revision → intervention → evidence → keep/revise/drop. Mark untested
-   proposals explicitly; do not convert every incident into a permanent rule.
-5. What affected total delivery effort? Use observed implementation/review/rework
-   time, usage or courier exchanges only where available. State unknowns. Test and
-   line counts do not prove productivity, and implementation-agent preference is
-   not measured cost evidence.
-6. What remains, who owns it, and what concrete evidence or decision closes it?
-   Distinguish code work, missing external prerequisites, independent acceptance,
-   integration and release. Track executable follow-ups in bd.
+1. **Product outcome:** What works through production callers, actual driven
+   Desktop/Web and packaged builds? Distinguish these observation levels and
+   missing evidence. Did the whole workflow become usable?
+2. **Escapes and causes:** Which defects were found during implementation,
+   self-review and independent review? Classify supported design omission,
+   implementation deviation, test/oracle gap, reviewer oversight or environment/
+   tool limitation. Allow overlap and unknown causes; cite the revision/case.
+3. **Necessity and reuse:** What existing code, including GeoLibre patterns, was
+   reused? What machinery was removed or proved unnecessary? Which prescription
+   from the main reviewer increased work without improving the outcome?
+4. **Working-method/tool changes:** For each material intervention record failure
+   → smallest change → actual next-use result → keep/revise/drop/untested →
+   maintained test/script/guide or bd follow-up. Did the new detector fail on the
+   old bug? Did a supposedly unavailable local test become executable?
+5. **Total delivery effort:** What implementation, verification, reviewer and
+   rework effort is directly observable? Separate needed decision exchanges from
+   avoidable continuation, reconstruction or duplicate research. Use existing logs
+   or reported usage only; state unknowns. Do not infer savings from model names,
+   test totals, code volume or fewer messages. No new cost collector is needed.
+6. **Next action:** What remains and who owns it? Separate code/proof gaps, actual
+   external prerequisites, independent acceptance, integration and release. Name
+   closure evidence in bd. Propose only a small number of improvements with a
+   concrete next task that can test them; no open-ended tooling program.
 
-The implementation agent writes the synthesis; the main reviewer adds independently
-observed escapes and acceptance disposition in the same record. Promote only proven
-lessons into the narrowest maintained test/script/guide, removing stale instructions.
-No broad workflow/skill/tool project is required to finish this product delivery.
-
+During work, update a material event when discovered; do not wait for memory at
+handoff or keep a diary. At final handoff the implementer owns the synthesis. The
+main reviewer then appends the independent outcome and any escaped defects to
+that same synthesis. A disproved lesson is revised or dropped. Promote demonstrated
+lessons to the narrowest existing test/script/guide and remove superseded guidance.
+Broader skill or shared tooling changes need their own user authorization.
 
 ### Interventions carried into this assignment
 
@@ -274,7 +310,7 @@ next-use evidence supports a benefit:
 
 ### Final synthesis
 
-Current disposition: changes required at `9208c930`. The next implementation
+Current disposition: changes required at `578a4f1c`. The next implementation
 synthesis is pending the correction, followed by independent acceptance. Do not
 reuse an earlier “implemented” heading as evidence of complete current scope.
 Historical accepted outcomes and limitations follow; their old execution prompts,

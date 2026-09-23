@@ -1,14 +1,14 @@
 # LiDAR implementation guide
 
-Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `9208c930` remains partial after independent review. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
+Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `578a4f1c` remains partial after independent review. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
 ## Accepted direction and current assignment
 
 The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-design.md): an ordered collection of source COGs, topmost-valid composition shared by display/analysis, whole-layer presentation visibility, and no compulsory merged-source raster for new edits. [ADR 0027](../adr/0027-ordered-cog-data-layers.md) supersedes ADR 0026 for new source composition. The correction at `34e4ded4` is [independently accepted in scope](../design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4); integration and release remain separate.
 
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
-`canopi-j571.1` from candidate `9208c930`, with foundation integrated at `f61f8494`.
-The [current independent review](../design/raster-rework/completion-review-9208c930.md)
+`canopi-j571.1` from candidate `578a4f1c`, with foundation integrated at `f61f8494`.
+The [current independent review](../design/raster-rework/completion-review-578a4f1c.md)
 requires R44–R51 repairs and remaining R27–R43 evidence under the [repair decisions](../design/raster-rework/completion-correction-design.md).
 Source-only publication and nullable exact/display facts are present; lifecycle,
 resource admission and evidence obligations remain. The
@@ -23,7 +23,7 @@ The delivered implementation lives on that branch, not in this documentation che
 
 Q is unqualified and frozen. Preserve useful regression tests and [historical evidence](../design/raster-qualification-q.md); do not repair or rerun its retired harness assignments. The [review/debrief](../design/raster-rework/review-and-debrief.md) owns historical outcomes and improvement evidence. GDAL and the pinned native reader remain selected; Rust owns native raster work and TypeScript application orchestration. No new Python raster tooling or wholesale Python removal.
 
-Preserve originals/sidecars, source-specific validity, valid zero/negative values and current Float32 semantics. The candidate still has its old 24-file/2-GiB/400M input policy and compulsory measurement; replace those only through the source-import amendment’s bounded implementation and evidence, not by deleting guards alone. Legacy dense/sparse assets stay readable exactly; never reinterpret masked historical replacement as simple source order. Current code remains the authority for existing behavior; update this guide's implementation inventory and the dock contract when the new route actually lands. The accepted workbench HTML reference `0e696722` is the production UI reference for completion, with ordered-source behavior taking precedence over obsolete replacement controls. [Collaboration](../design/raster-rework/collaboration-protocol.md) retains main-agent review and user courier authority.
+Preserve originals/sidecars, source-specific validity, valid zero/negative values and current Float32 semantics. The candidate retains its old 24-file/2-GiB/400M input policy; lift those limits only through the source-import amendment’s bounded implementation and evidence. Source-only publication no longer requires composed-pixel measurement; source facts remain measured during preparation. Legacy dense/sparse assets stay readable exactly; never reinterpret masked historical replacement as simple source order. Current code remains the authority for existing behavior; update this guide's implementation inventory and the dock contract when the new route actually lands. The accepted workbench HTML reference `0e696722` is the production UI reference for completion, with ordered-source behavior taking precedence over obsolete replacement controls. [Collaboration](../design/raster-rework/collaboration-protocol.md) retains main-agent review and user courier authority.
 
 | Change | Owner / reference |
 | --- | --- |
