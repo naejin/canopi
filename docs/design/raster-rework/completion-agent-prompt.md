@@ -1,6 +1,6 @@
 # Finish the raster candidate through verified production workflows
 
-Status: active — sole implementation prompt; continue reviewed candidate `291d0773`.
+Status: active — sole implementation prompt; continue reviewed candidate `eb3b5425`.
 Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
 Current guidance: [ownership correction](completion-ownership-design.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
 
@@ -16,12 +16,13 @@ Acceptance, primary-checkout integration and release remain separate.
 Inspect `git status --short --branch`, worktrees, ancestry and
 `bd show canopi-j571.1`; claim/resume that bead in the candidate worktree. Merge
 this committed documentation handoff with history preserved. Start from
-`291d0773` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
+`eb3b5425` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
 accepted repairs. Do not restart from the older documentation checkout. Its
 `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
 are user-owned: do not stage, stash, overwrite or discard them.
 
-Read the ownership correction, C0–C5 and the source-import amendment once.
+Read the [eb3b5425 findings and regression recipes](completion-ownership-design.md#review-at-eb3b5425-and-first-regression-cases),
+the remaining ownership contract, C0–C5 and the source-import amendment once.
 The ownership correction is the current seam-specific authority; older reviews
 are historical evidence where their sequencing differs.
 Use relevant subsystem guides as each slice requires; older review records are
@@ -34,8 +35,8 @@ assets and non-publishing platform checks early, then continue local work.
 
 | Order | Outcome and owned surfaces | Exit before continuing |
 | --- | --- | --- |
-| 1 | Consolidate the complete basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | TDD the M acceptance cases, starting with initial mount without events; migrate Canvas/Location/WorldMap and verify actual control ownership, coverage, replacement and disposal |
-| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | TDD the L acceptance cases with real store/workflow, including rejected-read recovery and overlapping completions; named two-definition Retry and native in-flight/early-NoData cases pass |
+| 1 | Consolidate the complete basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | Repair E1/E4 through actual Canvas/Location/WorldMap callers: initial mount, movement metadata, one attribution control, replacement/disposal; retain M coverage cases |
+| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Repair E2/E3 with real store/workflow/polling: automatic outage recovery and one attempt per job; repair E5 with name-based Retry; complete native in-flight/early-NoData proof |
 | 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Capacity loss during output, real write fault, finite chunk timeout/uncapped source cancellation and retry pass; perform all available live resource/fixture measurements |
 | 4 | Demonstrate the combined product and deliver it: existing Desktop/Web/gallery recipes, receipt and guides | C0–C5 caller audit, required final-tree gates and available driven workflows complete; unsupported claims corrected and exact external gaps recorded |
 
@@ -85,6 +86,22 @@ The main reviewer owns omitted decisions and overprescription in this handoff.
 
 ## Self-review, improvement and delivery
 
+Before broad gates, perform one bounded contract-to-caller review of the changed
+owners and their direct callers. For each changed event or async path trace setup,
+normal delivery, failure/retry, replacement and teardown. Inspect removed behavior
+in the diff: every deleted event subscription must be relocated or deliberately
+retired with contract evidence. A new helper name does not prove ownership moved.
+Repair in-scope findings and repeat affected focused checks; no review-count quota.
+
+Use the existing receipt as an acceptance cross-reference, not a second tracker:
+each E1–E5/M/L/R obligation links to a named test, actual boundary, observed result
+and residual limit. Check that test names and mock boundaries support the prose.
+No “done” row may still rely on a mocked owner, missing intended assertion, old-tip
+gate or unwritten required local proof. This audit is implementation work, not a
+request for another reviewer round. Keep bd checkpoints sufficient to resume after
+context loss: current commit, remaining obligation, last failure and next command.
+
+
 Before returning, trace each changed production caller through settlement or
 teardown and audit all remaining C0–C5 obligations. Repair in-scope defects found
 there. Optional cleanup/new features go to bd follow-ups without delaying closure.
@@ -111,6 +128,6 @@ prompt's cost. No new skills, model router, metrics service or automation platfo
 Commit intended changes and bead records without touching unrelated work. Push the
 candidate to both configured destinations and verify matching tips/upstream status.
 Return one consolidated handoff with revisions/branch, R44–R51 and R27/R43/C0–C5
-dispositions, required gates, actual driven workflows, exact remaining blockers,
+dispositions including E1–E5, required gates, actual driven workflows, exact remaining blockers,
 self-review discoveries and tested versus proposed improvements. Stop there for
 independent acceptance. Do not integrate, release or clean branches automatically.

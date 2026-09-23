@@ -1,12 +1,12 @@
 # Raster rework completion contract
 
-Status: active — ownership correction against candidate `291d0773`; not independently accepted.
+Status: active — ownership correction against candidate `eb3b5425`; not independently accepted.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
 Current guidance: [ownership correction](completion-ownership-design.md), [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 The [ownership correction](completion-ownership-design.md) is the current
 seam-specific addendum and supersedes conflicting assembly prescriptions in earlier
-reviews. Continue candidate `291d0773`; preserve R44–R51 repairs where correct.
+reviews. Continue candidate `eb3b5425`; preserve R44–R51 repairs where correct.
 Remaining R27/R43 and C0–C5 evidence stays in scope. The sole prompt owns execution
 order; prior reviews provide historical counterexamples, not alternate assignments.
 
@@ -22,7 +22,7 @@ Exclude new engines, custom raster codecs, precision migration, reprojection/res
 
 ## Inspected baseline and reuse decisions
 
-The implementation baseline is `291d0773` on `feature/raster-rework-completion`
+The implementation baseline is `eb3b5425` on `feature/raster-rework-completion`
 in `.rq-scratch/wt-candidate`, descended from main integration `f61f8494` and
 accepted foundation `34e4ded4`. Historical gates and real-fixture measurements
 belong to `b4ab8fe6`. The `26eca68a` review found ten diagnostic failures with 44

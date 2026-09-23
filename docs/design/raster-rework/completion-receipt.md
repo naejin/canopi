@@ -1,10 +1,37 @@
 # Raster rework completion receipt
 
-Status: partial — ownership correction M/L and TDD repairs delivered at `86c74b14`+ for independent acceptance. Capacity-plane GDAL lane passed with live measurements; IGN MNT/MNH private fixtures remain unavailable. Not independently accepted.
+Status: partial — independent review of `eb3b5425` requires E1–E5 repairs and remaining local proof; capacity-plane evidence retained, not independently accepted.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
+
+The [ownership contract and E1–E5 cases](completion-ownership-design.md#review-at-eb3b5425-and-first-regression-cases)
+are the current acceptance authority. Review: four focused suites **46 passed**;
+real-store/workflow diagnostic **one healthy control passed, two regressions failed**.
+No broad native, capacity or GUI rerun was performed by the reviewer.
+
+| Obligation at `eb3b5425` | Independent disposition | Evidence needed for next delivery |
+| --- | --- | --- |
+| E1 / M movement | Source-confirmed regression: Location and WorldMap handlers are empty | Actual caller movement updates viewport metadata, credit and zoom |
+| E2 / L recovery | Reproduced: restored transport plus six seconds produces zero attachments | Existing polling recovers pending intent automatically |
+| E3 / L single attempt | Reproduced: repeated Complete starts two reads | One in-flight attempt per job, with separate-job freshness retained |
+| E4 / M attribution | Source-confirmed duplicate ownership and control churn | One production control; stable unchanged credit; other-source credit retained once |
+| E5 / R50 identity | Source-confirmed stored result name omitted | Named-row Retry through action/IPC and saved-definition native proof |
+| R48 / R51 | Required native fault/race regressions unfinished | Mid-write preservation/cleanup/retry and gated head-change Value/NoData tests |
+| R27 / R43 | Generated capacity plane is useful reported evidence | Preserve fixture provenance and distinguish process memory, scratch peak, queue and fault evidence; retain ceilings pending required lift proof |
+| C0–C5 | Not independently accepted | Exact final-tree commands/outcomes and specific external limits |
+
+At delivery update this table in place with repair revision, test/command, intended
+behavioral RED, GREEN, real caller and residual limit. Link evidence once; do not
+copy logs. Keep missing proof separate from product defects and genuine external
+prerequisites. Final reviewer adds independent disposition after delivery.
+
+### Implementer report at eb3b5425 — qualified by independent review
+
+The report below is retained for provenance. Blank limitations and migrated-caller
+claims do not establish acceptance. L1 used a store mock; M1 exercised the mount
+helper; R50's setup failure was not behavioral RED. The current table above governs.
 
 Ownership correction TDD on the combined tree at `86c74b14`
 (merge `15463037`, mount+ordered-reads `86c74b14`). RED/GREEN recorded per cycle.

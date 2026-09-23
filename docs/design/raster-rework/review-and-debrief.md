@@ -1,19 +1,50 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — ownership correction against `291d0773` active; final synthesis and independent acceptance pending.
+Status: evidence — independent review at `eb3b5425` requires E1–E5 and local proof; final synthesis and independent acceptance pending.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `291d0773` under `canopi-j571.1`.
+The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `eb3b5425` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
 named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
+
+### Independent disposition at eb3b5425
+
+The generated capacity fixture unlocked useful GDAL evidence, and catch placement,
+returned snapshots and read-start ordering improved. Independent acceptance still
+failed: 46 focused tests passed, but a real-store/workflow probe failed automatic
+recovery and single-attempt settlement (healthy completion passed). Source inspection
+found disconnected viewport handlers, incomplete attribution ownership and unnamed
+Retry rows. See the [E1–E5 cases](completion-ownership-design.md#review-at-eb3b5425-and-first-regression-cases).
+
+The earlier architectural ownership omission remains the main agent's responsibility.
+At this revision, the five outcomes were explicit in the accepted handoff: classify
+these escapes as implementation deviations and test gaps, rather than treating each
+as a new missing design. The reviewer must still check for contradictory or excessive
+prescriptions and own corrections where found. Final cause attribution is evidence-
+based; this classification is not a claim about model ability or intent.
+
+| Process intervention for this delivery | Falsifiable next-use evidence | Owner / final decision |
+| --- | --- | --- |
+| Real-owner vertical TDD | E2 recovery fails before repair and passes after with real store/workflow/polling; healthy control remains green | Implementer records result; reviewer checks boundary, keep/revise/drop |
+| Production caller migration audit | E1 movement regression detected through registered events in all three map callers; removed listeners accounted for | Implementer records defects caught before handoff; reviewer records escapes |
+| Receipt claim audit | Every current completed row has matching boundary and intended assertion; R48/R51 no longer labelled external merely because unwritten | Implementer reconciles before delivery; reviewer verifies remaining limitations |
+| Existing fixture discovery | Preserve generator command and exact fixture identity; reproduce the capacity route when affected without rebuilding unrelated tooling | Keep demonstrated discovery improvement; do not extrapolate memory samples to scratch/queue guarantees |
+
+Use the existing six-question debrief for one final synthesis. Report usable outcomes,
+self-review discoveries versus review escapes, design and reviewer corrections,
+TDD failures that were behavioral versus fixture-only, and small tooling/guide changes
+with their next actual use. An unexercised proposal remains untested. Time/cost and
+avoidable courier exchanges are reported only when observed; no savings claim from
+model names, test counts or a longer prompt. Retain helpful controls, revise ineffective
+ones and remove duplicated instructions. Skill/framework changes need separate scope.
 
 ### Ownership correction and next-use evidence
 
@@ -324,7 +355,7 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
-**Ownership-correction synthesis at `86c74b14` (partial).** Commands and
+**Historical implementer synthesis at `86c74b14` (partial; superseded by the independent disposition at `eb3b5425`).** Commands and
 measurements live in the [receipt](completion-receipt.md#current-correction-acceptance).
 Independent acceptance remains a separate entry by the main reviewer.
 
@@ -416,7 +447,7 @@ next-use evidence supports a benefit:
 
 ### Final synthesis
 
-Current disposition: ownership correction required at `291d0773`. The next implementation
+Current disposition: E1–E5 and local proof required at `eb3b5425`. The next implementation
 synthesis is pending the correction, followed by independent acceptance. Do not
 reuse an earlier “implemented” heading as evidence of complete current scope.
 Historical accepted outcomes and limitations follow; their old execution prompts,
