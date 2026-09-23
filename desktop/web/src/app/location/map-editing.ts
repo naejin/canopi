@@ -14,6 +14,7 @@ import {
 } from '../../maplibre/location-map'
 import {
   bindBasemapProvider,
+  createAttributionControls,
   createBasemapProvider,
   installBasemapConfigObserver,
   mapStyleReadiness,
@@ -185,6 +186,7 @@ export function useLocationMapEditingHost(
             tileAuth,
             styleReady: mapStyleReadiness(context.map, context.lifetime),
             visible: () => !mapInitFailed.peek(),
+            attributionControls: createAttributionControls(context.maplibre, context.map),
           }),
         )
         // Style, key and locale are reactive inputs of this map lifetime.

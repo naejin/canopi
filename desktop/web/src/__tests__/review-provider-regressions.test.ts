@@ -343,4 +343,100 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(2)
     expect(sources.size).toBe(1)
   })
+
+  it('R45: copyright-only change updates attribution without removing the source', () => {
+    const { target, sources, order, readAttribution } = recordingTarget()
+    const first = {
+      state: 'ready' as const,
+      descriptor: descriptor({ attribution: 'A' }),
+      copyright: 'A',
+    }
+    reconcileBasemapContribution(target, first, { officialTilesResolvable: true })
+    const addCount = order.filter((entry) => entry.startsWith('addSource')).length
+    reconcileBasemapContribution(
+      target,
+      { state: 'ready', descriptor: descriptor({ attribution: 'B' }), copyright: 'B' },
+      { officialTilesResolvable: true },
+    )
+    expect(sources.size).toBe(1)
+    expect(order.filter((entry) => entry.startsWith('removeSource')).length).toBe(0)
+    expect(order.filter((entry) => entry.startsWith('addSource')).length).toBe(addCount)
+    expect(readAttribution()).toBe('B')
+  })
+
+  it('R46: Loading hides an unchanged source instead of exposing cached imagery', () => {
+    const { target, layers } = recordingTarget()
+    reconcileBasemapContribution(
+      target,
+      { state: 'ready', descriptor: descriptor(), copyright: 'A' },
+      { officialTilesResolvable: true },
+    )
+    const layer = layers.get('basemap-raster') as { layout?: { visibility?: string } } | undefined
+    expect(layer?.layout?.visibility).toBe('visible')
+    reconcileBasemapContribution(target, { state: 'loading', style: 'google_satellite' })
+    expect((layers.get('basemap-raster') as { layout?: { visibility?: string } })?.layout?.visibility)
+      .toBe('none')
+  })
+
+  it('R47: uncovered strips in the viewport are unavailable', () => {
+    // Longitude 0-1, 4-6 and 9-10 leave uncovered strips inside 0-10.
+    const gappy = readViewportMetadata(
+      {
+        copyright: 'c',
+        maxZoomRects: [
+          { north: 10, south: 0, east: 1, west: 0, maxZoom: 18 },
+          { north: 10, south: 0, east: 6, west: 4, maxZoom: 18 },
+          { north: 10, south: 0, east: 10, west: 9, maxZoom: 18 },
+        ],
+      },
+      { west: 0, south: 0, east: 10, north: 10, zoom: 12 },
+    )
+    expect(gappy).toBeNull()
+  })
+
+  it('R47: wrapped viewport coverage across the antimeridian is supported', () => {
+    const wrapped = readViewportMetadata(
+      {
+        copyright: 'c',
+        maxZoomRects: [
+          { north: 10, south: 0, east: -170, west: 170, maxZoom: 18 },
+        ],
+      },
+      { west: 175, south: 1, east: -175, north: 9, zoom: 12 },
+    )
+    expect(wrapped?.maxZoom).toBe(18)
+  })
+
+  it('R47: an interior lower ceiling becomes the source-wide ceiling', () => {
+    // The high-zoom rectangle covers only the outer band; the interior is
+    // supported solely at 12, so the source ceiling cannot exceed 12.
+    const interior = readViewportMetadata(
+      {
+        copyright: 'c',
+        maxZoomRects: [
+          { north: 10, south: 8, east: 10, west: 0, maxZoom: 18 },
+          { north: 2, south: 0, east: 10, west: 0, maxZoom: 18 },
+          { north: 8, south: 2, east: 2, west: 0, maxZoom: 18 },
+          { north: 8, south: 2, east: 10, west: 8, maxZoom: 18 },
+          { north: 8, south: 2, east: 8, west: 2, maxZoom: 12 },
+        ],
+      },
+      { west: 0, south: 0, east: 10, north: 10, zoom: 12 },
+    )
+    expect(interior?.maxZoom).toBe(12)
+  })
+
+  it('R47: a broad low-zoom rectangle cannot suppress a finer covering one', () => {
+    const overlapping = readViewportMetadata(
+      {
+        copyright: 'c',
+        maxZoomRects: [
+          { north: 90, south: -90, east: 180, west: -180, maxZoom: 10 },
+          { north: 10, south: 0, east: 10, west: 0, maxZoom: 18 },
+        ],
+      },
+      { west: 0, south: 0, east: 10, north: 10, zoom: 12 },
+    )
+    expect(overlapping?.maxZoom).toBe(18)
+  })
 })

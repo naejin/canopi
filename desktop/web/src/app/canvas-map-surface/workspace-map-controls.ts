@@ -8,7 +8,7 @@ import {
   MAPLIBRE_BASEMAP_SOURCE_ID,
 } from '../../maplibre/config'
 import type { BasemapStyle } from '../../generated/contracts'
-import { bindBasemapProvider, createBasemapProvider, installBasemapConfigObserver, mapStyleReadiness } from '../../maplibre/basemap-bind'
+import { bindBasemapProvider, createAttributionControls, createBasemapProvider, installBasemapConfigObserver, mapStyleReadiness } from '../../maplibre/basemap-bind'
 import type { BasemapProvider, BasemapViewport } from '../../maplibre/basemap-provider-session'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
@@ -46,6 +46,7 @@ interface WorkspaceMapAttempt {
   basemapProviderStyle: BasemapStyle | null
   lifetime: MapLibreSurfaceLifetime | null
   map: WorkspaceActivationMap | null
+  maplibre: unknown
   settled: boolean
   released: boolean
   admitted: boolean
@@ -119,6 +120,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         basemapProviderStyle: null,
         lifetime: null,
         map: null,
+        maplibre: null,
         settled: false,
         released: false,
         admitted: false,
@@ -376,6 +378,10 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     const unbind = bindBasemapProvider({
       provider,
       map: map as unknown as Parameters<typeof bindBasemapProvider>[0]['map'],
+      attributionControls: createAttributionControls(
+        (this.surface as { maplibre?: unknown }).maplibre,
+        map as unknown as Parameters<typeof createAttributionControls>[1],
+      ),
       tileAuth: attempt.tileAuth,
       styleReady: mapStyleReadiness(
         map as unknown as { isStyleLoaded?(): boolean; loaded?(): boolean },

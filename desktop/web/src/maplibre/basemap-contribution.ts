@@ -154,11 +154,12 @@ export function reconcileBasemapContribution(
 
   if (installed && sameTileConfig(installed, tiles, tileSize, maxzoom)) {
     // Identical tile configuration retains the source and its loaded state.
-    if (installed.attribution !== attribution) {
-      // Copyright-only: update attribution without removing the tile source.
-      if (target.replaceBasemapAttribution) {
-        target.replaceBasemapAttribution(attribution)
-      }
+    // Copyright-only: update attribution without removing the tile source.
+    // The source's own attribution field is left empty so stale basemap credit
+    // cannot linger there; the owned attribution control carries current credit
+    // while preserving every other source's credit.
+    if (target.replaceBasemapAttribution) {
+      target.replaceBasemapAttribution(attribution)
     }
     setBasemapContributionVisibility(target, true)
     return
@@ -172,9 +173,14 @@ export function reconcileBasemapContribution(
     type: 'raster',
     tiles: [...tiles],
     tileSize,
-    attribution,
+    // Basemap credit lives on the map-owned attribution control so a
+    // copyright-only change never has to rebuild the tile source.
+    attribution: '',
     maxzoom,
   })
+  if (target.replaceBasemapAttribution) {
+    target.replaceBasemapAttribution(attribution)
+  }
   const layer = {
     id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
     type: 'raster' as const,

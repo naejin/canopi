@@ -18,6 +18,7 @@ import {
 import { basemapStyle } from '../../app/settings/state'
 import {
   bindBasemapProvider,
+  createAttributionControls,
   createBasemapProvider,
   installBasemapConfigObserver,
   mapStyleReadiness,
@@ -110,6 +111,7 @@ export function WorldMapSurface({
             map: context.map,
             tileAuth,
             styleReady: mapStyleReadiness(context.map, context.lifetime),
+            attributionControls: createAttributionControls(context.maplibre, context.map),
           }),
         )
         // Style, key and locale are reactive inputs of this map lifetime: an

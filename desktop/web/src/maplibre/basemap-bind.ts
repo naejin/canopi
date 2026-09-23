@@ -70,6 +70,29 @@ export interface BasemapBindingDeps {
    * then, so it is not applied twice for one published state.
    */
   readonly afterApply?: () => void
+  /**
+   * Production map-owned attribution control seam.
+   *
+   * Copyright-only updates replace this owned control rather than removing the
+   * tile source. Required for a live map: a required behavior must not silently
+   * disappear behind an optional method.
+   */
+  readonly attributionControls?: {
+    create(options: {
+      compact?: boolean
+      customAttribution?: string | string[]
+    }): unknown
+    add(control: unknown): void
+    remove(control: unknown): void
+  }
+}
+
+/** Effective basemap visibility: user visibility AND provider renderability. */
+function effectiveBasemapVisibility(
+  state: BasemapProviderState,
+  userVisible: boolean,
+): boolean {
+  return userVisible && state.state === 'ready'
 }
 
 /** Install the binding and return its disposer. */
@@ -78,6 +101,32 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
   const visible = deps.visible ?? (() => true)
   let disposed = false
   let pending: BasemapProviderState | null = null
+  let ownedAttribution: unknown = null
+
+  const target: BasemapReconcileTarget = {
+    getSource: (id) => map.getSource(id),
+    getLayer: (id) => map.getLayer(id),
+    removeLayer: (id) => map.removeLayer(id),
+    removeSource: (id) => map.removeSource(id),
+    addSource: (id, source) => map.addSource(id, source),
+    addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
+    setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
+    replaceBasemapAttribution: map.replaceBasemapAttribution
+      ? (attribution: string) => map.replaceBasemapAttribution?.(attribution)
+      : (attribution: string) => {
+          const controls = deps.attributionControls
+          if (!controls) return
+          if (ownedAttribution) {
+            controls.remove(ownedAttribution)
+            ownedAttribution = null
+          }
+          ownedAttribution = controls.create({
+            compact: true,
+            customAttribution: attribution,
+          })
+          controls.add(ownedAttribution)
+        },
+  }
 
   const apply = (state: BasemapProviderState): void => {
     // The latest state always wins: a state that arrives while the style is
@@ -86,13 +135,16 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
     pending = state
     if (deps.styleReady && !deps.styleReady.isReady()) return
     pending = null
-    reconcileBasemapContribution(map, state, {
+    reconcileBasemapContribution(target, state, {
       officialTilesResolvable: tileAuth?.installed === true,
       ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
     })
-    // Visibility is applied after the contribution so a provider that has just
-    // published does not briefly show imagery the user has hidden.
-    setBasemapContributionVisibility(map, visible())
+    // Effective visibility is user visibility AND provider renderability:
+    // Loading official metadata must not expose cached imagery.
+    setBasemapContributionVisibility(
+      target,
+      effectiveBasemapVisibility(state, visible()),
+    )
     deps.afterApply?.()
   }
 
@@ -106,11 +158,14 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
       if (disposed) return
       const state = pending ?? provider.snapshot()
       pending = null
-      reconcileBasemapContribution(map, state, {
+      reconcileBasemapContribution(target, state, {
         officialTilesResolvable: tileAuth?.installed === true,
         ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
       })
-      setBasemapContributionVisibility(map, visible())
+      setBasemapContributionVisibility(
+        target,
+        effectiveBasemapVisibility(state, visible()),
+      )
       deps.afterApply?.()
     })
   }
@@ -119,6 +174,10 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
     disposed = true
     pending = null
     unsubscribe()
+    if (ownedAttribution) {
+      deps.attributionControls?.remove(ownedAttribution)
+      ownedAttribution = null
+    }
     // The credential belongs to the surface that installed it: a removed map
     // must not leave a live session token in a shared transport.
     tileAuth?.clear()
@@ -129,13 +188,48 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
  * Re-apply visibility alone.
  *
  * Hiding the basemap must not disturb the provider session or re-request tiles,
- * so this touches only the layer's layout property.
+ * so this touches only the layer's layout property. The caller supplies
+ * effective visibility (user visibility AND provider renderability).
  */
 export function applyBasemapVisibility(
   map: BasemapReconcileTarget,
   visible: boolean,
 ): void {
   setBasemapContributionVisibility(map, visible)
+}
+
+/**
+ * Map-owned attribution control seam for production MapLibre maps.
+ *
+ * Reuses the public add/remove-control APIs. Replacing the owned control is
+ * how a copyright-only change updates attribution without removing the tile
+ * source or disturbing other sources' credits.
+ */
+export function createAttributionControls(
+  maplibre: unknown,
+  map: {
+    addControl?(control: unknown, position?: string): unknown
+    removeControl?(control: unknown): unknown
+  },
+): BasemapBindingDeps['attributionControls'] {
+  const AttributionControl = (maplibre as {
+    AttributionControl?: new (options?: {
+      compact?: boolean
+      customAttribution?: string | string[]
+    }) => unknown
+  } | null | undefined)?.AttributionControl
+  if (!AttributionControl || !map.addControl || !map.removeControl) return undefined
+  const addControl = map.addControl.bind(map)
+  const removeControl = map.removeControl.bind(map)
+  return {
+    create: (options) => new AttributionControl(options),
+    add: (control) => {
+      addControl(control, 'bottom-right')
+    },
+    remove: (control) => {
+      removeControl(control)
+    },
+  }
 }
 
 /**

@@ -172,19 +172,29 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const unbind = bindBasemapProvider({ provider, map: map.target, tileAuth })
+    let installedCredit: string | null = null
+    const unbind = bindBasemapProvider({
+      provider,
+      map: {
+        ...map.target,
+        replaceBasemapAttribution: (credit: string) => {
+          installedCredit = credit
+        },
+      },
+      tileAuth,
+    })
     provider.update({ style: 'google_satellite' }, VIEWPORT)
 
-    await vi.waitFor(() =>
-      expect(map.sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)?.attribution).toBe(COPYRIGHT),
-    )
+    await vi.waitFor(() => expect(installedCredit).toBe(COPYRIGHT))
     const viewportCall = calls.find((call) => call.url.includes('/viewport'))
     expect(viewportCall, 'the viewport request is part of becoming usable').toBeDefined()
     expect(viewportCall?.url).toContain(`key=${API_KEY}`)
     expect(viewportCall?.url).toContain(`session=${SESSION_TOKEN}`)
 
     const source = map.sources.get(MAPLIBRE_BASEMAP_SOURCE_ID)
-    expect(source?.attribution).toBe(COPYRIGHT)
+    // Basemap credit is on the owned attribution control, not the source, so a
+    // copyright-only change retains source identity and loaded tiles.
+    expect(source?.attribution).toBe('')
     // Availability comes from the provider's own viewport metadata, not from a
     // universal zoom ceiling.
     expect(source?.maxzoom).toBe(21)

@@ -50,6 +50,7 @@ function recordingTarget() {
   const sources = new Map<string, Record<string, unknown>>()
   const layers = new Map<string, Record<string, unknown>>()
   const order: string[] = []
+  let attribution: string | null = null
   const target: BasemapReconcileTarget = {
     getSource: (id) => sources.get(id) ?? null,
     getLayer: (id) => layers.get(id) ?? null,
@@ -77,8 +78,18 @@ function recordingTarget() {
         layers.set(id, { ...layer, layout: { visibility: value as 'visible' | 'none' } })
       }
     }),
+    replaceBasemapAttribution: (next) => {
+      order.push(`attribution:${next}`)
+      attribution = next
+    },
   }
-  return { target, sources, layers, order }
+  return {
+    target,
+    sources,
+    layers,
+    order,
+    readAttribution: () => attribution,
+  }
 }
 
 describe('basemap contribution reconciliation', () => {
@@ -96,7 +107,7 @@ describe('basemap contribution reconciliation', () => {
   })
 
   it('applies the provider tile size and zoom ceiling rather than a fixed 256/19', () => {
-    const { target, sources } = recordingTarget()
+    const { target, sources, readAttribution } = recordingTarget()
     reconcileBasemapContribution(target, {
       state: 'ready',
       descriptor: descriptor({
@@ -111,7 +122,9 @@ describe('basemap contribution reconciliation', () => {
     const source = readSource(sources, MAPLIBRE_BASEMAP_SOURCE_ID)
     expect(source?.tileSize).toBe(512)
     expect(source?.maxzoom).toBe(22)
-    expect(source?.attribution).toBe('&copy; Google')
+    // Basemap credit lives on the map-owned attribution control so a
+    // copyright-only change never rebuilds the tile source.
+    expect(readAttribution()).toBe('&copy; Google')
   })
 
   it('replaces one contribution instead of accumulating them on a provider switch', () => {
@@ -129,10 +142,11 @@ describe('basemap contribution reconciliation', () => {
     expect(sources.size).toBe(1)
     // The layer goes before its source, because MapLibre refuses to remove a
     // source a layer still references.
-    expect(order.slice(2)).toEqual([
+    expect(order.slice(-5)).toEqual([
       `removeLayer:${MAPLIBRE_BASEMAP_RASTER_LAYER_ID}`,
       `removeSource:${MAPLIBRE_BASEMAP_SOURCE_ID}`,
       `addSource:${MAPLIBRE_BASEMAP_SOURCE_ID}`,
+      expect.stringContaining('attribution:'),
       `addLayer:${MAPLIBRE_BASEMAP_RASTER_LAYER_ID}`,
     ])
   })

@@ -682,12 +682,14 @@ export interface BasemapViewportMetadata {
  * Read the documented viewport response.
  *
  * `maxZoomRects` describes availability over sub-rectangles of the request.
- * Overlapping rectangles offer the greatest supported zoom at a point; the
- * source-wide ceiling cannot exceed the least such availability across the
- * requested viewport, respecting wrapped longitudes. Uncovered or unsupported
- * metadata is unavailable, not an invented zoom. Empty objects and answers
- * without finite applicable availability or a copyright are not established
- * metadata.
+ * Coverage is exact for the small bounded metadata response: wrapped
+ * viewport/rectangles are normalized into ordinary longitude intervals,
+ * clipped to the viewport and partitioned at rectangle boundaries. Every
+ * positive-area partition needs support; its supported zoom is the maximum of
+ * covering rectangles, and the source ceiling is the minimum across partitions,
+ * capped by the base descriptor. Uncovered or unsupported metadata is
+ * unavailable, not an invented zoom. Empty objects and answers without finite
+ * applicable availability or a copyright are not established metadata.
  */
 export function readViewportMetadata(
   json: unknown,
@@ -697,6 +699,7 @@ export function readViewportMetadata(
   if (!isRecord(json)) return null
   const copyright =
     typeof json.copyright === 'string' && json.copyright.length > 0 ? json.copyright : null
+  if (copyright === null) return null
   const rects = Array.isArray(json.maxZoomRects) ? json.maxZoomRects : []
   const parsed: Array<{ north: number; south: number; east: number; west: number; maxZoom: number }> = []
   for (const rect of rects) {
@@ -710,59 +713,120 @@ export function readViewportMetadata(
     if (
       !Number.isFinite(north) || !Number.isFinite(south)
       || !Number.isFinite(east) || !Number.isFinite(west)
+      || north <= south
     ) {
       continue
     }
     parsed.push({ north, south, east, west, maxZoom: value })
   }
-  if (parsed.length === 0) {
-    // `{}` or a response with no applicable rectangles is not established
-    // metadata, even if a fallback zoom would otherwise be available.
+  if (parsed.length === 0) return null
+  if (
+    !Number.isFinite(viewport.north) || !Number.isFinite(viewport.south)
+    || !Number.isFinite(viewport.east) || !Number.isFinite(viewport.west)
+    || viewport.north <= viewport.south
+  ) {
     return null
   }
-  // Sample the requested viewport so support is required across it, not only
-  // at the centre. Corners plus the centre catch the common thin-coverage case;
-  // wrapped longitudes are normalised into the rectangles' own frame.
-  const samples: Array<{ lat: number; lon: number }> = [
-    { lat: viewport.south, lon: viewport.west },
-    { lat: viewport.south, lon: viewport.east },
-    { lat: viewport.north, lon: viewport.west },
-    { lat: viewport.north, lon: viewport.east },
-    { lat: (viewport.south + viewport.north) / 2, lon: (viewport.west + viewport.east) / 2 },
-  ]
-  let ceiling: number | null = null
-  for (const sample of samples) {
-    // At a point, overlapping rectangles offer the greatest supported zoom.
-    let pointZoom: number | null = null
-    for (const rect of parsed) {
-      if (!rectContains(rect, sample.lat, sample.lon)) continue
-      pointZoom = pointZoom === null ? rect.maxZoom : Math.max(pointZoom, rect.maxZoom)
-    }
-    if (pointZoom === null) return null
-    // The source-wide ceiling cannot exceed the least such availability.
-    ceiling = ceiling === null ? pointZoom : Math.min(ceiling, pointZoom)
-  }
+  const ceiling = exactCoverageCeiling(viewport, parsed)
   if (ceiling === null) return null
-  // Missing or malformed copyright is not established metadata for an official
-  // viewport answer that must carry attribution.
-  if (copyright === null) return null
   return {
     copyright,
     maxZoom: Math.min(ceiling, fallbackMaxZoom),
   }
 }
 
-function rectContains(
-  rect: { north: number; south: number; east: number; west: number },
-  lat: number,
-  lon: number,
-): boolean {
-  if (lat > rect.north || lat < rect.south) return false
-  // Respect wrapped longitudes: a rectangle may span the antimeridian.
-  if (rect.west <= rect.east) {
-    return lon >= rect.west && lon <= rect.east
+/**
+ * Exact rectangle coverage over the requested viewport.
+ *
+ * Longitude is unwrapped into ordinary intervals so a viewport that crosses
+ * the antimeridian is one contiguous span. Partitioning is at rectangle
+ * boundaries along longitude and latitude; every positive-area partition must
+ * be covered, and the source ceiling is the least per-partition maximum zoom.
+ */
+function exactCoverageCeiling(
+  viewport: BasemapViewport,
+  rects: ReadonlyArray<{ north: number; south: number; east: number; west: number; maxZoom: number }>,
+): number | null {
+  const latEdges = new Set<number>([viewport.south, viewport.north])
+  // Unwrap the viewport into a single ordinary longitude interval.
+  const viewWest = viewport.west
+  let viewEast = viewport.east
+  if (viewEast < viewWest) viewEast += 360
+  const lonEdges = new Set<number>([viewWest, viewEast])
+
+  type Interval = { start: number; end: number }
+  const lonRects: Array<Interval & { latNorth: number; latSouth: number; maxZoom: number }> = []
+  for (const rect of rects) {
+    // Clip each rectangle to the viewport's latitude range.
+    const latSouth = Math.max(rect.south, viewport.south)
+    const latNorth = Math.min(rect.north, viewport.north)
+    if (latNorth <= latSouth) continue
+    // Normalize the rectangle into ordinary longitudes relative to viewWest.
+    let west = rect.west
+    let east = rect.east
+    while (west < viewWest) {
+      west += 360
+      east += 360
+    }
+    while (west > viewEast) {
+      west -= 360
+      east -= 360
+    }
+    // A wrapped rectangle becomes one or two ordinary intervals inside the view.
+    const spans: Array<Interval> = []
+    if (west <= east) {
+      const s = Math.max(west, viewWest)
+      const e = Math.min(east, viewEast)
+      if (e > s) spans.push({ start: s, end: e })
+    } else {
+      // west..360 and 0..east after unwrapping already handled by the shifts
+      // above; if still inverted, split at the wrap inside the view.
+      const s1 = Math.max(west, viewWest)
+      const e1 = viewEast
+      if (e1 > s1) spans.push({ start: s1, end: e1 })
+      const s2 = viewWest
+      const e2 = Math.min(east + 360, viewEast)
+      if (e2 > s2) spans.push({ start: s2, end: e2 })
+    }
+    for (const span of spans) {
+      lonEdges.add(span.start)
+      lonEdges.add(span.end)
+      lonRects.push({
+        start: span.start,
+        end: span.end,
+        latNorth,
+        latSouth,
+        maxZoom: rect.maxZoom,
+      })
+    }
+    latEdges.add(latSouth)
+    latEdges.add(latNorth)
   }
-  return lon >= rect.west || lon <= rect.east
+
+  const latBreaks = [...latEdges].sort((a, b) => a - b)
+  const lonBreaks = [...lonEdges].sort((a, b) => a - b)
+  let ceiling: number | null = null
+  for (let i = 0; i + 1 < latBreaks.length; i += 1) {
+    const latA = latBreaks[i]!
+    const latB = latBreaks[i + 1]!
+    if (!(latB > latA)) continue
+    for (let j = 0; j + 1 < lonBreaks.length; j += 1) {
+      const lonA = lonBreaks[j]!
+      const lonB = lonBreaks[j + 1]!
+      if (!(lonB > lonA)) continue
+      // Overlapping rectangles offer the greatest supported zoom at a point.
+      let partZoom: number | null = null
+      for (const rect of lonRects) {
+        if (rect.latNorth <= latA || rect.latSouth >= latB) continue
+        if (rect.end <= lonA || rect.start >= lonB) continue
+        partZoom = partZoom === null ? rect.maxZoom : Math.max(partZoom, rect.maxZoom)
+      }
+      // Uncovered partition: unavailable, not an invented zoom.
+      if (partZoom === null) return null
+      ceiling = ceiling === null ? partZoom : Math.min(ceiling, partZoom)
+    }
+  }
+  return ceiling
 }
 
 function sameViewport(a: BasemapViewport, b: BasemapViewport): boolean {
