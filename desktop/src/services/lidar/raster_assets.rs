@@ -112,7 +112,9 @@ pub(super) fn write_cog_asset(
     .map_err(|e| format!("Failed to write scratch header: {e}"))?;
 
     let staged = scratch.join(format!("{stem}.tif"));
-    let created = engine.run_uncapped_conversion(
+    // Bounded chunk conversion keeps the ordinary finite deadline; only
+    // whole-source controlled conversion may outlive it (R49).
+    let created = engine.run(
         GdalProgram::Translate,
         &prepared_raster::controlled_cog_arguments(&raw, &staged, crs_wkt, grid, nodata),
         Some(cancel),

@@ -427,6 +427,51 @@ fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize) -> bool 
 /// Blocks are computed one occupied chunk at a time and never concatenated:
 /// the result is exactly the set of chunks the input generation occupies, and
 /// the final transaction publishes them only when the input is still the
+/// Sparse slope storage admission over the actual occupied work.
+///
+/// Covers core+halo buffers, staged result/quality bytes and the shared
+/// reserve with checked arithmetic. Widely separated small members admit
+/// despite a large lattice envelope; occupied work beyond available storage
+/// is refused before any output is written.
+fn admit_sparse_slope_storage(scratch: &Path, occupied_blocks: usize) -> Result<(), String> {
+    let side = u64::try_from(generation::CHUNK_SIDE)
+        .map_err(|_| "chunk side is not representable".to_string())?;
+    let halo_side = side
+        .checked_add(2)
+        .ok_or_else(|| "slope halo side overflows".to_string())?;
+    let halo_cells = halo_side
+        .checked_mul(halo_side)
+        .ok_or_else(|| "slope halo cells overflow".to_string())?;
+    let core_cells = side
+        .checked_mul(side)
+        .ok_or_else(|| "slope core cells overflow".to_string())?;
+    // Core+halo f32 samples, staged result+quality bytes, and one block's
+    // scratch overlap, all per occupied block.
+    let halo_bytes = halo_cells
+        .checked_mul(4)
+        .ok_or_else(|| "slope halo bytes overflow".to_string())?;
+    let result_quality_bytes = core_cells
+        .checked_mul(8)
+        .ok_or_else(|| "slope result bytes overflow".to_string())?;
+    let scratch_overlap = core_cells
+        .checked_mul(4)
+        .ok_or_else(|| "slope scratch bytes overflow".to_string())?;
+    let per_block = halo_bytes
+        .checked_add(result_quality_bytes)
+        .and_then(|bytes| bytes.checked_add(scratch_overlap))
+        .ok_or_else(|| "slope per-block working set overflows".to_string())?;
+    let blocks = u64::try_from(occupied_blocks).map_err(|_| "block count overflow".to_string())?;
+    let total = per_block
+        .checked_mul(blocks)
+        .ok_or_else(|| "slope sparse working set overflows".to_string())?;
+    let side_u32 = u32::try_from(side).map_err(|_| "chunk side overflow".to_string())?;
+    let reserve = super::prepared_raster::required_free_bytes(side_u32, side_u32, 0)?;
+    let total = total
+        .checked_add(reserve)
+        .ok_or_else(|| "slope sparse working set plus reserve overflows".to_string())?;
+    super::paths::require_free_space(scratch, total, "the sparse slope working set")
+}
+
 /// layer head.
 #[allow(clippy::too_many_arguments)]
 fn publish_sparse_slope(
@@ -454,6 +499,10 @@ fn publish_sparse_slope(
         .map_err(|e| format!("Failed to create slope scratch: {e}"))?;
     let outcome = (|| -> Result<AnalysisOutcome, String> {
         let blocks = generation::occupied_chunks(&occurrences, &manifest.grid)?;
+        // Sparse admission covers the actual occupied work: core blocks plus
+        // halos, bounded working buffers, staged result/quality bytes and the
+        // shared reserve. Checked arithmetic; no first-member lattice envelope.
+        admit_sparse_slope_storage(&scratch, blocks.len())?;
         let mut chunks = Vec::with_capacity(blocks.len());
         for (chunk_x, chunk_y) in blocks {
             super::import::check_cancel(cancel)?;
