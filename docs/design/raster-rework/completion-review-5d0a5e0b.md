@@ -9,6 +9,10 @@ The accepted foundation is not reopened. This review does not authorize merging
 or releasing the candidate. The [completion contract](completion-design.md)
 remains the acceptance baseline, subject to the import direction below.
 
+The subsequent [source-import contract](source-import-design.md) now settles that
+amendment for implementation. This review remains evidence at `5d0a5e0b`; use the
+current prompt/contract for the complete correction assignment.
+
 ## Verdict and evidence
 
 The remaining work is not just four unavailable observations. Inspection and

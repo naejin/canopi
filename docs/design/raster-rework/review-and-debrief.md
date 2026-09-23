@@ -1,12 +1,66 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — completed foundation findings and whole-rework improvement/debrief contract; no completion measurements are claimed yet.
+Status: evidence — historical deliveries and independent review through `5d0a5e0b`; correction-cycle final synthesis remains pending.
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
 The user authorized the full remaining sequence on 2026-09-22, with the implementation agent continuing through internal milestones and returning only for material blockers. The purpose is more useful delivery per necessary main-agent intervention while preserving architectural coherence and trustworthy review. Actual savings have not been measured. This section owns the final synthesis; bd owns resumable progress and the completion receipt owns detailed measurements.
+
+### Correction cycle after independent review of 5d0a5e0b
+
+The [review](completion-review-5d0a5e0b.md) found R15–R26 despite the prior gate
+passes. The user's accepted [source-import amendment](source-import-design.md)
+also replaces the main agent's earlier conservative limit/mandatory measurement
+prescription. Both sides of this handoff must be evaluated: implementation gaps
+are not all design omissions, and the expensive import route was not an invention
+of the implementation agent. Preserve these distinctions in the final debrief.
+
+| Observed case | Classification / owner | Small intervention and next-use detector | Current disposition |
+| --- | --- | --- | --- |
+| Existing tests pass while tile session/viewport transport and attribution fail | Implementation plus test-boundary gap; implementer repairs, reviewer verifies | Assert actual outgoing tile/viewport authentication and installed attribution, with recognizable fake secrets excluded from exported/logged state | Five review probes establish escapes across provider/inspection; repair benefit pending |
+| Offset oracle repeats the implementation; real slope manifests never sampled | Scientific oracle/caller gap; implementer and reviewer | Known geographic cells/physical values through published source and slope readers at nonzero bearing/latitude | Pending |
+| Key-change test never changes key; inspection tests manually call unwired cleanup | Trigger/wiring gap; implementer | Drive settings and Design/head changes through their production owners; assert trigger happened and late work cannot publish | Pending |
+| Preview/full-composition preparation makes source admission depend on unrelated old pixels | Design overprescription; main agent | New source-only preparation and explicit unknown exact metadata; count prior-source pixel reads during append/reorder | Contract amended; implementation benefit pending |
+| Temporary-space cleanup was used as capacity evidence; safety gates remained unavailable | Measurement/acceptance gap; implementer, reviewer | Measure live peak, settled residue and durable bytes separately; inject real publication/write failure | Pending |
+| GUI progress stopped at lossy synthetic path typing | Environment/automation limitation, not established product root cause | Reuse clipboard paste or short owned fixture paths in the existing isolated recipe, then verify the same visible workflow | Pending; do not claim a chooser repair without evidence |
+
+Record a new event only when it changes a decision, exposes an escape, or justifies
+a specific tool/test/guide improvement. Reuse the event row instead of appending
+another round narrative. On the next actual use, record observed benefit, renewed
+failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
+model router, new dashboard or qualification framework is authorized.
+
+### Final correction debrief to deliver
+
+Replace pending synthesis with a short answer to these concrete questions:
+
+1. What now works through the actual app, and what still lacks observation? Link
+   the receipt instead of copying gates or screenshots into this section.
+2. Which R15–R26 defects escaped because the test never triggered the event,
+   tested the wrong boundary, copied an oracle, or omitted a production caller?
+   Which escaped the main agent's design/review, and which contradicted an existing
+   adequate instruction? Name the earliest economical detector for each group.
+3. Did source-only import remove old collection reads and mandatory preview work?
+   What replaced exact metadata, and did users receive truthful ranges/coverage?
+   Compare only equivalent observed inputs; the old/new pipeline differ.
+4. Which task-local test/script/guide changes demonstrably helped on their next
+   use? Give keep/revise/drop, owner and the one authoritative updated location.
+   Untested improvements remain proposals with a concrete next-use experiment.
+5. Which courier exchanges were material decisions/external prerequisites, and
+   which were avoidable continuations or missing handoff decisions? Report only
+   directly observed counts/time/cost, otherwise unknown. A round budget, test
+   count or presumed model price is not a productivity measurement.
+6. What bounded follow-ups remain in bd, and which instructions or tools should
+   be removed because they duplicate an existing owner or no longer apply?
+
+The main agent adds independent escapes and scoped acceptance to this same
+synthesis after review. Continuous improvement means using verified fixes in the
+next real task, not continuously increasing documentation or verification volume.
+A partial delivery has a partial debrief; absence of external evidence remains
+explicit. The previous “Final synthesis” below is historical at `2b39ee2a`, not the
+final disposition of the corrected candidate.
 
 ### Record during the work
 
@@ -28,6 +82,120 @@ Test each proposed intervention on a real next use. Keep/revise/drop is supporte
 | Initial independent Rust command used an unwritable Cargo home | Reuse the inspected worktree toolchain and existing isolated cache | Did the next real command run without a cache/pin workaround? This is local setup evidence, not a new global rule. |
 
 ### Final synthesis
+
+**Delivered 2026-09-22; verified at candidate `2b39ee2a` on
+`feature/raster-rework-completion`, containing `main` at `f61f8494`, which
+contains the accepted foundation `34e4ded4`. Evidence and limits live in the
+[completion receipt](completion-receipt.md); this section is the synthesis that
+contract asked for.**
+
+#### What works, and the exact limits
+
+Capability, capacity and command evidence are the receipt's to own. In summary:
+Desktop Data/Analysis/Layers ship with reusable datasets, ordered source import,
+priority, history and confirmed library deletion; Analysis runs slope in degrees
+or percent under an author-chosen result name; Layers is a flat geographic
+presentation list with independent result eyes; numeric inspection returns the
+physical value at a point; Web Location places coordinates and shares basemap
+providers. Production admits **24 files, 2 GiB per file, 2 GiB total and
+400,000,000 processing cells**, raised from a retired 25,000,000-cell bound that
+survives only as the legacy dense allocation guard. Measured on the real IGN
+fixtures: a 12-tile 48M-cell batch and a synthetic 400M-cell plane, the latter in
+798 s at 197 MiB peak.
+
+The limits that remain are **not** capacity but reach: the end-to-end Desktop
+import chain is unobserved because the native file chooser's autocompletion
+truncates a typed path, so everything behind Apply rests on unit and native
+tests rather than a driven run. Windows and macOS compilation, packaged-window
+smoke and the packaged Web artifact were never run. The official Google basemap
+path needs a real restricted key that does not exist here. Inspection values were
+never read off a live session. The receipt names each one; none is reported as a
+pass.
+
+#### Complexity that earned its place, and machinery that did not
+
+Reused rather than replaced: the ordered COG model, the SQLite catalogue with
+immutable generations, the surface-adapter seam and the shell-command
+composition. The additions that pay for themselves are the ones that deleted a
+falsehood — `resolve_units` refuses a unit nobody declared instead of storing
+`unitless`; `scan_source_facts` spans only valid samples so a NoData sentinel
+cannot dominate a range; `LIDAR_UNITS_UNKNOWN` distinguishes "not stated" from
+"dimensionless". `basemap-bind.ts` is ~70 lines that removed two map-recreation
+paths.
+
+Machinery removed: the overlap-replacement checkbox, compulsory merged-source
+publication and Q-as-prerequisite are retired rather than passed, and the epic
+description now says so.
+
+#### Material escapes, by invariant family
+
+Three families recurred, and each points at a missing detector rather than a
+missing test.
+
+**Interaction tests that could not fail.** The CSS structural guard's first
+version returned zero on the shipped-broken input; a low-space test passed with
+the production cleanup deleted; `lidar-data-panel`'s interpretation case
+dispatched a `change` event that never moved the radio, so it asserted a state it
+had not created. In each case the test looked healthy. The detector that would
+have caught all three is cheap and now applied: **probe that the subject actually
+changed before trusting the assertion**, by mutating the production code or
+reading the control's state.
+
+**Regression tests that encoded the defect.** Two tests actively required map
+recreation on a basemap change — the exact behaviour C4 forbids. Both were
+inverted rather than deleted, because the old assertion is the clearest
+description of what a reader must not reintroduce.
+
+**Whole-rule deletions.** A bulk selector cleanup removed a selector line
+together with its rule's body, silently disabling the focus-outline rule shared
+by nine controls, and that round was reported complete. The `css-module-policies`
+guard passed throughout because it checked token *values*, not rule *structure*.
+A blank line inside a prelude is now the detector, verified against the
+shipped-broken revision.
+
+Classification: the first family is a test-oracle gap; the second an
+implementation deviation the tests had blessed; the third an implementation
+deviation with a genuine guard gap. None was a design omission — the contracts
+were explicit in every case, and the failures were mine.
+
+#### Handoff decisions that were missing or overprescribed
+
+The completion contract was unusually complete. Two places cost real time.
+`completion-design.md` prescribed no window manager for the isolated session, so
+the GTK file chooser was unmapped and unreachable for several rounds; a window
+manager fixed it at the first attempt, and the guide now requires one. The
+low-space path was required to be verified but is not reachable by an
+unprivileged test here — no tmpfs mount, and `RLIMIT_FSIZE` is process-wide — so
+it is recorded as unverified with the probe evidence rather than papered over.
+Those are environment/handoff limitations, not implementer failures, and both
+were safely settled locally.
+
+#### Effort and exchanges
+
+Unknown in cost terms and deliberately not reconstructed. What is observable:
+one whole-rework authorization produced the sequence without routine resumption,
+which is the outcome the arrangement was testing. Rounds 20 and 25 were spent
+entirely on harness mechanics with no product evidence, and rounds 26–30 each
+landed product code, which is the honest shape of the return.
+
+#### Highest-value next interventions
+
+1. **Drive the import chain by breadcrumb and row** rather than typing a path
+   autocompletion can truncate, with the DOM feedback loop installed first. Trial:
+   a correct filename reaches GDAL and the review route appears. Owner: whoever
+   takes the next pass.
+2. **Run the two platform builds and one packaged smoke.** Trial: the packaged
+   window opens and lists the library. Owner: needs a Windows or macOS host.
+3. **Verify inspection against independently derived values in a live session.**
+   Trial: a clicked and a centre-keyed sample both match an independent oracle
+   across a bearing. Owner: next pass. The transform and pixel selection beneath
+   it are already checked against a hand-derived Web Mercator oracle by
+   `the_real_transform_lands_in_the_expected_cell`, mutation-verified by swapping
+   the coordinate pair, so what a live pass adds is the *session* — the click and
+   the centre key — rather than the geometry.
+
+Everything else on the list is capability that already exists and is waiting on
+one of those three.
 
 At consolidated delivery, replace provisional conclusions with a short revision-linked synthesis covering:
 
@@ -60,6 +228,87 @@ The `524eef55` review then exposed the three additional geometry/lifecycle failu
 Applied and observed: R12–R14 regressions; teardown guard discovered while writing the unmount regression; reuse of the Xephyr/software-GL/private-profile recipe on its second run, promoted into `docs/agent/edition-development.md`; receipt/guide reconciliation. Historical restoration checks must compare saved starting bytes rather than HEAD. General skill/automation changes were not installed. Per-occurrence names, general asset reclamation and larger-capacity measurements were follow-ups, not accomplished tooling improvements.
 
 The final correction review found no blocking R12–R14 findings. Its default Cargo cache invocation failed read-only; retry using the existing isolated cache passed without dependency changes. Effort, total cost and avoided exchanges are unknown. The completion assignment tests the next-use value of these concrete controls instead of adding another methodology framework.
+
+#### Ordered COG correction outcome at `d53f4185`
+
+Delivered in one run on `feature/bounded-raster-generations` from `524eef55` (docs merge `34bf6041`, code `d53f4185`). The three reproduced failures are repaired with an ordinary regression each, and the mounted-map observation the earlier pass left open is established in a second isolated profile.
+
+**R12–R14.** `tile_read_bounds` now derives the candidate footprint from the windows the renderer reads — a native-scale sample's two cells per axis and a minified sample's two level-dependent reduced cells — instead of one cell of slack around the sample centres, with member filtering, checked arithmetic and the read limits retained. `LidarLayersSection.tsx` separates mutation lifetime from view lifetime: the awaited edit owns `pending` until its own settlement and only its view refresh is fenced to the submitting selection, while collection and History each own a traversal object and their own loading state, so a superseded response or page is dropped and History actions wait until both pages describe one head. Each regression was also shown to fail with the superseded behaviour restored — the old tile prefilter, the pre-fix component, and the unmount guard removed on its own. The exact cases are in the [receipt](ordered-cog-receipt.md#correction-at-d53f4185--r12r14-and-the-mounted-map).
+
+**Mounted map.** In a fresh isolated profile the Location tab was confirmed through the UI (`Confirmed site 48.4312, 0.0911`), the imported coverage was mounted and navigated to, and the rendered composition changed in place on reorder → Undo → Restore, on the whole-layer eye and at a zoomed-out edge. Slope was created, and then a live move published a new head for which the catalogue carried exactly one new completed job and generation re-pointed to it — four edits in a row did the same. Navigating away mid-edit (unmounting the panel) still settled the edit, and the next edit from the remounted panel published, so controls were not orphaned. After Save As and an app restart the Design reopened with the layer, History and slope ready and the same composed surface. Screenshots and catalogue identities: `.rq-scratch/smoke-map-K9t/`; the final render correlates with head `gen-…0018`, topmost `mem-…0007` (`smoke-ground-b.tif`), range 150.84…1183.27.
+
+**Machinery.** No new cache, scheduler, request framework, counter, abstraction or migration: the two traversal objects and the head-consistency check are the design's own completion/read-identity rules, and `ViewTraversal` carries no field without a caller. This correction removed no production code and changed no shared contract.
+
+**Interventions (observed failure → smallest change → evidence → keep/revise/drop).**
+
+- *The Xephyr/software-GL recipe existed only inside a design receipt.* Moved in reusable form to [edition development](../../agent/edition-development.md#isolated-desktop-verification-on-a-nested-x-server), with the receipt keeping its revision-labelled account. Its second use succeeded and it now records the traps that use found: Xephyr must nest in the host display, the inspector notice re-flows the panel so a control must be measured immediately before clicking it, and the Save dialog's **Name** field accepts an absolute path. **Keep.**
+- *The review's diagnostic probes were scratch-only.* Recreated as ordinary repository regressions and shown red on the superseded behaviour, green on the fix. **Keep.**
+- *Panel scroll drift caused several mis-clicks before it was understood.* No product change; the local driver now measures a control in the same step as the click. **Keep as a driver technique.**
+
+**Self-review discoveries.** The teardown path started one further collection read until its guard was added (found while writing the unmount regression, not by the review), and the first `ViewTraversal` carried an unused token field that was removed before commit. **Escapes only the independent review caught** are R12–R14 themselves: the earlier panel regressions resolved their mocks immediately, and no tile regression rendered a minified tile whose member lies inside the reduction footprint.
+
+**Limits and effort.** Both fixtures are synthetic MNT-derived crops, labelled as such in the receipt; the legacy-only UI state, Windows/macOS compilation and the external IGN lifecycle fixture remain unobserved exactly as recorded there. Elapsed work and cost: unknown, not measured.
+
+**Decision exchanges.** None were needed. The forwarded brief and design §8 settled ownership and behaviour, so the run continued through its internal phases without a continuation prompt.
+
+### Record during implementation
+
+Use bd checkpoints for execution state and one `ordered-cog-receipt.md` for delivery evidence. Record only observations that affect correctness, repeatability or delivery cost: source revision, triggering behavior/command, classification, repair or unresolved decision, decisive test, and whether discovered before or after courier delivery. Keep fixture identities and useful command outputs without private rasters, absolute user paths or giant transcripts. No new metrics collector, reporting service or Markdown task tracker.
+
+Record elapsed work or cost only if directly available, with what the measure includes (implementation, tests, review, waiting and reruns). Otherwise write unknown. Do not reconstruct tokens/model settings from Git or use the user's cost motivation as a measured result. Distinguish a guard-removal sensitivity check from a recorded failing regression before the fix. Final gate evidence identifies the actual revision; identical code may reuse a successful run.
+
+### Consolidated delivery and independent disposition
+
+The implementer adds one compact revision-labelled repair outcome here after completing the prompt (do not overwrite the earlier delivery outcome): demonstrated user workflows; legacy cases preserved; merge machinery removed/retained with reason; self-review discoveries; unresolved limitations; actual tooling/guide changes with their detector; observed effort/courier data or unknown. Preserve the earlier finding-to-regression map and migration Undo boundary; append R12–R14 and the mounted-map observation, exact pending evidence, and applied versus merely proposed improvements. The main agent then adds one disposition with the reviewed revision, independently observed evidence, escaped defects and ownership. Do not claim independent acceptance from self-review.
+
+#### Ordered COG repair outcome at the review baseline
+
+The eleven finding groups are repaired and each has a regression at the boundary the review named;
+the finding-to-regression map in the [receipt](ordered-cog-receipt.md#finding-to-regression-map)
+carries the disposition, and the probe round above records which regressions detect their own guard
+being removed.
+
+**What the repair actually changed.** The public collection read no longer re-acquires the catalogue
+lock it already holds, and the read surfaces were split into bounded summary/member/history pages
+with snapshot-bound cursors. Every ordered occurrence now has one composition rule — topmost valid —
+at publication, measurement, review and reopen, so published statistics and reopened samples are the
+same numbers. Admission validates one common CRS/grid anchor for a first batch, refuses a zero-valid
+source by name, refuses a partially rejected batch at the publication boundary rather than only in
+the panel, and measures the envelope from the current composition's extent instead of the fixed
+lattice anchor. A pre-transition head is wrapped as itself rather than through its base ancestor, and
+a sparse preserved composition keeps its signed chunk extent. Slope eligibility resolves through the
+composition, superseded jobs settle as the scheduler's stale outcome on both routes, and readiness is
+derived from result/source identity so a restart cannot resurrect a Ready result. Undo records its
+target and whether it is available at all, restore compares ordered occurrence identities, and
+v1.5-era catalogues migrate to a neutral baseline instead of a fabricated action chain. Edits await
+their own settlement and return a typed outcome, which is what lets the panel keep controls disabled,
+fence late answers and keep a refusal on screen.
+
+**Improvements applied versus untested proposals.** Applied and verified here: the bounded
+summary/member/history split, the shared composition rule, the whole-batch admission boundary, the
+explicit Undo state, readiness from identity, and the legacy-shaped fixture helper the pre-repair
+compatibility tests needed. Still untested proposals, left as follow-ups rather than smuggled in: a
+truthful multi-name source display (the stored original filename is used now, but a second import of
+the same bytes still shares one name), a measurement pass for the ordered route's memory and disk
+behaviour, and general reclamation of unreferenced published assets.
+
+**Evidence limits worth naming.** The isolated real-Desktop workflow ran on this revision. The earlier
+session's conclusion that it could not was wrong for a reason worth keeping: the shell has no
+`Xvfb`, but it does have `Xephyr`, and the nested server only segfaulted because it was started without
+`-extension GLX` (the crash is in the host's NVIDIA EGL/GBM path). With GLX disabled, software GL and
+a `0700` `XDG_RUNTIME_DIR` under `dbus-run-session`, a second instance gets its own display and its own
+profile while the user's instance on `:0` is untouched; the receipt holds the recipe, the exact command
+line and the two environment traps (the GTK location entry wedges the app's main loop on a
+hidden-directory path segment, and a stale region under a dialog needs a resize to repaint). The pass
+covered add, reorder, remove, repeated Undo to exhaustion, two restores including an equal-summary
+pair, slope, a selection change during a read, a restart, and a refused foreign-CRS batch, and it read
+the catalogue back as ground truth after each phase. What it did not cover is the map itself: the
+isolated Design kept its provisional site, so composed values were read from the priority list and the
+catalogue rather than from rendered pixels, and legacy-only states remain caller-test territory. The
+sandbox lesson still stands and is narrower than it looked: processes started here cannot be observed
+afterwards, so ownership of a foreign-looking window must be established through the profile it writes
+into, never through `pgrep`.
+
 
 ## Historical purpose and evidence discipline
 

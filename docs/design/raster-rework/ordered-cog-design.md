@@ -5,7 +5,7 @@ Tracking: `canopi-jv8a.4`, related `canopi-kko3`, parent `canopi-j571`; completi
 Current guidance: [completion contract](completion-design.md), [current prompt](completion-agent-prompt.md), [accepted review](ordered-cog-review.md#accepted-correction-at-34e4ded4), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md).
 
 
-The exclusions and execution instructions below describe the completed foundation scope. New capacity, workbench, inspection and Web work is governed by the completion contract; the numeric, ownership, history and compatibility invariants here remain binding. Its C1 explicitly supersedes unchanged-admission instructions only after measured qualification.
+The exclusions and execution instructions below describe the completed foundation scope. New capacity, workbench, inspection and Web work is governed by the completion contract; the numeric, ownership, history and compatibility invariants here remain binding. The [source-import amendment](source-import-design.md) supersedes its compulsory review/measurement and input-policy ceilings for the new route after bounded implementation; exact historical composition/validity remains protected.
 
 ## 1. Mandate and supersession
 

@@ -1,14 +1,14 @@
 # Raster rework — implementation, review and improvement
 
 Status: active — execution and evidence rules for whole-rework completion.
-Tracking: `canopi-j571`; one completion implementation bead; bd owns task state and follow-ups.
+Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task state and follow-ups.
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement), [delivery](../../workflow/delivery.md).
 
 ## Ownership and continuation
 
 The main agent owns architectural coherence, decision-complete handoffs and independent review. The implementation agent owns execution, ordinary diagnosis/repairs, tests, routine design choices inside the settled boundaries and evidence. The user owns consequential scope/risk and remains courier. No subagent delegation or direct agent messaging is authorized. The project-wide architecture guide remains authoritative.
 
-On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The completion contract supplies C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 authorizes integration of the accepted foundation; new code is delivered for independent review, with release separate.
+On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The [completion contract](completion-design.md) and [source-import amendment](source-import-design.md) supply C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 now preserves candidate `5d0a5e0b` and the already integrated foundation. The source-import amendment and R15–R26 corrections are part of this same assignment; new code is delivered for independent review, with integration/release separate.
 
 ## One bounded loop
 
@@ -19,6 +19,8 @@ A changed private module shape, meaningful test strategy or contract-preserving 
 ## Product closure policy
 
 Implement through the contract's dependency gates; repair in-scope normal-workflow defects. Perform a fresh final diff/contract review and repair its findings before one consolidated delivery. The main agent then reviews changed risk boundaries and actual workflow evidence independently. Acceptance is scoped and is not integration or release.
+
+Use [current correction acceptance](completion-receipt.md#current-correction-acceptance) for R15–R26/new-import evidence and the [correction debrief](review-and-debrief.md#final-correction-debrief-to-deliver) for the final synthesis. The candidate’s old “implemented, only observations missing” claim is superseded by independent findings.
 
 Block completion for demonstrated data loss, wrong scientific results, broken required workflows, violated resource/compatibility guarantees, missing required evidence or material false claims. Tie each finding to a reachable case, accepted invariant and impact. Cosmetics, speculative hardening, new analysis types and unrelated optimization become follow-ups. New requirements are not retroactive blockers.
 

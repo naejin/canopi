@@ -1,77 +1,90 @@
 # Raster rework completion contract
 
-Status: active — whole-rework implementation handoff authorized on 2026-09-22; new work is not yet implemented or independently accepted.
-Tracking: `canopi-j571`; accepted foundation `canopi-jv8a.4`; workbench scope `canopi-j8mp`; executor creates one completion bead before coding.
+Status: active — correction and simplified-import handoff after independent review of candidate `5d0a5e0b`; not independently accepted.
+Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
 Current guidance: [execution prompt](completion-agent-prompt.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## Outcome, authority and exclusions
 
 Finish the initial rework: users can import the representative larger numeric rasters, manage reusable Data Layers, run slope, arrange independently visible data/results, inspect physical values, and place a Design/use shared basemaps in Web. Deliver one combined, verified candidate with platform limits stated honestly. The user selected the entire sequence and sustained execution; intermediate phases do not require renewed authorization.
 
-This contract replaces the old active ordered-correction prompt and the broader plan's expired execution freeze. It does not replace its settled product/scientific/provider rules. Precedence: repository safety/ownership → this contract's scope, capacity and delivery decisions → ordered COG composition/history rules → broader product contract and approved UI references. The old overlap-replacement checkbox, compulsory merged-source publication and Q prerequisite are retired, not passed.
+This contract and its [source-import amendment](source-import-design.md) supersede the original C1 limits and compulsory preview/measurement route. The [R15–R26 review](completion-review-5d0a5e0b.md) supplies correction evidence, not a second assignment. This contract replaces the old active ordered-correction prompt and the broader plan's expired execution freeze. It does not replace its settled product/scientific/provider rules. Precedence: repository safety/ownership → this contract's scope, capacity and delivery decisions → ordered COG composition/history rules → broader product contract and approved UI references. The old overlap-replacement checkbox, compulsory merged-source publication and Q prerequisite are retired, not passed.
 
-The main agent owns architecture and independent review. The implementation agent owns all execution and contract-preserving local decisions. The user remains courier and retains consequential scope/risk authority. C0 authorizes integration of the previously accepted foundation, including this documentation. New implementation is pushed as a candidate for independent review; no public release, deployment, branch deletion, paid-service purchase or user-profile mutation is authorized.
+The main agent owns architecture and independent review. The implementation agent owns all execution and contract-preserving local decisions. The user remains courier and retains consequential scope/risk authority. Foundation integration is already complete at `f61f8494`; C0 now verifies preservation and establishes the correction baseline. New implementation is pushed as a candidate for independent review; no public release, deployment, branch deletion, paid-service purchase or user-profile mutation is authorized.
 
 Exclude new engines, custom raster codecs, precision migration, reprojection/resampling, local RGB/RGBA orthophotos, point clouds, hydrology/aspect/canopy expansion, Web local-raster processing, Web address search, offline map archives and PDF map export. General published-asset reclamation and a per-occurrence source-name column remain separate follow-ups. Preserve originals and accepted history even when deleting a source from a current composition.
 
 ## Inspected baseline and reuse decisions
 
-The foundation candidate is `34e4ded4427697db36e70a8007bb60af2fc1d4c3` on `feature/bounded-raster-generations`, following `a5fc7d7b`, C1/C2 and the eleven-group repair at `64050896`. R12–R14 are repaired at `d53f4185`, with teardown and mounted-map evidence retained through `34e4ded4`. [Independent disposition](ordered-cog-review.md#accepted-correction-at-34e4ded4) accepts the named correction scope. It does not certify unlimited capacity, every platform or the future workbenches.
+The implementation baseline is `5d0a5e0b` on `feature/raster-rework-completion`
+in `.rq-scratch/wt-candidate`, descended from main integration `f61f8494` and
+accepted foundation `34e4ded4`. Combined code gates were reported at `2b39ee2a`;
+head differs only in receipt/debrief/bead metadata. R15–R26 require correction;
+passing those historical gates is not independent acceptance. Preserve earlier
+R12–R14 and native-reader fixes, existing candidate capabilities and measurements.
 
-At authoring, the primary documentation checkout is `feature/raster-html-references` at `af8aed87` before this handoff commit; it contains user-owned native-operation changes and an untracked lock. Implementation resides in `.rq-scratch/wt-bounded`. These locations are conveniences, not required runtime paths. Recheck all tips/status before integrating.
+The primary documentation checkout is `feature/raster-html-references`; its
+pre-existing `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and
+`.beads.gate.lock` are user-owned. Do not stage, stash, reset or overwrite them.
+Use the clean candidate worktree, inspect actual status/ancestry first, and merge
+this committed docs handoff preserving candidate receipt/debrief evidence.
 
 | Reuse/adapt | Concrete owner and retained behavior | Necessary addition / maintenance cost |
 | --- | --- | --- |
 | Reuse native library and selected dependencies | `desktop/src/services/lidar/{mod,collection,generation,prepared_raster,analysis,tiles}.rs`; `CollectionReader`, `GenerationReader`, `LidarLibrary`, GDAL slope and pinned native TIFF reader | Capacity consumes the same public callers. Inspection adds one bounded lookup, not another decoder/service. Preserve numeric/cancellation/legacy regressions. |
-| Adapt one admission policy | `services/lidar/admission.rs`, `import.rs`, `paths.rs`; thread-local `limits_probe`, checked sizes, original copy/hash, disk checks | C1 replaces an envelope-based restriction with a conservative processing budget after measurement. No production bypass. |
+| Adapt one admission policy | `services/lidar/admission.rs`, `import.rs`, `paths.rs`; thread-local `limits_probe`, checked sizes, original copy/hash, disk checks | C1 removes arbitrary input policy ceilings after bounding preparation and metadata; actual working-resource/legacy guards remain. See the source-import amendment. |
 | Reuse asynchronous library and document owners | `desktop/web/src/app/lidar/{actions,library-store}.ts`, `app/design-edit/lidar.ts`, ordered panel traversal/edit lifetimes | Split UI responsibilities without duplicating library state or moving jobs into components. Library data stays separate from Design presentation/history. |
 | Adapt accepted UI with production primitives | `components/panels/lidar/`, `components/shared/`, workspace/shell registration; HTML reference `0e696722` | New Data/Analysis dock surfaces and flat presentation list, using existing fields, menus, tokens and focus behavior. No prototype runtime in production. |
 | Reuse map, camera and placement | `app/canvas-map-surface/`, `maplibre/{host,surface-adapter,config}.ts`, `app/location/{coordinate-workbench,map-editing}.ts` | Inspection arbitrates existing canvas gestures; Web supplies coordinate placement without native search. Provider replacement updates contributions, not map lifetime. |
 | Adapt settings/network boundaries | `app/settings/{platform-adapter,projection,state}.ts`, `desktop/src/http.rs`, executor-backed commands | Device-local Google setting and bounded provider requests; native HTTP only through fixed provider operations, never arbitrary caller URLs. No second settings store. |
 
-The additions unlock explicit user capabilities absent from the existing combined dock. Existing readers, controllers, map host and settings are sufficient foundations. New runtime dependencies, a general task engine or a universal workbench framework are not justified by this handoff. If measurement disproves sufficiency, return the counterexample before replacing the engine or ownership model.
+The candidate already supplies the new dock surfaces; correct and complete their callers rather than reconstructing them. Existing readers, controllers, map host and settings are sufficient foundations. New runtime dependencies, a general task engine or a universal workbench framework are not justified by this handoff. If measurement disproves sufficiency, return the counterexample before replacing the engine or ownership model.
 
-## C0 — integrate accepted work and establish one execution baseline
+## C0 — retain the candidate and establish correction evidence
 
-Read the delivery/issue workflows. Fetch remotes and inspect actual branch ancestry and worktrees. Inventory the accepted foundation, this committed handoff and the approved UI references. Use a clean integration worktree from current `main`; preserve unrelated main changes and accepted merge commits. Prefer fast-forward where possible, otherwise a deliberate merge. Never reset the primary checkout or move its user edits. Resolve documentation conflicts using the current contract while preserving dated evidence.
+Inspect status, remotes, worktrees and `bd show canopi-j571.1`; claim/resume that
+bead. Do not replay completed foundation integration or create a replacement
+branch from a baseline missing candidate code. Merge this documentation handoff
+into `feature/raster-rework-completion`, resolving current guidance in favour of
+this contract and preserving revision-labelled delivered evidence. Reconcile the
+existing bead's design/acceptance with C1 and R15–R26; do not reopen accepted
+foundation work or erase historical evidence. Bead exports must preserve unrelated
+dirty records according to the issue workflow.
 
-Run the combined Rust/frontend/shared-contract gates required by the integrated tree and documentation validation. If `main` already fails a gate, follow the separate maintenance-bead rule rather than hiding repairs. Push the accepted integration to both configured destinations and verify remote `main` ancestry. Stop only integration if the remote has unexpected work; continue safe candidate preparation. Do not delete branches/worktrees.
+Begin external prerequisite discovery now: available disk/RAM, fixtures, working
+isolated GUI recipe, existing non-publishing CI/platform runners, package assets,
+and optional restricted Google key through device settings. Inspect/reuse the
+existing fixture generator if needed; do not create another raster-processing
+runtime. A missing key/host blocks that observation only. Try the documented file
+chooser path using clipboard paste/short owned paths instead of repeating lossy
+synthetic typing; classify automation failures separately from app defects.
 
-Reconcile bd from evidence: close `canopi-jv8a.4` and `canopi-kko3` only with their accepted scope and tests; reconcile `canopi-a9uy`'s delivered fixture/engine changes against `canopi-kc8z`; remove stale Q blockers and merged-raster descriptions from active epic/workbench/foundation briefs. Q remains frozen/unqualified, with historical records preserved. Inspect `canopi-jv8a.2` before treating its old source-statistics issue as still present. Keep unresolved work linked, not silently closed. Export intended metadata with the integration/docs commit.
+**Exit:** retained candidate ancestry, updated existing bead, precise prerequisite
+inventory and reproducible R15–R26 failures at appropriate caller boundaries.
+Review probes in `.rq-scratch/review-5d0a5e0b` are optional local evidence; ordinary
+committed regressions must remain reproducible without that scratch directory.
 
-Then create/claim the single completion bead and candidate branch named in the prompt. C1–C5 are internal milestones of that bead. Existing related beads may be reconciled at their actual acceptance boundary without starting parallel implementations.
+## C1 — independent source import and bounded capacity
 
-**Exit:** remote integration commit retains every inventoried accepted tip; combined checks pass; user work is intact; candidate branch starts from that baseline. Record it in the receipt. Discover available disk/RAM, fixture identities, isolated GUI recipe, platform CI and optional Google credential access now. Missing external proof is named early and does not block unrelated phases.
+Implement [Source import without collection-wide preparation](source-import-design.md).
+It is the authoritative user flow, interface, migration, metadata, resource and
+acceptance decision for this phase, replacing the original conservative policy.
+Do not merely remove constants or hide previews. Remove the actual composed scan
+from import and metadata edit publication; preserve numerical readers and
+history. Source-level exact facts and result statistics remain distinct from
+source-derived display ranges and unknown composed coverage.
 
-## C1 — qualify and enable a conservative larger-raster policy
+Start with a small real caller fixture proving the new prepare → atomic publish
+route, metadata semantics and failure recovery, then qualify larger inputs.
+Bound copy/conversion/indexing and all publication/read consumers before removing
+production input ceilings. An intermediate branch checkpoint may retain old
+limits until safe; the delivered new route must use the amended admission, or
+remain explicitly partial with the demonstrated blocker. Do not ship a bypass.
 
-Start with production limits unchanged and the existing test-only `admission::limits_probe`. Keep the selected native engine, topmost-valid resolver, immutable publication, result chunks and no whole-union allocation. Extend ordinary ignored GDAL caller tests or small existing fixture helpers; do not revive Q or build a new qualification framework.
-
-### Conditional production admission
-
-After the measurements below pass, this handoff authorizes the following initial larger policy for **new ordered imports only**:
-
-- At most **24 selected files**, **2 GiB per file** and **2 GiB total selected bytes**; equality is admitted, excess is refused by name before publication. Existing count/byte checking remains centralized across selection, copy/hash, staging and Apply.
-- At most **400,000,000 processing cells in the proposed active collection**, calculated with checked arithmetic as the sum of each source occurrence's full native width × height, including NoData and overlap. Counting overlap repeatedly is intentional conservative work accounting; it is not scientific coverage. A preserved dense member contributes its full grid size; a preserved sparse member contributes the sum of unique stored chunk footprints, not the intervening empty envelope. Deduplicate result/quality roles for that count. Empty space between independent sources is not charged.
-- Remove the old 25-million-cell **union-envelope admission** only from the ordered path. Retain coordinate/index representability checks and legacy dense allocation guards. Do not enable a dense fallback for a larger ordered import. Reorder, remove, Undo/Restore and reads of already accepted generations stay grandfathered as before; no new admission refusal makes saved history unreadable.
-
-This policy is a reviewer-selected conservative initial scope, not a measured result or unlimited-raster promise. It admits the named 48M batch, 400M single file and 24-file sparse cases without choosing arbitrary limits from test run time. Increasing it further requires another measured decision. Do not change its arithmetic to valid-cell count: a huge mostly-NoData source still costs decoding work. Recheck against the expected current head at Apply so concurrent changes cannot bypass it. Keep source validity, all-NoData refusal, CRS/alignment and whole-batch atomicity separate from size admission.
-
-### Evidence and resource gate
-
-Use the [representative fixture contract](../raster-data-analysis-rework.md#representative-evidence-and-capacity-acceptance): the read-only 12-tile IGN MNH batch (48M cells), real ground MNT, a separate uncompressed 20,000×20,000 Float32 0.5 m analytical plane above 1 GiB with block-crossing holes, and at least 24 small adjacent/separated sources including a million-pixel gap. Verify identities locally; never substitute MNH for slope input or resample a private file into a purported new survey.
-
-Before generation/run, inventory idle app RSS, available RAM, free disk, expected fixture/original/COG/result/temporary copies and the retained reserve. Use an isolated profile and owned scratch outputs. Require the plan's ≥8 GiB host and sufficient measured disk; lack of resources blocks the large run, not smaller correctness tests or later UI work. Reuse GDAL/native helpers to generate in bounded blocks. No new Python raster-processing tool.
-
-Measure the complete pipeline, including managed originals, preparation, review, Apply, reopen/display, edits and slope. The simultaneous incremental raster workload must remain within **1 GiB**, including native app increment above recorded idle, decoder caches and live child processes. Record aggregate sampled RSS and sampling interval, child maximum RSS where available, temporary/durable bytes, queue/cache peaks, and instrumentation limitations. One process's peak or sum of unrelated lifetime peaks is not the simultaneous total. Keep 128 MiB decoded caches, 512 MiB reproducible disk cache and the 256 MiB free-space reserve from the product contract; verify actual owners rather than asserting constants prove bounds.
-
-The 400M ground plane must import/reopen/display and produce slope through production callers; verify independent plane values/tolerances and exact hole/edge masks across chunk boundaries. The 48M MNH batch must import atomically, reopen and display; it remains ineligible for ground slope. The sparse case's allocations/iteration track occupied footprints, not the million-pixel gap. Exercise overlapping topmost-valid samples near a display reduction boundary, plus reorder/Undo/Restore with one dependent recompute per changed head. Reuse R12–R14 regressions.
-
-Cancel during preparation, measurement and slope; scheduling stops promptly and owned work settles within 5 seconds in fixture tests, including stalled-child termination. A failed/cancelled precommit job leaves the old head and previous valid result intact; committed work is reported as success. Test low space/write failure, restart reuse, and last-head/existence checks. Record one cold and three warm display runs with median/p95 tile timings and UI long-task observations; speed is diagnostic, while bounded resources, correctness, responsive cancellation and no >50 ms UI-thread raster compute are gates. Do not add speculative optimizations merely to improve timings.
-
-Add small deterministic boundary tests for each new limit and cumulative existing-plus-incoming accounting, NoData/overlap, preserved sparse gaps, exactly-at/above-limit and old-history reads. Then enable the specified policy only after all required capacity evidence passes, and repeat the decisive normal Desktop import route without test overrides. If a required C1 fixture or measurement environment is unavailable, keep production limits unchanged, finish independent implementation and report capacity as pending. Do not lower the required evidence or silently choose different ceilings.
-
-**Exit:** measured lane passes, policy enabled and public callers verified with no bypass, guides/receipt state exact supported inputs and limits. Or a named capacity blocker remains while C2–C4 continue against the existing safe limits. `canopi-jv8a.2`, if reproducible, is repaired here with valid-only statistics and unchanged masks; otherwise reconcile with concrete existing evidence.
+**Exit:** all amendment acceptance examples, migration/fault regressions, resource
+measurements and real Data import flow pass. R23 and R26 are closed by this new
+route's own evidence, not old preview-route measurements. No forced exact composed
+statistics feature is added to replace the deleted scan.
 
 ## C2 — production Data, Analysis and Layers
 
@@ -79,7 +92,7 @@ Use the [approved reference contract](../raster-data-analysis-rework.md#html-ui-
 
 Register Desktop Data and Analysis beside Layers through existing shell commands/workspace composition. Data manages reusable datasets, compatible imports, Add to Design, rename, source priority, history/Undo/Restore and confirmed library deletion. Analysis offers Slope only, compatible ground inputs with ineligible reasons, result name, degrees/percent, Run/Cancel/Retry and previous-result visibility during refresh/failure. Layers becomes a flat geographic presentation list in actual saved order, with independent source/result eyes, opacity, ramp/legend, extent navigation and undoable Remove from Design. Library delete and presentation remove remain different operations. A Data Layer eye controls its composed source presentation; it does not implicitly hide an independently displayed analysis result.
 
-Retain the current ordered staging/confirmation flow; do not copy obsolete replacement-checkbox behavior from the import mockup. Renaming library data does not dirty every Design. Adding/removing/reordering presentation uses Design Edit and coordinated document history; source priority changes library composition and triggers dependent analysis. New attachment is fenced to the originating Design session; closing the panel does not cancel a submitted job.
+Use C1’s Data-owned chooser/interpretation/Import flow; replace the old staging/review/Apply interaction. Existing visual references govern components and hierarchy, not their retired preview/confirmation steps. Renaming library data does not dirty every Design. Adding/removing/reordering presentation uses Design Edit and coordinated document history; source priority changes library composition and triggers dependent analysis. New attachment is fenced to the originating Design session; closing the panel does not cancel a submitted job.
 
 Reuse `app/lidar/actions.ts`/`library-store.ts` for jobs and settlement and `app/design-edit/lidar.ts` for presentation. Extract cohesive UI/workbench modules as needed; no controller-to-controller imports or mirrored canvas entity stores. Preserve separate collection/History traversal identities, edit ownership through settlement, expected-head edits, paging and unmount guards when replacing the old combined component. Do not create a second job scheduler.
 
@@ -87,19 +100,70 @@ Use shared contract fields where present. Any missing result name, unit or style
 
 **Exit:** Data → import → Analysis → Layers works through real native commands; changing panels/Designs during jobs cannot misattach results or orphan pending state. Independent eyes/order/legends survive save/reopen; Remove is undoable without deleting the library. Both themes, 390px width, keyboard/focus and actual long translations in all 11 locales are checked through production gallery fixtures. Web preserves unavailable local references and imports no Desktop raster capability.
 
+### Desktop corrections R23–R25
+
+Data owns import progress, errors and retry under C1. Reuse one coherent source
+management detail for Data's priority/History operations instead of duplicating
+traversal state. Layers stays presentation-oriented; expose undoable Remove from
+Design for source/result/unavailable entries using existing Design Edit, with no
+library deletion. Library Delete remains a separate confirmed Data operation.
+Analysis owns the initial submit-pending latch through settlement and exposes the
+actual action error once. Guard repeated Run before the first IPC settles, retain
+jobs across unmount, and label percent versus degree results from their own
+parameters. Initial Run creates a definition; Retry refreshes the failed definition
+against the current head rather than silently multiplying identical definitions.
+Reuse `analysis::enqueue_refreshes`/the existing `run_refresh` worker ownership,
+factoring the definition-specific scheduling path. Add an executor-backed typed
+`lidar_retry_analysis(definition_id, expected_source_generation_id)` operation
+returning the existing analysis job receipt; reject missing/deleted or changed
+inputs and an already active run. It schedules the named definition, not every
+dependent definition. This is an authorized extension of the existing owner,
+not a second scheduler; regenerate bindings and native policy registration.
+Test each through the production panel and real action boundary, including failure.
+
 ## C3 — numeric inspection without another interaction owner
 
-Implement the proposed `sample(entity, expected generation, WGS84 point)` contract from the [numeric interface table](../raster-data-analysis-rework.md#implementation-contracts). This is a new operation, not an existing symbol. Add typed request/result under `common-types/src/lidar.rs`, generate adapters, register one executor-backed command and policy entry through existing conventions.
+Repair the existing command to implement `sample(request id, entity, expected generation, WGS84 point)` from the [numeric interface table](../raster-data-analysis-rework.md#implementation-contracts). The candidate already has `lidar_sample_pixel`; adapt it rather than add a competing sampler. Maintain typed request/result under `common-types/src/lidar.rs`, generate adapters, retain executor-backed commands and policy registration through existing conventions.
 
 The request names source/result identity, immutable expected generation and finite point. Refuse a head mismatch at admission and recheck currency before returning; immutable bytes stay leased through the read, and a changed head returns stale rather than relabelling an old value. The library authorizes that identity and leases the same `CollectionReader`/`GenerationReader` or existing result reader used by scientific callers. Inverse CRS transform then selects the containing native pixel using the north-up half-open grid convention; no bilinear display sample or PNG decoding. Return the generation with physical numeric value/units, explicit NoData, or categorized unavailable/stale result. Out-of-coverage is NoData; missing/deleted generation, failed transform and unsupported input are unavailable. No raw path, raster buffer or third-party object crosses IPC. New operations use categorized outcomes; preserve compatible existing commands instead of undertaking a wholesale error-transport rewrite. Scientific Float32/scale/validity rules remain unchanged.
 
 The canvas/workspace lifecycle owns one inspection session containing Design/session, entity, generation and request identity. Pointer or center-keyboard samples supersede older requests; layer/head/Design change rejects late responses. Cancel native work through the existing bounded read cancellation pattern rather than a detached timer. Entering Inspect suspends drawing/selection while preserving navigation; Escape, toggle off, hidden/removed layer, Location navigation or teardown exits and releases listeners. Use current interaction/camera seams, not MapLibre drag handlers or a second gesture owner. The inspection status is read-only and not saved in a Design.
 
-**Exit:** click and keyboard-center return independently known physical values for source and slope; holes and excluded right/bottom extent edges report NoData, while included top/left edges return the containing cell when valid; a late answer after head/selection/Design replacement never appears current. Pan/zoom works, drawings remain intact, Escape restores normal tools and repeated mount/unmount leaves no listeners/reads. Accepted inspection reference, units, accessibility and runtime tests pass.
+**Exit:** click and keyboard-center return independently known physical values for source and slope. Half-open pixel boundaries select the adjacent cell; report NoData only when no member supplies a valid sample there, including outer uncovered edges and holes. A late answer after head/selection/Design replacement never appears current. Pan/zoom works, drawings remain intact, Escape restores normal tools and repeated mount/unmount leaves no listeners/reads. Accepted inspection reference, units, accessibility and runtime tests pass.
+
+### Inspection corrections R15–R18
+
+Use `canvas/projection.ts`'s existing `worldToGeo` for the actual scene point;
+remove the candidate's anchor-plus-offset IPC path and duplicate bearing math.
+The unreleased command may change in lockstep with generated bindings; no saved
+Design contains that request. The displayed coordinate is the sampled point.
+Native lookup transforms this WGS84 point into the chosen source/result CRS once.
+Resolve source and analysis manifests/readers separately; use result parameters
+for degrees/percent units. Use checked signed lattice indices and actual member
+coverage, not the original first source's width/height. Historical dense/chunked
+source and result reads reuse their existing compatible numeric readers.
+
+Add an opaque request ID to the sample request and use the existing library
+read-admission/cancel mechanism used by raster tile requests. The command must
+pass its real cancellation flag, not an always-false local flag; retain finite
+GDAL transform waits. Scope IDs to the originating runtime/session so one owner
+cannot cancel another's active read. Register cancellation before work can block,
+release permits/leases on every result, and fence both backend head currency at
+completion and frontend Design/entity/head/request identity at publication.
+The workspace owns the disposer; hide/remove, Design replacement, Location and
+teardown exit. Escape/toggle off restore the prior tool. Expose a focusable Sample
+at view centre button in the status surface, invoking the existing camera/query
+seam; no new global shortcut is needed. Keyboard activation and pointer sampling
+share the same command. Pan/zoom remains available during inspection.
+
+Acceptance includes real unique-valued native cells at non-equatorial latitude,
+nonzero bearing and beyond the original source extent, source and both slope
+units, supported historical formats, and late head/Design replacement. Use an
+independent geographic fixture oracle, not a copy of the projection formula.
 
 ## C4 — Web Location and shared basemap providers
 
-Implement the settled [Web/provider contract](../raster-data-analysis-rework.md#web-location-and-basemaps). Establish its replacement ADR for the specific Web-v1 restrictions in ADRs 0013/0016 when implementing, then update their status links, relevant guide and equivalent/stronger architecture guards together. This authorizes Web map/coordinate placement and shared providers; it does not authorize native geocoding, local-raster processing, PWA or PDF map capture in Web.
+Implement the settled [Web/provider contract](../raster-data-analysis-rework.md#web-location-and-basemaps). Retain candidate ADR 0028 and the updated ADR 0013/0016 status links; repair the actual shared-provider wiring without reopening that edition scope. Update relevant guides and equivalent/stronger architecture guards together. This authorizes Web map/coordinate placement and shared providers; it does not authorize native geocoding, local-raster processing, PWA or PDF map capture in Web.
 
 Web composes `coordinate-workbench.ts` directly with a browser-safe Location surface; Desktop retains native search as an injected capability. Coordinate/map preview, Confirm/Move, Cancel/Escape and document Undo retain the complete spatial frame, altitude and north bearing. Camera movement alone never commits. Map failure leaves coordinate entry usable. Keep Location and Canvas lifecycle ownership exclusive.
 
@@ -110,6 +174,52 @@ The native HTTP helper currently offers GET/bounded response reads; it is not a 
 Official session response shape/expiry, viewport metadata and attribution were rechecked on 2026-09-22 against [session documentation](https://developers.google.com/maps/documentation/tile/session_tokens), [2D overview](https://developers.google.com/maps/documentation/tile/2d-tiles-overview) and [policies](https://developers.google.com/maps/documentation/tile/policies). These support API behavior, not live access on this account or guarantees for the keyless endpoint. Verify material changes at implementation. A real supplied restricted key and account-appropriate content access are external prerequisites for live official qualification; use fake recognizable credentials for fault tests and never infer service success from mocks.
 
 **Exit:** both editions change provider/key/opacity without losing camera, scene, overlays or placement; out-of-order session/viewport answers are fenced; hidden/provisional Canvas issues no remote imagery work. Actual isolated Web placement saves/exports/reopens the same frame, including Undo and map-error entry. Test fake-key redaction in thrown errors, URLs, response bodies and diagnostics. Observe provider attribution/error states live and record credential/platform gaps rather than fabricating them. No service purchase or public release.
+
+### Provider corrections R19–R22
+
+Keep one concrete provider per mounted map lifetime on Canvas, Location and World
+Map in each applicable edition. The map owner creates/disposes it; settings supply
+reactive style/key/locale inputs rather than owning the map. Key/style/locale
+replacement aborts obsolete session/viewport work and advances identity. Settled
+viewport moves coalesce into one current metadata request; they need not recreate
+the session. Parse epoch-seconds expiry strings, schedule renewal before expiry,
+and dispose renewal/backoff timers and HTTP on teardown. A rejected configured
+key never silently selects the keyless route. Hidden/provisional Canvas does not
+request provider imagery/session work; reactivate using current settings/view.
+
+Use MapLibre's request transformation seam at map creation with a closure over
+the current provider transport to authenticate official tile requests. Published
+source descriptors contain a non-secret official endpoint template; the transport
+adds the current session and API key for that fixed Google tile endpoint only.
+The binding must not leave `{session}` unresolved. Session and viewport HTTP use
+fixed endpoint construction and the configured key. Keep ephemeral credentials
+out of Designs, exported state, reports, receipts and log/error strings; real
+network requests necessarily carry them. Sanitize map request errors too, not only
+session-fetch exceptions. A fake credential test must observe the actual outgoing
+tile request and separately prove safe persistence/diagnostic boundaries.
+
+Do not mark the official contribution ready until a valid session and usable
+viewport attribution/availability exist. Consume returned copyright and
+`maxZoomRects`, rather than a universal zoom ceiling; do not request imagery above
+its applicable availability. Metadata failure becomes an actionable unavailable
+state, not falsely current attribution. Normal HTTP/timeout/authentication errors
+must be distinguished; transient retry retains the existing finite policy.
+The browser adapter counts streamed body bytes and cancels at 256 KiB even when
+Content-Length is absent. Preserve cancellation during reads/backoff.
+
+Wait for map style readiness before applying the latest provider state, and fence
+callbacks to the live map. Update attribution without resetting the raster source
+when its tile configuration is unchanged. Use existing layer-stack reconciliation
+for provider changes, preserving source/result/custom-layer order, visibility,
+opacity, camera and placement. Do not use `setStyle()` or recreate the map for
+key/style/session changes. Real default street/keyless map startup must also work;
+provider mocks must model delayed style load. Existing MapLibre 6 request/host
+seams suffice; no generic proxy, new protocol framework or second map owner.
+
+Prove actual key changes, expiry, viewport movement, delayed startup and disposal
+through mounted callers. An HTTP mock establishes request construction and failure
+handling, not Google account access. Reuse official sources linked above and
+record real restricted-key observation separately.
 
 ## C5 — final candidate, independent review and debrief
 
@@ -124,3 +234,22 @@ Before delivery review the final diff independently of the implementation sequen
 Update current subsystem/design guides as behavior lands, retaining historical evidence by revision. Reconcile completed related beads with scope and tests, export intended metadata, push the candidate to both destinations and verify ancestry/status. Keep new candidate acceptance and public release pending for their actual owners. A required unavailable gate yields partial delivery, even when all available work is complete.
 
 The [receipt](completion-receipt.md) owns measured evidence; bd owns progress; the [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement) owns the final synthesis and tested improvements. Finish one consolidated handoff with completed capabilities, exact limits, integration/candidate revisions, gates, measured resource envelope, external blockers and applied versus proposed improvements. Independent review follows; no routine phase needs another prompt.
+
+## Execution sequence and completion disposition
+
+Continue C0 → C1 → C2 → C3 → C4 → C5 without another phase prompt. After a small
+C1 caller passes, run one real Data import/reopen smoke before scale measurements;
+after C3/C4 repairs, observe their live UI before the final broad gates. Routine
+in-scope defects discovered by those workflows are part of this bead. If a
+phase depends on a known later repair (for example R20 map startup before the
+import smoke), repair that dependency first and continue; phase order is not an
+approval barrier. If an external prerequisite is unavailable, complete independent corrections and gates,
+then return one consolidated partial delivery with exact prerequisites. Do not
+spend repeated rounds retrying an unchanged unavailable host/key or repeating
+already-passed gates. Context checkpoints are resumable state, not acceptance.
+
+R15–R26 are review evidence for this same assignment. Every finding needs a
+repair-and-regression receipt row or a concrete counterexample resolving it with
+the reviewer. C1 replaces the old import policy rather than repairing its arbitrary
+ceilings. After final self-review, report one reviewable combined candidate; the
+main agent performs independent acceptance and decides integration separately.
