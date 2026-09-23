@@ -15,6 +15,7 @@ import {
 import {
   bindBasemapProvider,
   createBasemapProvider,
+  installBasemapConfigObserver,
   mapStyleReadiness,
 } from '../../maplibre/basemap-bind'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
@@ -186,6 +187,14 @@ export function useLocationMapEditingHost(
             visible: () => !mapInitFailed.peek(),
           }),
         )
+        // Style, key and locale are reactive inputs of this map lifetime.
+        context.lifetime.addCleanup(
+          installBasemapConfigObserver(
+            provider,
+            () => ({ style: preferredBasemapStyle }),
+            () => readLocationMapViewport(surfaceRef.current?.map ?? null),
+          ),
+        )
         context.lifetime.addCleanup(() => {
           provider.dispose()
           basemapProviderRef.current = null
@@ -210,17 +219,8 @@ export function useLocationMapEditingHost(
       surface.destroy()
     }
     // Only the surface's own structural key belongs here; the basemap style is
-    // applied through the provider below.
+    // applied through the provider observer installed in onCreate.
   }, [])
-
-  // A style change updates the provider rather than rebuilding the map, so the
-  // camera and any placement in progress survive a provider switch.
-  useEffect(() => {
-    basemapProviderRef.current?.update(
-      { style: preferredBasemapStyle },
-      readLocationMapViewport(surfaceRef.current?.map ?? null),
-    )
-  }, [preferredBasemapStyle])
 
   useEffect(() => {
     updateCurrentMapState()

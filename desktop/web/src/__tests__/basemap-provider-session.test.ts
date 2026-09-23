@@ -23,6 +23,17 @@ function sessionBody(overrides: Record<string, unknown> = {}): unknown {
   }
 }
 
+/** Established viewport metadata: copyright plus rectangles covering VIEWPORT. */
+function viewportBody(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    copyright: 'Imagery &copy; Google',
+    maxZoomRects: [
+      { north: 49, south: 48, east: 1, west: -1, maxZoom: 18 },
+    ],
+    ...overrides,
+  }
+}
+
 /** A scripted HTTP capability that records every request it is given. */
 function scriptedHttp(
   answers: Array<BasemapProviderResponse | (() => Promise<BasemapProviderResponse>)>,
@@ -90,7 +101,7 @@ describe('basemap provider session lifecycle', () => {
   it('loads an official session, adopts its tile size and keeps the token private', async () => {
     const { http, calls } = scriptedHttp([
       ok(sessionBody()),
-      ok({ copyright: 'Imagery &copy; Google' }),
+      ok(viewportBody({ copyright: 'Imagery &copy; Google' })),
     ])
     const provider = new BasemapProvider(http, {
       googleMapsApiKey: 'fake-key',
@@ -109,7 +120,9 @@ describe('basemap provider session lifecycle', () => {
       if (last.copyright !== 'Imagery &copy; Google') throw new Error('copyright not adopted')
     })
 
-    expect(seen.map((state) => state.state)).toEqual(['loading', 'ready', 'ready'])
+    // Ready is published only once: session alone is not enough; validated
+    // viewport metadata must also arrive before imagery is Ready.
+    expect(seen.map((state) => state.state)).toEqual(['loading', 'ready'])
     // Both provider requests are authenticated: the documented viewport request
     // carries the session *and* the API key. Neither reaches published state.
     expect(calls[0]?.url).toContain('key=fake-key')
@@ -164,7 +177,7 @@ describe('basemap provider session lifecycle', () => {
     const { http, calls } = scriptedHttp([
       failure(503),
       ok(sessionBody()),
-      ok({ copyright: 'Imagery' }),
+      ok(viewportBody({ copyright: 'Imagery' })),
     ])
     const provider = new BasemapProvider(
       http,
@@ -247,7 +260,7 @@ describe('basemap provider session lifecycle', () => {
   })
 
   it('uses the locale for the session and falls back to en/US', async () => {
-    const { http, calls } = scriptedHttp([ok(sessionBody())])
+    const { http, calls } = scriptedHttp([ok(sessionBody()), ok(viewportBody())])
     const provider = new BasemapProvider(
       http,
       { googleMapsApiKey: 'fake-key', locale: 'not a locale' },

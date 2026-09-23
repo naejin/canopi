@@ -29,19 +29,23 @@ const PROVIDER_OPTIONS = [
  * keyless prompt all come from `resolveBasemapAvailability`, so this surface
  * cannot disagree with what the map actually renders. Nothing here reads a
  * device key into a Design: the key round-trips through device settings only.
+ * Availability is read inside the computed callback so a key or style update
+ * changes the visible prompt, error and attribution rather than only the signal.
  */
 export function BasemapSettings() {
   const [draftKey, setDraftKey] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
-  const selected = basemapStyle.value
-  const storedKey = googleMapsApiKey.value
-  const resolved = useComputed(() =>
-    resolveBasemapAvailability(selected, {
+  const resolved = useComputed(() => {
+    const selected = basemapStyle.value
+    const storedKey = googleMapsApiKey.value
+    return resolveBasemapAvailability(selected, {
       ...buildConfig(),
       googleMapsApiKey: storedKey,
-    }),
-  )
+    })
+  })
+  const selected = basemapStyle.value
+  const storedKey = googleMapsApiKey.value
 
   const keyEditing = draftKey !== null
   // The field shows the in-progress draft while editing and the stored value

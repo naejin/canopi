@@ -19,6 +19,7 @@ import { basemapStyle } from '../../app/settings/state'
 import {
   bindBasemapProvider,
   createBasemapProvider,
+  installBasemapConfigObserver,
   mapStyleReadiness,
 } from '../../maplibre/basemap-bind'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
@@ -111,6 +112,15 @@ export function WorldMapSurface({
             styleReady: mapStyleReadiness(context.map, context.lifetime),
           }),
         )
+        // Style, key and locale are reactive inputs of this map lifetime: an
+        // already mounted provider is updated when any of them change.
+        context.lifetime.addCleanup(
+          installBasemapConfigObserver(
+            provider,
+            () => ({ style: preferredBasemapStyle }),
+            () => readWorldMapViewport(surfaceRef.current?.map ?? null),
+          ),
+        )
         context.lifetime.addCleanup(() => {
           provider.dispose()
           providerRef.current = null
@@ -129,17 +139,8 @@ export function WorldMapSurface({
       surface.destroy()
     }
     // Only the surface's own structural key belongs here. The basemap style is
-    // applied through the provider below.
+    // applied through the provider observer installed above.
   }, [])
-
-  // A style change updates the provider rather than rebuilding the map, so the
-  // camera, the markers and the scene survive a provider switch mid-edit.
-  useEffect(() => {
-    providerRef.current?.update(
-      { style: preferredBasemapStyle },
-      readWorldMapViewport(surfaceRef.current?.map ?? null),
-    )
-  }, [preferredBasemapStyle])
 
   // Markers are rebuilt when the map is recreated, so the map itself is the
   // signal here rather than the basemap style.

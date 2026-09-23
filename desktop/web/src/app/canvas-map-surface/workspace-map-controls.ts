@@ -8,7 +8,7 @@ import {
   MAPLIBRE_BASEMAP_SOURCE_ID,
 } from '../../maplibre/config'
 import type { BasemapStyle } from '../../generated/contracts'
-import { bindBasemapProvider, createBasemapProvider, mapStyleReadiness } from '../../maplibre/basemap-bind'
+import { bindBasemapProvider, createBasemapProvider, installBasemapConfigObserver, mapStyleReadiness } from '../../maplibre/basemap-bind'
 import type { BasemapProvider, BasemapViewport } from '../../maplibre/basemap-provider-session'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
@@ -395,6 +395,15 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     // place; the session is not per-viewport.
     lifetime.on('moveend', () =>
       provider.updateViewport(readWorkspaceMapViewport(map)),
+    )
+    // Style, key and locale are reactive inputs of this map lifetime: an
+    // already mounted provider is updated when any of them change.
+    lifetime.addCleanup(
+      installBasemapConfigObserver(
+        provider,
+        () => ({ style: attempt.presentation.basemapStyle }),
+        () => readWorkspaceMapViewport(map),
+      ),
     )
     attempt.basemapTeardown = () => {
       unbind()

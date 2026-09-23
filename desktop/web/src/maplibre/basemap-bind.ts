@@ -1,8 +1,10 @@
-import type { BasemapProvider, BasemapProviderState } from './basemap-provider-session'
+import { effect } from '@preact/signals'
+import type { BasemapProvider, BasemapProviderState, BasemapViewport } from './basemap-provider-session'
 import { BasemapProvider as Provider } from './basemap-provider-session'
 import { createBrowserBasemapHttp } from './basemap-http.browser'
 import { BasemapTileAuth } from './basemap-tile-auth'
-import { googleMapsApiKey } from '../app/settings/state'
+import { googleMapsApiKey, locale } from '../app/settings/state'
+import type { BasemapStyle } from '../generated/contracts'
 import {
   reconcileBasemapContribution,
   setBasemapContributionVisibility,
@@ -157,11 +159,34 @@ export function createBasemapProvider(
     () => ({
       mapTilerKey: import.meta.env.VITE_MAPTILER_KEY,
       googleMapsApiKey: googleMapsApiKey.value,
+      locale: locale.value,
     }),
     () => Date.now(),
     (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     tileAuth,
   )
+}
+
+/**
+ * Observe style, effective key and application locale for one map lifetime.
+ *
+ * A getter without an observer is insufficient: an already mounted provider
+ * must be updated when any of these change, so the configuration identity is
+ * re-evaluated and an incompatible session is replaced. Returns its disposer.
+ */
+export function installBasemapConfigObserver(
+  provider: BasemapProvider,
+  readPresentation: () => { readonly style: BasemapStyle },
+  readViewport: () => BasemapViewport,
+): () => void {
+  return effect(() => {
+    // Subscribe to every configuration identity input.
+    void googleMapsApiKey.value
+    void locale.value
+    const presentation = readPresentation()
+    void presentation.style
+    provider.update(presentation, readViewport())
+  })
 }
 
 /**

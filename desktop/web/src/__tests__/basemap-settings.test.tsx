@@ -86,6 +86,10 @@ describe('basemap provider settings', () => {
     act(() => {
       render(<BasemapSettings />, container)
     })
+    // With a saved key the keyless prompt is not shown.
+    expect(container.textContent).not.toContain(
+      'Enter a Google Maps API key to load the official Google tiles.',
+    )
     const clear = Array.from(container.querySelectorAll('button')).find((button) =>
       (button.textContent ?? '').includes('Clear'),
     )
@@ -94,6 +98,10 @@ describe('basemap provider settings', () => {
       clear?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(googleMapsApiKey.value).toBeNull()
+    // R42: the visible prompt follows the actual key clear, not just the signal.
+    expect(container.textContent).toContain(
+      'Enter a Google Maps API key to load the official Google tiles.',
+    )
   })
 
   it('states that the key is device-local and never written to a design or export', () => {

@@ -23,6 +23,15 @@ export interface BasemapReconcileTarget {
   addSource(id: string, source: Record<string, unknown>): void
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
   setLayoutProperty?(id: string, name: string, value: unknown): void
+  /**
+   * Optional: update basemap attribution without removing the tile source.
+   *
+   * Installed MapLibre has no dynamic raster-source attribution setter, so a
+   * map-owned attribution control adapter is the supported way to change only
+   * the copyright. When absent, a copyright-only change is applied by replacing
+   * the attribution-bearing source only if tile configuration also changed.
+   */
+  replaceBasemapAttribution?(attribution: string): void
 }
 
 export interface BasemapRasterSource {
@@ -51,9 +60,11 @@ export interface BasemapRasterLayer {
  * runtime or any other layer — which is the property the product contract
  * requires and the reason provider changes are safe mid-edit.
  *
- * Removing the source before adding it keeps one contribution rather than
- * accumulating them, and the layer is removed before its source because
- * MapLibre refuses to drop a source that a layer still references.
+ * Tile configuration (provider/template, tile size, zoom limits) is compared
+ * separately from attribution and visibility. Identical publications are
+ * no-ops; copyright-only changes update attribution without removing the tile
+ * source; a source is rebuilt only when its actual tile configuration requires
+ * it, preserving layer order, opacity and overlays.
  */
 export interface BasemapContributionOptions {
   /**
@@ -75,6 +86,26 @@ export interface BasemapContributionOptions {
   readonly beforeLayerId?: () => string | null
 }
 
+function readInstalledSource(target: BasemapReconcileTarget): BasemapRasterSource | null {
+  const source = target.getSource(MAPLIBRE_BASEMAP_SOURCE_ID) as BasemapRasterSource | null | undefined
+  if (!source || source.type !== 'raster') return null
+  return source
+}
+
+function sameTiles(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((tile, index) => tile === b[index])
+}
+
+function sameTileConfig(
+  a: BasemapRasterSource,
+  tiles: readonly string[],
+  tileSize: number,
+  maxzoom: number,
+): boolean {
+  return a.tileSize === tileSize && a.maxzoom === maxzoom && sameTiles(a.tiles, tiles)
+}
+
 export function reconcileBasemapContribution(
   target: BasemapReconcileTarget,
   state: BasemapProviderState,
@@ -83,10 +114,23 @@ export function reconcileBasemapContribution(
   const descriptor = state.state === 'ready' ? state.descriptor : null
   const tiles = descriptor?.tiles ?? []
 
-  // An idle, loading or unavailable provider has no imagery to show, so the
-  // existing contribution is withdrawn. A provider that cannot serve must not
-  // leave the previous provider's tiles on screen: that would present one
-  // provider's imagery under another's name.
+  // A loading official provider may keep an already-installed source whose tile
+  // configuration is unchanged, hidden via visibility so it cannot present
+  // falsely attributed imagery while metadata is pending.
+  if (state.state === 'loading') {
+    const installed = readInstalledSource(target)
+    if (installed) {
+      setBasemapContributionVisibility(target, false)
+      return
+    }
+    removeContribution(target)
+    return
+  }
+
+  // An idle or unavailable provider has no imagery to show, so the existing
+  // contribution is withdrawn. A provider that cannot serve must not leave the
+  // previous provider's tiles on screen: that would present one provider's
+  // imagery under another's name.
   if (tiles.length === 0) {
     removeContribution(target)
     return
@@ -103,15 +147,33 @@ export function reconcileBasemapContribution(
     return
   }
 
-  // Rebuild the contribution so a changed provider, tile size, zoom ceiling or
-  // attribution is applied wholesale rather than partially updated.
+  const tileSize = descriptor?.tileSize ?? 256
+  const maxzoom = descriptor?.maxzoom ?? 19
+  const attribution = descriptor?.attribution ?? ''
+  const installed = readInstalledSource(target)
+
+  if (installed && sameTileConfig(installed, tiles, tileSize, maxzoom)) {
+    // Identical tile configuration retains the source and its loaded state.
+    if (installed.attribution !== attribution) {
+      // Copyright-only: update attribution without removing the tile source.
+      if (target.replaceBasemapAttribution) {
+        target.replaceBasemapAttribution(attribution)
+      }
+    }
+    setBasemapContributionVisibility(target, true)
+    return
+  }
+
+  // Rebuild only when the actual tile configuration requires it. The layer is
+  // removed before its source because MapLibre refuses to drop a source that a
+  // layer still references; layer order is re-applied by the insertion anchor.
   removeContribution(target)
   target.addSource(MAPLIBRE_BASEMAP_SOURCE_ID, {
     type: 'raster',
     tiles: [...tiles],
-    tileSize: descriptor?.tileSize ?? 256,
-    attribution: descriptor?.attribution ?? '',
-    maxzoom: descriptor?.maxzoom ?? 19,
+    tileSize,
+    attribution,
+    maxzoom,
   })
   const layer = {
     id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,

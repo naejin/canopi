@@ -137,10 +137,9 @@ describe('basemap contribution reconciliation', () => {
     ])
   })
 
-  it('withdraws the contribution for idle, loading and unavailable providers', () => {
+  it('withdraws the contribution for idle and unavailable providers', () => {
     const states: BasemapProviderState[] = [
       { state: 'idle' },
-      { state: 'loading', style: 'google_satellite' },
       { state: 'unavailable', style: 'satellite', reason: 'no MapTiler key' },
     ]
     for (const state of states) {
@@ -156,6 +155,21 @@ describe('basemap contribution reconciliation', () => {
       expect(sources.size).toBe(0)
       expect(layers.size).toBe(0)
     }
+  })
+
+  it('keeps an unchanged tile source hidden while official metadata is pending', () => {
+    const { target, sources, layers } = recordingTarget()
+    reconcileBasemapContribution(target, {
+      state: 'ready',
+      descriptor: descriptor(),
+      copyright: 'first',
+    })
+    expect(sources.size).toBe(1)
+    // Loading with an already-installed source keeps the object and hides it,
+    // so a pending metadata request cannot present falsely attributed imagery.
+    reconcileBasemapContribution(target, { state: 'loading', style: 'google_satellite' })
+    expect(sources.size).toBe(1)
+    expect(layers.size).toBe(1)
   })
 
   it('removes an idempotent contribution without error', () => {

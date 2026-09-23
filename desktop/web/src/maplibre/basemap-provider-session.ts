@@ -110,12 +110,6 @@ export function sanitizeProviderReason(text: string, secret: string | null): str
   return withoutSecret.length > 0 ? withoutSecret : 'The provider request failed.'
 }
 
-/** One session/viewport answer, fenced by generation. */
-interface Pending<T> {
-  readonly generation: number
-  readonly promise: Promise<T>
-}
-
 export class BasemapProvider {
   private generation = 0
   private disposed = false
@@ -125,6 +119,12 @@ export class BasemapProvider {
   private session: GoogleSession | null = null
   private lastViewport: BasemapViewport | null = null
   /**
+   * The newest viewport the caller wants served, even while a request is in
+   * flight. One active request plus one latest desired viewport: a newer
+   * viewport supersedes the older request/result rather than queueing.
+   */
+  private latestDesiredViewport: BasemapViewport | null = null
+  /**
    * Viewport refresh in flight for one generation.
    *
    * Sessions need no equivalent bookkeeping: `update()` advances the
@@ -132,11 +132,18 @@ export class BasemapProvider {
    * neither publish nor install itself, and at most one attempt per generation
    * can reach the publish point.
    */
-  private viewportInFlight: Pending<string | null> | null = null
-  /** The copyright the live viewport metadata supplied, when it supplied one. */
-  private copyright: string | null = null
-  /** The zoom ceiling the live viewport metadata permits, when it permits one. */
-  private viewportMaxZoom: number | null = null
+  private viewportInFlight: { readonly generation: number; readonly viewport: BasemapViewport } | null = null
+  /** Validated viewport metadata for the current generation, when established. */
+  private viewportMetadata: BasemapViewportMetadata | null = null
+  /** The descriptor as resolved before any viewport zoom clamp. */
+  private baseDescriptor: BasemapDescriptor | null = null
+  /**
+   * Identity of the configuration the live session was acquired under.
+   *
+   * A key or locale change is a different credential/session identity: the old
+   * session, viewport facts, credentials and renewal must not survive it.
+   */
+  private configIdentity: string | null = null
 
   private renewalTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -184,6 +191,8 @@ export class BasemapProvider {
    * Every call begins a new generation. Anything the previous generation had in
    * flight is aborted and can no longer publish, which is what makes a key
    * change, a provider switch or a fast sequence of viewport moves safe.
+   * A configuration identity change also drops incompatible session, viewport
+   * facts, credentials and renewal before the new session is acquired.
    */
   update(presentation: { readonly style: BasemapStyle }, viewport: BasemapViewport): void {
     if (this.disposed) return
@@ -192,24 +201,40 @@ export class BasemapProvider {
     this.controller?.abort()
     this.controller = new AbortController()
     this.lastViewport = viewport
+    this.latestDesiredViewport = viewport
     this.viewportInFlight = null
     this.clearRenewal()
 
-    const resolved = resolveBasemapAvailability(presentation.style, this.currentConfig())
+    const config = this.currentConfig()
+    const nextIdentity = this.configIdentityOf(config)
+    const configChanged = this.configIdentity !== nextIdentity
+    if (configChanged) {
+      this.session = null
+      this.credentials?.clear()
+      this.viewportMetadata = null
+    }
+    this.configIdentity = nextIdentity
+
+    const resolved = resolveBasemapAvailability(presentation.style, config)
     if (resolved.state === 'unavailable') {
       this.session = null
       this.credentials?.clear()
+      this.viewportMetadata = null
+      this.baseDescriptor = null
       // A style change or a cleared key must not leave the previous provider's
       // session usable by an in-flight map request.
       this.publish({ state: 'unavailable', style: presentation.style, reason: resolved.reason })
       return
     }
 
+    this.baseDescriptor = resolved.descriptor
+
     if (!resolved.descriptor.official) {
-      // Street, MapTiler and the keyless Google path need no session, so there
-      // is no loading state to show and no request to make.
+      // Street, MapTiler and the keyless Google path need no session and no
+      // viewport metadata, so there is no loading state to show and no request.
       this.session = null
       this.credentials?.clear()
+      this.viewportMetadata = null
       this.publish({
         state: 'ready',
         descriptor: resolved.descriptor,
@@ -218,16 +243,12 @@ export class BasemapProvider {
       return
     }
 
-    // An official generation needs a live session before it can render.
+    // An official generation needs a live session *and* validated viewport
+    // metadata before imagery is Ready. A session that still matches this
+    // configuration may be reused; otherwise it is re-acquired.
     const existing = this.session
     if (existing && existing.expiresAtMs - this.now() > PROVIDER_SESSION_RENEWAL_WINDOW_MS) {
-      this.installCredentials(existing)
-      this.publish({
-        state: 'ready',
-        descriptor: this.descriptorForSession(resolved.descriptor, existing),
-        copyright: this.copyright,
-      })
-      this.scheduleRenewal(generation, existing, resolved.descriptor)
+      this.publish({ state: 'loading', style: presentation.style })
       void this.refreshViewport(generation, viewport)
       return
     }
@@ -242,11 +263,23 @@ export class BasemapProvider {
    * A session is not per-viewport, so moving the map refreshes the viewport
    * metadata in place: aborting and re-acquiring the session on every pan would
    * cost a request per movement and blank the imagery while it completed.
+   * Only the latest desired viewport is kept; an older in-flight result is
+   * discarded and the latest is requested immediately.
    */
   updateViewport(viewport: BasemapViewport): void {
     if (this.disposed) return
     this.lastViewport = viewport
+    this.latestDesiredViewport = viewport
     if (!this.session) return
+    // Same settled viewport need not refetch when metadata is already valid.
+    if (
+      this.viewportMetadata !== null &&
+      this.viewportInFlight === null &&
+      this.lastPublishedViewport &&
+      sameViewport(this.lastPublishedViewport, viewport)
+    ) {
+      return
+    }
     void this.refreshViewport(this.generation, viewport)
   }
 
@@ -263,8 +296,23 @@ export class BasemapProvider {
     // stops serving that provider.
     this.credentials?.clear()
     this.viewportInFlight = null
+    this.latestDesiredViewport = null
+    this.viewportMetadata = null
+    this.baseDescriptor = null
+    this.configIdentity = null
     this.state = { state: 'idle' }
   }
+
+  /** Stable identity for the credential/session-relevant configuration. */
+  private configIdentityOf(config: BasemapProviderConfig): string {
+    return JSON.stringify({
+      key: config.googleMapsApiKey?.trim() ?? '',
+      locale: config.locale ?? '',
+    })
+  }
+
+  /** The viewport last published as current metadata, when one was published. */
+  private lastPublishedViewport: BasemapViewport | null = null
 
   private publish(state: BasemapProviderState): void {
     this.state = state
@@ -293,6 +341,8 @@ export class BasemapProvider {
       // an actionable provider error and never downgraded to keyless tiles,
       // because silently serving different imagery would misrepresent it.
       this.session = null
+      this.credentials?.clear()
+      this.viewportMetadata = null
       this.publish({
         state: 'unavailable',
         style: descriptor.style,
@@ -304,15 +354,10 @@ export class BasemapProvider {
       return
     }
     this.session = session
-    // The credential reaches the map's tile transport and nothing else: it is
-    // never part of the published state, so it cannot be persisted, exported or
-    // logged by any consumer of that state.
+    // Official imagery stays withheld until validated viewport metadata also
+    // arrives. Credentials are installed so the tile transport is ready, but
+    // the contribution is not published Ready yet.
     this.installCredentials(session)
-    this.publish({
-      state: 'ready',
-      descriptor: this.descriptorForSession(descriptor, session),
-      copyright: this.copyright,
-    })
     this.scheduleRenewal(generation, session, descriptor)
     if (this.lastViewport) void this.refreshViewport(generation, this.lastViewport)
   }
@@ -326,21 +371,44 @@ export class BasemapProvider {
   }
 
   /**
-   * The descriptor for a live session: the session's own tile size and the
-   * zoom the viewport metadata actually permits.
+   * The descriptor for a live session: the session's own tile size, the
+   * validated viewport copyright and the zoom the current viewport metadata
+   * actually permits, always computed against the base descriptor so
+   * availability can increase and decrease.
    */
   private descriptorForSession(
     descriptor: BasemapDescriptor,
     session: GoogleSession,
   ): BasemapDescriptor {
+    const metadataZoom = this.viewportMetadata?.maxZoom
+    const copyright = this.viewportMetadata?.copyright
     return {
       ...descriptor,
       tiles: [...descriptor.tiles],
       tileSize: session.tileWidth,
-      // Availability is per viewport and comes from the provider, so the
-      // descriptor ceiling follows the metadata rather than a universal guess.
-      maxzoom: Math.min(descriptor.maxzoom, this.viewportMaxZoom ?? descriptor.maxzoom),
+      attribution: copyright ?? descriptor.attribution,
+      maxzoom: Math.min(
+        descriptor.maxzoom,
+        typeof metadataZoom === 'number' && Number.isFinite(metadataZoom)
+          ? metadataZoom
+          : descriptor.maxzoom,
+      ),
     }
+  }
+
+  /** Publish Ready only when session and validated viewport metadata agree. */
+  private publishOfficialReady(generation: number, descriptor: BasemapDescriptor): void {
+    if (!this.isCurrent(generation)) return
+    const session = this.session
+    const metadata = this.viewportMetadata
+    if (!session || !metadata) return
+    this.installCredentials(session)
+    this.publish({
+      state: 'ready',
+      descriptor: this.descriptorForSession(descriptor, session),
+      copyright: metadata.copyright,
+    })
+    this.scheduleRenewal(generation, session, descriptor)
   }
 
   /**
@@ -413,31 +481,46 @@ export class BasemapProvider {
    * The documented viewport request is authenticated with the session **and**
    * the API key, so both are sent. A refused or malformed answer becomes an
    * actionable unavailable state rather than leaving the previous attribution
-   * in place as if it still described what is on screen.
+   * in place as if it still described what is on screen. A later valid request
+   * for a distinct settled viewport (or an explicit retry) may recover.
    */
   private async refreshViewport(
     generation: number,
     viewport: BasemapViewport,
   ): Promise<void> {
-    if (this.viewportInFlight?.generation === generation) return
+    if (this.viewportInFlight && this.viewportInFlight.generation === generation) {
+      // Keep only the latest desired viewport; the in-flight request will be
+      // superseded when it settles if it is no longer the latest.
+      this.latestDesiredViewport = viewport
+      return
+    }
     const session = this.session
     const key = this.currentConfig().googleMapsApiKey?.trim() ?? ''
     if (!session || !key) return
+    this.latestDesiredViewport = viewport
+    this.viewportInFlight = { generation, viewport }
     const url =
       `https://tile.googleapis.com/v1/viewport?session=${encodeURIComponent(session.sessionToken)}` +
       `&key=${encodeURIComponent(key)}` +
       `&zoom=${viewport.zoom}&north=${viewport.north}&south=${viewport.south}` +
       `&east=${viewport.east}&west=${viewport.west}`
-    const pending = this.requestWithRetry(generation, url, { method: 'GET' })
-    this.viewportInFlight = { generation, promise: pending.then(() => null) }
     let response: BasemapProviderResponse | null = null
     try {
-      response = await pending
+      response = await this.requestWithRetry(generation, url, { method: 'GET' })
     } catch {
       response = null
     }
     if (!this.isCurrent(generation)) return
     this.viewportInFlight = null
+
+    // A newer viewport arrived while this request was running: discard this
+    // result without publishing and immediately request the latest.
+    const latest = this.latestDesiredViewport
+    if (latest && !sameViewport(latest, viewport)) {
+      void this.refreshViewport(generation, latest)
+      return
+    }
+
     if (!response || !response.ok) {
       this.failViewportMetadata(generation, key, response)
       return
@@ -447,18 +530,11 @@ export class BasemapProvider {
       this.failViewportMetadata(generation, key, response)
       return
     }
-    this.copyright = metadata.copyright
-    this.viewportMaxZoom = metadata.maxZoom
-    if (this.state.state !== 'ready') return
-    this.publish({
-      ...this.state,
-      descriptor: {
-        ...this.state.descriptor,
-        attribution: metadata.copyright ?? this.state.descriptor.attribution,
-        maxzoom: Math.min(this.state.descriptor.maxzoom, metadata.maxZoom),
-      },
-      copyright: metadata.copyright,
-    })
+    this.viewportMetadata = metadata
+    this.lastPublishedViewport = viewport
+    const descriptor = this.baseDescriptor
+    if (!descriptor) return
+    this.publishOfficialReady(generation, descriptor)
   }
 
   /**
@@ -466,7 +542,9 @@ export class BasemapProvider {
    *
    * Official imagery is not shown without usable viewport attribution and
    * availability, so a failed metadata request is an unavailable provider with
-   * an actionable reason — not a ready provider with a stale credit line.
+   * an actionable reason — not a ready provider with a stale credit line. The
+   * transport credential is cleared so stale tokens cannot authenticate tiles.
+   * A later valid request may recover through the same bounded policy.
    */
   private failViewportMetadata(
     generation: number,
@@ -475,6 +553,7 @@ export class BasemapProvider {
   ): void {
     if (!this.isCurrent(generation)) return
     this.credentials?.clear()
+    this.viewportMetadata = null
     this.clearRenewal()
     this.publish({
       state: 'unavailable',
@@ -602,11 +681,13 @@ export interface BasemapViewportMetadata {
 /**
  * Read the documented viewport response.
  *
- * `maxZoomRects` describes availability over sub-rectangles of the request; the
- * rectangle containing the requested viewport's centre is the one that applies,
- * and the deepest declared `maxZoom` is the fallback. A universal zoom ceiling
- * would either request imagery the provider has not declared or hide zoom the
- * provider does support.
+ * `maxZoomRects` describes availability over sub-rectangles of the request.
+ * Overlapping rectangles offer the greatest supported zoom at a point; the
+ * source-wide ceiling cannot exceed the least such availability across the
+ * requested viewport, respecting wrapped longitudes. Uncovered or unsupported
+ * metadata is unavailable, not an invented zoom. Empty objects and answers
+ * without finite applicable availability or a copyright are not established
+ * metadata.
  */
 export function readViewportMetadata(
   json: unknown,
@@ -617,9 +698,7 @@ export function readViewportMetadata(
   const copyright =
     typeof json.copyright === 'string' && json.copyright.length > 0 ? json.copyright : null
   const rects = Array.isArray(json.maxZoomRects) ? json.maxZoomRects : []
-  let maxZoom: number | null = null
-  const centreLon = (viewport.west + viewport.east) / 2
-  const centreLat = (viewport.south + viewport.north) / 2
+  const parsed: Array<{ north: number; south: number; east: number; west: number; maxZoom: number }> = []
   for (const rect of rects) {
     if (!isRecord(rect)) continue
     const value = Number(rect.maxZoom)
@@ -628,29 +707,72 @@ export function readViewportMetadata(
     const south = Number(rect.south)
     const east = Number(rect.east)
     const west = Number(rect.west)
-    const contains =
-      Number.isFinite(north) && Number.isFinite(south)
-      && Number.isFinite(east) && Number.isFinite(west)
-      && centreLat <= north && centreLat >= south
-      && centreLon <= east && centreLon >= west
-    if (contains) {
-      maxZoom = maxZoom === null ? value : Math.min(maxZoom, value)
+    if (
+      !Number.isFinite(north) || !Number.isFinite(south)
+      || !Number.isFinite(east) || !Number.isFinite(west)
+    ) {
+      continue
     }
+    parsed.push({ north, south, east, west, maxZoom: value })
   }
-  if (maxZoom === null) {
-    for (const rect of rects) {
-      if (!isRecord(rect)) continue
-      const value = Number(rect.maxZoom)
-      if (!Number.isFinite(value) || value <= 0) continue
-      maxZoom = maxZoom === null ? value : Math.max(maxZoom, value)
+  if (parsed.length === 0) {
+    // `{}` or a response with no applicable rectangles is not established
+    // metadata, even if a fallback zoom would otherwise be available.
+    return null
+  }
+  // Sample the requested viewport so support is required across it, not only
+  // at the centre. Corners plus the centre catch the common thin-coverage case;
+  // wrapped longitudes are normalised into the rectangles' own frame.
+  const samples: Array<{ lat: number; lon: number }> = [
+    { lat: viewport.south, lon: viewport.west },
+    { lat: viewport.south, lon: viewport.east },
+    { lat: viewport.north, lon: viewport.west },
+    { lat: viewport.north, lon: viewport.east },
+    { lat: (viewport.south + viewport.north) / 2, lon: (viewport.west + viewport.east) / 2 },
+  ]
+  let ceiling: number | null = null
+  for (const sample of samples) {
+    // At a point, overlapping rectangles offer the greatest supported zoom.
+    let pointZoom: number | null = null
+    for (const rect of parsed) {
+      if (!rectContains(rect, sample.lat, sample.lon)) continue
+      pointZoom = pointZoom === null ? rect.maxZoom : Math.max(pointZoom, rect.maxZoom)
     }
+    if (pointZoom === null) return null
+    // The source-wide ceiling cannot exceed the least such availability.
+    ceiling = ceiling === null ? pointZoom : Math.min(ceiling, pointZoom)
   }
+  if (ceiling === null) return null
+  // Missing or malformed copyright is not established metadata for an official
+  // viewport answer that must carry attribution.
+  if (copyright === null) return null
   return {
-    // Metadata without a copyright still establishes the applicable zoom, so it
-    // is not discarded; the caller keeps its descriptor attribution.
     copyright,
-    maxZoom: maxZoom ?? fallbackMaxZoom,
+    maxZoom: Math.min(ceiling, fallbackMaxZoom),
   }
+}
+
+function rectContains(
+  rect: { north: number; south: number; east: number; west: number },
+  lat: number,
+  lon: number,
+): boolean {
+  if (lat > rect.north || lat < rect.south) return false
+  // Respect wrapped longitudes: a rectangle may span the antimeridian.
+  if (rect.west <= rect.east) {
+    return lon >= rect.west && lon <= rect.east
+  }
+  return lon >= rect.west || lon <= rect.east
+}
+
+function sameViewport(a: BasemapViewport, b: BasemapViewport): boolean {
+  return (
+    a.west === b.west &&
+    a.south === b.south &&
+    a.east === b.east &&
+    a.north === b.north &&
+    a.zoom === b.zoom
+  )
 }
 
 export { GOOGLE_KEY_PROMPT }
