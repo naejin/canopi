@@ -597,7 +597,8 @@
         "retry": "重试分析",
         "previous": "之前的结果",
         "noResults": "此输入尚无结果。",
-        "resultName": "结果名称"
+        "resultName": "结果名称",
+        "retryNeedsHead": "重试需要当前源头；请刷新库后重试。"
       },
       "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。",
       "slopePercent": "坡度（百分比）",

@@ -502,10 +502,15 @@ fn publish_sparse_slope(
         // Sparse admission covers the actual occupied work: core blocks plus
         // halos, bounded working buffers, staged result/quality bytes and the
         // shared reserve. Checked arithmetic; no first-member lattice envelope.
-        admit_sparse_slope_storage(&scratch, blocks.len())?;
-        let mut chunks = Vec::with_capacity(blocks.len());
-        for (chunk_x, chunk_y) in blocks {
+        let total_blocks = blocks.len();
+        admit_sparse_slope_storage(&scratch, total_blocks)?;
+        let mut chunks = Vec::with_capacity(total_blocks);
+        for (index, (chunk_x, chunk_y)) in blocks.into_iter().enumerate() {
             super::import::check_cancel(cancel)?;
+            // Recheck before each bounded output: remaining work plus reserve,
+            // not a second charge of bytes already written.
+            let remaining = total_blocks.saturating_sub(index);
+            admit_sparse_slope_storage(&scratch, remaining)?;
             chunks.push(compute_slope_block(
                 engine,
                 cancel,

@@ -31,13 +31,20 @@ export const lidarStatusMessage = signal<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
+let freshRefreshInFlight: Promise<void> | null = null
+
+async function readLibrarySnapshot(): Promise<void> {
+  const snapshot = await lidarListLibrary()
+  lidarLibrary.value = snapshot
+  lidarStatusMessage.value = null
+}
 
 /**
  * Refresh the library snapshot.
  *
- * Overlapping callers await the same real settlement read rather than
- * returning early and observing a stale head: a terminal job and its library
- * head must be observed as a pair.
+ * Passive overlapping callers coalesce onto the in-flight read. Settlement
+ * must not use this entry: waiting for an earlier read does not make its
+ * snapshot fresh.
  */
 export async function refreshLidarLibrary(): Promise<void> {
   if (refreshInFlight) {
@@ -45,9 +52,7 @@ export async function refreshLidarLibrary(): Promise<void> {
   }
   refreshInFlight = (async () => {
     try {
-      const snapshot = await lidarListLibrary()
-      lidarLibrary.value = snapshot
-      lidarStatusMessage.value = null
+      await readLibrarySnapshot()
     } catch (error) {
       // Passive library read failures leave the previous snapshot in place;
       // the rest of the app keeps working (Web Edition has no library at all).
@@ -57,6 +62,86 @@ export async function refreshLidarLibrary(): Promise<void> {
     }
   })()
   return refreshInFlight
+}
+
+/**
+ * Start a library read that begins after this call.
+ *
+ * Settlement uses this entry so attachment never consumes a snapshot that
+ * predates the terminal observation. One shared follow-up read satisfies
+ * overlapping settlement callers.
+ */
+export async function refreshLidarLibraryFresh(): Promise<void> {
+  if (freshRefreshInFlight) {
+    return freshRefreshInFlight
+  }
+  // Chain after any in-flight passive read so this one actually starts later.
+  const prior = refreshInFlight ?? Promise.resolve()
+  freshRefreshInFlight = (async () => {
+    try {
+      await prior
+    } catch {
+      // Ignore the prior read's failure; this one is the freshness source.
+    }
+    try {
+      await readLibrarySnapshot()
+    } catch (error) {
+      lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+      throw error
+    } finally {
+      freshRefreshInFlight = null
+    }
+  })()
+  return freshRefreshInFlight
+}
+
+export interface ImportAttachmentIntent {
+  readonly jobId: string
+  readonly layerId: string
+  readonly designIdentity: object
+  consumed: boolean
+}
+
+const attachmentIntents = new Map<string, ImportAttachmentIntent>()
+
+/**
+ * Record that a successful import submission should attach its layer when the
+ * job commits, but only in the Design session that submitted it.
+ */
+export function recordImportAttachmentIntent(
+  jobId: string,
+  layerId: string,
+  designIdentity: object,
+): void {
+  attachmentIntents.set(jobId, {
+    jobId,
+    layerId,
+    designIdentity,
+    consumed: false,
+  })
+}
+
+/** Drop a pending attachment without presenting anything. */
+export function discardImportAttachmentIntent(jobId: string): void {
+  attachmentIntents.delete(jobId)
+}
+
+/** The unconsumed attachment intent for one job, if any. */
+export function peekImportAttachmentIntent(jobId: string): ImportAttachmentIntent | null {
+  return attachmentIntents.get(jobId) ?? null
+}
+
+/** Consume the intent for one job, returning it if it was still pending. */
+export function consumeImportAttachmentIntent(jobId: string): ImportAttachmentIntent | null {
+  const intent = attachmentIntents.get(jobId)
+  if (!intent || intent.consumed) return null
+  intent.consumed = true
+  attachmentIntents.delete(jobId)
+  return intent
+}
+
+export function clearImportAttachmentIntents(): void {
+  attachmentIntents.clear()
 }
 
 function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {

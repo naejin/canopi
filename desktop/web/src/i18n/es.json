@@ -597,7 +597,8 @@
         "retry": "Reintentar análisis",
         "previous": "Resultados anteriores",
         "noResults": "Aún no hay resultados para esta entrada.",
-        "resultName": "Nombre del resultado"
+        "resultName": "Nombre del resultado",
+        "retryNeedsHead": "Reintentar requiere un encabezado de origen actual; actualice la biblioteca e inténtelo de nuevo."
       },
       "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos.",
       "slopePercent": "Pendiente (porcentaje)",

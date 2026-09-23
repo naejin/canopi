@@ -3,10 +3,16 @@ import { upsertLidarEntry } from '../design-edit/lidar'
 import { designSessionStore } from '../document-session/store'
 import type { LidarImportJob } from '../../generated/contracts'
 import {
+  clearImportAttachmentIntents,
+  consumeImportAttachmentIntent,
   ensureLidarPolling,
+  lidarLibrary,
+  lidarStatusMessage,
   openImportJob,
-  refreshLidarLibrary,
+  peekImportAttachmentIntent,
+  refreshLidarLibraryFresh,
   stopLidarPolling,
+  type ImportAttachmentIntent,
 } from './library-store'
 
 /**
@@ -17,45 +23,13 @@ import {
  * Design Edit seam; leaf actions never import this module.
  */
 
-interface ImportAttachmentIntent {
-  readonly jobId: string
-  readonly layerId: string
-  readonly designIdentity: object
-  consumed: boolean
-}
+export {
+  discardImportAttachmentIntent,
+  recordImportAttachmentIntent,
+} from './library-store'
 
-const attachmentIntents = new Map<string, ImportAttachmentIntent>()
-
-/**
- * Record that a successful import submission should attach its layer when the
- * job commits, but only in the Design session that submitted it.
- *
- * Captured at submission time so closing Data, navigating panels or replacing
- * the Design cannot invent an attachment the user never made.
- */
-export function recordImportAttachmentIntent(
-  jobId: string,
-  layerId: string,
-  designIdentity: object,
-): void {
-  attachmentIntents.set(jobId, {
-    jobId,
-    layerId,
-    designIdentity,
-    consumed: false,
-  })
-}
-
-/** Drop a pending attachment without presenting anything. */
-export function discardImportAttachmentIntent(jobId: string): void {
-  attachmentIntents.delete(jobId)
-}
-
-function consumeAttachment(job: LidarImportJob): void {
-  const intent = attachmentIntents.get(job.job_id)
-  if (!intent || intent.consumed) return
+function consumeAttachment(job: LidarImportJob, intent: ImportAttachmentIntent): void {
   intent.consumed = true
-  attachmentIntents.delete(job.job_id)
   if (job.state !== 'Complete') return
   // Only the exact Design session that submitted the import may receive it.
   if (designSessionStore.sessionIdentity.value !== intent.designIdentity) return
@@ -70,23 +44,38 @@ function isTerminal(state: LidarImportJob['state']): boolean {
 /**
  * Observe tracked import jobs and settle their attachment intent exactly once.
  *
- * A committed success refreshes the library first so the presentation attaches
- * against the head the job published, then attaches once if the submitting
- * Design session is still active. Failure and cancellation consume the intent
- * without attaching. A cancellation *request* never decides attachment: the
- * observed terminal result does, so a job that already committed still attaches.
+ * A committed success waits for a library read that *starts after* Complete
+ * was observed, then attaches once in the submitting Design session. Failure
+ * and cancellation consume the intent without attaching. A cancellation
+ * *request* never decides attachment. On a failed fresh read the intent stays
+ * pending for the next normal poll/reopen refresh.
  */
 function settleImportAttachment(job: LidarImportJob): void {
   if (!isTerminal(job.state)) return
-  if (job.state === 'Complete') {
-    void refreshLidarLibrary()
-      .catch(() => {
-        // A passive refresh failure still allows attachment: the entity exists.
-      })
-      .then(() => consumeAttachment(job))
+  const intent = peekImportAttachmentIntent(job.job_id)
+  if (!intent) return
+  if (job.state !== 'Complete') {
+    const consumed = consumeImportAttachmentIntent(job.job_id)
+    if (consumed) consumeAttachment(job, consumed)
     return
   }
-  consumeAttachment(job)
+  void refreshLidarLibraryFresh()
+    .catch(() => {
+      // Fresh read failed: retain the pending intent for the next poll.
+    })
+    .then(() => {
+      const settled = consumeImportAttachmentIntent(job.job_id)
+      if (!settled) return
+      // A successful fresh read that no longer lists the layer means the
+      // target disappeared; consume without attaching and report it.
+      const library = lidarLibrary.value
+      const present = library?.layers.some((layer) => layer.id === settled.layerId) ?? false
+      if (!present) {
+        lidarStatusMessage.value = `Imported layer ${settled.layerId} is no longer in the library`
+        return
+      }
+      consumeAttachment(job, settled)
+    })
 }
 
 let attachmentDisposer: (() => void) | null = null
@@ -114,7 +103,7 @@ export function installLidarWorkflow(): void {
 export function disposeLidarWorkflow(): void {
   attachmentDisposer?.()
   attachmentDisposer = null
-  attachmentIntents.clear()
+  clearImportAttachmentIntents()
   if (installed) {
     stopLidarPolling()
     installed = false

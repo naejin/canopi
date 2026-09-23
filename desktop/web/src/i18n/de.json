@@ -597,7 +597,8 @@
         "retry": "Analyse wiederholen",
         "previous": "Frühere Ergebnisse",
         "noResults": "Noch keine Ergebnisse für diese Eingabe.",
-        "resultName": "Ergebnisname"
+        "resultName": "Ergebnisname",
+        "retryNeedsHead": "Zum Wiederholen wird ein aktueller Quellkopf benötigt; Bibliothek aktualisieren und erneut versuchen."
       },
       "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen.",
       "slopePercent": "Neigung (Prozent)",

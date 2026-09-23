@@ -382,3 +382,66 @@ fn which_on_path(name: &str) -> Option<PathBuf> {
         .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A stalled bounded child is killed and reaped when its finite deadline
+    /// expires, without waiting for the full production timeout.
+    #[test]
+    fn a_stalled_bounded_child_is_killed_and_reaped_on_timeout() {
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sleep spawns");
+        let out = std::env::temp_dir().join("canopi-engine-timeout-out.log");
+        let err = std::env::temp_dir().join("canopi-engine-timeout-err.log");
+        let started = Instant::now();
+        let result = wait_cancellable(
+            &mut child,
+            None,
+            Some(Duration::from_millis(120)),
+            [&out, &err],
+        );
+        let _ = std::fs::remove_file(&out);
+        let _ = std::fs::remove_file(&err);
+        assert!(result.is_err(), "timeout must report an error");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "timeout settled in {:?}",
+            started.elapsed()
+        );
+        // The child was killed and reaped: try_wait reports a status, not a hang.
+        let status = child.try_wait().expect("reaped child polls");
+        assert!(status.is_some(), "child must be reaped after timeout");
+    }
+
+    /// An explicit cancel settles a running child within the contract bound
+    /// even when the elapsed deadline is absent (the source-conversion mode).
+    #[test]
+    fn an_explicit_cancel_settles_an_uncapped_child() {
+        let cancel = AtomicBool::new(false);
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sleep spawns");
+        let out = std::env::temp_dir().join("canopi-engine-cancel-out.log");
+        let err = std::env::temp_dir().join("canopi-engine-cancel-err.log");
+        let started = Instant::now();
+        cancel.store(true, Ordering::Relaxed);
+        let result = wait_cancellable(&mut child, Some(&cancel), None, [&out, &err]);
+        let _ = std::fs::remove_file(&out);
+        let _ = std::fs::remove_file(&err);
+        assert!(result.is_err(), "cancel must report an error");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "cancel settled in {:?}",
+            started.elapsed()
+        );
+    }
+}

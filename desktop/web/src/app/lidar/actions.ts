@@ -34,14 +34,12 @@ import {
   ensureLidarPolling,
   lidarStatusMessage,
   openImportJob,
+  recordImportAttachmentIntent,
   refreshOpenImportJob,
   refreshLidarLibrary,
   trackImportJob,
 } from './library-store'
 import { designSessionStore } from '../document-session/store'
-import {
-  recordImportAttachmentIntent,
-} from './workflow'
 import { reconcileInspectionWithPresentation } from './inspection'
 
 /**

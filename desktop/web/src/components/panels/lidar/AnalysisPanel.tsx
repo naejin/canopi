@@ -74,7 +74,6 @@ export function AnalysisPanel() {
   const run = results.find(
     (analysis) => analysis.state === 'Preparing' || analysis.state === 'Refreshing',
   ) ?? null
-  const previousFailed = results.find((analysis) => analysis.state === 'Failed') ?? null
 
   return (
     <div className={styles.panel}>
@@ -192,27 +191,9 @@ export function AnalysisPanel() {
             if (chosen === null || submitting) return
             setError(null)
             setSubmitting(true)
-            // Retry the selected failed definition (same identity, new job).
-            // Creating a different analysis remains an explicit create.
-            let start: Promise<void>
-            if (previousFailed) {
-              // The expected source head is the layer's current generation: a
-              // changed head is refused before work so the previous valid
-              // result survives and the caller can re-aim.
-              const sourceLayer = layers.find((layer) => layer.id === previousFailed.source_layer_id)
-              const sourceTileset = sourceLayer?.tilesets.find(
-                (tileset) => tileset.source.kind === 'native-generation',
-              )
-              const expectedSourceGenerationId =
-                sourceTileset && 'generation_id' in sourceTileset.source
-                  ? sourceTileset.source.generation_id
-                  : ''
-              start = retryAnalysis(previousFailed.id, expectedSourceGenerationId)
-            } else {
-              // A blank field stays unnamed rather than becoming the empty string.
-              start = analyseLayerAsSlope(chosen.id, unit, resultName.trim() || null)
-            }
-            start
+            // Create always uses the form; Retry lives on each failed row.
+            // A blank field stays unnamed rather than becoming the empty string.
+            analyseLayerAsSlope(chosen.id, unit, resultName.trim() || null)
               .then(() => ensureLidarPolling())
               .catch((cause: unknown) =>
                 setError(cause instanceof Error ? cause.message : String(cause)),
@@ -222,9 +203,7 @@ export function AnalysisPanel() {
         >
           {submitting || run !== null
             ? t('canvas.lidar.analysis.running')
-            : previousFailed
-              ? t('canvas.lidar.analysis.retry')
-              : t('canvas.lidar.createSlope')}
+            : t('canvas.lidar.createSlope')}
         </button>
 
         {chosen === null ? null : (
@@ -254,6 +233,45 @@ export function AnalysisPanel() {
                       <span className={styles.previousRange}>
                         {formatRange(result.value_range)}
                       </span>
+                    ) : null}
+                    {result.state === 'Failed' ? (
+                      <button
+                        type="button"
+                        className={styles.secondary}
+                        disabled={submitting || run !== null}
+                        onClick={() => {
+                          if (submitting || chosen === null) return
+                          // Retry this row's definition with its saved
+                          // parameters/name and the currently observed source
+                          // head; the create form is not consulted.
+                          const sourceLayer = layers.find(
+                            (layer) => layer.id === result.source_layer_id,
+                          )
+                          const sourceTileset = sourceLayer?.tilesets.find(
+                            (tileset) => tileset.source.kind === 'native-generation',
+                          )
+                          const expectedSourceGenerationId =
+                            sourceTileset && 'generation_id' in sourceTileset.source
+                              ? sourceTileset.source.generation_id
+                              : null
+                          if (!expectedSourceGenerationId) {
+                            setError(t('canvas.lidar.analysis.retryNeedsHead'))
+                            return
+                          }
+                          setError(null)
+                          setSubmitting(true)
+                          retryAnalysis(result.id, expectedSourceGenerationId)
+                            .then(() => ensureLidarPolling())
+                            .catch((cause: unknown) =>
+                              setError(
+                                cause instanceof Error ? cause.message : String(cause),
+                              ),
+                            )
+                            .finally(() => setSubmitting(false))
+                        }}
+                      >
+                        {t('canvas.lidar.analysis.retry')}
+                      </button>
                     ) : null}
                   </li>
                 ))}

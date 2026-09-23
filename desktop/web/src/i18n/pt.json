@@ -597,7 +597,8 @@
         "retry": "Repetir análise",
         "previous": "Resultados anteriores",
         "noResults": "Ainda não há resultados para esta entrada.",
-        "resultName": "Nome do resultado"
+        "resultName": "Nome do resultado",
+        "retryNeedsHead": "Repetir requer um cabeçalho de origem atual; atualize a biblioteca e tente novamente."
       },
       "webUnavailable": "Os conjuntos de dados raster e resultados deste projeto são preservados aqui, mas não são renderizados nem processados na edição Web. Abra o projeto no aplicativo de desktop para importar, analisar ou exibir.",
       "slopePercent": "Declive (percentagem)",

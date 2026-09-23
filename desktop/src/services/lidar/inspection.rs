@@ -333,9 +333,16 @@ pub(super) fn sample(
     // Out of every member's coverage is NoData, not an error: the point simply
     // holds nothing. The reader decides that, not the lattice rectangle.
     let Some(pixel) = containing_pixel(&target.grid, x, y) else {
-        return Ok(LidarSampleOutcome::NoData {
-            generation_id: target.generation_id,
-        });
+        // Every successful Value/NoData exit rechecks currency, including this
+        // early unrepresentable-index branch after the slow transform.
+        return finish_sample_outcome(
+            library,
+            request,
+            &target.generation_id,
+            LidarSampleOutcome::NoData {
+                generation_id: target.generation_id.clone(),
+            },
+        );
     };
     let window = cell_window(pixel)?;
     let Some(reader) = read_one_cell(library, &target, pixel, cancel)? else {
@@ -364,21 +371,61 @@ pub(super) fn sample(
         }
     }
     if resolved.valid.first().copied().unwrap_or(0) == 0 {
-        return Ok(LidarSampleOutcome::NoData {
-            generation_id: target.generation_id,
-        });
+        return finish_sample_outcome(
+            library,
+            request,
+            &target.generation_id,
+            LidarSampleOutcome::NoData {
+                generation_id: target.generation_id.clone(),
+            },
+        );
     }
     let value = f64::from(resolved.samples.first().copied().unwrap_or(f32::NAN));
     if !value.is_finite() {
-        return Ok(LidarSampleOutcome::NoData {
-            generation_id: target.generation_id,
-        });
+        return finish_sample_outcome(
+            library,
+            request,
+            &target.generation_id,
+            LidarSampleOutcome::NoData {
+                generation_id: target.generation_id.clone(),
+            },
+        );
     }
-    Ok(LidarSampleOutcome::Value {
-        generation_id: target.generation_id,
-        value,
-        units: target.units,
-    })
+    finish_sample_outcome(
+        library,
+        request,
+        &target.generation_id,
+        LidarSampleOutcome::Value {
+            generation_id: target.generation_id.clone(),
+            value,
+            units: target.units.clone(),
+        },
+    )
+}
+
+/// Recheck currency before any successful Value/NoData delivery.
+fn finish_sample_outcome(
+    library: &LidarLibrary,
+    request: &LidarSampleRequest,
+    read_generation_id: &str,
+    outcome: LidarSampleOutcome,
+) -> Result<LidarSampleOutcome, String> {
+    match resolve_target(library, request)? {
+        None => Ok(LidarSampleOutcome::Unavailable {
+            reason: LidarSampleUnavailableReason::MissingGeneration,
+        }),
+        Some(current) => {
+            if current.generation_id != request.expected_generation_id
+                || current.generation_id != read_generation_id
+            {
+                Ok(LidarSampleOutcome::Unavailable {
+                    reason: LidarSampleUnavailableReason::StaleGeneration,
+                })
+            } else {
+                Ok(outcome)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
