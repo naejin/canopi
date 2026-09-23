@@ -5,6 +5,7 @@ import {
   inspectionLocation,
   inspectionSample,
   inspectionTarget,
+  sampleInspectionCentre,
 } from '../../app/lidar/inspection'
 import styles from './inspection-status.module.css'
 
@@ -36,6 +37,11 @@ export function InspectionStatus() {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [target])
+
+  // Workspace teardown — including navigating away from the canvas to Location —
+  // ends the session and releases its gesture, so no handler or pending lookup
+  // outlives the surface that owned it.
+  useEffect(() => () => endInspection(), [])
 
   if (!target) return null
 
@@ -73,6 +79,17 @@ export function InspectionStatus() {
           <span className={styles.noData}>{t('canvas.rasterSample.unavailable')}</span>
         )}
       </div>
+      {/*
+        The keyboard half of the same command the canvas pointer invokes: a
+        focusable control that samples whatever the viewport is centred on.
+      */}
+      <button
+        type="button"
+        className={styles.centreButton}
+        onClick={() => sampleInspectionCentre()}
+      >
+        {t('canvas.rasterSample.sampleCentre')}
+      </button>
       {location ? (
         <span className={styles.location}>
           {location.lat.toFixed(6)}, {location.lon.toFixed(6)}

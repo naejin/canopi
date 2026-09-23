@@ -51,7 +51,6 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarSampleEntityKind>()
         .register::<common_types::lidar::LidarSampleOutcome>()
         .register::<common_types::lidar::LidarSampleRequest>()
-        .register::<common_types::lidar::LidarSceneOffset>()
         .register::<common_types::lidar::LidarSampleUnavailableReason>()
         .register::<common_types::lidar::LidarSlopeUnit>()
         .register::<common_types::lidar::LidarTileset>()

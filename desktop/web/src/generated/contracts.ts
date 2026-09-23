@@ -493,27 +493,17 @@ export type LidarSampleRequest = {
 	// The immutable generation the caller believes is current.
 	expected_generation_id: string,
 	/**
-	 *  WGS84 longitude in degrees.
+	 *  WGS84 longitude in degrees of the point to sample.
 	 *
-	 *  With `scene_offset_metres` this is the **anchor** the offset is measured
-	 *  from; without it, the point itself.
+	 *  The caller derives this from the scene point with the canvas's own
+	 *  `worldToGeo`, which is the projection the canvas actually drew with, so
+	 *  the sampled point is the displayed point. Nothing here re-derives or
+	 *  approximates the placement: the native side only transforms this WGS84
+	 *  point into the generation's own CRS.
 	 */
 	longitude: number,
-	// WGS84 latitude in degrees. See `longitude`.
+	// WGS84 latitude in degrees of the point to sample.
 	latitude: number,
-	/**
-	 *  Optional placement offset from the given WGS84 point, in scene metres.
-	 *
-	 *  A canvas knows a pointer position as metres east/north of the Design
-	 *  anchor, not as a WGS84 coordinate. Converting that to degrees in the
-	 *  frontend would need a projection library it does not have, and a
-	 *  flat-earth approximation can be wrong by more than a 0.5 m pixel — which
-	 *  would select the wrong cell and report a confidently wrong physical
-	 *  value. Instead the caller sends the anchor's own WGS84 point plus the
-	 *  offset, and the projection happens here with the engine that already owns
-	 *  the raster's CRS.
-	 */
-	scene_offset_metres?: LidarSceneOffset | null,
 };
 
 // Why a sample could not produce a physical value.
@@ -526,19 +516,6 @@ export type LidarSampleUnavailableReason =
 "TransformFailed" |
 // The generation's interpretation cannot be sampled numerically.
 "UnsupportedInput";
-
-// A placement offset from a WGS84 anchor, in the scene's own metre frame.
-export type LidarSceneOffset = {
-	// Metres east of the anchor, before the Design's north bearing is applied.
-	east_metres: number,
-	// Metres north of the anchor, before the Design's north bearing is applied.
-	north_metres: number,
-	/**
-	 *  The Design's north bearing in degrees, applied to the offset before it is
-	 *  added to the projected anchor.
-	 */
-	north_bearing_deg: number,
-};
 
 export type LidarSlopeUnit = "Degrees" | "Percent";
 

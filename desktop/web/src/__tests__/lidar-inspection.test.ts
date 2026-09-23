@@ -4,7 +4,7 @@ import type { LidarSampleOutcome } from '../generated/contracts'
 /** Deferred native answers, so a test can control when a lookup settles. */
 const pending: Array<(outcome: LidarSampleOutcome) => void> = []
 const samplePixel = vi.fn(
-  () =>
+  (_request: unknown) =>
     new Promise<LidarSampleOutcome>((resolve) => {
       pending.push(resolve)
     }),
@@ -12,7 +12,7 @@ const samplePixel = vi.fn(
 
 vi.mock('../ipc/lidar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../ipc/lidar')>()
-  return { ...actual, lidarSamplePixel: () => samplePixel() }
+  return { ...actual, lidarSamplePixel: (request: unknown) => samplePixel(request) }
 })
 
 const { currentDesign, replaceCurrentDesignState } = await import(
@@ -22,12 +22,17 @@ const { lidarLibrary } = await import('../app/lidar/library-store')
 const {
   beginInspection,
   endInspection,
+  hasInspectionPointerHandler,
+  inspectionLocation,
   inspectionSample,
   inspectionTarget,
   interpretOutcome,
   reconcileInspectionWithPresentation,
+  sampleInspectionCentre,
   sampleInspectionPoint,
 } = await import('../app/lidar/inspection')
+const { setCurrentCanvasSession } = await import('../canvas/session')
+const { createTestCanvasRuntimeSurfaces } = await import('./support/canvas-runtime-surfaces')
 
 /** A Design whose only presentation entry is a visible source layer. */
 function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState>[0] {
@@ -98,18 +103,15 @@ function libraryWithGeneration(generationId: string) {
   }
 }
 
-const POINT = {
-  anchor: { lat: 48.4312, lon: 0.0911 },
-  eastMetres: 10,
-  northMetres: -5,
-  northBearingDeg: 12,
-}
+/** One WGS84 point, as the canvas's own `worldToGeo` would report it. */
+const POINT = { lat: 48.4312, lon: 0.0911 }
 
 describe('numeric inspection session state', () => {
   beforeEach(() => {
     pending.length = 0
     samplePixel.mockClear()
     endInspection()
+    setCurrentCanvasSession(null)
     replaceCurrentDesignState(designWithPresentedLayer(), null, 'Inspect')
     lidarLibrary.value = libraryWithGeneration('gen-1') as never
   })
@@ -156,7 +158,7 @@ describe('numeric inspection session state', () => {
     expect(inspectionSample.value).toEqual({ kind: 'idle' })
   })
 
-  it('publishes a sampled value and sends the anchor with the scene offset', async () => {
+  it('publishes a sampled value for the point the canvas displayed', async () => {
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const sampling = sampleInspectionPoint(POINT)
     expect(inspectionSample.value).toEqual({ kind: 'loading' })
@@ -165,15 +167,22 @@ describe('numeric inspection session state', () => {
     await sampling
 
     expect(inspectionSample.value).toEqual({ kind: 'value', value: 42.25, units: 'm' })
-    // The native side receives the expected generation and the anchor-plus-offset
-    // decomposition, which is what it needs to project accurately.
+    // The native side receives the sampled WGS84 point itself, the expected
+    // generation and no offset of any kind.
     expect(samplePixel).toHaveBeenCalledTimes(1)
+    expect(samplePixel.mock.calls[0]?.[0]).toEqual({
+      kind: 'Source',
+      entity_id: 'lyr-1',
+      expected_generation_id: 'gen-1',
+      longitude: POINT.lon,
+      latitude: POINT.lat,
+    })
   })
 
   it('never publishes a superseded answer as the current sample', async () => {
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const first = sampleInspectionPoint(POINT)
-    const second = sampleInspectionPoint({ ...POINT, eastMetres: 99 })
+    const second = sampleInspectionPoint({ ...POINT, lon: POINT.lon + 0.001 })
 
     // The older answer arrives last, which is the ordering that produces a wrong
     // current value if responses are not fenced.
@@ -196,6 +205,113 @@ describe('numeric inspection session state', () => {
     // Escape, layer removal or teardown must not be followed by a late value.
     expect(inspectionSample.value).toEqual({ kind: 'idle' })
     expect(inspectionTarget.value).toBeNull()
+  })
+
+  /**
+   * The head can move while an answer is in flight.
+   *
+   * The native side checks currency before it reads, so this window is the one
+   * after that check: without a second check here the old head's number would be
+   * published as the current layer's value.
+   */
+  it('does not publish an answer whose head moved while it was in flight', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    // The layer published a new head after this lookup was aimed.
+    lidarLibrary.value = libraryWithGeneration('gen-2') as never
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 123.5, units: 'm' } })
+    await reading
+    expect(inspectionSample.value.kind).not.toBe('value')
+    expect(inspectionSample.value).toEqual({ kind: 'stale' })
+  })
+
+  /**
+   * A Design replacement is a different document, not an edit of this one.
+   *
+   * The session names the Design it was entered for, so the replacement ends it
+   * — including when the replacement drops the inspected entry, which is the
+   * case that leaves a stale target behind if only the presentation is consulted
+   * at aim time.
+   */
+  it('releases inspection when the Design is replaced', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    const next = designWithPresentedLayer() as unknown as {
+      lidar: { entries: Array<Record<string, unknown>> }
+    }
+    next.lidar.entries = []
+    replaceCurrentDesignState(
+      next as unknown as Parameters<typeof replaceCurrentDesignState>[0],
+      null,
+      'Another Design',
+    )
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 123.5, units: 'm' } })
+    await reading
+    expect(inspectionTarget.value).toBeNull()
+    expect(inspectionSample.value.kind).not.toBe('value')
+    // The replaced session also releases the canvas gesture it installed.
+    expect(hasInspectionPointerHandler()).toBe(false)
+  })
+
+  it('releases the canvas gesture when inspection ends or is reconciled away', () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    expect(hasInspectionPointerHandler()).toBe(true)
+    endInspection()
+    expect(hasInspectionPointerHandler()).toBe(false)
+
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    expect(hasInspectionPointerHandler()).toBe(true)
+
+    const design = designWithPresentedLayer() as unknown as {
+      lidar: { entries: Array<Record<string, unknown>> }
+    }
+    design.lidar.entries[0]!.visible = false
+    replaceCurrentDesignState(
+      design as unknown as Parameters<typeof replaceCurrentDesignState>[0],
+      null,
+      'Inspect',
+    )
+    reconcileInspectionWithPresentation()
+    expect(inspectionTarget.value).toBeNull()
+    expect(hasInspectionPointerHandler()).toBe(false)
+  })
+
+  /**
+   * The keyboard sampling path and the pointer path are one command.
+   *
+   * The centre button is the only way to read a value without a pointer, so it
+   * must go through the same session and the same native request rather than a
+   * second call path.
+   */
+  it('samples the viewport centre through the same command as a click', async () => {
+    // The centre button reads the live viewport through the existing canvas
+    // query surface, so the test provides one rather than a second camera owner.
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const submitted = sampleInspectionCentre()
+    expect(submitted).toBe(true)
+    expect(samplePixel).toHaveBeenCalledTimes(1)
+    const request = samplePixel.mock.calls[0]?.[0] as {
+      longitude: number
+      latitude: number
+      expected_generation_id: string
+    }
+    expect(request.expected_generation_id).toBe('gen-1')
+    expect(Number.isFinite(request.longitude)).toBe(true)
+    expect(Number.isFinite(request.latitude)).toBe(true)
+    // The displayed coordinate is the sampled point, not an anchor.
+    expect(inspectionLocation.value).toEqual({
+      lat: request.latitude,
+      lon: request.longitude,
+    })
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 3, units: 'm' } })
+    await Promise.resolve()
+  })
+
+  it('submits no sample at the view centre when nothing is inspected', () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    expect(sampleInspectionCentre()).toBe(false)
+    expect(samplePixel).not.toHaveBeenCalled()
   })
 
   it('reports a missing generation rather than sampling one', async () => {

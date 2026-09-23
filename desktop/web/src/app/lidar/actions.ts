@@ -36,6 +36,7 @@ import {
   trackImportJob,
 } from './library-store'
 import { designSessionStore } from '../document-session/store'
+import { reconcileInspectionWithPresentation } from './inspection'
 
 /**
  * Leaf action module for the LiDAR workbench: every UI mutation flows
@@ -251,6 +252,9 @@ export async function restoreLayerVersion(
 
 export function setLidarEntryVisibility(id: string, visible: boolean): void {
   patchLidarEntryById(id, { visible })
+  // Hiding the inspected entity ends the mode in the same interaction that hid
+  // it, rather than leaving a session pointed at something no longer drawn.
+  reconcileInspectionWithPresentation()
 }
 
 export function setLidarEntryOpacity(id: string, opacity: number): void {
@@ -269,6 +273,8 @@ export function movePresentationEntry(id: string, direction: 'up' | 'down'): voi
 
 function removePresentedEntities(ids: string[]): void {
   removeLidarEntries(ids)
+  // Removing a presented entity removes its reason to be inspected.
+  reconcileInspectionWithPresentation()
 }
 
 async function withLidarError(work: () => Promise<void>): Promise<void> {

@@ -6,16 +6,30 @@
 //! composed value through the same resolver display and analysis use. It never
 //! decodes a colourised tile, never interpolates between pixels, and never
 //! returns a value from a generation the caller did not ask for.
+//!
+//! Source layers and analysis results are different storage contracts, so they
+//! are resolved separately: a source is an ordered collection or a published
+//! chunk store described by `import::GenerationManifest`, while a result is
+//! described by `analysis::ResultManifest` and always reads through resolved
+//! chunks. Units come from whichever contract owns the bytes — a result reports
+//! its own degrees/percent choice rather than the source layer's unit string.
 
 use std::sync::atomic::AtomicBool;
 
 use common_types::lidar::{
     LidarSampleEntityKind, LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason,
+    LidarSlopeUnit,
 };
 
+use super::analysis;
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
+
+/// Degrees, the unit every slope result carries unless it chose percent.
+const DEGREES_UNIT: &str = "°";
+/// Percent, the unit a slope result chooses explicitly.
+const PERCENT_UNIT: &str = "%";
 
 /// One analysis definition's own row, by definition id.
 fn analysis_definition_layer(
@@ -32,52 +46,96 @@ fn analysis_definition_layer(
         .map_err(|e| e.to_string())
 }
 
-/// The generation a request's entity currently resolves to, with everything a
-/// bounded read needs.
-struct SampleTarget {
-    generation_id: String,
-    grid: RasterGrid,
-    manifest: import::GenerationManifest,
-    units: String,
+/// Which reader serves a target's numbers.
+enum TargetRead {
+    /// Published resolved chunks: a sparse source generation or any result.
+    Chunks,
+    /// An ordered source collection, resolved on demand from its members.
+    Collection(Box<import::GenerationManifest>),
+    /// A preserved dense mosaic, read through one compatibility lease.
+    PreservedDense,
 }
 
+/// The generation a request's entity currently resolves to, with everything a
+/// bounded read needs and nothing that opens a raster yet.
+struct SampleTarget {
+    generation_id: String,
+    /// The lattice the target's cells are addressed in.
+    grid: RasterGrid,
+    crs_wkt: String,
+    /// What one returned number means, in the target's own terms.
+    units: String,
+    read: TargetRead,
+}
+
+/// Resolve the requested entity's current head.
+///
+/// Source and result targets share only the currency rule; their manifests, unit
+/// sources and readers differ, so each is resolved on its own contract rather
+/// than being forced through one shape.
 fn resolve_target(
     library: &LidarLibrary,
     request: &LidarSampleRequest,
 ) -> Result<Option<SampleTarget>, String> {
     let connection = library.catalogue()?;
-    // Both head readers expose the same two facts this read needs, so only those
-    // are carried forward.
-    let (generation_id, manifest_json, layer_id) = match request.kind {
+    match request.kind {
         LidarSampleEntityKind::Source => {
             let Some(row) = catalogue::head_generation(&connection, &request.entity_id)? else {
                 return Ok(None);
             };
-            (row.id, row.manifest_json, request.entity_id.clone())
+            // A source layer's own declared unit is what its numbers mean.
+            let units = catalogue::get_layer(&connection, &request.entity_id)?
+                .map(|layer| layer.units)
+                .unwrap_or_default();
+            let manifest = import::read_generation_manifest(&row.manifest_json)?;
+            let read = match manifest.format {
+                import::GenerationStorageFormat::CogChunksV1 => TargetRead::Chunks,
+                import::GenerationStorageFormat::OrderedMembersV1 => {
+                    TargetRead::Collection(Box::new(manifest.clone()))
+                }
+                import::GenerationStorageFormat::LegacyDenseV1 => TargetRead::PreservedDense,
+            };
+            Ok(Some(SampleTarget {
+                generation_id: row.id,
+                grid: manifest.grid.clone(),
+                crs_wkt: manifest.crs_wkt.clone(),
+                units,
+                read,
+            }))
         }
         LidarSampleEntityKind::Analysis => {
-            let Some(layer_id) = analysis_definition_layer(&connection, &request.entity_id)? else {
+            // The definition owns the result, so a definition that no longer
+            // exists has no generation to sample even if a row survived.
+            if analysis_definition_layer(&connection, &request.entity_id)?.is_none() {
                 return Ok(None);
-            };
+            }
             let Some(row) = catalogue::head_analysis_generation(&connection, &request.entity_id)?
             else {
                 return Ok(None);
             };
-            (row.id, row.manifest_json, layer_id)
+            let manifest: analysis::ResultManifest = serde_json::from_str(&row.manifest_json)
+                .map_err(|e| format!("Invalid analysis manifest: {e}"))?;
+            // A result reports the measurement it was computed in, not the unit
+            // string of the layer it was derived from: a slope in percent is not
+            // a source elevation in metres.
+            let units = match manifest.parameters.slope_unit {
+                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
+                _ => DEGREES_UNIT.to_string(),
+            };
+            let read = if manifest.format == import::GenerationStorageFormat::LegacyDenseV1 {
+                TargetRead::PreservedDense
+            } else {
+                TargetRead::Chunks
+            };
+            Ok(Some(SampleTarget {
+                generation_id: row.id,
+                grid: manifest.grid.clone(),
+                crs_wkt: manifest.crs_wkt.clone(),
+                units,
+                read,
+            }))
         }
-    };
-    let manifest = import::read_generation_manifest(&manifest_json)?;
-    // A result carries the units of the measurement it was derived from, so the
-    // answer can state what the number means.
-    let units = catalogue::get_layer(&connection, &layer_id)?
-        .map(|layer| layer.units)
-        .unwrap_or_default();
-    Ok(Some(SampleTarget {
-        generation_id,
-        grid: manifest.grid.clone(),
-        manifest,
-        units,
-    }))
+    }
 }
 
 /// Transform one WGS84 point into the generation's CRS through GDAL.
@@ -122,46 +180,27 @@ fn transform_point(
     Ok(Some((x, y)))
 }
 
-/// Apply a scene metre offset to an already-projected anchor.
+/// The largest lattice index this read will carry into a window.
 ///
-/// The offset is expressed in the scene's own frame — east and north before the
-/// Design's bearing — so it is rotated by the bearing first and then added to
-/// the projected anchor. A non-finite offset or bearing is returned unchanged
-/// from the anchor, which the caller reports as no coverage rather than as a
-/// value at a guessed position.
-fn apply_scene_offset(
-    anchor_x: f64,
-    anchor_y: f64,
-    offset: common_types::lidar::LidarSceneOffset,
-) -> (f64, f64) {
-    if !offset.east_metres.is_finite()
-        || !offset.north_metres.is_finite()
-        || !offset.north_bearing_deg.is_finite()
-    {
-        return (anchor_x, anchor_y);
-    }
-    // Scene coordinates are metres east/north of the anchor, and the bearing
-    // rotates that frame: at zero bearing local positive X is east and local
-    // positive Y is south, and a positive bearing turns geographic north
-    // clockwise from local negative Y (ADR 0025).
-    //
-    // The projected y axis grows north, so the north component is subtracted.
-    // This is the exact inverse of the frontend's authoritative
-    // `canvasWorldToEastNorthMeters`, which is what keeps the sampled cell the
-    // same one the canvas drew.
-    let bearing = offset.north_bearing_deg.to_radians();
-    let (sin, cos) = bearing.sin_cos();
-    let scene_x = offset.east_metres * cos + offset.north_metres * sin;
-    let scene_y = offset.east_metres * sin - offset.north_metres * cos;
-    (anchor_x + scene_x, anchor_y - scene_y)
-}
+/// Far below `i64::MAX` so a one-cell window's end cannot overflow, and inside
+/// the range where `f64` still represents consecutive integers. It is a
+/// representability guard, not a coverage rule: the lattice origin is not the
+/// composition's extent.
+const MAX_LATTICE_INDEX: f64 = 9.0e15;
 
 /// The containing native pixel of one projected point.
 ///
 /// The grid is north-up and half-open: a point exactly on the right or bottom
-/// edge belongs to the neighbouring pixel and is therefore outside this
-/// generation, while a point on the top or left edge belongs to the first
-/// pixel. `floor` on the fractional cell implements exactly that.
+/// edge belongs to the neighbouring pixel, while a point on the top or left
+/// edge belongs to the first pixel. `floor` on the fractional cell implements
+/// exactly that.
+///
+/// The result is a **signed lattice coordinate**. An ordered collection keeps
+/// its lattice origin while members added later extend beyond the first
+/// source's rectangle, negative cell coordinates included, so clipping to
+/// `grid.width`/`grid.height` would report NoData for coverage the display and
+/// the readers both serve. Whether the addressed cell holds a valid sample is
+/// the reader's answer.
 fn containing_pixel(grid: &RasterGrid, x: f64, y: f64) -> Option<(i64, i64)> {
     let gt = grid.geotransform;
     if gt[1] == 0.0 || gt[5] == 0.0 {
@@ -174,21 +213,94 @@ fn containing_pixel(grid: &RasterGrid, x: f64, y: f64) -> Option<(i64, i64)> {
     }
     let pixel_x = cell_x.floor();
     let pixel_y = cell_y.floor();
-    if pixel_x < 0.0
-        || pixel_y < 0.0
-        || pixel_x >= f64::from(grid.width)
-        || pixel_y >= f64::from(grid.height)
-    {
+    if pixel_x.abs() > MAX_LATTICE_INDEX || pixel_y.abs() > MAX_LATTICE_INDEX {
         return None;
     }
     Some((pixel_x as i64, pixel_y as i64))
+}
+
+/// Bind the reader that owns one target's numbers, limited to one cell.
+///
+/// Each format keeps the reader it already publishes through: an ordered
+/// collection resolves only the occurrences that can reach the cell, a sparse
+/// source or a result reads its published chunks, and a preserved dense mosaic
+/// is read through the library's single compatibility lease. No format falls
+/// back to another format's bytes.
+fn read_one_cell(
+    library: &LidarLibrary,
+    target: &SampleTarget,
+    pixel: (i64, i64),
+    cancel: &AtomicBool,
+) -> Result<Option<generation::GenerationReader>, String> {
+    let window = cell_window(pixel)?;
+    match &target.read {
+        TargetRead::Chunks => Ok(Some(generation::GenerationReader::Chunks(
+            generation::GenerationChunkReader::new(
+                &target.generation_id,
+                generation::RESULT_ROLE,
+            ),
+        ))),
+        TargetRead::Collection(manifest) => {
+            let bounds = collection::ReadBounds {
+                x0: window.x,
+                y0: window.y,
+                x1: window
+                    .x
+                    .checked_add(1)
+                    .ok_or_else(|| "inspection window overflows".to_string())?,
+                y1: window
+                    .y
+                    .checked_add(1)
+                    .ok_or_else(|| "inspection window overflows".to_string())?,
+            };
+            let reader = collection::load_reader_within(
+                library,
+                &target.generation_id,
+                manifest,
+                Some(bounds),
+                cancel,
+            )?;
+            Ok(reader.map(|reader| {
+                generation::GenerationReader::Collection(Box::new(reader))
+            }))
+        }
+        TargetRead::PreservedDense => {
+            let member = collection::preserved_member(library, &target.generation_id, cancel)?;
+            let lattice = member.grid.clone();
+            let reader = generation::CollectionReader::new(
+                vec![(
+                    format!("inspection-{}", target.generation_id),
+                    member,
+                )],
+                lattice,
+            )?;
+            Ok(Some(generation::GenerationReader::Collection(Box::new(
+                reader,
+            ))))
+        }
+    }
+}
+
+/// A one-cell window at a signed lattice coordinate.
+fn cell_window(pixel: (i64, i64)) -> Result<generation::LatticeWindow, String> {
+    // Reject the two coordinates whose own successor is not representable, so
+    // the half-open window below can never wrap.
+    if pixel.0 == i64::MAX || pixel.1 == i64::MAX {
+        return Err("inspection coordinate is not representable".to_string());
+    }
+    Ok(generation::LatticeWindow {
+        x: pixel.0,
+        y: pixel.1,
+        width: 1,
+        height: 1,
+    })
 }
 
 /// Sample one physical value for inspection.
 ///
 /// Returns `Unavailable(StaleGeneration)` when the entity's head is not the
 /// generation the caller aimed at, so a late answer can never be presented as
-/// current. A point outside the generation reads as `NoData`, matching the
+/// current. A point that reaches no valid member reads as `NoData`, matching the
 /// product rule that out-of-coverage is no data rather than an error.
 pub(super) fn sample(
     library: &LidarLibrary,
@@ -214,66 +326,32 @@ pub(super) fn sample(
             reason: LidarSampleUnavailableReason::StaleGeneration,
         });
     }
-    // A preserved dense generation has no ordered occurrence to resolve through,
-    // so inspection reports it as unsupported rather than guessing at its bytes.
-    if target.manifest.format == import::GenerationStorageFormat::LegacyDenseV1 {
-        return Ok(LidarSampleOutcome::Unavailable {
-            reason: LidarSampleUnavailableReason::UnsupportedInput,
-        });
-    }
-    let projected = transform_point(
+    let Some((x, y)) = transform_point(
         engine,
         cancel,
-        &target.manifest.crs_wkt,
+        &target.crs_wkt,
         request.longitude,
         request.latitude,
-    )?;
-    let Some((anchor_x, anchor_y)) = projected else {
+    )?
+    else {
         return Ok(LidarSampleOutcome::Unavailable {
             reason: LidarSampleUnavailableReason::TransformFailed,
         });
     };
-    // A canvas pointer arrives as an offset from the anchor in scene metres.
-    // Applying it *after* the anchor has been projected keeps every coordinate
-    // operation in the engine's own projected space, so the selected cell is as
-    // accurate as a native read rather than as accurate as a frontend
-    // metres-to-degrees approximation.
-    let (x, y) = match request.scene_offset_metres {
-        Some(offset) => apply_scene_offset(anchor_x, anchor_y, offset),
-        None => (anchor_x, anchor_y),
-    };
-    // Out of coverage is NoData, not an error: the point simply holds nothing.
-    let Some((pixel_x, pixel_y)) = containing_pixel(&target.grid, x, y) else {
+    // Out of every member's coverage is NoData, not an error: the point simply
+    // holds nothing. The reader decides that, not the lattice rectangle.
+    let Some(pixel) = containing_pixel(&target.grid, x, y) else {
         return Ok(LidarSampleOutcome::NoData {
             generation_id: target.generation_id,
         });
     };
-
-    let window = generation::LatticeWindow {
-        x: pixel_x,
-        y: pixel_y,
-        width: 1,
-        height: 1,
-    };
-    let bounds = collection::ReadBounds {
-        x0: window.x,
-        y0: window.y,
-        x1: window.x + 1,
-        y1: window.y + 1,
-    };
-    let Some(reader) = collection::load_reader_within(
-        library,
-        &target.generation_id,
-        &target.manifest,
-        Some(bounds),
-        cancel,
-    )?
-    else {
+    let window = cell_window(pixel)?;
+    let Some(reader) = read_one_cell(library, &target, pixel, cancel)? else {
         return Ok(LidarSampleOutcome::Unavailable {
             reason: LidarSampleUnavailableReason::MissingGeneration,
         });
     };
-    let resolved = reader.read_window(window, cancel)?;
+    let resolved = reader.read_window(library, &target.grid, window, cancel)?;
     if resolved.valid.first().copied().unwrap_or(0) == 0 {
         return Ok(LidarSampleOutcome::NoData {
             generation_id: target.generation_id,
@@ -321,66 +399,66 @@ mod tests {
     }
 
     /// The real transform and the real pixel selection, against an independent
-    /// oracle.
+    /// oracle, at a non-equatorial latitude.
     ///
-    /// The other tests in this module exercise the offset and the half-open
-    /// convention in isolation. This one runs the actual `gdaltransform` call and
-    /// then selects the containing pixel from the projected point, so a wrong
-    /// `-t_srs` axis order, a swapped coordinate pair or an off-by-one in the row
-    /// inversion would all surface here rather than passing as a plausible
-    /// number.
+    /// The other tests in this module exercise the half-open convention in
+    /// isolation. This one runs the actual `gdaltransform` call and then selects
+    /// the containing pixel from the projected point, so a wrong `-t_srs` axis
+    /// order, a swapped coordinate pair or an off-by-one in the row inversion
+    /// would all surface here rather than passing as a plausible number. The
+    /// grid is deliberately placed away from the equator: a transform that
+    /// silently ignored latitude scaling would still land inside a
+    /// Mercator-centred rectangle but not inside this one.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn the_real_transform_lands_in_the_expected_cell() {
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
-        // A one-degree grid whose north-west corner is (0, 0), 0.001 degrees per
-        // cell: small enough that a cell index is a sharp assertion.
+        // A 250-metre Web Mercator grid whose north-west corner is the
+        // projection of (-0.6°, 48.9°), north and west of every sample below, so
+        // every expected coordinate is derived from the oracle rather than from
+        // the grid and every sample lands in the interior.
+        let (origin_x, origin_y) = web_mercator(-0.6, 48.9);
+        let cell = 250.0;
         let grid = RasterGrid {
             width: 1000,
             height: 1000,
-            geotransform: [0.0, 0.001, 0.0, 0.0, 0.0, -0.001],
+            geotransform: [origin_x, cell, 0.0, origin_y, 0.0, -cell],
         };
 
-        // The grid is in Web Mercator, so the same point known in WGS84 must
-        // come back as the projected coordinate the oracle predicts.
-        for (lon, lat) in [(0.0, 0.0), (2.0, 48.0), (-1.25, 48.75)] {
-            let (expected_x, expected_y) = web_mercator(lon, lat);
-            let projected = transform_point(&engine, &cancel, "EPSG:3857", lon, lat)
+        for (longitude, latitude) in [(0.2, 48.75), (0.0, 48.5), (-0.3, 48.2)] {
+            let (projected_x, projected_y) = web_mercator(longitude, latitude);
+            let expected_column = ((projected_x - origin_x) / cell).floor();
+            let expected_row = ((projected_y - origin_y) / -cell).floor();
+            assert!(
+                expected_column >= 0.0
+                    && expected_column < 1000.0
+                    && expected_row >= 0.0
+                    && expected_row < 1000.0,
+                "the fixture must place ({longitude}, {latitude}) inside the grid"
+            );
+
+            let projected = transform_point(&engine, &cancel, "EPSG:3857", longitude, latitude)
                 .expect("the transform runs")
                 .expect("a finite WGS84 point projects");
             // A metre is far below the assertions that follow, and the two
             // implementations differ only by floating-point rounding.
             assert!(
-                (projected.0 - expected_x).abs() < 1.0,
-                "x for ({lon}, {lat}): {} vs oracle {expected_x}",
+                (projected.0 - projected_x).abs() < 1.0,
+                "x for ({longitude}, {latitude}): {} vs oracle {projected_x}",
                 projected.0
             );
             assert!(
-                (projected.1 - expected_y).abs() < 1.0,
-                "y for ({lon}, {lat}): {} vs oracle {expected_y}",
+                (projected.1 - projected_y).abs() < 1.0,
+                "y for ({longitude}, {latitude}): {} vs oracle {projected_y}",
                 projected.1
             );
-
-            // The projected point selects the cell the north-up half-open rule
-            // names, computed here from the oracle rather than from the engine.
-            let column = (expected_x / 0.001).floor();
-            let row = ((-expected_y) / 0.001).floor();
-            if (0.0..1000.0).contains(&column) && (0.0..1000.0).contains(&row) {
-                let selected = containing_pixel(&grid, projected.0, projected.1)
-                    .expect("a point inside the grid has a containing pixel");
-                assert_eq!(
-                    selected,
-                    (column as i64, row as i64),
-                    "cell for ({lon}, {lat})"
-                );
-            }
+            assert_eq!(
+                containing_pixel(&grid, projected.0, projected.1),
+                Some((expected_column as i64, expected_row as i64)),
+                "cell for ({longitude}, {latitude})"
+            );
         }
-
-        // A point outside the grid has no containing pixel rather than a clamped
-        // one, which is what makes out-of-coverage report as NoData.
-        let outside = web_mercator(30.0, 48.0);
-        assert_eq!(containing_pixel(&grid, outside.0, outside.1), None);
     }
 
     #[test]
@@ -392,76 +470,49 @@ mod tests {
         assert_eq!(containing_pixel(&grid, 0.5, 9.5), Some((0, 0)));
         // The last included pixel.
         assert_eq!(containing_pixel(&grid, 9.999, 0.001), Some((9, 9)));
-        // The right and bottom edges are excluded, not clamped into the grid.
-        assert_eq!(containing_pixel(&grid, 10.0, 5.0), None);
-        assert_eq!(containing_pixel(&grid, 5.0, 0.0), None);
-        // Outside entirely.
-        assert_eq!(containing_pixel(&grid, -0.001, 5.0), None);
-        assert_eq!(containing_pixel(&grid, 5.0, 10.001), None);
+        // The right and bottom edges belong to the neighbouring cell, which this
+        // lattice does not cover, rather than being clamped into the last one.
+        // The grid's north-west corner is (0, 10) with a -1 y resolution, so the
+        // row index is `10 - y` and the bottom edge is row 10.
+        assert_eq!(containing_pixel(&grid, 10.0, 5.0), Some((10, 5)));
+        assert_eq!(containing_pixel(&grid, 5.0, 0.0), Some((5, 10)));
+        assert_eq!(containing_pixel(&grid, -0.001, 5.0), Some((-1, 5)));
     }
 
-    /// The scene-to-projected-component conversion, mirroring the frontend's
-    /// authoritative `canvasWorldToEastNorthMeters` and the projected flip the
-    /// raster reader applies. Kept here as an independent oracle so the test
-    /// does not merely restate the implementation.
-    fn project_offset(east: f64, north: f64, bearing_deg: f64) -> (f64, f64) {
-        let bearing = bearing_deg.to_radians();
-        let (sin, cos) = bearing.sin_cos();
-        let scene_x = east * cos + north * sin;
-        let scene_y = east * sin - north * cos;
-        (scene_x, -scene_y)
-    }
-
+    /// The lattice rectangle is not the composition's extent.
+    ///
+    /// An ordered collection keeps its original lattice while members appended
+    /// later reach outside the first source's rectangle, negative indices
+    /// included. Clipping here reported NoData for coverage the display and the
+    /// readers both serve, so the index is returned and the reader answers
+    /// coverage.
     #[test]
-    fn a_scene_offset_is_applied_in_projected_space() {
-        let offset = |east: f64, north: f64, bearing: f64| common_types::lidar::LidarSceneOffset {
-            east_metres: east,
-            north_metres: north,
-            north_bearing_deg: bearing,
-        };
-        // At zero bearing the offset is a straight east/north displacement, and
-        // north must increase the projected y rather than decrease it.
-        let (x, y) = apply_scene_offset(1000.0, 2000.0, offset(100.0, 50.0, 0.0));
-        assert!((x - 1100.0).abs() < 1e-9, "{x}");
-        assert!((y - 2050.0).abs() < 1e-9, "{y}");
-
-        // A pure bearing change must not move the anchor.
-        let (x, y) = apply_scene_offset(7.0, -3.0, offset(0.0, 0.0, 137.0));
-        assert!((x - 7.0).abs() < 1e-9, "{x}");
-        assert!((y + 3.0).abs() < 1e-9, "{y}");
-
-        // Every bearing agrees with the frontend conversion.
-        for bearing in [0.0, 30.0, 90.0, 180.0, 271.5, 359.0] {
-            let (east, north) = (123.5, -67.25);
-            let (expected_x, expected_y) = project_offset(east, north, bearing);
-            let (x, y) = apply_scene_offset(0.0, 0.0, offset(east, north, bearing));
-            assert!(
-                (x - expected_x).abs() < 1e-9,
-                "bearing {bearing}: {x} vs {expected_x}"
-            );
-            assert!(
-                (y - expected_y).abs() < 1e-9,
-                "bearing {bearing}: {y} vs {expected_y}"
+    fn cells_beyond_the_lattice_rectangle_keep_their_signed_coordinate() {
+        let grid = grid();
+        for (x, y, expected) in [
+            (-4.5, 5.5, (-5, 4)),
+            (25.5, 5.5, (25, 4)),
+            (5.5, -12.25, (5, 22)),
+            (-1000.5, -1000.5, (-1001, 1010)),
+        ] {
+            assert_eq!(
+                containing_pixel(&grid, x, y),
+                Some(expected),
+                "point ({x}, {y})"
             );
         }
     }
 
+    /// An index the window arithmetic cannot carry is refused, not wrapped.
     #[test]
-    fn a_non_finite_offset_falls_back_to_the_anchor() {
-        let broken = common_types::lidar::LidarSceneOffset {
-            east_metres: f64::NAN,
-            north_metres: 1.0,
-            north_bearing_deg: 0.0,
-        };
-        // A broken offset reports the anchor, which reads as no coverage there
-        // rather than as a value at a guessed position.
-        assert_eq!(apply_scene_offset(5.0, 6.0, broken), (5.0, 6.0));
-        let broken = common_types::lidar::LidarSceneOffset {
-            east_metres: 1.0,
-            north_metres: 1.0,
-            north_bearing_deg: f64::INFINITY,
-        };
-        assert_eq!(apply_scene_offset(5.0, 6.0, broken), (5.0, 6.0));
+    fn an_unrepresentable_lattice_index_is_refused() {
+        let grid = grid();
+        assert_eq!(containing_pixel(&grid, 1.0e18, 0.0), None);
+        assert_eq!(containing_pixel(&grid, 0.0, -1.0e18), None);
+        // Just inside the guard still yields a usable signed coordinate.
+        assert!(containing_pixel(&grid, 1.0e15, 5.0).is_some());
+        assert_eq!(cell_window((i64::MAX, 0)).is_err(), true);
+        assert!(cell_window((i64::MIN, i64::MIN)).is_ok());
     }
 
     #[test]
@@ -472,5 +523,22 @@ mod tests {
         let mut broken = grid();
         broken.geotransform[5] = 0.0;
         assert_eq!(containing_pixel(&broken, 1.0, 1.0), None);
+    }
+
+    /// A result's unit is its own parameter, not its source layer's.
+    #[test]
+    fn a_slope_result_reports_the_unit_it_was_computed_in() {
+        for (unit, expected) in [
+            (Some(LidarSlopeUnit::Degrees), DEGREES_UNIT),
+            (Some(LidarSlopeUnit::Percent), PERCENT_UNIT),
+            // A manifest written before the choice existed is in degrees.
+            (None, DEGREES_UNIT),
+        ] {
+            let units = match unit {
+                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
+                _ => DEGREES_UNIT.to_string(),
+            };
+            assert_eq!(units, expected);
+        }
     }
 }

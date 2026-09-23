@@ -1,9 +1,12 @@
-import { signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import type { LidarSampleOutcome } from '../../generated/contracts'
 import { lidarSamplePixel } from '../../ipc/lidar'
-import { currentDesign } from '../document-session/store'
+import { currentDesign, designSessionStore } from '../document-session/store'
 import { readLidarPresentation, lidarLibrary } from './library-store'
-import { inspectionAimForScenePoint } from './camera-request'
+import {
+  inspectionPointForScenePoint,
+  inspectionViewCentreScenePoint,
+} from './camera-request'
 
 /**
  * What one inspection lookup is currently showing.
@@ -27,31 +30,104 @@ export interface InspectionTarget {
   readonly name: string
 }
 
+/** One WGS84 point to sample, as the canvas itself projected it. */
+export interface InspectionPoint {
+  readonly lat: number
+  readonly lon: number
+}
+
 /** The layer inspection is aimed at, or null when inspection is off. */
-export const inspectionTarget = signal<InspectionTarget | null>(null)
+const inspectionSession = signal<InspectionTarget | null>(null)
+
+/**
+ * The layer inspection is aimed at, or null when inspection is off.
+ *
+ * Derived rather than stored so a Design replacement drops the session in the
+ * same read that would otherwise return a target from a document that no longer
+ * exists: the session names the Design it was entered for, and a different
+ * Design is a different document with different presentation.
+ */
+export const inspectionTarget = computed<InspectionTarget | null>(() => {
+  if (!inspectionSession.value) return null
+  if (session && session.designIdentity !== currentDesignIdentity()) return null
+  return inspectionSession.value
+})
 
 /** The result of the most recent lookup for the current target. */
 export const inspectionSample = signal<InspectionSample>({ kind: 'idle' })
 
 /** Where the last sample was taken, for the read-only status surface. */
-export const inspectionLocation = signal<{ lat: number; lon: number } | null>(null)
+export const inspectionLocation = signal<InspectionPoint | null>(null)
 
 /**
- * The current inspection generation.
+ * The identity of one inspection session.
  *
- * Every aim, every sample and every exit advances it. A response may only
- * publish when its own generation is still current, so a slow answer can never
- * be shown as the result for a layer, head or Design the user has already left.
+ * Every aim, every sample and every exit advances the request counter. A
+ * response may only publish when its own session is still the live one *and*
+ * the Design, entity and head it was aimed at are still current, so a slow
+ * answer can never be shown as the result for a layer, head or Design the user
+ * has already left.
  */
-let generation = 0
-
-function nextGeneration(): number {
-  generation += 1
-  return generation
+interface InspectionSession {
+  /** Monotonic request identity, advanced by every aim, sample and exit. */
+  readonly request: number
+  /**
+   * The document session this was entered for, so a replacement ends it.
+   *
+   * The frozen session identity is the document layer's own "a different Design
+   * is loaded now" token; ordinary edits keep it, so an edit does not end
+   * inspection while loading another Design does.
+   */
+  readonly designIdentity: object
+  /** The entity inspected, so re-aiming at another layer cannot be answered. */
+  readonly entityId: string
+  /** Which kind of entity the id names. */
+  readonly kind: InspectionTarget['kind']
+  /** The immutable head the answer must belong to. */
+  readonly expectedGenerationId: string | null
 }
 
-function isCurrent(candidate: number): boolean {
-  return candidate === generation && inspectionTarget.value !== null
+let requestCounter = 0
+let session: InspectionSession | null = null
+
+/**
+ * The scene point inspector currently armed on the canvas, or null.
+ *
+ * Holding the disposer rather than a bare function is what lets `endInspection`
+ * release the gesture in the same step it clears the target, so no pointer
+ * handler outlives the session that installed it.
+ */
+let pointerDisposer: (() => void) | null = null
+
+/**
+ * The document session an inspection session belongs to.
+ *
+ * A Design replacement is a different document with different presentation, so
+ * the session must end rather than re-point at whatever the same reference id
+ * means in the new document.
+ */
+function currentDesignIdentity(): object {
+  return designSessionStore.sessionIdentity.value
+}
+
+/** Whether one aimed request is still the live one for the live entity. */
+function isCurrent(mine: InspectionSession): boolean {
+  const target = inspectionSession.value
+  return (
+    session !== null &&
+    session.request === mine.request &&
+    session.entityId === mine.entityId &&
+    target !== null &&
+    target.id === mine.entityId &&
+    target.kind === mine.kind &&
+    // Design replacement invalidates the whole session, not only its request.
+    currentDesignIdentity() === mine.designIdentity
+  )
+}
+
+function nextRequest(): number {
+  requestCounter += 1
+  return requestCounter
 }
 
 /**
@@ -62,8 +138,15 @@ function isCurrent(candidate: number): boolean {
  * the mode can never outlive the entity it describes.
  */
 export function beginInspection(target: InspectionTarget): void {
-  nextGeneration()
-  inspectionTarget.value = target
+  const designIdentity = currentDesignIdentity()
+  session = {
+    request: nextRequest(),
+    designIdentity,
+    entityId: target.id,
+    kind: target.kind,
+    expectedGenerationId: null,
+  }
+  inspectionSession.value = target
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
   // Arm the canvas gesture here so entering inspection cannot leave the mode
@@ -74,24 +157,30 @@ export function beginInspection(target: InspectionTarget): void {
 
 /** Leave inspection mode and release every pending lookup. */
 export function endInspection(): void {
-  nextGeneration()
-  inspectionTarget.value = null
+  session = null
+  inspectionSession.value = null
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
   // Release the gesture in the same step, so a later ordinary click is drawing
   // again and no handler outlives the session.
-  setInspectionPointerHandler(null)
+  releaseInspectionPointerHandler()
 }
 
 /**
  * Abandon inspection if its layer is no longer presented or no longer visible.
  *
  * Called from the presentation owner rather than by polling, so a hidden or
- * removed layer drops the mode in the same interaction that changed it.
+ * removed layer drops the mode in the same interaction that changed it. A
+ * Design replacement presents a different library view, so the same check also
+ * ends a session whose Design is gone.
  */
 export function reconcileInspectionWithPresentation(): void {
-  const target = inspectionTarget.value
+  const target = inspectionSession.value
   if (!target) return
+  if (session && session.designIdentity !== currentDesignIdentity()) {
+    endInspection()
+    return
+  }
   const presented = readLidarPresentation(currentDesign.value, lidarLibrary.value).find(
     (item) => item.id === target.id,
   )
@@ -101,21 +190,19 @@ export function reconcileInspectionWithPresentation(): void {
 }
 
 /**
- * Sample one point of the inspected layer.
+ * Sample one WGS84 point of the inspected layer.
  *
- * `anchor` is the Design's own anchor and the offset is the scene metre
- * displacement of the point from it, which is what the canvas actually knows.
- * The native side projects the anchor and applies the offset there, so the
- * selected cell is as accurate as a native read.
+ * The point is produced by the canvas's own `worldToGeo`, so it is the
+ * geographic position the canvas actually drew rather than an approximation
+ * reconstructed here. The displayed coordinate is that same point.
  */
-export async function sampleInspectionPoint(point: {
-  readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly eastMetres: number
-  readonly northMetres: number
-  readonly northBearingDeg: number
-}): Promise<void> {
+export async function sampleInspectionPoint(point: InspectionPoint): Promise<void> {
   const target = inspectionTarget.value
-  if (!target) return
+  if (!target || !session) return
+  if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+    inspectionSample.value = { kind: 'unavailable', reason: 'bad-point' }
+    return
+  }
 
   // The expected generation is the one presentation currently reports, so a
   // head that changed since the aim is refused natively rather than answered
@@ -129,9 +216,16 @@ export async function sampleInspectionPoint(point: {
     return
   }
 
-  const mine = nextGeneration()
+  // Re-arm the session with the same Design and entity but a new request, so
+  // this lookup supersedes any still in flight.
+  const mine: InspectionSession = {
+    ...session,
+    request: nextRequest(),
+    expectedGenerationId,
+  }
+  session = mine
   inspectionSample.value = { kind: 'loading' }
-  inspectionLocation.value = { lat: point.anchor.lat, lon: point.anchor.lon }
+  inspectionLocation.value = point
 
   let outcome: LidarSampleOutcome
   try {
@@ -139,13 +233,8 @@ export async function sampleInspectionPoint(point: {
       kind: target.kind,
       entity_id: target.id,
       expected_generation_id: expectedGenerationId,
-      longitude: point.anchor.lon,
-      latitude: point.anchor.lat,
-      scene_offset_metres: {
-        east_metres: point.eastMetres,
-        north_metres: point.northMetres,
-        north_bearing_deg: point.northBearingDeg,
-      },
+      longitude: point.lon,
+      latitude: point.lat,
     })
   } catch {
     if (isCurrent(mine)) {
@@ -153,8 +242,24 @@ export async function sampleInspectionPoint(point: {
     }
     return
   }
-  // A superseded, exited or re-aimed lookup publishes nothing at all.
-  if (!isCurrent(mine)) return
+  // A superseded, exited or re-aimed lookup publishes nothing at all: the
+  // session identity, the Design, the entity and the request must all still be
+  // the ones this lookup was aimed at.
+  if (!isCurrent(mine)) {
+    // Release anything a session that ended underneath this lookup still owned
+    // — its canvas gesture in particular. A merely superseded request leaves the
+    // live session alone.
+    reconcileInspectionWithPresentation()
+    return
+  }
+  // The head can also have moved while the answer was in flight. The native side
+  // checked currency before reading, so this covers the window after that read:
+  // an answer for a generation the presentation no longer reports is stale, not
+  // current.
+  if (readCurrentGenerationId(target) !== mine.expectedGenerationId) {
+    inspectionSample.value = { kind: 'stale' }
+    return
+  }
   inspectionSample.value = interpretOutcome(outcome)
 }
 
@@ -227,25 +332,54 @@ export function tryInspectAt(point: { x: number; y: number }): boolean {
 /**
  * Install the pointer handler that samples the clicked scene point.
  *
- * Returns its disposer. A surface must call it on unmount: a leaked handler
- * would keep claiming clicks for a session that no longer exists.
+ * The disposer is kept by the session, so `endInspection` and any teardown both
+ * release it: a leaked handler would keep claiming clicks for a session that no
+ * longer exists.
  */
 export function installInspectionPointerHandler(): () => void {
-  setInspectionPointerHandler((point) => {
-    if (!inspectionTarget.value) return false
-    const aim = inspectionAimForScenePoint(point, currentDesign.value?.spatial_frame ?? null)
-    if (!aim) return false
-    void sampleInspectionPoint(aim)
-    return true
-  })
-  return () => setInspectionPointerHandler(null)
+  setInspectionPointerHandler((point) => sampleInspectionScenePoint(point))
+  const dispose = () => setInspectionPointerHandler(null)
+  pointerDisposer = dispose
+  return dispose
 }
 
-/** Sample the current viewport centre, so mouse use is never required. */
-export function sampleInspectionCentre(centre: { x: number; y: number }): boolean {
+/** Release the installed pointer handler, if one is installed. */
+export function releaseInspectionPointerHandler(): void {
+  pointerDisposer?.()
+  pointerDisposer = null
+}
+
+/** Whether a canvas gesture handler is currently installed. */
+export function hasInspectionPointerHandler(): boolean {
+  return pointerHandler !== null
+}
+
+/**
+ * Sample a scene point, for the canvas gesture and the status surface's button.
+ *
+ * The keyboard/pointer parity the contract requires is exactly this: the button
+ * calls the same session and the same native command as a click, so a user
+ * without a pointer can still read a value.
+ */
+export function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
   if (!inspectionTarget.value) return false
-  const aim = inspectionAimForScenePoint(centre, currentDesign.value?.spatial_frame ?? null)
+  const aim = inspectionPointForScenePoint(
+    point,
+    currentDesign.value?.spatial_frame ?? null,
+  )
   if (!aim) return false
   void sampleInspectionPoint(aim)
   return true
+}
+
+/**
+ * Sample the current viewport centre, so pointer use is never required.
+ *
+ * Returns whether a sample was submitted. The button that calls this is the
+ * keyboard-reachable half of the same command the canvas pointer invokes.
+ */
+export function sampleInspectionCentre(): boolean {
+  const centre = inspectionViewCentreScenePoint()
+  if (!centre) return false
+  return sampleInspectionScenePoint(centre)
 }
