@@ -20,7 +20,7 @@ tip is `bf43af19`.
 | Boundary | Current evidence / required next proof |
 | --- | --- |
 | C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip |
-| C1 / R26 import | **Partially implemented.** Publication no longer reads the composed pixels; exact composed facts are nullable and labelled; the display range is what tiles and previews consume; and the user flow is now choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`), with cancellation, retry and progress in Data. **What remains is deletion, not design:** the shared staging call still runs the review's composed scan and renders before/after previews, and the retired stage/apply/preview commands are still registered though no production caller reaches them. See "C1 disposition" |
+| C1 / R26 import | **Implemented except measurement.** Publication derives its metadata from stored member facts without reading composed pixels; exact composed facts are nullable and labelled; tiles and legends consume the labelled display range; the user flow is choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`) with progress, cancel and retry in Data; and the retired review route — composed scan, previews, decision screen, commands and payload — is deleted. **R26's own resource evidence for the new route has not been measured**, so no capacity claim is made. See "C1 disposition" |
 | C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
 | C3 / R15–R18 inspection | **Repaired** at `85d19ca7` with R18's cancellation half and R16's published-result lane added later: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest` and are read end to end in both units, lattice indices are signed, the session is fenced to the document session/entity/request/head, and the lookup is admitted into the shared bounded read queue and cancellable by the surface that started it. GDAL-backed oracle tests pass; live isolated-Desktop value verification not re-run |
 | C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
@@ -61,7 +61,7 @@ No finding needed a counterexample: each was reproduced and repaired.
 | `npm run build`, `npm run build:web` | PASS |
 | `npm run gen:types` / `check:types` | PASS — no binding drift |
 | `python3 scripts/check_docs.py` | 0 errors |
-| **GDAL-backed ignored LiDAR lane** | **69 passed / 9 failed**, the same set that fails at `5d0a5e0b` — checked by name before and after the C1 publication change, which is what makes "no new failures" a comparison rather than an assumption. Failures are pre-existing, not regressions: three IGN-MNT e2e tests cannot find their fixture; three import tests still assert the retired 25,000,000-cell union-envelope refusal; one asserts a finite-NoData value range this host's GDAL 3.8.4 does not produce; two resource-gate tests panicked with "incremental unavailable (no complete workload sample)" while other builds ran concurrently. Filed as `canopi-a7ot` rather than silently accepted. **The lane is not a green baseline**, so no positive capacity claim rests on it |
+| **GDAL-backed ignored LiDAR lane** | **61 passed / 7 failed** after the review-route deletion. All seven are failures already present at the reviewed baseline, and two baseline failures went away with their subject, so the deletion added none — a comparison by name, not an assumption. The seven: three IGN-MNT e2e tests cannot find their fixture; one import test still asserts the retired 25,000,000-cell union-envelope refusal; one asserts a finite-NoData value range this host's GDAL 3.8.4 does not produce; two resource-gate tests hit the sampler's "incremental unavailable (no complete workload sample)" guard while other builds ran. Filed as `canopi-a7ot` rather than silently accepted. **The lane is not a green baseline**, so no positive capacity claim rests on it |
 
 Not run, and therefore not claimed: Windows and macOS builds, the packaged-window
 smoke, a **driven** isolated Desktop or Web session, live restricted-Google-key
@@ -139,21 +139,30 @@ explicitly; adding to an existing dataset reuses that dataset's interpretation.
 A batch it cannot use refuses entirely and now names the user's file, where the
 staging error used to name the hashed staging copy.
 
-**What still remains, in order.**
+**Landed — the retired path is deleted.** The review screen is gone, so its
+whole machinery went with it: the composed scan that classified incoming
+coverage against the accepted head, both preview renders, the decision preview,
+the `awaiting_review` step, the three commands that drove them, the review
+payload in the shared contract, and the ~60 preview references in the native
+tests. **A production import no longer pays for a whole-composition comparison
+and two preview images that nothing displayed.** Preparation now ends by moving a
+validated batch to publishing in one guarded update inside `stage_import`, so a
+caller cannot forget the transition and a job cancelled while it prepared stays
+cancelled and its publication is refused. Dependent analysis refresh moved with
+it: a committed import enqueues one refresh per definition. A refused batch names
+each file it is about (`<file>: <reason>`).
 
-1. **Delete the retired path, which is where the remaining cost lives.** The
-   one-step route calls the same `stage_import`, so the review's composed scan
-   (`review_coverage`) and both preview renders still run on every production
-   import even though nothing displays them. Removing them means separating
-   per-source preparation from the review comparison, dropping the preview fields
-   from the review contract, and deleting `lidar_stage_import`,
-   `lidar_apply_import`, `lidar_preview_import_decision`, their frontend consumers
-   and the ~60 preview references in the native tests. Until that lands the
-   honest statement is: **a production import still pays for one
-   whole-composition scan and two preview renders it does not use.**
-2. Retire those commands from the native registry and the sync-command policy
-   once their frontend consumers are gone.
-3. Measure the new route: peak live scratch separate from durable bytes,
+Six fault-injection and resilience tests (promotion rollback, later-source
+rollback, collision ownership, unresolved recovery, post-commit cleanup failure,
+journal-clear evidence) were recovered from the pre-deletion revision and adapted
+to the one-step route, so the publication-failure coverage R26 requires is
+intact. Coverage that belonged to the deleted surface alone (review traversal,
+preview pixels, the retired union-envelope admission rule, awaiting-review
+restart) is retired with it.
+
+**What still remains.**
+
+1. Measure the new route: peak live scratch separate from durable bytes,
    cancellation settlement, queue refusal, low-space/write failure at the real
    publication seam, and cold/three-warm display timing.
 
@@ -162,10 +171,10 @@ policy is therefore still the production admission rule, and R26's activation
 condition remains unmet in the sense the amendment defines: the new route's own
 resource evidence does not exist. This is a scope and budget boundary, not an
 external blocker. Every finding R15–R26 raised against the candidate's *code* now
-has a repair and a committed regression; C1/R26 is the outstanding amendment.
+has a repair and a committed regression; R26 is the outstanding acceptance item.
 
-Until the deletion and the measurements land, the retired compatibility claims
-(the overlap-replacement checkbox, compulsory merged-source publication and the Q
+Until the measurements land, the retired compatibility claims (the
+overlap-replacement checkbox, compulsory merged-source publication and the Q
 prerequisite) remain retired, and no "unlimited capacity" claim is made.
 
 
