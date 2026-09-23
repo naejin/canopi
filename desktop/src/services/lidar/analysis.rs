@@ -1346,6 +1346,89 @@ mod tests {
         (receipt.job_id, receipt.definition_id)
     }
 
+    /// The published slope result is readable through its own manifest, in its
+    /// own units, at a known cell.
+    ///
+    /// This is R16's end-to-end half. The unit test above proves the unit comes
+    /// from the result's parameters; this one proves a *published* result can be
+    /// read at all — the reviewer's finding was that a slope result failed
+    /// before sampling because the head was parsed as a source manifest, and
+    /// that the source reader cannot identify a result's chunks.
+    ///
+    /// The oracle is the geometry, not a formula: the fixture is a plane rising
+    /// exactly one metre per metre eastward, so its slope is 45 degrees and 100
+    /// percent wherever it has neighbours. Both reads must agree with that and
+    /// with each other.
+    #[test]
+    #[ignore = "requires system GDAL and the slope-plane fixture"]
+    fn inspection_reads_a_published_slope_result_in_both_units() {
+        let root = scratch_root("inspection");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = plane_layer(&library, &root, 16, 16);
+        let cancel = AtomicBool::new(false);
+
+        // The centre of lattice cell (5, 5): the grid origin is (0, 16) with a
+        // one-metre cell and a -1 y resolution, in EPSG:3857.
+        let (easting, northing) = (5.5_f64, 16.0 - 5.5);
+        // Independent inverse Web Mercator, so the point is not derived from
+        // the transform under test.
+        const R: f64 = 6_378_137.0;
+        let longitude = easting / R * 180.0 / std::f64::consts::PI;
+        let latitude = (2.0 * (northing / R).exp().atan() - std::f64::consts::FRAC_PI_2) * 180.0
+            / std::f64::consts::PI;
+
+        let mut observed: Vec<(LidarSlopeUnit, f64, String)> = Vec::new();
+        for (unit, expected, expected_units) in [
+            (LidarSlopeUnit::Degrees, 45.0_f64, "°"),
+            (LidarSlopeUnit::Percent, 100.0_f64, "%"),
+        ] {
+            let (_job_id, definition_id) = run_first_slope_job(&library, &layer_id, unit);
+            let generation_id = {
+                let connection = library.catalogue().expect("catalogue");
+                super::super::catalogue::head_analysis_generation(&connection, &definition_id)
+                    .expect("head read")
+                    .expect("a published result")
+                    .id
+            };
+            let outcome = library
+                .sample(
+                    &common_types::lidar::LidarSampleRequest {
+                        kind: common_types::lidar::LidarSampleEntityKind::Analysis,
+                        entity_id: definition_id.clone(),
+                        expected_generation_id: generation_id,
+                        request_id: format!("test-{expected_units}"),
+                        longitude,
+                        latitude,
+                    },
+                    &cancel,
+                )
+                .expect("the sample runs");
+            let common_types::lidar::LidarSampleOutcome::Value { value, units, .. } = outcome
+            else {
+                panic!("cell (5, 5) must hold a slope, got {outcome:?}");
+            };
+            // Half a degree of slack covers the one-cell kernel's own rounding
+            // on a Float32 plane; the value is not a survey observation.
+            assert!(
+                (value - expected).abs() < 0.5,
+                "{unit:?} slope at cell (5, 5) was {value}, expected {expected}"
+            );
+            assert_eq!(units, expected_units, "{unit:?} units");
+            observed.push((unit, value, units));
+        }
+
+        // The two units describe the same geometry, so they must agree.
+        let degrees = observed[0].1;
+        let percent = observed[1].1;
+        assert!(
+            (percent - 100.0 * degrees.to_radians().tan()).abs() < 0.5,
+            "percent {percent} must be the tangent of degrees {degrees}"
+        );
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     fn published_slope(library: &LidarLibrary, definition_id: &str) -> PublishedSlope {
         let connection = library.catalogue().expect("catalogue");
         let generation_id: String = connection
