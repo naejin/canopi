@@ -38,6 +38,12 @@ export interface LocationMapLibreOptions {
   readonly basemapStyle: BasemapStyle
   readonly center: [number, number]
   readonly zoom: number
+  /**
+   * The request seam that authenticates official provider tiles with the live
+   * session. A construction option, so it is installed once and closes over the
+   * map's own credential owner.
+   */
+  readonly transformRequest?: (url: string) => { url: string }
 }
 
 export function createLocationMapLibreMap(
@@ -55,6 +61,7 @@ export function createLocationMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
+    ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
   }) as unknown as LocationMapLibreMap
 
   try {

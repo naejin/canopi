@@ -59,9 +59,11 @@ export const GOOGLE_KEY_PROMPT = 'Enter a Google Maps API key to load the offici
 /**
  * The official Map Tiles API 2D tile path.
  *
- * `{session}` is a placeholder the **session owner** replaces with the live
- * session token it acquired; a descriptor that already carried a token would be
- * a lie, because the token is per-generation and expires.
+ * This is the published, **non-secret** template: it names the endpoint and
+ * leaves the session unresolved. The live session token and the API key are
+ * supplied per request by the map's tile transport, because the token is
+ * per-generation and expires, and because a descriptor carrying a credential
+ * could be persisted, exported or logged.
  */
 export const GOOGLE_SESSION_TILES =
   'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}'
@@ -120,20 +122,22 @@ export function resolveBasemapAvailability(
   if (style === 'google_satellite') {
     const key = trimmedKey(config.googleMapsApiKey)
     if (key) {
-      // The session token is acquired per provider generation by the session
-      // owner, which substitutes it for `{session}`. This descriptor names the
-      // endpoint and the configuration that selects the official path.
+      // The published template is credential-free: the session owner acquires a
+      // token per generation and the map's tile transport adds the live session
+      // and key to requests for this fixed endpoint. Putting either in the
+      // descriptor would let an ephemeral credential reach persistence, exports,
+      // diagnostics or logs.
       return {
         state: 'ready',
         descriptor: {
           style,
           provider: 'google',
-          tiles: [`${GOOGLE_SESSION_TILES}&key=${key}`],
+          tiles: [GOOGLE_SESSION_TILES],
           tileSize: 256,
           maxzoom: GOOGLE_MAX_ZOOM,
           // Copyright/availability metadata is required before official tiles
           // are shown; the session owner supplies the authoritative viewport
-          // string. This is the minimum a caller may display until then.
+          // string and zoom availability. This is the minimum until then.
           attribution: GOOGLE_KEYLESS_ATTRIBUTION,
           official: true,
           notice: null,

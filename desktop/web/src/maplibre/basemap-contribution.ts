@@ -3,6 +3,7 @@ import {
   MAPLIBRE_BASEMAP_SOURCE_ID,
 } from './config'
 import type { BasemapProviderState } from './basemap-provider-session'
+import { hasUnresolvedSession } from './basemap-tile-auth'
 
 /**
  * The narrow MapLibre surface this adapter mutates.
@@ -20,7 +21,7 @@ export interface BasemapReconcileTarget {
   // `BasemapRasterLayer` remain the shapes this module *builds*, which is what
   // keeps the reconciler from reaching beyond a raster source and layer.
   addSource(id: string, source: Record<string, unknown>): void
-  addLayer(layer: Record<string, unknown>): void
+  addLayer(layer: Record<string, unknown>, beforeId?: string): void
   setLayoutProperty?(id: string, name: string, value: unknown): void
 }
 
@@ -54,9 +55,30 @@ export interface BasemapRasterLayer {
  * accumulating them, and the layer is removed before its source because
  * MapLibre refuses to drop a source that a layer still references.
  */
+export interface BasemapContributionOptions {
+  /**
+   * Whether the map's tile transport can resolve an official session template.
+   *
+   * An official descriptor carries a credential-free `{session}` template, so a
+   * map without that transport would request a literal placeholder and fail
+   * every tile. Withdrawing the contribution is the honest outcome; installing
+   * a source that cannot load would look like a provider outage.
+   */
+  readonly officialTilesResolvable?: boolean
+  /**
+   * Where the raster layer belongs in the target's own stack.
+   *
+   * The canvas keeps a local background layer beneath the basemap, so the
+   * contribution is inserted directly above it rather than appended over the
+   * shared scene. Read per reconciliation because the stack changes.
+   */
+  readonly beforeLayerId?: () => string | null
+}
+
 export function reconcileBasemapContribution(
   target: BasemapReconcileTarget,
   state: BasemapProviderState,
+  options: BasemapContributionOptions = {},
 ): void {
   const descriptor = state.state === 'ready' ? state.descriptor : null
   const tiles = descriptor?.tiles ?? []
@@ -66,6 +88,17 @@ export function reconcileBasemapContribution(
   // leave the previous provider's tiles on screen: that would present one
   // provider's imagery under another's name.
   if (tiles.length === 0) {
+    removeContribution(target)
+    return
+  }
+
+  // An official template is only usable through the transport that resolves its
+  // session for this fixed endpoint.
+  if (
+    descriptor?.official
+    && tiles.some(hasUnresolvedSession)
+    && options.officialTilesResolvable !== true
+  ) {
     removeContribution(target)
     return
   }
@@ -80,13 +113,18 @@ export function reconcileBasemapContribution(
     attribution: descriptor?.attribution ?? '',
     maxzoom: descriptor?.maxzoom ?? 19,
   })
-  target.addLayer({
+  const layer = {
     id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-    type: 'raster',
+    type: 'raster' as const,
     source: MAPLIBRE_BASEMAP_SOURCE_ID,
     minzoom: 0,
-    layout: { visibility: 'visible' },
-  })
+    layout: { visibility: 'visible' as const },
+  }
+  // The anchor is optional rather than `undefined`, so a target that takes no
+  // insertion point is called with exactly the layer it must add.
+  const beforeId = options.beforeLayerId?.() ?? null
+  if (beforeId) target.addLayer(layer, beforeId)
+  else target.addLayer(layer)
 }
 
 /** Withdraw the basemap contribution when there is one. */

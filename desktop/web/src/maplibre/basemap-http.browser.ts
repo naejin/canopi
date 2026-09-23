@@ -74,22 +74,43 @@ function readRetryAfter(headers: Headers): number | null {
 /**
  * Read a response body only when it is JSON, and only up to the cap.
  *
- * A non-JSON or oversized body is reported as `null` rather than being parsed
- * or buffered whole, so a misbehaving endpoint cannot make the provider hold
- * unbounded data.
+ * The cap is enforced **while reading**, from the streamed bytes, because a
+ * `Content-Length` header is optional and a chunked answer would otherwise be
+ * buffered whole before the size was ever consulted. Text length is not byte
+ * length either, so the count is taken from the decoded chunks. A non-JSON or
+ * oversized body is reported as `null` rather than being parsed, and an
+ * oversized body cancels the reader instead of draining it.
  */
 async function readBoundedJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.toLowerCase().includes('json')) return null
+  // An honest declared length is respected without opening the body at all.
   const declared = Number(response.headers.get('content-length'))
   if (Number.isFinite(declared) && declared > BASEMAP_HTTP_MAX_BODY_BYTES) return null
-  let text: string
+
+  const body = response.body
+  if (!body) return null
+  const decoder = new TextDecoder()
+  let text = ''
+  let bytes = 0
+  const reader = body.getReader()
   try {
-    text = await response.text()
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      bytes += chunk.value.byteLength
+      if (bytes > BASEMAP_HTTP_MAX_BODY_BYTES) {
+        await reader.cancel()
+        return null
+      }
+      text += decoder.decode(chunk.value, { stream: true })
+    }
+    text += decoder.decode()
   } catch {
     return null
+  } finally {
+    reader.releaseLock()
   }
-  if (text.length > BASEMAP_HTTP_MAX_BODY_BYTES) return null
   try {
     return JSON.parse(text) as unknown
   } catch {

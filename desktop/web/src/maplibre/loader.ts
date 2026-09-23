@@ -15,6 +15,13 @@ export interface MapLibreMapConstructorOptions {
   pitchWithRotate: boolean
   dragRotate: boolean
   touchZoomRotate: boolean
+  /**
+   * MapLibre's request seam, used to authenticate official provider tiles with
+   * the live session. Set once at creation, because a map's transform is a
+   * construction option; it closes over the map's own credential owner so a
+   * session renewal reaches requests without touching the style or the source.
+   */
+  transformRequest?: (url: string) => MapLibreRequestParameters
 }
 
 export interface MapLibreRequestParameters {

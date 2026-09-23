@@ -12,7 +12,12 @@ import {
   readLocationMapViewState,
   type LocationMapLibreMap,
 } from '../../maplibre/location-map'
-import { bindBasemapProvider, createBasemapProvider } from '../../maplibre/basemap-bind'
+import {
+  bindBasemapProvider,
+  createBasemapProvider,
+  mapStyleReadiness,
+} from '../../maplibre/basemap-bind'
+import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type {
   BasemapProvider,
   BasemapViewport,
@@ -96,6 +101,8 @@ export function useLocationMapEditingHost(
   workbenchRef.current = workbench
   if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
   const basemapProviderRef = useRef<BasemapProvider | null>(null)
+  const tileAuthRef = useRef<BasemapTileAuth | null>(null)
+  if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
 
   const mapInitFailed = useSignal(false)
   const pinState = useSignal<PinOverlayState>({ visible: false, x: 0, y: 0, clamped: false, angle: 0 })
@@ -113,9 +120,15 @@ export function useLocationMapEditingHost(
     surface.attach(container)
 
     const onMove = () => updateCurrentMapState()
+    // A settled viewport move refreshes the provider's metadata in place. The
+    // session is not per-viewport, so this must not restart the provider.
+    const onSettledMove = () => provider.updateViewport(readLocationMapViewport(surfaceRef.current?.map ?? null))
     const onClick = (event?: unknown) => previewClickedLocation(event)
 
-    const provider = createBasemapProvider()
+    // The credential owner is created before the map, because MapLibre takes
+    // its request transform as a construction option.
+    const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
+    const provider = createBasemapProvider(tileAuth)
     basemapProviderRef.current = provider
     surface.requestMap({
       // Deliberately independent of the provider. A basemap change is
@@ -139,6 +152,7 @@ export function useLocationMapEditingHost(
                   ]
                 : DEFAULT_CENTER),
             zoom: preservedView?.zoom ?? (savedLoc ? 10 : 3.2),
+            transformRequest: tileAuth.transformRequest,
           },
         )
       },
@@ -160,14 +174,26 @@ export function useLocationMapEditingHost(
         }
 
         // The provider's session and viewport work belongs to this map's
-        // lifetime, so both are torn down together.
-        context.lifetime.addCleanup(bindBasemapProvider({ provider, map: context.map }))
+        // lifetime, so the binding, the provider and its credential are all
+        // torn down together rather than leaving requests and a live session
+        // token behind a removed map.
+        context.lifetime.addCleanup(
+          bindBasemapProvider({
+            provider,
+            map: context.map,
+            tileAuth,
+            styleReady: mapStyleReadiness(context.map, context.lifetime),
+            visible: () => !mapInitFailed.peek(),
+          }),
+        )
         context.lifetime.addCleanup(() => {
+          provider.dispose()
           basemapProviderRef.current = null
         })
         context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
+        context.lifetime.on('moveend', onSettledMove)
         context.lifetime.on('click', onClick)
         updateMapState(context.map)
       },

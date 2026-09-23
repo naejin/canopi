@@ -16,7 +16,12 @@ import {
   type WorldMapMarker,
 } from '../../maplibre/world-map'
 import { basemapStyle } from '../../app/settings/state'
-import { bindBasemapProvider, createBasemapProvider } from '../../maplibre/basemap-bind'
+import {
+  bindBasemapProvider,
+  createBasemapProvider,
+  mapStyleReadiness,
+} from '../../maplibre/basemap-bind'
+import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type {
   BasemapProvider,
   BasemapViewport,
@@ -60,6 +65,8 @@ export function WorldMapSurface({
   selectedIdRef.current = selectedId
   onSelectRef.current = onSelect
   if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
+  const tileAuthRef = useRef<BasemapTileAuth | null>(null)
+  if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
 
   const preferredBasemapStyle = basemapStyle.value
 
@@ -70,7 +77,10 @@ export function WorldMapSurface({
     if (!surface) return
 
     surface.attach(container)
-    const provider = createBasemapProvider()
+    // Created before the map, because MapLibre takes its request transform as a
+    // construction option.
+    const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
+    const provider = createBasemapProvider(tileAuth)
     providerRef.current = provider
     surface.requestMap({
       // Deliberately independent of the provider: a basemap change is
@@ -84,16 +94,30 @@ export function WorldMapSurface({
           basemapStyle: preferredBasemapStyle,
           center: preservedView?.center ?? [0, 14],
           zoom: preservedView?.zoom ?? 1.15,
+          transformRequest: tileAuth.transformRequest,
         },
       ),
       captureViewState: (context) => readWorldMapViewState(context.map),
       onCreate: (context) => {
         // The provider's session and viewport work belongs to this map's
-        // lifetime, so both are torn down together.
-        context.lifetime.addCleanup(bindBasemapProvider({ provider, map: context.map }))
+        // lifetime, so the binding, the provider and its credential are torn
+        // down together rather than leaving requests and a live session token
+        // behind a removed map.
+        context.lifetime.addCleanup(
+          bindBasemapProvider({
+            provider,
+            map: context.map,
+            tileAuth,
+            styleReady: mapStyleReadiness(context.map, context.lifetime),
+          }),
+        )
         context.lifetime.addCleanup(() => {
+          provider.dispose()
           providerRef.current = null
         })
+        context.lifetime.on('moveend', () =>
+          provider.updateViewport(readWorldMapViewport(surfaceRef.current?.map ?? null)),
+        )
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()

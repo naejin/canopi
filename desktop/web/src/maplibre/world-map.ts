@@ -45,6 +45,8 @@ export interface WorldMapLibreOptions {
   readonly basemapStyle: BasemapStyle
   readonly center: [number, number]
   readonly zoom: number
+  /** The request seam that authenticates official provider tiles. */
+  readonly transformRequest?: (url: string) => { url: string }
 }
 
 export function createWorldMapLibreMap(
@@ -62,6 +64,7 @@ export function createWorldMapLibreMap(
     pitchWithRotate: false,
     dragRotate: false,
     touchZoomRotate: false,
+    ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
   }) as unknown as WorldMapLibreMap
 
   try {

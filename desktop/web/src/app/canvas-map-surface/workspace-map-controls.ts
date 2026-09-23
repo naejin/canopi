@@ -3,11 +3,15 @@ import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot
 import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import {
-  createMapLibreBasemapContribution,
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
   MAPLIBRE_BASEMAP_SOURCE_ID,
 } from '../../maplibre/config'
+import type { BasemapStyle } from '../../generated/contracts'
+import { bindBasemapProvider, createBasemapProvider, mapStyleReadiness } from '../../maplibre/basemap-bind'
+import type { BasemapProvider, BasemapViewport } from '../../maplibre/basemap-provider-session'
+import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
+import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import {
   createWorkspaceMapLibreMap,
   captureWorkspaceBasemapPresentation,
@@ -32,7 +36,15 @@ interface WorkspaceMapAttempt {
   readonly signal: AbortSignal
   readonly snapshot: WorkspaceMapSnapshot
   presentation: WorkspaceBasemapPresentation
-  appliedBasemapStyle: WorkspaceBasemapPresentation['basemapStyle'] | null
+  /** The map's own credential owner, created before the map for its transform. */
+  readonly tileAuth: BasemapTileAuth
+  /** The one shared provider for this map lifetime, created with the map. */
+  provider: BasemapProvider | null
+  /** The binding's disposer plus the opacity subscription. */
+  basemapTeardown: (() => void) | null
+  /** The style the live provider is already serving, if any. */
+  basemapProviderStyle: BasemapStyle | null
+  lifetime: MapLibreSurfaceLifetime | null
   map: WorkspaceActivationMap | null
   settled: boolean
   released: boolean
@@ -101,7 +113,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
         signal,
         snapshot: ownedSnapshot,
         presentation: workspaceBasemapPresentationFromSnapshot(ownedSnapshot),
-        appliedBasemapStyle: null,
+        tileAuth: new BasemapTileAuth(),
+        provider: null,
+        basemapTeardown: null,
+        basemapProviderStyle: null,
+        lifetime: null,
         map: null,
         settled: false,
         released: false,
@@ -133,10 +149,12 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           maplibre,
           container,
           attempt.snapshot,
+          attempt.tileAuth.transformRequest,
         ),
         onCreate: (context) => {
           const map = context.map as WorkspaceActivationMap
           attempt.map = map
+          attempt.lifetime = context.lifetime
           attempt.contributions.attach(context)
           const isLive = () => !attempt.released && !attempt.signal.aborted && context.isCurrent()
           if (!isLive()) return
@@ -168,6 +186,11 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             if (attempt.admitted) {
               if (attempt.failureReported) return
               attempt.pendingStyleRestore = true
+              // A reloaded style is an empty stack again, so the basemap
+              // contribution has to be re-applied even though the provider
+              // itself has not changed. An unexpired session is reused, so this
+              // costs no extra provider request.
+              attempt.basemapProviderStyle = null
               this.drainReconciliation(attempt)
               return
             }
@@ -292,45 +315,100 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     }
   }
 
+  /**
+   * Drive the canvas basemap through the same provider the other surfaces use.
+   *
+   * The canvas previously built a static contribution from a descriptor, which
+   * cannot follow the official Google path at all: that path needs a session
+   * acquired per generation and an authenticated tile request, and it is only
+   * reachable through the shared provider and the map's request transform.
+   */
   private applyBasemapPresentation(attempt: WorkspaceMapAttempt): void {
     const { map, snapshot, presentation } = attempt
     if (!map) return
     if (snapshot.placementStatus !== 'confirmed' || !presentation.basemapVisible) {
+      this.releaseBasemapProvider(attempt)
       this.removeBasemapContribution(map)
-      attempt.appliedBasemapStyle = null
       return
     }
-    const contribution = createMapLibreBasemapContribution(presentation.basemapStyle)
-    const layerExists = map.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID) != null
-    const sourceExists = map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID) != null
-    if (layerExists && sourceExists && attempt.appliedBasemapStyle === presentation.basemapStyle) {
-      map.setPaintProperty?.(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        presentation.basemapOpacity,
+    const provider = this.ensureBasemapProvider(attempt)
+    if (!provider) return
+    // An opacity-only update must not re-issue a session or rebuild the
+    // contribution; only a provider change does that.
+    if (attempt.basemapProviderStyle !== presentation.basemapStyle) {
+      attempt.basemapProviderStyle = presentation.basemapStyle
+      provider.update(
+        { style: presentation.basemapStyle },
+        readWorkspaceMapViewport(map),
       )
-      return
+    } else {
+      // Opacity alone changes no provider input, so the contribution is left
+      // exactly as it is and only the paint property is written.
+      this.applyBasemapOpacity(attempt)
     }
-    this.removeBasemapContribution(map)
-    if (map.getSource(contribution.sourceId) == null) {
-      map.addSource(contribution.sourceId, contribution.source as Record<string, unknown>)
-    }
-    if (map.getLayer(contribution.layer.id) == null) {
-      const order = map.getLayersOrder()
-      const backgroundIndex = order.indexOf(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
-      const beforeId = backgroundIndex >= 0 ? order[backgroundIndex + 1] : order[0]
-      if (beforeId) {
-        map.addLayer(contribution.layer as unknown as Record<string, unknown>, beforeId)
-      } else {
-        map.addLayer(contribution.layer as unknown as Record<string, unknown>)
-      }
-    }
-    attempt.appliedBasemapStyle = presentation.basemapStyle
+  }
+
+  private applyBasemapOpacity(attempt: WorkspaceMapAttempt): void {
+    const map = attempt.map
+    // No contribution means no layer to paint; writing a property for a layer
+    // that does not exist is not an opacity update.
+    if (!map?.getLayer?.(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)) return
     map.setPaintProperty?.(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
       'raster-opacity',
-      presentation.basemapOpacity,
+      attempt.presentation.basemapOpacity,
     )
+  }
+
+  /**
+   * Create this map lifetime's provider and bind it to the map once.
+   *
+   * The binding owns contribution reconciliation, so this surface never adds or
+   * removes the basemap source itself while a provider is live.
+   */
+  private ensureBasemapProvider(attempt: WorkspaceMapAttempt): BasemapProvider | null {
+    const map = attempt.map
+    const lifetime = attempt.lifetime
+    if (!map || !lifetime) return null
+    if (attempt.provider) return attempt.provider
+    const provider = createBasemapProvider(attempt.tileAuth)
+    attempt.provider = provider
+    const unbind = bindBasemapProvider({
+      provider,
+      map: map as unknown as Parameters<typeof bindBasemapProvider>[0]['map'],
+      tileAuth: attempt.tileAuth,
+      styleReady: mapStyleReadiness(
+        map as unknown as { isStyleLoaded?(): boolean; loaded?(): boolean },
+        lifetime,
+      ),
+      // Opacity is a property of the layer the binding reconciles, so it is
+      // re-applied exactly when the contribution is.
+      afterApply: () => this.applyBasemapOpacity(attempt),
+      // The canvas keeps a local background beneath the basemap.
+      beforeLayerId: () => {
+        const order = map.getLayersOrder()
+        const background = order.indexOf(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
+        return background >= 0 ? order[background + 1] ?? null : order[0] ?? null
+      },
+    })
+    // A settled camera move refreshes the provider's viewport metadata in
+    // place; the session is not per-viewport.
+    lifetime.on('moveend', () =>
+      provider.updateViewport(readWorkspaceMapViewport(map)),
+    )
+    attempt.basemapTeardown = () => {
+      unbind()
+      provider.dispose()
+    }
+    return provider
+  }
+
+  /** Stop the canvas provider and release its session and timers. */
+  private releaseBasemapProvider(attempt: WorkspaceMapAttempt): void {
+    attempt.basemapTeardown?.()
+    attempt.basemapTeardown = null
+    attempt.provider = null
+    attempt.basemapProviderStyle = null
   }
 
   private removeBasemapContribution(map: WorkspaceActivationMap): void {
@@ -421,6 +499,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   private releaseAttempt(attempt: WorkspaceMapAttempt | null): void {
     if (!attempt || attempt.released) return
     attempt.released = true
+    this.releaseBasemapProvider(attempt)
+    attempt.lifetime = null
     attempt.signal.removeEventListener('abort', attempt.abort)
     if (this.attempt === attempt) this.attempt = null
     // Host/Surface Adapter performs listener cleanup, observer disconnect, and
@@ -430,6 +510,44 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     } finally {
       this.surface.destroy()
     }
+  }
+}
+
+/**
+ * The provider viewport for the live workspace map.
+ *
+ * Read from the map's own camera. A map that cannot report bounds yet describes
+ * the whole world, which is what it is actually showing at that point rather
+ * than an invented extent.
+ */
+function readWorkspaceMapViewport(map: WorkspaceActivationMap): BasemapViewport {
+  const bounds = (
+    map as unknown as {
+      getBounds?(): {
+        getWest(): number
+        getSouth(): number
+        getEast(): number
+        getNorth(): number
+      }
+    }
+  ).getBounds?.()
+  // A map whose camera is not attached yet reports no zoom; that is the same
+  // "nothing known yet" case as no bounds.
+  let zoom = Number.NaN
+  try {
+    zoom = map.getZoom()
+  } catch {
+    zoom = Number.NaN
+  }
+  if (!bounds || !Number.isFinite(zoom)) {
+    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
+  }
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+    zoom,
   }
 }
 

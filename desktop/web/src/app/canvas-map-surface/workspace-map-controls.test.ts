@@ -631,6 +631,12 @@ describe('WorkspaceMapControls', () => {
   })
 
   it('binds map construction and later style restoration to each attempt snapshot', async () => {
+    // The second attempt selects `satellite`, which is only servable with a
+    // MapTiler key. Without one it is genuinely unavailable and contributes no
+    // basemap at all, so the per-attempt paint expectations below need a build
+    // that can serve it.
+    vi.stubEnv('VITE_MAPTILER_KEY', 'snapshot-attempt-key')
+    try {
     const { controls, maps } = createControls()
     const snapshotA: WorkspaceMapSnapshot = {
       anchor: { lat: 10, lon: 20 },
@@ -683,6 +689,9 @@ describe('WorkspaceMapControls', () => {
       'raster-opacity',
       0.8,
     )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('owns the call-time map snapshot through admission and later style reload', async () => {
@@ -1354,5 +1363,86 @@ describe('WorkspaceMapControls', () => {
 
     expect(controls.getWebGL2Context(map as never)).toBe(context)
     expect(getContext).toHaveBeenCalledWith('webgl2')
+  })
+})
+
+describe('WorkspaceMapControls shared basemap provider', () => {
+  /**
+   * The canvas previously built a static basemap contribution, which cannot
+   * serve the official Google path: that path needs a session acquired per
+   * generation and an authenticated tile request. The defect this pins is that
+   * a configured key was silently ignored on the main Canvas, so the keyless
+   * endpoint served imagery while the user believed the official one was in use.
+   */
+  it('follows the official Google session path when a device key is configured', async () => {
+    const calls: Array<{ url: string; method?: string }> = []
+    vi.stubGlobal('fetch', (async (url: string, init?: { method?: string }) => {
+      calls.push({ url: String(url), method: init?.method })
+      if (String(url).includes('createSession')) {
+        return new Response(JSON.stringify({
+          session: 'fake-session-token',
+          expiry: '4000000000',
+          tileWidth: 512,
+          tileHeight: 512,
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        copyright: 'Imagery ©2026 Google',
+        maxZoomRects: [{ north: 49, south: 48, east: 3, west: 2, maxZoom: 20 }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch)
+    const { googleMapsApiKey } = await import('../../app/settings/state')
+    const { GOOGLE_SESSION_TILES } = await import('../../maplibre/basemap-provider')
+    googleMapsApiKey.value = 'fake-canvas-google-key'
+
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal, {
+        anchor: { lat: 48.86, lon: 2.35 },
+        northBearingDeg: 0,
+        placementStatus: 'confirmed',
+        basemapStyle: 'google_satellite',
+        basemapVisible: true,
+        basemapOpacity: 0.8,
+      })
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+
+      await vi.waitFor(() => expect(map.addSource).toHaveBeenCalled())
+      // The published template is credential-free and unresolved: the transport
+      // supplies the session for this fixed endpoint.
+      expect(map.addSource).toHaveBeenLastCalledWith(
+        MAPLIBRE_BASEMAP_SOURCE_ID,
+        expect.objectContaining({ tiles: [GOOGLE_SESSION_TILES] }),
+      )
+      // The keyless endpoint would mean the configured key was silently
+      // ignored, which is the defect this pins.
+      expect(JSON.stringify([...map.sources.entries()])).not.toContain('mt1.google.com')
+      expect(JSON.stringify([...map.sources.entries()])).not.toContain('fake-canvas-google-key')
+
+      // The request the map would make carries the live session and the key.
+      const transform = map.options.transformRequest
+      expect(transform, 'the canvas map must be created with the request seam').toBeTypeOf('function')
+      const outgoing = transform!(
+        (map.sources.get(MAPLIBRE_BASEMAP_SOURCE_ID) as { tiles: string[] }).tiles[0]!
+          .split('{z}').join('14').split('{x}').join('8192').split('{y}').join('5461'),
+      )
+      expect(outgoing.url).toContain('session=fake-session-token')
+      expect(outgoing.url).toContain('key=fake-canvas-google-key')
+      expect(outgoing.url).not.toContain('{session}')
+
+      // The session request is authenticated too, and the viewport metadata
+      // established the attribution the layer shows.
+      expect(calls[0]?.url).toContain('createSession')
+      expect(calls[0]?.url).toContain('fake-canvas-google-key')
+      expect(calls.some((call) => call.url.includes('/viewport'))).toBe(true)
+      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toMatchObject({
+        attribution: 'Imagery ©2026 Google',
+      })
+    } finally {
+      googleMapsApiKey.value = null
+      vi.unstubAllGlobals()
+    }
   })
 })
