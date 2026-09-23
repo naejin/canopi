@@ -65,6 +65,12 @@ pub(super) struct SnapshotMeasurement {
     pub published_cells: u64,
     pub min_value: f64,
     pub max_value: f64,
+    /// The range styling and legends use, which need not be the exact one: a
+    /// composition published without reading its pixels has no exact range but
+    /// still has a stable display domain derived from its members.
+    pub display_min_value: f64,
+    pub display_max_value: f64,
+    pub display_basis: common_types::lidar::LidarDisplayRangeBasis,
     pub bounds_3857: [f64; 4],
 }
 
@@ -524,6 +530,11 @@ pub(super) fn measure(
         published_cells,
         min_value,
         max_value,
+        // This pass reads the composed values, so the range it finds is exact
+        // and is also the display domain.
+        display_min_value: min_value,
+        display_max_value: max_value,
+        display_basis: common_types::lidar::LidarDisplayRangeBasis::Exact,
         bounds_3857,
     })
 }
@@ -600,8 +611,8 @@ pub(super) fn insert_snapshot(
 ) -> Result<(), String> {
     connection
         .execute(
-            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, base_generation_id, previous_generation_id, undo_available, operation)
-             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8, NULL, ?9, ?10, ?11)",
+            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, display_min_value, display_max_value, display_basis, bounds_3857, base_generation_id, previous_generation_id, undo_available, operation)
+             VALUES(?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, ?12, ?13, ?14)",
             rusqlite::params![
                 generation_id,
                 layer_id,
@@ -610,6 +621,9 @@ pub(super) fn insert_snapshot(
                 measurement.published_cells as i64,
                 measurement.min_value,
                 measurement.max_value,
+                measurement.display_min_value,
+                measurement.display_max_value,
+                super::display_basis_label(measurement.display_basis),
                 serde_json::to_string(&measurement.bounds_3857).map_err(|e| e.to_string())?,
                 lineage.previous_generation_id,
                 i64::from(lineage.undo_available),
@@ -630,7 +644,11 @@ pub(super) fn insert_snapshot(
 pub(super) struct HistoryEntry {
     pub generation_id: String,
     pub created_at: String,
-    pub coverage_cells: i64,
+    pub coverage_cells: Option<i64>,
+    /// The range this version is displayed with, and how it was derived.
+    pub display_min_value: Option<f64>,
+    pub display_max_value: Option<f64>,
+    pub display_basis: Option<String>,
     /// Occurrences in this version's composition.
     pub member_count: i64,
     /// User operation this version recorded. Migrated rows recorded none and
@@ -722,7 +740,9 @@ pub(super) fn history_page(
         .unwrap_or_default();
     let mut statement = connection
         .prepare(
-            "SELECT g.id, g.created_at, g.coverage_cells, g.operation, g.rowid,
+            "SELECT g.id, g.created_at, g.coverage_cells,
+                    g.display_min_value, g.display_max_value, g.display_basis,
+                    g.operation, g.rowid,
                     (SELECT COUNT(*) FROM lidar_collection_members m
                      WHERE m.generation_id = g.id)
              FROM lidar_layer_generations g
@@ -742,10 +762,13 @@ pub(super) fn history_page(
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, i64>(5)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<f64>>(3)?,
+                    row.get::<_, Option<f64>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, i64>(7)?,
+                    row.get::<_, i64>(8)?,
                 ))
             },
         )
@@ -757,8 +780,17 @@ pub(super) fn history_page(
     let has_more = rows.len() as i64 > limit;
     let mut versions = Vec::with_capacity(rows.len().min(limit as usize));
     let mut last_rowid = None;
-    for (generation_id, created_at, coverage_cells, operation, rowid, member_count) in
-        rows.into_iter().take(limit as usize)
+    for (
+        generation_id,
+        created_at,
+        coverage_cells,
+        display_min_value,
+        display_max_value,
+        display_basis,
+        operation,
+        rowid,
+        member_count,
+    ) in rows.into_iter().take(limit as usize)
     {
         // The publication order within the layer is the version's identity
         // cue; it is stable because a generation's rowid never changes.
@@ -776,6 +808,9 @@ pub(super) fn history_page(
             generation_id,
             created_at,
             coverage_cells,
+            display_min_value,
+            display_max_value,
+            display_basis,
             member_count,
             operation,
             sequence,

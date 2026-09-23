@@ -598,7 +598,8 @@
       },
       "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。",
       "slopePercent": "坡度（百分比）",
-      "removeFromDesign": "从设计中移除"
+      "removeFromDesign": "从设计中移除",
+      "notCalculated": "未计算"
     },
     "basemap": {
       "title": "底图",

@@ -181,11 +181,44 @@ pub struct LidarLayerSummary {
     pub state: LidarResultState,
     /// Native source-grid resolution in metres for accepted coverage.
     pub resolution_m: Option<f64>,
-    pub coverage_cells: u64,
+    /// Exact valid cells in the accepted composition.
+    ///
+    /// `None` when the exact count is not known. Publishing membership does not
+    /// require reading the composed pixels, so a generation that was published
+    /// without that scan reports unknown coverage rather than zero: zero means
+    /// "measured, and there is nothing there".
+    pub coverage_cells: Option<u64>,
     pub bounds: Option<[f64; 4]>,
+    /// Exact composed value range, when it is known.
     pub value_range: Option<[f64; 2]>,
+    /// The range styling and legends use, labelled by how it was derived.
+    pub display_range: Option<LidarDisplayRange>,
     pub tilesets: Vec<LidarTileset>,
     pub analysis_count: u32,
+}
+
+/// Where a display range came from.
+///
+/// The distinction is the point: a source envelope may include values that no
+/// composed pixel actually holds, so it is a stable colour domain rather than a
+/// scientific statistic.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarDisplayRangeBasis {
+    /// Measured from the composed value itself.
+    Exact,
+    /// The union of the stored member ranges, which may include occluded
+    /// extremes.
+    SourceEnvelope,
+}
+
+/// The range a generation is displayed with, and what it is based on.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayRange {
+    pub min: f64,
+    pub max: f64,
+    pub basis: LidarDisplayRangeBasis,
 }
 
 /// Library-side summary of an analysis definition and its current result.
@@ -279,7 +312,9 @@ pub struct LidarImportDecisionPreview {
 pub struct LidarGenerationHistoryEntry {
     pub id: String,
     pub created_at: String,
-    pub coverage_cells: u64,
+    /// Exact valid cells, or `None` when that count is not known.
+    pub coverage_cells: Option<u64>,
+    pub display_range: Option<LidarDisplayRange>,
     /// Position of this version in the layer's publication order, counting from
     /// the oldest. Unique within the layer, so it is the identity cue History
     /// shows instead of numbering that makes consecutive imports read alike.

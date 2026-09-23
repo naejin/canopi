@@ -598,7 +598,8 @@
       },
       "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos.",
       "slopePercent": "Pendiente (porcentaje)",
-      "removeFromDesign": "Quitar del diseño"
+      "removeFromDesign": "Quitar del diseño",
+      "notCalculated": "Sin calcular"
     },
     "basemap": {
       "title": "Mapa base",

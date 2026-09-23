@@ -598,7 +598,8 @@
       },
       "webUnavailable": "I dataset raster e i risultati di questo progetto sono conservati qui, ma non vengono visualizzati né elaborati nell’edizione Web. Apri il progetto nell’app desktop per importarli, analizzarli o visualizzarli.",
       "slopePercent": "Pendenza (percentuale)",
-      "removeFromDesign": "Rimuovi dal progetto"
+      "removeFromDesign": "Rimuovi dal progetto",
+      "notCalculated": "Non calcolato"
     },
     "basemap": {
       "title": "Mappa di base",

@@ -554,7 +554,11 @@ export function LidarLayersSection() {
               {selected.kind === 'Source' && selectedLayer && (
                 <SourceActions
                   item={selected}
-                  coverageCells={Number(selectedLayer.coverage_cells)}
+                  coverageCells={
+                    selectedLayer.coverage_cells === null
+                      ? null
+                      : Number(selectedLayer.coverage_cells)
+                  }
                   bounds={selected.bounds}
                   engineUnavailable={engineUnavailable}
                   showReturn={showReturnToLocation}
@@ -763,7 +767,8 @@ function OpacityControl({ item }: { readonly item: LidarPresentationItem }) {
 
 function SourceActions({ item, coverageCells, bounds, engineUnavailable, showReturn, onViewedCoverage }: {
   readonly item: LidarPresentationItem
-  readonly coverageCells: number
+  /** `null` when the exact coverage is not known; unknown is not empty. */
+  readonly coverageCells: number | null
   readonly bounds: [number, number, number, number] | null
   readonly engineUnavailable: boolean
   readonly showReturn: boolean
@@ -779,7 +784,7 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
   return (
     <>
       {coverageCells === 0 && <p className={styles.emptyState}>{t('canvas.lidar.noTiffs')}</p>}
-      {!location && coverageCells > 0 && <p className={styles.notice}>{t('canvas.lidar.locationRequired')}</p>}
+      {!location && coverageCells !== 0 && <p className={styles.notice}>{t('canvas.lidar.locationRequired')}</p>}
       {outsideView && (
         <div className={styles.notice}>
           <p>{t('canvas.lidar.coverageOutsideView')}</p>
@@ -796,7 +801,7 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
         }}>{t('canvas.lidar.viewCoverage')}</button>}
         {showReturn && location && <button type="button" className={styles.secondaryButton} onClick={viewDesignLocation}>{t('canvas.lidar.returnToLocation')}</button>}
         <button type="button" className={styles.secondaryButton} disabled={engineUnavailable} onClick={() => void startImportForLayer(item.id)}>{t('canvas.lidar.addTiffs')}</button>
-        {item.detail === 'GroundElevation' && coverageCells > 0 && <button type="button" className={styles.secondaryButton} disabled={engineUnavailable} onClick={() => void analyseLayerAsSlope(item.id)}>{t('canvas.lidar.createSlope')}</button>}
+        {item.detail === 'GroundElevation' && coverageCells !== 0 && <button type="button" className={styles.secondaryButton} disabled={engineUnavailable} onClick={() => void analyseLayerAsSlope(item.id)}>{t('canvas.lidar.createSlope')}</button>}
       </div>
     </>
   )
@@ -845,7 +850,7 @@ function SourcePriorityList({ collection, confirmRemove, pending, loading, error
                 <small>
                   {source.kind === 'previous-composition'
                     ? t('canvas.lidar.previousCompositionHint')
-                    : `${Number(source.coverage_cells).toLocaleString()} ${t('canvas.lidar.historyCells')}`}
+                    : `${coverageLabel(source.coverage_cells)} ${t('canvas.lidar.historyCells')}`}
                 </small>
               </span>
               <button
@@ -952,7 +957,7 @@ function HistoryDetail({ history, collection, pending, collectionLoading, histor
               </span>
               <small>
                 {entry.created_at} · {entry.source_count} {t('canvas.lidar.historySources')} ·{' '}
-                {Number(entry.coverage_cells).toLocaleString()} {t('canvas.lidar.historyCells')}
+                {coverageLabel(entry.coverage_cells)} {t('canvas.lidar.historyCells')}
                 {entry.is_head ? ` · ${t('canvas.lidar.historyHead')}` : ''}
               </small>
               <button
@@ -1008,7 +1013,9 @@ function AnalysisIcon() {
 function sourceState(item: LidarPresentationItem): string {
   if (item.state === 'unavailable') return stateLabel(item.state)
   const layer = lidarLibrary.value?.layers.find((candidate) => candidate.id === item.id)
-  if (Number(layer?.coverage_cells ?? 0) === 0) return t('canvas.lidar.emptyState')
+  // A count of zero is a measured emptiness; an unknown count is not emptiness,
+  // so it keeps the layer's own state rather than claiming there is nothing.
+  if (layer?.coverage_cells === '0') return t('canvas.lidar.emptyState')
   return stateLabel(item.state)
 }
 
@@ -1016,12 +1023,22 @@ function stateLabel(state: LidarPresentationItem['state']): string {
   return t(`canvas.lidar.state.${state}`)
 }
 
-function sourceFacts(resolution: number | null, cells: string, units: string): string {
+function sourceFacts(resolution: number | null, cells: string | null, units: string): string {
   const parts = [`${t('canvas.lidar.units')}: ${units}`]
   if (resolution !== null) parts.push(`${resolution.toLocaleString()} m ${t('canvas.lidar.resolution')}`)
-  const area = resolution === null ? null : Number(cells) * resolution * resolution
-  if (area !== null) parts.push(`${formatArea(area)} ${t('canvas.lidar.coverage')}`)
+  // Unknown coverage is reported as not calculated rather than as zero area:
+  // an area of 0 ha would be a measurement this generation never took.
+  if (cells === null) {
+    parts.push(`${t('canvas.lidar.notCalculated')} ${t('canvas.lidar.coverage')}`)
+  } else if (resolution !== null) {
+    parts.push(`${formatArea(Number(cells) * resolution * resolution)} ${t('canvas.lidar.coverage')}`)
+  }
   return parts.join(' · ')
+}
+
+/** One coverage figure, or the honest label for a count that was never taken. */
+function coverageLabel(cells: string | null): string {
+  return cells === null ? t('canvas.lidar.notCalculated') : Number(cells).toLocaleString()
 }
 
 

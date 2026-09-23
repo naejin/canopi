@@ -234,7 +234,11 @@ export function DataPanel() {
                     <dt>{t('canvas.lidar.data.measurement')}</dt>
                     <dd>{t(`canvas.lidar.kind.${layer.measurement_kind}`)}</dd>
                     <dt>{t('canvas.lidar.coverage')}</dt>
-                    <dd>{formatCoverage(Number(layer.coverage_cells), layer.resolution_m)}</dd>
+                    <dd>
+                      {layer.coverage_cells === null
+                        ? t('canvas.lidar.notCalculated')
+                        : formatCoverage(Number(layer.coverage_cells), layer.resolution_m)}
+                    </dd>
                     <dt>{t('canvas.lidar.data.state')}</dt>
                     <dd>{t(`canvas.lidar.state.${layer.state}`)}</dd>
                     <dt>{t('canvas.lidar.data.analyses')}</dt>

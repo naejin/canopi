@@ -598,7 +598,8 @@
       },
       "webUnavailable": "この設計のラスターデータセットと結果はここに保持されますが、Web 版では描画も処理もされません。インポート・解析・表示にはデスクトップアプリで設計を開いてください。",
       "slopePercent": "傾斜（パーセント）",
-      "removeFromDesign": "デザインから削除"
+      "removeFromDesign": "デザインから削除",
+      "notCalculated": "未計算"
     },
     "basemap": {
       "title": "ベースマップ",

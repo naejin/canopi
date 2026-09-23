@@ -804,19 +804,39 @@ impl DenseWindow {
     }
 }
 
-/// Published value range of the requested generation.
+/// The value range the requested generation is styled with.
+///
+/// Styling consumes the **display** range, which is metadata of its own: a
+/// source generation published without reading its composed pixels has no exact
+/// range but still has a stable colour domain derived from its members. A
+/// generation written before the display columns existed falls back to its
+/// exact range, and one with neither keeps the constant-domain default rather
+/// than inventing a spread.
 fn generation_range(
     library: &super::LidarLibrary,
     request: &TileRequest,
 ) -> Result<(f64, f64), String> {
     let connection = library.catalogue()?;
-    let (table, owner_column) = match request.entity_kind.as_str() {
-        "source" => ("lidar_layer_generations", "layer_id"),
-        "analysis" => ("lidar_analysis_generations", "definition_id"),
+    let (display, exact, table, owner_column) = match request.entity_kind.as_str() {
+        "source" => (
+            "display_min_value, display_max_value",
+            "min_value, max_value",
+            "lidar_layer_generations",
+            "layer_id",
+        ),
+        // A result's own range is exact, so it is both.
+        "analysis" => (
+            "min_value, max_value",
+            "min_value, max_value",
+            "lidar_analysis_generations",
+            "definition_id",
+        ),
         other => return Err(format!("unknown raster entity kind {other}")),
     };
-    let sql =
-        format!("SELECT min_value, max_value FROM {table} WHERE id = ?1 AND {owner_column} = ?2");
+    let sql = format!(
+        "SELECT COALESCE({display}, {exact}) FROM {table}
+         WHERE id = ?1 AND {owner_column} = ?2"
+    );
     connection
         .query_row(
             &sql,

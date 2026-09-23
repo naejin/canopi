@@ -229,6 +229,39 @@ describe('Data panel import job corrections', () => {
     expect(retry).toBeDefined()
   })
 
+  /**
+   * A generation that was never counted reports "Not calculated".
+   *
+   * The distinction is the whole point of the nullable count: unknown coverage
+   * is not zero hectares, and a panel that renders 0 ha states a measurement
+   * nobody took.
+   */
+  it('reports unknown coverage as not calculated rather than zero area', () => {
+    library.layers = [{ ...groundLayer(), coverage_cells: null }]
+    act(() => {
+      render(<DataPanel />, container)
+    })
+    const facts = container.querySelector('dl')
+    const labels = Array.from(facts?.querySelectorAll('dt') ?? []).map((node) => node.textContent)
+    const values = Array.from(facts?.querySelectorAll('dd') ?? []).map((node) => node.textContent)
+    const index = labels.findIndex((label) => label?.toLowerCase() === 'coverage')
+    expect(index, `coverage row among ${labels.join(', ')}`).toBeGreaterThanOrEqual(0)
+    expect(values[index]).toBe('Not calculated')
+  })
+
+  it('still reports a measured zero as zero', () => {
+    library.layers = [{ ...groundLayer(), coverage_cells: '0' }]
+    act(() => {
+      render(<DataPanel />, container)
+    })
+    const facts = container.querySelector('dl')
+    const labels = Array.from(facts?.querySelectorAll('dt') ?? []).map((node) => node.textContent)
+    const values = Array.from(facts?.querySelectorAll('dd') ?? []).map((node) => node.textContent)
+    const index = labels.findIndex((label) => label?.toLowerCase() === 'coverage')
+    expect(index, `coverage row among ${labels.join(', ')}`).toBeGreaterThanOrEqual(0)
+    expect(values[index]).toContain('0 ha')
+  })
+
   it('shows another layer its own import action rather than this job', () => {
     openImportJob.value = {
       job_id: 'job-2',

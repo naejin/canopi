@@ -48,6 +48,7 @@ function layerSummary(overrides: Partial<LidarLayerSummary> = {}): LidarLayerSum
     coverage_cells: '4000000',
     bounds: [-0.43, 48.3, -0.41, 48.31],
     value_range: [12, 88],
+    display_range: { min: 12, max: 88, basis: 'Exact' },
     tilesets: [tileset('elevation')],
     analysis_count: 0,
     ...overrides,

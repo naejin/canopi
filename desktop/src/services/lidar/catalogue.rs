@@ -852,9 +852,16 @@ pub struct GenerationRow {
     pub mosaic_path: Option<String>,
     pub coverage_mask_path: Option<String>,
     pub manifest_json: String,
-    pub coverage_cells: i64,
+    /// Exact valid cells, or `None` when the count is not known. A generation
+    /// published without reading the composed pixels reports unknown rather
+    /// than zero.
+    pub coverage_cells: Option<i64>,
     pub min_value: Option<f64>,
     pub max_value: Option<f64>,
+    /// The range styling and legends use, with the basis it came from.
+    pub display_min_value: Option<f64>,
+    pub display_max_value: Option<f64>,
+    pub display_basis: Option<String>,
     pub bounds_3857: String,
     /// Immutable opaque legacy head this generation overlays, when its own
     /// member history was never recorded.
@@ -955,7 +962,9 @@ pub fn head_generation(
     connection
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
-                    g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
+                    g.coverage_cells, g.min_value, g.max_value,
+                    g.display_min_value, g.display_max_value, g.display_basis,
+                    g.bounds_3857,
                     g.base_generation_id, g.previous_generation_id, g.undo_available
              FROM lidar_layer_heads h
              JOIN lidar_layer_generations g ON g.id = h.generation_id
@@ -976,10 +985,13 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
         coverage_cells: row.get(5)?,
         min_value: row.get(6)?,
         max_value: row.get(7)?,
-        bounds_3857: row.get(8)?,
-        base_generation_id: row.get(9)?,
-        previous_generation_id: row.get(10)?,
-        undo_available: row.get::<_, i64>(11)? != 0,
+        display_min_value: row.get(8)?,
+        display_max_value: row.get(9)?,
+        display_basis: row.get(10)?,
+        bounds_3857: row.get(11)?,
+        base_generation_id: row.get(12)?,
+        previous_generation_id: row.get(13)?,
+        undo_available: row.get::<_, i64>(14)? != 0,
     })
 }
 
@@ -1737,7 +1749,9 @@ pub fn generation_row(
     connection
         .query_row(
             "SELECT g.id, g.layer_id, g.mosaic_path, g.coverage_mask_path, g.manifest_json,
-                    g.coverage_cells, g.min_value, g.max_value, g.bounds_3857,
+                    g.coverage_cells, g.min_value, g.max_value,
+                    g.display_min_value, g.display_max_value, g.display_basis,
+                    g.bounds_3857,
                     g.base_generation_id, g.previous_generation_id, g.undo_available
              FROM lidar_layer_generations g WHERE g.id = ?1",
             [generation_id],
@@ -2989,7 +3003,7 @@ mod tests {
         let with_range = generation_row(&connection, "with-range")
             .unwrap()
             .expect("the measured generation survives");
-        assert_eq!(with_range.coverage_cells, 12);
+        assert_eq!(with_range.coverage_cells, Some(12));
         assert_eq!(with_range.min_value, Some(-3.5));
         assert_eq!(with_range.max_value, Some(11.25));
         let (display_min, display_max, basis) = connection
@@ -3034,7 +3048,7 @@ mod tests {
                 .unwrap()
                 .expect("the unmeasured generation survives")
                 .coverage_cells,
-            4
+            Some(4)
         );
         // The head still names the generation it named before the rebuild.
         assert_eq!(
@@ -3053,7 +3067,7 @@ mod tests {
                 .unwrap()
                 .expect("the generation is still there")
                 .coverage_cells,
-            12
+            Some(12)
         );
     }
 
@@ -3080,7 +3094,9 @@ mod tests {
                         (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
                          coverage_cells, min_value, max_value, bounds_3857)
                      VALUES ('kept', 'layer', '0', '/library/a/mosaic.tif',
-                             '/library/a/coverage.bin', '{}', 7, 1.5, 9.5, '[0,0,1,1]');",
+                             '/library/a/coverage.bin', '{}', 7, 1.5, 9.5, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                     VALUES ('layer', 'kept');",
                 )
                 .unwrap();
             downgrade_generations_to_v17(&connection);
@@ -3094,18 +3110,57 @@ mod tests {
             "a migration that cannot build the new table must fail loudly"
         );
 
-        let connection = rusqlite::Connection::open(&path).unwrap();
-        assert_eq!(
-            schema_version(&connection).unwrap(),
-            17,
-            "the version must not advance past a failed upgrade"
-        );
-        let kept = generation_row(&connection, "kept")
+        {
+            // The schema is still v17, so the row is read through that shape:
+            // the point is that the rebuild left the catalogue intact, not that
+            // a newer reader can open an older file.
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            assert_eq!(
+                schema_version(&connection).unwrap(),
+                17,
+                "the version must not advance past a failed upgrade"
+            );
+            let (cells, min, max) = connection
+                .query_row(
+                    "SELECT coverage_cells, min_value, max_value
+                     FROM lidar_layer_generations WHERE id = 'kept'",
+                    [],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, f64>(1)?,
+                            row.get::<_, f64>(2)?,
+                        ))
+                    },
+                )
+                .expect("the row survives the rolled-back rebuild");
+            assert_eq!(cells, 7);
+            assert_eq!(min, 1.5);
+            assert_eq!(max, 9.5);
+            let head: String = connection
+                .query_row(
+                    "SELECT h.generation_id FROM lidar_layer_heads h WHERE h.layer_id = 'layer'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("the head survives too");
+            assert_eq!(head, "kept");
+        }
+
+        // And the catalogue is still migratable once the obstacle is gone.
+        {
+            let connection = rusqlite::Connection::open(&path).unwrap();
+            connection
+                .execute_batch("DROP TABLE lidar_layer_generations_v18;")
+                .unwrap();
+        }
+        let reopened = open(&path).expect("the obstacle is gone and the upgrade can retry");
+        assert_eq!(schema_version(&reopened).unwrap(), CATALOGUE_VERSION);
+        let kept = generation_row(&reopened, "kept")
             .unwrap()
-            .expect("the row survives the rolled-back rebuild");
-        assert_eq!(kept.coverage_cells, 7);
-        assert_eq!(kept.min_value, Some(1.5));
-        assert_eq!(kept.max_value, Some(9.5));
+            .expect("the row survives the retried upgrade");
+        assert_eq!(kept.coverage_cells, Some(7));
+        assert_eq!(kept.display_basis.as_deref(), Some("exact"));
     }
 
     #[test]

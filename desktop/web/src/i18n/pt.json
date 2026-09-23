@@ -598,7 +598,8 @@
       },
       "webUnavailable": "Os conjuntos de dados raster e resultados deste projeto são preservados aqui, mas não são renderizados nem processados na edição Web. Abra o projeto no aplicativo de desktop para importar, analisar ou exibir.",
       "slopePercent": "Declive (percentagem)",
-      "removeFromDesign": "Remover do projeto"
+      "removeFromDesign": "Remover do projeto",
+      "notCalculated": "Não calculado"
     },
     "basemap": {
       "title": "Mapa base",

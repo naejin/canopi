@@ -3657,7 +3657,8 @@ pub fn apply_import(
                 generation_id: head.as_ref().map(|row| row.id.clone()).unwrap_or_default(),
                 published_cells: head
                     .as_ref()
-                    .map(|row| row.coverage_cells.max(0) as u64)
+                    .and_then(|row| row.coverage_cells)
+                    .map(|cells| cells.max(0) as u64)
                     .unwrap_or(0),
                 changed: false,
                 message: Some("no coverage changes selected; existing generation kept".to_string()),
@@ -3936,7 +3937,12 @@ pub fn apply_import(
         LidarImportProgressPhase::ComposingLayer,
         40,
     );
-    let previous_cells = head.as_ref().map(|h| h.coverage_cells).unwrap_or(0);
+    // An unknown previous count is not zero: it means the comparison below
+    // cannot prove the selection added nothing, so publication proceeds.
+    let previous_cells = head
+        .as_ref()
+        .and_then(|h| h.coverage_cells)
+        .map(|cells| cells.max(0) as u64);
 
     if published_cells == 0 {
         return Ok(ApplyOutcome {
@@ -3946,7 +3952,7 @@ pub fn apply_import(
             message: Some("selection contains no valid pixels; nothing published".to_string()),
         });
     }
-    if head.is_some() && published_cells == previous_cells as u64 && !replace_overlap {
+    if previous_cells == Some(published_cells) && !replace_overlap {
         return Ok(ApplyOutcome {
             generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
             published_cells,
@@ -6770,7 +6776,7 @@ mod tests {
         assert!(head.mosaic_path.is_none() && head.coverage_mask_path.is_none());
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
         assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        assert_eq!(head.coverage_cells, 60 * 45);
+        assert_eq!(head.coverage_cells, Some(60 * 45));
         assert_eq!(head.min_value, Some(5.0));
         assert_eq!(head.max_value, Some(5.0));
         assert_eq!(published_chunk_count(&library, &head.id), 0);
@@ -6814,7 +6820,7 @@ mod tests {
             apply_import(&reopened, &staging_two, true, false, &cancel).expect("second applies");
         assert!(stacked.changed);
         let stacked_head = head_of(&reopened, &layer_id);
-        assert_eq!(stacked_head.coverage_cells, 80 * 45);
+        assert_eq!(stacked_head.coverage_cells, Some(80 * 45));
         assert_eq!(stacked_head.min_value, Some(5.0));
         assert_eq!(stacked_head.max_value, Some(9.0));
         assert_eq!(published_chunk_count(&reopened, &stacked_head.id), 0);
@@ -7320,7 +7326,7 @@ mod tests {
         let composed = head_of(&library, &layer_id);
         assert_eq!(
             composed.coverage_cells,
-            2 * 16,
+            Some(2 * 16),
             "both accepted sources are one composition"
         );
 
@@ -7419,7 +7425,7 @@ mod tests {
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("second");
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, applied.generation_id);
-        assert_eq!(head.coverage_cells, 16);
+        assert_eq!(head.coverage_cells, Some(16));
         assert_eq!(
             head.min_value,
             Some(9.0),
@@ -8258,7 +8264,7 @@ mod tests {
         let head = head_of(&library, &layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
         assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        assert_eq!(head.coverage_cells, 60 * 45 + 40 * 30);
+        assert_eq!(head.coverage_cells, Some(60 * 45 + 40 * 30));
         assert_eq!(head.min_value, Some(5.0));
         assert_eq!(head.max_value, Some(7.0));
         assert_eq!(
@@ -8337,7 +8343,7 @@ mod tests {
         let undone = undo_import(&library, &job_two, &cancel).expect("undo publishes");
         assert!(undone.changed);
         let undone_head = head_of(&library, &layer_id);
-        assert_eq!(undone_head.coverage_cells, 60 * 45);
+        assert_eq!(undone_head.coverage_cells, Some(60 * 45));
         let (values, _) = head_window(
             &library,
             &layer_id,
@@ -8414,7 +8420,7 @@ mod tests {
         assert!(applied.changed);
 
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, expected_cells as i64);
+        assert_eq!(head.coverage_cells, Some(expected_cells as i64));
         assert_eq!(head.min_value, Some(3.0));
         assert_eq!(head.max_value, Some(7.0));
         // The composition materializes nothing at all: its cost is member
@@ -8653,7 +8659,7 @@ mod tests {
         assert!(applied.changed);
 
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, 24 * 32 * 24);
+        assert_eq!(head.coverage_cells, Some(24 * 32 * 24));
         assert_eq!(
             head_member_count(&library, &layer_id),
             24,
@@ -8819,7 +8825,7 @@ mod tests {
             Some(base.id.as_str()),
             "the previous composition points at the original opaque base"
         );
-        assert_eq!(head.coverage_cells, 60 * 45 + 40 * 30);
+        assert_eq!(head.coverage_cells, Some(60 * 45 + 40 * 30));
         assert_eq!(head.min_value, Some(4.0));
         assert_eq!(head.max_value, Some(6.0));
         // The preserved base is untouched.
@@ -8857,7 +8863,7 @@ mod tests {
         let undone = undo_import(&library, &job_two, &cancel).expect("undo publishes");
         assert!(undone.changed);
         let after = head_of(&library, &layer_id);
-        assert_eq!(after.coverage_cells, 60 * 45);
+        assert_eq!(after.coverage_cells, Some(60 * 45));
         let after_members = {
             let connection = library.catalogue().unwrap();
             catalogue::collection_members(&connection, &after.id).unwrap()
@@ -8924,7 +8930,7 @@ mod tests {
         let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
         assert!(applied.changed);
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, 32);
+        assert_eq!(head.coverage_cells, Some(32));
         assert_eq!(
             head_occupied_chunks(&library, &layer_id).len(),
             2,
@@ -8989,7 +8995,7 @@ mod tests {
             "the processing budget admits the pair, charging the sources and not the gap"
         );
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, 32);
+        assert_eq!(head.coverage_cells, Some(32));
         assert_eq!(
             head_member_count(&library, &layer_id),
             2,
@@ -9165,7 +9171,8 @@ mod tests {
         assert!(undone.changed);
         let after = head_of(&library, &layer_id);
         assert_eq!(
-            after.coverage_cells, 0,
+            after.coverage_cells,
+            Some(0),
             "undoing the only import leaves no coverage"
         );
 
@@ -10206,7 +10213,11 @@ mod tests {
             .expect("replace-overlap applies");
         assert!(replaced.changed);
         let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, 16, "replacement adds no new coverage");
+        assert_eq!(
+            head.coverage_cells,
+            Some(16),
+            "replacement adds no new coverage"
+        );
         let (values, valid) = head_window(
             &library,
             &layer_id,
@@ -10243,7 +10254,7 @@ mod tests {
         library.prepare_apply(&job_three).expect("review accepted");
         let extended = apply_import(&library, &staging_three, true, false, &cancel).expect("apply");
         assert!(extended.changed);
-        assert_eq!(head_of(&library, &layer_id).coverage_cells, 32);
+        assert_eq!(head_of(&library, &layer_id).coverage_cells, Some(32));
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
@@ -11998,7 +12009,7 @@ mod tests {
         // are 7 and 9 rather than either source's constant.
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, stacked.generation_id);
-        assert_eq!(head.coverage_cells, 6);
+        assert_eq!(head.coverage_cells, Some(6));
         assert_eq!(head.min_value, Some(7.0));
         assert_eq!(head.max_value, Some(9.0));
 

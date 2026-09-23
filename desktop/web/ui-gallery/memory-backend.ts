@@ -29,6 +29,7 @@ let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
   coverage_cells: '4000000',
   bounds: lidarBounds,
   value_range: [131.2, 287.8],
+  display_range: { min: 131.2, max: 287.8, basis: 'Exact' },
   tilesets: [{
     style: 'elevation',
     source: {
@@ -164,6 +165,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
         state: 'Preparing',
         resolution_m: null,
         coverage_cells: '0',
+        display_range: null,
         bounds: null,
         value_range: null,
         tilesets: [],

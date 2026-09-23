@@ -96,6 +96,29 @@ struct DisplayAdmission {
     queued: Vec<(String, Arc<AtomicBool>)>,
 }
 
+/// The display basis a stored label names.
+///
+/// An unrecognised or absent label is read as `Exact`: that is the conservative
+/// reading, because a range presented as measured never claims more than it is.
+pub(crate) fn display_range_basis(
+    stored: Option<&str>,
+) -> common_types::lidar::LidarDisplayRangeBasis {
+    match stored {
+        Some("source-envelope") => common_types::lidar::LidarDisplayRangeBasis::SourceEnvelope,
+        _ => common_types::lidar::LidarDisplayRangeBasis::Exact,
+    }
+}
+
+/// The stored label for one display basis.
+pub(crate) fn display_basis_label(
+    basis: common_types::lidar::LidarDisplayRangeBasis,
+) -> &'static str {
+    match basis {
+        common_types::lidar::LidarDisplayRangeBasis::Exact => "exact",
+        common_types::lidar::LidarDisplayRangeBasis::SourceEnvelope => "source-envelope",
+    }
+}
+
 /// The admission name one inspection lookup occupies.
 ///
 /// Scoped by surface so an inspection cancel can never signal a raster tile's
@@ -809,7 +832,14 @@ impl LidarLibrary {
                 .map(|entry| common_types::lidar::LidarGenerationHistoryEntry {
                     id: entry.generation_id,
                     created_at: entry.created_at,
-                    coverage_cells: entry.coverage_cells.max(0) as u64,
+                    coverage_cells: entry.coverage_cells.map(|cells| cells.max(0) as u64),
+                    display_range: entry.display_min_value.zip(entry.display_max_value).map(
+                        |(min, max)| common_types::lidar::LidarDisplayRange {
+                            min,
+                            max,
+                            basis: display_range_basis(entry.display_basis.as_deref()),
+                        },
+                    ),
                     source_count: u32::try_from(entry.member_count).unwrap_or(u32::MAX),
                     sequence: u32::try_from(entry.sequence.max(0)).unwrap_or(u32::MAX),
                     is_head: entry.is_current,

@@ -598,7 +598,8 @@
       },
       "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them.",
       "slopePercent": "Slope (percent)",
-      "removeFromDesign": "Remove from Design"
+      "removeFromDesign": "Remove from Design",
+      "notCalculated": "Not calculated"
     },
     "basemap": {
       "title": "Basemap",

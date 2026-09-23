@@ -598,7 +598,8 @@
       },
       "webUnavailable": "De rasterdatasets en resultaten van dit ontwerp blijven hier bewaard, maar worden in de Web-editie niet weergegeven of verwerkt. Open het ontwerp in de desktopapp om ze te importeren, analyseren of tonen.",
       "slopePercent": "Helling (procent)",
-      "removeFromDesign": "Uit ontwerp verwijderen"
+      "removeFromDesign": "Uit ontwerp verwijderen",
+      "notCalculated": "Niet berekend"
     },
     "basemap": {
       "title": "Basiskaart",

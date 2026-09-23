@@ -327,7 +327,12 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(snapshot.layers.len(), 1);
     let layer = &snapshot.layers[0];
     assert_eq!(layer.id, layer_id);
-    assert!(layer.coverage_cells > 3_000_000);
+    assert!(
+        layer
+            .coverage_cells
+            .expect("this fixture measured its coverage")
+            > 3_000_000
+    );
     assert!(
         layer
             .tilesets
@@ -505,7 +510,12 @@ fn e2e_import_publish_slope_restart_reuse() {
         .expect("replacement undo publishes");
     assert!(undo.changed);
     let after_undo = reopened.library_snapshot().expect("snapshot after undo");
-    assert!(after_undo.layers[0].coverage_cells > 3_000_000);
+    assert!(
+        after_undo.layers[0]
+            .coverage_cells
+            .expect("this fixture measured its coverage")
+            > 3_000_000
+    );
     assert_tileset_has_visible_pixels(&engine, &after_undo.layers[0].tilesets[0]);
     let undo_head = {
         let connection = reopened.catalogue().unwrap();
@@ -607,7 +617,11 @@ fn e2e_sparse_generation_lifecycle() {
         "the sparse route publishes resolved chunks"
     );
     assert!(head.mosaic_path.is_none(), "a sparse head owns no mosaic");
-    assert!(head.coverage_cells > 3_000_000, "{}", head.coverage_cells);
+    assert!(
+        head.coverage_cells
+            .expect("this fixture measured its coverage")
+            > 3_000_000
+    );
     let chunks = {
         let connection = library.catalogue().unwrap();
         catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap()
@@ -616,7 +630,8 @@ fn e2e_sparse_generation_lifecycle() {
     assert_eq!(chunks.len(), 4, "only occupied chunks are stored");
     println!(
         "sparse import: {} cells in {} chunks, value range {:?}..{:?}",
-        head.coverage_cells,
+        head.coverage_cells
+            .expect("this fixture measured its coverage"),
         chunks.len(),
         head.min_value,
         head.max_value
@@ -791,7 +806,7 @@ fn e2e_sparse_generation_lifecycle() {
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
     assert_eq!(
         snapshot.layers[0].coverage_cells,
-        head.coverage_cells.max(0) as u64,
+        Some(head.coverage_cells.unwrap_or(0).max(0) as u64),
         "coverage survives restart"
     );
     assert!(matches!(
@@ -826,7 +841,8 @@ fn e2e_sparse_generation_lifecycle() {
     };
     assert_eq!(after_undo.id, undone.generation_id);
     assert_eq!(
-        after_undo.coverage_cells, 0,
+        after_undo.coverage_cells,
+        Some(0),
         "undoing the only import leaves no coverage"
     );
     // The replaced generation and its chunks stay as immutable history.
@@ -969,7 +985,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         import::GenerationStorageFormat::OrderedMembersV1,
         "the batch publishes as an ordered collection of source occurrences"
     );
-    assert_eq!(head.coverage_cells, 48_000_000);
+    assert_eq!(head.coverage_cells, Some(48_000_000));
     let members = {
         let connection = library.catalogue().unwrap();
         catalogue::collection_members(&connection, &head.id).unwrap()
@@ -1017,7 +1033,8 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     );
     println!(
         "applied: {} cells, {} source occurrences, {} retained source COGs, range {:?}..{:?}",
-        head.coverage_cells,
+        head.coverage_cells
+            .expect("this fixture measured its coverage"),
         members.len(),
         source_cogs,
         head.min_value,
@@ -1102,12 +1119,15 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
-    assert_eq!(snapshot.layers[0].coverage_cells, 48_000_000);
+    assert_eq!(snapshot.layers[0].coverage_cells, Some(48_000_000));
     assert!(matches!(
         snapshot.layers[0].tilesets[0].source,
         common_types::lidar::LidarTileSource::NativeGeneration { .. }
     ));
-    println!("restart: {} cells", snapshot.layers[0].coverage_cells);
+    println!(
+        "restart: {} cells",
+        snapshot.layers[0].coverage_cells.unwrap_or(0)
+    );
 
     // The combined working set is a sampled process-tree total: the root plus
     // every observed live descendant, summed per tick. Resident sets are
@@ -1260,7 +1280,11 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     );
     println!(
         "applied: {} valid cells, {} invalid, range {:?}..{:?}",
-        head.coverage_cells, review.invalid_cells, head.min_value, head.max_value
+        head.coverage_cells
+            .expect("this fixture measured its coverage"),
+        review.invalid_cells,
+        head.min_value,
+        head.max_value
     );
     // The plane is 400,000,000 cells and its four declared holes are exactly
     // 3,020,700 of them, so coverage is the grid minus the holes. Checking both
@@ -1273,7 +1297,9 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
         .sum();
     assert_eq!(hole_cells, 3_020_700, "the declared holes' own area");
     assert_eq!(
-        head.coverage_cells as u64 + review.invalid_cells,
+        head.coverage_cells
+            .expect("this fixture measured its coverage") as u64
+            + review.invalid_cells,
         400_000_000,
         "valid coverage plus the declared holes is the whole grid"
     );
@@ -1316,9 +1342,15 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
     assert_eq!(
         snapshot.layers[0].coverage_cells,
-        head.coverage_cells as u64
+        Some(
+            head.coverage_cells
+                .expect("this fixture measured its coverage") as u64
+        )
     );
-    println!("restart: {} cells", snapshot.layers[0].coverage_cells);
+    println!(
+        "restart: {} cells",
+        snapshot.layers[0].coverage_cells.unwrap_or(0)
+    );
 
     let result_layer_id = snapshot.layers[0].id.clone();
     let generation_id = match &snapshot.layers[0].tilesets[0].source {

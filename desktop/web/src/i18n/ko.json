@@ -598,7 +598,8 @@
       },
       "webUnavailable": "이 설계의 래스터 데이터셋과 결과는 여기에 보존되지만 웹 에디션에서는 렌더링되거나 처리되지 않습니다. 가져오기, 분석 또는 표시하려면 데스크톱 앱에서 설계를 여십시오.",
       "slopePercent": "경사(퍼센트)",
-      "removeFromDesign": "디자인에서 제거"
+      "removeFromDesign": "디자인에서 제거",
+      "notCalculated": "계산되지 않음"
     },
     "basemap": {
       "title": "배경 지도",

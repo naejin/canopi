@@ -241,6 +241,29 @@ export type LidarDeleteImpact = {
 	analysis_ids: string[],
 };
 
+// The range a generation is displayed with, and what it is based on.
+export type LidarDisplayRange = {
+	min: number,
+	max: number,
+	basis: LidarDisplayRangeBasis,
+};
+
+/**
+ *  Where a display range came from.
+ *
+ *  The distinction is the point: a source envelope may include values that no
+ *  composed pixel actually holds, so it is a stable colour domain rather than a
+ *  scientific statistic.
+ */
+export type LidarDisplayRangeBasis =
+// Measured from the composed value itself.
+"Exact" |
+/**
+ *  The union of the stored member ranges, which may include occluded
+ *  extremes.
+ */
+"SourceEnvelope";
+
 // Detected external raster engine used behind the narrow LiDAR adapter.
 export type LidarEngineStatus = {
 	available: boolean,
@@ -252,7 +275,9 @@ export type LidarEngineStatus = {
 export type LidarGenerationHistoryEntry = {
 	id: string,
 	created_at: string,
-	coverage_cells: string,
+	// Exact valid cells, or `None` when that count is not known.
+	coverage_cells: string | null,
+	display_range: LidarDisplayRange | null,
 	/**
 	 *  Position of this version in the layer's publication order, counting from
 	 *  the oldest. Unique within the layer, so it is the identity cue History
@@ -427,9 +452,20 @@ export type LidarLayerSummary = {
 	state: LidarResultState,
 	// Native source-grid resolution in metres for accepted coverage.
 	resolution_m: number | null,
-	coverage_cells: string,
+	/**
+	 *  Exact valid cells in the accepted composition.
+	 *
+	 *  `None` when the exact count is not known. Publishing membership does not
+	 *  require reading the composed pixels, so a generation that was published
+	 *  without that scan reports unknown coverage rather than zero: zero means
+	 *  "measured, and there is nothing there".
+	 */
+	coverage_cells: string | null,
 	bounds: [number, number, number, number] | null,
+	// Exact composed value range, when it is known.
 	value_range: [number, number] | null,
+	// The range styling and legends use, labelled by how it was derived.
+	display_range: LidarDisplayRange | null,
 	tilesets: LidarTileset[],
 	analysis_count: number,
 };

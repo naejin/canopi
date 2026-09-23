@@ -24,36 +24,39 @@ pub fn library_snapshot(
         let head = catalogue::head_generation(connection, &layer.id)?;
         let analysis_count =
             catalogue::list_definitions_for_layer(connection, &layer.id)?.len() as u32;
-        let (coverage_cells, resolution_m, bounds, value_range, tilesets) = match &head {
-            Some(head) => {
-                let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
-                    .ok()
-                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
-                    .map(bounds_3857_to_wgs84);
-                let range = match (head.min_value, head.max_value) {
-                    (Some(min), Some(max)) => Some([min, max]),
-                    _ => None,
-                };
-                let manifest = super::import::read_generation_manifest(&head.manifest_json).ok();
-                let registered =
-                    tilesets_for(display_connection, "source", &layer.id, head.id.clone());
-                let tilesets = if registered.is_empty() {
-                    native_tilesets("elevation", &head.id, manifest.as_ref(), bounds)
-                } else {
-                    registered
-                };
-                (
-                    head.coverage_cells as u64,
-                    manifest
-                        .as_ref()
-                        .map(|manifest| manifest.grid.pixel_size().0),
-                    bounds,
-                    range,
-                    tilesets,
-                )
-            }
-            None => (0, None, None, None, Vec::new()),
-        };
+        let (coverage_cells, display_range, resolution_m, bounds, value_range, tilesets) =
+            match &head {
+                Some(head) => {
+                    let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
+                        .ok()
+                        .and_then(|v| <[f64; 4]>::try_from(v).ok())
+                        .map(bounds_3857_to_wgs84);
+                    let range = match (head.min_value, head.max_value) {
+                        (Some(min), Some(max)) => Some([min, max]),
+                        _ => None,
+                    };
+                    let manifest =
+                        super::import::read_generation_manifest(&head.manifest_json).ok();
+                    let registered =
+                        tilesets_for(display_connection, "source", &layer.id, head.id.clone());
+                    let tilesets = if registered.is_empty() {
+                        native_tilesets("elevation", &head.id, manifest.as_ref(), bounds)
+                    } else {
+                        registered
+                    };
+                    (
+                        head.coverage_cells.map(|cells| cells.max(0) as u64),
+                        display_range_of(head),
+                        manifest
+                            .as_ref()
+                            .map(|manifest| manifest.grid.pixel_size().0),
+                        bounds,
+                        range,
+                        tilesets,
+                    )
+                }
+                None => (Some(0), None, None, None, None, Vec::new()),
+            };
         layer_summaries.push(LidarLayerSummary {
             id: layer.id.clone(),
             name: layer.name.clone(),
@@ -68,6 +71,7 @@ pub fn library_snapshot(
             coverage_cells,
             bounds,
             value_range,
+            display_range,
             tilesets,
             analysis_count,
         });
@@ -91,7 +95,9 @@ pub fn library_snapshot(
                 if manifest.format.is_ordered_collection() {
                     catalogue::collection_member_count(connection, &head.id)? > 0
                 } else {
-                    head.coverage_cells > 0
+                    // Unknown coverage is not empty coverage: a composition that
+                    // was never counted still has its members.
+                    head.coverage_cells != Some(0)
                 }
             }
         };
@@ -214,6 +220,32 @@ pub fn library_snapshot(
         analyses: analysis_summaries,
         engine: engine_status,
     })
+}
+
+/// The display range of a source generation.
+///
+/// The stored display columns are authoritative. A generation written before
+/// they existed falls back to its exact range, which is what it was always
+/// displayed with, and a generation with neither reports none rather than a
+/// guess: styling then uses its own constant-domain handling.
+fn display_range_of(
+    head: &catalogue::GenerationRow,
+) -> Option<common_types::lidar::LidarDisplayRange> {
+    match (head.display_min_value, head.display_max_value) {
+        (Some(min), Some(max)) => Some(common_types::lidar::LidarDisplayRange {
+            min,
+            max,
+            basis: super::display_range_basis(head.display_basis.as_deref()),
+        }),
+        _ => match (head.min_value, head.max_value) {
+            (Some(min), Some(max)) => Some(common_types::lidar::LidarDisplayRange {
+                min,
+                max,
+                basis: common_types::lidar::LidarDisplayRangeBasis::Exact,
+            }),
+            _ => None,
+        },
+    }
 }
 
 /// The parts of either manifest an on-demand tileset needs.
