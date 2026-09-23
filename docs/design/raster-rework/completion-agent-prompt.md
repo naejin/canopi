@@ -1,143 +1,75 @@
-# Finish the raster candidate through verified production workflows
+# Finish the raster candidate with bounded ownership repairs
 
-Status: active — sole implementation prompt; continue reviewed candidate `68852cbd`.
+Status: active — sole implementation prompt; continue reviewed candidate `592e04ed`.
 Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
-Current guidance: [reviewer-authored tests and evidence](completion-acceptance-tests.md), [ownership correction](completion-ownership-design.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
+Current guidance: [current repair decisions and tests](completion-review-592e04ed.md), [C0–C5](completion-design.md), [ownership contract](completion-ownership-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#final-correction-debrief-to-deliver).
 
-## Assignment and first actions
+## Assignment
 
-Finish the authorized whole-rework candidate, not just the newest review examples.
-Users must be able to import supported numeric sources, manage ordered Data Layers,
-run/retry slope, inspect physical values, save/reopen independent presentation,
-and use Web Location/shared basemaps. Preserve Float32/NoData, originals, immutable
-history, legacy compatibility and the selected GDAL/native-reader architecture.
-Acceptance, primary-checkout integration and release remain separate.
+Finish all locally executable authorized work before one consolidated handoff.
+Repair F1 installation/attempt ownership and F2 retained listener cleanup; close
+R50 saved-definition action/IPC/native proof; audit and complete remaining C0–C5
+and R27/R43 evidence where prerequisites exist. The linked repair decisions settle
+behavior and test boundaries. Make ordinary implementation choices locally.
+Preserve numeric/NoData behavior, immutable history, compatibility, source-only
+import, ordered presentation and all accepted repairs. No architecture rewrite,
+new dependencies, runtime framework, new Python code, or renewed GeoLibre research.
+Use TypeScript and Rust for new tests/tooling; existing repository Python validators
+remain allowed. Do not replace working existing tooling merely because it is Python.
 
-Inspect `git status --short --branch`, worktrees, ancestry and
-`bd show canopi-j571.1`; claim/resume that bead in the candidate worktree. Merge
-this committed documentation handoff and test commit `0a3a29f4` from
-`test/raster-acceptance-handoff`, with history preserved. The test branch already
-descends from `68852cbd`; do not restart from the documentation checkout. Start from
-`68852cbd` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
-accepted repairs. The primary documentation checkout’s
+## Start and execute
+
+Inspect status/worktrees and `bd show canopi-j571.1`; claim/resume the existing bead
+in the candidate checkout. Merge this documentation handoff preserving history.
+Continue from `592e04ed` or its verified successor; retain test handoff `0a3a29f4`,
+its five repairs, foundations `34e4ded4`/`f61f8494` and later accepted fixes. Do not
+start implementation from this older documentation checkout. The primary checkout's
 `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
-are user-owned: do not stage, stash, overwrite or discard them.
+are user-owned; do not stage, stash or overwrite them.
 
-Start by running the [acceptance packet](completion-acceptance-tests.md): expect
-five frontend failures and 76 passing controls; the two native GDAL tests pass.
-The frontend failures are deliberate behavioral regressions, not a broken baseline
-to skip or bless with expected-failure markers. Then read the [ownership contract](completion-ownership-design.md),
-C0–C5 and the source-import amendment once.
-The ownership correction is the current seam-specific authority; older reviews
-are historical evidence where their sequencing differs.
-Use relevant subsystem guides as each slice requires; older review records are
-supporting evidence, not a stack of alternate assignments. Reconcile the existing
-bead design/acceptance links to this prompt; do not create another completion bead.
-Inventory disk, existing fixture paths/generators, isolated GUI tooling, package
-assets and non-publishing platform checks early, then continue local work.
+1. Reproduce F1 with the supplied test; write and validate F2's retention detector.
+   Repair each in a vertical RED → GREEN → refactor cycle with healthy controls.
+   Add the adjacent replacement/finally cases specified in the repair decisions.
+2. Complete R50 at the actual boundaries. Preserve passing production behavior;
+   record baseline GREEN honestly when no repair is necessary.
+3. Trace the changed owners and direct callers through setup, reuse, failure,
+   replacement and teardown. Fix in-scope discoveries and rerun affected checks.
+   Check both visible effects and retained ownership; do not stop at helper tests.
+4. Audit existing whole-candidate requirements, run feasible remaining local proof,
+   then final C5 gates. Required unavailable evidence remains explicitly partial.
 
-## Execute through these internal milestones
+Do not weaken assertions, mock the owner under test, fabricate RED through a broken
+fixture, or add sleeps to force ordering. Keep tests in normal Vitest/Rust suites.
+Use bounded fault seams already present. Record meaningful expected/actual failures
+and named GREEN commands in the receipt; no transcript quota or new tracker.
+Keep bd checkpoints resumable: revision, remaining obligation, last failure, next
+command. Finish ordinary repairs, gates and docs without asking for continuation.
 
-| Order | Outcome and owned surfaces | Exit before continuing |
-| --- | --- | --- |
-| 1 | Complete the existing basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | Make the four reviewer map regressions green; verify current bounds, zoom/credit updates, single-control ownership and mount listener cleanup; preserve healthy caller cases |
-| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Make late-disposal status regression green; retain E2/E3 and E5 controls; finish R50 action/IPC/native evidence and rerun supplied R51 proof |
-| 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Run supplied native mid-write capacity/write/preservation/worker-retry tests; retain timeout/cancel checks and complete available R27/R43 measurements |
-| 4 | Demonstrate the combined product and deliver it: existing Desktop/Web/gallery recipes, receipt and guides | C0–C5 caller audit, required final-tree gates and available driven workflows complete; unsupported claims corrected and exact external gaps recorded |
+## Gates and delivery
 
-These are checkpoints, not requests for permission or separate deliveries.
-Dependencies may justify reordering. Keep one writer; subagents are not authorized.
-Routine helper/API organization inside the named owners, small test gates, diagnosis,
-regressions, i18n and contract-preserving fixes are delegated. Keep all eleven
-locales aligned if copy changes. Reuse accepted controls; no new analysis editor.
+Use the [acceptance packet commands](completion-acceptance-tests.md) plus the new
+cases. Run the complete [C5 gates](completion-design.md#c5--final-candidate-independent-review-and-debrief)
+on the final combined code, including any required rebase preserving merges.
+This includes frontend typecheck/full tests, gallery/both builds, bindings, native
+fmt/strict workspace Clippy/check/tests/policy, docs and available fixture/workflow
+lanes. Rerun affected gates after fixes; unchanged code does not need repeated broad
+gates solely for receipt edits. Never silently repair unrelated mainline failures.
 
-The reviewer owns the supplied test oracles; the implementer owns coherent repairs,
-additional discovery regressions and final verification. Passing the supplied packet
-is necessary but not sufficient for C0–C5 acceptance. Do not return for a new prompt
-after making only these tests green.
+Update current receipt rows in place: code revision, exact command/result, real
+boundary, residual limitation. Separate defects, unwritten local proof and actual
+external prerequisites. Retain capacity measurements with their original scope.
+Update affected agent guides and current-guidance links. Complete the existing
+six-question debrief with its current next-use evaluation; remove expired instructions.
 
-Use the repository TDD skill for every changed behavior: write one regression,
-run and inspect its intended RED, implement the smallest coherent GREEN, then
-refactor while green. Record the compact evidence required by the ownership
-correction; do not substitute a final test total for TDD. First reproduce each concrete failure, then fix
-it and examine its adjacent success/failure/replacement/disposal behavior. Do not
-mock away the owner or capability being verified. Record actual red/green evidence;
-source-traced findings without a reproduction are not retrospectively red tests.
-The supplied probes are starting points: committed tests must use the normal test
-runner and cannot depend on `/tmp` or ignored scratch artifacts.
+Escalate only a material conflict with scientific/compatibility, shared ownership,
+persistence/dependency or product-scope decisions. Give the counterexample, blocked
+work, smallest alternatives and recommendation; continue unaffected work. Missing
+external prerequisites do not block unrelated local completion. Optional new work
+goes to bd follow-ups, not silent scope expansion. Keep the bead open while required
+acceptance remains unmet; do not equate passing the supplied tests with acceptance.
 
-Use the pinned GeoLibre references in the ownership correction for lifecycle and
-reconciliation patterns; no further toolkit survey is needed. Preserve existing
-`wbgeotiff` adoption. No engine search, whole-toolkit import, geometry dependency,
-generic scheduler, new qualification harness or speculative abstraction.
-
-## Continue independently; escalate only material decisions
-
-Work until all authorized, available implementation and verification is complete.
-Do not hand back after focused green tests, one milestone, a context checkpoint,
-or a missing unrelated fixture. Use bd checkpoints with revision, observed outcome,
-remaining blocker and next executable command, then resume. Do not create Markdown
-progress lists or a second task tracker.
-
-Unset fixture variables are discovery work: inspect the documented existing inputs
-and reuse bounded generators where authorized. Missing real inputs, disk, keys or
-hosts block only their evidence. Small queue, capacity, clock and fault tests and
-local broad gates are work to perform, not external prerequisites by default.
-Never fabricate real-fixture accuracy from synthetic inputs or lift ceilings by
-removing guards without the amendment's bounded evidence. Record a specific failed
-command/prerequisite once; retry only after a relevant condition changes.
-
-Escalate only an actual conflict with fixed scientific/compatibility behavior,
-shared ownership/persistence/dependency decisions, consequential product scope,
-or authorization. Provide revision, counterexample, blocked scope, smallest
-alternatives and recommendation; continue unaffected work. Ordinary failing tests,
-local helper changes and small verification-tool repairs do not require approval.
-The main reviewer owns omitted decisions and overprescription in this handoff.
-
-## Self-review, improvement and delivery
-
-Before broad gates, perform one bounded contract-to-caller review of the changed
-owners and their direct callers. For each changed event or async path trace setup,
-normal delivery, failure/retry, replacement and teardown. Inspect removed behavior
-in the diff: every deleted event subscription must be relocated or deliberately
-retired with contract evidence. A new helper name does not prove ownership moved.
-Repair in-scope findings and repeat affected focused checks; no review-count quota.
-
-Use the existing receipt as an acceptance cross-reference, not a second tracker:
-each E1–E5/M/L/R obligation links to a named test, actual boundary, observed result
-and residual limit. Check that test names and mock boundaries support the prose.
-No “done” row may rely on a mocked owner for the behavior it claims, a missing intended assertion, or an old-tip
-gate or unwritten required local proof. This audit is implementation work, not a
-request for another reviewer round. Keep bd checkpoints sufficient to resume after
-context loss: current commit, remaining obligation, last failure and next command.
-
-
-Before returning, trace each changed production caller through settlement or
-teardown and audit all remaining C0–C5 obligations. Repair in-scope defects found
-there. Optional cleanup/new features go to bd follow-ups without delaying closure.
-Run the complete [C5 gate set](completion-design.md#c5--final-candidate-independent-review-and-debrief)
-on the final combined code and after any required rebase preserving merges:
-full frontend tests/typecheck, gallery and both editions, generated bindings,
-Rust fmt/strict workspace clippy/check/tests/native policy, docs, and available
-fixture/package lanes. Earlier-tip or focused gates cannot substitute. Do not
-repeat broad gates for unchanged code solely because the receipt was edited.
-
-Use the existing [receipt](completion-receipt.md#current-correction-acceptance):
-for each obligation report code revision, named regression/caller, exact command
-and outcome, observation level and remaining limitation. Distinguish implemented,
-locally verified, independently accepted, integrated and released. Missing required
-proof remains partial. Keep code defects separate from missing proof and actual
-external prerequisites; leave the bead open while its acceptance is unmet.
-
-Apply small demonstrated improvements to existing tests/scripts/guides during work,
-verify their failure case and healthy control, then return to product work. Record
-material discoveries as they occur; finish the [six-question debrief](review-and-debrief.md#final-correction-debrief-to-deliver)
-after gates. Evaluate next-use benefit and unnecessary machinery, including this
-prompt's cost. No new skills, model router, metrics service or automation platform.
-
-Commit intended changes and bead records without touching unrelated work. Push the
-candidate to both configured destinations and verify matching tips/upstream status.
-Return one consolidated handoff with revisions/branch, R44–R51 and R27/R43/C0–C5
-dispositions including E1–E5, required gates, actual driven workflows, exact remaining blockers,
-self-review discoveries and tested versus proposed improvements. Stop there for
-independent acceptance. Do not integrate, release or clean branches automatically.
+Commit intended files and authorized bead updates; push the candidate to both
+configured destinations and verify matching tips. Return revision/branch, F1/F2/R50
+results, R27/R43 and C0–C5 disposition, gates, driven workflows, exact blockers and
+the concise debrief. Stop for independent review; do not integrate, release or clean
+branches. The user remains courier; no automatic delegation is authorized.
