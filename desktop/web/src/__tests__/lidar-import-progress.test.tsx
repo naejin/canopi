@@ -2,9 +2,17 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { locale } from '../app/settings/state'
-import { importPanelOpen, openImportJob } from '../app/lidar/library-store'
-import { LidarImportPanel } from '../components/panels/lidar/LidarLayersSection'
+import { openImportJob } from '../app/lidar/library-store'
+import { LidarLayersSection } from '../components/panels/lidar/LidarLayersSection'
 
+/**
+ * Import progress is reported where the import was started.
+ *
+ * The retired review screen mounted a second surface the user had to navigate
+ * back to; the one-step route never waits for a decision, so the Layers
+ * presentation reports the phase in place and Data reports the same job beside
+ * its own layer.
+ */
 describe('LiDAR import progress', () => {
   let container: HTMLDivElement
 
@@ -12,17 +20,15 @@ describe('LiDAR import progress', () => {
     locale.value = 'en'
     container = document.createElement('div')
     document.body.append(container)
-    importPanelOpen.value = true
   })
 
   afterEach(() => {
     render(null, container)
     openImportJob.value = null
-    importPanelOpen.value = false
     container.remove()
   })
 
-  it('shows the backend phase and percentage with determinate progress semantics', async () => {
+  it('reports the backend phase and percentage in the presentation list', async () => {
     openImportJob.value = {
       job_id: 'job-1',
       layer_id: 'layer-1',
@@ -32,100 +38,31 @@ describe('LiDAR import progress', () => {
       progress: { phase: 'RenderingMap', percent: 68 },
     }
 
-    await act(() => render(<LidarImportPanel />, container))
+    await act(() => render(<LidarLayersSection />, container))
 
-    const progressbar = container.querySelector<HTMLElement>('[role="progressbar"]')
-    expect(progressbar?.getAttribute('aria-label')).toBe('Rendering map')
-    expect(progressbar?.getAttribute('aria-valuemin')).toBe('0')
-    expect(progressbar?.getAttribute('aria-valuemax')).toBe('100')
-    expect(progressbar?.getAttribute('aria-valuenow')).toBe('68')
-    expect(container.textContent).toContain('Rendering map')
-    expect(container.textContent).toContain('68%')
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toContain('Rendering map')
+    expect(status?.textContent).toContain('68%')
   })
 
-  it('confirms an addition above the existing sources instead of a merge decision', async () => {
+  it('reports a settled job by its state instead of a stale phase', async () => {
     openImportJob.value = {
-      job_id: 'job-2',
+      job_id: 'job-1',
       layer_id: 'layer-1',
-      state: 'AwaitingReview',
-      review: {
-        job_id: 'job-2',
-        layer_id: 'layer-1',
-        compatible: true,
-        issues: [],
-        sources: [{
-          filename: 'mnt.tif',
-          sha256: 'a'.repeat(64),
-          size_bytes: '1024',
-          width: 4,
-          height: 4,
-          pixel_size_m: 1,
-          nodata: null,
-          value_range: [0, 9],
-          compatible: true,
-          issues: [],
-        }],
-        uncovered_cells: '16',
-        overlap_cells: '0',
-        invalid_cells: '0',
-        before_preview_path: null,
-        after_preview_path: null,
-      },
-      message: null,
+      state: 'Failed',
+      review: null,
+      message: 'broken.tif: not recognized as a supported file format',
       progress: null,
     }
 
-    await act(() => render(<LidarImportPanel />, container))
+    await act(() => render(<LidarLayersSection />, container))
 
-    // The retired merge route offered "Add uncovered" / "Replace overlap" and
-    // a Before/After tab pair; the ordered route adds the selection as one
-    // group above the accepted sources and says so.
-    expect(container.textContent).not.toContain('Replace overlap')
-    expect(container.textContent).not.toContain('Before')
-    expect(container.textContent).toContain('The selected sources are added above')
-    const confirm = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Add sources')
-    expect(confirm).toBeDefined()
-    expect(confirm?.disabled).toBe(false)
+    const status = container.querySelector('[role="status"]')
+    expect(status?.textContent).toBe('Import failed')
   })
 
-  it('refuses the confirmation while any selected source is incompatible', async () => {
-    openImportJob.value = {
-      job_id: 'job-3',
-      layer_id: 'layer-1',
-      state: 'AwaitingReview',
-      review: {
-        job_id: 'job-3',
-        layer_id: 'layer-1',
-        compatible: false,
-        issues: [],
-        sources: [{
-          filename: 'foreign.tif',
-          sha256: 'b'.repeat(64),
-          size_bytes: '1024',
-          width: 4,
-          height: 4,
-          pixel_size_m: 1,
-          nodata: null,
-          value_range: [0, 9],
-          compatible: false,
-          issues: ['horizontal CRS differs from the layer'],
-        }],
-        uncovered_cells: '0',
-        overlap_cells: '0',
-        invalid_cells: '0',
-        before_preview_path: null,
-        after_preview_path: null,
-      },
-      message: null,
-      progress: null,
-    }
-
-    await act(() => render(<LidarImportPanel />, container))
-
-    expect(container.textContent).toContain('horizontal CRS differs from the layer')
-    const confirm = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Add sources')
-    expect(confirm?.disabled).toBe(true)
+  it('reports nothing when no import is tracked', async () => {
+    await act(() => render(<LidarLayersSection />, container))
+    expect(container.querySelector('[role="status"]')).toBeNull()
   })
 })

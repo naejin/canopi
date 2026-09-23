@@ -20,9 +20,13 @@ const LIDAR_POLL_INTERVAL_MS = 1500
 /** Library-side snapshot; null until the first successful read. */
 export const lidarLibrary = signal<LidarLibrarySnapshot | null>(null)
 
-/** The import job currently open for review, if any. */
+/**
+ * The import job this session is tracking.
+ *
+ * A job is progress, not a decision: the one-step route has no review to return
+ * to, so this exists for the progress, cancel and retry the Data surface shows.
+ */
 export const openImportJob = signal<LidarImportJob | null>(null)
-export const importPanelOpen = signal(false)
 export const lidarStatusMessage = signal<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -68,7 +72,6 @@ export async function refreshOpenImportJob(): Promise<void> {
     const next = await lidarGetImportJob(tracked.job_id)
     if (openImportJob.value?.job_id !== tracked.job_id) return
     openImportJob.value = next
-    if (next?.state === 'AwaitingReview') importPanelOpen.value = true
   } catch (error) {
     lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
   }
@@ -96,21 +99,7 @@ export function ensureLidarPolling(): void {
 export async function trackImportJob(jobId: string): Promise<void> {
   const job = await lidarGetImportJob(jobId)
   openImportJob.value = job
-  importPanelOpen.value = true
   ensureLidarPolling()
-}
-
-export function showTrackedImport(): void {
-  if (openImportJob.value !== null) importPanelOpen.value = true
-}
-
-export function hideTrackedImport(): void {
-  importPanelOpen.value = false
-}
-
-export function dismissTrackedImport(): void {
-  importPanelOpen.value = false
-  openImportJob.value = null
 }
 
 export function stopLidarPolling(): void {
@@ -124,7 +113,6 @@ export function installLidarLibraryObserver(): () => void {
   void refreshLidarLibrary()
   return () => {
     stopLidarPolling()
-    importPanelOpen.value = false
   }
 }
 

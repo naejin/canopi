@@ -4,7 +4,6 @@ import type {
   LidarPresentationEntryKind,
 } from '../../generated/contracts'
 import {
-  lidarApplyImport,
   lidarImportSources,
   lidarCancelAnalysisJob,
   lidarCancelImport,
@@ -20,7 +19,6 @@ import {
   lidarRemoveLayerSource,
   lidarRestoreLayerVersion,
   lidarUndoLayerChange,
-  lidarStageImport,
   type LidarLayerCollection,
   type LidarLayerEditOutcome,
   type LidarLayerHistoryPage,
@@ -129,35 +127,6 @@ export async function importSourcesIntoLayer(
   await withLidarError(async () => {
     const jobId = await lidarImportSources(layerId, paths)
     await trackImportJob(jobId)
-  })
-}
-
-export async function startImportForLayer(layerId: string): Promise<void> {
-  await withLidarError(async () => {
-    const selection = await open({
-      multiple: true,
-      title: 'Add TIFF sources',
-    })
-    if (selection === null) return
-    const paths = Array.isArray(selection) ? selection : [selection]
-    if (paths.length === 0) return
-    const jobId = await lidarStageImport(layerId, paths)
-    await trackImportJob(jobId)
-  })
-}
-
-export async function applyOpenImport(
-  addUncovered: boolean,
-  replaceOverlap: boolean,
-): Promise<void> {
-  const job = openImportJob.value
-  if (job === null) {
-    return
-  }
-  await withLidarError(async () => {
-    await lidarApplyImport(job.job_id, addUncovered, replaceOverlap)
-    await refreshOpenImportJob()
-    ensureLidarPolling()
   })
 }
 

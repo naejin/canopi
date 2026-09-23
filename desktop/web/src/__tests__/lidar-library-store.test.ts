@@ -10,9 +10,7 @@ vi.mock('../ipc/lidar', () => ({
 }))
 
 import {
-  dismissTrackedImport,
   ensureLidarPolling,
-  importPanelOpen,
   lidarLibrary,
   openImportJob,
   stopLidarPolling,
@@ -48,37 +46,26 @@ describe('LiDAR library polling', () => {
     getImportJobMock.mockReset()
     lidarLibrary.value = null
     openImportJob.value = null
-    importPanelOpen.value = false
     stopLidarPolling()
   })
 
   afterEach(() => {
     stopLidarPolling()
-    dismissTrackedImport()
+    openImportJob.value = null
     vi.useRealTimers()
   })
 
-  it('keeps a staged import visible and stops polling when review is ready', async () => {
+  it('tracks a running import and stops polling once it settles', async () => {
+    // The one-step route settles at complete; there is no review state to wait
+    // for, so polling must stop when the job is no longer working.
     getImportJobMock
       .mockResolvedValueOnce(importJob('Staging'))
-      .mockResolvedValueOnce({ ...importJob('AwaitingReview'), review: {
-        job_id: 'job-1',
-        layer_id: 'layer-1',
-        sources: [],
-        uncovered_cells: '0',
-        overlap_cells: '0',
-        invalid_cells: '0',
-        compatible: true,
-        issues: [],
-        before_preview_path: null,
-        after_preview_path: null,
-      } })
+      .mockResolvedValueOnce(importJob('Complete'))
 
     await trackImportJob('job-1')
     await flushMicrotasks()
 
-    expect(openImportJob.value?.state).toBe('AwaitingReview')
-    expect(importPanelOpen.value).toBe(true)
+    expect(openImportJob.value?.state).toBe('Complete')
     expect(getImportJobMock).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(5_000)

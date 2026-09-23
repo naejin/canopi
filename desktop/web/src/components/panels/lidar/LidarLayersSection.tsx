@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import {
-  importPanelOpen,
   lidarLibrary,
   lidarStatusMessage,
-  dismissTrackedImport,
-  hideTrackedImport,
   openImportJob,
   readLidarPresentation,
-  showTrackedImport,
   type LidarPresentationItem,
 } from '../../../app/lidar/library-store'
 import {
   analyseLayerAsSlope,
-  applyOpenImport,
-  cancelOpenImport,
   createLidarLayer,
   deleteLidarAnalysis,
   deleteLidarLayer,
@@ -29,7 +23,6 @@ import {
   setLidarEntryVisibility,
   movePresentationEntry,
   removePresentationEntry,
-  startImportForLayer,
 } from '../../../app/lidar/actions'
 import {
   lidarMapViewBounds,
@@ -47,7 +40,6 @@ import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import layerStyles from '../../canvas/LayerPanel.module.css'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
-import { DockPanelHeader } from '../../shared/DockPanelHeader'
 import styles from './lidar-layers-section.module.css'
 
 type DetailMode = 'settings' | 'history' | 'delete'
@@ -365,15 +357,17 @@ export function LidarLayersSection() {
           </button>
         </div>
       )}
-      {trackedImport !== null && !importPanelOpen.value && (
-        <button type="button" className={styles.pendingReview} onClick={showTrackedImport}>
-          <span>
-            {trackedImport.progress
-              ? `${t(`canvas.lidar.progressPhase.${trackedImport.progress.phase}`)} · ${trackedImport.progress.percent}%`
-              : t(`canvas.lidar.jobState.${trackedImport.state}`)}
-          </span>
-          <span>{t('canvas.lidar.openImport')}</span>
-        </button>
+      {/*
+        A running import is progress, not a decision to return to: the one-step
+        route never waits for review, so this reports the phase and percentage
+        in place instead of opening a second screen.
+      */}
+      {trackedImport !== null && (
+        <p className={styles.pendingReview} role="status">
+          {trackedImport.progress
+            ? `${t(`canvas.lidar.progressPhase.${trackedImport.progress.phase}`)} · ${trackedImport.progress.percent}%`
+            : t(`canvas.lidar.jobState.${trackedImport.state}`)}
+        </p>
       )}
       {/*
         One flat geographic presentation list in the Design\'s own saved order.
@@ -573,119 +567,6 @@ export function LidarLayersSection() {
   )
 }
 
-export function LidarImportPanel() {
-  const job = openImportJob.value
-
-  useEffect(() => {
-    const cancelOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || job === null) return
-      if (!['Staging', 'AwaitingReview', 'Applying'].includes(job.state)) return
-      event.preventDefault()
-      void cancelOpenImport()
-    }
-    document.addEventListener('keydown', cancelOnEscape)
-    return () => document.removeEventListener('keydown', cancelOnEscape)
-  }, [job?.job_id, job?.state])
-
-  if (job === null) return null
-  const review = job.review
-  const active = job.state === 'Staging' || job.state === 'Applying'
-  const progress = active ? job.progress : null
-  const progressPercent = progress === null
-    ? null
-    : Math.max(0, Math.min(100, Math.round(progress.percent)))
-  const progressLabel = progress === null
-    ? t(`canvas.lidar.jobState.${job.state}`)
-    : t(`canvas.lidar.progressPhase.${progress.phase}`)
-  const terminal = job.state === 'Complete' || job.state === 'Cancelled' || job.state === 'Failed'
-  return (
-    <aside className={layerStyles.panel} aria-label={t('canvas.lidar.review.title')}>
-      <DockPanelHeader
-        title={t('canvas.lidar.review.title')}
-        actions={(
-          <button type="button" className={styles.headerBack} onClick={hideTrackedImport}>
-            {t('canvas.lidar.backToLayers')}
-          </button>
-        )}
-      />
-      <div className={styles.reviewBody}>
-        <section className={styles.reviewSection}>
-          <h3>{t(`canvas.lidar.jobState.${job.state}`)}</h3>
-          {job.message && <p className={styles.detailSummary}>{job.message}</p>}
-          {active && (
-            <>
-              <div className={styles.progressMeta}>
-                <span>{progressLabel}</span>
-                {progressPercent !== null && <strong>{progressPercent}%</strong>}
-              </div>
-              <div
-                className={`${styles.progress} ${progressPercent !== null ? styles.progressDeterminate : ''}`}
-                role="progressbar"
-                aria-label={progressLabel}
-                aria-valuemin={progressPercent !== null ? 0 : undefined}
-                aria-valuemax={progressPercent !== null ? 100 : undefined}
-                aria-valuenow={progressPercent ?? undefined}
-              >
-                <span style={progressPercent !== null ? { width: `${progressPercent}%` } : undefined} />
-              </div>
-              <p className={styles.detailSummary}>{t('canvas.lidar.progressBackground')}</p>
-            </>
-          )}
-        </section>
-        {review && (
-          <>
-            <section className={styles.reviewSection}>
-              <h3>{t('canvas.lidar.review.sources')}</h3>
-              {review.sources.map((source) => (
-                <details key={source.sha256} className={styles.sourceFile}>
-                  <summary>{source.filename}</summary>
-                  <p>{source.width.toLocaleString()} × {source.height.toLocaleString()} · {source.pixel_size_m.toLocaleString()} m</p>
-                  {source.issues.map((issue) => <p key={issue} className={styles.errorMessage}>{issue}</p>)}
-                </details>
-              ))}
-            </section>
-            <section className={styles.reviewSection}>
-              {/* The retired overlap counters described a merge decision the
-                  ordered model no longer makes; the confirmation states the
-                  one rule that still applies. */}
-              <p className={styles.detailSummary}>{t('canvas.lidar.review.addSourcesHint')}</p>
-            </section>
-          </>
-        )}
-        {job.state === 'Failed' && (
-          <section className={styles.reviewSection}>
-            <p className={styles.errorMessage}>{job.message ?? t('canvas.lidar.importFailed')}</p>
-            <button type="button" className={styles.secondaryButton} onClick={hideTrackedImport}>{t('canvas.lidar.addAgain')}</button>
-          </section>
-        )}
-        {job.state === 'Cancelled' && <p className={styles.reviewSection}>{t('canvas.lidar.cancelledAcknowledgement')}</p>}
-        {job.state === 'Complete' && <p className={styles.reviewSection}>{t('canvas.lidar.completeAcknowledgement')}</p>}
-      </div>
-      <div className={styles.reviewFooter}>
-        {job.state === 'AwaitingReview' && review && (
-          <button
-            type="button"
-            className={styles.primaryButton}
-            disabled={!review.compatible}
-            onClick={() => void applyOpenImport(true, false)}
-          >
-            {t('canvas.lidar.review.addSources')}
-          </button>
-        )}
-        {(active || job.state === 'AwaitingReview') && (
-          <button type="button" className={styles.secondaryButton} onClick={() => void cancelOpenImport()}>
-            {t('canvas.lidar.review.cancel')}
-          </button>
-        )}
-        {terminal && (
-          <button type="button" className={styles.primaryButton} onClick={dismissTrackedImport}>
-            {t('canvas.lidar.done')}
-          </button>
-        )}
-      </div>
-    </aside>
-  )
-}
 
 /**
  * Keyboard-accessible reorder controls for one presentation entry.
@@ -800,7 +681,6 @@ function SourceActions({ item, coverageCells, bounds, engineUnavailable, showRet
           onViewedCoverage()
         }}>{t('canvas.lidar.viewCoverage')}</button>}
         {showReturn && location && <button type="button" className={styles.secondaryButton} onClick={viewDesignLocation}>{t('canvas.lidar.returnToLocation')}</button>}
-        <button type="button" className={styles.secondaryButton} disabled={engineUnavailable} onClick={() => void startImportForLayer(item.id)}>{t('canvas.lidar.addTiffs')}</button>
         {item.detail === 'GroundElevation' && coverageCells !== 0 && <button type="button" className={styles.secondaryButton} disabled={engineUnavailable} onClick={() => void analyseLayerAsSlope(item.id)}>{t('canvas.lidar.createSlope')}</button>}
       </div>
     </>
