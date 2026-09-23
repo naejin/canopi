@@ -1,6 +1,6 @@
 # Raster rework completion receipt
 
-Status: evidence — R15–R25 repaired and gated at `bf43af19`; C1/R26 (the streamed source-import route) is **not** implemented, so this is a partial delivery, not a verified release candidate. Prior capacity, gate and workflow evidence below is retained and revision-labelled.
+Status: evidence — R15–R25 repaired, C1 implemented and R26 measured at `b4ab8fe6`, where the ignored GDAL lane is green (70 passed, 0 failed). This is a reviewable candidate, **not** an accepted or released one: no driven Desktop/Web session, no live provider key, no Windows/macOS build and no packaged smoke. Prior capacity, gate and workflow evidence below is retained and revision-labelled.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
@@ -14,17 +14,20 @@ failed while 16 existing tests passed; the review names their scope and location
 
 The docs handoff merged into the candidate at `5dfae6bc` (conflicts in
 `docs/agent/lidar.md` and this receipt resolved toward the handoff's current
-status with the candidate's revision-labelled evidence preserved). The repaired
-tip is `bf43af19`.
+status with the candidate's revision-labelled evidence preserved). The R15–R25
+repair tip was `bf43af19`. The [source-import amendment](source-import-design.md)
+has since landed and is measured at `b4ab8fe6`; that revision's ignored
+GDAL-backed lane is green with every fixture named, and its figures are in
+[R26 measurements at the code tip](#r26-measurements-at-the-code-tip).
 
 | Boundary | Current evidence / required next proof |
 | --- | --- |
-| C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip |
-| C1 / R26 import | **Implemented except measurement.** Publication derives its metadata from stored member facts without reading composed pixels; exact composed facts are nullable and labelled; tiles and legends consume the labelled display range; the user flow is choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`) with progress, cancel and retry in Data; and the retired review route — composed scan, previews, decision screen, commands and payload — is deleted. **R26's own resource evidence for the new route has not been measured**, so no capacity claim is made. See "C1 disposition" |
+| C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip. The primary checkout and its user-owned files were never staged, stashed or overwritten |
+| C1 / R26 import | **Implemented and measured at `b4ab8fe6`.** Production import is one route: choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`) with progress, cancel and retry in Data. Publication derives its metadata from stored member facts without reading composed pixels; exact composed facts are nullable and labelled; tiles, previews and legends consume the labelled display range; the retired review route — composed scan, previews, decision screen, commands and payload — is deleted. R26's resource evidence now exists for the new route: see [C1 disposition and R26](#c1-disposition-and-r26) |
 | C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
 | C3 / R15–R18 inspection | **Repaired** at `85d19ca7` with R18's cancellation half and R16's published-result lane added later: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest` and are read end to end in both units, lattice indices are signed, the session is fenced to the document session/entity/request/head, and the lookup is admitted into the shared bounded read queue and cancellable by the surface that started it. GDAL-backed oracle tests pass; live isolated-Desktop value verification not re-run |
 | C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
-| C5 combined candidate | **Partial.** Frontend gates green at `bf43af19` (283 files / 2757 tests, tsc, gallery check, both edition builds). Rust gates recorded below. No packaged-window smoke, no Windows/macOS build, no live provider/placement observation, no independent acceptance |
+| C5 combined candidate | **Code gates green at `b4ab8fe6`** (see [Gate results at the delivered tip](#gate-results-at-the-delivered-tip)). No packaged-window smoke, no Windows/macOS build, no driven Desktop/Web session, no live provider/placement observation, and no independent acceptance |
 
 ## R15–R25 repair record
 
@@ -37,7 +40,7 @@ repair revision and the committed regression that now pins it.
 | R16 read results through their storage contract | `inspection.rs` parsed analysis heads as `import::GenerationManifest` (results carry `analysis::ResultManifest`) and took units from the source layer, so a published slope failed before sampling | `85d19ca7`: source and result resolve separately; a result reads its published chunks and reports its own degrees/percent unit | `inspection::tests::a_slope_result_reports_the_unit_it_was_computed_in`, and `analysis::tests::inspection_reads_a_published_slope_result_in_both_units` — a real plane published through the import path, sampled at a known cell in both units against the fixture's geometry (45° / 100 %). Mutation-verified: restoring the reviewed parse fails it with `invalid type: null, expected f32`, which is the reviewer's exact mechanism |
 | R17 do not clip to the original lattice | `containing_pixel` rejected negative cell coordinates and cells beyond `grid.width/height`, so valid appended coverage read as NoData | `85d19ca7`: signed lattice coordinates with a representability guard only; coverage is the reader's answer; preserved dense sources read through their compatibility lease instead of a blanket refusal | `cells_beyond_the_lattice_rectangle_keep_their_signed_coordinate`, `the_containing_pixel_is_half_open_at_the_far_edges`, `an_unrepresentable_lattice_index_is_refused` |
 | R18 bind inspection to the lifecycle | Review probes: a pending answer published after the head changed, and inspection survived a Design replacement. The pointer disposer was discarded and `sampleInspectionCentre` had no caller | `85d19ca7`: the session names the document session identity, entity, request and expected head; the head is re-checked at publication; the disposer is owned and released; a Design replacement ends the session; a focusable Sample at view centre button runs the same command | `does not publish an answer whose head moved while it was in flight`, `releases inspection when the Design is replaced`, `releases the canvas gesture when inspection ends or is reconciled away`, `samples the viewport centre through the same command as a click` |
-| R18 **remaining half** — real read cancellation | `lidar_sample_pixel` still builds `AtomicBool::new(false)` and never enters the shared read admission, so a superseded or exited inspection cannot stop bounded native work and the frontend never cancels it | **Not implemented.** The seam is identified and unused: `LidarLibrary::admit_display_request(request_id)` / `DisplayTicket::cancel_flag()` / `cancel_display_request(request_id)`, used by `lidar_raster_tile` and `lidar_cancel_raster_tile`, plus an opaque request id on `LidarSampleRequest` | None. No regression exists for it; the review's R18 text is the specification |
+| R18 **remaining half** — real read cancellation | `lidar_sample_pixel` still built `AtomicBool::new(false)` and never entered the shared read admission, so a superseded or exited inspection could not stop bounded native work and the frontend never cancelled it | `b4ab8fe6`: the request carries an opaque `request_id`, the command takes the same display admission the tile route uses (`admit_sample_request`, named `sample-{id}`), and `lidar_cancel_sample_pixel` cancels the real flag through `cancel_sample_request`; the frontend keeps `pendingRequestId` and cancels a superseded lookup instead of orphaning it | `mod.rs`: `inspection_reads_share_the_display_admission_and_are_scoped` (GDAL lane), and `lidar-inspection.test.ts`: `cancels the superseded lookup by the id it was submitted under`. Mutation-verified: restoring `AtomicBool::new(false)` fails the cancellation regression, which is the reviewer's exact mechanism |
 | R19 make the official request path usable | Review probes: the published descriptor kept `session={session}`, no transformer supplied a token, the viewport request omitted the key, expiry parsing accepted a number where the response has an epoch-seconds string, and copyright/`maxZoomRects` were ignored | `39cfb9a5`: credential-free template plus a per-map `transformRequest` that adds the live session and key for the fixed Google tile endpoint only; keyed viewport request; string expiry; copyright and `maxZoomRects` become the layer's attribution and zoom ceiling; metadata failure is an actionable unavailable state | `serves an authenticated tile request through the map transport`, `authenticates viewport requests and installs their attribution and zoom`, `reports viewport metadata failure as an actionable unavailable state` |
 | R20 wait for a mounted map's style | `bindBasemapProvider` applied a ready contribution straight from `onCreate`, before MapLibre finishes loading even an inline style, where `addSource` throws | `39cfb9a5`: the binding waits for style readiness and applies the latest published state once ready | `waits for a mounted map style before mutating it, then applies the latest state` |
 | R21 finish shared provider ownership | The Canvas built a static contribution, so a configured key was silently ignored there; Location/WorldMap captured the key once, refreshed no viewport metadata, renewed no session and never disposed their provider | `39cfb9a5`: one concrete provider per map lifetime on Canvas, Location and World Map; the configuration is read per call; settled `moveend` refreshes metadata in place; renewal is scheduled before expiry; the provider and its credential are disposed with the map | `follows the official Google session path when a device key is configured` (canvases constructor transform + outgoing URL), `clears the transport credential when the provider is disposed`, `keeps the map contribution stable across a key change without recreating it` |
@@ -50,22 +53,32 @@ No finding needed a counterexample: each was reproduced and repaired.
 
 ## Gate results at the delivered tip
 
+Every gate below ran on `b4ab8fe6`, the code tip of this delivery, on this host.
+The log names are the retained evidence in the ignored scratch tree.
+
 | Gate | Result |
 | --- | --- |
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 364 `canopi-desktop` + 41 + 7 + 2, 0 failed |
+| `cargo check --workspace` | PASS |
+| `cargo test --workspace` | PASS — 363 `canopi-desktop` + 41 + 1 + 7 + 2, 0 failed (70 ignored, run separately below) |
 | `native_command_policy::tests` | PASS — 13 |
-| Frontend `npx vitest run` | PASS — 283 files / 2757 tests |
+| Frontend `npx vitest run` | PASS — 284 files / 2766 tests |
 | `npx tsc --noEmit`, `npm run check:ui` | PASS |
 | `npm run build`, `npm run build:web` | PASS |
-| `npm run gen:types` / `check:types` | PASS — no binding drift |
+| `npm run check:types` | PASS — no binding drift |
 | `python3 scripts/check_docs.py` | 0 errors |
-| **GDAL-backed ignored LiDAR lane** | **61 passed / 7 failed** after the review-route deletion. All seven are failures already present at the reviewed baseline, and two baseline failures went away with their subject, so the deletion added none — a comparison by name, not an assumption. The seven: three IGN-MNT e2e tests cannot find their fixture; one import test still asserts the retired 25,000,000-cell union-envelope refusal; one asserts a finite-NoData value range this host's GDAL 3.8.4 does not produce; two resource-gate tests hit the sampler's "incremental unavailable (no complete workload sample)" guard while other builds ran. Filed as `canopi-a7ot` rather than silently accepted. **The lane is not a green baseline**, so no positive capacity claim rests on it |
+| **GDAL-backed ignored LiDAR lane** | **PASS — 70 passed / 0 failed**, 865.88 s, `--test-threads=1 --nocapture`, with `CANOPI_LIDAR_E2E_FIXTURE`, `CANOPI_LIDAR_MNH_DIR` and `CANOPI_LIDAR_CAPACITY_PLANE` naming real fixtures (`round4-ignored-lane-b4ab8fe6.log`). This discharges `canopi-a7ot`: the four code-level failures it tracked are repaired or repurposed to the current contract, and the fixture-dependent ones run because their fixtures are named. A run without those variables is **not** a pass and no lane result is claimed for it |
 
 Not run, and therefore not claimed: Windows and macOS builds, the packaged-window
 smoke, a **driven** isolated Desktop or Web session, live restricted-Google-key
 qualification, and any non-publishing CI dispatch.
+
+`b4ab8fe6` is the code tip; the commits that follow it on this branch change
+documentation and bead metadata only, so these results transfer to them and to any
+later revision whose difference from `b4ab8fe6` is likewise non-source. A gate
+result transfers across a commit that changes no source, and not across one that
+does.
 
 ### Isolated Desktop session at `96ef5d33` (partial observation)
 
@@ -103,8 +116,10 @@ undriven.
 
 ## C1 disposition and R26
 
-C1 is **partially implemented**: the flow, the command and the metadata split
-have landed, and what remains is deletion plus measurement.
+C1 is **implemented and measured at `b4ab8fe6`**: the flow, the command, the
+metadata split and the deletion have landed on the candidate, and the new route's
+resource evidence now exists. What is not claimed is acceptance, live drive or
+platform coverage.
 
 **Landed — publication metadata without reading composed pixels.** Catalogue v18
 relaxes `coverage_cells` to nullable and adds
@@ -116,15 +131,15 @@ the Layers empty state, the coverage fact, the history rows and the Data panel.
 `collection::measure` is now a derivation over stored member facts: exact facts
 are reported only when derivable (empty composition, one-member composition,
 all-members-empty), and everything else reports unknown exact coverage and range
-plus a `SourceEnvelope` display range. Tiles, review previews and legends consume
-the display range with a per-column fallback to the exact range. Reorder, remove,
-Undo and Restore therefore publish without decoding the prior collection, and the
-ordered lifecycle test still verifies the composed window, reorder, remove, undo
-and restore cell by cell.
+plus a `SourceEnvelope` display range. Tiles and legends consume the display range
+with a per-column fallback to the exact range. Reorder, remove, Undo and Restore
+therefore publish without decoding the prior collection, and the ordered lifecycle
+test still verifies the composed window, reorder, remove, undo and restore cell by
+cell.
 
 *Two defects the GDAL lane caught while landing that:* a single four-argument
 `COALESCE` over the display and exact columns returned the *minimum* for both
-bounds, collapsing the colour domain to a constant; and the preview scale read
+bounds, collapsing the colour domain to a constant; and the display scale read
 only the exact columns, so an unknown exact range collapsed it. Both now fall
 back per column, and both failures are pinned by the lane.
 
@@ -160,42 +175,78 @@ intact. Coverage that belonged to the deleted surface alone (review traversal,
 preview pixels, the retired union-envelope admission rule, awaiting-review
 restart) is retired with it.
 
-**What still remains.**
+### R26 measurements at the code tip
 
-1. Measure the new route: peak live scratch separate from durable bytes,
-   cancellation settlement, queue refusal, low-space/write failure at the real
-   publication seam, and cold/three-warm display timing.
+Every figure below was produced by the production callers with no admission
+override at `b4ab8fe6`, in one `--ignored --test-threads=1` lane run on an
+otherwise idle host (`.rq-scratch/round4-ignored-lane-b4ab8fe6.log`, 70 passed /
+0 failed / 865.88 s; the earlier isolated runs of the first two rows are committed
+at `5a1012b0` and `b495b11c`).
 
-The old 24-file / 2 GiB-per-file / 2 GiB-total / 400,000,000-processing-cell
-policy is therefore still the production admission rule, and R26's activation
-condition remains unmet in the sense the amendment defines: the new route's own
-resource evidence does not exist. This is a scope and budget boundary, not an
-external blocker. Every finding R15–R26 raised against the candidate's *code* now
-has a repair and a committed regression; R26 is the outstanding acceptance item.
+| Input (identity) | Cells and bytes | Durable | Temporary and settled residue | Sampled peak RSS (50 ms ticks) | Cold display / repeats |
+| --- | --- | --- | --- | --- | --- |
+| 24 synthetic placed rasters, 32×24 cells each in three columns eight rows apart (24 occurrences, the production file ceiling; GDAL-converted GeoTIFFs) | 18,432 processing cells over a **60,809,728-cell** union; **0 resolved composition bytes** | none (fixture root removed) | 0 files / 0 bytes | **48 MiB** incremental (base 49, peak 98); largest single member 49 MiB over 2 members — 117 complete / 61 incomplete ticks | — |
+| 12 real IGN MNH tiles, 16,000,513 B each (**192,006,156 B** in) | 48,000,000 valid cells; exact coverage **unknown**, display range **[-1.7019, 39.2840]** as `source-envelope` | **596,449,840 B in 57 files** | **0 files / 0 bytes**, job scratch `[]` | **66 MiB** incremental (base 32, peak 99); largest single member 68 MiB — 1555 / 63 ticks | z18 **2510 ms**, z17 **2586 ms**, z16 **4585 ms**, z15 **4740 ms**; three repeats each **0 ms** (bounded tile cache) |
+| Synthetic capacity plane, **1,677,760,928 B** (20,000×20,000 Float32 = 400,000,000 cells, 4 declared NoData rectangles) | **396,979,300 valid cells**, exact range **[3,469,900.25, 3,477,399.75]** | **4,951,034,977 B in 9 files** | **0 files / 0 bytes**, job scratch `[]` | **177 MiB** incremental (base 32, peak 209); largest single member 177 MiB — 10734 / 16 ticks | z14 **8115 ms** cold; three repeats **0 ms** |
+| IGN MNT ground tile (4,000,000 cells) + slope | 1 occurrence, slope publishes 4 result and 4 quality chunks | — | — | **66 MiB** incremental (base 37, peak 104) — 330 / 21 ticks | — |
 
-Until the measurements land, the retired compatibility claims (the
-overlap-replacement checkbox, compulsory merged-source publication and the Q
-prerequisite) remain retired, and no "unlimited capacity" claim is made.
+Reading the table honestly:
+
+- **The peak is a lower bound.** The sampler measures the test process tree every
+  50 ms and reports incomplete ticks; a shorter peak between ticks can be missed,
+  and the RSS sum double-counts shared pages. Both facts are printed by each gate
+  and are not suppressed here.
+- **The 1 GiB combined budget is met with margin in all four lanes**, and the
+  composition line shows these peaks are *one dominant process plus a modest
+  remainder*, not accumulating concurrency: 177 of 209 MiB is one member on the
+  plane, 68 of 99 MiB on the MNH batch. No lane approaches the 128 MiB per
+  conversion cache ceiling by accumulation.
+- **Durable and temporary are reported separately.** Temporary and settled
+  residue are **zero**, with no job scratch left behind, in both large lanes.
+- **Display timing is a measurement, not a quota.** A cold tile over the
+  400M-cell plane took 8.1 s and over the 12-tile batch 2.5–4.7 s; every repeat
+  was served from the bounded tile cache in under the timer's resolution. Nothing
+  here is a latency promise, and no optimization target is derived from it.
+- **"No prior-composition pixel reads" is structural, not instrumented.** There is
+  no read counter seam; the claim rests on `collection::measure` calling only
+  catalogue member facts plus arithmetic over member extents, on
+  `publish_applied_snapshot` composing nothing, and on the observed **0 resolved
+  composition bytes** for the 24-source batch. It is stated as a property of the
+  code path, not as an instrumented count.
+- **What the lane does not measure.** There is no queue-depth bound: the lanes show
+  no queue accumulation, which is an observation and not a limit. The
+  low-space/write-failure path is still unverified with probe evidence and its
+  environment limits are recorded in [C1 low-space and write-failure](#c1-low-space-and-write-failure-not-verified-and-here-is-why).
+  Cancellation settlement was measured at **101.4 ms** against the 5 s contract
+  bound (`a_cancelled_engine_conversion_settles_within_the_contract_bound`).
+
+**Retired compatibility claims stay retired.** The overlap-replacement checkbox,
+compulsory merged-source publication and the Q prerequisite remain retired, and no
+"unlimited capacity" claim is made. The production admission rule is 24 files,
+2 GiB per file, 2 GiB per selection and 400,000,000 processing cells charged per
+occurrence; the 25,000,000-cell envelope guard survives only for the preserved
+dense format.
+
+**The preserved dense route.** It is test-forced and unreachable in production
+(`chunked_publication_enabled` is `const true` outside tests). Its publications
+record no snapshot lineage, so a dense head offers no composition Undo — the
+pre-rework behaviour, unchanged, and now asserted as such instead of assumed
+away. On the next accepted import the shipped ordered route wraps that dense head
+as one indivisible `previous-composition` member, which is what restores Undo for
+a grandfathered layer; the real-fixture dense lane now drives exactly that
+sequence, including the restored head rendering the same tile.
 
 
-For capacity report input identities, cell/byte counts, source/output TIFF format,
-working-memory and cache/queue scope, sampling interval, simultaneous child/app
-RSS, peak live scratch, durable storage and settled residue **separately**. Include
-low-space/write failure with unchanged old head/result and successful retry;
-metadata-only publication should show no prior-composition pixel reads. Record
-cold/three-warm display timing without turning it into an optimization quota.
-
-For live proof identify edition, dev versus package, OS, isolated profile/fixture,
-UI trigger, expected visible outcome, observed outcome, head/result identity and
-artifact. For inspection include clicked geographic coordinate, expected native
-cell/value/units and observed readout. For provider tests separate fake transport,
-actual outgoing request construction and real account response; redact secrets.
-An unavailable host/key/fixture names the exact command or observation prevented.
-
-At final consolidation keep one current capability/gate table and one R15–R26
-repair table, with links to necessary logs. Retain revision-labelled historical
-measurements but collapse repeated round narration and duplicated gate output.
-No source image, private raster, key, token or full personal path enters Git.
+**The capacity report this section owed.** The table above plus its notes are
+that report: input identities, cells and bytes, working memory with its sampling
+interval, cache/concurrency composition, peak live scratch, durable storage and
+settled residue are separate columns; low-space/write failure is recorded as
+unverified with its environment limits instead of being passed off as covered;
+the metadata-only claim is stated structurally rather than as an instrumented
+count; and cold/three-repeat display timing is recorded as a measurement rather
+than an optimization quota. The live-proof fields (edition, dev versus package,
+isolated profile, UI trigger, observed outcome) are deliberately empty: no driven
+session exists, and the specific prerequisites are named rather than implied.
 
 ## Prior delivery at 5d0a5e0b
 

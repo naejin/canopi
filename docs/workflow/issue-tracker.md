@@ -11,6 +11,7 @@ Canopi uses **bd (beads)** for task, bug, feature, epic, chore, and decision tra
 - Use `decision` beads for durable scope and rejection memory; search them with `--status all`.
 - Use `bd remember` for terse cross-session memory, not full briefs or specifications.
 - Keep the durable problem statement or request in the bead `description`.
+- `bd update <id> --notes <text>` **replaces** the whole notes field. Append progress with `--append-notes` so a long checkpoint history survives, splitting a checkpoint that exceeds the OS argument limit into ordered pieces.
 - Store AFK-ready handoff briefs, fix plans, and implementation guidance in the bead `design` field.
 - Store concrete, observable completion checklists in the bead `acceptance` field.
 - When batch creation flows cannot express `design`, `acceptance`, or readiness labels directly, backfill those fields immediately.

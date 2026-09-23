@@ -1,6 +1,6 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — historical deliveries and independent review through `5d0a5e0b`; R15–R25 repaired and gated at `bf43af19`; C1/R26 and the correction-cycle synthesis remain open.
+Status: evidence — historical deliveries and independent review through `5d0a5e0b`; R15–R25 repaired and gated at `bf43af19`; C1 implemented and R26 measured at `b4ab8fe6`, whose ignored GDAL lane is green. Independent acceptance, live drive and platform coverage remain open.
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
@@ -32,6 +32,87 @@ a specific tool/test/guide improvement. Reuse the event row instead of appending
 another round narrative. On the next actual use, record observed benefit, renewed
 failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
 model router, new dashboard or qualification framework is authorized.
+
+### Final correction debrief at `b4ab8fe6` (C1 implemented and measured)
+
+1. **What now works through the actual app, and what still lacks observation.**
+   The shipped import is one job: choose files → choose the interpretation →
+   Import, one job that prepares, validates and publishes atomically with
+   progress, Cancel and Retry in Data; composition, reorder, remove, Undo and
+   Restore publish without reading composed pixels; inspection samples the point
+   the canvas displayed and reads a published result in its own units; the three
+   map surfaces share one basemap provider with an authenticated tile request.
+   The [receipt](completion-receipt.md) owns the per-finding evidence, the gate
+   table and the R26 measurements; this section links rather than copying them.
+   Still unobserved: any **driven** isolated Desktop or Web session (the launch,
+   render, own-profile and scoped-teardown halves were observed; the drive was
+   not), a live restricted-Google-key session, Windows/macOS builds, the packaged
+   smoke and CI. Nothing above is claimed as accepted: the code is gated and
+   measured, not reviewed again.
+2. **Which defects escaped, and through which gap.** Two families, both already
+   named at `bf43af19`. R15–R22 escaped because the tests never triggered the real
+   event: the offset oracle restated the implementation, the provider test
+   asserted that *no* credential reached the map (protecting the defect), the
+   key-change test never changed a key, and no test called the lifecycle cleanup
+   the inspection session installed. R23–R25 escaped because the test boundary sat
+   at the action layer instead of the panel that shows the result. This round added
+   a third instance of the same gap in the test *fixtures*: the two real-fixture
+   lanes still asserted the retired route's contract — a settled job reporting
+   `Finalizing 100`, and a resolved-chunk payload on an ordered composition — so
+   they failed as soon as the route they describe changed, and they are the reason
+   the ignored lane had to be read as a contract rather than as a smoke test. The
+   earliest economical detector is unchanged and now cheaper to apply: assert the
+   artifact a user or wire actually receives (the outgoing URL, the published
+   value, the settled job state), which immediately fails when the route changes;
+   and run the real-fixture lane in the same delivery that changes a production
+   route. The C1 amendment itself was a design overprescription owned by the main
+   agent, not an implementation deviation.
+3. **Did source-only import remove old collection reads and mandatory preview
+   work?** Yes, and the answer is now evidenced rather than structural only. The
+   composed scan, both preview renders, the decision preview and the review
+   payload are deleted with the route; `collection::measure` is a derivation over
+   stored member facts; a 24-occurrence batch publishes **0 resolved composition
+   bytes**, and the largest lane imports 396,979,300 cells with only member
+   metadata and 4,951,034,977 durable bytes in 9 files. What replaced exact
+   metadata: an exact count and range when they are derivable (empty, one member,
+   all members empty), otherwise unknown exact coverage plus a separately labelled
+   `SourceEnvelope` display range, which is what tiles, legends and the panels
+   consume. Users therefore receive a truthful display range and an honest "not
+   measured" coverage for multi-source compositions; the old composed-exact
+   numbers survive unchanged for pre-existing generations. The comparison is
+   between the observed new-route lanes above and the retired route's own
+   revision-labelled figures, not between equivalent inputs.
+4. **Which task-local changes demonstrably helped on their next use.** Keep:
+   mutation-checking a new regression before trusting it (this round it was applied
+   to the scoped sampling, the byte cap, the status render and the submit latch,
+   and it caught load-bearing assertions); asserting a transport artifact instead
+   of a descriptor; and the `bd` checkpoint discipline (revise: `bd update
+   --notes` replaces history — use `--append-notes`, now recorded as a durable rule
+   in the [issue tracker guide](../../workflow/issue-tracker.md#rules)). New, observed
+   once: running the whole ignored GDAL lane in one background job with all three
+   fixture variables set and a full log, at `--test-threads=1` on an idle host.
+   Its next-use benefit is concrete — the lane went from 61/7 with two unexplained
+   failures to 70/0 with citable figures, and the earlier "no complete workload
+   sample" failures turned out to be contention, not a broken sampler. Proposal,
+   untested: name the sampler-contention effect in the extraction note so a future
+   runner does not re-triase it.
+5. **Courier exchanges.** None this round. The assignment's standing authority
+   covered every phase, no credential, fixture, host or decision was requested,
+   and the only external prerequisites (live Google key, other platforms) were
+   already recorded as unavailable rather than requested again. Directly observed
+   cost: none measured; no productivity claim is made.
+6. **Bounded follow-ups, and what should be removed.** In bd: live isolated
+   Desktop/Web drive of the corrected surfaces, live provider qualification,
+   Windows/macOS builds and the packaged smoke, and the published-slope inspection
+   observation. `canopi-a7ot` is
+   discharged by the green lane above. Removed or corrected this round instead of
+   adding rules: the LiDAR guide's `apply_scene_offset`/review-screen inventory and
+   its pre-amendment policy paragraph, and the build guide's stale admission caps
+   and single-fixture lane command. No new instruction is proposed beyond the
+   existing "a fixture-less lane is not a pass".
+
+The `bf43af19` debrief below is retained as the partial answer it was; its open
+questions are answered above rather than rewritten.
 
 ### Correction debrief at `bf43af19` (partial)
 
