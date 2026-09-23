@@ -4,6 +4,8 @@ Status: active — the completion handoff owns remaining implementation; older a
 Tracking: `canopi-j571`; executor claims one completion bead; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
+Latest independent review: candidate `5d0a5e0b` requires [R15–R26 corrections](completion-review-5d0a5e0b.md). Its remaining work includes functional defects, not only unavailable observations. That review also records the user's subsequent source-import simplification; reconcile the C1 design before implementing that amendment. Existing revision-labelled implementation evidence remains in the candidate receipt.
+
 Start with the completion prompt and contract. On 2026-09-22 the user authorized the **whole remaining rework through a verified candidate**, returning only for material blockers: integrate the accepted foundation, qualify larger capacity, build production Data/Analysis/Layers and inspection, add Web Location/shared basemaps, then verify the combined candidate. No routine phase requires another prompt. New work still requires independent review before mainline integration/release.
 
 The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. Existing production admission remains unchanged until the new measured gate passes. Q is frozen/unqualified; do not restart its tooling.
