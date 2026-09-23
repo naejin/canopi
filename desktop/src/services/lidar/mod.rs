@@ -2097,6 +2097,132 @@ mod tests {
     /// than stored, because a label like `unitless` would assert the values are
     /// dimensionless — a measurement claim nobody made.
     #[test]
+    fn retry_through_executor_preserves_publication_and_refuses_changed_head() {
+        use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
+
+        let root = scratch_root("retry-command");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let executor = NativeOperationExecutor::production();
+
+        let layer_id = new_id("lyr");
+        let head_id = new_id("gen");
+        let prior_result = new_id("agen");
+        {
+            let connection = library.catalogue().expect("catalogue");
+            connection
+                .execute(
+                    "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at) VALUES(?1, 'Ground', 'ground-elevation', 'm', ?2)",
+                    rusqlite::params![layer_id, now_iso()],
+                )
+                .expect("layer row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES(?1, ?2, ?3, '{}', 1, 0, 1, '[0,0,1,1]')",
+                    rusqlite::params![head_id, layer_id, now_iso()],
+                )
+                .expect("generation row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)",
+                    rusqlite::params![layer_id, head_id],
+                )
+                .expect("head row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_definitions(id, layer_id, kind, version, parameters_json, created_at)
+                     VALUES(?1, ?2, 'slope', 1, ?3, ?4)",
+                    rusqlite::params![
+                        "adef-cmd",
+                        layer_id,
+                        r#"{"slope_unit":"degrees","name":"South slope"}"#,
+                        now_iso()
+                    ],
+                )
+                .expect("definition row");
+            // A previously published valid result for this definition.
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_generations
+                 (id, definition_id, source_generation_id, engine_version, state, result_path,
+                  quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
+                  bounds_3857, published_at, name)
+                 VALUES(?1, 'adef-cmd', ?2, 'test', 'complete', '/prior', NULL, '{}',
+                         1, 0, 1, '[0,0,1,1]', '0', 'South slope')",
+                    rusqlite::params![prior_result, head_id],
+                )
+                .expect("prior result row");
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_heads(definition_id, generation_id)
+                 VALUES ('adef-cmd', ?1)",
+                    [prior_result.clone()],
+                )
+                .expect("prior head row");
+        }
+
+        // Command → executor → library: the same seam as `lidar_retry_analysis`.
+        let refused = tauri::async_runtime::block_on(executor.run(
+            NativeOperationClass::UserData,
+            "lidar retry analysis",
+            {
+                let library = library.clone();
+                move || library.retry_analysis("adef-cmd", "stale-head")
+            },
+        ))
+        .expect_err("changed head refuses through the executor");
+        assert!(refused.contains("source head changed"), "{refused}");
+
+        // Refusal created no new retry job and left the prior publication intact.
+        {
+            let connection = library.catalogue().expect("catalogue");
+            let jobs: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_analysis_jobs WHERE definition_id = 'adef-cmd'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("job count");
+            assert_eq!(jobs, 0, "refusal must not enqueue a retry job");
+            let head: String = connection
+                .query_row(
+                    "SELECT generation_id FROM lidar_analysis_heads WHERE definition_id = 'adef-cmd'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("prior head");
+            assert_eq!(head, prior_result, "prior publication head unchanged");
+            let name: String = connection
+                .query_row(
+                    "SELECT name FROM lidar_analysis_generations WHERE id = ?1",
+                    [prior_result.clone()],
+                    |row| row.get(0),
+                )
+                .expect("prior name");
+            assert_eq!(name, "South slope");
+        }
+
+        // Healthy control: the executor path enqueues a new job for the same definition.
+        let receipt = tauri::async_runtime::block_on(executor.run(
+            NativeOperationClass::UserData,
+            "lidar retry analysis",
+            {
+                let library = library.clone();
+                let head_id = head_id.clone();
+                move || library.retry_analysis("adef-cmd", &head_id)
+            },
+        ))
+        .expect("retry enqueues through the executor");
+        assert_eq!(receipt.definition_id, "adef-cmd");
+        assert_ne!(receipt.job_id, "");
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn retry_preserves_definition_identity_and_refuses_changed_head() {
         let root = scratch_root("retry-identity");
         let _ = std::fs::remove_dir_all(&root);

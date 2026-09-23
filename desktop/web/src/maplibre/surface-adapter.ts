@@ -235,13 +235,19 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
   }
 
   clear(): void {
-    if (this.cleared) return
     this.cleared = true
-    for (let i = this.cleanups.length - 1; i >= 0; i -= 1) {
-      const cleanup = this.cleanups[i]
-      if (cleanup) this.runCleanup(cleanup)
+    // Destructive drain: take ownership of the remaining cleanups first so a
+    // cleanup that unregisters another registration cannot shift entries and
+    // run a later cleanup twice.
+    const pending = this.cleanups.splice(0)
+    this.eventCleanups.clear()
+    for (let i = pending.length - 1; i >= 0; i -= 1) {
+      try {
+        pending[i]!()
+      } catch {
+        // One throwing cleanup must not suppress the others.
+      }
     }
-    this.cleanups.length = 0
   }
 
   private runCleanup(cleanup: () => void): void {

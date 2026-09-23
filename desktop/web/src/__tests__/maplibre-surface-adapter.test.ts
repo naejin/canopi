@@ -211,4 +211,26 @@ describe('MapLibre surface adapter', () => {
       expect(map.off).toHaveBeenCalledWith('moveend', listener)
     }
   })
-})
+
+  it('cleanup unregistering an earlier listener runs once', async () => {
+    const adapter = createMapLibreSurfaceAdapter<FakeMap>({ loadMapLibre: vi.fn(async () => maplibre) })
+    const teardown = vi.fn()
+    adapter.attach(container)
+    adapter.requestMap({
+      key: 'street',
+      createMap: (api, target) => new api.Map({
+        container: target, style: { version: 8, sources: {}, layers: [] },
+        interactive: false, pitchWithRotate: false, dragRotate: false, touchZoomRotate: false,
+      }) as FakeMap,
+      onCreate: ({ lifetime }) => {
+        const listener = () => {}
+        lifetime.on('moveend', listener)
+        lifetime.addCleanup(() => { teardown(); lifetime.off?.('moveend', listener) })
+      },
+    })
+    await flushPromises()
+    adapter.destroy()
+    expect(teardown).toHaveBeenCalledTimes(1)
+  })
+
+  })
