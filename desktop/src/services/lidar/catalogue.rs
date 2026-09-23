@@ -6,7 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 17;
+pub const CATALOGUE_VERSION: i32 = 18;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -114,7 +114,7 @@ fn migrate(connection: &Connection) -> Result<(), String> {
         // plain foreign keys, which would refuse the DROP while enforcement is
         // on; enforcement is suspended for that single rebuild and the result
         // is verified before the migration is reported as applied.
-        let rebuild = matches!(next, 8 | 9);
+        let rebuild = matches!(next, 8 | 9 | 18);
         if rebuild {
             connection
                 .execute_batch("PRAGMA foreign_keys=OFF")
@@ -161,6 +161,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         15 => SCHEMA_V15,
         16 => SCHEMA_V16,
         17 => SCHEMA_V17,
+        18 => SCHEMA_V18,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -509,6 +510,58 @@ const SCHEMA_V15: &str = "";
 /// its assets and its explicit Restore capability, and entries without a
 /// recorded operation display a neutral "Previous version" label.
 const SCHEMA_V16: &str = "";
+
+/// v18: a source generation may not know its exact composed coverage, and its
+/// display range becomes metadata of its own.
+///
+/// The ordered route publishes membership without reading the composed pixels,
+/// so exact `coverage_cells` and the exact `min_value`/`max_value` range are not
+/// always derivable. The display range is what styling and legends consume: it
+/// is a stable colour domain for an immutable generation, explicitly labelled
+/// by the basis it came from, and never a claim about composed statistics.
+///
+/// Every existing row keeps the exact values it already had and is labelled
+/// `exact`, so an upgraded library renders and reads exactly as before.
+const SCHEMA_V18: &str = r#"
+CREATE TABLE lidar_layer_generations_v18 (
+    id TEXT PRIMARY KEY,
+    layer_id TEXT NOT NULL REFERENCES lidar_source_layers(id),
+    created_at TEXT NOT NULL,
+    mosaic_path TEXT,
+    coverage_mask_path TEXT,
+    manifest_json TEXT NOT NULL,
+    coverage_cells INTEGER,
+    min_value REAL,
+    max_value REAL,
+    display_min_value REAL,
+    display_max_value REAL,
+    display_basis TEXT,
+    bounds_3857 TEXT NOT NULL,
+    base_generation_id TEXT REFERENCES lidar_layer_generations(id),
+    previous_generation_id TEXT REFERENCES lidar_layer_generations(id),
+    undo_available INTEGER NOT NULL DEFAULT 0,
+    operation TEXT,
+    CHECK ((mosaic_path IS NULL) = (coverage_mask_path IS NULL)),
+    CHECK ((display_min_value IS NULL) = (display_max_value IS NULL)),
+    CHECK (display_min_value IS NULL OR display_min_value <= display_max_value)
+);
+INSERT INTO lidar_layer_generations_v18(
+    id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+    coverage_cells, min_value, max_value,
+    display_min_value, display_max_value, display_basis,
+    bounds_3857, base_generation_id, previous_generation_id, undo_available, operation
+)
+SELECT id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+       coverage_cells, min_value, max_value,
+       min_value, max_value,
+       CASE WHEN min_value IS NULL OR max_value IS NULL THEN NULL ELSE 'exact' END,
+       bounds_3857, base_generation_id, previous_generation_id, undo_available, operation
+FROM lidar_layer_generations;
+DROP TABLE lidar_layer_generations;
+ALTER TABLE lidar_layer_generations_v18 RENAME TO lidar_layer_generations;
+CREATE INDEX IF NOT EXISTS idx_layer_generations_layer
+    ON lidar_layer_generations(layer_id);
+"#;
 
 /// v17: an analysis result may carry the name its author gave it.
 ///
@@ -2161,6 +2214,50 @@ mod tests {
     use super::*;
     use crate::services::lidar::collection;
 
+    /// Rewrite a current catalogue into the v17 shape, for an upgrade test.
+    ///
+    /// SQLite cannot drop a column a CHECK constraint mentions, so the downgrade
+    /// rebuilds the table the way v17 had it rather than editing it in place.
+    #[cfg(test)]
+    fn downgrade_generations_to_v17(connection: &rusqlite::Connection) {
+        connection
+            .execute_batch(
+                "PRAGMA foreign_keys=OFF;
+             CREATE TABLE lidar_layer_generations_v17 (
+                 id TEXT PRIMARY KEY,
+                 layer_id TEXT NOT NULL REFERENCES lidar_source_layers(id),
+                 created_at TEXT NOT NULL,
+                 mosaic_path TEXT,
+                 coverage_mask_path TEXT,
+                 manifest_json TEXT NOT NULL,
+                 coverage_cells INTEGER NOT NULL,
+                 min_value REAL,
+                 max_value REAL,
+                 bounds_3857 TEXT NOT NULL,
+                 base_generation_id TEXT REFERENCES lidar_layer_generations(id),
+                 previous_generation_id TEXT REFERENCES lidar_layer_generations(id),
+                 undo_available INTEGER NOT NULL DEFAULT 0,
+                 operation TEXT,
+                 CHECK ((mosaic_path IS NULL) = (coverage_mask_path IS NULL))
+             );
+             INSERT INTO lidar_layer_generations_v17(
+                 id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                 coverage_cells, min_value, max_value, bounds_3857,
+                 base_generation_id, previous_generation_id, undo_available, operation)
+             SELECT id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                    coverage_cells, min_value, max_value, bounds_3857,
+                    base_generation_id, previous_generation_id, undo_available, operation
+             FROM lidar_layer_generations;
+             DROP TABLE lidar_layer_generations;
+             ALTER TABLE lidar_layer_generations_v17 RENAME TO lidar_layer_generations;
+             CREATE INDEX IF NOT EXISTS idx_layer_generations_layer
+                 ON lidar_layer_generations(layer_id);
+             UPDATE lidar_catalogue_meta SET value = '17' WHERE key = 'schema_version';
+             PRAGMA foreign_keys=ON;",
+            )
+            .unwrap();
+    }
+
     #[test]
     fn import_progress_is_monotonic_and_stops_with_the_job() {
         let dir = std::env::temp_dir().join(new_id("canopi-import-progress-test"));
@@ -2852,6 +2949,165 @@ mod tests {
     /// member identities. A migrated library therefore keeps every version and
     /// its explicit Restore, gets a neutral operation label, and takes its
     /// current head as the new Undo baseline instead of a fabricated chain.
+    /// A v17 catalogue moves to v18 without losing a row or a value.
+    ///
+    /// The upgrade relaxes exact coverage to nullable and adds the display
+    /// range. An existing generation already has exact facts, so it keeps them
+    /// and is labelled `exact`; the display range starts equal to them, which is
+    /// what makes the upgraded library render exactly as it did before.
+    #[test]
+    fn v18_catalogue_keeps_exact_facts_and_labels_the_display_range() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v18"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('with-range', 'layer', '0', '/library/a/mosaic.tif',
+                             '/library/a/coverage.bin', '{}', 12, -3.5, 11.25, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('no-range', 'layer', '1', '/library/b/mosaic.tif',
+                             '/library/b/coverage.bin', '{}', 4, NULL, NULL, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id)
+                     VALUES ('layer', 'with-range');",
+                )
+                .unwrap();
+            downgrade_generations_to_v17(&connection);
+        }
+
+        let connection = open(&path).expect("v17 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), CATALOGUE_VERSION);
+        let with_range = generation_row(&connection, "with-range")
+            .unwrap()
+            .expect("the measured generation survives");
+        assert_eq!(with_range.coverage_cells, 12);
+        assert_eq!(with_range.min_value, Some(-3.5));
+        assert_eq!(with_range.max_value, Some(11.25));
+        let (display_min, display_max, basis) = connection
+            .query_row(
+                "SELECT display_min_value, display_max_value, display_basis
+                 FROM lidar_layer_generations WHERE id = 'with-range'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<f64>>(0)?,
+                        row.get::<_, Option<f64>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(display_min, Some(-3.5));
+        assert_eq!(display_max, Some(11.25));
+        assert_eq!(basis.as_deref(), Some("exact"));
+
+        // A generation that never had a range keeps none: the migration must not
+        // invent a display domain it cannot justify.
+        let (display_min, display_max, basis) = connection
+            .query_row(
+                "SELECT display_min_value, display_max_value, display_basis
+                 FROM lidar_layer_generations WHERE id = 'no-range'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<f64>>(0)?,
+                        row.get::<_, Option<f64>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(display_min, None);
+        assert_eq!(display_max, None);
+        assert_eq!(basis, None);
+        assert_eq!(
+            generation_row(&connection, "no-range")
+                .unwrap()
+                .expect("the unmeasured generation survives")
+                .coverage_cells,
+            4
+        );
+        // The head still names the generation it named before the rebuild.
+        assert_eq!(
+            head_generation(&connection, "layer")
+                .unwrap()
+                .map(|row| row.id),
+            Some("with-range".to_string())
+        );
+        drop(connection);
+
+        // Re-running the upgrade on an already-current catalogue is a no-op.
+        let reopened = open(&path).expect("a current catalogue reopens");
+        assert_eq!(schema_version(&reopened).unwrap(), CATALOGUE_VERSION);
+        assert_eq!(
+            generation_row(&reopened, "with-range")
+                .unwrap()
+                .expect("the generation is still there")
+                .coverage_cells,
+            12
+        );
+    }
+
+    /// A failed v18 upgrade leaves the v17 catalogue exactly as it was.
+    ///
+    /// The rebuild drops and recreates the generation table, so a failure part
+    /// way through would be the worst kind of damage if the version and the rows
+    /// did not travel in the same transaction. The obstacle below makes the new
+    /// table's creation fail; the version must stay at 17 and every row must
+    /// still be readable.
+    #[test]
+    fn an_interrupted_v18_upgrade_rolls_back_and_keeps_the_old_catalogue() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v18-rollback"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('kept', 'layer', '0', '/library/a/mosaic.tif',
+                             '/library/a/coverage.bin', '{}', 7, 1.5, 9.5, '[0,0,1,1]');",
+                )
+                .unwrap();
+            downgrade_generations_to_v17(&connection);
+            connection
+                .execute_batch("CREATE TABLE lidar_layer_generations_v18 (id TEXT PRIMARY KEY);")
+                .unwrap();
+        }
+
+        assert!(
+            open(&path).is_err(),
+            "a migration that cannot build the new table must fail loudly"
+        );
+
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        assert_eq!(
+            schema_version(&connection).unwrap(),
+            17,
+            "the version must not advance past a failed upgrade"
+        );
+        let kept = generation_row(&connection, "kept")
+            .unwrap()
+            .expect("the row survives the rolled-back rebuild");
+        assert_eq!(kept.coverage_cells, 7);
+        assert_eq!(kept.min_value, Some(1.5));
+        assert_eq!(kept.max_value, Some(9.5));
+    }
+
     #[test]
     fn v15_catalogue_migrates_to_an_explicit_undo_baseline() {
         let root = std::env::temp_dir().join(new_id("canopi-catalogue-v16"));
