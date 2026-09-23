@@ -17,15 +17,11 @@ import {
 } from '../../maplibre/world-map'
 import { basemapStyle } from '../../app/settings/state'
 import {
-  bindBasemapProvider,
-  createAttributionControls,
-  createBasemapProvider,
-  installBasemapConfigObserver,
   mapStyleReadiness,
+  mountBasemapLifecycle,
 } from '../../maplibre/basemap-bind'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type {
-  BasemapProvider,
   BasemapViewport,
 } from '../../maplibre/basemap-provider-session'
 import styles from './WorldMapSurface.module.css'
@@ -57,7 +53,6 @@ export function WorldMapSurface({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<MapLibreSurfaceAdapter<WorldMapLibreMap> | null>(null)
-  const providerRef = useRef<BasemapProvider | null>(null)
   const markersRef = useRef<WorldMapMarker[]>([])
   const lastTemplateLayoutKeyRef = useRef<string>('')
   const templatesRef = useRef(templates)
@@ -82,8 +77,6 @@ export function WorldMapSurface({
     // Created before the map, because MapLibre takes its request transform as a
     // construction option.
     const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
-    const provider = createBasemapProvider(tileAuth)
-    providerRef.current = provider
     surface.requestMap({
       // Deliberately independent of the provider: a basemap change is
       // reconciled into the live map by the binding below, so it cannot reset
@@ -101,35 +94,24 @@ export function WorldMapSurface({
       ),
       captureViewState: (context) => readWorldMapViewState(context.map),
       onCreate: (context) => {
-        // The provider's session and viewport work belongs to this map's
-        // lifetime, so the binding, the provider and its credential are torn
-        // down together rather than leaving requests and a live session token
-        // behind a removed map.
-        context.lifetime.addCleanup(
-          bindBasemapProvider({
-            provider,
+        // One basemap mount owns provider, observers, binding and credits.
+        // tileAuth already carries the request transform installed at map
+        // construction; the mount never installs a second transform.
+        const basemapMount = mountBasemapLifecycle({
             map: context.map,
             tileAuth,
+            readStyle: () => basemapStyle.value,
+            readViewport: () => readWorldMapViewport(surfaceRef.current?.map ?? null),
+            readVisible: () => true,
             styleReady: mapStyleReadiness(context.map, context.lifetime),
-            attributionControls: createAttributionControls(context.maplibre, context.map),
-          }),
-        )
-        // Style, key and locale are reactive inputs of this map lifetime: an
-        // already mounted provider is updated when any of them change.
-        context.lifetime.addCleanup(
-          installBasemapConfigObserver(
-            provider,
-            () => ({ style: preferredBasemapStyle }),
-            () => readWorldMapViewport(surfaceRef.current?.map ?? null),
-          ),
-        )
-        context.lifetime.addCleanup(() => {
-          provider.dispose()
-          providerRef.current = null
+            maplibre: context.maplibre,
+            mapControls: context.map,
+          })
+        context.lifetime.addCleanup(() => basemapMount.dispose())
+        context.lifetime.on('moveend', () => {
+          // Viewport refresh stays with the map lifetime; the mount owns
+          // configuration observation.
         })
-        context.lifetime.on('moveend', () =>
-          provider.updateViewport(readWorldMapViewport(surfaceRef.current?.map ?? null)),
-        )
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()

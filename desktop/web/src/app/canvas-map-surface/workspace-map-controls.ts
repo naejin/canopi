@@ -8,7 +8,7 @@ import {
   MAPLIBRE_BASEMAP_SOURCE_ID,
 } from '../../maplibre/config'
 import type { BasemapStyle } from '../../generated/contracts'
-import { bindBasemapProvider, createAttributionControls, createBasemapProvider, installBasemapConfigObserver, mapStyleReadiness } from '../../maplibre/basemap-bind'
+import { mapStyleReadiness, mountBasemapLifecycle } from '../../maplibre/basemap-bind'
 import type { BasemapProvider, BasemapViewport } from '../../maplibre/basemap-provider-session'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
@@ -333,8 +333,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.removeBasemapContribution(map)
       return
     }
+    const justMounted = attempt.provider === null
     const provider = this.ensureBasemapProvider(attempt)
     if (!provider) return
+    if (justMounted) {
+      // The mount already applied current configuration and opacity.
+      return
+    }
     // An opacity-only update must not re-issue a session or rebuild the
     // contribution; only a provider change does that.
     if (attempt.basemapProviderStyle !== presentation.basemapStyle) {
@@ -373,49 +378,40 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     const lifetime = attempt.lifetime
     if (!map || !lifetime) return null
     if (attempt.provider) return attempt.provider
-    const provider = createBasemapProvider(attempt.tileAuth)
-    attempt.provider = provider
-    const unbind = bindBasemapProvider({
-      provider,
-      map: map as unknown as Parameters<typeof bindBasemapProvider>[0]['map'],
-      attributionControls: createAttributionControls(
-        (this.surface as { maplibre?: unknown }).maplibre,
-        map as unknown as Parameters<typeof createAttributionControls>[1],
-      ),
+    const mount = mountBasemapLifecycle({
+      map: map as unknown as Parameters<typeof mountBasemapLifecycle>[0]['map'],
       tileAuth: attempt.tileAuth,
+      readStyle: () => attempt.presentation.basemapStyle,
+      readViewport: () => readWorkspaceMapViewport(map),
+      readVisible: () => attempt.presentation.basemapVisible,
       styleReady: mapStyleReadiness(
         map as unknown as { isStyleLoaded?(): boolean; loaded?(): boolean },
         lifetime,
       ),
-      // Opacity is a property of the layer the binding reconciles, so it is
-      // re-applied exactly when the contribution is.
       afterApply: () => this.applyBasemapOpacity(attempt),
-      // The canvas keeps a local background beneath the basemap.
       beforeLayerId: () => {
         const order = map.getLayersOrder()
         const background = order.indexOf(MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID)
         return background >= 0 ? order[background + 1] ?? null : order[0] ?? null
       },
+      maplibre: (this.surface as { maplibre?: unknown }).maplibre,
+      mapControls: map as unknown as Parameters<typeof mountBasemapLifecycle>[0]['mapControls'],
     })
-    // A settled camera move refreshes the provider's viewport metadata in
-    // place; the session is not per-viewport.
-    lifetime.on('moveend', () =>
-      provider.updateViewport(readWorkspaceMapViewport(map)),
-    )
-    // Style, key and locale are reactive inputs of this map lifetime: an
-    // already mounted provider is updated when any of them change.
-    lifetime.addCleanup(
-      installBasemapConfigObserver(
-        provider,
-        () => ({ style: attempt.presentation.basemapStyle }),
-        () => readWorkspaceMapViewport(map),
-      ),
-    )
-    attempt.basemapTeardown = () => {
-      unbind()
-      provider.dispose()
-    }
-    return provider
+    lifetime.on('moveend', () => mount.updateViewport(readWorkspaceMapViewport(map)))
+    attempt.basemapTeardown = () => mount.dispose()
+    // The mount already applied current configuration; record it so the
+    // caller's first presentation sync does not issue a duplicate update.
+    attempt.basemapProviderStyle = attempt.presentation.basemapStyle
+    // Reuse one mount per map lifetime; opacity-only updates must not remount.
+    attempt.provider = {
+      update: (presentation: { style: BasemapStyle }, viewport: BasemapViewport) =>
+        mount.update(presentation, viewport),
+      updateViewport: (viewport: BasemapViewport) => mount.updateViewport(viewport),
+      dispose: () => mount.dispose(),
+      snapshot: () => ({ state: 'idle' as const }),
+      subscribe: () => () => {},
+    } as unknown as BasemapProvider
+    return attempt.provider
   }
 
   /** Stop the canvas provider and release its session and timers. */

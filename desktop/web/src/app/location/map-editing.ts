@@ -13,15 +13,11 @@ import {
   type LocationMapLibreMap,
 } from '../../maplibre/location-map'
 import {
-  bindBasemapProvider,
-  createAttributionControls,
-  createBasemapProvider,
-  installBasemapConfigObserver,
   mapStyleReadiness,
+  mountBasemapLifecycle,
 } from '../../maplibre/basemap-bind'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import type {
-  BasemapProvider,
   BasemapViewport,
 } from '../../maplibre/basemap-provider-session'
 import {
@@ -102,7 +98,6 @@ export function useLocationMapEditingHost(
   savedLocationRef.current = workbench.saved.location
   workbenchRef.current = workbench
   if (!surfaceRef.current) surfaceRef.current = createMapLibreSurfaceAdapter()
-  const basemapProviderRef = useRef<BasemapProvider | null>(null)
   const tileAuthRef = useRef<BasemapTileAuth | null>(null)
   if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
 
@@ -124,14 +119,11 @@ export function useLocationMapEditingHost(
     const onMove = () => updateCurrentMapState()
     // A settled viewport move refreshes the provider's metadata in place. The
     // session is not per-viewport, so this must not restart the provider.
-    const onSettledMove = () => provider.updateViewport(readLocationMapViewport(surfaceRef.current?.map ?? null))
     const onClick = (event?: unknown) => previewClickedLocation(event)
 
     // The credential owner is created before the map, because MapLibre takes
     // its request transform as a construction option.
     const tileAuth = tileAuthRef.current ?? new BasemapTileAuth()
-    const provider = createBasemapProvider(tileAuth)
-    basemapProviderRef.current = provider
     surface.requestMap({
       // Deliberately independent of the provider. A basemap change is
       // reconciled into this map by the binding below, so switching provider
@@ -179,32 +171,21 @@ export function useLocationMapEditingHost(
         // lifetime, so the binding, the provider and its credential are all
         // torn down together rather than leaving requests and a live session
         // token behind a removed map.
-        context.lifetime.addCleanup(
-          bindBasemapProvider({
-            provider,
+        const basemapMount = mountBasemapLifecycle({
             map: context.map,
             tileAuth,
+            readStyle: () => basemapStyle.value,
+            readViewport: () => readLocationMapViewport(surfaceRef.current?.map ?? null),
+            readVisible: () => !mapInitFailed.peek(),
             styleReady: mapStyleReadiness(context.map, context.lifetime),
-            visible: () => !mapInitFailed.peek(),
-            attributionControls: createAttributionControls(context.maplibre, context.map),
-          }),
-        )
-        // Style, key and locale are reactive inputs of this map lifetime.
-        context.lifetime.addCleanup(
-          installBasemapConfigObserver(
-            provider,
-            () => ({ style: preferredBasemapStyle }),
-            () => readLocationMapViewport(surfaceRef.current?.map ?? null),
-          ),
-        )
-        context.lifetime.addCleanup(() => {
-          provider.dispose()
-          basemapProviderRef.current = null
-        })
+            maplibre: context.maplibre,
+            mapControls: context.map,
+          })
+        context.lifetime.addCleanup(() => basemapMount.dispose())
         context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
-        context.lifetime.on('moveend', onSettledMove)
+        context.lifetime.on('moveend', () => {})
         context.lifetime.on('click', onClick)
         updateMapState(context.map)
       },

@@ -31,12 +31,28 @@ export const lidarStatusMessage = signal<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
-let freshRefreshInFlight: Promise<void> | null = null
+/**
+ * Monotonic read-start sequence.
+ *
+ * A queued fresh read may serve multiple callers only if it starts after all
+ * their fences. Settlement records the sequence at terminal observation and
+ * must not join a read already started at that point.
+ */
+let readStartSequence = 0
+let publishedReadSequence = 0
+let freshRefreshInFlight: Promise<LidarLibrarySnapshot> | null = null
+let freshRefreshStartSequence = 0
 
-async function readLibrarySnapshot(): Promise<void> {
+async function readLibrarySnapshot(startSequence: number): Promise<LidarLibrarySnapshot> {
   const snapshot = await lidarListLibrary()
-  lidarLibrary.value = snapshot
-  lidarStatusMessage.value = null
+  // Publish in read-start order: an older passive response cannot overwrite
+  // newer state.
+  if (startSequence >= publishedReadSequence) {
+    publishedReadSequence = startSequence
+    lidarLibrary.value = snapshot
+    lidarStatusMessage.value = null
+  }
+  return snapshot
 }
 
 /**
@@ -50,9 +66,11 @@ export async function refreshLidarLibrary(): Promise<void> {
   if (refreshInFlight) {
     return refreshInFlight
   }
+  readStartSequence += 1
+  const startSequence = readStartSequence
   refreshInFlight = (async () => {
     try {
-      await readLibrarySnapshot()
+      await readLibrarySnapshot(startSequence)
     } catch (error) {
       // Passive library read failures leave the previous snapshot in place;
       // the rest of the app keeps working (Web Edition has no library at all).
@@ -65,34 +83,45 @@ export async function refreshLidarLibrary(): Promise<void> {
 }
 
 /**
- * Start a library read that begins after this call.
+ * Start a library read that begins after `afterSequence`.
  *
  * Settlement uses this entry so attachment never consumes a snapshot that
- * predates the terminal observation. One shared follow-up read satisfies
- * overlapping settlement callers.
+ * predates the terminal observation. One shared follow-up read may satisfy
+ * multiple callers only when it starts after all their fences. A fresh read
+ * does not join an earlier passive read that was already under way.
  */
-export async function refreshLidarLibraryFresh(): Promise<void> {
-  if (freshRefreshInFlight) {
+export async function refreshLidarLibraryFresh(
+  afterSequence: number = readStartSequence,
+): Promise<LidarLibrarySnapshot> {
+  if (
+    freshRefreshInFlight &&
+    freshRefreshStartSequence > afterSequence
+  ) {
     return freshRefreshInFlight
   }
-  // Chain after any in-flight passive read so this one actually starts later.
-  const prior = refreshInFlight ?? Promise.resolve()
-  freshRefreshInFlight = (async () => {
+  readStartSequence += 1
+  const startSequence = readStartSequence
+  freshRefreshStartSequence = startSequence
+  let inflight!: Promise<LidarLibrarySnapshot>
+  inflight = (async () => {
     try {
-      await prior
-    } catch {
-      // Ignore the prior read's failure; this one is the freshness source.
-    }
-    try {
-      await readLibrarySnapshot()
+      return await readLibrarySnapshot(startSequence)
     } catch (error) {
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
       throw error
     } finally {
-      freshRefreshInFlight = null
+      if (freshRefreshInFlight === inflight) {
+        freshRefreshInFlight = null
+      }
     }
   })()
-  return freshRefreshInFlight
+  freshRefreshInFlight = inflight
+  return inflight
+}
+
+/** The current read-start sequence, used as a settlement fence. */
+export function libraryReadSequence(): number {
+  return readStartSequence
 }
 
 export interface ImportAttachmentIntent {

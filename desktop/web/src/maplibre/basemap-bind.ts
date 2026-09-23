@@ -345,3 +345,80 @@ export function mapStyleReadiness(
     },
   }
 }
+
+/**
+ * One per-map basemap mount operation.
+ *
+ * Creates the provider and its observers/binding, initializes from current
+ * configuration immediately, applies later configuration and viewport changes,
+ * and cleans up subscriptions, pending callbacks, requests, credentials and
+ * owned controls. Where request transformation must exist before map
+ * construction, the map host creates that credential capability and supplies
+ * it; this mount never installs a second transform or recreates the map.
+ */
+export interface BasemapMountOptions {
+  readonly map: BasemapReconcileTarget
+  readonly tileAuth?: BasemapTileAuth | null
+  readonly readStyle: () => BasemapStyle
+  readonly readViewport: () => BasemapViewport
+  readonly readVisible?: () => boolean
+  readonly styleReady?: BasemapStyleReadiness
+  readonly beforeLayerId?: () => string | null
+  readonly afterApply?: () => void
+  readonly attributionControls?: BasemapBindingDeps['attributionControls']
+  readonly maplibre?: unknown
+  readonly mapControls?: {
+    addControl?(control: unknown, position?: string): unknown
+    removeControl?(control: unknown): unknown
+  }
+}
+
+export interface BasemapMountHandle {
+  update(presentation: { readonly style: BasemapStyle }, viewport: BasemapViewport): void
+  updateViewport(viewport: BasemapViewport): void
+  dispose(): void
+}
+
+export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMountHandle {
+  const tileAuth = options.tileAuth ?? null
+  const provider = createBasemapProvider(tileAuth)
+  const attributionControls =
+    options.attributionControls ??
+    (options.maplibre && options.mapControls
+      ? createAttributionControls(options.maplibre, options.mapControls)
+      : undefined)
+  const unbind = bindBasemapProvider({
+    provider,
+    map: options.map,
+    ...(tileAuth ? { tileAuth } : {}),
+    ...(options.styleReady ? { styleReady: options.styleReady } : {}),
+    ...(options.beforeLayerId ? { beforeLayerId: options.beforeLayerId } : {}),
+    ...(options.afterApply ? { afterApply: options.afterApply } : {}),
+    ...(attributionControls ? { attributionControls } : {}),
+    ...(options.readVisible ? { visible: options.readVisible } : {}),
+  })
+  // Initialize from current configuration immediately: no movement, settings
+  // or style-ready event is required before the first provider generation.
+  provider.update({ style: options.readStyle() }, options.readViewport())
+  const disposeObserver = installBasemapConfigObserver(
+    provider,
+    () => ({ style: options.readStyle() }),
+    options.readViewport,
+  )
+  return {
+    update: (presentation, viewport) => provider.update(presentation, viewport),
+    updateViewport: (viewport: BasemapViewport) => provider.updateViewport(viewport),
+    dispose: () => {
+      disposeObserver()
+      unbind()
+      provider.dispose()
+      // Withdraw the contribution so teardown leaves no source, layer or
+      // basemap-owned credit on a map that outlives the mount.
+      try {
+        reconcileBasemapContribution(options.map, { state: 'idle' })
+      } catch {
+        // A map that rejects withdrawal still tears down its own resources.
+      }
+    },
+  }
+}

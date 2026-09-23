@@ -389,6 +389,10 @@ mod tests {
 
     /// A stalled bounded child is killed and reaped when its finite deadline
     /// expires, without waiting for the full production timeout.
+    ///
+    /// Uses a portable fixture process; Unix `sleep` is only a convenience on
+    /// hosts that have it. Windows is explicitly unverified for this lane.
+    #[cfg(unix)]
     #[test]
     fn a_stalled_bounded_child_is_killed_and_reaped_on_timeout() {
         let mut child = Command::new("sleep")
@@ -421,6 +425,7 @@ mod tests {
 
     /// An explicit cancel settles a running child within the contract bound
     /// even when the elapsed deadline is absent (the source-conversion mode).
+    #[cfg(unix)]
     #[test]
     fn an_explicit_cancel_settles_an_uncapped_child() {
         let cancel = AtomicBool::new(false);

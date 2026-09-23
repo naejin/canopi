@@ -140,4 +140,85 @@ describe('LiDAR library polling', () => {
     expect(listLibraryMock.mock.calls.length).toBeGreaterThan(before)
     expect(lidarLibrary.value?.layers).toHaveLength(1)
   })
+
+  it('L2: refreshLidarLibraryFresh returns the snapshot it published', async () => {
+    const snapshot = {
+      ...emptyLibrary,
+      layers: [{
+        id: 'layer-1',
+        name: 'Ground',
+        measurement_kind: 'GroundElevation',
+        units: 'm',
+        state: 'Ready',
+        resolution_m: 0.5,
+        coverage_cells: '10',
+        bounds: [0, 0, 1, 1],
+        value_range: null,
+        analysis_count: 0,
+        tilesets: [],
+      }],
+    }
+    listLibraryMock.mockResolvedValueOnce(snapshot)
+    const { refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
+    const returned = await refreshLidarLibraryFresh()
+    expect(returned).toBe(snapshot)
+    expect(lidarLibrary.value).toBe(snapshot)
+  })
+
+  it('L3: a queued fresh read only serves callers whose fence it started after', async () => {
+    const { refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
+    const gate: { release: ((snapshot: unknown) => void) | null } = { release: null }
+    listLibraryMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          gate.release = resolve
+        }),
+    )
+    // Read A starts before B's terminal observation.
+    const readA = refreshLidarLibraryFresh()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(gate.release).not.toBeNull()
+    const snapshotB = {
+      ...emptyLibrary,
+      layers: [{
+        id: 'layer-b', name: 'B', measurement_kind: 'GroundElevation', units: 'm',
+        state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null,
+        value_range: null, analysis_count: 0, tilesets: [],
+      }],
+    }
+    listLibraryMock.mockResolvedValueOnce(snapshotB)
+    // B observes Complete after A already started: B must not join A.
+    const readB = refreshLidarLibraryFresh()
+    expect(readB).not.toBe(readA)
+    gate.release?.(emptyLibrary)
+    const resultA = await readA
+    expect(resultA).toBe(emptyLibrary)
+    const resultB = await readB
+    expect(resultB).toBe(snapshotB)
+  })
+
+  it('L4: an older passive response cannot overwrite a newer snapshot', async () => {
+    const { refreshLidarLibrary, refreshLidarLibraryFresh } = await import('../app/lidar/library-store')
+    const oldGate: { release: ((snapshot: unknown) => void) | null } = { release: null }
+    const oldSnapshot = { ...emptyLibrary, engine: { available: true, version: 'old', detail: null } }
+    const newSnapshot = { ...emptyLibrary, engine: { available: true, version: 'new', detail: null } }
+    listLibraryMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          oldGate.release = resolve
+        }),
+    )
+    const passive = refreshLidarLibrary()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(oldGate.release).not.toBeNull()
+    listLibraryMock.mockResolvedValueOnce(newSnapshot)
+    await refreshLidarLibraryFresh()
+    expect(lidarLibrary.value).toBe(newSnapshot)
+    // The older passive read resolves last and must not regress the store.
+    oldGate.release?.(oldSnapshot)
+    await passive
+    expect(lidarLibrary.value).toBe(newSnapshot)
+  })
 })

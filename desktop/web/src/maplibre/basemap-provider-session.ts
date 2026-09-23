@@ -719,7 +719,6 @@ export function readViewportMetadata(
       || !Number.isFinite(east) || !Number.isFinite(west)
       || north <= south
       || south < -90 || north > 90
-      || Math.abs(west) > 360 || Math.abs(east) > 360
     ) {
       continue
     }
@@ -732,7 +731,6 @@ export function readViewportMetadata(
     || !Number.isFinite(viewport.zoom)
     || viewport.north <= viewport.south
     || viewport.south < -90 || viewport.north > 90
-    || Math.abs(viewport.west) > 360 || Math.abs(viewport.east) > 360
   ) {
     return null
   }

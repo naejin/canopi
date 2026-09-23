@@ -491,10 +491,10 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     ).toBeNull()
   })
 
-  it('R47: malformed large coordinates and zero-width viewports are unavailable', () => {
+  it('R47: nonfinite coordinates and zero-width viewports are unavailable', () => {
     expect(
       readViewportMetadata(
-        { copyright: 'c', maxZoomRects: [{ west: 1e20, east: 1e20 + 1, south: 0, north: 10, maxZoom: 18 }] },
+        { copyright: 'c', maxZoomRects: [{ west: Number.NaN, east: 1, south: 0, north: 10, maxZoom: 18 }] },
         { west: 0, south: 1, east: 1, north: 9, zoom: 12 },
       ),
     ).toBeNull()
@@ -530,5 +530,56 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     reconcileBasemapContribution(target, { state: 'idle' })
     expect(sources.size).toBe(0)
     expect(credits.at(-1)).toBe('')
+  })
+
+  it('M1: mountBasemapLifecycle applies current configuration without waiting for events', async () => {
+    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
+    const sources = new Map<string, Record<string, unknown>>()
+    const layers = new Map<string, Record<string, unknown>>()
+    const map = {
+      getSource: (id: string) => sources.get(id) ?? null,
+      getLayer: (id: string) => layers.get(id) ?? null,
+      removeLayer: (id: string) => void layers.delete(id),
+      removeSource: (id: string) => void sources.delete(id),
+      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
+      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
+      setLayoutProperty: (id: string, name: string, value: unknown) => {
+        const layer = layers.get(id)
+        if (layer && name === 'visibility') layer.layout = { visibility: value }
+      },
+    }
+    const teardown = mountBasemapLifecycle({
+      map,
+      tileAuth: null,
+      readStyle: () => 'street' as const,
+      readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
+      readVisible: () => true,
+    })
+    // No movement, settings or style-ready event: the keyless street provider
+    // must already be applied from current configuration.
+    expect(sources.size).toBe(1)
+    expect(layers.get('basemap-raster')?.layout).toEqual({ visibility: 'visible' })
+    teardown.dispose()
+    expect(sources.size).toBe(0)
+    expect(layers.size).toBe(0)
+  })
+
+  it('M5: equivalent world copies share the same supported coverage', () => {
+    const rect = { west: -15, east: 15, south: -5, north: 5, maxZoom: 18 }
+    const json = { copyright: 'credit', maxZoomRects: [rect] }
+    const views = [
+      { west: -10, south: -4, east: 10, north: 4, zoom: 2 },
+      { west: 350, south: -4, east: 370, north: 4, zoom: 2 },
+      { west: 710, south: -4, east: 730, north: 4, zoom: 2 },
+    ]
+    const results = views.map((viewport) => readViewportMetadata(json, viewport)?.maxZoom ?? null)
+    expect(results[0]).toBe(18)
+    expect(results[1]).toBe(18)
+    expect(results[2]).toBe(18)
+    // Zoom-0 world view uses the same coverage rule: a local rect cannot
+    // support the whole world.
+    expect(
+      readViewportMetadata(json, { west: -180, south: -4, east: 180, north: 4, zoom: 0 }),
+    ).toBeNull()
   })
 })

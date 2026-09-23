@@ -10,6 +10,7 @@ import {
   lidarStatusMessage,
   openImportJob,
   peekImportAttachmentIntent,
+  libraryReadSequence,
   refreshLidarLibraryFresh,
   stopLidarPolling,
   type ImportAttachmentIntent,
@@ -59,22 +60,27 @@ function settleImportAttachment(job: LidarImportJob): void {
     if (consumed) consumeAttachment(job, consumed)
     return
   }
-  void refreshLidarLibraryFresh()
-    .catch(() => {
-      // Fresh read failed: retain the pending intent for the next poll.
-    })
-    .then(() => {
+  // Fence at the terminal observation: the settlement read must start after
+  // this point, never join a read already under way.
+  const fence = libraryReadSequence()
+  void refreshLidarLibraryFresh(fence)
+    .then((snapshot) => {
+      // A successful post-fence read is the only path to attachment or a
+      // missing-target conclusion. A failed read retains the intent.
       const settled = consumeImportAttachmentIntent(job.job_id)
       if (!settled) return
-      // A successful fresh read that no longer lists the layer means the
-      // target disappeared; consume without attaching and report it.
-      const library = lidarLibrary.value
+      const library = snapshot ?? lidarLibrary.value
       const present = library?.layers.some((layer) => layer.id === settled.layerId) ?? false
       if (!present) {
         lidarStatusMessage.value = `Imported layer ${settled.layerId} is no longer in the library`
         return
       }
       consumeAttachment(job, settled)
+    })
+    .catch((error) => {
+      // Fresh read failed: retain the pending intent and report the read
+      // error. Do not fall through to success or missing-target handling.
+      lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
     })
 }
 

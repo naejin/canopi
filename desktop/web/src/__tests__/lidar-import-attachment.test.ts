@@ -56,6 +56,7 @@ vi.mock('../app/lidar/library-store', async () => {
     refreshOpenImportJob: vi.fn(),
     refreshLidarLibrary: refreshLibraryMock,
     refreshLidarLibraryFresh: refreshFreshMock,
+    libraryReadSequence: () => 0,
     trackImportJob: trackImportMock,
     stopLidarPolling: vi.fn(),
     installLidarLibraryObserver: vi.fn(() => () => {}),
@@ -335,5 +336,56 @@ describe('import attachment through the LiDAR workflow owner', () => {
     await flush()
     await flush()
     expect(upsertMock).not.toHaveBeenCalled()
+  })
+
+  it('L1: a failed fresh read retains intent and does not report a missing target', async () => {
+    installLidarWorkflow()
+    await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
+      label: null,
+      unknown: false,
+    })
+    // The layer is present; only the settlement read fails.
+    librarySignal.value = {
+      layers: [{ id: 'lyr-1', name: 'Ground', measurement_kind: 'GroundElevation', units: 'm', state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null, value_range: null, analysis_count: 0, tilesets: [] }],
+      analyses: [],
+      engine: { available: true, version: null, detail: null },
+    }
+    refreshFreshMock.mockRejectedValueOnce(new Error('read refused'))
+    trackedJob.value = job('Complete')
+    await flush()
+    await flush()
+    // Failed read must not attach and must not consume intent as missing-target.
+    expect(upsertMock).not.toHaveBeenCalled()
+    const { lidarStatusMessage } = await import('../app/lidar/library-store')
+    expect(lidarStatusMessage.value ?? '').not.toContain('no longer in the library')
+
+    // A later poll with unchanged Complete and a successful read attaches once.
+    refreshFreshMock.mockResolvedValue(undefined)
+    trackedJob.value = job('Complete')
+    await flush()
+    await flush()
+    expect(upsertMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'lyr-1')
+  })
+
+  it('L2: settlement attaches from the snapshot returned by the fresh read', async () => {
+    installLidarWorkflow()
+    await importSourcesIntoNewLayer(['/a.tif'], 'Ground', 'GroundElevation', {
+      label: null,
+      unknown: false,
+    })
+    // The global signal stays empty; only the returned snapshot lists the layer.
+    librarySignal.value = { layers: [], analyses: [], engine: { available: true, version: null, detail: null } }
+    const returned = {
+      layers: [{ id: 'lyr-1', name: 'Ground', measurement_kind: 'GroundElevation', units: 'm', state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null, value_range: null, analysis_count: 0, tilesets: [] }],
+      analyses: [],
+      engine: { available: true, version: null, detail: null },
+    }
+    refreshFreshMock.mockResolvedValueOnce(returned)
+    trackedJob.value = job('Complete')
+    await flush()
+    await flush()
+    expect(upsertMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'lyr-1')
   })
 })
