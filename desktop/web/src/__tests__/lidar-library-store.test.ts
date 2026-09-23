@@ -11,6 +11,7 @@ vi.mock('../ipc/lidar', () => ({
 
 import {
   ensureLidarPolling,
+  installLidarLibraryObserver,
   lidarLibrary,
   openImportJob,
   stopLidarPolling,
@@ -93,5 +94,50 @@ describe('LiDAR library polling', () => {
 
     expect(settledCalls).toBe(1)
     expect(listLibraryMock).toHaveBeenCalledTimes(settledCalls)
+  })
+
+  it('panel unmount does not stop an active import from settling', async () => {
+    // R33: Data/Analysis/Layers subscribe; they must not own the shared timer.
+    getImportJobMock.mockResolvedValue(importJob('Staging'))
+    const disposeData = installLidarLibraryObserver()
+    await trackImportJob('job-1')
+    await flushMicrotasks()
+
+    // Closing Data must leave the tracked job polling.
+    disposeData()
+    getImportJobMock.mockResolvedValue(importJob('Complete'))
+    await vi.advanceTimersByTimeAsync(1_500)
+    await flushMicrotasks()
+
+    expect(openImportJob.value?.state).toBe('Complete')
+  })
+
+  it('reopening a panel refreshes immediately and observes current progress', async () => {
+    getImportJobMock.mockResolvedValue(importJob('Staging'))
+    await trackImportJob('job-1')
+    await flushMicrotasks()
+    const before = listLibraryMock.mock.calls.length
+
+    // Reopen Data: the observer refreshes at once rather than waiting a tick.
+    listLibraryMock.mockResolvedValue({
+      ...emptyLibrary,
+      layers: [{
+        id: 'layer-1',
+        name: 'Ground',
+        measurement_kind: 'GroundElevation',
+        units: 'm',
+        state: 'Ready',
+        resolution_m: 0.5,
+        coverage_cells: '10',
+        bounds: [0, 0, 1, 1],
+        value_range: null,
+        analysis_count: 0,
+        tilesets: [],
+      }],
+    })
+    installLidarLibraryObserver()
+    await flushMicrotasks()
+    expect(listLibraryMock.mock.calls.length).toBeGreaterThan(before)
+    expect(lidarLibrary.value?.layers).toHaveLength(1)
   })
 })

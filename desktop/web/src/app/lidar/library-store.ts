@@ -77,8 +77,20 @@ export async function refreshOpenImportJob(): Promise<void> {
   }
 }
 
+/**
+ * One polled tick: job and library refresh together so a terminal job and the
+ * library head it published are observed as a pair. A second library read after
+ * a terminal job closes the window where the job settled but the head is stale.
+ */
 async function pollLidarState(): Promise<void> {
   await Promise.all([refreshLidarLibrary(), refreshOpenImportJob()])
+  const job = openImportJob.value
+  if (
+    job !== null &&
+    (job.state === 'Complete' || job.state === 'Cancelled' || job.state === 'Failed')
+  ) {
+    await refreshLidarLibrary()
+  }
   if (!hasActiveWork(lidarLibrary.value) && !importIsActive(openImportJob.value)) {
     stopLidarPolling()
   }
@@ -109,10 +121,20 @@ export function stopLidarPolling(): void {
   }
 }
 
+/**
+ * Subscribe a surface to the shared library snapshot.
+ *
+ * Panel navigation must not stop active-job settlement: the Desktop-lifetime
+ * workflow owner owns the timer, and this observer only refreshes immediately
+ * on mount so reopening Data/Analysis/Layers shows current progress at once.
+ */
 export function installLidarLibraryObserver(): () => void {
   void refreshLidarLibrary()
+  ensureLidarPolling()
   return () => {
-    stopLidarPolling()
+    // Intentionally does not stop polling. Native jobs remain library-owned
+    // even after a panel unmounts; idle polling stops on its own when nothing
+    // needs settlement.
   }
 }
 

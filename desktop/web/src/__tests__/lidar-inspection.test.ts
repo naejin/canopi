@@ -448,4 +448,101 @@ describe('numeric inspection session state', () => {
     // other tests would pass for the wrong reason.
     expect(currentDesign.value?.lidar?.entries).toHaveLength(1)
   })
+
+  /**
+   * R34: an already-displayed answer must become stale when the head changes,
+   * not only an in-flight one. The target stays armed for a fresh sample.
+   */
+  it('marks a displayed value stale when the head changes after the answer', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 12.5, units: 'm' } })
+    await reading
+    expect(inspectionSample.value).toEqual({ kind: 'value', value: 12.5, units: 'm' })
+
+    // The layer publishes a new head after the answer was displayed.
+    lidarLibrary.value = libraryWithGeneration('gen-2') as never
+    reconcileInspectionWithPresentation()
+    expect(inspectionSample.value).toEqual({ kind: 'stale' })
+    // The target stays armed so the user can re-aim for a fresh sample.
+    expect(inspectionTarget.value?.id).toBe('lyr-1')
+    expect(hasInspectionPointerHandler()).toBe(true)
+  })
+
+  it('cancels a pending lookup when the head changes before the answer', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    const requestId = (samplePixel.mock.calls[0]?.[0] as { request_id: string }).request_id
+    expect(inspectionSample.value).toEqual({ kind: 'loading' })
+
+    lidarLibrary.value = libraryWithGeneration('gen-2') as never
+    reconcileInspectionWithPresentation()
+    expect(cancelSample).toHaveBeenCalledWith(requestId)
+    expect(inspectionSample.value).toEqual({ kind: 'stale' })
+
+    // The cancelled answer cannot restore the old value.
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 99, units: 'm' } })
+    await reading
+    expect(inspectionSample.value).toEqual({ kind: 'stale' })
+  })
+
+  it('marks a displayed NoData answer stale on a head change', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    pending[0]?.({ NoData: { generation_id: 'gen-1' } })
+    await reading
+    expect(inspectionSample.value).toEqual({ kind: 'no-data' })
+
+    lidarLibrary.value = libraryWithGeneration('gen-2') as never
+    reconcileInspectionWithPresentation()
+    expect(inspectionSample.value).toEqual({ kind: 'stale' })
+  })
+
+  /**
+   * R35: re-entering inspection must cancel the previous request by its id,
+   * including same-target re-entry.
+   */
+  it('cancels the previous request when inspection re-aims, including same target', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const first = sampleInspectionPoint(POINT)
+    const firstId = (samplePixel.mock.calls[0]?.[0] as { request_id: string }).request_id
+
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    expect(cancelSample).toHaveBeenCalledWith(firstId)
+
+    // The overwritten session's late answer cannot publish.
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 50, units: 'm' } })
+    await first
+    expect(inspectionSample.value).toEqual({ kind: 'idle' })
+  })
+
+  it('supersedes a pending answer on an invalid re-aim', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const first = sampleInspectionPoint(POINT)
+    const firstId = (samplePixel.mock.calls[0]?.[0] as { request_id: string }).request_id
+
+    await sampleInspectionPoint({ lat: Number.NaN, lon: 0 })
+    expect(cancelSample).toHaveBeenCalledWith(firstId)
+    expect(inspectionSample.value).toEqual({ kind: 'unavailable', reason: 'bad-point' })
+
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 50, units: 'm' } })
+    await first
+    expect(inspectionSample.value).toEqual({ kind: 'unavailable', reason: 'bad-point' })
+  })
+
+  it('ends inspection and releases the gesture when navigating to Location', async () => {
+    const { activePanel } = await import('../app/shell/state')
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const reading = sampleInspectionPoint(POINT)
+    expect(hasInspectionPointerHandler()).toBe(true)
+
+    activePanel.value = 'location'
+    // The observer ends the session without waiting for a later reconcile.
+    expect(inspectionTarget.value).toBeNull()
+    expect(hasInspectionPointerHandler()).toBe(false)
+
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 1, units: 'm' } })
+    await reading
+    expect(inspectionSample.value).toEqual({ kind: 'idle' })
+  })
 })

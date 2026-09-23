@@ -1,7 +1,8 @@
-import { computed, signal } from '@preact/signals'
+import { computed, effect, signal } from '@preact/signals'
 import type { LidarSampleOutcome } from '../../generated/contracts'
 import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
+import { activePanel } from '../shell/state'
 import { readLidarPresentation, lidarLibrary } from './library-store'
 import {
   inspectionPointForScenePoint,
@@ -143,9 +144,12 @@ function nextRequest(): number {
  *
  * Hiding that layer, removing it from the Design, replacing the Design,
  * navigating to Location or tearing the workspace down all leave this mode, so
- * the mode can never outlive the entity it describes.
+ * the mode can never outlive the entity it describes. Any previous lookup is
+ * cancelled before the session is overwritten, including same-target re-entry.
  */
 export function beginInspection(target: InspectionTarget): void {
+  // Cancel before replacement so re-aiming cannot orphan a live read.
+  cancelPendingLookup(session)
   const designIdentity = currentDesignIdentity()
   session = {
     request: nextRequest(),
@@ -158,9 +162,11 @@ export function beginInspection(target: InspectionTarget): void {
   inspectionSession.value = target
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
+  lastObservedGenerationId = readCurrentGenerationId(target)
   // Arm the canvas gesture here so entering inspection cannot leave the mode
   // active but unable to receive a click.
   installInspectionPointerHandler()
+  installInspectionObserver()
   reconcileInspectionWithPresentation()
 }
 
@@ -186,18 +192,20 @@ export function endInspection(): void {
   inspectionSession.value = null
   inspectionLocation.value = null
   inspectionSample.value = { kind: 'idle' }
-  // Release the gesture in the same step, so a later ordinary click is drawing
-  // again and no handler outlives the session.
+  lastObservedGenerationId = null
+  // Release the gesture and the observer in the same step, so a later ordinary
+  // click is drawing again and no handler or subscription outlives the session.
   releaseInspectionPointerHandler()
+  disposeInspectionObserver()
 }
 
 /**
  * Abandon inspection if its layer is no longer presented or no longer visible.
  *
- * Called from the presentation owner rather than by polling, so a hidden or
- * removed layer drops the mode in the same interaction that changed it. A
- * Design replacement presents a different library view, so the same check also
- * ends a session whose Design is gone.
+ * Called from the presentation owner and the reactive observer rather than by
+ * polling, so a hidden or removed layer drops the mode in the same interaction
+ * that changed it. A Design replacement presents a different library view, so
+ * the same check also ends a session whose Design is gone.
  */
 export function reconcileInspectionWithPresentation(): void {
   const target = inspectionSession.value
@@ -211,7 +219,76 @@ export function reconcileInspectionWithPresentation(): void {
   )
   if (!presented || !presented.visible) {
     endInspection()
+    return
   }
+  // A head change under an armed target invalidates displayed and pending
+  // answers without ending the session: the user may re-aim for a fresh sample.
+  const generation = readCurrentGenerationId(target)
+  if (lastObservedGenerationId !== generation) {
+    lastObservedGenerationId = generation
+    invalidateAnswersForHeadChange()
+  }
+}
+
+/**
+ * Cancel any in-flight lookup and mark displayed answers stale after a head
+ * change. The target stays armed so the next aim samples the new head.
+ */
+function invalidateAnswersForHeadChange(): void {
+  cancelPendingLookup(session)
+  if (session) {
+    session = { ...session, pendingRequestId: null, request: nextRequest() }
+  }
+  const sample = inspectionSample.value
+  if (
+    sample.kind === 'value' ||
+    sample.kind === 'no-data' ||
+    sample.kind === 'loading'
+  ) {
+    inspectionSample.value = { kind: 'stale' }
+  }
+}
+
+/** The generation the observer last accepted for the inspected entity. */
+let lastObservedGenerationId: string | null = null
+
+let inspectionObserverDisposer: (() => void) | null = null
+
+/**
+ * Install one disposable observer of Design identity, entity presence and
+ * displayed generation for the active inspection session.
+ *
+ * Hide/remove, Design replacement, Location navigation and a published head
+ * change all arrive here reactively, so a completed answer cannot silently
+ * outlive the generation it was read from even when no action module runs.
+ */
+export function installInspectionObserver(): () => void {
+  disposeInspectionObserver()
+  inspectionObserverDisposer = effect(() => {
+    const target = inspectionSession.value
+    // Subscribe to the identities the fence depends on.
+    void designSessionStore.sessionIdentity.value
+    void currentDesign.value
+    void lidarLibrary.value
+    const panel = activePanel.value
+    if (!target) {
+      lastObservedGenerationId = null
+      return
+    }
+    // Leaving Canvas for Location (or any other primary surface) ends the
+    // canvas gesture and releases its inspection session.
+    if (panel !== 'canvas') {
+      endInspection()
+      return
+    }
+    reconcileInspectionWithPresentation()
+  })
+  return disposeInspectionObserver
+}
+
+export function disposeInspectionObserver(): void {
+  inspectionObserverDisposer?.()
+  inspectionObserverDisposer = null
 }
 
 /**
@@ -225,6 +302,9 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
   const target = inspectionTarget.value
   if (!target || !session) return
   if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+    // Supersede any older pending answer so it cannot publish after this refusal.
+    cancelPendingLookup(session)
+    session = { ...session, pendingRequestId: null, request: nextRequest() }
     inspectionSample.value = { kind: 'unavailable', reason: 'bad-point' }
     return
   }
@@ -237,6 +317,9 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
   )
   const expectedGenerationId = readCurrentGenerationId(target)
   if (!presented || !expectedGenerationId) {
+    // Same fence as a bad point: an older pending lookup must not become current.
+    cancelPendingLookup(session)
+    session = { ...session, pendingRequestId: null, request: nextRequest() }
     inspectionSample.value = { kind: 'unavailable', reason: 'missing-generation' }
     return
   }
@@ -255,6 +338,7 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
     expectedGenerationId,
   }
   session = mine
+  lastObservedGenerationId = expectedGenerationId
   inspectionSample.value = { kind: 'loading' }
   inspectionLocation.value = point
 

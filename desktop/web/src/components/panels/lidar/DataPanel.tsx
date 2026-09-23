@@ -57,6 +57,14 @@ export function DataPanel() {
   const [draftName, setDraftName] = useState('')
   const [impact, setImpact] = useState<LidarDeleteImpact | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Whether an import submission is in flight.
+   *
+   * Guards the commit path so an unguarded double click cannot create duplicate
+   * datasets or submit the same batch twice. Released on every terminal path so
+   * a failed submission leaves the form retryable rather than permanently stuck.
+   */
+  const [submitting, setSubmitting] = useState(false)
 
   const closeRow = () => {
     setRow(null)
@@ -113,11 +121,23 @@ export function DataPanel() {
             className={styles.inlineForm}
             onSubmit={(event) => {
               event.preventDefault()
+              if (submitting) return
               if (selection.layer !== null) {
                 const target = selection.layer
                 const paths = selection.paths
-                setSelection(null)
-                void run(() => importSourcesIntoLayer(target.id, paths))
+                setSubmitting(true)
+                setError(null)
+                void (async () => {
+                  try {
+                    await importSourcesIntoLayer(target.id, paths)
+                    setSelection(null)
+                  } catch (cause) {
+                    // Keep the chosen files so the user can retry immediately.
+                    setError(cause instanceof Error ? cause.message : String(cause))
+                  } finally {
+                    setSubmitting(false)
+                  }
+                })()
                 return
               }
               const name = newDatasetName.trim()
@@ -130,12 +150,24 @@ export function DataPanel() {
               const paths = selection.paths
               const kind = draftKind
               const unit = { label: unitLabel.trim() || null, unknown: unitUnknown }
-              setSelection(null)
-              setNewDatasetName('')
-              setDraftKind(null)
-              setUnitLabel('')
-              setUnitUnknown(false)
-              void run(() => importSourcesIntoNewLayer(paths, name, kind, unit))
+              setSubmitting(true)
+              setError(null)
+              void (async () => {
+                try {
+                  await importSourcesIntoNewLayer(paths, name, kind, unit)
+                  setSelection(null)
+                  setNewDatasetName('')
+                  setDraftKind(null)
+                  setUnitLabel('')
+                  setUnitUnknown(false)
+                } catch (cause) {
+                  // Leave the chosen files and interpretation in place so the
+                  // user can retry without re-choosing or losing the measurement.
+                  setError(cause instanceof Error ? cause.message : String(cause))
+                } finally {
+                  setSubmitting(false)
+                }
+              })()
             }}
           >
             <p className={styles.selectedFiles}>
@@ -205,11 +237,12 @@ export function DataPanel() {
                 type="submit"
                 className={styles.primary}
                 disabled={
-                  selection.layer === null
-                  && (draftKind === null
-                    || (draftKind === 'OtherContinuous'
-                      && unitLabel.trim().length === 0
-                      && !unitUnknown))
+                  submitting
+                  || (selection.layer === null
+                    && (draftKind === null
+                      || (draftKind === 'OtherContinuous'
+                        && unitLabel.trim().length === 0
+                        && !unitUnknown)))
                 }
               >
                 {t('canvas.lidar.data.importConfirm')}

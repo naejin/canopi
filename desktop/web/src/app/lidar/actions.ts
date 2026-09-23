@@ -38,6 +38,10 @@ import {
   trackImportJob,
 } from './library-store'
 import { designSessionStore } from '../document-session/store'
+import {
+  discardImportAttachmentIntent,
+  recordImportAttachmentIntent,
+} from './workflow'
 import { reconcileInspectionWithPresentation } from './inspection'
 
 /**
@@ -97,7 +101,9 @@ export async function chooseImportFiles(): Promise<string[] | null> {
  * The dataset is created first because the interpretation must be explicit and
  * attached before anything is prepared, and the one-step job then prepares,
  * validates and publishes the batch. A failure leaves the empty dataset
- * retryable rather than presenting it as ready.
+ * retryable rather than presenting it as ready. Attachment is deferred to the
+ * workflow owner: it happens once on committed success, and only in the Design
+ * session that submitted the import.
  */
 export async function importSourcesIntoNewLayer(
   paths: string[],
@@ -105,10 +111,14 @@ export async function importSourcesIntoNewLayer(
   kind: LidarMeasurementKind,
   unit: { label: string | null; unknown: boolean },
 ): Promise<void> {
+  // Capture the submitting Design before any await, so a replacement during
+  // the import cannot receive an attachment the user made in this document.
+  const identity = designSessionStore.sessionIdentity.value
   await withLidarError(async () => {
     const layerId = await lidarCreateLayer(name, kind, unit)
     await refreshLidarLibrary()
     const jobId = await lidarImportSources(layerId, paths)
+    recordImportAttachmentIntent(jobId, layerId, identity)
     await trackImportJob(jobId)
   })
 }
@@ -118,14 +128,17 @@ export async function importSourcesIntoNewLayer(
  *
  * The dataset already declares how its values are measured, so its
  * interpretation is reused rather than asked for again; the chosen files are
- * what the user is confirming.
+ * what the user is confirming. Attachment uses the same session-fenced intent
+ * as a new-dataset import.
  */
 export async function importSourcesIntoLayer(
   layerId: string,
   paths: string[],
 ): Promise<void> {
+  const identity = designSessionStore.sessionIdentity.value
   await withLidarError(async () => {
     const jobId = await lidarImportSources(layerId, paths)
+    recordImportAttachmentIntent(jobId, layerId, identity)
     await trackImportJob(jobId)
   })
 }
@@ -137,6 +150,8 @@ export async function cancelOpenImport(): Promise<void> {
   }
   await withLidarError(async () => {
     await lidarCancelImport(job.job_id)
+    // Cancellation must not attach; consume the intent immediately.
+    discardImportAttachmentIntent(job.job_id)
     await refreshOpenImportJob()
     await refreshLidarLibrary()
   })
