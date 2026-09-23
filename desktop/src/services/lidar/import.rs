@@ -4589,12 +4589,17 @@ mod tests {
     }
 
     /// Independently recomputed value range for the retained conversion.
-    fn oracle_range(raw: &[u8]) -> [f64; 2] {
+    /// The range an oracle expects for one source.
+    ///
+    /// A value the source itself declares as NoData is not one of its values, so
+    /// it must not widen the reported range even though it is finite: a legend
+    /// that spanned it would describe data the source does not hold.
+    fn oracle_range(raw: &[u8], nodata: Option<f32>) -> [f64; 2] {
         let mut min = f64::INFINITY;
         let mut max = f64::NEG_INFINITY;
         for chunk in raw.chunks_exact(4) {
             let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-            if value.is_finite() {
+            if value.is_finite() && Some(value) != nodata {
                 min = min.min(value as f64);
                 max = max.max(value as f64);
             }
@@ -4755,8 +4760,8 @@ mod tests {
             }
             assert_eq!(
                 source.value_range,
-                oracle_range(&oracle),
-                "value range keeps the retained finite-NoData behaviour"
+                oracle_range(&oracle, Some(-9999.0)),
+                "the range covers the source's own values and nothing it declares as no data"
             );
         }
 
@@ -8312,8 +8317,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// An Apply that fails after its review publishes nothing, and a shared
-    /// asset another publication already references survives exactly as it was.
+    /// A publication that fails after preparation publishes nothing, and a
+    /// shared asset another publication already references survives exactly as
+    /// it was.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_failed_apply_leaves_a_reused_asset_and_the_head_intact() {
@@ -8372,13 +8378,13 @@ mod tests {
         );
         assert_eq!(head_of(&library, &layer_id).id, head_before.id);
 
-        // A third job reuses that file beside a far source, staged under a
-        // raised envelope so staging itself succeeds.
+        // A third job reuses that file beside a far source. It prepares
+        // normally — the ordered route charges occurrences, not an envelope —
+        // so the failure below is a real publication failure rather than an
+        // admission refusal.
         let far = write_placed_fixture(&engine, &root, "far", 5004.0, 5004.0, 4, 4, -9999.0, 7.0);
-        let (_job_three, staging_three) = {
-            let _raised = admission::limits_probe::raise(u64::MAX / 2, 16, 512 * 1024 * 1024);
-            stage_review(&library, &layer_id, &[small.clone(), far], &cancel)
-        };
+        let (_job_three, staging_three) =
+            stage_review(&library, &layer_id, &[small.clone(), far], &cancel);
         assert_eq!(
             staging_three.sources[0]
                 .source_cog
@@ -8398,11 +8404,13 @@ mod tests {
             );
         }
 
-        // The review accepted the pair under the override; Apply rechecks the
-        // production envelope and refuses before publishing anything.
+        // A publication interrupted after promotion leaves nothing behind and
+        // never disturbs the asset the accepted head already references.
+        promotion_probe::fail_at(promotion_probe::FaultPoint::BeforeTransaction);
         let error = apply_import(&library, &staging_three, true, false, &cancel)
-            .expect_err("the envelope is rechecked at Apply");
-        assert!(error.contains("import publication"), "{error}");
+            .expect_err("the injected failure refuses the publication");
+        promotion_probe::clear();
+        assert!(error.contains("injected failure"), "{error}");
         let head_after = head_of(&library, &layer_id);
         assert_eq!(head_after.id, head_before.id);
         assert_eq!(head_after.coverage_cells, head_before.coverage_cells);
