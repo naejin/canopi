@@ -449,6 +449,46 @@ Broader skill or shared tooling changes need their own user authorization.
 
 
 
+**F2b/R50 synthesis at `ef8b858f` (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** Cleanup drain is safe when a cleanup unregisters
+   another registration; R50 retry identity holds through the authored IPC
+   wrapper and the native command→executor→library seam with prior-publication
+   preservation. Full frontend 2837, native 120, acceptance 2/2, gallery and
+   builds green. Driven Desktop/Web remains unobserved.
+2. **Escapes and causes.** F2b descending-index drain double-ran a cleanup
+   after splice: implementation. R50 fixture moved `prior_result`: test setup.
+3. **Necessity and reuse.** Reused lifetime registry, `retry_analysis`,
+   `NativeOperationExecutor`, AnalysisPanel. No new framework.
+4. **Working-method/tool changes.** Supplied F2b probe reproduced exactly (2×
+   vs 1). Keep.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
+   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
+   Integration and release separate.
+
+**F2b/R50 synthesis at `ef8b858f` (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** Cleanup drain is safe when a cleanup unregisters a
+   listener; R50 retry identity holds through the authored IPC wrapper and the
+   native command→executor→library with changed-head publication preservation.
+   Full frontend 2837, native 120, acceptance 2/2, gallery/builds/bindings
+   green. Driven Desktop/Web remains unobserved.
+2. **Escapes and causes.** F2b descending drain + splice shifted a cleanup into
+   the next index: implementation. R50 fixture move: test setup.
+3. **Necessity and reuse.** Reused surface adapter drain, `retry_analysis`,
+   `NativeOperationExecutor`, AnalysisPanel. No new framework.
+4. **Working-method/tool changes.** Supplied F2b probe reproduced exactly (2×
+   teardown); R50 IPC boundary kept the real action/wrapper. Keep.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
+   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
+   Integration and release separate.
+
 **F1/F2/R50 synthesis at `265b365c` (partial).** Commands live in the
 [receipt](completion-receipt.md#current-correction-acceptance). Independent
 acceptance remains a separate entry by the main reviewer.

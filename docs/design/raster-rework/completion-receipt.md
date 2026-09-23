@@ -1,67 +1,37 @@
 # Raster rework completion receipt
 
-Status: partial — independent review at `de336a7d`: F1 passes; F2b teardown regression and R50 boundary/preservation proof remain; whole-candidate evidence incomplete.
+Status: partial — F2b cleanup drain and R50 boundary proofs delivered at `ef8b858f`. C5 gates green. Unavailable: IGN fixtures, driven Desktop/Web, live key, packaged smoke. Not independently accepted.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-[Review and fixed next cases](completion-review-de336a7d.md) govern this delivery.
-Reviewer rerun at `de336a7d`: **97 frontend tests, 1 native retry identity test and
-2 native R48/R51 proofs pass**. Added teardown probe: **1 failed, 3 controls pass**.
-Full frontend 2835/288 and other C5 gates remain implementer-reported.
+Review at `de336a7d` accepted F1 and left F2b teardown drain and R50 boundary
+proof open. Repairs delivered at `ef8b858f` after merge `05efedaf`.
+Acceptance-packet and native R48/R51 proofs retained.
 
-| Boundary | Independent disposition / next obligation |
-| --- | --- |
-| F1 installation/replacement/finally | Repaired in reviewed scope; preserve passing cases |
-| F2 retained cleanup / F2b draining | Retention fix exists, but unregister during clear executes cleanup twice; fix mutation-safe draining |
-| R50 UI/action/library | Useful partial proofs; actual IPC wrapper and native command/executor untested; valid prior-result preservation unproven |
-| R48/R51 | Scoped native proofs pass; no scheduler, stress or GUI claim |
-| R43 and driven Desktop/Web | Unverified; latest unavailable labels lack specific attempted command/prerequisite evidence |
-| Private fixtures, keys, other platforms/package | Record exact prerequisites and required remaining gates; do not equate unrun with external |
-
-Update this table in place after execution. Preserve historical measurements below
-with their revision and observation scope. Do not label missing local proof complete.
-
-### Implementer report at de336a7d
-
-`b4704e1d` delivered F1/F2, `265b365c` added native retry/Design-switch tests;
-`4d418b2b` merged the previous docs and `de336a7d` reconciled delivery notes.
-Reported gates: tsc, full frontend 2835/288, native LiDAR 119, native acceptance 2,
-fmt/strict Clippy/workspace/docs, gallery/both builds/bindings pass. These totals
-are not independent whole-candidate acceptance. Native retry test setup failures
-(NOT NULL and held catalogue lock) were fixture defects, not product TDD RED.
-
-### Supplied packet repairs at 592e04ed
-
-Reviewer-authored acceptance packet at `0a3a29f4` reproduced 5 frontend RED
-cases and 2 passing native proofs. Repairs delivered at `a41f76c7` on the
-combined tree (test merge `1c382047`, docs merge `443d3201`). Assertions were
-not weakened; mocks that hid the returned-snapshot contract were corrected.
-
-| Obligation | Test / observed RED | GREEN repair | Real caller | Remaining limit |
+| Obligation | Test / observed RED | GREEN | Real caller | Remaining limit |
 | --- | --- | --- | --- | --- |
-| F1 reinstall fence | `lidar-settlement-acceptance.test.ts` supplied probe; status became `obsolete read error` | installation identity token; fence success/error/finally | real store + workflow | — |
-| F1 replacement/finally | same suite; old success consumed new intent; old finally released guard | attempt-owned guards keyed by install generation | real store + workflow | — |
-| F2 retained cleanup | `maplibre-surface-adapter.test.ts` F2; `map.off` 9 vs 6 | `off` drops retained cleanup registration | real surface adapter + hide/show path | — |
-| R50 native identity | `mod.rs::retry_preserves_definition_identity_and_refuses_changed_head`; RED only as fixture NOT NULL | same definition, new job, changed-head refusal, name/params preserved | `LidarLibrary::retry_analysis` | no scheduler retry claim |
-| R50 Design-switch | `lidar-actions.test.ts` R50 | baseline GREEN (already correct) | `retryAnalysis` action | IPC transport mocked |
-| R50 UI name-based | `lidar-analysis-panel.test.tsx` E5/R50 | retained | AnalysisPanel | — |
+| F2b cleanup drain | `maplibre-surface-adapter.test.ts` supplied probe; teardown ran 2× | destructive drain in `clear()` | real surface adapter + mount/lifetime composition | — |
+| F1 reinstall fence | retained | retained | real store + workflow | — |
+| R50 UI→authored IPC wrapper | `lidar-retry-ipc-boundary.test.tsx` | baseline GREEN (behavior present) | AnalysisPanel + real `actions.ts` + `ipc/lidar.ts` | transport mocked |
+| R50 native command→executor→library | `mod.rs::retry_through_executor_preserves_publication_and_refuses_changed_head` | baseline GREEN | `executor.run` + `retry_analysis` | worker retry only |
+| R50 changed-head preserves publication | same test; prior head/name unchanged, 0 retry jobs | baseline GREEN | native library | — |
+| R50 Design-switch + healthy | `lidar-actions.test.ts` retained | retained | `retryAnalysis` action | — |
 | R48/R51 | native acceptance packet | retained pass | generated plane + hooks | worker retry / deterministic interleaving only |
-| R27/R43 | capacity-plane measurements retained | retained | real GDAL | live scratch/queue separate; IGN fixtures unavailable |
-| Acceptance packet 5 fixes | retained | retained | retained | — |
+| R27/R43 | capacity-plane measurements retained | retained | real GDAL | live scratch/queue unverified |
 
-### Final gates at `265b365c`
+### Final gates at `ef8b858f`
 
 | Gate | Command | Result |
 | --- | --- | --- |
 | TypeScript | `npx tsc --noEmit` | clean |
-| Full frontend | `npm test` | 2835 passed / 288 files |
+| Full frontend | `npm test` | 2837 passed / 289 files |
 | Native acceptance | `cargo test --lib acceptance_ -- --ignored` | 2 passed |
-| Native LiDAR | `cargo test --lib services::lidar::` | 119 passed / 70 ignored |
-| fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
+| Native LiDAR | `cargo test --lib services::lidar::` | 120 passed / 70 ignored |
 | Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
-| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R43 live scratch/queue | — | **unavailable** |
+| fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R43 live scratch/queue | — | **unverified / unavailable** |
 
 ### Reported delivery at `291d0773` — qualified by current correction
 
