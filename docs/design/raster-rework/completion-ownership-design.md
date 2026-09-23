@@ -1,8 +1,13 @@
 # Raster completion: cohesive lifecycle ownership
 
-Status: active — user-approved architectural correction reviewed at candidate `eb3b5425`; caller repairs and required local proof remain, not independently accepted.
+Status: active — user-approved architectural correction reviewed at `68852cbd`; reviewer-authored test packet `0a3a29f4` supersedes claims of E1–E5 completion.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue `feature/raster-rework-completion`.
 Current guidance: [sole execution prompt](completion-agent-prompt.md), [C0–C5 scope](completion-design.md), [source-import amendment](source-import-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#ownership-correction-and-next-use-evidence).
+
+The [executable acceptance packet](completion-acceptance-tests.md) supplies the
+current failing caller cases and scoped native proof. Earlier findings below retain
+their reviewed revision; E2/E3 recovery controls and E5 UI names now pass. R48/R51
+are no longer unwritten: their exact proof limits are recorded in the packet.
 
 ## Mandate and precedence
 
@@ -189,9 +194,10 @@ existing small fault hooks rather than sleeps, timing luck or a new test framewo
 
 Then finish the existing obligations: R50 must show each failed result's stored name
 and retry its own definition through UI/IPC/native boundaries with two distinguishable
-failures; Create continues to use the form. R48 needs mid-write capacity/write failure,
-old-publication preservation, cleanup and successful retry. R51 needs a gated native
-in-flight head change for Value and early NoData, with a healthy control. R49 tests
+failures; Create continues to use the form. The supplied R48 test proves mid-write capacity/write failure, old-publication
+preservation, cleanup and worker rerun. The supplied R51 test proves interleaved
+head changes for Value, hole and early NoData with healthy controls. Retain those
+scoped proofs; scheduler/IPC retry and driven workflows remain separate. R49 tests
 must not assume an unguarded Unix `sleep` on Windows: use a portable fixture process
 or explicitly platform-scope the test and report unverified platform behavior.
 
@@ -230,8 +236,9 @@ parameters/name survive retry without creating a new definition. Keep form Creat
 independent. Existing focused tests may cover distinct boundaries when each is real
 and their shared contract is explicit; a new all-stack harness is not required.
 
-R48 mid-write fault/preservation/retry, R51 gated native head change, R43 scratch/queue
-observations and final C5 checks remain required local work where prerequisites exist.
+Run the supplied R48 mid-write fault/preservation/worker-retry and R51 native
+head-change tests when affected. R43 scratch/queue observations and final C5 checks
+remain required local work where prerequisites exist.
 A preflight refusal test does not establish mid-write cleanup. A memory sample does
 not establish scratch peak. Use existing native fault/capacity seams and small
 synthetic fixtures; record actual missing prerequisites only after inspection or a

@@ -1,55 +1,60 @@
 # Raster rework completion receipt
 
-Status: partial — independent review of `eb3b5425` requires E1–E5 repairs and remaining local proof; capacity-plane evidence retained, not independently accepted.
+Status: partial — `68852cbd` still has caller/lifetime defects; reviewer-authored tests at `0a3a29f4` provide five frontend RED cases and passing scoped native R48/R51 proof.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-The [ownership contract and E1–E5 cases](completion-ownership-design.md#review-at-eb3b5425-and-first-regression-cases)
-are the current acceptance authority. Review: four focused suites **46 passed**;
-real-store/workflow diagnostic **one healthy control passed, two regressions failed**.
-No broad native, capacity or GUI rerun was performed by the reviewer.
+The [reviewer test packet](completion-acceptance-tests.md) is the current evidence
+entry. Implementation baseline is `68852cbd`; merge test handoff `0a3a29f4`.
 
-| Obligation at `eb3b5425` | Independent disposition | Evidence needed for next delivery |
+| Boundary | Independent observation | Next delivery obligation |
 | --- | --- | --- |
-| E1 / M movement | Source-confirmed regression: Location and WorldMap handlers are empty | Actual caller movement updates viewport metadata, credit and zoom |
-| E2 / L recovery | Reproduced: restored transport plus six seconds produces zero attachments | Existing polling recovers pending intent automatically |
-| E3 / L single attempt | Reproduced: repeated Complete starts two reads | One in-flight attempt per job, with separate-job freshness retained |
-| E4 / M attribution | Source-confirmed duplicate ownership and control churn | One production control; stable unchanged credit; other-source credit retained once |
-| E5 / R50 identity | Source-confirmed stored result name omitted | Named-row Retry through action/IPC and saved-definition native proof |
-| R48 / R51 | Required native fault/race regressions unfinished | Mid-write preservation/cleanup/retry and gated head-change Value/NoData tests |
-| R27 / R43 | Generated capacity plane is useful reported evidence | Preserve fixture provenance and distinguish process memory, scratch peak, queue and fault evidence; retain ceilings pending required lift proof |
-| C0–C5 | Not independently accepted | Exact final-tree commands/outcomes and specific external limits |
+| Location / WorldMap movement | Healthy initial metadata, then request count stays 1 after move; both lack the event capability | Make actual mounted-caller regressions green |
+| Canvas mount listener ownership | Three hide/show cycles increase moveend listeners from 2 to 5 | Release mount-owned subscription before remount; final teardown stays clean |
+| Canvas attribution | Automatic control remains enabled alongside owned path | Single-control behavior, including retained other-source credits |
+| Settlement | E2/E3 and healthy completion controls pass; late disposed read overwrites status | Fence both success/error outcomes and retain recovery/single-attempt controls |
+| E5 / R50 | Names and row-selected UI Retry pass | Real action/IPC/native saved-definition evidence still required |
+| R48 | Generated two-block native test passes capacity and filesystem fault after output, preservation, cleanup and worker rerun | Retain test; do not claim scheduler/IPC retry or asset reclamation from it |
+| R51 | Generated native Value/hole/early-NoData controls reject deterministically interleaved head change | Retain test; no thread-stress or GUI claim |
+| Final-tree gates | Reviewer TypeScript, workspace Rust tests/check, fmt, strict workspace/all-target Clippy, docs pass; frontend focused packet intentionally 76 pass / 5 fail | Repair frontend REDs, then final C5 gates and available workflow/evidence lanes |
 
-At delivery update this table in place with repair revision, test/command, intended
-behavioral RED, GREEN, real caller and residual limit. Link evidence once; do not
-copy logs. Keep missing proof separate from product defects and genuine external
-prerequisites. Final reviewer adds independent disposition after delivery.
+Sensitivity evidence and exact commands are in the packet. Temporary wiring made all
+8 Location/WorldMap tests pass; removing native final currency checking failed early
+NoData. All experiment mutations were restored. These results do not establish full
+independent acceptance. Update these current rows in place after implementation.
 
-### Implementer report at eb3b5425 — qualified by independent review
+### Implementer report at 68852cbd — qualified by independent review
 
-The report below is retained for provenance. Blank limitations and migrated-caller
-claims do not establish acceptance. L1 used a store mock; M1 exercised the mount
-helper; R50's setup failure was not behavioral RED. The current table above governs.
+The report below incorrectly says every map passes lifetime events; only Canvas did.
+Its all-E1–E5-repaired claim is superseded by the current evidence above.
 
-Ownership correction TDD on the combined tree at `86c74b14`
-(merge `15463037`, mount+ordered-reads `86c74b14`). RED/GREEN recorded per cycle.
+Caller-level E1–E5 repairs on the combined tree after merge `d38be95d`
+(ownership TDD retained from `86c74b14`/`eb3b5425`). TDD RED/GREEN recorded
+per cycle through real owners where the contract required them.
 
-| Obligation | Baseline / test command / intended RED | Repair / GREEN | Real caller | Remaining limit |
+| Obligation | Test / intended RED | GREEN | Real caller | Remaining limit |
 | --- | --- | --- | --- | --- |
-| L1 failed-read fallthrough | `lidar-import-attachment.test.ts` L1; RED: upsert despite failed read | workflow `.catch` retains intent | real workflow + store mock | — |
-| L2 returned snapshot | `lidar-library-store.test.ts` L2; RED: returned undefined | `refreshLidarLibraryFresh` returns snapshot | real store | first attachment test was insensitive; store contract strengthened |
-| L3 fence-ordered fresh reads | `lidar-library-store.test.ts` L3; RED: B joined A / timeout | `libraryReadSequence` barrier | real store | — |
-| L4 no snapshot regression | `lidar-library-store.test.ts` L4; RED: older passive overwrote | ordered publish by start sequence | real store | — |
-| M1 no-event initial mount | `review-provider-regressions.test.ts` M1; RED: `mountBasemapLifecycle` missing | `mountBasemapLifecycle` | WorldMap/Location/Canvas migrated | — |
-| M5 equivalent world copies | `review-provider-regressions.test.ts` M5; RED: `350..370` null | modulo world-copy normalize | `readViewportMetadata` | — |
-| R50 two-definition Retry | `lidar-analysis-panel.test.tsx` R50; RED: 0 Retry buttons (insensitive until layer selected) | behavior already present | AnalysisPanel per-row Retry | IPC/native boundary not re-driven |
-| R48 low-capacity refusal | `analysis.rs` `low_capacity_refuses_sparse_slope_admission_before_output` | `admit_sparse_slope_storage` + `capacity_probe` | native admission | mid-write fault/retry not injected |
-| R49 portable timeout | `engine.rs` timeout/cancel tests | `#[cfg(unix)]` scope | engine wait_cancellable | Windows unverified |
-| R44–R47, R51 prior repairs | retained from `c02d8164` | retained | retained | R51 in-flight native gate still open |
-| R27/R43 capacity evidence | `e2e_capacity_plane_import_display_and_bounded_reads` with generated `CANOPI_LIDAR_CAPACITY_PLANE` | **PASSED** | real GDAL lane | IGN MNT/MNH fixtures missing |
-| C0–C5 gates | see table below | green except named external | — | driven Desktop/Web, live key, packaged smoke unavailable |
+| E1 viewport on moveend | `review-provider-regressions.test.ts` E1; RED: no moveend listener | mount owns `events.on('moveend')` → `updateViewport` | WorldMap/Location/Canvas pass `lifetime` as `events` | live Google key not required for this detector |
+| E2 recovery after failed read | `lidar-settlement-recovery.test.ts` E2; RED: 0 attaches after recovery | `libraryPollTick` retries pending settlement | real store + workflow | — |
+| E3 one attempt per job | `lidar-settlement-recovery.test.ts` E3; RED: extra read on second Complete | `settlingJobs` guard | real store + workflow | — |
+| E4 attribution identity | `review-provider-regressions.test.ts` E4; RED: create ×3 | keep control on unchanged credit; no empty control; suppress auto controls | Location/WorldMap `attributionControl: false` | live control render not driven |
+| E5 name-based Retry | `lidar-analysis-panel.test.tsx` E5; RED: names missing | show `result.name`; Retry located by row name | AnalysisPanel | IPC/native not re-driven |
+| L1–L4 / M1 / M5 / R48 / R50 | retained from `eb3b5425` | retained | retained | R51 gate, R48 mid-write open |
+| R27/R43 | capacity-plane GDAL lane (prior run) | retained measurements | real GDAL | IGN MNT/MNH fixtures unavailable |
+| C0–C5 | gates below | green | — | driven Desktop/Web, live key, packaged smoke unavailable |
+
+### Final gates after E1–E5
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| TypeScript | `npx tsc --noEmit` | clean |
+| Full frontend | `npm test` | 2822 passed / 287 files |
+| Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
+| Native LiDAR | `cargo test -p canopi-desktop --lib services::lidar::` | 118 passed / 68 ignored |
+| fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R51 in-flight gate, R48 mid-write | — | **unavailable / unfinished local proof** |
 
 ### Capacity plane measurements at `86c74b14` (GDAL 3.8.4)
 
@@ -61,17 +66,8 @@ Command: `CANOPI_LIDAR_CAPACITY_PLANE=/tmp/canopi-capacity-plane.tif cargo test 
 - Seam window: 16 samples match the analytic plane; holes: 4 declared rectangles read as exactly NoData
 - Sampled process tree every 50 ms: baseline 15 MiB, peak total 200 MiB, incremental 184 MiB (lower bound; 7177 complete samples)
 
-### Final gates at `86c74b14`
-
-| Gate | Command | Result |
-| --- | --- | --- |
-| TypeScript | `npx tsc --noEmit` | clean |
-| Full frontend | `npm test` | 2816 passed / 286 files |
-| Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
-| Native LiDAR | `cargo test -p canopi-desktop --lib services::lidar::` | 118 passed / 68 ignored |
-| Ignored GDAL unit lanes | `cargo test --lib -- --ignored` | **67 passed**; 3 e2e failed only for missing private IGN/plane env at run time (plane lane then passed when generated) |
-| fmt / clippy / docs | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py` | clean |
-| Driven Desktop/Web, live key, Windows/macOS, packaged smoke | — | **unavailable** |
+These are retained implementer measurements, not rerun by the reviewer. Sampled
+process memory is not peak scratch, queue or fault evidence.
 
 ### Reported delivery at `291d0773` — qualified by current correction
 
