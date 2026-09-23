@@ -1,8 +1,11 @@
 # Final ownership repairs and remaining proof
 
-Status: active — accepted next implementation scope after independent review of `592e04ed`; whole-candidate acceptance remains partial.
+Status: evidence — reviewed at `de336a7d`: F1 repaired, F2 refined by a teardown regression, R50 proof incomplete; use the current prompt.
 Tracking: `canopi-j571.1`; existing `feature/raster-rework-completion`.
 Current guidance: [sole prompt](completion-agent-prompt.md), [ownership contract](completion-ownership-design.md), [C0–C5](completion-design.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md).
+
+Current repair guidance: [teardown and retry boundary proof](completion-review-de336a7d.md).
+The fixed invariants below remain; the prior execution sequence is superseded.
 
 ## Evidence and scope
 
