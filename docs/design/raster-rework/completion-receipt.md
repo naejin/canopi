@@ -1,36 +1,91 @@
 # Raster rework completion receipt
 
-Status: evidence — foundation integrated; candidate `5d0a5e0b` requires R15–R26 corrections and the new source-import route. Prior capacity, gate and workflow evidence is retained and revision-labelled; no corrected candidate is verified yet.
+Status: evidence — R15–R25 repaired and gated at `bf43af19`; C1/R26 (the streamed source-import route) is **not** implemented, so this is a partial delivery, not a verified release candidate. Prior capacity, gate and workflow evidence below is retained and revision-labelled.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
 This section is the current claim boundary. The prior delivery below is evidence
-at its named revisions, not a claim that inspection/providers are functional or
-that only platform observations remain. See the [independent review](completion-review-5d0a5e0b.md)
+at its named revisions. See the [independent review](completion-review-5d0a5e0b.md)
 and [source-import amendment](source-import-design.md). The reviewed tip is
 `5d0a5e0b`; its code gate revision is `2b39ee2a`. Five independent review probes
 failed while 16 existing tests passed; the review names their scope and locations.
 
-The implementer replaces pending entries below with concise measured outcomes at
-the repaired revision. bd remains the execution tracker; this is acceptance evidence.
+The docs handoff merged into the candidate at `5dfae6bc` (conflicts in
+`docs/agent/lidar.md` and this receipt resolved toward the handoff's current
+status with the candidate's revision-labelled evidence preserved). The repaired
+tip is `bf43af19`.
 
 | Boundary | Current evidence / required next proof |
 | --- | --- |
-| C0 preservation | `f61f8494` integrates the accepted foundation; retain `5d0a5e0b` candidate work and merge the new docs; record resulting ancestry |
-| C1 / R23 / R26 import | Pending new production route: no preview/composed scan, nullable exact metadata, disk/resource admission, migrated historical data, above-cap/BigTIFF evidence and actual Data workflow |
-| C2 / R24–R25 workbenches | Pending Remove from Design/Undo, Data-owned import/history, Analysis request/error/retry/unit regressions and visible flow |
-| C3 / R15–R18 inspection | Pending correct point, actual source/result/historical readers, signed coverage, units, cancellation and live lifecycle/keyboard evidence |
-| C4 / R19–R22 providers | Pending outgoing authenticated tile/viewport, actual changed key, metadata, style readiness, mounted Canvas/Location/WorldMap, renewal/disposal and streamed byte bound |
-| C5 combined candidate | Pending corrected-tree gates, real Desktop/Web, package/CI/platform observations and independent review |
+| C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip |
+| C1 / R26 import | **Not implemented.** Production still uses the staging/review/Apply route with `collection::measure` and preview rendering. See "C1 disposition" below for the exact remaining work and why it is not claimed |
+| C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
+| C3 / R15–R18 inspection | **Repaired** at `85d19ca7`: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest`, lattice indices are signed, and the session is fenced to the document session, entity, request and head. GDAL-backed oracle test passes; live isolated-Desktop value verification not re-run this round |
+| C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
+| C5 combined candidate | **Partial.** Frontend gates green at `bf43af19` (283 files / 2757 tests, tsc, gallery check, both edition builds). Rust gates recorded below. No packaged-window smoke, no Windows/macOS build, no live provider/placement observation, no independent acceptance |
 
-For each R15–R26 row in the final disposition record: reproduced revision and
-trigger → repair revision → committed regression and observed failing reason →
-passing result → applicable live proof or explicit gap. Group related rows only
-when their distinct outcomes remain visible. A disputed finding needs concrete
-counterevidence, not silent omission. Record the C1 design amendment separately
-from defect correction so prior implementation is not judged against a later rule.
+## R15–R25 repair record
+
+Each row names the reviewed finding, the reproduction that demonstrates it, the
+repair revision and the committed regression that now pins it.
+
+| Finding | Reproduction (red) | Repair | Committed regression |
+| --- | --- | --- | --- |
+| R15 sample the displayed point | `inspectionAimForScenePoint` turned a scene point into anchor + metre offset, and `inspection.rs` rotated that offset back and added metres to raster CRS coordinates — wrong for any projected CRS whose units are not local metres, and impossible for a degree grid | `85d19ca7`: the request carries only the sampled WGS84 point, produced by the canvas's own `worldToGeo`; `apply_scene_offset`, the anchor-plus-offset request shape and the duplicated bearing math are deleted | `inspection::tests::the_real_transform_lands_in_the_expected_cell` (real `gdaltransform`, independent Web Mercator oracle, non-equatorial latitude); `lidar-inspection.test.ts` asserts the exact outgoing request in `publishes a sampled value for the point the canvas displayed` |
+| R16 read results through their storage contract | `inspection.rs` parsed analysis heads as `import::GenerationManifest` (results carry `analysis::ResultManifest`) and took units from the source layer | `85d19ca7`: source and result resolve separately; a result reads its published chunks and reports its own degrees/percent unit | `inspection::tests::a_slope_result_reports_the_unit_it_was_computed_in` |
+| R17 do not clip to the original lattice | `containing_pixel` rejected negative cell coordinates and cells beyond `grid.width/height`, so valid appended coverage read as NoData | `85d19ca7`: signed lattice coordinates with a representability guard only; coverage is the reader's answer; preserved dense sources read through their compatibility lease instead of a blanket refusal | `cells_beyond_the_lattice_rectangle_keep_their_signed_coordinate`, `the_containing_pixel_is_half_open_at_the_far_edges`, `an_unrepresentable_lattice_index_is_refused` |
+| R18 bind inspection to the lifecycle | Review probes: a pending answer published after the head changed, and inspection survived a Design replacement. The pointer disposer was discarded and `sampleInspectionCentre` had no caller | `85d19ca7`: the session names the document session identity, entity, request and expected head; the head is re-checked at publication; the disposer is owned and released; a Design replacement ends the session; a focusable Sample at view centre button runs the same command | `does not publish an answer whose head moved while it was in flight`, `releases inspection when the Design is replaced`, `releases the canvas gesture when inspection ends or is reconciled away`, `samples the viewport centre through the same command as a click` |
+| R19 make the official request path usable | Review probes: the published descriptor kept `session={session}`, no transformer supplied a token, the viewport request omitted the key, expiry parsing accepted a number where the response has an epoch-seconds string, and copyright/`maxZoomRects` were ignored | `39cfb9a5`: credential-free template plus a per-map `transformRequest` that adds the live session and key for the fixed Google tile endpoint only; keyed viewport request; string expiry; copyright and `maxZoomRects` become the layer's attribution and zoom ceiling; metadata failure is an actionable unavailable state | `serves an authenticated tile request through the map transport`, `authenticates viewport requests and installs their attribution and zoom`, `reports viewport metadata failure as an actionable unavailable state` |
+| R20 wait for a mounted map's style | `bindBasemapProvider` applied a ready contribution straight from `onCreate`, before MapLibre finishes loading even an inline style, where `addSource` throws | `39cfb9a5`: the binding waits for style readiness and applies the latest published state once ready | `waits for a mounted map style before mutating it, then applies the latest state` |
+| R21 finish shared provider ownership | The Canvas built a static contribution, so a configured key was silently ignored there; Location/WorldMap captured the key once, refreshed no viewport metadata, renewed no session and never disposed their provider | `39cfb9a5`: one concrete provider per map lifetime on Canvas, Location and World Map; the configuration is read per call; settled `moveend` refreshes metadata in place; renewal is scheduled before expiry; the provider and its credential are disposed with the map | `follows the official Google session path when a device key is configured` (canvases constructor transform + outgoing URL), `clears the transport credential when the provider is disposed`, `keeps the map contribution stable across a key change without recreating it` |
+| R22 enforce the body bound while reading | `basemap-http.browser.ts` checked `Content-Length`, then called `response.text()` and compared `text.length`, so a chunked answer was buffered whole and the cap was counted in characters | `39cfb9a5`: byte count enforced from the streamed chunks, with the reader cancelled on excess | `enforces the byte cap on a stream that declares no length`, `counts bytes rather than characters…` — mutation-verified: restoring the old `response.text()` implementation fails both |
+| R23 Data owns the import workflow | `DataPanel` started the import but rendered no progress; progress/review/Apply lived only in the Layers panel | `bf43af19`: Data renders its layer's job — phase, determinate progress, Cancel, the named failure and Retry — while the job stays library-owned | `lidar-panel-corrections.test.tsx`: `renders the tracked job of its own layer with progress and Cancel`, `names the failure and offers Retry when the job failed`, `shows another layer its own import action rather than this job` |
+| R24 undoable Remove from Design | Layers offered library/result deletion but no Remove from Design, and no remedy for unavailable references | `bf43af19`: every entry, unavailable ones included, has Remove from Design through Design Edit, with no library deletion | `removePresentationEntry` writes through the existing `removeLidarEntries` seam; the R24 action is exercised through the panel's action menu |
+| R25 make Analysis failures and units observable | A failed Run settled with no visible explanation (the action swallowed the error into a status the panel did not render); Run stayed enabled until a library refresh; every Layers row was labelled `slopeDegrees` | `bf43af19`: the action publishes **and** re-throws; Analysis renders that status and latches the submit; the result's unit is carried on the library summary from the definition's parameters and used by both panels | `shows the failure the action published as well as one it threw`, `refuses a second Run before the first request settles` — mutation-verified by reverting the status render and the latch |
+
+No finding needed a counterexample: each was reproduced and repaired.
+
+## C1 disposition and R26
+
+C1's amendment is **not implemented** in this round. Production import still runs
+`stage_import` → review → `apply_import`, still renders before/after previews
+(`import.rs` preview generation), and still calls `collection::measure` on the
+composed plan before publishing (`import.rs` apply, and `publish_snapshot_members`
+for reorder/remove/undo/restore). The old 24-file / 2 GiB-per-file / 2 GiB-total /
+400,000,000-processing-cell policy is therefore still the production admission
+rule, and R26's activation condition remains unmet in the sense the amendment
+defines: the new route's own resource evidence does not exist because the route
+does not.
+
+This is a scope and budget boundary, not an external blocker: no missing
+credential, fixture or platform prevents it. Naming it plainly is the honest
+alternative to shipping a half-migrated publication path.
+
+The remaining work, in dependency order, is:
+
+1. Derive publication metadata from stored member metadata: exact composed
+   `coverage_cells` becomes nullable (empty composition ⇒ zero; one unchanged
+   member ⇒ its exact facts) and a separately labelled display range with basis
+   `Exact` or `SourceEnvelope` is added. This needs an additive catalogue
+   migration and regenerated bindings, plus the presentation/tile/legend
+   consumers the contract lists.
+2. Delete the preview generation from `stage_import` and the composed scan from
+   both publication call sites, keeping real format/index/disk guards.
+3. Add `lidar_import_sources(layer_id, paths) -> job_id` and retire
+   `lidar_stage_import`/`lidar_apply_import` from production, with the batch
+   atomicity, expected-head capture and conflict rules the amendment fixes.
+4. Rebuild the Data import interaction as choose files → explicit interpretation
+   → Import → progress → cancel/retry, removing the review/Apply screen.
+5. Measure the new route: peak live scratch separate from durable bytes,
+   cancellation settlement, queue refusal, low-space/write failure at the real
+   publication seam, and cold/three-warm display timing.
+
+Until (1)–(5) land, the retired compatibility claims (the overlap-replacement
+checkbox, compulsory merged-source publication and the Q prerequisite) remain
+retired, and no "unlimited capacity" claim is made.
+
 
 For capacity report input identities, cell/byte counts, source/output TIFF format,
 working-memory and cache/queue scope, sampling interval, simultaneous child/app

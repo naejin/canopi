@@ -235,10 +235,7 @@ fn read_one_cell(
     let window = cell_window(pixel)?;
     match &target.read {
         TargetRead::Chunks => Ok(Some(generation::GenerationReader::Chunks(
-            generation::GenerationChunkReader::new(
-                &target.generation_id,
-                generation::RESULT_ROLE,
-            ),
+            generation::GenerationChunkReader::new(&target.generation_id, generation::RESULT_ROLE),
         ))),
         TargetRead::Collection(manifest) => {
             let bounds = collection::ReadBounds {
@@ -260,18 +257,13 @@ fn read_one_cell(
                 Some(bounds),
                 cancel,
             )?;
-            Ok(reader.map(|reader| {
-                generation::GenerationReader::Collection(Box::new(reader))
-            }))
+            Ok(reader.map(|reader| generation::GenerationReader::Collection(Box::new(reader))))
         }
         TargetRead::PreservedDense => {
             let member = collection::preserved_member(library, &target.generation_id, cancel)?;
             let lattice = member.grid.clone();
             let reader = generation::CollectionReader::new(
-                vec![(
-                    format!("inspection-{}", target.generation_id),
-                    member,
-                )],
+                vec![(format!("inspection-{}", target.generation_id), member)],
                 lattice,
             )?;
             Ok(Some(generation::GenerationReader::Collection(Box::new(
@@ -431,10 +423,7 @@ mod tests {
             let expected_column = ((projected_x - origin_x) / cell).floor();
             let expected_row = ((projected_y - origin_y) / -cell).floor();
             assert!(
-                expected_column >= 0.0
-                    && expected_column < 1000.0
-                    && expected_row >= 0.0
-                    && expected_row < 1000.0,
+                (0.0..1000.0).contains(&expected_column) && (0.0..1000.0).contains(&expected_row),
                 "the fixture must place ({longitude}, {latitude}) inside the grid"
             );
 
@@ -511,7 +500,7 @@ mod tests {
         assert_eq!(containing_pixel(&grid, 0.0, -1.0e18), None);
         // Just inside the guard still yields a usable signed coordinate.
         assert!(containing_pixel(&grid, 1.0e15, 5.0).is_some());
-        assert_eq!(cell_window((i64::MAX, 0)).is_err(), true);
+        assert!(cell_window((i64::MAX, 0)).is_err());
         assert!(cell_window((i64::MIN, i64::MIN)).is_ok());
     }
 
