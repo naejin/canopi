@@ -96,6 +96,14 @@ struct DisplayAdmission {
     queued: Vec<(String, Arc<AtomicBool>)>,
 }
 
+/// The admission name one inspection lookup occupies.
+///
+/// Scoped by surface so an inspection cancel can never signal a raster tile's
+/// read, or another caller's lookup, that happens to share an id.
+pub(crate) fn sample_admission_name(request_id: &str) -> String {
+    format!("sample-{request_id}")
+}
+
 /// One admitted display read. Dropping it frees its slot.
 pub(crate) struct DisplayTicket {
     inner: Arc<LidarLibraryInner>,
@@ -993,6 +1001,35 @@ impl LidarLibrary {
             cancel,
             active: true,
         })
+    }
+
+    /// Admit one inspection lookup into the shared bounded read admission.
+    ///
+    /// `None` when the caller named no lookup: an older caller still works and
+    /// simply occupies no cancellable slot rather than reserving one it cannot
+    /// release. Inspection deliberately shares the display budget, so a burst of
+    /// abandoned lookups is bounded by the same active/queued limits tiles use.
+    pub(crate) fn admit_sample_request(
+        &self,
+        request_id: &str,
+    ) -> Result<Option<DisplayTicket>, String> {
+        if request_id.is_empty() {
+            return Ok(None);
+        }
+        self.admit_display_request(&sample_admission_name(request_id))
+            .map(Some)
+    }
+
+    /// Cancel one inspection lookup.
+    ///
+    /// The admission name is scoped to the inspection surface, so this can
+    /// never signal a raster tile's read — or another surface's lookup — that
+    /// happens to carry the same caller-chosen id.
+    pub fn cancel_sample_request(&self, request_id: &str) {
+        if request_id.is_empty() {
+            return;
+        }
+        self.cancel_display_request(&sample_admission_name(request_id));
     }
 
     /// Cancel one display read: a waiting request stops waiting, a running one
@@ -2452,6 +2489,68 @@ mod tests {
             "no executor is attached in this fixture"
         );
         drop(HeavyJobLease::acquire(&library, &holding).unwrap());
+
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// An inspection lookup shares the display admission and is cancellable.
+    ///
+    /// The defect this pins: the sample command passed an always-false flag and
+    /// entered no admission at all, so a superseded or abandoned lookup could
+    /// not be stopped and could not be accounted for. The scoping is part of
+    /// the contract — a caller cancels *its* lookup, never a tile's read or
+    /// another surface's entry that happens to carry the same id.
+    #[test]
+    fn inspection_reads_share_the_display_admission_and_are_scoped() {
+        let root = std::env::temp_dir().join(new_id("lidar-sample-admission-test"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+
+        // A named lookup takes a real slot, and cancelling it signals the flag
+        // the read is actually given.
+        let mut sample = library
+            .admit_sample_request("lookup-1")
+            .unwrap()
+            .expect("a named lookup is admitted");
+        assert!(sample.try_activate().unwrap());
+        let flag = sample.cancel_flag();
+        assert!(!flag.load(Ordering::Relaxed));
+        library.cancel_sample_request("lookup-1");
+        assert!(flag.load(Ordering::Relaxed));
+
+        // The same caller-chosen id on another surface is a different entry:
+        // cancelling the inspection lookup must not have signalled it.
+        let tile = library.admit_display_request("lookup-1").unwrap();
+        let tile_flag = tile.cancel_flag();
+        assert!(!tile_flag.load(Ordering::Relaxed));
+        library.cancel_sample_request("lookup-1");
+        assert!(!tile_flag.load(Ordering::Relaxed));
+        // ...and cancelling the tile leaves the inspection name alone.
+        let sample_two = library
+            .admit_sample_request("lookup-2")
+            .unwrap()
+            .expect("a named lookup is admitted");
+        let sample_two_flag = sample_two.cancel_flag();
+        library.cancel_display_request("lookup-2");
+        assert!(!sample_two_flag.load(Ordering::Relaxed));
+        library.cancel_sample_request("lookup-2");
+        assert!(sample_two_flag.load(Ordering::Relaxed));
+
+        // A caller that names no lookup still works and occupies no slot, so
+        // it cannot hold admission it has no way to release.
+        assert!(library.admit_sample_request("").unwrap().is_none());
+
+        // Dropping a finished lookup frees its slot for the next one.
+        drop(sample);
+        drop(sample_two);
+        drop(tile);
+        let mut next = library
+            .admit_sample_request("lookup-3")
+            .unwrap()
+            .expect("a named lookup is admitted");
+        assert!(next.try_activate().unwrap());
+        drop(next);
 
         drop(library);
         std::fs::remove_dir_all(root).unwrap();

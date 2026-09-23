@@ -10,9 +10,15 @@ const samplePixel = vi.fn(
     }),
 )
 
+const cancelSample = vi.fn(async (_requestId: string) => {})
+
 vi.mock('../ipc/lidar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../ipc/lidar')>()
-  return { ...actual, lidarSamplePixel: (request: unknown) => samplePixel(request) }
+  return {
+    ...actual,
+    lidarSamplePixel: (request: unknown) => samplePixel(request),
+    lidarCancelSamplePixel: (requestId: string) => cancelSample(requestId),
+  }
 })
 
 const { currentDesign, replaceCurrentDesignState } = await import(
@@ -110,6 +116,7 @@ describe('numeric inspection session state', () => {
   beforeEach(() => {
     pending.length = 0
     samplePixel.mockClear()
+    cancelSample.mockClear()
     endInspection()
     setCurrentCanvasSession(null)
     replaceCurrentDesignState(designWithPresentedLayer(), null, 'Inspect')
@@ -174,6 +181,8 @@ describe('numeric inspection session state', () => {
       kind: 'Source',
       entity_id: 'lyr-1',
       expected_generation_id: 'gen-1',
+      // Every lookup names itself so it can be cancelled.
+      request_id: expect.any(String),
       longitude: POINT.lon,
       latitude: POINT.lat,
     })
@@ -214,6 +223,46 @@ describe('numeric inspection session state', () => {
    * after that check: without a second check here the old head's number would be
    * published as the current layer's value.
    */
+  /**
+   * A superseded lookup is cancelled, not merely ignored.
+   *
+   * The native read is admitted into the shared bounded display queue, so a
+   * superseded or exited lookup that is only fenced in the frontend still holds
+   * a slot and still does work. This pins the signal that releases it, and that
+   * the id it names is the one the cancelled request carried.
+   */
+  it('cancels the superseded lookup by the id it was submitted under', async () => {
+    beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
+    const first = sampleInspectionPoint(POINT)
+    const firstId = (samplePixel.mock.calls[0]?.[0] as { request_id: string }).request_id
+    expect(firstId).toBeTruthy()
+
+    const second = sampleInspectionPoint({ ...POINT, lon: POINT.lon + 0.001 })
+    const secondId = (samplePixel.mock.calls[1]?.[0] as { request_id: string }).request_id
+    // Every lookup names its own opaque id, so cancelling one cannot signal the
+    // other.
+    expect(secondId).not.toBe(firstId)
+    expect(cancelSample).toHaveBeenCalledWith(firstId)
+
+    pending[1]?.({ Value: { generation_id: 'gen-1', value: 7, units: 'm' } })
+    await second
+    pending[0]?.({ Value: { generation_id: 'gen-1', value: 999, units: 'm' } })
+    await first
+    expect(inspectionSample.value).toEqual({ kind: 'value', value: 7, units: 'm' })
+
+    // Exiting cancels whatever is still in flight, and does nothing once the
+    // answer already arrived.
+    const third = sampleInspectionPoint(POINT)
+    const thirdId = (samplePixel.mock.calls[2]?.[0] as { request_id: string }).request_id
+    endInspection()
+    expect(cancelSample).toHaveBeenCalledWith(thirdId)
+    cancelSample.mockClear()
+    pending[2]?.({ Value: { generation_id: 'gen-1', value: 1, units: 'm' } })
+    await third
+    endInspection()
+    expect(cancelSample).not.toHaveBeenCalled()
+  })
+
   it('does not publish an answer whose head moved while it was in flight', async () => {
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const reading = sampleInspectionPoint(POINT)

@@ -491,6 +491,14 @@ pub async fn lidar_delete_analysis(
         .await
 }
 
+/// Read one physical value for inspection through the shared display admission.
+///
+/// Inspection reuses the same bounded read admission, cancellation and queue
+/// budget the raster display path owns, instead of passing a local flag that
+/// nothing could ever set: a superseded lookup then stops at its next bounded
+/// read, and a burst of abandoned lookups cannot outrun the active-request
+/// budget. The admission name is scoped to the inspection surface, so a caller
+/// can only ever cancel its own lookup.
 #[tauri::command]
 pub async fn lidar_sample_pixel(
     library: State<'_, LidarLibrary>,
@@ -498,17 +506,45 @@ pub async fn lidar_sample_pixel(
     request: common_types::lidar::LidarSampleRequest,
 ) -> Result<common_types::lidar::LidarSampleOutcome, String> {
     let library = library.inner().clone();
+    let mut ticket = library.admit_sample_request(&request.request_id)?;
+    if let Some(slot) = ticket.as_mut() {
+        // Wait for a slot without holding an executor permit, so an inspection
+        // read can never sit in front of a heavy raster job.
+        loop {
+            if slot.try_activate()? {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+        }
+    }
+    let cancel = match ticket.as_ref() {
+        Some(slot) => slot.cancel_flag(),
+        // No admission: no one can signal this read, and that is what the flag
+        // then says. It is never a stand-in for a cancellation that exists.
+        None => std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar sample pixel",
             move || {
-                // One pixel: the read is bounded by construction, so a
-                // never-set flag is the honest cancellation state for a single
-                // admission-free lookup.
-                let cancel = std::sync::atomic::AtomicBool::new(false);
+                // The ticket is held for the whole read and released with it,
+                // so a cancelled or finished lookup never keeps a slot.
+                let _slot = ticket;
                 library.sample(&request, &cancel)
             },
         )
         .await
+}
+
+/// Stop waiting for, or stop reading, one inspection lookup.
+///
+/// Synchronous by design: it only signals bounded in-memory state, and the
+/// reader checks the flag between bounded reads.
+#[tauri::command]
+pub fn lidar_cancel_sample_pixel(library: State<'_, LidarLibrary>, request_id: String) {
+    if request_id.is_empty() {
+        return;
+    }
+    library.cancel_sample_request(&request_id);
 }

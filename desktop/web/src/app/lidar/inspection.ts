@@ -1,6 +1,6 @@
 import { computed, signal } from '@preact/signals'
 import type { LidarSampleOutcome } from '../../generated/contracts'
-import { lidarSamplePixel } from '../../ipc/lidar'
+import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { readLidarPresentation, lidarLibrary } from './library-store'
 import {
@@ -71,6 +71,14 @@ export const inspectionLocation = signal<InspectionPoint | null>(null)
 interface InspectionSession {
   /** Monotonic request identity, advanced by every aim, sample and exit. */
   readonly request: number
+  /**
+   * The opaque id the in-flight lookup was submitted under, or null.
+   *
+   * Kept so the next aim or the exit can cancel exactly that lookup: the native
+   * side admits it into the shared bounded read queue, and nothing else may
+   * release the slot it holds.
+   */
+  readonly pendingRequestId: string | null
   /**
    * The document session this was entered for, so a replacement ends it.
    *
@@ -145,6 +153,7 @@ export function beginInspection(target: InspectionTarget): void {
     entityId: target.id,
     kind: target.kind,
     expectedGenerationId: null,
+    pendingRequestId: null,
   }
   inspectionSession.value = target
   inspectionLocation.value = null
@@ -155,8 +164,24 @@ export function beginInspection(target: InspectionTarget): void {
   reconcileInspectionWithPresentation()
 }
 
+/**
+ * Cancel the lookup this session still has in flight, if any.
+ *
+ * Fire-and-forget by design: the signal is a bounded in-memory flag, and the
+ * surface must not wait on a round trip to leave a mode the user has exited.
+ */
+function cancelPendingLookup(active: InspectionSession | null): void {
+  const requestId = active?.pendingRequestId
+  if (!requestId) return
+  void lidarCancelSamplePixel(requestId).catch(() => {
+    // A failed cancellation only means the read finishes on its own; the
+    // response is fenced anyway, so it cannot publish.
+  })
+}
+
 /** Leave inspection mode and release every pending lookup. */
 export function endInspection(): void {
+  cancelPendingLookup(session)
   session = null
   inspectionSession.value = null
   inspectionLocation.value = null
@@ -218,9 +243,15 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
 
   // Re-arm the session with the same Design and entity but a new request, so
   // this lookup supersedes any still in flight.
+  // A new aim supersedes the previous lookup, so the native read it may still
+  // be running is cancelled rather than left to occupy the bounded queue.
+  cancelPendingLookup(session)
+  const request = nextRequest()
+  const requestId = String(request)
   const mine: InspectionSession = {
     ...session,
-    request: nextRequest(),
+    request,
+    pendingRequestId: requestId,
     expectedGenerationId,
   }
   session = mine
@@ -233,6 +264,7 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
       kind: target.kind,
       entity_id: target.id,
       expected_generation_id: expectedGenerationId,
+      request_id: requestId,
       longitude: point.lon,
       latitude: point.lat,
     })
@@ -245,6 +277,7 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
   // A superseded, exited or re-aimed lookup publishes nothing at all: the
   // session identity, the Design, the entity and the request must all still be
   // the ones this lookup was aimed at.
+  if (session === mine) session = { ...mine, pendingRequestId: null }
   if (!isCurrent(mine)) {
     // Release anything a session that ended underneath this lookup still owned
     // — its canvas gesture in particular. A merely superseded request leaves the

@@ -125,6 +125,7 @@ pub fn run() {
             commands::lidar::lidar_cancel_raster_tile,
             commands::lidar::lidar_delete_analysis,
             commands::lidar::lidar_sample_pixel,
+            commands::lidar::lidar_cancel_sample_pixel,
             commands::lidar::lidar_layer_history,
             commands::lidar::lidar_layer_collection,
             commands::lidar::lidar_move_layer_source,

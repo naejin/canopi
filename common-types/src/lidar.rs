@@ -448,6 +448,16 @@ pub struct LidarSampleRequest {
     pub entity_id: String,
     /// The immutable generation the caller believes is current.
     pub expected_generation_id: String,
+    /// Opaque identity of this lookup, chosen by the caller.
+    ///
+    /// Inspection shares the bounded display read admission with raster tiles,
+    /// so a superseded or abandoned lookup has to be cancellable by the owner
+    /// that started it. The name is scoped per surface by the command, so one
+    /// caller can never signal another's read. Empty means "not cancellable",
+    /// which keeps an older caller working without claiming a slot it cannot
+    /// release.
+    #[serde(default)]
+    pub request_id: String,
     /// WGS84 longitude in degrees of the point to sample.
     ///
     /// The caller derives this from the scene point with the canvas's own

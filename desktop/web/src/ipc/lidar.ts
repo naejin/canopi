@@ -188,3 +188,15 @@ export async function lidarSamplePixel(
 ): Promise<LidarSampleOutcome> {
   return invoke('lidar_sample_pixel', { request })
 }
+
+/**
+ * Stop one inspection lookup.
+ *
+ * The request id is the one the sample request carried, so this cancels exactly
+ * the lookup that asked for it and nothing else: a superseded pan, a hidden
+ * layer or an exited session must not leave bounded native work running.
+ */
+export async function lidarCancelSamplePixel(requestId: string): Promise<void> {
+  if (!requestId) return
+  await invoke('lidar_cancel_sample_pixel', { requestId })
+}

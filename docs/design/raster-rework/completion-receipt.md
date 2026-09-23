@@ -22,7 +22,7 @@ tip is `bf43af19`.
 | C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip |
 | C1 / R26 import | **Not implemented.** Production still uses the staging/review/Apply route with `collection::measure` and preview rendering. See "C1 disposition" below for the exact remaining work and why it is not claimed |
 | C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
-| C3 / R15–R18 inspection | **Repaired except R18's cancellation half** at `85d19ca7`: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest`, lattice indices are signed, and the session is fenced to the document session, entity, request and head. `lidar_sample_pixel` still passes an always-false cancel flag and does not enter the shared read admission — see the table below. GDAL-backed oracle test passes; live isolated-Desktop value verification not re-run this round |
+| C3 / R15–R18 inspection | **Repaired** at `85d19ca7` with R18's cancellation half added later: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest`, lattice indices are signed, the session is fenced to the document session/entity/request/head, and the lookup is admitted into the shared bounded read queue and cancellable by the surface that started it. GDAL-backed oracle test passes; live isolated-Desktop value verification not re-run |
 | C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
 | C5 combined candidate | **Partial.** Frontend gates green at `bf43af19` (283 files / 2757 tests, tsc, gallery check, both edition builds). Rust gates recorded below. No packaged-window smoke, no Windows/macOS build, no live provider/placement observation, no independent acceptance |
 
@@ -117,15 +117,9 @@ This is a scope and budget boundary, not an external blocker: no missing
 credential, fixture or platform prevents it. Naming it plainly is the honest
 alternative to shipping a half-migrated publication path.
 
-Two items are outstanding from the defect corrections themselves, both
-specified by the review and neither blocked externally:
+One item is outstanding from the defect corrections themselves, specified by the
+review and not blocked externally:
 
-- **R18 cancellation.** Give `LidarSampleRequest` an opaque request id, admit the
-  command through `admit_display_request` with a kind-scoped name, pass the
-  ticket's real cancel flag instead of an always-false one, hold the ticket
-  through the read, and expose a `lidar_cancel_sample_pixel` that only touches
-  that scope. The frontend then cancels the superseded request when it re-aims or
-  exits. The seam is named in the table above.
 - **R16's published-result half.** No regression yet samples a real published
   slope result's cell through the panel in both units; the unit and reader
   contracts are repaired and unit-tested, but the end-to-end case is not.
