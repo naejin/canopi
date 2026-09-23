@@ -420,6 +420,27 @@ Broader skill or shared tooling changes need their own user authorization.
 
 
 
+**F1/F2/R50 synthesis at `265b365c` (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** Settlement attempts are owned by an installation token
+   so reinstall cannot revive retired callbacks; explicit `off` releases
+   retained listener ownership; R50 retry identity holds at UI/action/native.
+   Full frontend 2835, native 119, acceptance 2/2, gallery/builds/bindings
+   green. Driven Desktop/Web remains unobserved.
+2. **Escapes and causes.** F1 `installed` boolean was mutable across installs:
+   implementation. F2 `off` left the cleanup closure: implementation. R50 native
+   fixture held the catalogue lock across spawn (test-oracle/setup, not product).
+3. **Necessity and reuse.** Reused store fence, workflow guard, lifetime
+   registry, `retry_analysis`. No new framework.
+4. **Working-method/tool changes.** Supplied F1 probe reproduced exactly; F2
+   retention detector used `map.off` counts before teardown. Keep.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
+   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
+   Integration and release separate.
+
 **Acceptance-packet synthesis at `a41f76c7` (partial).** Commands live in the
 [receipt](completion-receipt.md#current-correction-acceptance). Independent
 acceptance remains a separate entry by the main reviewer.
@@ -443,6 +464,27 @@ acceptance remains a separate entry by the main reviewer.
 5. **Total delivery effort.** One courier-free continuation; cost unknown.
 6. **Next action.** Independent acceptance. Follow-ups in bd: R50 IPC/native
    drive, IGN fixtures, driven Desktop/Web, live key, packaged smoke.
+   Integration and release separate.
+
+**F1/F2/R50 synthesis at `265b365c` (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** Settlement attempts are installation-owned; explicit
+   unregister releases retained listener ownership; R50 retry preserves
+   definition identity across UI/action/native. Full frontend 2835, native 119,
+   native acceptance 2/2, gallery/builds/bindings green. Driven Desktop/Web
+   remains unobserved.
+2. **Escapes and causes.** F1 `installed` boolean revived after reinstall:
+   implementation. F2 `off` left retained cleanup: implementation. R50 native
+   fixture schema/deadlock: test setup, not a production defect.
+3. **Necessity and reuse.** Reused store fence, workflow guard, lifetime
+   registry, `retry_analysis`. No new framework.
+4. **Working-method/tool changes.** F1 supplied probe reproduced exactly;
+   F2 used map.off call counts as a behavioral retention detector. Keep.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: IGN fixtures,
+   driven Desktop/Web, live key, packaged smoke, R43 live scratch/queue.
    Integration and release separate.
 
 **E1–E5 caller-repair synthesis (partial).** Commands live in the

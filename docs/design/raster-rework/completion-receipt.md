@@ -1,73 +1,38 @@
 # Raster rework completion receipt
 
-Status: partial — independent review at `592e04ed`: five supplied fixes and scoped R48/R51 proofs pass; F1/F2 ownership defects, R50 proof and required whole-candidate evidence remain.
+Status: partial — F1/F2 ownership repairs and R50 proofs delivered at `265b365c`. C5 gates green. Unavailable: IGN fixtures, driven Desktop/Web, live key, packaged smoke. Not independently accepted.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-The [current independent review and repair decisions](completion-review-592e04ed.md)
-supersede completion claims below. Reviewer rerun: **81/81 frontend acceptance,
-2/2 native proofs pass**. A separate restart probe fails; cleanup retention is
-source-confirmed. Full 2830/288 frontend and remaining C5 results below are reported
-by the implementer, not independently rerun.
+Review at `592e04ed` left F1/F2 ownership defects and an R50 evidence gap.
+Repairs delivered at `b4704e1d` (F1/F2) and `265b365c` (R50) after merge
+`4d418b2b`. Acceptance-packet and native R48/R51 proofs retained.
 
-| Remaining boundary | Evidence / next obligation |
-| --- | --- |
-| F1 installation and attempt ownership | Old read error overwrites new status after reinstall; fence success/error/finally and replacement guard |
-| F2 cleanup retention | Explicit off retains cleanup closure; prove release before map destruction |
-| R50 retry identity | UI row proof retained; action/generated IPC/native command identity proof unfinished |
-| R43 resource evidence | Capacity-plane sampled memory and residue do not prove live peak scratch/concurrent queue behavior; run feasible existing gates or name blockers |
-| Driven app, fixtures, platforms/package | Record exact attempted route/prerequisite; distinguish local work from external absence |
-
-Update these rows in place after execution. No required local proof becomes external
-merely because it has not been written. R48/R51 scoped native proofs are complete.
-
-### Supplied packet repairs at 592e04ed
-
-Reviewer-authored acceptance packet at `0a3a29f4` reproduced 5 frontend RED
-cases and 2 passing native proofs. Repairs delivered at `a41f76c7` on the
-combined tree (test merge `1c382047`, docs merge `443d3201`). Assertions were
-not weakened; mocks that hid the returned-snapshot contract were corrected.
-
-| Obligation | Test / observed RED | GREEN repair | Real caller | Remaining limit |
+| Obligation | Test / observed RED | GREEN | Real caller | Remaining limit |
 | --- | --- | --- | --- | --- |
-| Location movement | `location-map-editing-host.test.tsx` acceptance; viewport request count stayed 1 | pass `events: lifetime` to mount | mounted Location host/provider/binding | live Google key not required |
-| WorldMap movement | `world-map-surface.test.tsx` acceptance; same | pass `events: lifetime`; drop empty handler | mounted WorldMap host/provider/binding | — |
-| hide/show listener leak | `workspace-map-controls.test.ts` acceptance; moveend 2→5 | `MapLibreSurfaceLifetime.off`; mount unregisters | WorkspaceMapControls + lifetime | — |
-| workspace auto-attribution | same suite; `attributionControl` stayed `{ compact: true }` | `workspace-map.ts` `attributionControl: false` | production map construction | live DOM render not driven |
-| late-disposal status | `lidar-settlement-acceptance.test.ts`; status became `obsolete read error` | fence late success/error after dispose; store leaves status to workflow | real store + workflow | — |
-| Native R51 head-change | `acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads` | **passed before and after** | generated plane + hooks | deterministic interleaving only |
-| Native R48 mid-write | `acceptance_sparse_midwrite_failure_preserves_publication_and_retries` | **passed before and after** | generated plane + capacity/filesystem fault | worker retry only |
-| E2/E3/E5, L1–L4, M1/M5 | retained | retained | retained | R50 IPC/native not re-driven |
-| R27/R43 | capacity-plane GDAL lane (prior) | retained | real GDAL | IGN MNT/MNH fixtures unavailable |
+| F1 reinstall fence | `lidar-settlement-acceptance.test.ts` supplied probe; status became `obsolete read error` | installation identity token; fence success/error/finally | real store + workflow | — |
+| F1 replacement/finally | same suite; old success consumed new intent; old finally released guard | attempt-owned guards keyed by install generation | real store + workflow | — |
+| F2 retained cleanup | `maplibre-surface-adapter.test.ts` F2; `map.off` 9 vs 6 | `off` drops retained cleanup registration | real surface adapter + hide/show path | — |
+| R50 native identity | `mod.rs::retry_preserves_definition_identity_and_refuses_changed_head`; RED only as fixture NOT NULL | same definition, new job, changed-head refusal, name/params preserved | `LidarLibrary::retry_analysis` | no scheduler retry claim |
+| R50 Design-switch | `lidar-actions.test.ts` R50 | baseline GREEN (already correct) | `retryAnalysis` action | IPC transport mocked |
+| R50 UI name-based | `lidar-analysis-panel.test.tsx` E5/R50 | retained | AnalysisPanel | — |
+| R48/R51 | native acceptance packet | retained pass | generated plane + hooks | worker retry / deterministic interleaving only |
+| R27/R43 | capacity-plane measurements retained | retained | real GDAL | live scratch/queue separate; IGN fixtures unavailable |
+| Acceptance packet 5 fixes | retained | retained | retained | — |
 
-### Final gates at `a41f76c7`
+### Final gates at `265b365c`
 
 | Gate | Command | Result |
 | --- | --- | --- |
 | TypeScript | `npx tsc --noEmit` | clean |
-| Full frontend | `npm test` | 2830 passed / 288 files |
-| Acceptance packet | reviewer suite | 81/81 (was 76 pass / 5 fail) |
+| Full frontend | `npm test` | 2835 passed / 288 files |
 | Native acceptance | `cargo test --lib acceptance_ -- --ignored` | 2 passed |
-| Native LiDAR | `cargo test --lib services::lidar::` | 118 passed / 70 ignored |
-| Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
+| Native LiDAR | `cargo test --lib services::lidar::` | 119 passed / 70 ignored |
 | fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
-| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R50 IPC/native drive | — | **unavailable / unfinished local proof** |
-
-### Capacity plane measurements at `86c74b14` (GDAL 3.8.4)
-
-Command: `CANOPI_LIDAR_CAPACITY_PLANE=/tmp/canopi-capacity-plane.tif cargo test -p canopi-desktop --lib e2e_capacity_plane -- --ignored --test-threads=1`
-
-- Plane 20000×20000 Float32, 1,677,741,340 bytes uncompressed, synthetic z=0.25x+0.5y-100
-- Imported 396,979,300 valid cells; durable 4,951,015,369 bytes in 9 files; temporary 0; job scratch empty after settlement
-- Cold tile 8734 ms; three warm repeats 0/0/0 ms
-- Seam window: 16 samples match the analytic plane; holes: 4 declared rectangles read as exactly NoData
-- Sampled process tree every 50 ms: baseline 15 MiB, peak total 200 MiB, incremental 184 MiB (lower bound; 7177 complete samples)
-
-These are retained implementer measurements, not rerun by the reviewer. Sampled
-process memory is not peak scratch, queue or fault evidence.
-
+| Gallery / builds / bindings | `check:ui`, `build`, `build:web`, `gen:types`, `check:types` | clean |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R43 live scratch/queue | — | **unavailable** |
 
 ### Reported delivery at `291d0773` — qualified by current correction
 
