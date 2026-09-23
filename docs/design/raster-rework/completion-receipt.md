@@ -1,38 +1,39 @@
 # Raster rework completion receipt
 
-Status: evidence — R15–R25 repaired, C1 implemented and R26 measured at `b4ab8fe6`, where the ignored GDAL lane is green (70 passed, 0 failed). This is a reviewable candidate, **not** an accepted or released one: no driven Desktop/Web session, no live provider key, no Windows/macOS build and no packaged smoke. Prior capacity, gate and workflow evidence below is retained and revision-labelled.
+Status: partial — candidate `26eca68a` independently reviewed; changes required. Reported gates and measurements at `b4ab8fe6` are retained, but do not establish completion of C1/R26 or independent acceptance.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-This section is the current claim boundary. The prior delivery below is evidence
-at its named revisions. See the [independent review](completion-review-5d0a5e0b.md)
-and [source-import amendment](source-import-design.md). The reviewed tip is
-`5d0a5e0b`; its code gate revision is `2b39ee2a`. Five independent review probes
-failed while 16 existing tests passed; the review names their scope and locations.
+The [independent review at `26eca68a`](completion-review-26eca68a.md) supersedes
+prior completion claims: **10 diagnostic assertions failed and 44 tests passed**.
+The user approved repairs under the [current correction decisions](completion-correction-design.md),
+then independent acceptance before integration. This section owns the current
+disposition; subsequent revision-labelled sections retain reported delivery evidence.
 
-The docs handoff merged into the candidate at `5dfae6bc` (conflicts in
-`docs/agent/lidar.md` and this receipt resolved toward the handoff's current
-status with the candidate's revision-labelled evidence preserved). The R15–R25
-repair tip was `bf43af19`. The [source-import amendment](source-import-design.md)
-has since landed and is measured at `b4ab8fe6`; that revision's ignored
-GDAL-backed lane is green with every fixture named, and its figures are in
-[R26 measurements at the code tip](#r26-measurements-at-the-code-tip).
-
-| Boundary | Current evidence / required next proof |
+| Boundary | Current disposition and required proof |
 | --- | --- |
-| C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip. The primary checkout and its user-owned files were never staged, stashed or overwritten |
-| C1 / R26 import | **Implemented and measured at `b4ab8fe6`.** Production import is one route: choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`) with progress, cancel and retry in Data. Publication derives its metadata from stored member facts without reading composed pixels; exact composed facts are nullable and labelled; tiles, previews and legends consume the labelled display range; the retired review route — composed scan, previews, decision screen, commands and payload — is deleted. R26's resource evidence now exists for the new route: see [C1 disposition and R26](#c1-disposition-and-r26) |
-| C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
-| C3 / R15–R18 inspection | **Repaired** at `85d19ca7` with R18's cancellation half and R16's published-result lane added later: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest` and are read end to end in both units, lattice indices are signed, the session is fenced to the document session/entity/request/head, and the lookup is admitted into the shared bounded read queue and cancellable by the surface that started it. GDAL-backed oracle tests pass; live isolated-Desktop value verification not re-run |
-| C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
-| C5 combined candidate | **Code gates green at `b4ab8fe6`** (see [Gate results at the delivered tip](#gate-results-at-the-delivered-tip)). No packaged-window smoke, no Windows/macOS build, no driven Desktop/Web session, no live provider/placement observation, and no independent acceptance |
+| Preservation | Keep `34e4ded4` / `f61f8494` ancestry, v18 migration, ordered compatibility and user-owned primary-checkout files. Candidate is not integrated into the user's normal checkout. |
+| C1 / R26 | Partial: one-step source-only publication and nullable exact/display facts landed. Old input caps, copy/hash cancellation, conversion timeout, lock lifetime and slope admission remain (R27–R31). R43 live scratch/fault/concurrent-queue proof remains open. |
+| C2 workbenches | Partial: panels and manual Add/Remove exist; automatic import attachment and panel-independent polling remain (R32–R33). Verify every C2 obligation including same-definition Analysis Retry. |
+| C3 inspection | Physical projection/read/unit repairs retained; already-displayed head invalidation and re-aim cancellation remain (R34–R35). Verify native post-read currency and mounted lifecycle. |
+| C4 providers | Transport/body/readiness repairs retained; config changes, viewport identity/readiness/recovery, zoom, source retention and settings feedback remain (R36–R42). Live restricted-key observation is separate. |
+| C5 gates and external observations | Reported code gates/70-test GDAL lane at `b4ab8fe6` remain evidence for that tree. No driven Desktop/Web session, live key, Windows/macOS build or packaged smoke is inferred. Required unavailable evidence means partial delivery. |
+
+Before next delivery replace these rows with evidence at the corrected revision.
+Add one compact finding-to-regression table for R27–R43: contract/caller, observed
+failure or source trace, repair revision, decisive regression/command, healthy
+control and remaining boundary. Audit C0–C5 beyond these examples. Never mark an
+unrun requirement passed or convert unfinished implementation into an external
+prerequisite. The [debrief](review-and-debrief.md#final-correction-debrief-to-deliver)
+records lessons and self-review discoveries without copying gate logs here twice.
 
 ## R15–R25 repair record
 
-Each row names the reviewed finding, the reproduction that demonstrates it, the
-repair revision and the committed regression that now pins it.
+Historical implementer repair claims below name their revisions and tests.
+The current review identifies remaining gaps in several of the same families;
+these rows are not independent acceptance of the complete obligation.
 
 | Finding | Reproduction (red) | Repair | Committed regression |
 | --- | --- | --- | --- |
@@ -49,7 +50,8 @@ repair revision and the committed regression that now pins it.
 | R24 undoable Remove from Design | Layers offered library/result deletion but no Remove from Design, and no remedy for unavailable references | `bf43af19`: every entry, unavailable ones included, has Remove from Design through Design Edit, with no library deletion | `removePresentationEntry` writes through the existing `removeLidarEntries` seam; the R24 action is exercised through the panel's action menu |
 | R25 make Analysis failures and units observable | A failed Run settled with no visible explanation (the action swallowed the error into a status the panel did not render); Run stayed enabled until a library refresh; every Layers row was labelled `slopeDegrees` | `bf43af19`: the action publishes **and** re-throws; Analysis renders that status and latches the submit; the result's unit is carried on the library summary from the definition's parameters and used by both panels | `shows the failure the action published as well as one it threw`, `refuses a second Run before the first request settles` — mutation-verified by reverting the status render and the latch |
 
-No finding needed a counterexample: each was reproduced and repaired.
+The implementer reported these cases repaired. The current independent review
+found additional failures within their accepted lifecycle and resource contracts.
 
 ## Gate results at the delivered tip
 
@@ -116,10 +118,10 @@ undriven.
 
 ## C1 disposition and R26
 
-C1 is **implemented and measured at `b4ab8fe6`**: the flow, the command, the
-metadata split and the deletion have landed on the candidate, and the new route's
-resource evidence now exists. What is not claimed is acceptance, live drive or
-platform coverage.
+At `b4ab8fe6`, the flow, command, metadata split and review-route deletion
+landed, with the measurements below. **C1/R26 remains partial:** these runs do not
+prove the uncapped source amendment, peak live storage or all lifecycle/resource
+requirements. The current independent review and acceptance table govern status.
 
 **Landed — publication metadata without reading composed pixels.** Catalogue v18
 relaxes `coverage_cells` to nullable and adds
@@ -183,7 +185,7 @@ otherwise idle host (`.rq-scratch/round4-ignored-lane-b4ab8fe6.log`, 70 passed /
 0 failed / 865.88 s; the earlier isolated runs of the first two rows are committed
 at `5a1012b0` and `b495b11c`).
 
-| Input (identity) | Cells and bytes | Durable | Temporary and settled residue | Sampled peak RSS (50 ms ticks) | Cold display / repeats |
+| Input (identity) | Cells and bytes | Durable | Post-settlement job residue (not peak) | Sampled peak RSS (50 ms ticks) | Cold display / repeats |
 | --- | --- | --- | --- | --- | --- |
 | 24 synthetic placed rasters, 32×24 cells each in three columns eight rows apart (24 occurrences, the production file ceiling; GDAL-converted GeoTIFFs) | 18,432 processing cells over a **60,809,728-cell** union; **0 resolved composition bytes** | none (fixture root removed) | 0 files / 0 bytes | **48 MiB** incremental (base 49, peak 98); largest single member 49 MiB over 2 members — 117 complete / 61 incomplete ticks | — |
 | 12 real IGN MNH tiles, 16,000,513 B each (**192,006,156 B** in) | 48,000,000 valid cells; exact coverage **unknown**, display range **[-1.7019, 39.2840]** as `source-envelope` | **596,449,840 B in 57 files** | **0 files / 0 bytes**, job scratch `[]` | **66 MiB** incremental (base 32, peak 99); largest single member 68 MiB — 1555 / 63 ticks | z18 **2510 ms**, z17 **2586 ms**, z16 **4585 ms**, z15 **4740 ms**; three repeats each **0 ms** (bounded tile cache) |
@@ -201,8 +203,9 @@ Reading the table honestly:
   remainder*, not accumulating concurrency: 177 of 209 MiB is one member on the
   plane, 68 of 99 MiB on the MNH batch. No lane approaches the 128 MiB per
   conversion cache ceiling by accumulation.
-- **Durable and temporary are reported separately.** Temporary and settled
-  residue are **zero**, with no job scratch left behind, in both large lanes.
+- **Cleanup was measured, peak live scratch was not.** Post-settlement job
+  residue is zero in both large lanes. `report_library_bytes` runs after work
+  settles; no peak-capacity claim follows from it.
 - **Display timing is a measurement, not a quota.** A cold tile over the
   400M-cell plane took 8.1 s and over the 12-tile batch 2.5–4.7 s; every repeat
   was served from the bounded tile cache in under the timer's resolution. Nothing
@@ -237,10 +240,9 @@ a grandfathered layer; the real-fixture dense lane now drives exactly that
 sequence, including the restored head rendering the same tile.
 
 
-**The capacity report this section owed.** The table above plus its notes are
-that report: input identities, cells and bytes, working memory with its sampling
-interval, cache/concurrency composition, peak live scratch, durable storage and
-settled residue are separate columns; low-space/write failure is recorded as
+**Partial capacity evidence at this revision.** The table above and notes report input identities, cells and bytes, working memory with its sampling
+interval, cache/concurrency composition, durable storage and
+settled residue. Peak live scratch was not sampled; low-space/write failure remains
 unverified with its environment limits instead of being passed off as covered;
 the metadata-only claim is stated structurally rather than as an instrumented
 count; and cold/three-repeat display timing is recorded as a measurement rather

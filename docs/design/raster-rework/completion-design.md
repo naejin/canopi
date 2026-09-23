@@ -1,14 +1,14 @@
 # Raster rework completion contract
 
-Status: active — correction and simplified-import handoff after independent review of candidate `5d0a5e0b`; not independently accepted.
+Status: active — consolidated correction handoff after independent review of candidate `26eca68a`; not independently accepted.
 Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
-Current guidance: [execution prompt](completion-agent-prompt.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [current review](completion-review-26eca68a.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## Outcome, authority and exclusions
 
 Finish the initial rework: users can import the representative larger numeric rasters, manage reusable Data Layers, run slope, arrange independently visible data/results, inspect physical values, and place a Design/use shared basemaps in Web. Deliver one combined, verified candidate with platform limits stated honestly. The user selected the entire sequence and sustained execution; intermediate phases do not require renewed authorization.
 
-This contract and its [source-import amendment](source-import-design.md) supersede the original C1 limits and compulsory preview/measurement route. The [R15–R26 review](completion-review-5d0a5e0b.md) supplies correction evidence, not a second assignment. This contract replaces the old active ordered-correction prompt and the broader plan's expired execution freeze. It does not replace its settled product/scientific/provider rules. Precedence: repository safety/ownership → this contract's scope, capacity and delivery decisions → ordered COG composition/history rules → broader product contract and approved UI references. The old overlap-replacement checkbox, compulsory merged-source publication and Q prerequisite are retired, not passed.
+This contract and its [source-import amendment](source-import-design.md) supersede the original C1 limits and compulsory preview/measurement route. The [R27–R43 review](completion-review-26eca68a.md) and [earlier R15–R26 review](completion-review-5d0a5e0b.md) supply evidence, not separate assignments. The [correction decisions](completion-correction-design.md) settle the current repair sequence and lifecycle details within this contract. This contract replaces the old active ordered-correction prompt and the broader plan's expired execution freeze. It does not replace its settled product/scientific/provider rules. Precedence: repository safety/ownership → this contract's scope, capacity and delivery decisions → ordered COG composition/history rules → broader product contract and approved UI references. The old overlap-replacement checkbox, compulsory merged-source publication and Q prerequisite are retired, not passed.
 
 The main agent owns architecture and independent review. The implementation agent owns all execution and contract-preserving local decisions. The user remains courier and retains consequential scope/risk authority. Foundation integration is already complete at `f61f8494`; C0 now verifies preservation and establishes the correction baseline. New implementation is pushed as a candidate for independent review; no public release, deployment, branch deletion, paid-service purchase or user-profile mutation is authorized.
 
@@ -16,12 +16,13 @@ Exclude new engines, custom raster codecs, precision migration, reprojection/res
 
 ## Inspected baseline and reuse decisions
 
-The implementation baseline is `5d0a5e0b` on `feature/raster-rework-completion`
+The implementation baseline is `26eca68a` on `feature/raster-rework-completion`
 in `.rq-scratch/wt-candidate`, descended from main integration `f61f8494` and
-accepted foundation `34e4ded4`. Combined code gates were reported at `2b39ee2a`;
-head differs only in receipt/debrief/bead metadata. R15–R26 require correction;
-passing those historical gates is not independent acceptance. Preserve earlier
-R12–R14 and native-reader fixes, existing candidate capabilities and measurements.
+accepted foundation `34e4ded4`. Gates and real-fixture measurements were reported
+at code tip `b4ab8fe6`; independent review reproduced ten failing assertions while
+44 tests passed. Preserve the one-step import, v18 metadata migration, meaningful
+R12–R26 repairs and their measurements. The review still requires functional,
+resource-admission and evidence corrections; existing green totals are not acceptance.
 
 The primary documentation checkout is `feature/raster-html-references`; its
 pre-existing `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and
@@ -47,7 +48,7 @@ bead. Do not replay completed foundation integration or create a replacement
 branch from a baseline missing candidate code. Merge this documentation handoff
 into `feature/raster-rework-completion`, resolving current guidance in favour of
 this contract and preserving revision-labelled delivered evidence. Reconcile the
-existing bead's design/acceptance with C1 and R15–R26; do not reopen accepted
+existing bead's design/acceptance with C0–C5 and R27–R43; do not reopen accepted
 foundation work or erase historical evidence. Bead exports must preserve unrelated
 dirty records according to the issue workflow.
 
@@ -60,8 +61,8 @@ chooser path using clipboard paste/short owned paths instead of repeating lossy
 synthetic typing; classify automation failures separately from app defects.
 
 **Exit:** retained candidate ancestry, updated existing bead, precise prerequisite
-inventory and reproducible R15–R26 failures at appropriate caller boundaries.
-Review probes in `.rq-scratch/review-5d0a5e0b` are optional local evidence; ordinary
+inventory and reproduced current review cases at appropriate caller boundaries.
+Review probes in `/tmp/canopi-review-26eca68a` are optional local evidence; ordinary
 committed regressions must remain reproducible without that scratch directory.
 
 ## C1 — independent source import and bounded capacity
@@ -237,19 +238,15 @@ The [receipt](completion-receipt.md) owns measured evidence; bd owns progress; t
 
 ## Execution sequence and completion disposition
 
-Continue C0 → C1 → C2 → C3 → C4 → C5 without another phase prompt. After a small
-C1 caller passes, run one real Data import/reopen smoke before scale measurements;
-after C3/C4 repairs, observe their live UI before the final broad gates. Routine
-in-scope defects discovered by those workflows are part of this bead. If a
-phase depends on a known later repair (for example R20 map startup before the
-import smoke), repair that dependency first and continue; phase order is not an
-approval barrier. If an external prerequisite is unavailable, complete independent corrections and gates,
-then return one consolidated partial delivery with exact prerequisites. Do not
-spend repeated rounds retrying an unchanged unavailable host/key or repeating
-already-passed gates. Context checkpoints are resumable state, not acceptance.
+C0 establishes preservation and prerequisite inventory. Execute the current
+[correction sequence A–D](completion-correction-design.md#a--finish-the-import-and-inspection-lifecycle-first)
+inside C1–C5: small lifecycle/workflow repairs first, provider transitions, bounded
+native admission/measurements, then combined self-review/gates. These phases do not
+require separate prompts. A required unavailable proof yields partial delivery;
+continue independent code repairs and available gates before returning.
 
-R15–R26 are review evidence for this same assignment. Every finding needs a
-repair-and-regression receipt row or a concrete counterexample resolving it with
-the reviewer. C1 replaces the old import policy rather than repairing its arbitrary
-ceilings. After final self-review, report one reviewable combined candidate; the
-main agent performs independent acceptance and decides integration separately.
+R27–R43 and retained R15–R26 obligations need repair-and-regression receipt rows
+or concrete counterevidence, not a self-approved weakening of the contract.
+C1 replaces the old source policy after its resource prerequisites hold. Final
+self-review checks all C0–C5, not only numbered findings. Independent acceptance
+comes next; integration into the primary development checkout remains separate.
