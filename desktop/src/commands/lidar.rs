@@ -146,6 +146,41 @@ pub async fn lidar_stage_import(
     Ok(job_id)
 }
 
+/// Import selected sources into one Data Layer in a single job.
+///
+/// This is the production route: the Import action is the commit intent, so the
+/// batch is prepared, validated and published under one job without a review
+/// screen or a preview. Progress, cancellation and the terminal outcome are the
+/// job's own state, which the Data surface already reads. The target head is
+/// captured before preparation begins and rechecked inside the publication
+/// transaction, so a head that moved is a conflict rather than a rebase.
+#[tauri::command]
+pub async fn lidar_import_sources(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+    paths: Vec<String>,
+) -> Result<String, String> {
+    if paths.is_empty() {
+        return Err("no files were selected for import".to_string());
+    }
+    let library_for_record = library.inner().clone();
+    let layer_id_for_record = layer_id.clone();
+    let job_id = executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar import admission",
+            move || library_for_record.record_import_job(&layer_id_for_record),
+        )
+        .await?;
+    library.inner().begin_import_sources(
+        &job_id,
+        &layer_id,
+        paths.into_iter().map(std::path::PathBuf::from).collect(),
+    )?;
+    Ok(job_id)
+}
+
 #[tauri::command]
 pub async fn lidar_get_import_job(
     library: State<'_, LidarLibrary>,

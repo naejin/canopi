@@ -2,16 +2,19 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const createLayer = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-const startImport = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const chooseFiles = vi.hoisted(() => vi.fn())
+const importIntoNew = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const importIntoLayer = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('../app/lidar/actions', () => ({
-  createLidarLayer: createLayer,
+  chooseImportFiles: chooseFiles,
+  importSourcesIntoNewLayer: importIntoNew,
+  importSourcesIntoLayer: importIntoLayer,
   deleteLidarLayer: vi.fn(),
   fetchLidarLayerDeleteImpact: vi.fn(),
   presentEntity: vi.fn(),
   renameLidarLayer: vi.fn(),
-  startImportForLayer: startImport,
+  cancelOpenImport: vi.fn(),
 }))
 
 vi.mock('../app/lidar/library-store', async () => {
@@ -24,6 +27,7 @@ vi.mock('../app/lidar/library-store', async () => {
       engine: { available: true, version: null, detail: null },
     }),
     lidarStatusMessage: signal<string | null>(null),
+    openImportJob: signal<unknown>(null),
     refreshLidarLibrary: vi.fn().mockResolvedValue(undefined),
   }
 })
@@ -37,13 +41,21 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement |
   )
 }
 
+/** The commit button, matched exactly: "Import" is a prefix of "Import sources". */
+function importButton(container: HTMLElement): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll('button')).find(
+    (button) => (button.textContent ?? '').trim() === 'Import',
+  )
+}
+
 describe('Data panel import affordance', () => {
   let container: HTMLDivElement
 
   beforeEach(() => {
     locale.value = 'en'
-    createLayer.mockClear()
-    startImport.mockClear()
+    chooseFiles.mockReset()
+    importIntoNew.mockClear()
+    importIntoLayer.mockClear()
     container = document.createElement('div')
     document.body.append(container)
   })
@@ -52,6 +64,19 @@ describe('Data panel import affordance', () => {
     render(null, container)
     container.remove()
   })
+
+  /** Choose files through the real control, with the chooser scripted. */
+  async function choose(paths: string[] | null): Promise<void> {
+    chooseFiles.mockResolvedValue(paths)
+    act(() => {
+      render(<DataPanel />, container)
+    })
+    await act(async () => {
+      buttonByText(container, 'Import sources')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+  }
 
   it('offers importing sources as an action even when the library is empty', () => {
     act(() => {
@@ -62,50 +87,46 @@ describe('Data panel import affordance', () => {
     expect(buttonByText(container, 'Import sources')).toBeDefined()
   })
 
-  it('requires an explicit interpretation before creating the dataset', async () => {
-    act(() => {
-      render(<DataPanel />, container)
-    })
-    act(() => {
-      buttonByText(container, 'Import sources')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      )
-    })
+  /**
+   * The chooser comes first, so cancelling it creates nothing.
+   *
+   * The previous interaction asked for a name and an interpretation before the
+   * user had chosen anything, which left a dataset behind when they then
+   * cancelled the chooser.
+   */
+  it('creates nothing when the chooser is cancelled', async () => {
+    await choose(null)
+    expect(chooseFiles).toHaveBeenCalledTimes(1)
+    expect(importIntoNew).not.toHaveBeenCalled()
+    expect(importIntoLayer).not.toHaveBeenCalled()
+    // No form, because there is nothing to import.
+    expect(importButton(container)).toBeUndefined()
+  })
 
-    const create = buttonByText(container, 'Create dataset')
+  it('requires an explicit interpretation before importing the chosen files', async () => {
+    await choose(['/data/ground.tif', '/data/ground-2.tif'])
+
+    // The chosen files are shown, and the name is suggested from the first one.
+    expect(container.textContent).toContain('2 file(s) selected')
+    expect(container.textContent).toContain('ground.tif')
+    const nameField = container.querySelector<HTMLInputElement>('input[type="text"]')!
+    expect(nameField.value).toBe('ground')
+
     // The form defaults interpretation to unselected, so a filename can never
     // decide the measurement type.
-    expect(create?.disabled).toBe(true)
-
-    const nameField = container.querySelector<HTMLInputElement>('input[type="text"]')
-    expect(nameField).not.toBeNull()
-    act(() => {
-      if (nameField) {
-        nameField.value = 'Ground survey'
-        nameField.dispatchEvent(new Event('input', { bubbles: true }))
-      }
-    })
-    // Still refused: a name alone is not an interpretation.
-    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(true)
+    expect(importButton(container)?.disabled).toBe(true)
 
     act(() => {
       const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       expect(radios).toHaveLength(4)
       radios[0]?.click()
     })
-    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(false)
-    expect(createLayer).not.toHaveBeenCalled()
+    expect(importButton(container)?.disabled).toBe(false)
+    expect(importIntoNew).not.toHaveBeenCalled()
   })
 
-  it('refuses to create an other continuous dataset before its unit is declared', async () => {
-    act(() => {
-      render(<DataPanel />, container)
-    })
-    act(() => {
-      buttonByText(container, 'Import sources')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      )
-    })
+  it('refuses to import an other continuous dataset before its unit is declared', async () => {
+    await choose(['/data/soil.tif'])
     const nameField = container.querySelector<HTMLInputElement>('input[type="text"]')!
     act(() => {
       nameField.value = 'Soil chemistry'
@@ -118,27 +139,20 @@ describe('Data panel import affordance', () => {
       radios[3]?.click()
     })
 
-    // The unit controls appear, and Create stays refused until one is used.
-    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(true)
+    // The unit controls appear, and Import stays refused until one is used.
+    expect(importButton(container)?.disabled).toBe(true)
     expect(container.querySelector('input[type="checkbox"]')).not.toBeNull()
 
     act(() => {
       container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click()
     })
-    // Stating the unit is unknown is a declaration, so it admits the dataset.
-    expect(buttonByText(container, 'Create dataset')?.disabled).toBe(false)
-    expect(createLayer).not.toHaveBeenCalled()
+    // Stating the unit is unknown is a declaration, so it admits the batch.
+    expect(importButton(container)?.disabled).toBe(false)
+    expect(importIntoNew).not.toHaveBeenCalled()
   })
 
-  it('creates the dataset with the chosen name and interpretation', async () => {
-    act(() => {
-      render(<DataPanel />, container)
-    })
-    act(() => {
-      buttonByText(container, 'Import sources')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      )
-    })
+  it('imports the chosen files with the name and interpretation the user gave', async () => {
+    await choose(['/data/height.tif'])
     const nameField = container.querySelector<HTMLInputElement>('input[type="text"]')!
     act(() => {
       nameField.value = 'Height survey'
@@ -152,15 +166,19 @@ describe('Data panel import affordance', () => {
     })
 
     await act(async () => {
-      buttonByText(container, 'Create dataset')?.dispatchEvent(
+      importButton(container)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true }),
       )
     })
 
-    // Elevation and height have an inherent unit, so no declaration is sent.
-    expect(createLayer).toHaveBeenCalledWith('Height survey', 'AboveGroundHeight', {
-      label: null,
-      unknown: false,
-    })
+    // The selected paths, the edited name and the chosen interpretation all
+    // reach the one-step import. Elevation and height have an inherent unit, so
+    // no declaration is sent.
+    expect(importIntoNew).toHaveBeenCalledWith(
+      ['/data/height.tif'],
+      'Height survey',
+      'AboveGroundHeight',
+      { label: null, unknown: false },
+    )
   })
 })

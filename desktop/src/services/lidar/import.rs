@@ -219,6 +219,18 @@ impl RetainedSourceCog {
     }
 }
 
+/// Read the staged payload one job wrote during preparation.
+///
+/// The payload is the job's own record of what it prepared, so both entry
+/// routes read it the same way: the retired review route to show a decision,
+/// and the one-step route to publish what it just validated.
+pub fn read_staged_import(library: &LidarLibrary, job_id: &str) -> Result<StagedImport, String> {
+    let path = library.inner.paths.job_dir(job_id).join("staging.json");
+    let staging_json = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Staged import data is missing: {e}"))?;
+    serde_json::from_str(&staging_json).map_err(|e| format!("Invalid staging data: {e}"))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StagedImport {
     pub job_id: String,
@@ -317,7 +329,14 @@ pub fn stage_import(
     let mut staged: Vec<StagedSource> = Vec::new();
     for source_path in source_paths {
         check_cancel(cancel)?;
-        staged.push(stage_source(
+        // A source this batch cannot use refuses the whole batch, and the
+        // refusal names the user's own file: "gdalinfo failed on a hashed copy"
+        // is not an answer anyone can act on.
+        let filename = source_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| source_path.display().to_string());
+        let staged_source = stage_source(
             engine,
             paths,
             library,
@@ -330,7 +349,9 @@ pub fn stage_import(
             job_id,
             &job_dir,
             cancel,
-        )?);
+        )
+        .map_err(|error| format!("{filename}: {error}"))?;
+        staged.push(staged_source);
     }
 
     // One common interpretation for the whole batch.

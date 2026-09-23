@@ -576,7 +576,10 @@
         "importing": "正在导入…",
         "importFailed": "导入失败：{{reason}}",
         "retryImport": "重试导入",
-        "importCompleted": "导入完成：{{sources}} 个源"
+        "importCompleted": "导入完成：{{sources}} 个源",
+        "selectedFiles": "已选择 {{count}} 个文件",
+        "reusesInterpretation": "将添加到 {{dataset}}：沿用其解释。",
+        "importConfirm": "导入"
       },
       "analysis": {
         "title": "分析",

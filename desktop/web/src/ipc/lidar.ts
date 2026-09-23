@@ -70,6 +70,18 @@ export async function lidarDeleteLayer(layerId: string): Promise<void> {
   return invoke('lidar_delete_layer', { layerId })
 }
 
+/**
+ * Import selected sources into one Data Layer, in a single job.
+ *
+ * The Import action is the commit intent: the native side prepares and
+ * validates every occurrence and publishes the batch atomically, reporting
+ * progress, cancellation and the terminal outcome through the job. There is no
+ * review screen to poll and no second decision to apply.
+ */
+export async function lidarImportSources(layerId: string, paths: string[]): Promise<string> {
+  return invoke('lidar_import_sources', { layerId, paths })
+}
+
 export async function lidarStageImport(layerId: string, paths: string[]): Promise<string> {
   return invoke('lidar_stage_import', { layerId, paths })
 }

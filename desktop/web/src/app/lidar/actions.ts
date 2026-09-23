@@ -1,7 +1,11 @@
 import { open } from '@tauri-apps/plugin-dialog'
-import type { LidarPresentationEntryKind } from '../../generated/contracts'
+import type {
+  LidarMeasurementKind,
+  LidarPresentationEntryKind,
+} from '../../generated/contracts'
 import {
   lidarApplyImport,
+  lidarImportSources,
   lidarCancelAnalysisJob,
   lidarCancelImport,
   lidarCreateAnalysis,
@@ -70,6 +74,62 @@ export async function presentEntity(
   entityId: string,
 ): Promise<void> {
   upsertLidarEntry(kind, entityId)
+}
+
+/**
+ * Let the user choose source files, without creating anything yet.
+ *
+ * This is Data's primary import entry: cancelling the chooser creates no
+ * dataset, no job and no asset, which is why the chooser comes first and the
+ * interpretation is confirmed afterwards rather than before.
+ */
+export async function chooseImportFiles(): Promise<string[] | null> {
+  const selection = await open({
+    multiple: true,
+    title: 'Add TIFF sources',
+  })
+  if (selection === null) return null
+  const paths = Array.isArray(selection) ? selection : [selection]
+  return paths.length > 0 ? paths : null
+}
+
+/**
+ * Import the chosen files into a new Data Layer.
+ *
+ * The dataset is created first because the interpretation must be explicit and
+ * attached before anything is prepared, and the one-step job then prepares,
+ * validates and publishes the batch. A failure leaves the empty dataset
+ * retryable rather than presenting it as ready.
+ */
+export async function importSourcesIntoNewLayer(
+  paths: string[],
+  name: string,
+  kind: LidarMeasurementKind,
+  unit: { label: string | null; unknown: boolean },
+): Promise<void> {
+  await withLidarError(async () => {
+    const layerId = await lidarCreateLayer(name, kind, unit)
+    await refreshLidarLibrary()
+    const jobId = await lidarImportSources(layerId, paths)
+    await trackImportJob(jobId)
+  })
+}
+
+/**
+ * Import the chosen files into an existing dataset.
+ *
+ * The dataset already declares how its values are measured, so its
+ * interpretation is reused rather than asked for again; the chosen files are
+ * what the user is confirming.
+ */
+export async function importSourcesIntoLayer(
+  layerId: string,
+  paths: string[],
+): Promise<void> {
+  await withLidarError(async () => {
+    const jobId = await lidarImportSources(layerId, paths)
+    await trackImportJob(jobId)
+  })
 }
 
 export async function startImportForLayer(layerId: string): Promise<void> {

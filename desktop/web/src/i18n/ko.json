@@ -576,7 +576,10 @@
         "importing": "가져오는 중…",
         "importFailed": "가져오기 실패: {{reason}}",
         "retryImport": "가져오기 다시 시도",
-        "importCompleted": "가져오기 완료: 소스 {{sources}}개"
+        "importCompleted": "가져오기 완료: 소스 {{sources}}개",
+        "selectedFiles": "파일 {{count}}개 선택됨",
+        "reusesInterpretation": "{{dataset}}에 추가합니다. 해석은 그대로 사용됩니다.",
+        "importConfirm": "가져오기"
       },
       "analysis": {
         "title": "분석",

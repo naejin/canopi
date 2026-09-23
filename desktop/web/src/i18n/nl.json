@@ -576,7 +576,10 @@
         "importing": "Importeren…",
         "importFailed": "Import mislukt: {{reason}}",
         "retryImport": "Import opnieuw proberen",
-        "importCompleted": "Import voltooid: {{sources}} bron(nen)"
+        "importCompleted": "Import voltooid: {{sources}} bron(nen)",
+        "selectedFiles": "{{count}} bestand(en) geselecteerd",
+        "reusesInterpretation": "Toevoegen aan {{dataset}}: de interpretatie wordt hergebruikt.",
+        "importConfirm": "Importeren"
       },
       "analysis": {
         "title": "Analyse",

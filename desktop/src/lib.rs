@@ -113,6 +113,7 @@ pub fn run() {
             commands::lidar::lidar_rename_layer,
             commands::lidar::lidar_delete_layer_impact,
             commands::lidar::lidar_delete_layer,
+            commands::lidar::lidar_import_sources,
             commands::lidar::lidar_stage_import,
             commands::lidar::lidar_get_import_job,
             commands::lidar::lidar_preview_import_decision,

@@ -576,7 +576,10 @@
         "importing": "Importando…",
         "importFailed": "Error de importación: {{reason}}",
         "retryImport": "Reintentar importación",
-        "importCompleted": "Importación completada: {{sources}} fuente(s)"
+        "importCompleted": "Importación completada: {{sources}} fuente(s)",
+        "selectedFiles": "{{count}} archivo(s) seleccionado(s)",
+        "reusesInterpretation": "Se añade a {{dataset}}: se reutiliza su interpretación.",
+        "importConfirm": "Importar"
       },
       "analysis": {
         "title": "Análisis",

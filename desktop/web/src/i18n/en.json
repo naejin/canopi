@@ -576,7 +576,10 @@
         "importing": "Importing…",
         "importFailed": "Import failed: {{reason}}",
         "retryImport": "Retry import",
-        "importCompleted": "Import complete: {{sources}} source(s)"
+        "importCompleted": "Import complete: {{sources}} source(s)",
+        "selectedFiles": "{{count}} file(s) selected",
+        "reusesInterpretation": "Adding to {{dataset}}: its interpretation is reused.",
+        "importConfirm": "Import"
       },
       "analysis": {
         "title": "Analysis",

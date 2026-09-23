@@ -576,7 +576,10 @@
         "importing": "Импорт…",
         "importFailed": "Ошибка импорта: {{reason}}",
         "retryImport": "Повторить импорт",
-        "importCompleted": "Импорт завершён: источников — {{sources}}"
+        "importCompleted": "Импорт завершён: источников — {{sources}}",
+        "selectedFiles": "Выбрано файлов: {{count}}",
+        "reusesInterpretation": "Добавление в {{dataset}}: его интерпретация будет использована.",
+        "importConfirm": "Импортировать"
       },
       "analysis": {
         "title": "Анализ",

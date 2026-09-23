@@ -576,7 +576,10 @@
         "importing": "インポート中…",
         "importFailed": "インポートに失敗しました: {{reason}}",
         "retryImport": "インポートを再試行",
-        "importCompleted": "インポート完了: {{sources}} 件のソース"
+        "importCompleted": "インポート完了: {{sources}} 件のソース",
+        "selectedFiles": "{{count}} 件のファイルを選択",
+        "reusesInterpretation": "{{dataset}} に追加します。解釈はそのまま使用されます。",
+        "importConfirm": "インポート"
       },
       "analysis": {
         "title": "解析",

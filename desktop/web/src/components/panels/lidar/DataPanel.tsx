@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'preact/hooks'
 import {
   cancelOpenImport,
-  createLidarLayer,
+  chooseImportFiles,
   deleteLidarLayer,
   fetchLidarLayerDeleteImpact,
+  importSourcesIntoLayer,
+  importSourcesIntoNewLayer,
   presentEntity,
   renameLidarLayer,
-  startImportForLayer,
 } from '../../../app/lidar/actions'
 import {
   installLidarLibraryObserver,
@@ -36,7 +37,19 @@ export function DataPanel() {
   useEffect(() => installLidarLibraryObserver(), [])
   const library = lidarLibrary.value
   const [row, setRow] = useState<{ id: string; mode: RowMode } | null>(null)
-  const [creating, setCreating] = useState(false)
+  /**
+   * Files the user chose, with the interpretation still to confirm.
+   *
+   * The chooser comes first and creates nothing, so cancelling it leaves no
+   * dataset, job or asset behind. Holding the selection here is what lets the
+   * form below ask how the values are measured *after* the user has seen what
+   * they picked.
+   */
+  const [selection, setSelection] = useState<{
+    readonly paths: string[]
+    /** The dataset this batch targets, or null for a new one. */
+    readonly layer: { readonly id: string; readonly name: string } | null
+  } | null>(null)
   const [newDatasetName, setNewDatasetName] = useState('')
   const [draftKind, setDraftKind] = useState<MeasurementKind | null>(null)
   const [unitLabel, setUnitLabel] = useState('')
@@ -71,116 +84,151 @@ export function DataPanel() {
           is what makes the interpretation an explicit choice rather than a
           filename guess, so the form asks for it before any file is opened.
         */}
-        {creating ? (
+        {/*
+          Data's primary action is importing sources, and it opens the chooser
+          first: cancelling it creates nothing, and the interpretation is asked
+          for only once the user knows what they selected. Import is the commit
+          intent — there is no preview and no second Apply decision.
+        */}
+        {selection === null ? (
+          <div className={styles.rowActions}>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={() =>
+                void run(async () => {
+                  const paths = await chooseImportFiles()
+                  if (paths === null) return
+                  setNewDatasetName(suggestedDatasetName(paths))
+                  setDraftKind(null)
+                  setSelection({ paths, layer: null })
+                })
+              }
+            >
+              {t('canvas.lidar.data.importSources')}
+            </button>
+          </div>
+        ) : (
           <form
             className={styles.inlineForm}
             onSubmit={(event) => {
               event.preventDefault()
+              if (selection.layer !== null) {
+                const target = selection.layer
+                const paths = selection.paths
+                setSelection(null)
+                void run(() => importSourcesIntoLayer(target.id, paths))
+                return
+              }
               const name = newDatasetName.trim()
-              // Interpretation stays unselected until the user chooses one.
+              // Interpretation stays unselected until the user chooses one, so
+              // a filename can never decide the measurement type.
               if (name.length === 0 || draftKind === null) return
-              // A continuous dataset that is neither elevation nor height has no
-              // inherent unit, so its author declares one or states it is unknown
-              // rather than letting the app assume a label.
               if (draftKind === 'OtherContinuous' && unitLabel.trim().length === 0 && !unitUnknown) {
                 return
               }
-              void run(async () => {
-                await createLidarLayer(name, draftKind, {
-                  label: unitLabel.trim() || null,
-                  unknown: unitUnknown,
-                })
-                setCreating(false)
-                setNewDatasetName('')
-                setDraftKind(null)
-                setUnitLabel('')
-                setUnitUnknown(false)
-              })
+              const paths = selection.paths
+              const kind = draftKind
+              const unit = { label: unitLabel.trim() || null, unknown: unitUnknown }
+              setSelection(null)
+              setNewDatasetName('')
+              setDraftKind(null)
+              setUnitLabel('')
+              setUnitUnknown(false)
+              void run(() => importSourcesIntoNewLayer(paths, name, kind, unit))
             }}
           >
-            <label className={styles.field}>
-              <span>{t('canvas.lidar.data.datasetName')}</span>
-              <input
-                type="text"
-                value={newDatasetName}
-                onInput={(event) => setNewDatasetName(event.currentTarget.value)}
-              />
-            </label>
-            <fieldset className={styles.fieldset}>
-              <legend>{t('canvas.lidar.data.interpretation')}</legend>
-              {MEASUREMENT_KINDS.map((kind) => (
-                <label key={kind} className={styles.choice}>
-                  <input
-                    type="radio"
-                    name="dataset-kind"
-                    checked={draftKind === kind}
-                    onChange={() => setDraftKind(kind)}
-                  />
-                  <span>{t(`canvas.lidar.kind.${kind}`)}</span>
-                </label>
+            <p className={styles.selectedFiles}>
+              {t('canvas.lidar.data.selectedFiles', { count: selection.paths.length })}
+            </p>
+            <ul className={styles.fileList}>
+              {selection.paths.map((path) => (
+                <li key={path}>{path.split('/').pop()}</li>
               ))}
-            </fieldset>
-            {draftKind === 'OtherContinuous' ? (
+            </ul>
+            {selection.layer === null ? (
               <>
                 <label className={styles.field}>
-                  <span>{t('canvas.lidar.data.unitLabel')}</span>
+                  <span>{t('canvas.lidar.data.datasetName')}</span>
                   <input
                     type="text"
-                    value={unitLabel}
-                    disabled={unitUnknown}
-                    onInput={(event) => setUnitLabel(event.currentTarget.value)}
+                    value={newDatasetName}
+                    onInput={(event) => setNewDatasetName(event.currentTarget.value)}
                   />
                 </label>
-                <label className={styles.choice}>
-                  <input
-                    type="checkbox"
-                    checked={unitUnknown}
-                    onChange={(event) => setUnitUnknown(event.currentTarget.checked)}
-                  />
-                  <span>{t('canvas.lidar.data.unitUnknown')}</span>
-                </label>
+                <fieldset className={styles.fieldset}>
+                  <legend>{t('canvas.lidar.data.interpretation')}</legend>
+                  {MEASUREMENT_KINDS.map((kind) => (
+                    <label key={kind} className={styles.choice}>
+                      <input
+                        type="radio"
+                        name="dataset-kind"
+                        checked={draftKind === kind}
+                        onChange={() => setDraftKind(kind)}
+                      />
+                      <span>{t(`canvas.lidar.kind.${kind}`)}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                {draftKind === 'OtherContinuous' ? (
+                  <>
+                    <label className={styles.field}>
+                      <span>{t('canvas.lidar.data.unitLabel')}</span>
+                      <input
+                        type="text"
+                        value={unitLabel}
+                        disabled={unitUnknown}
+                        onInput={(event) => setUnitLabel(event.currentTarget.value)}
+                      />
+                    </label>
+                    <label className={styles.choice}>
+                      <input
+                        type="checkbox"
+                        checked={unitUnknown}
+                        onChange={(event) => setUnitUnknown(event.currentTarget.checked)}
+                      />
+                      <span>{t('canvas.lidar.data.unitUnknown')}</span>
+                    </label>
+                  </>
+                ) : null}
               </>
-            ) : null}
+            ) : (
+              // An existing dataset already declares how its values are
+              // measured, so that interpretation is reused and only the files
+              // are new.
+              <p className={styles.note}>
+                {t('canvas.lidar.data.reusesInterpretation', { dataset: selection.layer.name })}
+              </p>
+            )}
             <div className={styles.formActions}>
               <button
                 type="submit"
                 className={styles.primary}
                 disabled={
-                  draftKind === null
-                  || (draftKind === 'OtherContinuous'
-                    && unitLabel.trim().length === 0
-                    && !unitUnknown)
+                  selection.layer === null
+                  && (draftKind === null
+                    || (draftKind === 'OtherContinuous'
+                      && unitLabel.trim().length === 0
+                      && !unitUnknown))
                 }
               >
-                {t('canvas.lidar.data.createDataset')}
+                {t('canvas.lidar.data.importConfirm')}
               </button>
               <button
                 type="button"
                 className={styles.secondary}
                 onClick={() => {
-                  setCreating(false)
+                  setSelection(null)
                   setNewDatasetName('')
                   setDraftKind(null)
+                  setUnitLabel('')
+                  setUnitUnknown(false)
                 }}
               >
                 {t('canvas.lidar.cancelCreate')}
               </button>
             </div>
           </form>
-        ) : (
-          <div className={styles.rowActions}>
-            <button
-              type="button"
-              className={styles.primary}
-              onClick={() => {
-                setNewDatasetName('')
-                setDraftKind(null)
-                setCreating(true)
-              }}
-            >
-              {t('canvas.lidar.data.importSources')}
-            </button>
-          </div>
         )}
         {lidarStatusMessage.value ? (
           <p className={styles.error} role="status">
@@ -322,7 +370,16 @@ export function DataPanel() {
                       type="button"
                       className={styles.secondary}
                       disabled={isImportActive(openImportJob.value, layer.id)}
-                      onClick={() => void run(() => startImportForLayer(layer.id))}
+                      onClick={() =>
+                        void run(async () => {
+                          const paths = await chooseImportFiles()
+                          if (paths === null) return
+                          setSelection({
+                            paths,
+                            layer: { id: layer.id, name: layer.name },
+                          })
+                        })
+                      }
                     >
                       {openImportJob.value?.layer_id === layer.id
                         && openImportJob.value.state === 'Failed'
@@ -338,6 +395,18 @@ export function DataPanel() {
       </div>
     </div>
   )
+}
+
+/**
+ * A dataset name suggested from the first chosen file.
+ *
+ * The suggestion is editable and never decides the interpretation, so it is
+ * only a convenience: an empty suggestion leaves the field for the user.
+ */
+function suggestedDatasetName(paths: readonly string[]): string {
+  const first = paths[0]?.split('/').pop() ?? ''
+  const stem = first.replace(/\.[^.]+$/, '').trim()
+  return stem
 }
 
 /** Whether one layer's import job is still doing work. */

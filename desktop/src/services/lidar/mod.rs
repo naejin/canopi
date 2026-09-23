@@ -1590,6 +1590,129 @@ impl LidarLibrary {
         Ok(())
     }
 
+    /// Prepare and publish a batch in one job, with no review in between.
+    ///
+    /// This is the production import route: the user's commit intent is the
+    /// Import action, so each selected source is prepared and validated and the
+    /// batch is published atomically without a second decision screen. The
+    /// amendment's rules are enforced by the work below rather than by a
+    /// reviewer: preparation is per source and sequential under one heavy-job
+    /// lease, the target head is captured before any preparation starts and
+    /// rechecked inside the publication transaction, and a pre-commit failure
+    /// or cancellation publishes nothing.
+    pub fn begin_import_sources(
+        &self,
+        job_id: &str,
+        layer_id: &str,
+        source_paths: Vec<PathBuf>,
+    ) -> Result<(), String> {
+        let lease = HeavyJobLease::acquire(self, job_id)?;
+        let executor = self.executor()?;
+        let flag = self.register_cancel(job_id);
+        let library = self.clone();
+        let layer_id_for_work = layer_id.to_string();
+        let job_id_for_work = job_id.to_string();
+        let job_id_clone = job_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            let library_for_work = library.clone();
+            let job_id_for_stage = job_id_for_work.clone();
+            let layer_for_stage = layer_id_for_work.clone();
+            let outcome = executor
+                .run(
+                    crate::native_operation::NativeOperationClass::Local,
+                    "lidar import sources",
+                    move || {
+                        let _lease = lease;
+                        // Prepare and validate every selected source. The head
+                        // is captured inside this call, before preparation
+                        // begins, and carried by the staged payload.
+                        match import::stage_import(
+                            &library_for_work,
+                            &job_id_for_stage,
+                            &layer_for_stage,
+                            &source_paths,
+                            &flag,
+                        ) {
+                            Ok(_) => {}
+                            Err(error) => return Err(error),
+                        }
+                        let staging =
+                            import::read_staged_import(&library_for_work, &job_id_for_stage)?;
+                        // Every occurrence is compatible and validated before
+                        // anything becomes visible; a partial batch is never
+                        // published as a success.
+                        import::ensure_whole_batch_compatible(&staging)?;
+                        library_for_work.mark_import_publishing(&job_id_for_stage)?;
+                        // Publication rechecks the captured head inside its own
+                        // transaction, so a head that moved during preparation
+                        // is a conflict rather than a silently rebased import.
+                        import::apply_import(&library_for_work, &staging, true, false, &flag)
+                            .map(|_| ())
+                    },
+                )
+                .await;
+            library.finish_import_sources(&job_id_clone, outcome);
+        });
+        Ok(())
+    }
+
+    /// Record the outcome of a one-step import.
+    fn finish_import_sources(&self, job_id: &str, outcome: Result<(), String>) {
+        if let Ok(connection) = self.catalogue() {
+            match outcome {
+                Ok(()) => {
+                    let _ = connection.execute(
+                        "UPDATE lidar_import_jobs
+                         SET state = 'complete', message = NULL, review_json = NULL,
+                             progress_phase = NULL, progress_percent = NULL,
+                             updated_at = ?2
+                         WHERE id = ?1 AND state IN ('staging', 'applying')",
+                        rusqlite::params![job_id, now_iso()],
+                    );
+                }
+                Err(error) => {
+                    let (state, message) = if error == "cancelled" {
+                        ("cancelled", "import cancelled".to_string())
+                    } else {
+                        ("failed", error)
+                    };
+                    let _ = connection.execute(
+                        "UPDATE lidar_import_jobs
+                         SET state = ?2, message = ?3, progress_phase = NULL,
+                             progress_percent = NULL, updated_at = ?4
+                         WHERE id = ?1 AND state IN ('staging', 'applying')",
+                        rusqlite::params![job_id, state, message, now_iso()],
+                    );
+                    drop(connection);
+                    if let Err(cleanup) = import::settle_job_root(self, job_id) {
+                        tracing::warn!(
+                            job_id,
+                            error = %cleanup,
+                            "failed import kept its root for recovery"
+                        );
+                    }
+                }
+            }
+        }
+        self.settle_cancel(job_id);
+    }
+
+    /// Mark a one-step import as publishing, after its batch was validated.
+    fn mark_import_publishing(&self, job_id: &str) -> Result<(), String> {
+        let connection = self.catalogue()?;
+        connection
+            .execute(
+                "UPDATE lidar_import_jobs
+                 SET state = 'applying', message = NULL,
+                     progress_phase = 'composing_layer', progress_percent = 0,
+                     updated_at = ?2
+                 WHERE id = ?1 AND state = 'staging'",
+                rusqlite::params![job_id, now_iso()],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn finish_staging(&self, job_id: &str, outcome: Result<import::StagingOutput, String>) {
         let connection = self.catalogue();
         if let Ok(connection) = connection {
@@ -1651,11 +1774,7 @@ impl LidarLibrary {
                 row.state
             ));
         }
-        let staging_json =
-            std::fs::read_to_string(self.inner.paths.job_dir(job_id).join("staging.json"))
-                .map_err(|e| format!("Staged import data is missing: {e}"))?;
-        let staging: import::StagedImport = serde_json::from_str(&staging_json)
-            .map_err(|e| format!("Invalid staging data: {e}"))?;
+        let staging = import::read_staged_import(self, job_id)?;
         // The whole-batch rule is rechecked before the job leaves review, so a
         // partially rejected selection never even enters the applying state.
         import::ensure_whole_batch_compatible(&staging)?;
@@ -1689,11 +1808,7 @@ impl LidarLibrary {
         if state != "awaiting_review" {
             return Err(format!("Import job is not awaiting review (state {state})"));
         }
-        let staging_json =
-            std::fs::read_to_string(self.inner.paths.job_dir(job_id).join("staging.json"))
-                .map_err(|e| format!("Staged import data is missing: {e}"))?;
-        let staging: import::StagedImport = serde_json::from_str(&staging_json)
-            .map_err(|e| format!("Invalid staging data: {e}"))?;
+        let staging = import::read_staged_import(self, job_id)?;
         let cancel = AtomicBool::new(false);
         import::render_composition_preview(self, &staging, &cancel)
     }
@@ -2522,6 +2637,129 @@ mod tests {
 
         drop(library);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The one-step import route prepares, validates and publishes in one job.
+    ///
+    /// The amendment's flow is: the Import action *is* the commit intent, so
+    /// there is no review state and no second decision. This drives the same
+    /// calls the orchestration makes, in the same order, and asserts the
+    /// properties that flow depends on — including that a batch with an
+    /// unusable file publishes nothing and names the file.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn one_step_import_publishes_without_review_and_refuses_an_invalid_batch() {
+        let engine = engine::GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-one-step-import"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        // Two four-by-four planes over the same lattice: the second starts one
+        // column east so the batch has uncovered coverage to add.
+        let plane = |name: &str, value: f32, origin_x: f64| -> std::path::PathBuf {
+            let values = vec![value; 16];
+            let raw = root.join(format!("{name}.raw"));
+            import::write_f32_raw(&raw, &values).expect("raw plane");
+            let tif = root.join(format!("{name}.tif"));
+            let grid = grid::RasterGrid {
+                width: 4,
+                height: 4,
+                geotransform: [origin_x, 1.0, 0.0, 4.0, 0.0, -1.0],
+            };
+            import::raw_to_tif(&engine, &cancel, &raw, &tif, &grid, "EPSG:3857", -9999.0)
+                .expect("plane converts");
+            tif
+        };
+        let west = plane("west", 5.0, 0.0);
+        let east = plane("east", 9.0, 3.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "one step",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
+            )
+            .expect("layer created");
+
+        // The production sequence, without the spawned wrapper around it.
+        let job_id = library.record_import_job(&layer_id).expect("job recorded");
+        import::stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            &[west.clone(), east.clone()],
+            &cancel,
+        )
+        .expect("staging succeeds");
+        // Preparation leaves the job staging: the one-step route never enters
+        // the review state, so nothing can be waiting for a decision.
+        let job = library
+            .get_import_job(&job_id)
+            .unwrap()
+            .expect("job exists");
+        assert_eq!(
+            format!("{:?}", job.state),
+            "Staging",
+            "the one-step route must not stop for review"
+        );
+        let staging = import::read_staged_import(&library, &job_id).expect("staged payload");
+        import::ensure_whole_batch_compatible(&staging).expect("every source is compatible");
+        library
+            .mark_import_publishing(&job_id)
+            .expect("the job moves to publishing");
+        import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
+        library.finish_import_sources(&job_id, Ok(()));
+
+        let job = library
+            .get_import_job(&job_id)
+            .unwrap()
+            .expect("job exists");
+        assert_eq!(format!("{:?}", job.state), "Complete");
+        assert!(job.review.is_none(), "a review is not part of this route");
+
+        // Two occurrences published as one generation, and the batch is visible.
+        let connection = library.catalogue().unwrap();
+        let head = catalogue::head_generation(&connection, &layer_id)
+            .unwrap()
+            .expect("a head was published");
+        assert_eq!(
+            catalogue::collection_member_count(&connection, &head.id).unwrap(),
+            2
+        );
+        drop(connection);
+
+        // A batch whose second file cannot be used publishes nothing and names
+        // the file, leaving the accepted head exactly where it was.
+        let broken = root.join("broken.tif");
+        std::fs::write(&broken, b"not a raster").expect("broken file");
+        let before = catalogue::head_generation(&library.catalogue().unwrap(), &layer_id)
+            .unwrap()
+            .expect("head")
+            .id;
+        let second_job = library.record_import_job(&layer_id).expect("job recorded");
+        let failure = import::stage_import(
+            &library,
+            &second_job,
+            &layer_id,
+            &[east.clone(), broken.clone()],
+            &cancel,
+        )
+        .expect_err("an unusable source refuses the batch");
+        assert!(
+            failure.contains("broken.tif"),
+            "the refusal names the file: {failure}"
+        );
+        let after = catalogue::head_generation(&library.catalogue().unwrap(), &layer_id)
+            .unwrap()
+            .expect("head")
+            .id;
+        assert_eq!(after, before, "a refused batch leaves the head untouched");
+
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// An inspection lookup shares the display admission and is cancellable.
