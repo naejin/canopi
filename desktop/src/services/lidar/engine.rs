@@ -99,7 +99,7 @@ impl GdalEngine {
             &["--version".to_string()],
             None,
             None,
-            DEFAULT_PROCESS_TIMEOUT,
+            Some(DEFAULT_PROCESS_TIMEOUT),
         )?;
         let mut tools = tools;
         tools.version = version_output.stdout.trim().to_string();
@@ -125,7 +125,31 @@ impl GdalEngine {
             GdalProgram::Dem => tools.gdaldem,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(&path, args, None, cancel, DEFAULT_PROCESS_TIMEOUT)
+        Self::run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
+    }
+
+    /// Run the controlled source-conversion call with no elapsed-time ceiling.
+    ///
+    /// Only this call may outlive the common finite deadline: a real large
+    /// conversion is the one operation the product contract exempts. Explicit
+    /// cancel and shutdown still terminate and reap the child, and every call
+    /// retains bounded output and process-reaping behavior. OS read/write/fsync
+    /// stalls are not made interruptible by an atomic flag.
+    pub fn run_uncapped_conversion(
+        &self,
+        program: GdalProgram,
+        args: &[String],
+        cancel: Option<&AtomicBool>,
+    ) -> Result<RunOutput, String> {
+        let tools = self.discover()?;
+        let path = match program {
+            GdalProgram::Info => tools.gdalinfo,
+            GdalProgram::Translate => tools.gdal_translate,
+            GdalProgram::Warp => tools.gdalwarp,
+            GdalProgram::Dem => tools.gdaldem,
+            GdalProgram::Transform => tools.gdaltransform,
+        };
+        Self::run_once(&path, args, None, cancel, None)
     }
 
     /// Run a GDAL tool with a small caller-owned stdin payload. This keeps
@@ -149,7 +173,13 @@ impl GdalEngine {
             GdalProgram::Dem => tools.gdaldem,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(&path, args, Some(input), cancel, DEFAULT_PROCESS_TIMEOUT)
+        Self::run_once(
+            &path,
+            args,
+            Some(input),
+            cancel,
+            Some(DEFAULT_PROCESS_TIMEOUT),
+        )
     }
 
     fn run_once(
@@ -157,7 +187,7 @@ impl GdalEngine {
         args: &[String],
         input: Option<&[u8]>,
         cancel: Option<&AtomicBool>,
-        timeout: Duration,
+        timeout: Option<Duration>,
     ) -> Result<RunOutput, String> {
         let started = Instant::now();
         // Output is captured through temp files instead of pipes so no
@@ -274,7 +304,7 @@ pub struct RunOutput {
 fn wait_cancellable(
     child: &mut Child,
     cancel: Option<&AtomicBool>,
-    timeout: Duration,
+    timeout: Option<Duration>,
     output_paths: [&std::path::Path; 2],
 ) -> Result<std::process::ExitStatus, String> {
     let started = Instant::now();
@@ -289,7 +319,9 @@ fn wait_cancellable(
             Ok(None) => {}
             Err(e) => return Err(format!("Failed to poll raster process: {e}")),
         }
-        if started.elapsed() > timeout {
+        if let Some(timeout) = timeout
+            && started.elapsed() > timeout
+        {
             let _ = child.kill();
             let _ = child.wait();
             return Err("raster process timed out".to_string());

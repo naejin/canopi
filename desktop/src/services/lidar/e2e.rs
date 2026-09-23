@@ -977,8 +977,8 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     };
     println!("MNH batch: {} tiles", files.len());
     for file in &files {
-        let (digest, bytes) =
-            super::raster_assets::hash_file(file).expect("tile hashes with bounded I/O");
+        let (digest, bytes) = super::raster_assets::hash_file(file, &AtomicBool::new(false))
+            .expect("tile hashes with bounded I/O");
         println!(
             "  {} {} bytes {}",
             file.file_name().unwrap_or_default().to_string_lossy(),

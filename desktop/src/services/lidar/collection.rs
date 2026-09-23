@@ -505,38 +505,50 @@ pub(super) fn measure(
     cancel: &AtomicBool,
 ) -> Result<SnapshotMeasurement, String> {
     import::check_cancel(cancel)?;
-    let connection = library.catalogue()?;
-    let mut member_cells = 0u64;
-    let mut display_min = f64::INFINITY;
-    let mut display_max = f64::NEG_INFINITY;
-    let mut any_range = false;
-    for member in &plan.members {
-        import::check_cancel(cancel)?;
-        let (cells, min, max) = member_facts(&connection, member)?;
-        member_cells = member_cells.saturating_add(cells);
-        if let (Some(min), Some(max)) = (min, max)
-            && min.is_finite()
-            && max.is_finite()
-        {
-            display_min = display_min.min(min);
-            display_max = display_max.max(max);
-            any_range = true;
+    let (exact_cells, exact_min, exact_max, any_range, display_min, display_max) = {
+        let connection = library.catalogue()?;
+        let mut member_cells = 0u64;
+        let mut display_min = f64::INFINITY;
+        let mut display_max = f64::NEG_INFINITY;
+        let mut any_range = false;
+        for member in &plan.members {
+            import::check_cancel(cancel)?;
+            let (cells, min, max) = member_facts(&connection, member)?;
+            member_cells = member_cells.saturating_add(cells);
+            if let (Some(min), Some(max)) = (min, max)
+                && min.is_finite()
+                && max.is_finite()
+            {
+                display_min = display_min.min(min);
+                display_max = display_max.max(max);
+                any_range = true;
+            }
         }
-    }
-    // No member holds a valid cell, so the composition holds none either: this
-    // is the one composed statement member facts can make soundly, and it is
-    // exact because an empty union needs every member to be empty.
-    let exact_cells = match plan.members.len() {
-        0 => Some(0),
-        1 => Some(member_cells),
-        _ if member_cells == 0 => Some(0),
-        _ => None,
-    };
-    let (exact_min, exact_max) = match (plan.members.len(), any_range) {
-        (1, true) => (Some(display_min), Some(display_max)),
-        // An empty or all-NoData composition has a known range of nothing.
-        (_, false) if exact_cells == Some(0) => (Some(0.0), Some(0.0)),
-        _ => (None, None),
+        // No member holds a valid cell, so the composition holds none either: this
+        // is the one composed statement member facts can make soundly, and it is
+        // exact because an empty union needs every member to be empty.
+        let exact_cells = match plan.members.len() {
+            0 => Some(0),
+            1 => Some(member_cells),
+            _ if member_cells == 0 => Some(0),
+            _ => None,
+        };
+        let (exact_min, exact_max) = match (plan.members.len(), any_range) {
+            (1, true) => (Some(display_min), Some(display_max)),
+            // An empty or all-NoData composition has a known range of nothing.
+            (_, false) if exact_cells == Some(0) => (Some(0.0), Some(0.0)),
+            _ => (None, None),
+        };
+        (
+            exact_cells,
+            exact_min,
+            exact_max,
+            any_range,
+            display_min,
+            display_max,
+        )
+        // Catalogue facts are collected here; the guard is released before any
+        // bounds transform or reader work so unrelated catalogue reads proceed.
     };
     // Display bounds are the envelope of what the members actually occupy: the
     // reader is only asked for its occupied blocks, which is arithmetic over

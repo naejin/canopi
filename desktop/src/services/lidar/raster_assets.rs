@@ -32,14 +32,15 @@ pub(super) struct CogAsset {
     pub nodata: Option<f32>,
 }
 
-/// Digest a file with bounded I/O.
-pub(super) fn hash_file(path: &Path) -> Result<(String, u64), String> {
+/// Digest a file with bounded I/O, cancellable between chunks.
+pub(super) fn hash_file(path: &Path, cancel: &AtomicBool) -> Result<(String, u64), String> {
     let mut file = std::fs::File::open(path)
         .map_err(|e| format!("Failed to open raster asset {}: {e}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut total = 0u64;
     let mut buffer = vec![0u8; HASH_CHUNK];
     loop {
+        super::import::check_cancel(cancel)?;
         let read = file
             .read(&mut buffer)
             .map_err(|e| format!("Failed to read raster asset {}: {e}", path.display()))?;
@@ -111,7 +112,7 @@ pub(super) fn write_cog_asset(
     .map_err(|e| format!("Failed to write scratch header: {e}"))?;
 
     let staged = scratch.join(format!("{stem}.tif"));
-    let created = engine.run(
+    let created = engine.run_uncapped_conversion(
         GdalProgram::Translate,
         &prepared_raster::controlled_cog_arguments(&raw, &staged, crs_wkt, grid, nodata),
         Some(cancel),
@@ -120,7 +121,7 @@ pub(super) fn write_cog_asset(
     let _ = std::fs::remove_file(&header);
     created?;
 
-    admit_staged_cog(paths, &staged, grid, nodata)
+    admit_staged_cog(paths, &staged, grid, nodata, cancel)
 }
 
 /// Create one controlled source COG inside the job directory that owns it.
@@ -142,7 +143,7 @@ pub(super) fn write_job_source_cog(
     let required = prepared_raster::required_free_bytes(grid.width, grid.height, 0)?;
     super::paths::require_free_space(job_dir, required, "the staged source COG")?;
     let staged = job_dir.join(format!("{stem}.tif"));
-    let created = engine.run(
+    let created = engine.run_uncapped_conversion(
         GdalProgram::Translate,
         &prepared_raster::controlled_cog_arguments(input, &staged, crs_wkt, grid, nodata),
         Some(cancel),
@@ -154,7 +155,7 @@ pub(super) fn write_job_source_cog(
     let validated = (|| -> Result<CogAsset, String> {
         let reader = PreparedRaster::open_committed(&staged, grid, nodata)?;
         drop(reader);
-        let (sha256, bytes) = hash_file(&staged)?;
+        let (sha256, bytes) = hash_file(&staged, cancel)?;
         Ok(CogAsset {
             sha256,
             path: staged.clone(),
@@ -180,11 +181,12 @@ pub(super) fn admit_staged_cog(
     staged: &Path,
     grid: &RasterGrid,
     nodata: Option<f32>,
+    cancel: &AtomicBool,
 ) -> Result<CogAsset, String> {
     let admitted = (|| -> Result<CogAsset, String> {
         let reader = PreparedRaster::open_committed(staged, grid, nodata)?;
         drop(reader);
-        let (sha256, bytes) = hash_file(staged)?;
+        let (sha256, bytes) = hash_file(staged, cancel)?;
         let target = paths.asset_cog(&sha256);
         if target.exists() {
             let _ = std::fs::remove_file(staged);
@@ -300,7 +302,7 @@ mod tests {
         let dir = scratch_dir("hash");
         let path = dir.join("bytes.bin");
         std::fs::write(&path, b"canopi-asset").unwrap();
-        let (digest, bytes) = hash_file(&path).unwrap();
+        let (digest, bytes) = hash_file(&path, &AtomicBool::new(false)).unwrap();
         assert_eq!(bytes, 12);
         // Independently known SHA-256 of the same byte string.
         let mut hasher = Sha256::new();
@@ -389,7 +391,7 @@ mod tests {
             "committed asset survives reader disposal"
         );
         assert_eq!(
-            hash_file(&asset.path).unwrap(),
+            hash_file(&asset.path, &AtomicBool::new(false)).unwrap(),
             (asset.sha256.clone(), asset.bytes)
         );
 

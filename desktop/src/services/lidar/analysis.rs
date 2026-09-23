@@ -725,7 +725,8 @@ pub fn run_slope_job(
         let manifest = read_generation_manifest(&head.manifest_json)?;
         (definition, head, manifest)
     };
-    validate_working_grid(&manifest.grid, "slope analysis")?;
+    // Sparse slope is admitted by its own occupied work, not the lattice
+    // envelope. The dense guard applies only to the dense fallback below.
 
     // Bounded slope: when the sparse publication path is enabled, resolve the
     // input generation once and compute one core+halo block per occupied chunk
@@ -766,7 +767,9 @@ pub fn run_slope_job(
 
     // Dense fallback: a generation whose member history cannot be replayed
     // still has its accepted mosaic, and the accepted whole-raster slope stays
-    // the route for it.
+    // the route for it. Dense work allocates the lattice, so the dense guard
+    // applies here rather than before the sparse path is chosen.
+    validate_working_grid(&manifest.grid, "slope analysis")?;
     let (Some(source_mosaic), Some(source_coverage)) = (
         head.mosaic_path.as_deref(),
         head.coverage_mask_path.as_deref(),

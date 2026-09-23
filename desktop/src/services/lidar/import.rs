@@ -692,6 +692,7 @@ fn stage_managed_original(
     source_path: &Path,
     job_dir: &Path,
     filename: &str,
+    cancel: &AtomicBool,
 ) -> Result<(String, PathBuf, u64), String> {
     let temporary = job_dir.join(format!("source-copy-{}.tmp", new_id("copy")));
     let copied = (|| -> Result<(String, u64), String> {
@@ -709,6 +710,7 @@ fn stage_managed_original(
         let mut total = 0u64;
         let mut buffer = [0u8; 64 * 1024];
         loop {
+            check_cancel(cancel)?;
             let read = source
                 .read(&mut buffer)
                 .map_err(|e| format!("Failed to read {}: {e}", source_path.display()))?;
@@ -747,7 +749,7 @@ fn stage_managed_original(
         .map_err(|e| format!("Failed to create source dir: {e}"))?;
     let managed_original = paths.source_original(&sha256);
     if managed_original.exists() {
-        let (existing_hash, existing_size) = hash_file_limited(&managed_original)?;
+        let (existing_hash, existing_size) = hash_file_limited(&managed_original, cancel)?;
         if existing_hash != sha256 || existing_size != size_bytes {
             let _ = std::fs::remove_file(&temporary);
             return Err(format!(
@@ -776,7 +778,7 @@ fn stage_managed_original(
     Ok((sha256, managed_original, size_bytes))
 }
 
-fn hash_file_limited(path: &Path) -> Result<(String, u64), String> {
+fn hash_file_limited(path: &Path, cancel: &AtomicBool) -> Result<(String, u64), String> {
     let mut file = std::io::BufReader::new(
         std::fs::File::open(path)
             .map_err(|e| format!("Failed to verify {}: {e}", path.display()))?,
@@ -785,6 +787,7 @@ fn hash_file_limited(path: &Path) -> Result<(String, u64), String> {
     let mut total = 0u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
+        check_cancel(cancel)?;
         let read = file
             .read(&mut buffer)
             .map_err(|e| format!("Failed to verify {}: {e}", path.display()))?;
@@ -839,7 +842,7 @@ fn stage_source(
     // avoids loading an arbitrary TIFF into memory and lets an existing
     // deduplicated original be verified before it is trusted.
     let (sha256, managed_original, size_bytes) =
-        stage_managed_original(paths, source_path, job_dir, &filename)?;
+        stage_managed_original(paths, source_path, job_dir, &filename, cancel)?;
 
     // Probe from the managed copy so the flow survives user-file changes.
     let probe_json = probe_gdalinfo(engine, &managed_original, cancel)?;
@@ -1879,7 +1882,7 @@ fn promote_source_cogs(
         // is the payload this source declares.
         let grid = grid_for_source(source);
         let (destination_digest, destination_bytes) =
-            super::raster_assets::hash_file(&destination)?;
+            super::raster_assets::hash_file(&destination, cancel)?;
         if destination_digest != cog.sha256 || destination_bytes != cog.bytes {
             return Err(format!(
                 "asset {} holds {destination_bytes} bytes of {destination_digest}, not the declared {} bytes of {}",
@@ -4394,15 +4397,32 @@ mod tests {
         let source = root.join("extensionless-source");
         std::fs::write(&source, b"canopi raster bytes").unwrap();
 
-        let (sha256, managed, size) =
-            stage_managed_original(&paths, &source, &job_dir, "extensionless-source").unwrap();
+        let (sha256, managed, size) = stage_managed_original(
+            &paths,
+            &source,
+            &job_dir,
+            "extensionless-source",
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert_eq!(size, 19);
         assert_eq!(std::fs::read(&managed).unwrap(), b"canopi raster bytes");
-        assert_eq!(hash_file_limited(&managed).unwrap().0, sha256);
+        assert_eq!(
+            hash_file_limited(&managed, &AtomicBool::new(false))
+                .unwrap()
+                .0,
+            sha256
+        );
 
         std::fs::write(&managed, b"corrupt").unwrap();
-        let error =
-            stage_managed_original(&paths, &source, &job_dir, "extensionless-source").unwrap_err();
+        let error = stage_managed_original(
+            &paths,
+            &source,
+            &job_dir,
+            "extensionless-source",
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
         assert!(error.contains("failed integrity verification"));
         let _ = std::fs::remove_dir_all(root);
     }
@@ -8061,7 +8081,9 @@ mod tests {
 
         // A replacement publishes from its own retained source; the first
         // source's shared asset stays byte-identical.
-        let shared_before = crate::services::lidar::raster_assets::hash_file(&asset).unwrap();
+        let shared_before =
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap();
         let (job_two, staging_two) =
             stage_review(&reopened, &layer_id, std::slice::from_ref(&second), &cancel);
         let replacement = staging_two.sources[0]
@@ -8079,7 +8101,8 @@ mod tests {
         assert_eq!(valid, first_valid);
         assert_eq!(values, second_values);
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap(),
             shared_before,
             "a retained asset is immutable"
         );
@@ -8208,9 +8231,11 @@ mod tests {
                 "the old member keeps {name}"
             );
         }
-        let legacy_digest =
-            crate::services::lidar::raster_assets::hash_file(&legacy_dir.join("values.raw"))
-                .unwrap();
+        let legacy_digest = crate::services::lidar::raster_assets::hash_file(
+            &legacy_dir.join("values.raw"),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
 
         // Publish the retained source over it: the head's history is now a
         // legacy payload and a retained COG at once.
@@ -8308,8 +8333,11 @@ mod tests {
         assert_eq!(values, first_values, "undo restores the legacy member");
         assert!(legacy_dir.join("values.raw").exists());
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&legacy_dir.join("values.raw"))
-                .unwrap(),
+            crate::services::lidar::raster_assets::hash_file(
+                &legacy_dir.join("values.raw"),
+                &AtomicBool::new(false)
+            )
+            .unwrap(),
             legacy_digest,
             "undo never rewrites a legacy payload"
         );
@@ -8350,7 +8378,9 @@ mod tests {
         let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         assert!(applied.changed);
         let asset = library.inner.paths.asset_cog(&retained.sha256);
-        let shared_digest = crate::services::lidar::raster_assets::hash_file(&asset).unwrap();
+        let shared_digest =
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap();
         let head_before = head_of(&library, &layer_id);
 
         // A second job reuses the same file and is cancelled before it
@@ -8372,7 +8402,8 @@ mod tests {
         assert!(cancelled.contains("cancelled"), "{cancelled}");
         cancel.store(false, Ordering::Relaxed);
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap(),
             shared_digest,
             "a cancelled Apply never touches a shared asset"
         );
@@ -8432,7 +8463,8 @@ mod tests {
             assert_eq!(generations, 1, "a refused Apply publishes nothing");
         }
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&asset).unwrap(),
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap(),
             shared_digest,
             "the reused asset is untouched"
         );
@@ -9007,7 +9039,11 @@ mod tests {
             "a file this job did not create is preserved"
         );
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&destinations[1]).unwrap(),
+            crate::services::lidar::raster_assets::hash_file(
+                &destinations[1],
+                &AtomicBool::new(false)
+            )
+            .unwrap(),
             (declared.sha256.clone(), declared.bytes),
             "its content still matches the declared digest by construction"
         );
@@ -9040,7 +9076,11 @@ mod tests {
         let reopened = LidarLibrary::open(&root).expect("library reopens");
         assert!(destinations[1].exists(), "recovery preserves it too");
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&destinations[1]).unwrap(),
+            crate::services::lidar::raster_assets::hash_file(
+                &destinations[1],
+                &AtomicBool::new(false)
+            )
+            .unwrap(),
             (declared.sha256, declared.bytes)
         );
         drop(reopened);
