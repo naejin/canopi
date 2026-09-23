@@ -74,8 +74,11 @@ pub enum LidarResultState {
     Failed,
 }
 
-/// Import job states. `awaiting_review` carries the Before/After plan; only
-/// an explicit apply publishes a generation.
+/// Import job states.
+///
+/// `Staging` is preparation, `Applying` is publication, and the terminal states
+/// report the outcome. `AwaitingReview` is retained in the vocabulary for the
+/// superseded review route, which no production caller enters.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarImportJobState {
@@ -258,54 +261,6 @@ pub struct LidarLibrarySnapshot {
     pub engine: LidarEngineStatus,
 }
 
-/// Admission facts for one staged source file.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarImportSourceFacts {
-    pub filename: String,
-    pub sha256: String,
-    pub size_bytes: u64,
-    pub width: u32,
-    pub height: u32,
-    pub pixel_size_m: f64,
-    pub nodata: Option<f32>,
-    pub value_range: [f64; 2],
-    /// Accepted into this staging; false entries carry `issues`.
-    pub compatible: bool,
-    pub issues: Vec<String>,
-}
-
-/// Review payload for one staged import. Coverage counts are exact valid
-/// pixels classified against the destination layer over the union grid.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarImportReview {
-    pub job_id: String,
-    pub layer_id: String,
-    pub sources: Vec<LidarImportSourceFacts>,
-    pub uncovered_cells: u64,
-    pub overlap_cells: u64,
-    pub invalid_cells: u64,
-    pub compatible: bool,
-    pub issues: Vec<String>,
-    /// Filesystem paths of the fixed-style Before/After preview images; the
-    /// frontend resolves them to local asset URLs. `before` is absent when
-    /// the destination layer has no accepted coverage yet.
-    pub before_preview_path: Option<String>,
-    pub after_preview_path: Option<String>,
-}
-
-/// Decision-specific comparison rendered from the same staged import that
-/// will be applied. Both images use one value scale.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarImportDecisionPreview {
-    pub add_uncovered: bool,
-    pub replace_overlap: bool,
-    pub before_preview_path: Option<String>,
-    pub after_preview_path: String,
-}
-
 /// Immutable published generation of a source layer, for layer history.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -424,7 +379,6 @@ pub struct LidarImportJob {
     pub job_id: String,
     pub layer_id: String,
     pub state: LidarImportJobState,
-    pub review: Option<LidarImportReview>,
     pub message: Option<String>,
     pub progress: Option<LidarImportProgress>,
 }

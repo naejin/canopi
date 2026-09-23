@@ -28,7 +28,6 @@ export type {
   LidarDeleteImpact,
   LidarEngineStatus,
   LidarImportJob,
-  LidarImportDecisionPreview,
   LidarAnalysisJobStatus,
   LidarAnalysisReceipt,
   LidarAnalysisKind,
@@ -82,20 +81,8 @@ export async function lidarImportSources(layerId: string, paths: string[]): Prom
   return invoke('lidar_import_sources', { layerId, paths })
 }
 
-export async function lidarStageImport(layerId: string, paths: string[]): Promise<string> {
-  return invoke('lidar_stage_import', { layerId, paths })
-}
-
 export async function lidarGetImportJob(jobId: string): Promise<LidarImportJob | null> {
   return invoke('lidar_get_import_job', { jobId })
-}
-
-export async function lidarApplyImport(
-  jobId: string,
-  addUncovered: boolean,
-  replaceOverlap: boolean,
-): Promise<void> {
-  return invoke('lidar_apply_import', { jobId, addUncovered, replaceOverlap })
 }
 
 export async function lidarCancelImport(jobId: string): Promise<void> {

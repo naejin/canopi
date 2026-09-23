@@ -31,7 +31,7 @@ import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity, galleryInitialLidarImportJob } from './memory-backend'
-import { importPanelOpen, openImportJob } from '../src/app/lidar/library-store'
+import { openImportJob } from '../src/app/lidar/library-store'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { readPlanningViewState } from '../src/app/planning-view/state'
@@ -64,7 +64,6 @@ const file = designFixture(fixtureState)
 designSessionStore.replaceCurrentDesignState(file, null, file.name)
 if (galleryInitialLidarImportJob) {
   openImportJob.value = galleryInitialLidarImportJob
-  importPanelOpen.value = true
 }
 lidarMapViewBounds.value = fixtureState === 'located'
   ? [0.02, 48.21, 0.05, 48.23]
@@ -120,7 +119,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'overview-confirmed', 'max-zoom', 'lidar-review'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'overview-confirmed', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}

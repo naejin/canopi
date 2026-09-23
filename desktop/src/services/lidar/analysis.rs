@@ -1266,34 +1266,15 @@ mod tests {
     ) {
         let cancel = AtomicBool::new(false);
         let job_id = library.record_import_job(layer_id).expect("job recorded");
-        let output = super::super::import::stage_import(
+        let outcome = super::super::import::stage_and_publish(
             library,
             &job_id,
             layer_id,
             std::slice::from_ref(&source.to_path_buf()),
+            replace_overlap,
             &cancel,
         )
-        .expect("staging succeeds");
-        assert!(
-            output.review.compatible,
-            "plane must be admitted: {:?}",
-            output.review.issues
-        );
-        library.finish_staging(
-            &job_id,
-            Ok(super::super::import::StagingOutput {
-                review: output.review.clone(),
-            }),
-        );
-        let staging: super::super::import::StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                .expect("staging json"),
-        )
-        .expect("staging parses");
-        library.prepare_apply(&job_id).expect("review accepted");
-        let outcome =
-            super::super::import::apply_import(library, &staging, true, replace_overlap, &cancel)
-                .expect("apply publishes");
+        .expect("the batch publishes");
         assert!(outcome.changed, "{}", outcome.summary());
     }
 
@@ -1875,24 +1856,10 @@ mod tests {
             )
             .expect("layer created");
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
-        let output =
-            super::super::import::stage_import(library, &job_id, &layer_id, sources, &cancel)
-                .expect("staging");
-        assert!(output.review.compatible, "{:?}", output.review.issues);
-        library.finish_staging(
-            &job_id,
-            Ok(super::super::import::StagingOutput {
-                review: output.review.clone(),
-            }),
-        );
-        let staging: super::super::import::StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                .expect("staging json"),
+        let applied = super::super::import::stage_and_publish(
+            library, &job_id, &layer_id, sources, false, &cancel,
         )
-        .expect("staging parse");
-        library.prepare_apply(&job_id).expect("review accepted");
-        let applied = super::super::import::apply_import(library, &staging, true, false, &cancel)
-            .expect("apply publishes");
+        .expect("the batch publishes");
         assert!(applied.changed);
         layer_id
     }

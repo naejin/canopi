@@ -36,8 +36,6 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarEngineStatus>()
         .register::<common_types::lidar::LidarImportJob>()
         .register::<common_types::lidar::LidarImportJobState>()
-        .register::<common_types::lidar::LidarImportDecisionPreview>()
-        .register::<common_types::lidar::LidarImportReview>()
         .register::<common_types::lidar::LidarLayerCollection>()
         .register::<common_types::lidar::LidarLayerEditOutcome>()
         .register::<common_types::lidar::LidarLayerHistoryPage>()

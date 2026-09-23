@@ -33,7 +33,6 @@ describe('LiDAR import progress', () => {
       job_id: 'job-1',
       layer_id: 'layer-1',
       state: 'Applying',
-      review: null,
       message: null,
       progress: { phase: 'RenderingMap', percent: 68 },
     }
@@ -50,7 +49,6 @@ describe('LiDAR import progress', () => {
       job_id: 'job-1',
       layer_id: 'layer-1',
       state: 'Failed',
-      review: null,
       message: 'broken.tif: not recognized as a supported file format',
       progress: null,
     }

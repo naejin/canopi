@@ -1409,12 +1409,6 @@ impl LidarLibrary {
         let Some(row) = catalogue::get_import_job(&connection, job_id)? else {
             return Ok(None);
         };
-        let review = row
-            .review_json
-            .as_deref()
-            .map(serde_json::from_str)
-            .transpose()
-            .map_err(|e| format!("Invalid stored review: {e}"))?;
         let progress = row
             .progress_phase
             .as_deref()
@@ -1430,7 +1424,6 @@ impl LidarLibrary {
             job_id: row.id,
             layer_id: row.layer_id,
             state: parse_import_state(&row.state),
-            review,
             message: row.message,
             progress,
         }))
@@ -1551,45 +1544,6 @@ impl LidarLibrary {
     }
 
     /// Spawn staging: probe, mask, classify and plan the review.
-    pub fn begin_staging(
-        &self,
-        job_id: &str,
-        layer_id: &str,
-        source_paths: Vec<PathBuf>,
-    ) -> Result<(), String> {
-        // Refuse a competing heavy job before any running work is created;
-        // the lease is released when staging settles, which is the moment the
-        // user takes over for review.
-        let lease = HeavyJobLease::acquire(self, job_id)?;
-        let executor = self.executor()?;
-        let flag = self.register_cancel(job_id);
-        let library = self.clone();
-        let layer_id_for_work = layer_id.to_string();
-        let job_id_for_work = job_id.to_string();
-        let job_id_clone = job_id.to_string();
-        tauri::async_runtime::spawn(async move {
-            let library_for_work = library.clone();
-            let outcome = executor
-                .run(
-                    crate::native_operation::NativeOperationClass::Local,
-                    "lidar import staging",
-                    move || {
-                        let _lease = lease;
-                        import::stage_import(
-                            &library_for_work,
-                            &job_id_for_work,
-                            &layer_id_for_work,
-                            &source_paths,
-                            &flag,
-                        )
-                    },
-                )
-                .await;
-            library.finish_staging(&job_id_clone, outcome);
-        });
-        Ok(())
-    }
-
     /// Prepare and publish a batch in one job, with no review in between.
     ///
     /// This is the production import route: the user's commit intent is the
@@ -1642,8 +1596,9 @@ impl LidarLibrary {
                         // anything becomes visible; a partial batch is never
                         // published as a success.
                         import::ensure_whole_batch_compatible(&staging)?;
-                        library_for_work.mark_import_publishing(&job_id_for_stage)?;
-                        // Publication rechecks the captured head inside its own
+                        // Preparation marked the job publishing once the batch
+                        // validated. Publication rechecks the captured head in
+                        // its own
                         // transaction, so a head that moved during preparation
                         // is a conflict rather than a silently rebased import.
                         import::apply_import(&library_for_work, &staging, true, false, &flag)
@@ -1651,23 +1606,33 @@ impl LidarLibrary {
                     },
                 )
                 .await;
-            library.finish_import_sources(&job_id_clone, outcome);
+            library.finish_import_sources(&job_id_clone, &layer_id_for_work, outcome);
         });
         Ok(())
     }
 
     /// Record the outcome of a one-step import.
-    fn finish_import_sources(&self, job_id: &str, outcome: Result<(), String>) {
+    fn finish_import_sources(&self, job_id: &str, layer_id: &str, outcome: Result<(), String>) {
+        let mut published = false;
         if let Ok(connection) = self.catalogue() {
             match outcome {
                 Ok(()) => {
+                    published = true;
                     let _ = connection.execute(
                         "UPDATE lidar_import_jobs
                          SET state = 'complete', message = NULL, review_json = NULL,
-                             progress_phase = NULL, progress_percent = NULL,
                              updated_at = ?2
                          WHERE id = ?1 AND state IN ('staging', 'applying')",
                         rusqlite::params![job_id, now_iso()],
+                    );
+                    // Publication reports its own finalising progress as it
+                    // commits, so the settled job's phase is cleared here
+                    // whether or not the guarded state update above matched.
+                    let _ = connection.execute(
+                        "UPDATE lidar_import_jobs
+                         SET progress_phase = NULL, progress_percent = NULL
+                         WHERE id = ?1",
+                        [job_id],
                     );
                 }
                 Err(error) => {
@@ -1695,255 +1660,11 @@ impl LidarLibrary {
             }
         }
         self.settle_cancel(job_id);
-    }
-
-    /// Mark a one-step import as publishing, after its batch was validated.
-    fn mark_import_publishing(&self, job_id: &str) -> Result<(), String> {
-        let connection = self.catalogue()?;
-        connection
-            .execute(
-                "UPDATE lidar_import_jobs
-                 SET state = 'applying', message = NULL,
-                     progress_phase = 'composing_layer', progress_percent = 0,
-                     updated_at = ?2
-                 WHERE id = ?1 AND state = 'staging'",
-                rusqlite::params![job_id, now_iso()],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    fn finish_staging(&self, job_id: &str, outcome: Result<import::StagingOutput, String>) {
-        let connection = self.catalogue();
-        if let Ok(connection) = connection {
-            match outcome {
-                Ok(output) => {
-                    let review_json = serde_json::to_string(&output.review).unwrap_or_default();
-                    let changed = connection
-                        .execute(
-                            "UPDATE lidar_import_jobs
-                         SET state = 'awaiting_review', review_json = ?2, message = NULL,
-                             progress_phase = NULL, progress_percent = NULL,
-                             updated_at = ?3
-                         WHERE id = ?1 AND state = 'staging'",
-                            rusqlite::params![job_id, review_json, now_iso()],
-                        )
-                        .unwrap_or(0);
-                    if changed == 0 {
-                        let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
-                    }
-                }
-                Err(error) => {
-                    let (state, message) = if error == "cancelled" {
-                        ("cancelled", "import cancelled".to_string())
-                    } else {
-                        ("failed", error)
-                    };
-                    let _ = connection.execute(
-                        "UPDATE lidar_import_jobs
-                         SET state = ?2, message = ?3, progress_phase = NULL,
-                             progress_percent = NULL, updated_at = ?4 WHERE id = ?1",
-                        rusqlite::params![job_id, state, message, now_iso()],
-                    );
-                    // A settled job owns no payload, but its root is removed
-                    // only through the same reconciliation decision: a journal
-                    // that cannot be settled keeps its evidence for retry.
-                    drop(connection);
-                    if let Err(cleanup) = import::settle_job_root(self, job_id) {
-                        tracing::warn!(
-                            job_id,
-                            error = %cleanup,
-                            "failed staging kept its root for recovery"
-                        );
-                    }
-                }
-            }
-        }
-        self.settle_cancel(job_id);
-    }
-
-    /// Validate the review decision and mark the job applying (short
-    /// catalogue write; called through the executor from the command).
-    pub fn prepare_apply(&self, job_id: &str) -> Result<import::StagedImport, String> {
-        let connection = self.catalogue()?;
-        let row = catalogue::get_import_job(&connection, job_id)?
-            .ok_or_else(|| format!("Import job {job_id} does not exist"))?;
-        if row.state != "awaiting_review" {
-            return Err(format!(
-                "Import job is not awaiting review (state {})",
-                row.state
-            ));
-        }
-        let staging = import::read_staged_import(self, job_id)?;
-        // The whole-batch rule is rechecked before the job leaves review, so a
-        // partially rejected selection never even enters the applying state.
-        import::ensure_whole_batch_compatible(&staging)?;
-        connection
-            .execute(
-                "UPDATE lidar_import_jobs
-                 SET state = 'applying', message = NULL,
-                     progress_phase = 'composing_layer', progress_percent = 0,
-                     updated_at = ?2 WHERE id = ?1",
-                rusqlite::params![job_id, now_iso()],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(staging)
-    }
-
-    /// Render the composition an Apply of this staging would publish.
-    pub fn preview_import_decision(
-        &self,
-        job_id: &str,
-    ) -> Result<common_types::lidar::LidarImportDecisionPreview, String> {
-        let state: String = {
-            let connection = self.catalogue()?;
-            connection
-                .query_row(
-                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
-                    [job_id],
-                    |row| row.get(0),
-                )
-                .map_err(|_| format!("Import job {job_id} does not exist"))?
-        };
-        if state != "awaiting_review" {
-            return Err(format!("Import job is not awaiting review (state {state})"));
-        }
-        let staging = import::read_staged_import(self, job_id)?;
-        let cancel = AtomicBool::new(false);
-        import::render_composition_preview(self, &staging, &cancel)
-    }
-
-    /// Spawn apply: compose the mosaic, publish the generation and refresh
-    /// dependent analyses.
-    pub fn begin_apply(
-        &self,
-        staging: import::StagedImport,
-        add_uncovered: bool,
-        replace_overlap: bool,
-    ) -> Result<(), String> {
-        let job_id = staging.job_id.clone();
-        let lease = HeavyJobLease::acquire(self, &job_id)?;
-        let executor = self.executor()?;
-        let flag = self.register_cancel(&job_id);
-        let library = self.clone();
-        let job_id_owned = job_id.to_string();
-        tauri::async_runtime::spawn(async move {
-            let library_for_work = library.clone();
-            let outcome = executor
-                .run(
-                    crate::native_operation::NativeOperationClass::Local,
-                    "lidar import apply",
-                    move || {
-                        let _lease = lease;
-                        import::apply_import(
-                            &library_for_work,
-                            &staging,
-                            add_uncovered,
-                            replace_overlap,
-                            &flag,
-                        )
-                    },
-                )
-                .await;
-            library.finish_apply(&job_id_owned, outcome);
-        });
-        Ok(())
-    }
-
-    /// Settle one apply attempt: mark the job from the publication result and
-    /// run the dependent-refresh path for a committed layer.
-    ///
-    /// The spawned apply task and the caller-level tests both drive this, so a
-    /// committed publication cannot be reported as failed here.
-    pub(crate) fn finish_apply(&self, job_id: &str, outcome: Result<import::ApplyOutcome, String>) {
-        let mut published_layer: Option<String> = None;
-        let mut refresh_stale_review = false;
-        let connection = self.catalogue();
-        if let Ok(connection) = connection {
-            match outcome {
-                Ok(applied) => {
-                    tracing::info!(job_id, summary = applied.summary(), "LiDAR import applied");
-                    if applied.changed {
-                        published_layer = connection
-                            .query_row(
-                                "SELECT layer_id FROM lidar_import_jobs WHERE id = ?1",
-                                [job_id],
-                                |row| row.get::<_, String>(0),
-                            )
-                            .ok();
-                    } else {
-                        let _ = connection.execute(
-                            "UPDATE lidar_import_jobs
-                             SET state = 'complete', message = ?2,
-                                 progress_phase = 'finalizing', progress_percent = 100,
-                                 updated_at = ?3 WHERE id = ?1 AND state = 'applying'",
-                            rusqlite::params![job_id, applied.message, now_iso()],
-                        );
-                    }
-                }
-                Err(error) => {
-                    let (state, message) = if error.starts_with("import review is stale") {
-                        refresh_stale_review = true;
-                        (
-                            "staging",
-                            "coverage changed; refreshing import review".to_string(),
-                        )
-                    } else if error == "cancelled" {
-                        ("cancelled", "import cancelled".to_string())
-                    } else {
-                        ("failed", error)
-                    };
-                    let _ = connection.execute(
-                        "UPDATE lidar_import_jobs
-                         SET state = ?2, message = ?3,
-                             review_json = CASE WHEN ?2 = 'staging' THEN NULL ELSE review_json END,
-                             progress_phase = CASE WHEN ?2 = 'staging' THEN NULL ELSE progress_phase END,
-                             progress_percent = CASE WHEN ?2 = 'staging' THEN NULL ELSE progress_percent END,
-                             updated_at = ?4 WHERE id = ?1",
-                        rusqlite::params![job_id, state, message, now_iso()],
-                    );
-                }
-            }
-        }
-        self.settle_cancel(job_id);
-        if refresh_stale_review {
-            let staging =
-                std::fs::read_to_string(self.inner.paths.job_dir(job_id).join("staging.json"))
-                    .map_err(|error| error.to_string())
-                    .and_then(|json| {
-                        serde_json::from_str::<import::StagedImport>(&json)
-                            .map_err(|error| error.to_string())
-                    });
-            match staging {
-                Ok(staging) => {
-                    let paths = staging
-                        .sources
-                        .into_iter()
-                        .map(|source| source.managed_original)
-                        .collect();
-                    if let Err(error) = self.begin_staging(job_id, &staging.layer_id, paths) {
-                        self.fail_import_job(job_id, &error);
-                    }
-                }
-                Err(error) => self.fail_import_job(
-                    job_id,
-                    &format!("Could not refresh stale import review: {error}"),
-                ),
-            }
-        }
-        // Dependency-aware invalidation: enqueue one refresh per definition.
-        if let Some(layer_id) = published_layer.filter(|id| !id.is_empty()) {
-            self.refresh_dependents(&layer_id);
-        }
-    }
-
-    fn fail_import_job(&self, job_id: &str, message: &str) {
-        if let Ok(connection) = self.catalogue() {
-            let _ = connection.execute(
-                "UPDATE lidar_import_jobs
-                 SET state = 'failed', message = ?2, updated_at = ?3 WHERE id = ?1",
-                rusqlite::params![job_id, message, now_iso()],
-            );
+        // A committed publication makes every result derived from this layer's
+        // previous head stale, so one refresh per definition is enqueued. A
+        // failed or cancelled import published nothing and invalidates nothing.
+        if published {
+            self.refresh_dependents(layer_id);
         }
     }
 
@@ -2608,7 +2329,7 @@ mod tests {
         // ...so a competing submission is refused promptly instead of creating
         // running work.
         let error = library
-            .begin_staging(&competing, &layer_id, Vec::new())
+            .begin_import_sources(&competing, &layer_id, Vec::new())
             .expect_err("a competing heavy submission must be refused");
         assert!(error.contains("already running"), "{error}");
         {
@@ -2629,7 +2350,7 @@ mod tests {
         drop(HeavyJobLease::acquire(&library, &competing).unwrap());
         assert!(
             library
-                .begin_staging(&holding, &layer_id, Vec::new())
+                .begin_import_sources(&holding, &layer_id, Vec::new())
                 .is_err(),
             "no executor is attached in this fixture"
         );
@@ -2694,31 +2415,32 @@ mod tests {
             &cancel,
         )
         .expect("staging succeeds");
-        // Preparation leaves the job staging: the one-step route never enters
-        // the review state, so nothing can be waiting for a decision.
+        // Preparation ends by moving the validated batch to publishing, so the
+        // job never rests in a state that waits for a person.
         let job = library
             .get_import_job(&job_id)
             .unwrap()
             .expect("job exists");
         assert_eq!(
             format!("{:?}", job.state),
-            "Staging",
-            "the one-step route must not stop for review"
+            "Applying",
+            "the one-step route does not stop for review"
         );
         let staging = import::read_staged_import(&library, &job_id).expect("staged payload");
         import::ensure_whole_batch_compatible(&staging).expect("every source is compatible");
-        library
-            .mark_import_publishing(&job_id)
-            .expect("the job moves to publishing");
         import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
-        library.finish_import_sources(&job_id, Ok(()));
+        library.finish_import_sources(&job_id, &layer_id, Ok(()));
 
         let job = library
             .get_import_job(&job_id)
             .unwrap()
             .expect("job exists");
         assert_eq!(format!("{:?}", job.state), "Complete");
-        assert!(job.review.is_none(), "a review is not part of this route");
+        assert_eq!(
+            format!("{:?}", job.progress),
+            "None",
+            "progress is cleared once the job settles"
+        );
 
         // Two occurrences published as one generation, and the batch is visible.
         let connection = library.catalogue().unwrap();

@@ -14,16 +14,13 @@ use super::catalogue::{self, new_id, now_iso};
 use super::collection;
 use super::display::{self, ColorRamp};
 use super::engine::{GdalEngine, GdalProgram};
-use super::generation::{self, LatticeWindow};
-use super::grid::{
-    self, CoverageClassification, GeoTransform, RasterGrid, ValidMask, remap_mask_checked,
-    union_grid,
-};
+use super::generation::{self};
+use super::grid::{self, GeoTransform, RasterGrid, ValidMask, remap_mask_checked, union_grid};
 use super::paths::LidarPaths;
-use super::prepared_raster::{PreparedRaster, RasterWindow};
-use common_types::lidar::{
-    LidarImportDecisionPreview, LidarImportProgressPhase, LidarImportReview, LidarImportSourceFacts,
-};
+use super::prepared_raster::PreparedRaster;
+#[cfg(test)]
+use super::prepared_raster::RasterWindow;
+use common_types::lidar::LidarImportProgressPhase;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
@@ -219,11 +216,29 @@ impl RetainedSourceCog {
     }
 }
 
+/// Move a prepared job to publishing.
+///
+/// Guarded on the staging state so a job that was cancelled while it prepared
+/// stays cancelled and its publication is refused.
+fn mark_publishing(library: &LidarLibrary, job_id: &str) -> Result<(), String> {
+    let connection = library.catalogue()?;
+    connection
+        .execute(
+            "UPDATE lidar_import_jobs
+             SET state = 'applying', message = NULL,
+                 progress_phase = 'composing_layer', progress_percent = 0,
+                 updated_at = ?2
+             WHERE id = ?1 AND state = 'staging'",
+            rusqlite::params![job_id, catalogue::now_iso()],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Read the staged payload one job wrote during preparation.
 ///
-/// The payload is the job's own record of what it prepared, so both entry
-/// routes read it the same way: the retired review route to show a decision,
-/// and the one-step route to publish what it just validated.
+/// The payload is the job's own record of what it prepared, and publication
+/// reads it to publish exactly what was validated.
 pub fn read_staged_import(library: &LidarLibrary, job_id: &str) -> Result<StagedImport, String> {
     let path = library.inner.paths.job_dir(job_id).join("staging.json");
     let staging_json = std::fs::read_to_string(&path)
@@ -235,9 +250,11 @@ pub fn read_staged_import(library: &LidarLibrary, job_id: &str) -> Result<Staged
 pub struct StagedImport {
     pub job_id: String,
     pub layer_id: String,
-    /// Head generation the review was planned against; apply detects a
-    /// changed head and recomputes the plan instead of publishing stale
-    /// decisions.
+    /// Head generation captured before preparation began.
+    ///
+    /// Publication compares it with the head it is about to replace inside its
+    /// own transaction, so a head that moved during preparation is a conflict
+    /// rather than a silently rebased import.
     #[serde(default)]
     pub planned_against_head: Option<String>,
     pub layer_grid: Option<RasterGrid>,
@@ -245,47 +262,19 @@ pub struct StagedImport {
     pub layer_nodata: f32,
     pub union_grid: RasterGrid,
     pub sources: Vec<StagedSource>,
-    pub uncovered_cells: u64,
-    pub overlap_cells: u64,
-    pub invalid_cells: u64,
-    /// Processing cells this proposal was admitted for.
+    /// Processing cells this batch was admitted for.
     ///
-    /// Recorded so the review carries the number the admission policy actually
-    /// charged, and so Apply can be read against the same figure the user saw.
-    /// Defaulted for staged payloads written before the ordered path replaced
-    /// the union-envelope bound.
+    /// Recorded so the number the admission policy actually charged travels
+    /// with the job. Defaulted for staged payloads written before the ordered
+    /// path replaced the union-envelope bound.
     #[serde(default)]
     pub processing_cells: u64,
-    pub before_preview_path: Option<PathBuf>,
-    pub after_preview_path: Option<PathBuf>,
     pub engine_version: String,
-}
-
-#[derive(Debug)]
-pub struct StagingOutput {
-    pub review: LidarImportReview,
 }
 
 // ---------------------------------------------------------------------------
 // Staging
 // ---------------------------------------------------------------------------
-
-/// The range the accepted head is displayed with.
-///
-/// The previews share one value scale with the map that will show the result,
-/// so they read the head's **display** range — falling back to its exact range
-/// for a generation written before the display columns existed. Reading only
-/// the exact columns would collapse the preview scale whenever a composition's
-/// exact range is unknown.
-fn head_display_bounds(head: Option<&catalogue::GenerationRow>) -> (Option<f64>, Option<f64>) {
-    let Some(head) = head else {
-        return (None, None);
-    };
-    match (head.display_min_value, head.display_max_value) {
-        (Some(min), Some(max)) => (Some(min), Some(max)),
-        _ => (head.min_value, head.max_value),
-    }
-}
 
 pub fn stage_import(
     library: &LidarLibrary,
@@ -293,7 +282,7 @@ pub fn stage_import(
     layer_id: &str,
     source_paths: &[PathBuf],
     cancel: &AtomicBool,
-) -> Result<StagingOutput, String> {
+) -> Result<(), String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
     validate_source_selection(source_paths)?;
@@ -459,176 +448,24 @@ pub fn stage_import(
         admitted_processing_cells = admission::check_processing_budget(proposed, "import review")?;
     }
 
-    // R-tree candidate guard: when every accepted member has a footprint,
-    // an incoming extent intersecting none of them must classify without
-    // overlap. This cross-checks exact masks against the spatial index.
-    let incoming_bounds =
-        compatible
-            .iter()
-            .map(|s| grid_for_source(s).bounds())
-            .fold(union.bounds(), |acc, b| {
-                [
-                    acc[0].min(b[0]),
-                    acc[1].min(b[1]),
-                    acc[2].max(b[2]),
-                    acc[3].max(b[3]),
-                ]
-            });
-    let (all_members_footprinted, member_count) = if let Some(head_row) = &head {
-        let connection = library.catalogue()?;
-        let member_count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM lidar_generation_members WHERE generation_id = ?1",
-                [&head_row.id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
-        let footprint_count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM lidar_source_footprints WHERE layer_id = ?1",
-                [layer_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
-        (
-            member_count > 0 && footprint_count >= member_count,
-            member_count,
-        )
-    } else {
-        (false, 0)
-    };
-    let footprint_candidates: Vec<String> = if member_count == 0 || all_members_footprinted {
-        let connection = library.catalogue()?;
-        catalogue::footprint_candidates(&connection, incoming_bounds)?
-    } else {
-        Vec::new()
-    };
-
-    // Compose the review one bounded block at a time: each block unions the
-    // incoming sources' validity (so overlapping files count once), compares it
-    // once with the accepted head, and reduces the result into both previews.
-    // Nothing here is sized by the union's area.
+    // Every selected source is now prepared and validated independently, and
+    // that is all publication needs: the composition is defined by its members,
+    // their order and their own stored facts. Nothing here reads the accepted
+    // composition, because the amendment removed the whole-composition scan and
+    // the review imagery that depended on it.
     check_cancel(cancel)?;
-    let (target_width, target_height) = review_preview_target(&union)?;
-    let coverage = {
-        let head_source =
-            HeadBlockSource::open(library, head.as_ref(), head_manifest.as_ref(), cancel)?;
-        // The traversal runs on the fixed layer lattice: the accepted head's own
-        // grid when one exists, otherwise the first accepted source's grid,
-        // exactly as publication anchors it.
-        let lattice = head_manifest
-            .as_ref()
-            .map(|manifest| manifest.grid.clone())
-            .unwrap_or_else(|| grid_for_source(compatible[0]));
-        review_coverage(
-            &head_source,
-            &compatible,
-            library,
-            paths,
-            &lattice,
-            &union,
-            layer_nodata,
-            (target_width, target_height),
-            cancel,
-        )?
-    };
-    let classification = coverage.classification;
-    if all_members_footprinted
-        && footprint_candidates.is_empty()
-        && classification.overlap_cells > 0
-    {
-        return Err(
-            "spatial index reports no overlapping members but exact masks disagree".to_string(),
-        );
-    }
+    let engine_version = engine_version(engine);
 
-    let mut facts: Vec<LidarImportSourceFacts> = Vec::new();
-    for source in &staged {
-        facts.push(LidarImportSourceFacts {
-            filename: source.filename.clone(),
-            sha256: source.sha256.clone(),
-            size_bytes: source.size_bytes,
-            width: source.width,
-            height: source.height,
-            pixel_size_m: grid_for_source(source).pixel_size().0,
-            nodata: source.nodata,
-            value_range: source.value_range,
-            compatible: source.compatible,
-            issues: source.issues.clone(),
-        });
-    }
-
-    // Fixed-style Before/After previews share one value scale, and both are
-    // rendered from the bounded target grids the review walk produced. The
-    // initial review reflects the UI's default decision: add uncovered
-    // coverage and preserve overlap.
-    check_cancel(cancel)?;
-    let (head_min, head_max) = head_display_bounds(head.as_ref());
-    let preview_min = head_min
-        .unwrap_or(coverage.preview_min)
-        .min(coverage.preview_min);
-    let preview_max = head_max
-        .unwrap_or(coverage.preview_max)
-        .max(coverage.preview_max)
-        .max(preview_min + 1.0);
-    let preview_ramp = ColorRamp::elevation_range(preview_min, preview_max);
-    let preview_grid = preview_target_grid(&union, target_width, target_height);
-    let before_preview_path = if head.is_some() {
-        check_cancel(cancel)?;
-        let preview_tif = preview_tif_from_values(
-            engine,
-            cancel,
-            &job_dir,
-            "before-head",
-            &preview_grid,
-            &layer_crs_wkt,
-            layer_nodata,
-            &coverage.before_values,
-        )?;
-        let target = job_dir.join("preview-before.png");
-        let rendered = display::generate_preview(
-            engine,
-            cancel,
-            &preview_tif,
-            Some(layer_nodata),
-            &preview_ramp,
-            &target,
-        );
-        let _ = std::fs::remove_file(&preview_tif);
-        rendered?;
-        Some(target)
-    } else {
-        None
-    };
-    let after_preview_path = {
-        check_cancel(cancel)?;
-        let preview_tif = preview_tif_from_values(
-            engine,
-            cancel,
-            &job_dir,
-            "default",
-            &preview_grid,
-            &layer_crs_wkt,
-            layer_nodata,
-            &coverage.preview_values,
-        )?;
-        let target = job_dir.join("preview-after.png");
-        let rendered = display::generate_preview(
-            engine,
-            cancel,
-            &preview_tif,
-            Some(layer_nodata),
-            &preview_ramp,
-            &target,
-        );
-        let _ = std::fs::remove_file(&preview_tif);
-        rendered?;
-        Some(target)
-    };
-
+    // Every issue is reported against the file it is about, so a refused batch
+    // names the user's own sources rather than only the rule that refused them.
     let issues: Vec<String> = staged
         .iter()
-        .flat_map(|s| s.issues.iter().cloned())
+        .flat_map(|source| {
+            source
+                .issues
+                .iter()
+                .map(|issue| format!("{}: {issue}", source.filename))
+        })
         .collect();
 
     let staging = StagedImport {
@@ -640,13 +477,8 @@ pub fn stage_import(
         layer_nodata,
         union_grid: union,
         sources: staged,
-        uncovered_cells: classification.uncovered_cells,
-        overlap_cells: classification.overlap_cells,
-        invalid_cells: classification.invalid_cells,
         processing_cells: admitted_processing_cells,
-        before_preview_path,
-        after_preview_path,
-        engine_version: engine_version(engine),
+        engine_version,
     };
     std::fs::write(
         job_dir.join("staging.json"),
@@ -654,154 +486,15 @@ pub fn stage_import(
     )
     .map_err(|e| format!("Failed to persist staging: {e}"))?;
 
-    let review = LidarImportReview {
-        job_id: job_id.to_string(),
-        layer_id: layer_id.to_string(),
-        sources: facts,
-        uncovered_cells: staging.uncovered_cells,
-        overlap_cells: staging.overlap_cells,
-        invalid_cells: staging.invalid_cells,
-        compatible: issues.is_empty(),
-        issues,
-        before_preview_path: staging
-            .before_preview_path
-            .as_ref()
-            .map(|p| p.display().to_string()),
-        after_preview_path: staging
-            .after_preview_path
-            .as_ref()
-            .map(|p| p.display().to_string()),
-    };
-    Ok(StagingOutput { review })
-}
-
-/// Render the composition an Apply of this staging would publish.
-///
-/// The ordered model has no coverage decisions to preview: the selection is
-/// always inserted above the accepted sources. The preview is therefore the
-/// composed result itself, which is also what makes it the caller-level
-/// detector for "the accepted head's own values" in the review regressions.
-pub fn render_composition_preview(
-    library: &LidarLibrary,
-    staging: &StagedImport,
-    cancel: &AtomicBool,
-) -> Result<LidarImportDecisionPreview, String> {
-    check_cancel(cancel)?;
-    let engine = &library.inner.engine;
-    let paths = &library.inner.paths;
-    let (head, head_manifest) = {
-        let connection = library.catalogue()?;
-        let head = catalogue::head_generation(&connection, &staging.layer_id)?;
-        let manifest = head
-            .as_ref()
-            .map(|row| read_generation_manifest(&row.manifest_json))
-            .transpose()?;
-        (head, manifest)
-    };
-    if head.as_ref().map(|row| row.id.as_str()) != staging.planned_against_head.as_deref() {
-        return Err("import review is stale; review the current coverage again".to_string());
+    if !issues.is_empty() {
+        return Err(issues.join("; "));
     }
-    let compatible: Vec<&StagedSource> = staging
-        .sources
-        .iter()
-        .filter(|source| source.compatible)
-        .collect();
-    if compatible.is_empty() {
-        return Err("import has no compatible sources to preview".to_string());
-    }
-    // The decision preview walks the same bounded blocks the review did, so a
-    // sparsely covered layer costs what its data occupies.
-    validate_lattice(&staging.union_grid, "import decision preview")?;
-    let (target_width, target_height) = review_preview_target(&staging.union_grid)?;
-    let coverage = {
-        let head_source =
-            HeadBlockSource::open(library, head.as_ref(), head_manifest.as_ref(), cancel)?;
-        let lattice = head_manifest
-            .as_ref()
-            .map(|manifest| manifest.grid.clone())
-            .unwrap_or_else(|| grid_for_source(compatible[0]));
-        review_coverage(
-            &head_source,
-            &compatible,
-            library,
-            paths,
-            &lattice,
-            &staging.union_grid,
-            staging.layer_nodata,
-            (target_width, target_height),
-            cancel,
-        )?
-    };
-    let (head_min, head_max) = head_display_bounds(head.as_ref());
-    let preview_min = head_min
-        .unwrap_or(coverage.preview_min)
-        .min(coverage.preview_min);
-    let preview_max = head_max
-        .unwrap_or(coverage.preview_max)
-        .max(coverage.preview_max)
-        .max(preview_min + 1.0);
-    let ramp = ColorRamp::elevation_range(preview_min, preview_max);
-    let decision_key = "composition".to_string();
-    let job_dir = paths.job_dir(&staging.job_id);
-    let preview_grid = preview_target_grid(&staging.union_grid, target_width, target_height);
-    let before_preview_path = if head.is_some() {
-        check_cancel(cancel)?;
-        let head_tif = preview_tif_from_values(
-            engine,
-            cancel,
-            &job_dir,
-            &format!("before-{decision_key}"),
-            &preview_grid,
-            &staging.layer_crs_wkt,
-            staging.layer_nodata,
-            &coverage.before_values,
-        )?;
-        let target = job_dir.join(format!("preview-before-{decision_key}.png"));
-        let rendered = display::generate_preview(
-            engine,
-            cancel,
-            &head_tif,
-            Some(staging.layer_nodata),
-            &ramp,
-            &target,
-        );
-        let _ = std::fs::remove_file(&head_tif);
-        rendered?;
-        Some(target.display().to_string())
-    } else {
-        None
-    };
-    let preview_tif = preview_tif_from_values(
-        engine,
-        cancel,
-        &job_dir,
-        &format!("decision-{decision_key}"),
-        &preview_grid,
-        &staging.layer_crs_wkt,
-        staging.layer_nodata,
-        &coverage.preview_values,
-    )?;
-    let after_target = job_dir.join(format!("preview-after-{decision_key}.png"));
-    let rendered = display::generate_preview(
-        engine,
-        cancel,
-        &preview_tif,
-        Some(staging.layer_nodata),
-        &ramp,
-        &after_target,
-    );
-    let _ = std::fs::remove_file(&preview_tif);
-    rendered?;
-    // The ordered model records no coverage decision, so the preview reports
-    // the composition it renders rather than echoing decisions that no longer
-    // exist. Both flags stay in the wire contract at their historical values so
-    // an older reader cannot mistake the payload for a changed decision.
-    Ok(LidarImportDecisionPreview {
-        add_uncovered: true,
-        replace_overlap: false,
-        before_preview_path,
-        after_preview_path: after_target.display().to_string(),
-    })
+    // Preparation is finished and the batch is valid, so the job moves to
+    // publishing here rather than in a separate caller step: publication
+    // refuses any other state, and a cancelled job is left cancelled by the
+    // guarded update below.
+    mark_publishing(library, job_id)?;
+    Ok(())
 }
 
 /// Refuse a batch that contains any rejected source.
@@ -1434,9 +1127,6 @@ fn scan_source_facts(
     }
 }
 
-/// Largest side of a review preview, matching the review surface's target.
-const REVIEW_PREVIEW_MAX_SIDE: u32 = 512;
-
 /// Check that a lattice is representable, without limiting its area.
 ///
 /// A sparse or block-wise caller never allocates by lattice area, so the dense
@@ -1458,257 +1148,9 @@ fn validate_lattice(grid: &RasterGrid, operation: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Both preview target dimensions: at most 512 each, aspect preserved.
-fn review_preview_target(union: &RasterGrid) -> Result<(u32, u32), String> {
-    validate_lattice(union, "preview target")?;
-    let longest = union.width.max(union.height);
-    if longest <= REVIEW_PREVIEW_MAX_SIDE {
-        return Ok((union.width, union.height));
-    }
-    let scale = f64::from(REVIEW_PREVIEW_MAX_SIDE) / f64::from(longest);
-    Ok((
-        ((f64::from(union.width) * scale).round() as u32).clamp(1, REVIEW_PREVIEW_MAX_SIDE),
-        ((f64::from(union.height) * scale).round() as u32).clamp(1, REVIEW_PREVIEW_MAX_SIDE),
-    ))
-}
-
-/// The small grid a preview target raster is written on.
-fn preview_target_grid(union: &RasterGrid, width: u32, height: u32) -> RasterGrid {
-    RasterGrid {
-        width,
-        height,
-        geotransform: [
-            union.geotransform[0],
-            union.geotransform[1] * f64::from(union.width) / f64::from(width),
-            0.0,
-            union.geotransform[3],
-            0.0,
-            union.geotransform[5] * f64::from(union.height) / f64::from(height),
-        ],
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Bounded review: block-wise composed coverage
 // ---------------------------------------------------------------------------
-
-/// The accepted head's numeric coverage, readable one bounded block at a time.
-enum HeadBlockSource {
-    /// No accepted generation yet.
-    None,
-    /// Preserved dense mosaic. A dense generation only exists inside the dense
-    /// working ceiling, so its whole numeric pair is bounded and is read once.
-    Dense {
-        values: Vec<f32>,
-        valid: ValidMask,
-        manifest_grid: RasterGrid,
-    },
-    /// A generation-owned numeric store read through its format's resolver.
-    ///
-    /// Published resolved chunks come from the paged chunk reader; an ordered
-    /// collection resolves its source COGs on demand. Either way the reader is
-    /// bound to the immutable generation, and the reference lattice comes from
-    /// the review caller.
-    Reader { owner: generation::GenerationReader },
-}
-
-impl HeadBlockSource {
-    fn open(
-        library: &LidarLibrary,
-        head: Option<&catalogue::GenerationRow>,
-        manifest: Option<&GenerationManifest>,
-        cancel: &AtomicBool,
-    ) -> Result<Self, String> {
-        let engine = &library.inner.engine;
-        let (Some(head), Some(manifest)) = (head, manifest) else {
-            return Ok(Self::None);
-        };
-        match manifest.format {
-            GenerationStorageFormat::CogChunksV1 => Ok(Self::Reader {
-                owner: generation::GenerationReader::Chunks(
-                    generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE),
-                ),
-            }),
-            GenerationStorageFormat::OrderedMembersV1 => {
-                let Some(collection) =
-                    collection::load_reader(library, &head.id, manifest, cancel)?
-                else {
-                    return Err(
-                        "accepted collection is missing a source payload; the layer cannot be \
-                         read without inventing coverage"
-                            .to_string(),
-                    );
-                };
-                Ok(Self::Reader {
-                    owner: generation::GenerationReader::Collection(Box::new(collection)),
-                })
-            }
-            GenerationStorageFormat::LegacyDenseV1 => {
-                let (Some(mosaic_path), Some(mask_path)) = (
-                    head.mosaic_path.as_deref(),
-                    head.coverage_mask_path.as_deref(),
-                ) else {
-                    return Err("accepted generation has no dense raster".to_string());
-                };
-                let raw = raw_f32_bytes(
-                    engine,
-                    Path::new(mosaic_path),
-                    manifest.grid.width,
-                    manifest.grid.height,
-                    cancel,
-                )?;
-                let values = f32_values(&raw);
-                let valid = ValidMask::read_from(
-                    Path::new(mask_path),
-                    manifest.grid.width,
-                    manifest.grid.height,
-                )?;
-                Ok(Self::Dense {
-                    values,
-                    valid,
-                    manifest_grid: manifest.grid.clone(),
-                })
-            }
-        }
-    }
-
-    /// Accepted values and validity for one union block.
-    ///
-    /// Cells the head does not cover stay invalid and carry `nodata`.
-    /// The occupied lattice blocks this head stores, as an ordered stream.
-    fn block_stream(&self, lattice: &RasterGrid) -> BlockStream {
-        match self {
-            Self::None => BlockStream::Empty,
-            // Published chunk coordinates are already lattice block coordinates.
-            Self::Reader { owner, .. } => BlockStream::occupied(owner.clone()),
-            // A dense or opaque head has no occupied index, so its own stored
-            // extent supplies the candidates.
-            Self::Dense { manifest_grid, .. } => {
-                BlockStream::extent(lattice_block_range(lattice, manifest_grid))
-            }
-        }
-    }
-
-    fn block(
-        &self,
-        library: &LidarLibrary,
-        lattice: &RasterGrid,
-        window: LatticeWindow,
-        nodata: f32,
-        cancel: &AtomicBool,
-    ) -> Result<(Vec<f32>, Vec<u8>), String> {
-        let cells = usize::try_from(u64::from(window.width) * u64::from(window.height))
-            .map_err(|_| "review block is too large for this platform".to_string())?;
-        let mut values = vec![nodata; cells];
-        let mut valid = vec![0u8; cells];
-        match self {
-            Self::None => {}
-            Self::Reader { owner, .. } => {
-                let resolved = owner.read_window(library, lattice, window, cancel)?;
-                for index in 0..cells {
-                    if resolved.valid[index] == 0 {
-                        continue;
-                    }
-                    values[index] = resolved.samples[index];
-                    valid[index] = 1;
-                }
-            }
-            Self::Dense {
-                values: mosaic,
-                valid: mask,
-                manifest_grid,
-            } => {
-                let offset_x = ((manifest_grid.geotransform[0] - lattice.geotransform[0])
-                    / lattice.geotransform[1])
-                    .round() as i64;
-                let offset_y = ((lattice.geotransform[3] - manifest_grid.geotransform[3])
-                    / manifest_grid.geotransform[5].abs())
-                .round() as i64;
-                let width = window.width as usize;
-                for row in 0..window.height as i64 {
-                    let my = window.y + row - offset_y;
-                    if my < 0 || my >= i64::from(manifest_grid.height) {
-                        continue;
-                    }
-                    for column in 0..window.width as i64 {
-                        let mx = window.x + column - offset_x;
-                        if mx < 0 || mx >= i64::from(manifest_grid.width) {
-                            continue;
-                        }
-                        if !mask.get(mx as u32, my as u32) {
-                            continue;
-                        }
-                        let source = my as usize * manifest_grid.width as usize + mx as usize;
-                        let target = row as usize * width + column as usize;
-                        values[target] = mosaic[source];
-                        valid[target] = 1;
-                    }
-                }
-            }
-        }
-        Ok((values, valid))
-    }
-}
-
-/// One composed union block with the incoming validity that produced it.
-struct ComposedBlock {
-    values: Vec<f32>,
-    valid: Vec<u8>,
-    /// Union of the incoming sources' validity in this block, before the
-    /// accepted roles are applied: the review counts this once per cell.
-    incoming: Vec<u8>,
-}
-
-/// Open readers reused across one bounded walk, keyed by source digest.
-///
-/// Opening a retained COG validates its layout but prepares nothing and charges
-/// nothing, so one open per source serves a whole review walk.
-#[derive(Default)]
-struct SourceReaders {
-    open: std::collections::HashMap<String, PreparedRaster>,
-}
-
-impl SourceReaders {
-    fn release(&mut self) {
-        self.open.clear();
-    }
-}
-
-/// Read one incoming source window.
-///
-/// A source with a retained COG reads through the production reader, so its
-/// validity is the source's own effective NoData rule; a staged job written
-/// before retention still reads its disposable raw/mask scratch.
-fn read_source_window(
-    source: &StagedSource,
-    paths: &LidarPaths,
-    readers: &mut SourceReaders,
-    window: RasterWindow,
-    cancel: &AtomicBool,
-) -> Result<(Vec<f32>, Vec<u8>), String> {
-    let grid = grid_for_source(source);
-    let job_id = source.job_id.as_deref();
-    let Some(cog) = source.source_cog.as_ref() else {
-        return generation::read_legacy_window(
-            &source.raw_samples_path,
-            &source.valid_mask_path,
-            &grid,
-            window,
-            cancel,
-        );
-    };
-    if !readers.open.contains_key(&cog.sha256) {
-        readers
-            .open
-            .insert(cog.sha256.clone(), cog.open(paths, job_id, &grid)?);
-    }
-    let reader = readers
-        .open
-        .get_mut(&cog.sha256)
-        .ok_or_else(|| "source reader cache lost its entry".to_string())?;
-    let read = reader.read_window(window, cancel)?;
-    Ok((read.samples().to_vec(), read.valid().to_vec()))
-}
 
 /// Read a whole incoming source payload for the preserved dense composition.
 ///
@@ -1763,692 +1205,9 @@ fn read_cog_payload(
     Ok((values, valid))
 }
 
-/// Compose one bounded union block from the accepted head and the incoming
-/// sources, applying the accepted roles.
-///
-/// The block is the unit of work: nothing here is sized by the union, so a
-/// review costs what its data occupies rather than what its envelope spans.
-#[allow(clippy::too_many_arguments)]
-fn compose_union_block(
-    head: &HeadBlockSource,
-    sources: &[&StagedSource],
-    readers: &mut SourceReaders,
-    library: &LidarLibrary,
-    paths: &LidarPaths,
-    lattice: &RasterGrid,
-    window: LatticeWindow,
-    nodata: f32,
-    cancel: &AtomicBool,
-) -> Result<ComposedBlock, String> {
-    let width = window.width as usize;
-    let (mut values, mut valid) = head.block(library, lattice, window, nodata, cancel)?;
-    let mut incoming = vec![0u8; values.len()];
-    for source in sources {
-        let window_in_source = source_window(source, lattice, window)?;
-        if window_in_source.width == 0 || window_in_source.height == 0 {
-            continue;
-        }
-        let (source_values, source_valid) =
-            read_source_window(source, paths, readers, window_in_source, cancel)?;
-        let offset_x = ((source.geotransform[0] - lattice.geotransform[0])
-            / lattice.geotransform[1])
-            .round() as i64;
-        let offset_y = ((lattice.geotransform[3] - source.geotransform[3])
-            / source.geotransform[5].abs())
-        .round() as i64;
-        let dest_x = (i64::from(window_in_source.x) + offset_x - window.x) as usize;
-        let dest_y = (i64::from(window_in_source.y) + offset_y - window.y) as usize;
-        for row in 0..window_in_source.height as usize {
-            check_optional_cancel(Some(cancel), row as u32)?;
-            for column in 0..window_in_source.width as usize {
-                let index = row * window_in_source.width as usize + column;
-                if source_valid[index] == 0 {
-                    continue;
-                }
-                let target = (dest_y + row) * width + dest_x + column;
-                incoming[target] = 1;
-                // The ordered model has exactly one composition rule: the
-                // selection is inserted above the accepted sources, so a valid
-                // incoming sample wins and an invalid one reveals what is
-                // below. `incoming` still records every valid incoming cell so
-                // the caller can classify it against the accepted head, but the
-                // classification never changes the composed value.
-                values[target] = source_values[index];
-                valid[target] = 1;
-            }
-        }
-    }
-    Ok(ComposedBlock {
-        values,
-        valid,
-        incoming,
-    })
-}
-
-/// A source's window that intersects one union block.
-fn source_window(
-    source: &StagedSource,
-    union: &RasterGrid,
-    window: LatticeWindow,
-) -> Result<RasterWindow, String> {
-    let offset_x =
-        ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1]).round() as i64;
-    let offset_y = ((union.geotransform[3] - source.geotransform[3]) / union.geotransform[5].abs())
-        .round() as i64;
-    let x0 = (window.x - offset_x).max(0);
-    let y0 = (window.y - offset_y).max(0);
-    let x1 = (window.x + i64::from(window.width) - offset_x).min(i64::from(source.width));
-    let y1 = (window.y + i64::from(window.height) - offset_y).min(i64::from(source.height));
-    Ok(RasterWindow {
-        x: x0 as u32,
-        y: y0 as u32,
-        width: (x1 - x0).max(0) as u32,
-        height: (y1 - y0).max(0) as u32,
-    })
-}
-
 // ---------------------------------------------------------------------------
 // BG6: occupied-region review traversal
 // ---------------------------------------------------------------------------
-
-/// Test-only observation of the work a review traversal actually performs.
-///
-/// A caller-level test reads this instead of testing the traversal in
-/// isolation, so a regression that walks the envelope again is visible from the
-/// real staging/review path.
-pub(crate) mod review_probe {
-    use std::cell::Cell;
-
-    thread_local! {
-        static BLOCKS: Cell<u64> = const { Cell::new(0) };
-        static PAGES: Cell<u64> = const { Cell::new(0) };
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reset() {
-        BLOCKS.with(|value| value.set(0));
-        PAGES.with(|value| value.set(0));
-    }
-
-    #[cfg(test)]
-    pub(crate) fn blocks() -> u64 {
-        BLOCKS.with(Cell::get)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn pages() -> u64 {
-        PAGES.with(Cell::get)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn note_block() {
-        BLOCKS.with(|value| value.set(value.get() + 1));
-    }
-
-    #[cfg(test)]
-    pub(crate) fn note_page() {
-        PAGES.with(|value| value.set(value.get() + 1));
-    }
-}
-
-/// One bounded page of occupied coordinates, the existing 256-record policy.
-const REVIEW_PAGE_MAX: usize = generation::CHUNK_PAGE_MAX;
-
-/// The lattice blocks one stored extent covers.
-fn lattice_block_range(lattice: &RasterGrid, grid: &RasterGrid) -> (i64, i64, i64, i64) {
-    let origin_x =
-        ((grid.geotransform[0] - lattice.geotransform[0]) / lattice.geotransform[1]).round() as i64;
-    let origin_y = ((lattice.geotransform[3] - grid.geotransform[3])
-        / lattice.geotransform[5].abs())
-    .round() as i64;
-    let first_x = origin_x.div_euclid(generation::CHUNK_SIDE);
-    let first_y = origin_y.div_euclid(generation::CHUNK_SIDE);
-    let last_x = (origin_x + i64::from(grid.width) - 1).div_euclid(generation::CHUNK_SIDE);
-    let last_y = (origin_y + i64::from(grid.height) - 1).div_euclid(generation::CHUNK_SIDE);
-    (first_x, first_y, last_x - first_x + 1, last_y - first_y + 1)
-}
-
-/// The full lattice window of one occupied block.
-fn block_window(block: (i64, i64)) -> LatticeWindow {
-    let side = generation::CHUNK_SIDE;
-    LatticeWindow {
-        x: block.1 * side,
-        y: block.0 * side,
-        width: side as u32,
-        height: side as u32,
-    }
-}
-
-/// One ordered stream of occupied lattice blocks, in `(block_y, block_x)` order.
-///
-/// Every stream is either paged from the catalogue or generated lazily from an
-/// extent, so a stream holds at most one page of coordinates and never the
-/// generation's or a source's whole occupied index.
-enum BlockStream {
-    /// A sparse generation's published records, paged by keyset.
-    Chunks {
-        owner: generation::GenerationChunkReader,
-        page: Vec<(i64, i64)>,
-        index: usize,
-        cursor: Option<(i64, i64)>,
-        done: bool,
-    },
-    /// One source's occupied regions, read once and expanded as up to four
-    /// monotone translated streams.
-    ///
-    /// A source block covers 1024 source cells; when the source origin is not
-    /// lattice-aligned its lattice footprint starts mid-block, so the same
-    /// ordered index is walked under a constant translation per quadrant. A
-    /// constant translation preserves the index order, so every translated
-    /// stream is monotone and the merge needs no page-sized buffer and no
-    /// discard rule.
-    Regions {
-        interpretation_id: String,
-        streams: Vec<RegionStream>,
-        /// The coordinate this stream currently offers, cached so the merge can
-        /// advance exactly the sub-streams that produced it.
-        current: Option<(i64, i64)>,
-    },
-    /// An ordered collection's occupied blocks, derived arithmetically from
-    /// member extents.
-    ///
-    /// The block set is coordinates only: computing it opens no raster and
-    /// holds no samples, and it is exact rather than a bounding envelope, so
-    /// the empty gap between separated sources contributes nothing.
-    Occupied {
-        chunks: Vec<(i64, i64)>,
-        index: usize,
-    },
-    /// Every block of one object's own stored extent, generated lazily.
-    Extent {
-        first_x: i64,
-        first_y: i64,
-        blocks_x: i64,
-        blocks_y: i64,
-        next: i64,
-    },
-    /// The stream cannot be built at all; the review reports it by name.
-    Invalid { error: String },
-    /// Nothing to visit.
-    Empty,
-}
-
-impl BlockStream {
-    /// The occupied blocks of one generation, in its own storage terms.
-    fn occupied(owner: generation::GenerationReader) -> Self {
-        match owner {
-            generation::GenerationReader::Chunks(owner) => Self::Chunks {
-                owner,
-                page: Vec::new(),
-                index: 0,
-                cursor: None,
-                done: false,
-            },
-            generation::GenerationReader::Collection(collection) => {
-                match collection.occupied_chunks() {
-                    Ok(chunks) => Self::Occupied { chunks, index: 0 },
-                    // A member whose grid cannot be placed on the lattice is a
-                    // publication defect, not something a review can skip: it
-                    // would silently under-report accepted coverage.
-                    Err(error) => Self::Invalid { error },
-                }
-            }
-        }
-    }
-
-    /// Up to four constant-translated streams over one source's region index.
-    ///
-    /// The source-to-lattice cell offset is decomposed by Euclidean division:
-    /// `offset = q * 1024 + r` with `0 <= r < 1024`. A source block then maps to
-    /// lattice blocks `q + {0}` when `r == 0`, otherwise `q + {0, 1}` on that
-    /// axis, for both axes independently.
-    fn regions(interpretation_id: String, offset_x: i64, offset_y: i64) -> Self {
-        let qx = offset_x.div_euclid(generation::CHUNK_SIDE);
-        let qy = offset_y.div_euclid(generation::CHUNK_SIDE);
-        let rx = offset_x.rem_euclid(generation::CHUNK_SIDE);
-        let ry = offset_y.rem_euclid(generation::CHUNK_SIDE);
-        let dxs: &[i64] = if rx == 0 { &[0] } else { &[0, 1] };
-        let dys: &[i64] = if ry == 0 { &[0] } else { &[0, 1] };
-        let mut streams = Vec::with_capacity(dxs.len() * dys.len());
-        for dy in dys {
-            for dx in dxs {
-                streams.push(RegionStream::new(qx + dx, qy + dy));
-            }
-        }
-        Self::Regions {
-            interpretation_id,
-            streams,
-            current: None,
-        }
-    }
-
-    fn extent(range: (i64, i64, i64, i64)) -> Self {
-        if range.2 <= 0 || range.3 <= 0 {
-            return Self::Empty;
-        }
-        Self::Extent {
-            first_x: range.0,
-            first_y: range.1,
-            blocks_x: range.2,
-            blocks_y: range.3,
-            next: 0,
-        }
-    }
-
-    /// The next coordinate this stream will emit, refilling one page if needed.
-    fn peek(
-        &mut self,
-        library: &LidarLibrary,
-        cancel: &AtomicBool,
-    ) -> Result<Option<(i64, i64)>, String> {
-        loop {
-            match self {
-                Self::Empty => return Ok(None),
-                Self::Extent {
-                    first_x,
-                    first_y,
-                    blocks_x,
-                    blocks_y,
-                    next,
-                } => {
-                    if *next >= *blocks_x * *blocks_y {
-                        return Ok(None);
-                    }
-                    return Ok(Some((
-                        *first_y + *next / *blocks_x,
-                        *first_x + *next % *blocks_x,
-                    )));
-                }
-                Self::Chunks {
-                    owner,
-                    page,
-                    index,
-                    cursor,
-                    done,
-                } => {
-                    if *index < page.len() {
-                        return Ok(Some(page[*index]));
-                    }
-                    if *done {
-                        return Ok(None);
-                    }
-                    check_cancel(cancel)?;
-                    let fetched = owner.page(library, None, *cursor)?;
-                    #[cfg(test)]
-                    #[cfg(test)]
-                    review_probe::note_page();
-                    *done = fetched.len() < REVIEW_PAGE_MAX;
-                    *cursor = fetched.last().map(|chunk| (chunk.chunk_y, chunk.chunk_x));
-                    *page = fetched
-                        .iter()
-                        .map(|chunk| (chunk.chunk_y, chunk.chunk_x))
-                        .collect();
-                    page.dedup();
-                    *index = 0;
-                    if page.is_empty() {
-                        return Ok(None);
-                    }
-                    continue;
-                }
-                Self::Occupied { chunks, index } => return Ok(chunks.get(*index).copied()),
-                Self::Invalid { error } => return Err(error.clone()),
-                Self::Regions {
-                    interpretation_id,
-                    streams,
-                    current,
-                } => {
-                    if let Some(coord) = *current {
-                        return Ok(Some(coord));
-                    }
-                    // Four constant translations of one ordered index: the
-                    // merge offers their minimum and, on advance, steps every
-                    // sub-stream that offered it. Each sub-stream refills at
-                    // most one bounded page, so a source costs at most four
-                    // live pages.
-                    let mut best: Option<(i64, i64)> = None;
-                    for stream in streams.iter_mut() {
-                        check_cancel(cancel)?;
-                        if let Some(coord) = stream.peek(library, interpretation_id)?
-                            && best.is_none_or(|current| coord < current)
-                        {
-                            best = Some(coord);
-                        }
-                    }
-                    *current = best;
-                    return Ok(best);
-                }
-            }
-        }
-    }
-
-    /// Step past the coordinate this stream last offered.
-    ///
-    /// The merge only advances a stream that currently holds the smallest
-    /// coordinate, so a region stream steps exactly the sub-streams that
-    /// produced it and keeps its offered coordinate cached for the next call.
-    fn advance(&mut self, library: &LidarLibrary) -> Result<(), String> {
-        match self {
-            Self::Empty => {}
-            Self::Extent { next, .. } => *next += 1,
-            Self::Chunks { index, .. } => *index += 1,
-            Self::Occupied { index, .. } => *index += 1,
-            Self::Invalid { .. } => {}
-            Self::Regions {
-                interpretation_id,
-                streams,
-                current,
-            } => {
-                let Some(coord) = current.take() else {
-                    return Ok(());
-                };
-                for stream in streams.iter_mut() {
-                    if stream.peek(library, interpretation_id)? == Some(coord) {
-                        stream.advance();
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-/// One constant-translated view of a source's occupied-region index.
-struct RegionStream {
-    /// Lattice-block translation for this quadrant.
-    dx: i64,
-    dy: i64,
-    page: Vec<(i64, i64)>,
-    index: usize,
-    /// Keyset cursor in the source's own block coordinates.
-    cursor: Option<(i64, i64)>,
-    exhausted: bool,
-}
-
-impl RegionStream {
-    fn new(dx: i64, dy: i64) -> Self {
-        Self {
-            dx,
-            dy,
-            page: Vec::new(),
-            index: 0,
-            cursor: None,
-            exhausted: false,
-        }
-    }
-
-    /// The next lattice block this stream will emit, refilling one bounded page
-    /// when the current one is spent.
-    fn peek(
-        &mut self,
-        library: &LidarLibrary,
-        interpretation_id: &str,
-    ) -> Result<Option<(i64, i64)>, String> {
-        loop {
-            if self.index < self.page.len() {
-                return Ok(Some(self.page[self.index]));
-            }
-            if self.exhausted {
-                return Ok(None);
-            }
-            let rows = {
-                let connection = library.catalogue()?;
-                catalogue::interpretation_region_keyset_page(
-                    &connection,
-                    interpretation_id,
-                    self.cursor,
-                    REVIEW_PAGE_MAX,
-                )?
-            };
-            #[cfg(test)]
-            review_probe::note_page();
-            self.exhausted = rows.len() < REVIEW_PAGE_MAX;
-            self.cursor = rows.last().map(|row| (row.1, row.0));
-            self.page.clear();
-            self.page.reserve(rows.len());
-            for (block_x, block_y, _, _, _, _) in &rows {
-                // Checked signed arithmetic: a source or journal coordinate that
-                // cannot be translated is an error, never a wrapped block.
-                let y = block_y
-                    .checked_add(self.dy)
-                    .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
-                let x = block_x
-                    .checked_add(self.dx)
-                    .ok_or_else(|| "occupied region coordinate overflows".to_string())?;
-                self.page.push((y, x));
-            }
-            self.index = 0;
-            // An empty page is not EOF unless the index itself is exhausted.
-            if self.page.is_empty() && self.exhausted {
-                return Ok(None);
-            }
-        }
-    }
-
-    fn advance(&mut self) {
-        self.index += 1;
-    }
-}
-
-/// The merged, deduplicated stream of occupied lattice blocks a review visits.
-///
-/// The head and every selected source contribute one ordered stream; the merge
-/// keeps exactly one coordinate per stream, so live storage is bounded by the
-/// number of selected files and one page, never by the envelope's area.
-struct ReviewTraversal {
-    streams: Vec<BlockStream>,
-    last: Option<(i64, i64)>,
-}
-
-impl ReviewTraversal {
-    fn open(
-        head: &HeadBlockSource,
-        sources: &[&StagedSource],
-        lattice: &RasterGrid,
-        library: &LidarLibrary,
-    ) -> Result<Self, String> {
-        let mut streams = vec![head.block_stream(lattice)];
-        {
-            let connection = library.catalogue()?;
-            for source in sources {
-                streams.push(source_block_stream(source, lattice, &connection)?);
-            }
-        }
-        Ok(Self {
-            streams,
-            last: None,
-        })
-    }
-
-    /// The next occupied lattice block, or `None` when every stream is done.
-    fn next_block(
-        &mut self,
-        library: &LidarLibrary,
-        cancel: &AtomicBool,
-    ) -> Result<Option<(i64, i64)>, String> {
-        loop {
-            check_cancel(cancel)?;
-            let mut best: Option<(i64, i64)> = None;
-            for stream in &mut self.streams {
-                if let Some(coord) = stream.peek(library, cancel)?
-                    && best.is_none_or(|current| coord < current)
-                {
-                    best = Some(coord);
-                }
-            }
-            let Some(coord) = best else {
-                return Ok(None);
-            };
-            // Every stream sitting on this coordinate advances past it, so a
-            // coordinate occupied by several members is visited once.
-            for stream in &mut self.streams {
-                if stream.peek(library, cancel)? == Some(coord) {
-                    stream.advance(library)?;
-                }
-            }
-            if self.last == Some(coord) {
-                continue;
-            }
-            self.last = Some(coord);
-            #[cfg(test)]
-            review_probe::note_block();
-            return Ok(Some(coord));
-        }
-    }
-}
-
-/// The occupied blocks of one staged source.
-///
-/// A source staged with retained facts has an occupied-region index; one staged
-/// before that index existed is scanned over its own stored extent instead.
-/// Neither path walks the joined envelope.
-fn source_block_stream(
-    source: &StagedSource,
-    lattice: &RasterGrid,
-    connection: &rusqlite::Connection,
-) -> Result<BlockStream, String> {
-    let interpretation_id = format!("interp-{}", source.interp_hash);
-    if catalogue::interpretation_has_regions(connection, &interpretation_id)? {
-        let offset_x = ((source.geotransform[0] - lattice.geotransform[0])
-            / lattice.geotransform[1])
-            .round() as i64;
-        let offset_y = ((lattice.geotransform[3] - source.geotransform[3])
-            / lattice.geotransform[5].abs())
-        .round() as i64;
-        return Ok(BlockStream::regions(interpretation_id, offset_x, offset_y));
-    }
-    let grid = grid_for_source(source);
-    Ok(BlockStream::extent(lattice_block_range(lattice, &grid)))
-}
-
-/// Counts and preview samples accumulated over the union's blocks.
-struct ReviewCoverage {
-    classification: CoverageClassification,
-    /// Target-sized composed values for the after preview; invalid cells keep
-    /// the layer NoData marker.
-    preview_values: Vec<f32>,
-    preview_min: f64,
-    preview_max: f64,
-    /// Target-sized accepted values for the before preview.
-    before_values: Vec<f32>,
-}
-
-/// Walk the occupied lattice blocks once, composing each for the counts and
-/// both previews.
-///
-/// The traversal is driven by the incoming sources' occupied regions and the
-/// accepted head's own occupied records, merged in `(block_y, block_x)` order
-/// and deduplicated, so neither its work nor its metadata depends on the empty
-/// gap inside the union envelope. Coordinates are fixed-lattice cells; they are
-/// translated to envelope coordinates only when the previews are sampled.
-#[allow(clippy::too_many_arguments)]
-fn review_coverage(
-    head: &HeadBlockSource,
-    sources: &[&StagedSource],
-    library: &LidarLibrary,
-    paths: &LidarPaths,
-    lattice: &RasterGrid,
-    union: &RasterGrid,
-    nodata: f32,
-    target: (u32, u32),
-    cancel: &AtomicBool,
-) -> Result<ReviewCoverage, String> {
-    let cells = u64::from(union.width) * u64::from(union.height);
-    let (target_width, target_height) = target;
-    let target_cells = usize::try_from(u64::from(target_width) * u64::from(target_height))
-        .map_err(|_| "preview target is too large for this platform".to_string())?;
-    let mut preview_values = vec![nodata; target_cells];
-    let mut before_values = vec![nodata; target_cells];
-    let mut uncovered_cells = 0u64;
-    let mut overlap_cells = 0u64;
-    let mut incoming_cells = 0u64;
-    let (mut preview_min, mut preview_max) = (f64::INFINITY, f64::NEG_INFINITY);
-    // Lattice cell to envelope cell, used only for the preview targets.
-    let union_offset_x =
-        ((lattice.geotransform[0] - union.geotransform[0]) / union.geotransform[1]).round() as i64;
-    let union_offset_y = ((union.geotransform[3] - lattice.geotransform[3])
-        / lattice.geotransform[5].abs())
-    .round() as i64;
-    let union_width = i64::from(union.width);
-    let union_height = i64::from(union.height);
-    let mut traversal = ReviewTraversal::open(head, sources, lattice, library)?;
-    let mut readers = SourceReaders::default();
-    while let Some(block) = traversal.next_block(library, cancel)? {
-        check_cancel(cancel)?;
-        let window = block_window(block);
-        let composed = compose_union_block(
-            head,
-            sources,
-            &mut readers,
-            library,
-            paths,
-            lattice,
-            window,
-            nodata,
-            cancel,
-        )?;
-        let (accepted_values, accepted) = head.block(library, lattice, window, nodata, cancel)?;
-        let width = window.width as usize;
-        for row in 0..window.height as usize {
-            for column in 0..width {
-                let index = row * width + column;
-                if composed.incoming[index] == 0 {
-                    continue;
-                }
-                incoming_cells += 1;
-                if accepted[index] == 0 {
-                    uncovered_cells += 1;
-                } else {
-                    overlap_cells += 1;
-                }
-            }
-        }
-        // Reduce this block into both preview targets: After is the composed
-        // selection, Before is the accepted head's own values.
-        for row in 0..window.height {
-            for column in 0..window.width {
-                let index = row as usize * width + column as usize;
-                let union_x = window.x + i64::from(column) + union_offset_x;
-                let union_y = window.y + i64::from(row) + union_offset_y;
-                if union_x < 0 || union_y < 0 || union_x >= union_width || union_y >= union_height {
-                    continue;
-                }
-                let tx = (union_x as u64 * u64::from(target_width) / u64::from(union.width))
-                    .min(u64::from(target_width) - 1) as u32;
-                let ty = (union_y as u64 * u64::from(target_height) / u64::from(union.height))
-                    .min(u64::from(target_height) - 1) as u32;
-                let target_index = ty as usize * target_width as usize + tx as usize;
-                if composed.valid[index] != 0 {
-                    preview_values[target_index] = composed.values[index];
-                    if composed.values[index].is_finite() {
-                        preview_min = preview_min.min(f64::from(composed.values[index]));
-                        preview_max = preview_max.max(f64::from(composed.values[index]));
-                    }
-                }
-                if accepted[index] != 0 {
-                    before_values[target_index] = accepted_values[index];
-                }
-            }
-        }
-    }
-    readers.release();
-    if !preview_min.is_finite() {
-        preview_min = 0.0;
-        preview_max = 0.0;
-    }
-    Ok(ReviewCoverage {
-        classification: CoverageClassification {
-            uncovered_cells,
-            overlap_cells,
-            // The checked envelope minus the unique incoming valid cells,
-            // computed arithmetically: the gap is never visited.
-            invalid_cells: cells.saturating_sub(incoming_cells),
-        },
-        preview_values,
-        preview_min,
-        preview_max,
-        before_values,
-    })
-}
 
 /// Decode little-endian Float32 bytes.
 fn f32_values(raw: &[u8]) -> Vec<f32> {
@@ -4274,6 +3033,26 @@ pub fn apply_import(
     })
 }
 
+/// Stage, validate and publish one batch the way the one-step route does.
+///
+/// Test fixtures used to drive staging, then a review, then an Apply. There is
+/// no review to drive, so this is the same sequence production runs: prepare
+/// every source, refuse an incompatible batch, then publish atomically.
+#[cfg(test)]
+pub(crate) fn stage_and_publish(
+    library: &LidarLibrary,
+    job_id: &str,
+    layer_id: &str,
+    source_paths: &[PathBuf],
+    replace_overlap: bool,
+    cancel: &AtomicBool,
+) -> Result<ApplyOutcome, String> {
+    stage_import(library, job_id, layer_id, source_paths, cancel)?;
+    let staging = read_staged_import(library, job_id)?;
+    ensure_whole_batch_compatible(&staging)?;
+    apply_import(library, &staging, true, replace_overlap, cancel)
+}
+
 /// Undo one accepted import: republish the layer coverage without the
 /// interpretation that import introduced. Immutable history stays on disk.
 /// Everything a member-list edit needs from the accepted head.
@@ -5254,34 +4033,6 @@ fn head_values_on_union(
     Ok((Some(expanded), Some(remapped)))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn preview_tif_from_values(
-    engine: &GdalEngine,
-    cancel: &AtomicBool,
-    job_dir: &Path,
-    stem: &str,
-    union: &RasterGrid,
-    crs_wkt: &Option<String>,
-    nodata: f32,
-    values: &[f32],
-) -> Result<PathBuf, String> {
-    let raw = job_dir.join(format!("preview-{stem}.raw"));
-    write_f32_raw(&raw, values)?;
-    let tif = job_dir.join(format!("preview-{stem}.tif"));
-    let converted = raw_to_tif(
-        engine,
-        cancel,
-        &raw,
-        &tif,
-        union,
-        crs_wkt.as_deref().unwrap_or(""),
-        nodata,
-    );
-    let _ = std::fs::remove_file(&raw);
-    converted?;
-    Ok(tif)
-}
-
 /// Storage format of one published generation.
 ///
 /// The manifest is the single authority for how a generation's numbers are
@@ -5932,19 +4683,14 @@ mod tests {
 
         use crate::services::lidar::prepared_raster::observability;
         observability::reset();
-        let output = stage_import(
+        stage_import(
             &library,
             &job_id,
             &layer_id,
             &[float_source.clone(), int_source.clone()],
             &cancel,
         )
-        .expect("staging succeeds");
-        assert!(
-            output.review.compatible,
-            "fixtures must be admitted: {:?}",
-            output.review.issues
-        );
+        .expect("fixtures are admitted");
         assert!(
             observability::tiles_decoded() > 0,
             "staging must decode through the native tiled reader"
@@ -6626,6 +5372,11 @@ mod tests {
     }
 
     /// Drive the real caller flow up to a staged review.
+    /// Prepare one batch the way the one-step route does, ready to publish.
+    ///
+    /// The retired review route handed back a review payload and waited for a
+    /// decision; this returns the validated batch itself, which is what
+    /// publication reads.
     fn stage_review(
         library: &LidarLibrary,
         layer_id: &str,
@@ -6633,23 +5384,9 @@ mod tests {
         cancel: &AtomicBool,
     ) -> (String, StagedImport) {
         let job_id = library.record_import_job(layer_id).expect("job recorded");
-        let output = stage_import(library, &job_id, layer_id, sources, cancel).expect("staging");
-        assert!(
-            output.review.compatible,
-            "fixtures must be admitted: {:?}",
-            output.review.issues
-        );
-        library.finish_staging(
-            &job_id,
-            Ok(StagingOutput {
-                review: output.review.clone(),
-            }),
-        );
-        let staging: StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                .unwrap(),
-        )
-        .unwrap();
+        stage_import(library, &job_id, layer_id, sources, cancel)
+            .unwrap_or_else(|error| panic!("fixtures must be admitted: {error}"));
+        let staging = read_staged_import(library, &job_id).expect("staged payload");
         (job_id, staging)
     }
 
@@ -6810,10 +5547,7 @@ mod tests {
             )
             .unwrap();
 
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        assert_eq!(staging_one.uncovered_cells, 60 * 45);
-        assert_eq!(staging_one.overlap_cells, 0);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
         let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         assert!(applied.changed);
 
@@ -6862,12 +5596,7 @@ mod tests {
 
         // Add a second source: it is inserted ABOVE the accepted member, so the
         // first displayed source is topmost.
-        let (job_two, staging_two) = stage_review(&reopened, &layer_id, &[top], &cancel);
-        assert_eq!(staging_two.overlap_cells, 40 * 45);
-        assert_eq!(staging_two.uncovered_cells, 20 * 45);
-        reopened
-            .prepare_apply(&job_two)
-            .expect("second review accepted");
+        let (_job_two, staging_two) = stage_review(&reopened, &layer_id, &[top], &cancel);
         let stacked =
             apply_import(&reopened, &staging_two, true, false, &cancel).expect("second applies");
         assert!(stacked.changed);
@@ -7062,8 +5791,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first applies");
         let first_generation = head_of(&library, &layer_id).id;
 
@@ -7139,9 +5867,8 @@ mod tests {
         // Control: the Apply path refreshes its dependent analysis, and that
         // refresh publishes a result for the new head.
         let (job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
         let stacked = apply_import(&library, &staging_two, true, false, &cancel).expect("applies");
-        library.finish_apply(&job_two, Ok(stacked.clone()));
+        library.finish_import_sources(&job_two, &layer_id, Ok(()));
         let (apply_job, apply_source) = latest_job();
         assert_ne!(apply_job, receipt.job_id, "Apply enqueues a refresh");
         assert_eq!(apply_source, stacked.generation_id);
@@ -7234,65 +5961,27 @@ mod tests {
             )
             .unwrap();
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
-        let output = stage_import(
+        let staging_error = stage_import(
             &library,
             &job_id,
             &layer_id,
             &[web_mercator, lambert],
             &cancel,
         )
-        .expect("staging completes");
+        .expect_err("a mixed-CRS batch is refused by preparation");
         assert!(
-            !output.review.compatible,
-            "a mixed-CRS batch is not compatible"
+            staging_error.contains("horizontal CRS differs"),
+            "the refusal names the CRS disagreement: {staging_error}"
         );
-        assert!(
-            output
-                .review
-                .issues
-                .iter()
-                .any(|issue| issue.contains("horizontal CRS differs")),
-            "the refusal names the CRS disagreement: {:?}",
-            output.review.issues
-        );
-        assert_eq!(
-            output
-                .review
-                .sources
-                .iter()
-                .filter(|source| source.compatible)
-                .count(),
-            1,
-            "the anchor source stays admissible; the disagreeing one does not"
-        );
-        // The same batch is refused by the publication boundary, not only by
-        // the panel that disables its confirmation.
-        library.finish_staging(
-            &job_id,
-            Ok(StagingOutput {
-                review: output.review.clone(),
-            }),
-        );
-        let staging: StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                .unwrap(),
-        )
-        .unwrap();
-        let refused = library
-            .prepare_apply(&job_id)
-            .expect_err("a mixed batch never enters applying");
-        assert!(refused.contains("cannot be published"), "{refused}");
-        assert!(
-            apply_import(&library, &staging, true, false, &cancel)
-                .expect_err("the backend refuses the whole batch")
-                .contains("cannot be published"),
-            "the whole selected batch is atomic"
-        );
-        assert_eq!(
-            generation_count(&library, &layer_id),
-            0,
-            "nothing was published"
-        );
+        {
+            let connection = library.catalogue().unwrap();
+            assert!(
+                catalogue::head_generation(&connection, &layer_id)
+                    .unwrap()
+                    .is_none(),
+                "a refused batch publishes nothing"
+            );
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -7321,136 +6010,15 @@ mod tests {
             )
             .unwrap();
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
-        let output = stage_import(&library, &job_id, &layer_id, &[empty, real], &cancel)
-            .expect("staging completes");
-        let empty_facts = output
-            .review
-            .sources
-            .iter()
-            .find(|source| source.filename.contains("empty"))
-            .expect("the empty source is listed");
+        let refusal = stage_import(&library, &job_id, &layer_id, &[empty, real], &cancel)
+            .expect_err("an all-NoData source refuses the batch");
         assert!(
-            !empty_facts.compatible,
-            "an all-NoData source is not admissible"
+            refusal.contains("empty.tif"),
+            "the refusal names the file: {refusal}"
         );
         assert!(
-            empty_facts
-                .issues
-                .iter()
-                .any(|issue| issue.contains("no valid samples")),
-            "the refusal names the reason: {:?}",
-            empty_facts.issues
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-4: the admission envelope follows the current composition.
-    ///
-    /// Three small sources are admitted one at a time. Each import's own union
-    /// with the fixed lattice anchor stays far below the limit, while the
-    /// composition's real extent crosses it — which is how an oversized
-    /// collection was admitted before.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn the_admission_envelope_follows_the_current_composition() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-cumulative-envelope"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let anchor = write_placed_fixture(&engine, &root, "anchor", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let east = write_placed_fixture(&engine, &root, "east", 6000.0, 4.0, 4, 4, -9999.0, 6.0);
-        let south = write_placed_fixture(&engine, &root, "south", 0.0, 4204.0, 4, 4, -9999.0, 7.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "cumulative envelope",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
-        apply_import(&library, &staging_one, true, false, &cancel).expect("anchor publishes");
-
-        // The east source extends the composition to 6004 x 4 cells: admitted.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[east], &cancel);
-        assert!(
-            admission::union_envelope_cells(
-                staging_two.union_grid.width,
-                staging_two.union_grid.height
-            )
-            .unwrap()
-                < admission::MAX_DENSE_ENVELOPE_CELLS,
-            "the second import's own envelope is small"
-        );
-        library.prepare_apply(&job_two).expect("review accepted");
-        apply_import(&library, &staging_two, true, false, &cancel).expect("east publishes");
-        let composed = head_of(&library, &layer_id);
-        assert_eq!(
-            composed.coverage_cells,
-            Some(2 * 16),
-            "both accepted sources are one composition"
-        );
-
-        // The south source leaves the anchor-relative envelope small, but the
-        // composition now spans 6004 x 4204 cells, above the unchanged limit.
-        let staging_three_error = stage_import(
-            &library,
-            &library.record_import_job(&layer_id).expect("job recorded"),
-            &layer_id,
-            &[south],
-            &cancel,
-        )
-        .err();
-        let anchor_relative = {
-            let mut admitted = RasterGrid {
-                width: 4,
-                height: 4,
-                geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
-            };
-            admitted = union_grid(
-                &admitted,
-                &RasterGrid {
-                    width: 4,
-                    height: 4,
-                    geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
-                },
-            )
-            .unwrap();
-            admission::union_envelope_cells(admitted.width, admitted.height).unwrap()
-        };
-        assert!(
-            anchor_relative < admission::MAX_DENSE_ENVELOPE_CELLS,
-            "the anchor-relative envelope is what the superseded check measured: {anchor_relative}"
-        );
-        let south_grid = RasterGrid {
-            width: 4,
-            height: 4,
-            geotransform: [0.0, 1.0, 0.0, 4204.0, 0.0, -1.0],
-        };
-        let mut with_incoming = composition_extent_grid(&library, Some(&composed))
-            .unwrap()
-            .expect("the composition has an extent");
-        with_incoming = union_grid(&with_incoming, &south_grid).unwrap();
-        assert!(
-            admission::union_envelope_cells(with_incoming.width, with_incoming.height).unwrap()
-                > admission::MAX_DENSE_ENVELOPE_CELLS,
-            "the composition's real extent exceeds the limit"
-        );
-        let refused = staging_three_error.expect("staging refuses the oversized composition");
-        assert!(
-            refused.contains("exceeds") || refused.contains("25000000"),
-            "the refusal names the envelope: {refused}"
-        );
-        assert_eq!(
-            head_of(&library, &layer_id).id,
-            composed.id,
-            "the accepted head is untouched"
+            refusal.contains("no valid samples"),
+            "and says why: {refusal}"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -7483,12 +6051,10 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[five], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[five], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first applies");
 
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[nine], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
+        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[nine], &cancel);
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("second");
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, applied.generation_id);
@@ -7569,8 +6135,7 @@ mod tests {
 
         // A new source above it wraps the accepted head as one member.
         let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
+        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
         apply_import(&library, &staging_two, true, false, &cancel).expect("wraps");
 
         let sample = |x: i64, y: i64| -> (f32, u8) {
@@ -7638,8 +6203,7 @@ mod tests {
 
         // A third source wraps whatever the layer accepted, so the overlay
         // stays visible underneath it.
-        let (job_three, staging_three) = stage_review(&library, &layer_id, &[top], &cancel);
-        library.prepare_apply(&job_three).expect("review accepted");
+        let (_job_three, staging_three) = stage_review(&library, &layer_id, &[top], &cancel);
         apply_import(&library, &staging_three, true, false, &cancel).expect("wraps");
         let head = head_of(&library, &layer_id);
         let members = {
@@ -7730,8 +6294,7 @@ mod tests {
         // A new source above it, then Undo: the head is now one ordered
         // snapshot whose only member is the preserved composition.
         let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
-        let (job, staging) = stage_review(&library, &layer_id, &[top], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[top], &cancel);
         apply_import(&library, &staging, true, false, &cancel).expect("top publishes");
         let undone = undo_last_change(&library, &layer_id, None, &cancel).expect("undo publishes");
         assert!(undone.changed);
@@ -7813,8 +6376,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
         let superseded = head_of(&library, &layer_id).id;
 
@@ -7842,8 +6404,7 @@ mod tests {
         };
 
         // The layer moves on while the captured job is still queued.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
+        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
         apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
         assert_ne!(head_of(&library, &layer_id).id, superseded);
 
@@ -7892,8 +6453,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
         let receipt = library
             .create_analysis(
@@ -7943,8 +6503,7 @@ mod tests {
         );
 
         // The head changes without a refresh having run.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
+        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
         apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
         // Cancel the enqueued refresh so the state is derived, not settled.
         let queued = {
@@ -8007,8 +6566,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job, staging) = stage_review(&library, &layer_id, &[first], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[first], &cancel);
         apply_import(&library, &staging, true, false, &cancel).expect("publishes");
         let imported = head_of(&library, &layer_id).id;
 
@@ -8126,12 +6684,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
-        assert_eq!(
-            staging.uncovered_cells, 1024,
-            "the exact review coverage is the valid half"
-        );
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
         apply_import(&library, &staging, true, false, &cancel).expect("publishes");
 
         let summary = library.layer_collection(&layer_id, None).unwrap();
@@ -8170,8 +6723,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job, staging) = stage_review(&library, &layer_id, &[near, far], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[near, far], &cancel);
         apply_import(&library, &staging, true, false, &cancel).expect("publishes");
         let head = head_of(&library, &layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
@@ -8241,8 +6793,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
         {
             let _dense = generation::chunked_publication::without_sparse();
             apply_import(&library, &staging, true, false, &cancel).expect("dense publishes");
@@ -8314,8 +6865,7 @@ mod tests {
 
         // First import through the accepted dense route, forced for this step
         // only: the rest of the test exercises the sparse extension.
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
         {
             let _dense = generation::chunked_publication::without_sparse();
             apply_import(&library, &staging_one, true, false, &cancel).expect("dense apply");
@@ -8336,7 +6886,6 @@ mod tests {
 
         // Extend it with a separated source through the sparse route.
         let (job_two, staging_two) = stage_review(&library, &layer_id, &[apart], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("apply");
         assert!(applied.changed);
 
@@ -8490,14 +7039,12 @@ mod tests {
             .unwrap();
         // The lattice anchors on the first selected source, so selecting the
         // anchor first makes the left member extend it into negative cells.
-        let (job_id, staging) = stage_review(&library, &layer_id, &[anchor, left, far], &cancel);
+        let (_job_id, staging) = stage_review(&library, &layer_id, &[anchor, left, far], &cancel);
         assert!(
             staging.union_grid.width > 1_000_000,
             "the union spans the gap: {}",
             staging.union_grid.width
         );
-        assert_eq!(staging.uncovered_cells, expected_cells);
-        library.prepare_apply(&job_id).expect("review accepted");
         let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
         assert!(applied.changed);
 
@@ -8620,8 +7167,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
-        library.prepare_apply(&job_one).expect("review accepted");
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first apply");
         let first_head = head_of(&library, &layer_id);
         let first_manifest = read_generation_manifest(&first_head.manifest_json).unwrap();
@@ -8632,13 +7178,12 @@ mod tests {
         );
 
         // Extending left must keep the anchor and put the new member before it.
-        let (job_two, staging_two) =
+        let (_job_two, staging_two) =
             stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
         assert!(
             staging_two.union_grid.geotransform[0] < first_manifest.grid.geotransform[0],
             "the union does extend left"
         );
-        library.prepare_apply(&job_two).expect("review accepted");
         apply_import(&library, &staging_two, true, false, &cancel).expect("second apply");
         let head = head_of(&library, &layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
@@ -8674,16 +7219,12 @@ mod tests {
         assert_eq!(sample(-1200, 0), (3.0, 1));
         assert_eq!(sample(-1000, 0).1, 0, "the gap between them stays invalid");
 
-        // Review over the sparse head maps the lattice onto the new union.
+        // A further source prepares against the sparse head and publishes
+        // above it; the signed lattice it maps onto is what this test covers.
         let (job_three, staging_three) =
             stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
-        assert_eq!(
-            staging_three.overlap_cells,
-            (40 * 30) as u64,
-            "the accepted left member is seen through the head read"
-        );
-        let overlap = staging_three.overlap_cells;
-        let _ = (job_three, overlap);
+        apply_import(&library, &staging_three, true, false, &cancel).expect("the source adds");
+        let _ = job_three;
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
@@ -8738,9 +7279,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job_id, staging) = stage_review(&library, &layer_id, &sources, &cancel);
-        assert_eq!(staging.uncovered_cells, 24 * 32 * 24);
-        library.prepare_apply(&job_id).expect("review accepted");
+        let (_job_id, staging) = stage_review(&library, &layer_id, &sources, &cancel);
         let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
         assert!(applied.changed);
 
@@ -8856,8 +7395,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (job, staging) = stage_review(&library, &layer_id, &[legacy], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
+        let (_job, staging) = stage_review(&library, &layer_id, &[legacy], &cancel);
         {
             // The legacy head this test overlays must have been published
             // dense, so the preserved route is forced for this step only.
@@ -8892,7 +7430,6 @@ mod tests {
 
         // A sparse publication now overlays it instead of rewriting it.
         let (job_two, staging_two) = stage_review(&library, &layer_id, &[extension], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
         let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("overlay");
         assert!(applied.changed);
         let head = head_of(&library, &layer_id);
@@ -8986,56 +7523,6 @@ mod tests {
     // BG5: admission is one policy, decided before review and rechecked at Apply
     // -----------------------------------------------------------------------
 
-    /// Two sources whose data is tiny but whose union envelope is exactly the
-    /// admission limit: admitted through the real sparse staging and Apply.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn admission_admits_a_union_exactly_at_the_envelope_limit() {
-        let root = std::env::temp_dir().join(new_id("canopi-admit-exact"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let library = LidarLibrary::open(&root).expect("library opens");
-        // A 5000x5000 envelope with four sample cells in each far corner.
-        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
-        let north_east =
-            write_placed_fixture(&engine, &root, "ne", 4996.0, 5000.0, 4, 4, -9999.0, 7.0);
-        let layer_id = library
-            .create_layer(
-                "envelope exact",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (job_id, staging) =
-            stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
-        assert_eq!(
-            admission::union_envelope_cells(staging.union_grid.width, staging.union_grid.height)
-                .unwrap(),
-            25_000_000,
-            "5000x5000 is exactly the admitted envelope"
-        );
-        library.prepare_apply(&job_id).expect("review accepted");
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-        let head = head_of(&library, &layer_id);
-        assert_eq!(head.coverage_cells, None);
-        assert_eq!(
-            head_occupied_chunks(&library, &layer_id).len(),
-            2,
-            "only the two occupied blocks are visited"
-        );
-        assert_eq!(
-            published_chunk_count(&library, &head.id),
-            0,
-            "the composition stores no resolved source raster"
-        );
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// The same two small sources, one lattice column further apart. Their
     /// union envelope is now *over* the retired 25M bound, and the ordered path
     /// admits them anyway: the governing bound is the processing cells the
@@ -9065,7 +7552,7 @@ mod tests {
             admission::limits(),
             admission::AdmissionLimits::production()
         );
-        let (job_id, staging) =
+        let (_job_id, staging) =
             stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
         let envelope =
             admission::union_envelope_cells(staging.union_grid.width, staging.union_grid.height)
@@ -9079,7 +7566,6 @@ mod tests {
             "the retained dense guard would refuse this geometry"
         );
         assert_eq!(staging.processing_cells, 32);
-        library.prepare_apply(&job_id).expect("review accepted");
         let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
         assert!(
             applied.changed,
@@ -9200,7 +7686,6 @@ mod tests {
                 .unwrap()
                     > admission::MAX_DENSE_ENVELOPE_CELLS
             );
-            library.prepare_apply(&job_id).expect("review accepted");
             let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
             (job_id, staging, applied)
         };
@@ -9324,10 +7809,8 @@ mod tests {
 
         // The same file is staged once the policy allows it, so no other
         // ceiling stands in the way.
-        let (job_id, staging) =
+        let (_job_id, _staging) =
             stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
-        assert!(staging.uncovered_cells > 0);
-        let _ = job_id;
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -9517,10 +8000,7 @@ mod tests {
             "the job holds exactly its own prepared COG: {staged_files:?}"
         );
         // The review read the source through its own effective rule.
-        assert_eq!(staging_one.uncovered_cells, u64::from(width * height) - 2);
-        assert_eq!(staging_one.overlap_cells, 0);
 
-        library.prepare_apply(&job_one).expect("review accepted");
         let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         assert!(applied.changed);
 
@@ -9580,7 +8060,6 @@ mod tests {
             replacement.sha256, retained.sha256,
             "different content is a different asset"
         );
-        reopened.prepare_apply(&job_two).expect("review accepted");
         let replaced =
             apply_import(&reopened, &staging_two, false, true, &cancel).expect("replace applies");
         assert!(replaced.changed);
@@ -9695,7 +8174,6 @@ mod tests {
         // The preserved dense route records this member the old way.
         {
             let _dense = generation::chunked_publication::without_sparse();
-            library.prepare_apply(&job_one).expect("review accepted");
             let applied = apply_import(&library, &staging_one, true, false, &cancel)
                 .expect("the legacy member publishes");
             assert!(applied.changed);
@@ -9730,7 +8208,6 @@ mod tests {
             staging_two.sources[0].source_cog.is_some(),
             "the new member retains its COG"
         );
-        library.prepare_apply(&job_two).expect("review accepted");
         let applied =
             apply_import(&library, &staging_two, false, true, &cancel).expect("sparse apply");
         assert!(applied.changed);
@@ -9851,13 +8328,12 @@ mod tests {
 
         // One small source published normally: its COG is now a shared asset.
         let small = write_placed_fixture(&engine, &root, "small", 0.0, 4.0, 4, 4, -9999.0, 3.0);
-        let (job_one, staging_one) =
+        let (_job_one, staging_one) =
             stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
         let retained = staging_one.sources[0]
             .source_cog
             .clone()
             .expect("the published source retains its COG");
-        library.prepare_apply(&job_one).expect("review accepted");
         let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         assert!(applied.changed);
         let asset = library.inner.paths.asset_cog(&retained.sha256);
@@ -9866,7 +8342,7 @@ mod tests {
 
         // A second job reuses the same file and is cancelled before it
         // publishes: nothing changes and the shared asset is untouched.
-        let (job_two, staging_two) =
+        let (_job_two, staging_two) =
             stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
         assert_eq!(
             staging_two.sources[0]
@@ -9877,7 +8353,6 @@ mod tests {
             retained.sha256,
             "content addressing reuses the admitted asset"
         );
-        library.prepare_apply(&job_two).expect("review accepted");
         cancel.store(true, Ordering::Relaxed);
         let cancelled = apply_import(&library, &staging_two, true, false, &cancel)
             .expect_err("a cancelled Apply publishes nothing");
@@ -9893,7 +8368,7 @@ mod tests {
         // A third job reuses that file beside a far source, staged under a
         // raised envelope so staging itself succeeds.
         let far = write_placed_fixture(&engine, &root, "far", 5004.0, 5004.0, 4, 4, -9999.0, 7.0);
-        let (job_three, staging_three) = {
+        let (_job_three, staging_three) = {
             let _raised = admission::limits_probe::raise(u64::MAX / 2, 16, 512 * 1024 * 1024);
             stage_review(&library, &layer_id, &[small.clone(), far], &cancel)
         };
@@ -9918,7 +8393,6 @@ mod tests {
 
         // The review accepted the pair under the override; Apply rechecks the
         // production envelope and refuses before publishing anything.
-        library.prepare_apply(&job_three).expect("review accepted");
         let error = apply_import(&library, &staging_three, true, false, &cancel)
             .expect_err("the envelope is rechecked at Apply");
         assert!(error.contains("import publication"), "{error}");
@@ -9968,6 +8442,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// A 1x1 fixture, the smallest occupied source placement.
+    #[allow(dead_code)]
     fn write_cell_fixture(
         engine: &GdalEngine,
         dir: &Path,
@@ -9978,505 +8453,167 @@ mod tests {
     ) -> PathBuf {
         write_placed_fixture(engine, dir, name, origin_x, origin_y, 1, 1, -9999.0, value)
     }
-
-    /// Two single-cell sources a million cells apart: the review composes only
-    /// the occupied blocks, so its work does not grow with the empty gap, and
-    /// adjacent placement costs the same visit count.
+    /// A tile whose samples read reduced cells keeps every source that reaches
+    /// those footprints, including one that lies outside the sample centres.
+    ///
+    /// Tile 14/8192/8191 starts at the layer anchor with a 1 m lattice, so its
+    /// samples are ~9.55 native cells apart and the first one is minified to
+    /// level 3. That sample reads reduced cells (0, 0) and (1, 0) plus their
+    /// vertical neighbours, whose footprints cover native cells `[0, 16)` while
+    /// the mapped sample centres start at cell 4. A candidate prefilter built
+    /// from the sample centres alone therefore drops a source holding only
+    /// cells 0..2 and draws nothing, even though those cells are exactly what
+    /// the first reduction cell averages.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_review_visits_only_occupied_blocks() {
+    fn a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint() {
+        use super::super::display::ColorRamp;
+        use super::super::tiles;
+
         let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-lazy-review"));
+        let root = std::env::temp_dir().join(new_id("ordered-tile-edge"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
+
+        // The layer anchor is the north-west corner of the tile, so both
+        // sources sit on lattice cells [0, 2) — the footprint of the first
+        // reduced cell, reached by no sample centre.
+        let bounds = tiles::tile_bounds_3857(14, 8192, 8191);
+        let bottom = write_placed_fixture(
+            &engine,
+            &root,
+            "edge-bottom",
+            bounds[0],
+            bounds[3],
+            2,
+            2,
+            -9999.0,
+            7.0,
+        );
+        // Imported second, so it is the topmost occurrence and wins where the
+        // two overlap: the composed cells are 7 above 9 below the seam.
+        let top = write_placed_fixture(
+            &engine,
+            &root,
+            "edge-top",
+            bounds[0],
+            bounds[3] - 1.0,
+            2,
+            2,
+            -9999.0,
+            9.0,
+        );
+
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = library
             .create_layer(
-                "lazy review",
+                "tile edge",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
                 None,
                 false,
             )
             .unwrap();
+        let (_first_job, first_staging) = stage_review(&library, &layer_id, &[bottom], &cancel);
+        apply_import(&library, &first_staging, true, false, &cancel).expect("first applies");
+        let (_second_job, second_staging) = stage_review(&library, &layer_id, &[top], &cancel);
+        let stacked =
+            apply_import(&library, &second_staging, true, false, &cancel).expect("second applies");
 
-        let west = write_cell_fixture(&engine, &root, "west", 0.0, 1.0, 5.0);
-        let far = write_cell_fixture(&engine, &root, "far", 1_000_000.0, 1.0, 5.0);
-        review_probe::reset();
-        let (_job, staging) = stage_review(&library, &layer_id, &[west.clone(), far], &cancel);
-        assert_eq!(staging.union_grid.width, 1_000_001);
-        assert_eq!(staging.union_grid.height, 1);
-        assert_eq!(staging.uncovered_cells, 2, "two incoming cells");
-        assert_eq!(staging.overlap_cells, 0);
-        assert_eq!(
-            staging.invalid_cells,
-            1_000_001 - 2,
-            "the gap is arithmetic, not a walk"
-        );
-        let far_blocks = review_probe::blocks();
-        // The west cell lies in one lattice block; the far source's occupied
-        // region block is 1024 cells wide starting at its own origin, so it
-        // straddles two lattice blocks. Either way the visit count is a handful,
-        // not the 977 envelope windows that contain no data.
-        assert_eq!(far_blocks, 3, "occupied blocks only: {far_blocks}");
-        assert!(
-            review_probe::pages() <= 8,
-            "at most four translated pages per admitted source: {}",
-            review_probe::pages()
-        );
-
-        // The same two cells adjacent: both occupy one block, so the visit
-        // count does not depend on the distance between them.
-        let adjacent = write_cell_fixture(&engine, &root, "adjacent", 1.0, 1.0, 5.0);
-        let layer_two = library
-            .create_layer(
-                "lazy review adjacent",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        review_probe::reset();
-        let (_job_two, staging_two) =
-            stage_review(&library, &layer_two, &[west, adjacent], &cancel);
-        assert_eq!(staging_two.union_grid.width, 2);
-        assert_eq!(staging_two.uncovered_cells, 2);
-        let adjacent_blocks = review_probe::blocks();
-        assert!(
-            adjacent_blocks <= 4,
-            "two occupied region blocks touch at most four lattice blocks: {adjacent_blocks}"
-        );
-
-        // The same file selected twice: one coordinate, visited once.
-        let layer_duplicate = library
-            .create_layer(
-                "lazy review duplicate",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        review_probe::reset();
-        let duplicate = write_cell_fixture(&engine, &root, "duplicate", 0.0, 1.0, 5.0);
-        let (_job_duplicate, staging_duplicate) = stage_review(
-            &library,
-            &layer_duplicate,
-            &[duplicate.clone(), duplicate],
-            &cancel,
-        );
-        assert_eq!(
-            staging_duplicate.uncovered_cells, 1,
-            "an overlapping member does not count twice"
-        );
-        assert_eq!(
-            review_probe::blocks(),
-            1,
-            "duplicate occupied coordinates are visited once"
-        );
-
-        // Ten times farther apart: the visit count is the same, so gap length
-        // does not drive review work.
-        let layer_three = library
-            .create_layer(
-                "lazy review far",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let farther = write_cell_fixture(&engine, &root, "farther", 10_000_000.0, 1.0, 5.0);
-        review_probe::reset();
-        let (_job_three, staging_three) = stage_review(
-            &library,
-            &layer_three,
-            &[
-                write_cell_fixture(&engine, &root, "near-zero", 0.0, 1.0, 5.0),
-                farther,
-            ],
-            &cancel,
-        );
-        assert_eq!(staging_three.union_grid.width, 10_000_001);
-        assert_eq!(staging_three.uncovered_cells, 2);
-        assert_eq!(
-            review_probe::blocks(),
-            far_blocks,
-            "the gap grew tenfold and the visits did not"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// The decision preview keeps the accepted head in Before and shows the
-    /// selected composition in After: replacing 5 with 9 must not rewrite
-    /// Before, and accepted-only coverage stays visible in both.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_review_previews_keep_accepted_values_before_the_change() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-preview-before"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "preview before",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        // An accepted 4x4 block of 5 next to a cell the change never touches.
-        let accepted =
-            write_placed_fixture(&engine, &root, "accepted", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let untouched =
-            write_placed_fixture(&engine, &root, "untouched", 8.0, 4.0, 1, 1, -9999.0, 5.0);
-        let (job, staging) =
-            stage_review(&library, &layer_id, &[accepted.clone(), untouched], &cancel);
-        library.prepare_apply(&job).expect("review accepted");
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-
-        // A replacement over the accepted block only.
-        let replacement =
-            write_placed_fixture(&engine, &root, "replacement", 0.0, 4.0, 4, 4, -9999.0, 9.0);
-        let (job_two, _staging_two) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&replacement),
-            &cancel,
-        );
-        review_probe::reset();
-        let preview = library
-            .preview_import_decision(&job_two)
-            .expect("decision preview");
-        assert!(
-            review_probe::blocks() >= 1,
-            "the preview reuses the occupied traversal"
-        );
-        let before_path = preview
-            .before_preview_path
-            .as_deref()
-            .expect("an accepted head has a before preview");
-        let ramp = ColorRamp::elevation_range(5.0, 9.0);
-        let before = decode_preview(Path::new(before_path));
-        let after = decode_preview(Path::new(&preview.after_preview_path));
-        for pixel in &before {
-            assert_eq!(
-                *pixel,
-                ramp.colour_for(5.0).expect("ramp covers 5"),
-                "the before preview shows the accepted value"
-            );
-        }
-        for pixel in &after {
-            assert_eq!(
-                *pixel,
-                ramp.colour_for(9.0).expect("ramp covers 9"),
-                "the after preview shows the selected replacement"
-            );
-        }
-        assert!(
-            !before.is_empty() && !after.is_empty(),
-            "both previews paint the covered area"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// Read the painted RGB of one preview PNG, ignoring transparent pixels.
-    fn decode_preview(path: &Path) -> Vec<(u8, u8, u8)> {
-        let bytes = std::fs::read(path).expect("preview png exists");
-        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-            .expect("preview decodes")
-            .to_rgba8();
-        image
-            .pixels()
-            .filter(|pixel| pixel.0[3] != 0)
-            .map(|pixel| (pixel.0[0], pixel.0[1], pixel.0[2]))
-            .collect()
-    }
-
-    /// Overlapping members count once, invalid incoming cells never erase
-    /// accepted values, replacement adds no coverage by itself, and an
-    /// extension into negative lattice cells is visited and counted.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_review_counts_once_and_keeps_accepted_values_under_invalid_input() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-review-invalid"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "review invalid",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        // Accepted 4x4 head of 5.
-        let accepted =
-            write_placed_fixture(&engine, &root, "accepted", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let (job, staging) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&accepted),
-            &cancel,
-        );
-        library.prepare_apply(&job).expect("review accepted");
-        apply_import(&library, &staging, true, false, &cancel).expect("apply");
-
-        // An incoming candidate that is valid only in half its cells, selected
-        // twice so the overlap is exact.
-        let mut values = vec![9.0f32; 16];
-        for value in values.iter_mut().take(8) {
-            *value = -9999.0;
-        }
-        let incoming =
-            write_oracle_fixture(&engine, &root, "incoming", 0.0, 4.0, 4, 4, -9999.0, &values);
-        review_probe::reset();
-        let (_job_duplicate, staging_duplicate) = stage_review(
-            &library,
-            &layer_id,
-            &[incoming.clone(), incoming.clone()],
-            &cancel,
-        );
-        assert_eq!(
-            staging_duplicate.uncovered_cells, 0,
-            "the accepted head covers every valid incoming cell"
-        );
-        assert_eq!(
-            staging_duplicate.overlap_cells, 8,
-            "eight valid incoming cells, counted once each"
-        );
-        assert_eq!(
-            staging_duplicate.invalid_cells,
-            u64::from(staging_duplicate.union_grid.width)
-                * u64::from(staging_duplicate.union_grid.height)
-                - 8,
-            "invalid is envelope arithmetic minus unique valid incoming cells"
-        );
-        assert!(
-            review_probe::blocks() <= 4,
-            "one occupied block area: {}",
-            review_probe::blocks()
-        );
-
-        // The decision preview keeps the accepted 5 where the input is invalid.
-        let (job_two, staging_two) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&incoming),
-            &cancel,
-        );
-        let preview = library
-            .preview_import_decision(&job_two)
-            .expect("decision preview");
-        let before = decode_preview(Path::new(
-            preview
-                .before_preview_path
-                .as_deref()
-                .expect("before preview"),
-        ));
-        let after = decode_preview(Path::new(&preview.after_preview_path));
-        let ramp = ColorRamp::elevation_range(5.0, 9.0);
-        assert!(
-            before.contains(&ramp.colour_for(5.0).expect("ramp covers 5")),
-            "the before preview shows the accepted value"
-        );
-        assert!(
-            after.contains(&ramp.colour_for(9.0).expect("ramp covers 9")),
-            "the after preview shows the selected value where the input is valid"
-        );
-        assert!(
-            after.contains(&ramp.colour_for(5.0).expect("ramp covers 5")),
-            "invalid input leaves the accepted value in place"
-        );
-
-        library.prepare_apply(&job_two).expect("review accepted");
-        let replaced = apply_import(&library, &staging_two, false, true, &cancel)
-            .expect("replace-overlap applies");
-        assert!(replaced.changed);
+        // The published composition overlaps by two cells, so its exact values
+        // are 7 and 9 rather than either source's constant.
         let head = head_of(&library, &layer_id);
-        // The composition is a preserved base plus a replacement, so it cannot
-        // claim an exact count; the values below are what prove the replacement
-        // added no new coverage.
+        assert_eq!(head.id, stacked.generation_id);
         assert_eq!(head.coverage_cells, None);
-        let (values, valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 4,
-                height: 4,
-            },
-        );
-        assert!(valid.iter().all(|byte| *byte == 1));
-        for (index, value) in values.iter().enumerate() {
-            assert_eq!(*value, if index < 8 { 5.0 } else { 9.0 }, "cell {index}");
-        }
+        assert_eq!(head.min_value, None);
+        assert_eq!(head.max_value, None);
+        assert_eq!(head.display_min_value, Some(7.0));
+        assert_eq!(head.display_max_value, Some(9.0));
 
-        // An extension into negative lattice cells is discovered from its own
-        // occupied region, not by walking the widened envelope.
-        let extension =
-            write_placed_fixture(&engine, &root, "extension", -4.0, 4.0, 4, 4, -9999.0, 7.0);
-        review_probe::reset();
-        let (job_three, staging_three) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&extension),
-            &cancel,
-        );
-        assert_eq!(staging_three.uncovered_cells, 16);
-        assert_eq!(staging_three.overlap_cells, 0);
-        assert!(
-            review_probe::blocks() <= 8,
-            "negative extension stays a handful of blocks: {}",
-            review_probe::blocks()
-        );
-        library.prepare_apply(&job_three).expect("review accepted");
-        let extended = apply_import(&library, &staging_three, true, false, &cancel).expect("apply");
-        assert!(extended.changed);
-        // The extension made a second occurrence, so the exact composed count is
-        // no longer derivable from member metadata.
-        assert_eq!(head_of(&library, &layer_id).coverage_cells, None);
+        let request = |z: u32, x: u32, y: u32| tiles::TileRequest {
+            entity_kind: "source".to_string(),
+            entity_id: layer_id.clone(),
+            generation_id: stacked.generation_id.clone(),
+            style: "elevation".to_string(),
+            z,
+            x,
+            y,
+        };
 
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// More occupied coordinates than two pages: the review streams bounded
-    /// pages, deduplicates, cancels cleanly and succeeds on the next healthy
-    /// call.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_review_pages_many_occupied_regions_and_survives_cancellation() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-review-pages"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "review pages",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        let accepted =
-            write_placed_fixture(&engine, &root, "accepted", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let (job, staging) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&accepted),
-            &cancel,
-        );
-        library.prepare_apply(&job).expect("review accepted");
-        apply_import(&library, &staging, true, false, &cancel).expect("apply");
-
-        let incoming =
-            write_placed_fixture(&engine, &root, "incoming", 0.0, 4.0, 4, 4, -9999.0, 9.0);
-        let (_job_two, staging_two) = stage_review(
-            &library,
-            &layer_id,
-            std::slice::from_ref(&incoming),
-            &cancel,
-        );
-        // Seed more than two pages of occupied coordinates for this source on
-        // top of its real one: the same rows the review streams, no new shape.
-        let interpretation_id = format!("interp-{}", staging_two.sources[0].interp_hash);
-        {
-            let connection = library.catalogue().unwrap();
-            for block_x in 4_000..4_600 {
-                connection
-                    .execute(
-                        "INSERT OR REPLACE INTO lidar_interpretation_regions(
-                            interpretation_id, block_x, block_y, valid_cells, min_value,
-                            max_value, sum_value)
-                         VALUES(?1, ?2, 0, 1, 9.0, 9.0, 9.0)",
-                        rusqlite::params![interpretation_id, block_x],
-                    )
-                    .unwrap();
+        // The minified tile resolves its first reduced cell from both sources:
+        // the composed cell mean is (2 * 7 + 4 * 9) / 6, and only that cell
+        // holds coverage, so exactly the corner sample is painted. Its index is
+        // the one the fixture was placed against: the floor of the derived index
+        // sits on a tile boundary where the floating-point value rounds down.
+        let png = match tiles::render_tile(&library, &request(14, 8192, 8191), &cancel).unwrap() {
+            tiles::TileOutcome::Png(bytes) => bytes,
+            tiles::TileOutcome::Empty => {
+                panic!("the two edge sources contribute to the first level-3 reduction cell")
             }
-        }
-        review_probe::reset();
-        let preview = render_composition_preview(&library, &staging_two, &cancel)
-            .expect("decision preview over many occupied regions");
-        let pages = review_probe::pages();
-        assert!(
-            pages >= 3,
-            "601 occupied coordinates need at least three bounded pages: {pages}"
+        };
+        let (width, height, rgba) = decode_tile(&png);
+        assert_eq!((width, height), (tiles::TILE_PIXELS, tiles::TILE_PIXELS));
+        let ramp = ColorRamp::elevation_range(7.0, 9.0);
+        let composed = (2.0 * 7.0 + 4.0 * 9.0) / 6.0;
+        let expected = ramp.colour_for(composed).expect("8.33 is inside the ramp");
+        let painted: Vec<[u8; 4]> = rgba
+            .chunks_exact(4)
+            .filter(|pixel| pixel[3] == 255)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
+            .collect();
+        assert_eq!(
+            painted.len(),
+            1,
+            "only the corner sample interpolates the one occupied reduced cell"
         );
-        assert!(
-            review_probe::blocks() >= 601,
-            "every occupied coordinate is visited: {}",
-            review_probe::blocks()
-        );
-        assert!(
-            !decode_preview(Path::new(&preview.after_preview_path)).is_empty(),
-            "the preview still paints the accepted coverage"
+        assert_eq!(
+            (painted[0][0], painted[0][1], painted[0][2]),
+            expected,
+            "the painted sample is the composed overlap mean"
         );
 
-        // Cancellation stops the walk cleanly, and the next healthy call works.
-        cancel.store(true, Ordering::Relaxed);
+        // Native scale reads the same composition through its own two-cell
+        // window: the source is still found and the tile is mostly transparent.
+        // The tile is the one holding the source's own centre, away from the
+        // boundary that makes a derived index ambiguous.
+        let world = {
+            let world = tiles::tile_bounds_3857(0, 0, 0);
+            world[2] - world[0]
+        };
+        let span = world / f64::from(1u32 << 17);
+        let half = world / 2.0;
+        let png = match tiles::render_tile(
+            &library,
+            &request(
+                17,
+                ((bounds[0] + 1.0 + half) / span).floor() as u32,
+                ((half - bounds[3] + 1.0) / span).floor() as u32,
+            ),
+            &cancel,
+        )
+        .unwrap()
+        {
+            tiles::TileOutcome::Png(bytes) => bytes,
+            tiles::TileOutcome::Empty => panic!("the source is present at native scale"),
+        };
+        let (_, _, rgba) = decode_tile(&png);
+        let painted = rgba.chunks_exact(4).filter(|pixel| pixel[3] == 255).count();
+        assert!(painted > 0, "the source draws at native scale");
         assert!(
-            render_composition_preview(&library, &staging_two, &cancel).is_err(),
-            "a cancelled review stops between pages"
+            painted < (tiles::TILE_PIXELS * tiles::TILE_PIXELS) as usize,
+            "a 2x2 m source does not fill a 305 m tile"
         );
-        cancel.store(false, Ordering::Relaxed);
-        let preview = render_composition_preview(&library, &staging_two, &cancel)
-            .expect("the same review succeeds after cancellation");
-        assert!(!decode_preview(Path::new(&preview.after_preview_path)).is_empty());
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // -----------------------------------------------------------------------
-    // BG7: job-owned source COGs, promotion journals and recovery
-    // -----------------------------------------------------------------------
-
-    fn generation_count(library: &LidarLibrary, layer_id: &str) -> i64 {
-        let connection = library.catalogue().unwrap();
-        connection
-            .query_row(
-                "SELECT COUNT(*) FROM lidar_layer_generations WHERE layer_id = ?1",
-                [layer_id],
-                |row| row.get(0),
-            )
-            .unwrap()
-    }
-
-    /// Journal contents by path, for assertions after the library is dropped.
-    fn journal_of_paths(paths: &LidarPaths, job_id: &str) -> Option<PromotionJournal> {
-        std::fs::read_to_string(promotion_journal_path(paths, job_id))
-            .ok()
-            .map(|json| serde_json::from_str(&json).expect("journal parses"))
-    }
-
-    /// The catalogue's view of one source: its committed reference, when any.
-    fn committed_asset(library: &LidarLibrary, interp_hash: &str) -> Option<String> {
-        let connection = library.catalogue().unwrap();
-        catalogue::interpretation_cog(&connection, &format!("interp-{interp_hash}"))
-            .unwrap()
-            .map(|(row, _)| row.sha256)
-    }
-
-    fn journal_of(library: &LidarLibrary, job_id: &str) -> Option<PromotionJournal> {
-        let path = promotion_journal_path(&library.inner.paths, job_id);
-        std::fs::read_to_string(&path)
-            .ok()
-            .map(|json| serde_json::from_str(&json).expect("journal parses"))
+    /// Decode a rendered tile into RGBA8 pixels.
+    fn decode_tile(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
+        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
+            .expect("tile is a PNG")
+            .to_rgba8();
+        (image.width(), image.height(), image.into_raw())
     }
 
     /// A failed publication rolls its own promotions back, keeps a reused asset
@@ -10504,13 +8641,12 @@ mod tests {
         // 1. An accepted generation, so the layer has history to protect.
         let accepted =
             write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_one, staging_one) = stage_review(
+        let (_job_one, staging_one) = stage_review(
             &library,
             &layer_id,
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        library.prepare_apply(&job_one).expect("review accepted");
         apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         let accepted_hash = staging_one.sources[0].interp_hash.clone();
         let accepted_asset = committed_asset(&library, &accepted_hash).expect("committed");
@@ -10522,7 +8658,6 @@ mod tests {
         let fresh = write_placed_fixture(&engine, &root, "fresh", 16.0, 8.0, 4, 4, -9999.0, 9.0);
         let (job_two, staging_two) =
             stage_review(&library, &layer_id, std::slice::from_ref(&fresh), &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
         let fresh_hash = staging_two.sources[0].interp_hash.clone();
         let fresh_cog = staging_two.sources[0]
             .source_cog
@@ -10582,9 +8717,8 @@ mod tests {
         let head_before_reuse = head_of(&library, &layer_id);
         let reuse_new =
             write_placed_fixture(&engine, &root, "reuse-new", 48.0, 8.0, 4, 4, -9999.0, 3.0);
-        let (job_reuse, staging_reuse) =
+        let (_job_reuse, staging_reuse) =
             stage_review(&library, &layer_id, &[accepted.clone(), reuse_new], &cancel);
-        library.prepare_apply(&job_reuse).expect("review accepted");
         let reuse_new_hash = staging_reuse.sources[1].interp_hash.clone();
         let reuse_new_asset = paths.asset_cog(
             &staging_reuse.sources[1]
@@ -10617,7 +8751,6 @@ mod tests {
         let third = write_placed_fixture(&engine, &root, "third", 32.0, 8.0, 4, 4, -9999.0, 7.0);
         let (job_three, staging_three) =
             stage_review(&library, &layer_id, std::slice::from_ref(&third), &cancel);
-        library.prepare_apply(&job_three).expect("review accepted");
         let third_hash = staging_three.sources[0].interp_hash.clone();
         let third_cog = staging_three.sources[0]
             .source_cog
@@ -10671,693 +8804,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Recovery is idempotent at each interruption point: an intent without a
-    /// file removes nothing, an uncommitted promotion is removed, a committed
-    /// one is kept, and an unresolvable journal is retained rather than
-    /// silently declared clean.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn promotion_recovery_is_idempotent_at_every_interruption_point() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-promotion-recovery"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "promotion recovery",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let paths = &library.inner.paths;
-        let source = write_placed_fixture(&engine, &root, "source", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_id, staging) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
-        let cog = staging.sources[0].source_cog.clone().expect("retained COG");
-        let local = cog
-            .resolve(paths, staging.sources[0].job_id.as_deref())
-            .expect("job-local COG");
-        assert!(local.exists());
-
-        // Intent recorded, promotion never happened: recovery finds no file and
-        // simply settles the journal.
-        let destination = paths.asset_cog(&cog.sha256);
-        let relative = destination
-            .strip_prefix(paths.root())
-            .unwrap()
-            .to_string_lossy()
-            .into_owned();
-        write_promotion_journal(
-            paths,
-            &job_id,
-            &PromotionJournal {
-                entries: vec![PromotionEntry {
-                    interpretation_id: format!("interp-{}", staging.sources[0].interp_hash),
-                    sha256: cog.sha256.clone(),
-                    destination: relative.clone(),
-                    witness: None,
-                }],
-            },
-        )
-        .unwrap();
-        let removed =
-            reconcile_promotion_journals(&library, std::slice::from_ref(&job_id)).unwrap();
-        assert_eq!(removed, 0, "nothing was promoted, so nothing is removed");
-        assert!(journal_of(&library, &job_id).is_none());
-        assert!(local.exists(), "the job-local COG is untouched");
-
-        // Promotion happened, the transaction never did: recovery removes the
-        // uncommitted asset and keeps the job's own file.
-        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
-        std::fs::hard_link(&local, &destination).unwrap();
-        // The journal records the job-local file it linked, which is what
-        // licenses deleting the destination later.
-        let witness = cog
-            .relative_path
-            .clone()
-            .expect("a staged COG records its job-relative location");
-        write_promotion_journal(
-            paths,
-            &job_id,
-            &PromotionJournal {
-                entries: vec![PromotionEntry {
-                    interpretation_id: format!("interp-{}", staging.sources[0].interp_hash),
-                    sha256: cog.sha256.clone(),
-                    destination: relative.clone(),
-                    witness: Some(witness),
-                }],
-            },
-        )
-        .unwrap();
-        let removed =
-            reconcile_promotion_journals(&library, std::slice::from_ref(&job_id)).unwrap();
-        assert_eq!(removed, 1, "the uncommitted promotion is removed");
-        assert!(!destination.exists());
-        assert!(local.exists());
-        assert!(journal_of(&library, &job_id).is_none());
-
-        // A journal that cannot be resolved is retained, never declared clean.
-        write_promotion_journal(
-            paths,
-            &job_id,
-            &PromotionJournal {
-                entries: vec![PromotionEntry {
-                    interpretation_id: "interp-unknown".to_string(),
-                    sha256: "unknown-digest".to_string(),
-                    destination: "../outside/cog.tif".to_string(),
-                    witness: None,
-                }],
-            },
-        )
-        .unwrap();
-        let error = reconcile_promotion_journals(&library, std::slice::from_ref(&job_id))
-            .expect_err("an escaping destination is refused");
-        assert!(error.contains("leaves its owning root"), "{error}");
-        assert!(
-            journal_of(&library, &job_id).is_some(),
-            "recoverable evidence is retained for retry"
-        );
-        let _ = std::fs::remove_file(promotion_journal_path(paths, &job_id));
-
-        // Two awaiting-review jobs with the same content stay independent: one
-        // being settled never touches the other's payload.
-        let layer_two = library
-            .create_layer(
-                "promotion recovery two",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (job_a, staging_a) =
-            stage_review(&library, &layer_two, std::slice::from_ref(&source), &cancel);
-        let (job_b, staging_b) =
-            stage_review(&library, &layer_two, std::slice::from_ref(&source), &cancel);
-        assert_ne!(job_a, job_b);
-        let local_a = staging_a.sources[0]
-            .source_cog
-            .as_ref()
-            .unwrap()
-            .resolve(paths, staging_a.sources[0].job_id.as_deref())
-            .unwrap();
-        let local_b = staging_b.sources[0]
-            .source_cog
-            .as_ref()
-            .unwrap()
-            .resolve(paths, staging_b.sources[0].job_id.as_deref())
-            .unwrap();
-        assert!(local_a.exists() && local_b.exists());
-        assert_ne!(local_a, local_b, "each job owns its own prepared file");
-        let _ = std::fs::remove_dir_all(paths.job_dir(&job_a));
-        assert!(
-            local_b.exists(),
-            "settling one job never removes another job's payload"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A job awaiting review survives a restart and publishes without another
-    /// preparation, including when an older staged job has no job-local record.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn awaiting_review_jobs_survive_restart_and_old_staged_jobs_stay_readable() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-await-review"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "await review",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let paths = LidarPaths::open(&root).expect("library paths");
-
-        let source = write_placed_fixture(&engine, &root, "awaiting", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_id, staging) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
-        let cog = staging.sources[0].source_cog.clone().expect("retained COG");
-        let local = cog
-            .resolve(&paths, staging.sources[0].job_id.as_deref())
-            .expect("job-local COG");
-        let digest = crate::services::lidar::raster_assets::hash_file(&local).unwrap();
-
-        // Restart with the job still awaiting review.
-        drop(library);
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        let staged_json = std::fs::read_to_string(paths.job_dir(&job_id).join("staging.json"))
-            .expect("staging survives the restart");
-        let restaged: StagedImport = serde_json::from_str(&staged_json).unwrap();
-        {
-            let connection = reopened.catalogue().unwrap();
-            let state = catalogue::get_import_job(&connection, &job_id)
-                .unwrap()
-                .expect("the job row survives")
-                .state;
-            assert_eq!(state, "awaiting_review");
-        }
-        assert!(local.exists(), "the job keeps its own prepared COG");
-        assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&local).unwrap(),
-            digest,
-            "no re-preparation happened"
-        );
-        let preview = render_composition_preview(&reopened, &restaged, &cancel)
-            .expect("the review still previews without re-preparing");
-        assert!(preview.after_preview_path.ends_with(".png"));
-
-        reopened.prepare_apply(&job_id).expect("review accepted");
-        let applied =
-            apply_import(&reopened, &restaged, true, false, &cancel).expect("apply after restart");
-        assert!(applied.changed);
-        let (values, valid) = head_window(
-            &reopened,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 4,
-                height: 4,
-            },
-        );
-        assert!(valid.iter().all(|byte| *byte == 1));
-        assert!(values.iter().all(|value| *value == 5.0));
-
-        // An older staged job (no job-local record) reads the global digest
-        // non-owningly, and a failed publication never deletes it.
-        let historic =
-            write_placed_fixture(&engine, &root, "historic", 16.0, 8.0, 4, 4, -9999.0, 9.0);
-        let (job_old, mut staging_old) = stage_review(
-            &reopened,
-            &layer_id,
-            std::slice::from_ref(&historic),
-            &cancel,
-        );
-        let old_cog = staging_old.sources[0]
-            .source_cog
-            .clone()
-            .expect("retained COG");
-        let old_local = old_cog
-            .resolve(&paths, staging_old.sources[0].job_id.as_deref())
-            .unwrap();
-        let global = paths.asset_cog(&old_cog.sha256);
-        std::fs::create_dir_all(global.parent().unwrap()).unwrap();
-        std::fs::hard_link(&old_local, &global).unwrap();
-        // Present the pre-BG7 shape: a global digest and no job-local location.
-        let source_row = &mut staging_old.sources[0];
-        source_row.job_id = None;
-        source_row.source_cog = Some(RetainedSourceCog {
-            relative_path: None,
-            ..old_cog.clone()
-        });
-        std::fs::write(
-            paths.job_dir(&job_old).join("staging.json"),
-            serde_json::to_string(&staging_old).unwrap(),
-        )
-        .unwrap();
-        let staging_old: StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(paths.job_dir(&job_old).join("staging.json")).unwrap(),
-        )
-        .unwrap();
-        assert!(
-            staging_old.sources[0]
-                .source_cog
-                .as_ref()
-                .unwrap()
-                .resolve(&paths, None)
-                .unwrap()
-                .exists(),
-            "an old staged job reads the global digest"
-        );
-        reopened.prepare_apply(&job_old).expect("review accepted");
-        let applied =
-            apply_import(&reopened, &staging_old, true, false, &cancel).expect("old job applies");
-        assert!(applied.changed);
-        assert!(
-            global.exists(),
-            "the reused global asset is never deleted by an old-format job"
-        );
-
-        drop(reopened);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A refused or cancelled staging owns nothing durable: no global asset, no
-    /// journal, no settled job payload, and untouched originals and head.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn refused_or_cancelled_staging_leaves_no_owned_payloads() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-stage-ownership"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "stage ownership",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let paths = library.inner.paths.clone();
-
-        // Two individually small sources whose union is over the envelope: the
-        // COGs are prepared first, then the union is refused.
-        let west = write_placed_fixture(&engine, &root, "west", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let east = write_placed_fixture(&engine, &root, "east", 5004.0, 5004.0, 4, 4, -9999.0, 5.0);
-        let digest_before = crate::services::lidar::raster_assets::hash_file(&west).unwrap();
-        let job_id = library.record_import_job(&layer_id).expect("job recorded");
-        let error = stage_import(
-            &library,
-            &job_id,
-            &layer_id,
-            &[west.clone(), east.clone()],
-            &cancel,
-        )
-        .expect_err("the union envelope is refused");
-        assert!(error.contains("import envelope limit"), "{error}");
-        library.finish_staging(&job_id, Err(error));
-        let assets: Vec<_> = std::fs::read_dir(paths.asset_dir(""))
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect();
-        assert!(assets.is_empty(), "no asset is admitted: {assets:?}");
-        assert!(
-            !paths.job_dir(&job_id).exists(),
-            "a refused job leaves no owned payload"
-        );
-        assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&west).unwrap(),
-            digest_before,
-            "the original bytes are untouched"
-        );
-        assert_eq!(
-            library.inner.paths.root(),
-            paths.root(),
-            "the library root is unchanged"
-        );
-
-        // Cancellation after the COG exists: the job owns the file until it is
-        // settled, and settling removes it.
-        let cancelled_source =
-            write_placed_fixture(&engine, &root, "cancelled", 0.0, 4.0, 4, 4, -9999.0, 7.0);
-        let job_two = library.record_import_job(&layer_id).expect("job recorded");
-        stage_import(
-            &library,
-            &job_two,
-            &layer_id,
-            std::slice::from_ref(&cancelled_source),
-            &cancel,
-        )
-        .expect("staging completes");
-        let staged: StagedImport = serde_json::from_str(
-            &std::fs::read_to_string(paths.job_dir(&job_two).join("staging.json")).unwrap(),
-        )
-        .unwrap();
-        let cog = staged.sources[0].source_cog.clone().expect("retained COG");
-        let local = cog
-            .resolve(&paths, staged.sources[0].job_id.as_deref())
-            .expect("job-local COG");
-        assert!(local.exists(), "the job owns its prepared COG");
-        library.finish_staging(&job_two, Err("cancelled".to_string()));
-        assert!(!local.exists(), "a cancelled job leaves no payload behind");
-        assert!(!paths.asset_cog(&cog.sha256).exists());
-        assert!(journal_of(&library, &job_two).is_none());
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    // -----------------------------------------------------------------------
-    // BG6-A: globally ordered transformed coverage
-    // -----------------------------------------------------------------------
-
-    /// A staged source in the shape the traversal reads, without raster files:
-    /// the iterator tests below author the occupied index directly.
-    fn traversal_source(interp_hash: &str, origin_x: f64, origin_y: f64) -> StagedSource {
-        StagedSource {
-            filename: format!("{interp_hash}.tif"),
-            sha256: format!("sha-{interp_hash}"),
-            managed_original: PathBuf::new(),
-            interp_hash: interp_hash.to_string(),
-            width: 1024,
-            height: 1024,
-            geotransform: [origin_x, 1.0, 0.0, origin_y, 0.0, -1.0],
-            crs_wkt: "EPSG:3857".to_string(),
-            nodata: Some(-9999.0),
-            value_range: [0.0, 0.0],
-            valid_cells: Some(1024 * 1024),
-            size_bytes: 0,
-            job_id: None,
-            source_cog: None,
-            valid_mask_path: PathBuf::new(),
-            raw_samples_path: PathBuf::new(),
-            compatible: true,
-            issues: Vec::new(),
-        }
-    }
-
-    /// Seed one source's occupied-region index.
-    fn seed_regions(library: &LidarLibrary, interp_hash: &str, blocks: &[(i64, i64)]) {
-        let connection = library.catalogue().unwrap();
-        let interpretation_id = format!("interp-{interp_hash}");
-        let sha = format!("sha-{interp_hash}");
-        connection
-            .execute(
-                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
-                 VALUES(?1, 'authored.tif', 4, '{}', '2026-01-01T00:00:00Z')
-                 ON CONFLICT(sha256) DO NOTHING",
-                rusqlite::params![sha],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_interpretations(
-                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
-                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
-                 VALUES(?1, ?2, 1, 'ground-elevation', 'm', 1, 0,
-                    'EPSG:3857', 'unspecified', -9999, '[0,1,0,0,0,-1]', 1024, 1024, ?3)
-                 ON CONFLICT(interp_hash) DO NOTHING",
-                rusqlite::params![interpretation_id, sha, interp_hash],
-            )
-            .unwrap();
-        let rows: Vec<(i64, i64, i64, f64, f64, f64)> = blocks
-            .iter()
-            .map(|(block_x, block_y)| (*block_x, *block_y, 4, 0.0, 1.0, 2.0))
-            .collect();
-        catalogue::replace_interpretation_regions(&connection, &interpretation_id, &rows).unwrap();
-    }
-
-    /// Every coordinate one traversal emits, in order.
-    fn traversal_blocks(
-        library: &LidarLibrary,
-        lattice: &RasterGrid,
-        source: &StagedSource,
-    ) -> Vec<(i64, i64)> {
-        let head = HeadBlockSource::None;
-        let cancel = AtomicBool::new(false);
-        let mut traversal =
-            ReviewTraversal::open(&head, std::slice::from_ref(&source), lattice, library)
-                .expect("traversal opens");
-        let mut blocks = Vec::new();
-        while let Some(block) = traversal.next_block(library, &cancel).expect("next block") {
-            blocks.push(block);
-        }
-        blocks
-    }
-
-    /// The counterexample the review found: 257 regions in one row, an offset
-    /// that expands each source block into two lattice rows, and a page boundary
-    /// in the middle. Every expanded coordinate must appear exactly once, in
-    /// order — the earlier per-page sort-and-discard dropped `(0, 256)`.
-    #[test]
-    fn transformed_region_pages_are_globally_ordered() {
-        let root = std::env::temp_dir().join(new_id("canopi-transformed-pages"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let lattice = RasterGrid {
-            width: 1024,
-            height: 1024,
-            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
-        };
-
-        // Control: an aligned source keeps one coordinate per region.
-        let aligned = traversal_source("aligned", 0.0, 0.0);
-        seed_regions(
-            &library,
-            "aligned",
-            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
-        );
-        let blocks = traversal_blocks(&library, &lattice, &aligned);
-        assert_eq!(blocks.len(), 257, "one lattice block per aligned region");
-        assert!(blocks.windows(2).all(|pair| pair[0] < pair[1]));
-
-        // The counterexample: one cell below the lattice origin, so each source
-        // block covers two lattice rows, split across a 256-record page.
-        let offset = traversal_source("offset", 0.0, -1.0);
-        seed_regions(
-            &library,
-            "offset",
-            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
-        );
-        let blocks = traversal_blocks(&library, &lattice, &offset);
-        let mut expected: Vec<(i64, i64)> = (0..257).flat_map(|x| [(0, x), (1, x)]).collect();
-        expected.sort_unstable();
-        assert_eq!(
-            blocks, expected,
-            "all 514 expanded coordinates, in order, exactly once"
-        );
-        assert!(
-            blocks.contains(&(0, 256)),
-            "the coordinate the discard rule dropped is present"
-        );
-
-        // Both axes non-aligned: each region expands to four lattice blocks.
-        // Offsets are (origin_x - lattice_x, lattice_top - origin_y): negative
-        // on both axes here, so both remainders are non-zero.
-        let both = traversal_source("both", -3.0, 5.0);
-        seed_regions(
-            &library,
-            "both",
-            &(0..257).map(|x| (x, 0)).collect::<Vec<_>>(),
-        );
-        let blocks = traversal_blocks(&library, &lattice, &both);
-        let mut expected: Vec<(i64, i64)> = (0..257)
-            .flat_map(|x| {
-                let qx = (-3i64).div_euclid(1024);
-                let rx = (-3i64).rem_euclid(1024);
-                let qy = (-5i64).div_euclid(1024);
-                let ry = (-5i64).rem_euclid(1024);
-                let dxs: Vec<i64> = if rx == 0 { vec![0] } else { vec![0, 1] };
-                let dys: Vec<i64> = if ry == 0 { vec![0] } else { vec![0, 1] };
-                dys.iter()
-                    .flat_map(|dy| dxs.iter().map(move |dx| (qy + dy, x + qx + dx)))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        expected.sort_unstable();
-        expected.dedup();
-        assert_eq!(blocks, expected, "negative two-axis offset stays exact");
-
-        // Duplicate coordinates from two sources are visited once.
-        let head = HeadBlockSource::None;
-        let cancel = AtomicBool::new(false);
-        let duplicate = traversal_source("duplicate", 0.0, 0.0);
-        seed_regions(&library, "duplicate", &[(0, 0), (1, 0)]);
-        let mut traversal =
-            ReviewTraversal::open(&head, &[&aligned, &duplicate], &lattice, &library)
-                .expect("traversal opens");
-        let mut shared = Vec::new();
-        while let Some(block) = traversal.next_block(&library, &cancel).expect("next") {
-            shared.push(block);
-        }
-        assert_eq!(
-            shared.iter().filter(|block| **block == (0, 0)).count(),
-            1,
-            "a coordinate two sources occupy is visited once"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A real source wider than one index page, placed one cell below the layer
-    /// anchor: every incoming cell must reach the review classification and the
-    /// far end must appear in the decision preview with the authored value.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn wide_transformed_source_reviews_every_cell() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-wide-review"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "wide review",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        // The anchor fixes the layer lattice at world (0, 4), 4x4 cells.
-        let anchor = write_placed_fixture(&engine, &root, "anchor", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let (job_anchor, staging_anchor) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&anchor), &cancel);
-        library.prepare_apply(&job_anchor).expect("review accepted");
-        apply_import(&library, &staging_anchor, true, false, &cancel).expect("anchor publishes");
-
-        // 257 index regions in one source row, one cell below the anchor, so the
-        // source origin is not lattice-aligned on the y axis. The sentinel block
-        // sits in the middle and the final index page stays fully valid, so
-        // dropping that page loses authored coverage from the count and the
-        // published values rather than merely omitting an all-NoData block.
-        let width = 263_168usize;
-        let sentinel_block = 128usize;
-        let mut values = vec![7.0f32; width];
-        for value in values.iter_mut().skip(sentinel_block * 1024).take(1024) {
-            *value = -9999.0;
-        }
-        let wide = write_oracle_fixture(
-            &engine,
-            &root,
-            "wide",
-            0.0,
-            0.0,
-            width as u32,
-            1,
-            -9999.0,
-            &values,
-        );
-        review_probe::reset();
-        let (job, staging) = stage_review(&library, &layer_id, &[wide], &cancel);
-        assert_eq!(staging.union_grid.width, width as u32);
-        assert_eq!(staging.union_grid.height, 5);
-        let incoming = u64::try_from(width - 1024).unwrap();
-        assert_eq!(
-            staging.uncovered_cells, incoming,
-            "every authored finite cell is incoming coverage, including the final page"
-        );
-        assert_eq!(staging.overlap_cells, 0, "the anchor occupies another row");
-        assert_eq!(
-            staging.invalid_cells,
-            u64::from(staging.union_grid.width) * u64::from(staging.union_grid.height) - incoming,
-            "the envelope gap is arithmetic"
-        );
-        assert!(
-            review_probe::pages() >= 3,
-            "more than two region pages were read: {}",
-            review_probe::pages()
-        );
-
-        // The decision preview walks the same traversal and completes for this
-        // extreme aspect ratio. Its 512x1 raster is a degenerate display
-        // derivative that GDAL renders transparent, so the preview is asserted
-        // to exist rather than to carry colour.
-        let preview = library
-            .preview_import_decision(&job)
-            .expect("decision preview");
-        let before_path = preview
-            .before_preview_path
-            .as_deref()
-            .expect("an accepted head has a before preview");
-        for path in [before_path, preview.after_preview_path.as_str()] {
-            let bytes = std::fs::read(path).expect("preview png exists");
-            let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-                .expect("preview decodes")
-                .to_rgba8();
-            assert_eq!(image.height(), 1, "the preview keeps the union aspect");
-            assert_eq!(image.width(), 512);
-        }
-
-        // Apply publishes the reviewed coverage, and the last index page's own
-        // values are readable while the middle sentinel block stays invalid.
-        library.prepare_apply(&job).expect("review accepted");
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-        let (far_values, far_valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: (width - 1024) as i64,
-                y: 4,
-                width: 1024,
-                height: 1,
-            },
-        );
-        assert!(
-            far_valid.iter().all(|byte| *byte == 1),
-            "the final index page is covered"
-        );
-        assert!(
-            far_values.iter().all(|value| *value == 7.0),
-            "the final index page carries its authored values"
-        );
-        let (sentinel_values, sentinel_valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: (sentinel_block * 1024) as i64,
-                y: 4,
-                width: 1024,
-                height: 1,
-            },
-        );
-        assert!(
-            sentinel_valid.iter().all(|byte| *byte == 0),
-            "the authored NoData block stays invalid"
-        );
-        assert!(
-            sentinel_values
-                .iter()
-                .all(|value| !value.is_finite() || *value == -9999.0),
-            "invalid cells carry the layer marker, not authored data"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    // -----------------------------------------------------------------------
-    // Product closure: collision ownership (C1) and journal clearing (C2)
-    // -----------------------------------------------------------------------
-
     /// The rollback owner exists before the first promotion, so a failure while
     /// a later source is being prepared still removes what already landed.
     #[test]
@@ -11382,13 +8828,12 @@ mod tests {
 
         let accepted =
             write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_one, staging_one) = stage_review(
+        let (_job_one, staging_one) = stage_review(
             &library,
             &layer_id,
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        library.prepare_apply(&job_one).expect("review accepted");
         apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
@@ -11402,7 +8847,6 @@ mod tests {
             &[first.clone(), second.clone()],
             &cancel,
         );
-        library.prepare_apply(&job_two).expect("review accepted");
         let hashes: Vec<String> = staging_two
             .sources
             .iter()
@@ -11482,13 +8926,12 @@ mod tests {
 
         let accepted =
             write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_one, staging_one) = stage_review(
+        let (_job_one, staging_one) = stage_review(
             &library,
             &layer_id,
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        library.prepare_apply(&job_one).expect("review accepted");
         apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
@@ -11498,7 +8941,6 @@ mod tests {
         let first = write_placed_fixture(&engine, &root, "first", 16.0, 8.0, 4, 4, -9999.0, 7.0);
         let second = write_placed_fixture(&engine, &root, "second", 32.0, 8.0, 4, 4, -9999.0, 9.0);
         let (job_two, staging_two) = stage_review(&library, &layer_id, &[first, second], &cancel);
-        library.prepare_apply(&job_two).expect("review accepted");
         let locals: Vec<PathBuf> = staging_two
             .sources
             .iter()
@@ -11659,18 +9101,28 @@ mod tests {
         let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_bad));
         let reopened = LidarLibrary::open(&root).expect("recovery completes on reopen");
         assert!(journal_of(&reopened, &job_bad).is_none());
-        assert!(paths.job_dir(&job_wait).exists());
-        assert!(wait_local.exists());
-        let staged_json = std::fs::read_to_string(paths.job_dir(&job_wait).join("staging.json"))
-            .expect("the awaiting-review job survives");
-        let restaged: StagedImport = serde_json::from_str(&staged_json).unwrap();
-        let preview = render_composition_preview(&reopened, &restaged, &cancel)
-            .expect("the intact job still previews");
-        assert!(preview.after_preview_path.ends_with(".png"));
-        reopened.prepare_apply(&job_wait).expect("review accepted");
-        let applied = apply_import(&reopened, &restaged, true, false, &cancel)
-            .expect("the intact job still applies");
-        assert!(applied.changed);
+        // A job interrupted while publishing is settled rather than left in a
+        // state nobody can act on: there is no review to return to, and its
+        // validated payload is re-derivable by importing again.
+        assert!(
+            !paths.job_dir(&job_wait).exists(),
+            "an interrupted publication is settled"
+        );
+        assert!(!wait_local.exists(), "and its job-local COG is removed");
+        // Recovery leaves the library usable: a fresh batch publishes normally.
+        let fresh = {
+            let job_id = reopened.record_import_job(&layer_id).expect("job recorded");
+            stage_and_publish(
+                &reopened,
+                &job_id,
+                &layer_id,
+                std::slice::from_ref(&other),
+                false,
+                &cancel,
+            )
+            .expect("a fresh batch publishes after recovery")
+        };
+        assert!(fresh.changed);
         drop(reopened);
         let twice = LidarLibrary::open(&root).expect("the second reopen is clean");
         drop(twice);
@@ -11703,13 +9155,12 @@ mod tests {
 
         let accepted =
             write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_one, staging_one) = stage_review(
+        let (_job_one, staging_one) = stage_review(
             &library,
             &layer_id,
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        library.prepare_apply(&job_one).expect("review accepted");
         apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
 
         let incoming =
@@ -11720,7 +9171,6 @@ mod tests {
             std::slice::from_ref(&incoming),
             &cancel,
         );
-        let staged = library.prepare_apply(&job_two).expect("review accepted");
         let hash = staging_two.sources[0].interp_hash.clone();
         let asset = paths.asset_cog(
             &staging_two.sources[0]
@@ -11731,7 +9181,7 @@ mod tests {
         );
 
         promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
-        let applied = apply_import(&library, &staged, true, false, &cancel)
+        let applied = apply_import(&library, &staging_two, true, false, &cancel)
             .expect("a committed publication reports success");
         promotion_probe::clear();
         assert!(applied.changed, "the generation is published");
@@ -11765,7 +9215,7 @@ mod tests {
                 )
                 .unwrap();
         }
-        library.finish_apply(&job_two, Ok(applied));
+        library.finish_import_sources(&job_two, &layer_id, Ok(()));
         {
             let connection = library.catalogue().unwrap();
             let state = catalogue::get_import_job(&connection, &job_two)
@@ -11833,13 +9283,12 @@ mod tests {
 
         let accepted =
             write_placed_fixture(&engine, &root, "accepted", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_one, staging_one) = stage_review(
+        let (_job_one, staging_one) = stage_review(
             &library,
             &layer_id,
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        library.prepare_apply(&job_one).expect("review accepted");
         apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
@@ -11852,7 +9301,6 @@ mod tests {
             std::slice::from_ref(&incoming),
             &cancel,
         );
-        let staged = library.prepare_apply(&job_two).expect("review accepted");
         let asset = paths.asset_cog(
             &staging_two.sources[0]
                 .source_cog
@@ -11865,7 +9313,7 @@ mod tests {
         // its journal: the evidence must survive rather than report clean.
         promotion_probe::fail_at(FaultPoint::BeforeTransaction);
         promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
-        let error = apply_import(&library, &staged, true, false, &cancel)
+        let error = apply_import(&library, &staging_two, true, false, &cancel)
             .expect_err("the injected failure refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("injected failure"), "{error}");
@@ -11905,291 +9353,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Ownership that cannot be proven preserves the file and reports
-    /// uncertainty, including for journals written before witnesses existed.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn unproven_ownership_preserves_an_interrupted_intent() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-unproven"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "unproven",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let paths = LidarPaths::open(&root).expect("library paths");
-
-        let source = write_placed_fixture(&engine, &root, "source", 0.0, 8.0, 4, 4, -9999.0, 5.0);
-        let (job_id, staging) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&source), &cancel);
-
-        // A file that looks like an asset of this digest but was not created by
-        // this job, with an intent that records no witness.
-        let digest = "unproven-digest";
-        let destination = paths.asset_cog(digest);
-        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
-        std::fs::write(&destination, b"a separately created file").unwrap();
-        write_promotion_journal(
-            &paths,
-            &job_id,
-            &PromotionJournal {
-                entries: vec![PromotionEntry {
-                    interpretation_id: "interp-unproven".to_string(),
-                    sha256: digest.to_string(),
-                    destination: destination
-                        .strip_prefix(paths.root())
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                    witness: None,
-                }],
-            },
-        )
-        .unwrap();
-
-        drop(library);
-        let error = LidarLibrary::open(&root)
-            .err()
-            .expect("unproven ownership fails opening");
-        assert!(error.contains("recovery is incomplete"), "{error}");
-        assert!(
-            destination.exists(),
-            "an unproven destination is preserved, never deleted"
-        );
-        assert_eq!(
-            std::fs::read(&destination).unwrap(),
-            b"a separately created file"
-        );
-        assert!(
-            journal_of_paths(&paths, &job_id).is_some(),
-            "the journal is retained"
-        );
-
-        // Removing the unresolvable intent lets reopening finish; the orphan
-        // file itself stays, because general reclamation is deferred.
-        let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_id));
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        assert!(destination.exists());
-        drop(reopened);
-
-        // A stale intent that does record a witness is still not proof: the
-        // destination is a separate file with the same content, so identity
-        // fails and the file is preserved with the uncertainty named.
-        let witness = staging.sources[0]
-            .source_cog
-            .as_ref()
-            .expect("retained COG")
-            .relative_path
-            .clone()
-            .expect("the retained COG records its job-relative location");
-        write_promotion_journal(
-            &paths,
-            &job_id,
-            &PromotionJournal {
-                entries: vec![PromotionEntry {
-                    interpretation_id: "interp-stale".to_string(),
-                    sha256: digest.to_string(),
-                    destination: destination
-                        .strip_prefix(paths.root())
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                    witness: Some(witness),
-                }],
-            },
-        )
-        .unwrap();
-        let error = LidarLibrary::open(&root)
-            .err()
-            .expect("a foreign destination fails opening even with a witness");
-        assert!(error.contains("recovery is incomplete"), "{error}");
-        assert!(
-            error.contains("is not the file this job linked"),
-            "the uncertainty is named: {error}"
-        );
-        assert_eq!(
-            std::fs::read(&destination).unwrap(),
-            b"a separately created file",
-            "content equality is not identity"
-        );
-        assert!(journal_of_paths(&paths, &job_id).is_some());
-
-        let _ = std::fs::remove_file(promotion_journal_path(&paths, &job_id));
-        let reopened = LidarLibrary::open(&root).expect("library reopens cleanly");
-        assert!(destination.exists());
-        drop(reopened);
-        let _ = std::fs::remove_dir_all(&root);
+    /// The catalogue's view of one source: its committed reference, when any.
+    fn committed_asset(library: &LidarLibrary, interp_hash: &str) -> Option<String> {
+        let connection = library.catalogue().unwrap();
+        catalogue::interpretation_cog(&connection, &format!("interp-{interp_hash}"))
+            .unwrap()
+            .map(|(row, _)| row.sha256)
     }
 
-    /// A tile whose samples read reduced cells keeps every source that reaches
-    /// those footprints, including one that lies outside the sample centres.
-    ///
-    /// Tile 14/8192/8191 starts at the layer anchor with a 1 m lattice, so its
-    /// samples are ~9.55 native cells apart and the first one is minified to
-    /// level 3. That sample reads reduced cells (0, 0) and (1, 0) plus their
-    /// vertical neighbours, whose footprints cover native cells `[0, 16)` while
-    /// the mapped sample centres start at cell 4. A candidate prefilter built
-    /// from the sample centres alone therefore drops a source holding only
-    /// cells 0..2 and draws nothing, even though those cells are exactly what
-    /// the first reduction cell averages.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint() {
-        use super::super::display::ColorRamp;
-        use super::super::tiles;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("ordered-tile-edge"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        // The layer anchor is the north-west corner of the tile, so both
-        // sources sit on lattice cells [0, 2) — the footprint of the first
-        // reduced cell, reached by no sample centre.
-        let bounds = tiles::tile_bounds_3857(14, 8192, 8191);
-        let bottom = write_placed_fixture(
-            &engine,
-            &root,
-            "edge-bottom",
-            bounds[0],
-            bounds[3],
-            2,
-            2,
-            -9999.0,
-            7.0,
-        );
-        // Imported second, so it is the topmost occurrence and wins where the
-        // two overlap: the composed cells are 7 above 9 below the seam.
-        let top = write_placed_fixture(
-            &engine,
-            &root,
-            "edge-top",
-            bounds[0],
-            bounds[3] - 1.0,
-            2,
-            2,
-            -9999.0,
-            9.0,
-        );
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "tile edge",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (first_job, first_staging) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        library.prepare_apply(&first_job).expect("first review");
-        apply_import(&library, &first_staging, true, false, &cancel).expect("first applies");
-        let (second_job, second_staging) = stage_review(&library, &layer_id, &[top], &cancel);
-        library.prepare_apply(&second_job).expect("second review");
-        let stacked =
-            apply_import(&library, &second_staging, true, false, &cancel).expect("second applies");
-
-        // The published composition overlaps by two cells, so its exact values
-        // are 7 and 9 rather than either source's constant.
-        let head = head_of(&library, &layer_id);
-        assert_eq!(head.id, stacked.generation_id);
-        assert_eq!(head.coverage_cells, None);
-        assert_eq!(head.min_value, None);
-        assert_eq!(head.max_value, None);
-        assert_eq!(head.display_min_value, Some(7.0));
-        assert_eq!(head.display_max_value, Some(9.0));
-
-        let request = |z: u32, x: u32, y: u32| tiles::TileRequest {
-            entity_kind: "source".to_string(),
-            entity_id: layer_id.clone(),
-            generation_id: stacked.generation_id.clone(),
-            style: "elevation".to_string(),
-            z,
-            x,
-            y,
-        };
-
-        // The minified tile resolves its first reduced cell from both sources:
-        // the composed cell mean is (2 * 7 + 4 * 9) / 6, and only that cell
-        // holds coverage, so exactly the corner sample is painted. Its index is
-        // the one the fixture was placed against: the floor of the derived index
-        // sits on a tile boundary where the floating-point value rounds down.
-        let png = match tiles::render_tile(&library, &request(14, 8192, 8191), &cancel).unwrap() {
-            tiles::TileOutcome::Png(bytes) => bytes,
-            tiles::TileOutcome::Empty => {
-                panic!("the two edge sources contribute to the first level-3 reduction cell")
-            }
-        };
-        let (width, height, rgba) = decode_tile(&png);
-        assert_eq!((width, height), (tiles::TILE_PIXELS, tiles::TILE_PIXELS));
-        let ramp = ColorRamp::elevation_range(7.0, 9.0);
-        let composed = (2.0 * 7.0 + 4.0 * 9.0) / 6.0;
-        let expected = ramp.colour_for(composed).expect("8.33 is inside the ramp");
-        let painted: Vec<[u8; 4]> = rgba
-            .chunks_exact(4)
-            .filter(|pixel| pixel[3] == 255)
-            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
-            .collect();
-        assert_eq!(
-            painted.len(),
-            1,
-            "only the corner sample interpolates the one occupied reduced cell"
-        );
-        assert_eq!(
-            (painted[0][0], painted[0][1], painted[0][2]),
-            expected,
-            "the painted sample is the composed overlap mean"
-        );
-
-        // Native scale reads the same composition through its own two-cell
-        // window: the source is still found and the tile is mostly transparent.
-        // The tile is the one holding the source's own centre, away from the
-        // boundary that makes a derived index ambiguous.
-        let world = {
-            let world = tiles::tile_bounds_3857(0, 0, 0);
-            world[2] - world[0]
-        };
-        let span = world / f64::from(1u32 << 17);
-        let half = world / 2.0;
-        let png = match tiles::render_tile(
-            &library,
-            &request(
-                17,
-                ((bounds[0] + 1.0 + half) / span).floor() as u32,
-                ((half - bounds[3] + 1.0) / span).floor() as u32,
-            ),
-            &cancel,
-        )
-        .unwrap()
-        {
-            tiles::TileOutcome::Png(bytes) => bytes,
-            tiles::TileOutcome::Empty => panic!("the source is present at native scale"),
-        };
-        let (_, _, rgba) = decode_tile(&png);
-        let painted = rgba.chunks_exact(4).filter(|pixel| pixel[3] == 255).count();
-        assert!(painted > 0, "the source draws at native scale");
-        assert!(
-            painted < (tiles::TILE_PIXELS * tiles::TILE_PIXELS) as usize,
-            "a 2x2 m source does not fill a 305 m tile"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
+    fn journal_of(library: &LidarLibrary, job_id: &str) -> Option<PromotionJournal> {
+        let path = promotion_journal_path(&library.inner.paths, job_id);
+        std::fs::read_to_string(&path)
+            .ok()
+            .map(|json| serde_json::from_str(&json).expect("journal parses"))
     }
 
-    /// Decode a rendered tile into RGBA8 pixels.
-    fn decode_tile(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
-        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-            .expect("tile is a PNG")
-            .to_rgba8();
-        (image.width(), image.height(), image.into_raw())
+    /// Journal contents by path, for assertions after the library is dropped.
+    fn journal_of_paths(paths: &LidarPaths, job_id: &str) -> Option<PromotionJournal> {
+        std::fs::read_to_string(promotion_journal_path(paths, job_id))
+            .ok()
+            .map(|json| serde_json::from_str(&json).expect("journal parses"))
+    }
+
+    /// Journal file of one job, next to the payloads it owns.
+    fn promotion_journal_path(paths: &LidarPaths, job_id: &str) -> PathBuf {
+        paths.job_dir(job_id).join("promotions.json")
+    }
+
+    fn generation_count(library: &LidarLibrary, layer_id: &str) -> i64 {
+        let connection = library.catalogue().unwrap();
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_layer_generations WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .unwrap()
     }
 }

@@ -1299,28 +1299,15 @@ mod tests {
                 )
                 .unwrap();
             let job_id = library.record_import_job(&layer_id).unwrap();
-            let output = super::super::import::stage_import(
+            super::super::import::stage_and_publish(
                 &library,
                 &job_id,
                 &layer_id,
                 std::slice::from_ref(&source),
+                false,
                 &cancel,
             )
             .unwrap();
-            assert!(output.review.compatible, "{:?}", output.review.issues);
-            library.finish_staging(
-                &job_id,
-                Ok(super::super::import::StagingOutput {
-                    review: output.review.clone(),
-                }),
-            );
-            let staging: super::super::import::StagedImport = serde_json::from_str(
-                &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                    .unwrap(),
-            )
-            .unwrap();
-            library.prepare_apply(&job_id).unwrap();
-            super::super::import::apply_import(&library, &staging, true, false, &cancel).unwrap();
             layer_id
         };
 

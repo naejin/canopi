@@ -297,29 +297,20 @@ export type LidarGenerationHistoryEntry = {
 	restorable: boolean,
 };
 
-/**
- *  Decision-specific comparison rendered from the same staged import that
- *  will be applied. Both images use one value scale.
- */
-export type LidarImportDecisionPreview = {
-	add_uncovered: boolean,
-	replace_overlap: boolean,
-	before_preview_path: string | null,
-	after_preview_path: string,
-};
-
 export type LidarImportJob = {
 	job_id: string,
 	layer_id: string,
 	state: LidarImportJobState,
-	review: LidarImportReview | null,
 	message: string | null,
 	progress: LidarImportProgress | null,
 };
 
 /**
- *  Import job states. `awaiting_review` carries the Before/After plan; only
- *  an explicit apply publishes a generation.
+ *  Import job states.
+ *
+ *  `Staging` is preparation, `Applying` is publication, and the terminal states
+ *  report the outcome. `AwaitingReview` is retained in the vocabulary for the
+ *  superseded review route, which no production caller enters.
  */
 export type LidarImportJobState = "Staging" | "AwaitingReview" | "Applying" | "Complete" | "Cancelled" | "Failed";
 
@@ -330,43 +321,6 @@ export type LidarImportProgress = {
 
 // Backend-owned phases for determinate import publication progress.
 export type LidarImportProgressPhase = "ComposingLayer" | "PreparingRaster" | "RenderingMap" | "Finalizing";
-
-/**
- *  Review payload for one staged import. Coverage counts are exact valid
- *  pixels classified against the destination layer over the union grid.
- */
-export type LidarImportReview = {
-	job_id: string,
-	layer_id: string,
-	sources: LidarImportSourceFacts[],
-	uncovered_cells: string,
-	overlap_cells: string,
-	invalid_cells: string,
-	compatible: boolean,
-	issues: string[],
-	/**
-	 *  Filesystem paths of the fixed-style Before/After preview images; the
-	 *  frontend resolves them to local asset URLs. `before` is absent when
-	 *  the destination layer has no accepted coverage yet.
-	 */
-	before_preview_path: string | null,
-	after_preview_path: string | null,
-};
-
-// Admission facts for one staged source file.
-export type LidarImportSourceFacts = {
-	filename: string,
-	sha256: string,
-	size_bytes: string,
-	width: number,
-	height: number,
-	pixel_size_m: number,
-	nodata: number | null,
-	value_range: [number, number],
-	// Accepted into this staging; false entries carry `issues`.
-	compatible: boolean,
-	issues: string[],
-};
 
 /**
  *  The ordered composition and published versions of one Data Layer.

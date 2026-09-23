@@ -248,62 +248,31 @@ fn e2e_import_publish_slope_restart_reuse() {
         )
         .expect("layer created");
 
-    // 2. Stage the real TIFF: probe, valid mask, classification, previews.
+    // 2. Prepare the real TIFF: probe, valid mask, controlled COG, source facts.
+    //    Preparation is the validation step now, so an unusable fixture fails
+    //    here rather than at a review.
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
-    let output = import::stage_import(
-        &library,
-        &job_id,
-        &layer_id,
-        std::slice::from_ref(&fixture),
-        &cancel,
-    )
-    .expect("staging succeeds");
-    let review = &output.review;
-    assert!(
-        review.compatible,
-        "fixture should be compatible: {:?}",
-        review.issues
-    );
-    assert!(
-        review.uncovered_cells > 3_000_000,
-        "1km² at 0.5m ≈ 4M cells, got {}",
-        review.uncovered_cells
-    );
-    assert!(
-        review.before_preview_path.is_none(),
-        "empty layer has no before preview"
-    );
-    assert!(
-        review.after_preview_path.is_some(),
-        "after preview rendered"
-    );
-    assert_png_has_visible_pixels(
-        &engine,
-        std::path::Path::new(review.after_preview_path.as_deref().unwrap()),
-    );
+    let staging = {
+        import::stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            std::slice::from_ref(&fixture),
+            &cancel,
+        )
+        .expect("the fixture is admitted");
+        import::read_staged_import(&library, &job_id).expect("staged payload")
+    };
     println!(
-        "staged: uncovered={} overlap={} invalid={}",
-        review.uncovered_cells, review.overlap_cells, review.invalid_cells
+        "staged: {} source(s), {} valid cells",
+        staging.sources.len(),
+        staging.sources[0].valid_cells.unwrap_or(0)
     );
 
-    // 3. Apply the accepted import: publishes a generation + display tiles.
-    library.finish_staging(
-        &job_id,
-        Ok(import::StagingOutput {
-            review: review.clone(),
-        }),
-    );
-    let staging: import::StagedImport = {
-        let json =
-            std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-                .unwrap();
-        serde_json::from_str(&json).unwrap()
-    };
-    library
-        .prepare_apply(&job_id)
-        .expect("review commit accepted");
+    // 3. Publish it: one generation plus display tiles.
     let outcome =
         import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
+    library.finish_import_sources(&job_id, &layer_id, Ok(()));
     assert!(outcome.changed);
     let completed_job = library
         .get_import_job(&job_id)
@@ -441,54 +410,27 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(snapshot.layers[0].name, "IGN ground renamed");
     assert_eq!(snapshot.analyses[0].source_layer_id, layer_id);
 
-    // Reimport the identical source as overlap-only replacement. The
-    // decision preview must match those choices and use readable images.
+    // Reimport the identical source as a replacement of the same bytes. There
+    // is no decision preview to render: preparation validates the batch and
+    // publication replaces the head.
     let replacement_job = reopened
         .record_import_job(&layer_id)
         .expect("replacement job");
-    let replacement = import::stage_import(
-        &reopened,
-        &replacement_job,
-        &layer_id,
-        std::slice::from_ref(&fixture),
-        &cancel,
-    )
-    .expect("replacement staging succeeds");
-    assert_eq!(replacement.review.uncovered_cells, 0);
-    assert!(replacement.review.overlap_cells > 3_000_000);
-    reopened.finish_staging(
-        &replacement_job,
-        Ok(import::StagingOutput {
-            review: replacement.review.clone(),
-        }),
-    );
-    let staged_replacement: import::StagedImport = serde_json::from_str(
-        &std::fs::read_to_string(
-            reopened
-                .inner
-                .paths
-                .job_dir(&replacement_job)
-                .join("staging.json"),
+    let staged_replacement = {
+        import::stage_import(
+            &reopened,
+            &replacement_job,
+            &layer_id,
+            std::slice::from_ref(&fixture),
+            &cancel,
         )
-        .unwrap(),
-    )
-    .unwrap();
-    let decision = reopened
-        .preview_import_decision(&replacement_job)
-        .expect("overlap-only decision preview renders");
-    assert!(!decision.add_uncovered);
-    assert!(decision.replace_overlap);
-    assert_png_has_visible_pixels(
-        &engine,
-        std::path::Path::new(decision.before_preview_path.as_deref().unwrap()),
-    );
-    assert_png_has_visible_pixels(&engine, std::path::Path::new(&decision.after_preview_path));
-    reopened
-        .prepare_apply(&replacement_job)
-        .expect("replacement review accepted");
+        .expect("the replacement is admitted");
+        import::read_staged_import(&reopened, &replacement_job).expect("staged payload")
+    };
     let replacement_outcome =
         import::apply_import(&reopened, &staged_replacement, false, true, &cancel)
             .expect("same-file replacement publishes");
+    reopened.finish_import_sources(&replacement_job, &layer_id, Ok(()));
     assert!(replacement_outcome.changed);
     let replacement_head = {
         let connection = reopened.catalogue().unwrap();
@@ -574,34 +516,21 @@ fn e2e_sparse_generation_lifecycle() {
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
-    let output = import::stage_import(
-        &library,
-        &job_id,
-        &layer_id,
-        std::slice::from_ref(&fixture),
-        &cancel,
-    )
-    .expect("staging succeeds");
-    assert!(
-        output.review.compatible,
-        "fixture is compatible: {:?}",
-        output.review.issues
-    );
-    let reviewed_cells = output.review.uncovered_cells;
-    assert!(reviewed_cells > 3_000_000, "4M-cell tile: {reviewed_cells}");
-    library.finish_staging(
-        &job_id,
-        Ok(import::StagingOutput {
-            review: output.review.clone(),
-        }),
-    );
-    let staging: import::StagedImport = serde_json::from_str(
-        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-            .unwrap(),
-    )
-    .unwrap();
-    library.prepare_apply(&job_id).expect("review accepted");
+    let staging = {
+        import::stage_import(
+            &library,
+            &job_id,
+            &layer_id,
+            std::slice::from_ref(&fixture),
+            &cancel,
+        )
+        .expect("the fixture is admitted");
+        import::read_staged_import(&library, &job_id).expect("staged payload")
+    };
+    let staged_cells = staging.sources[0].valid_cells.unwrap_or(0);
+    assert!(staged_cells > 3_000_000, "4M-cell tile: {staged_cells}");
     let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    library.finish_import_sources(&job_id, &layer_id, Ok(()));
     assert!(applied.changed);
 
     let head = {
@@ -933,40 +862,30 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
-    let staged = import::stage_import(&library, &job_id, &layer_id, &files, &cancel)
-        .expect("staging succeeds");
-    let review = &staged.review;
-    assert!(
-        review.compatible,
-        "every tile must be admitted: {:?}",
-        review.issues
-    );
-    let staged_cells = review.uncovered_cells;
+    let staging = {
+        import::stage_import(&library, &job_id, &layer_id, &files, &cancel)
+            .expect("every tile is admitted");
+        import::read_staged_import(&library, &job_id).expect("staged payload")
+    };
+    let staged_cells: u64 = staging
+        .sources
+        .iter()
+        .map(|source| source.valid_cells.unwrap_or(0))
+        .sum();
     println!(
-        "staged: uncovered={} overlap={} invalid={}",
-        review.uncovered_cells, review.overlap_cells, review.invalid_cells
+        "staged: {staged_cells} valid cells across {} tiles",
+        staging.sources.len()
     );
     assert_eq!(
         staged_cells, 48_000_000,
         "twelve 2000x2000 tiles aligned into an 8000x6000 union"
     );
-    library.finish_staging(
-        &job_id,
-        Ok(import::StagingOutput {
-            review: review.clone(),
-        }),
-    );
-    let staging: import::StagedImport = serde_json::from_str(
-        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-            .unwrap(),
-    )
-    .unwrap();
     assert_eq!(
         (staging.union_grid.width, staging.union_grid.height),
         (8000, 6000)
     );
-    library.prepare_apply(&job_id).expect("review accepted");
     let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    library.finish_import_sources(&job_id, &layer_id, Ok(()));
     assert!(applied.changed);
 
     let head = {
@@ -1230,30 +1149,11 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
         )
         .expect("layer created");
     let job_id = library.record_import_job(&layer_id).expect("job recorded");
-    let staged = import::stage_import(&library, &job_id, &layer_id, &[plane], &cancel)
-        .expect("staging succeeds");
-    let review = &staged.review;
-    assert!(
-        review.compatible,
-        "the plane must be admitted: {:?}",
-        review.issues
-    );
-    println!(
-        "staged: uncovered={} overlap={} invalid={}",
-        review.uncovered_cells, review.overlap_cells, review.invalid_cells
-    );
-    assert_eq!(review.overlap_cells, 0, "a single source overlaps nothing");
-    library.finish_staging(
-        &job_id,
-        Ok(import::StagingOutput {
-            review: review.clone(),
-        }),
-    );
-    let staging: import::StagedImport = serde_json::from_str(
-        &std::fs::read_to_string(library.inner.paths.job_dir(&job_id).join("staging.json"))
-            .unwrap(),
-    )
-    .unwrap();
+    let staging = {
+        import::stage_import(&library, &job_id, &layer_id, &[plane], &cancel)
+            .expect("the plane is admitted");
+        import::read_staged_import(&library, &job_id).expect("staged payload")
+    };
     assert_eq!(
         (staging.union_grid.width, staging.union_grid.height),
         (20_000, 20_000),
@@ -1261,10 +1161,10 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     );
     assert_eq!(
         staging.processing_cells, 400_000_000,
-        "the review is admitted for exactly the plane's own grid"
+        "the batch is admitted for exactly the plane's own grid"
     );
-    library.prepare_apply(&job_id).expect("review accepted");
     let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    library.finish_import_sources(&job_id, &layer_id, Ok(()));
     assert!(applied.changed);
 
     let head = {
@@ -1278,34 +1178,27 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
         manifest.format,
         import::GenerationStorageFormat::OrderedMembersV1
     );
-    println!(
-        "applied: {} valid cells, {} invalid, range {:?}..{:?}",
+    // A single-source batch carries its member's exact facts, so the published
+    // coverage is the source's own valid-cell count.
+    let published_cells =
         head.coverage_cells
-            .expect("this fixture measured its coverage"),
-        review.invalid_cells,
-        head.min_value,
-        head.max_value
+            .expect("a one-member composition carries its member's exact count") as u64;
+    println!(
+        "applied: {published_cells} valid cells, range {:?}..{:?}",
+        head.min_value, head.max_value
     );
     // The plane is 400,000,000 cells and its four declared holes are exactly
     // 3,020,700 of them, so coverage is the grid minus the holes. Checking both
     // numbers is what proves the holes were excluded rather than counted.
-    // `GenerationRow::coverage_cells` is i64 while the review's own counters are
-    // u64, so both sides are compared in u64.
     let hole_cells: u64 = PLANE_HOLES
         .iter()
         .map(|(y0, y1, x0, x1)| ((y1 - y0) * (x1 - x0)) as u64)
         .sum();
     assert_eq!(hole_cells, 3_020_700, "the declared holes' own area");
     assert_eq!(
-        head.coverage_cells
-            .expect("this fixture measured its coverage") as u64
-            + review.invalid_cells,
+        published_cells + hole_cells,
         400_000_000,
         "valid coverage plus the declared holes is the whole grid"
-    );
-    assert_eq!(
-        review.invalid_cells, hole_cells,
-        "the invalid count is the declared holes and nothing else"
     );
     // The composed range is the plane's own analytic range: `z` rises with x and
     // falls with y, so the lowest sample is at the far south-west corner and the

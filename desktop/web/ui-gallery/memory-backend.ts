@@ -64,44 +64,20 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
     bounds: lidarBounds,
   }],
 }]
-function createGalleryLidarReview(layerId: string): LidarImportJob {
+function createGalleryLidarImport(layerId: string): LidarImportJob {
   return {
     job_id: 'gallery-import',
     layer_id: layerId,
-    state: 'AwaitingReview',
+    state: 'Staging',
     message: null,
-    progress: null,
-    review: {
-      job_id: 'gallery-import',
-      layer_id: layerId,
-      sources: [{
-        filename: state === 'long' || state === 'lidar-review'
-          ? 'LHD_FXX_0446_6807_MNT_O_0M50_LAMB93_IGN69_without_extension'
-          : 'IGN_0446_6807',
-        sha256: 'gallery-sha256',
-        size_bytes: '16000000',
-        width: 2000,
-        height: 2000,
-        pixel_size_m: 0.5,
-        nodata: -9999,
-        value_range: [131.2, 287.8],
-        compatible: true,
-        issues: [],
-      }],
-      uncovered_cells: '3125000',
-      overlap_cells: '875000',
-      invalid_cells: '0',
-      compatible: true,
-      issues: [],
-      before_preview_path: '/lidar-prototype/assets/mnt-elevation-0.png',
-      after_preview_path: '/lidar-prototype/assets/mnt-elevation-1.png',
-    },
+    progress: { phase: 'PreparingRaster', percent: 42 },
   }
 }
 
+
 let lidarImportJob: LidarImportJob | null = null
-if (state === 'lidar-review' || state === 'lidar-progress') {
-  lidarImportJob = createGalleryLidarReview('lidar-ground')
+if (state === 'lidar-progress') {
+  lidarImportJob = createGalleryLidarImport('lidar-ground')
 }
 if (state === 'lidar-progress' && lidarImportJob) {
   lidarImportJob = {
@@ -196,7 +172,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = undefined
       break
     case 'lidar_stage_import':
-      lidarImportJob = createGalleryLidarReview(String(args.layerId))
+      lidarImportJob = createGalleryLidarImport(String(args.layerId))
       activity.value = 'Staged the sample raster in memory.'
       result = lidarImportJob.job_id
       break

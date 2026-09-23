@@ -908,6 +908,11 @@ pub struct ImportJobRow {
     pub id: String,
     pub layer_id: String,
     pub state: String,
+    /// Stored review payload of the superseded review route.
+    ///
+    /// Retained in the schema so an upgraded catalogue keeps its history, and
+    /// deliberately unread: nothing produces a review any more.
+    #[allow(dead_code)]
     pub review_json: Option<String>,
     pub message: Option<String>,
     pub progress_phase: Option<String>,
@@ -1520,30 +1525,6 @@ pub fn upsert_footprint(
         .map_err(|e| format!("Failed to index footprint: {e}"))
 }
 
-/// Interpretation ids whose footprints intersect the given rect; the exact
-/// mask decides admission, this only narrows candidates.
-pub fn footprint_candidates(
-    connection: &Connection,
-    bounds: [f64; 4],
-) -> Result<Vec<String>, String> {
-    let mut statement = connection
-        .prepare(
-            "SELECT f.interpretation_id FROM lidar_source_footprints f
-             JOIN lidar_footprint_rtree r ON r.id = f.id
-             WHERE r.min_x <= ?1 AND r.max_x >= ?2 AND r.min_y <= ?3 AND r.max_y >= ?4",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = statement
-        .query_map(
-            rusqlite::params![bounds[2], bounds[0], bounds[3], bounds[1]],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(rows)
-}
-
 pub fn now_iso() -> String {
     // Unix milliseconds; identity fields are UUIDs, timestamps are ordering
     // hints only, so wall-clock precision is sufficient.
@@ -1613,9 +1594,6 @@ pub fn replace_interpretation_regions(
         .map_err(|e| format!("Failed to commit interpretation regions: {e}"))
 }
 
-/// One paged occupied-region row: block coordinates plus its aggregate.
-pub type InterpretationRegionRow = (i64, i64, i64, f64, f64, f64);
-
 /// One ordered page of occupied-region rows.
 #[allow(dead_code)]
 /// One bounded page of a source's occupied regions, in `(block_y, block_x)`
@@ -1645,69 +1623,9 @@ pub fn asset_reference_exists(connection: &Connection, sha256: &str) -> Result<b
         .map_err(|e| format!("Failed to read asset references: {e}"))
 }
 
-/// Whether one interpretation has any occupied-region rows.
-///
-/// A review decides between the occupied index and an extent scan from this,
-/// without loading the index itself.
-pub fn interpretation_has_regions(
-    connection: &Connection,
-    interpretation_id: &str,
-) -> Result<bool, String> {
-    connection
-        .query_row(
-            "SELECT 1 FROM lidar_interpretation_regions
-             WHERE interpretation_id = ?1 LIMIT 1",
-            [interpretation_id],
-            |_| Ok(()),
-        )
-        .optional()
-        .map(|row| row.is_some())
-        .map_err(|e| format!("Failed to read interpretation regions: {e}"))
-}
-
-pub fn interpretation_region_keyset_page(
-    connection: &Connection,
-    interpretation_id: &str,
-    after: Option<(i64, i64)>,
-    limit: usize,
-) -> Result<Vec<InterpretationRegionRow>, String> {
-    let (after_y, after_x) = match after {
-        Some((block_y, block_x)) => (Some(block_y), Some(block_x)),
-        None => (None, None),
-    };
-    let mut statement = connection
-        .prepare(
-            "SELECT block_x, block_y, valid_cells, min_value, max_value, sum_value
-             FROM lidar_interpretation_regions
-             WHERE interpretation_id = ?1
-               AND (?2 IS NULL OR block_y > ?2 OR (block_y = ?2 AND block_x > ?3))
-             ORDER BY block_y, block_x
-             LIMIT ?4",
-        )
-        .map_err(|e| format!("Failed to prepare region page: {e}"))?;
-    statement
-        .query_map(
-            rusqlite::params![
-                interpretation_id,
-                after_y,
-                after_x,
-                i64::try_from(limit).unwrap_or(i64::MAX),
-            ],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, f64>(3)?,
-                    row.get::<_, f64>(4)?,
-                    row.get::<_, f64>(5)?,
-                ))
-            },
-        )
-        .map_err(|e| format!("Failed to read region page: {e}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to read region page: {e}"))
-}
+/// One stored region row, for tests that read the region index directly.
+#[cfg(test)]
+pub type InterpretationRegionRow = (i64, i64, i64, f64, f64, f64);
 
 #[cfg(test)]
 pub fn interpretation_region_page(
@@ -2518,66 +2436,6 @@ mod tests {
         );
         drop(connection);
         std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn rtree_footprints_narrow_candidates_to_intersecting_cells() {
-        let dir = std::env::temp_dir().join(format!("canopi-footprints-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let connection = open(&dir.join("catalogue.sqlite")).expect("catalogue opens");
-
-        connection
-            .execute(
-                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
-                 VALUES('sha-a', 'a.tif', 1, '{}', '0')",
-                [],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_sources(sha256, original_filename, size_bytes, probe_json, imported_at)
-                 VALUES('sha-b', 'b.tif', 1, '{}', '0')",
-                [],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_interpretations(
-                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
-                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
-                 VALUES('interp-a', 'sha-a', 1, 'ground-elevation', 'm', 1, 0, 'x', 'u', -9999,
-                        '[0,1,0,0,0,-1]', 10, 10, 'hash-a')",
-                [],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_interpretations(
-                    id, source_sha256, band_index, measurement_kind, units, scale, offset,
-                    crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
-                 VALUES('interp-b', 'sha-b', 1, 'ground-elevation', 'm', 1, 0, 'x', 'u', -9999,
-                        '[100,1,0,100,0,-1]', 10, 10, 'hash-b')",
-                [],
-            )
-            .unwrap();
-
-        upsert_footprint(&connection, "interp-a", "lyr-1", [0.0, 0.0, 10.0, 10.0]).unwrap();
-        upsert_footprint(
-            &connection,
-            "interp-b",
-            "lyr-1",
-            [100.0, 100.0, 110.0, 110.0],
-        )
-        .unwrap();
-
-        let near_a = footprint_candidates(&connection, [5.0, 5.0, 6.0, 6.0]).unwrap();
-        assert_eq!(near_a, vec!["interp-a".to_string()]);
-        let near_b = footprint_candidates(&connection, [101.0, 101.0, 102.0, 102.0]).unwrap();
-        assert_eq!(near_b, vec!["interp-b".to_string()]);
-        let empty = footprint_candidates(&connection, [500.0, 500.0, 501.0, 501.0]).unwrap();
-        assert!(empty.is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -359,51 +359,6 @@ pub fn valid_mask_from_f32_raw_checked(
     Ok(mask)
 }
 
-/// Classify incoming valid pixels against current layer coverage.
-#[derive(Debug, Clone, Copy)]
-pub struct CoverageClassification {
-    pub uncovered_cells: u64,
-    pub overlap_cells: u64,
-    pub invalid_cells: u64,
-}
-
-// The review no longer classifies a whole union buffer: `import::review_coverage`
-// counts the same quantities block by block. The buffer-sized helper is kept
-// because its regression tests pin those meanings.
-#[allow(dead_code)]
-pub fn classify_coverage(
-    incoming: &ValidMask,
-    layer: Option<&ValidMask>,
-) -> Result<CoverageClassification, String> {
-    let mut uncovered_cells = 0u64;
-    let mut overlap_cells = 0u64;
-    let mut invalid_cells = 0u64;
-    if layer.is_some_and(|layer| layer.width != incoming.width || layer.height != incoming.height) {
-        return Err(
-            "coverage classification requires the source grid to match the layer grid".to_string(),
-        );
-    }
-    for y in 0..incoming.height {
-        for x in 0..incoming.width {
-            if !incoming.get(x, y) {
-                invalid_cells += 1;
-                continue;
-            }
-            let covered = layer.is_some_and(|layer| layer.get(x, y));
-            if covered {
-                overlap_cells += 1;
-            } else {
-                uncovered_cells += 1;
-            }
-        }
-    }
-    Ok(CoverageClassification {
-        uncovered_cells,
-        overlap_cells,
-        invalid_cells,
-    })
-}
-
 /// Compute the smallest grid on the same aligned lattice that covers both
 /// extents. Requires compatible grids.
 pub fn union_grid(a: &RasterGrid, b: &RasterGrid) -> Result<RasterGrid, String> {
@@ -516,20 +471,6 @@ mod tests {
     }
 
     #[test]
-    fn classification_counts_uncovered_overlap_invalid() {
-        let incoming = ValidMask::from_bytes(2, 1, vec![1, 1]).unwrap();
-        let layer = ValidMask::from_bytes(2, 1, vec![1, 0]).unwrap();
-        let class = classify_coverage(&incoming, Some(&layer)).unwrap();
-        assert_eq!(class.uncovered_cells, 1);
-        assert_eq!(class.overlap_cells, 1);
-        assert_eq!(class.invalid_cells, 0);
-
-        let empty_layer: Option<&ValidMask> = None;
-        let class = classify_coverage(&incoming, empty_layer).unwrap();
-        assert_eq!(class.uncovered_cells, 2);
-    }
-
-    #[test]
     fn erosion_shrinks_to_complete_neighborhoods() {
         let mut mask = ValidMask::empty(4, 4);
         for y in 0..4 {
@@ -621,34 +562,6 @@ mod tests {
         assert!(remapped.get(2, 0));
         assert!(!remapped.get(0, 0));
         assert_eq!(remapped.count_valid(), 1);
-    }
-
-    #[test]
-    fn classification_over_union_grid_extents() {
-        // Layer covers x 0..2; incoming covers x 1..3 on the same lattice.
-        let layer_grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let incoming_grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [1.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let union = union_grid(&layer_grid, &incoming_grid).unwrap();
-        let mut layer_mask = ValidMask::empty(2, 1);
-        layer_mask.set(0, 0, true);
-        layer_mask.set(1, 0, true);
-        let mut incoming = ValidMask::empty(2, 1);
-        incoming.set(0, 0, true);
-        incoming.set(1, 0, true);
-        let layer_union = remap_mask(&layer_mask, &layer_grid, &union).unwrap();
-        let incoming_union = remap_mask(&incoming, &incoming_grid, &union).unwrap();
-        let class = classify_coverage(&incoming_union, Some(&layer_union)).unwrap();
-        // x=1 overlap, x=2 uncovered, x=0 outside incoming.
-        assert_eq!(class.overlap_cells, 1);
-        assert_eq!(class.uncovered_cells, 1);
     }
 
     // -----------------------------------------------------------------
