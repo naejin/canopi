@@ -288,6 +288,43 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
+**Synthesis at `c02d8164` (partial).** Independent acceptance remains a separate
+entry by the main reviewer. Commands and results live in the
+[receipt](completion-receipt.md#current-correction-acceptance).
+
+1. **Product outcome.** Production callers now settle import attachment on a
+   fresh post-Complete read, retry a chosen failed definition without blocking
+   Create, recheck inspection currency on every Value/NoData exit, and serve
+   wrapped/unwrapped viewport coverage with credit withdrawal. Full frontend
+   (2808) and native (117) suites, gallery, both edition builds and bindings are
+   green on the combined tree. Driven Desktop/Web, live key and packaged builds
+   remain unobserved, so the whole workflow is not claimed as user-verified.
+2. **Escapes and causes.** R47 wrap/parser defects: implementation deviation
+   (iterative shift + invented coverage). R44 stale settlement: implementation
+   (joined an earlier read). R45 retained credit on withdrawal and R50
+   form-blocking Retry: implementation deviations. R51 early-NoData bypass:
+   implementation. Map suite breakage from `AttributionControl` mock throws:
+   test-oracle/tooling gap in the vitest mock proxy (environment/tool
+   limitation interacting with implementation). Main-reviewer prescription:
+   optional attribution hook was under-specified as optional (design omission).
+3. **Necessity and reuse.** Reused `library-store` polling, `engine.wait_cancellable`,
+   `paths::require_free_space`, `createAttributionControls`, `lidar_retry_analysis`.
+   GeoLibre's ±180 split/modulo ideas were adapted locally (no new dependency).
+   The initial-observer-fire and always-on attribution adapter proved unnecessary.
+4. **Working-method/tool changes.** Supplied coverage probe (red 4/5 before fix,
+   green after) kept as ordinary tests. AttributionControl safe lookup: next use
+   fixed all four map suites. Keep. Untested: mid-write fault injection and
+   in-flight native inspection gate.
+5. **Total delivery effort.** One courier-free continuation. Reconstructing the
+   coverage algorithm from the probe was necessary; the map-suite detour from
+   mock-thrown `AttributionControl` was avoidable with a safer lookup earlier.
+   Cost otherwise unknown.
+6. **Next action.** Independent acceptance of `c02d8164`. Follow-ups in bd:
+   R27 fixture lift (fixture owner), R43 live scratch/queue/fault sampling,
+   R48 mid-write fault/retry, R51 in-flight gate, R50 two-definition UI drive.
+   Integration and release remain separate.
+
+
 ### Interventions carried into this assignment
 
 Test these existing approaches on the current repairs; they are hypotheses until

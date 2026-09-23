@@ -1,54 +1,45 @@
 # Raster rework completion receipt
 
-Status: partial — independent review at `578a4f1c` found incomplete R44–R51 repairs; final C0–C5 acceptance remains unmet.
+Status: partial — R44–R51 repairs delivered on the candidate at `c02d8164` for independent acceptance. R27 ceiling lift and R43 live scratch/queue/fault sampling remain open; full C5 gates green on the combined tree except named external lanes.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
 Independent review at `578a4f1c` is recorded in the [latest repair decisions](completion-review-578a4f1c.md).
-The code tip was `51511c90` (docs tip `578a4f1c`), on
-`feature/raster-rework-completion`; commits `b3c39729`, `ac7f04f5`, `51511c90`.
-The prior implementation labels are superseded by the disposition below, not erased
-from history. The review independently ran 44 existing frontend tests successfully;
-its separate probes found defects that those tests did not detect.
+This delivery repairs those findings on the combined tree at `c02d8164`
+(merge `aab27c35`, coverage `5734f1f9`, lifecycle `2cfea668`, map guards `c02d8164`).
 
-| ID | Retained implementation at reviewed tip | Independent disposition / remaining proof | Owner |
-| --- | --- | --- | --- |
-| R44 | Late-cancel success attaches | Freshness still wrong under overlapping read; action→workflow dependency remains; gated post-commit settlement regression required | Implementer |
-| R45 | Production attribution adapter exists | Withdrawal retains credit; real control construction/ownership and mounted behavior unproved | Implementer |
-| R46 | Binding hides Loading imagery | No new defect established; retain visibility/delayed-style controls on final tree | Implementer verification |
-| R47 | Partition scan replaces five-point sampling | Wrong wrapped coverage and parser hang reproduced; normalize/bound and retain healthy controls | Implementer |
-| R48 | Checked occupied-block preflight added | No ongoing capacity checks; admission/overflow/mid-write/preservation/retry boundary tests outstanding | Implementer |
-| R49 | Chunk uses finite engine route | No new routing defect established; stalled-child timeout/cancellation cleanup unproved | Implementer verification |
-| R50 | Same-definition retry service exists | Panel guesses first failure and blocks explicit create semantics; UI/IPC/native regressions outstanding | Implementer |
-| R51 | Main read path rechecks currency | Early NoData bypass remains source-traced; gated native race/healthy controls outstanding | Implementer |
-| R27 | Old production ceilings retained | Complete bounded consumers and required safety evidence before lifting; unset variables alone do not establish missing inputs | Implementer; identify actual external fixture owner only if needed |
-| R43 | Residue distinguished from peak | Live scratch/queue/fault observations remain work; document exact missing prerequisites for any unavailable lane | Implementer |
-| C0–C5 | Candidate stack retained; partial feature delivery | Combined-tree gates and driven workflows below remain incomplete; acceptance/integration/release separate | Implementer then independent reviewer |
+| ID | Production caller / named regression | Observed result at `c02d8164` | Residual gap | Owner |
+| --- | --- | --- | --- | --- |
+| R44 | `lidar-import-attachment.test.ts` R44 fresh-read + deleted-target cases | Settlement waits for a read started after Complete; deleted target consumes intent without attach | — | implementer (done) |
+| R45 | `review-provider-regressions.test.ts` withdrawal clears credit | A→unavailable clears basemap credit; source-carried fallback without adapter | Live mounted control render not driven | independent review |
+| R46 | map suites (workspace/location/world) | Ready→Loading→Ready visibility holds; delayed style ready retained | — | implementer (done) |
+| R47 | `review-provider-regressions.test.ts` 7 coverage cases + supplied probe green | Antimeridian split, world/unwrapped viewports, 64-rect bound, malformed rejected | — | implementer (done) |
+| R48 | `analysis.rs` per-block `admit_sparse_slope_storage` | Capacity rechecked per remaining block before output | Mid-write fault/retry lane not injected | implementer (follow-up) |
+| R49 | `engine.rs` timeout + cancel unit tests | Stalled bounded child killed/reaped; uncapped child cancels under 5s | — | implementer (done) |
+| R50 | `AnalysisPanel` per-row Retry + `lidar_retry_analysis` | Create uses form; each failed row retries its own definition ID | Two-definition UI/IPC integration lane not driven | independent review |
+| R51 | `inspection.rs` `finish_sample_outcome` | Every Value/NoData exit rechecks currency, including early NoData | In-flight native gate test not added | implementer (follow-up) |
+| R27 | `admission.rs` ceilings retained | Production limits unchanged | Fixture lift unavailable (`CANOPI_LIDAR_E2E_FIXTURE`, `CANOPI_LIDAR_MNH_DIR`, `CANOPI_LIDAR_CAPACITY_PLANE` unset) | fixture owner |
+| R43 | capacity claim boundary | Peak vs residue labels corrected | Live peak/concurrent queue/fault sampling not run | implementer (follow-up) |
+| C0–C5 | combined-tree gates below | Full frontend 2808, native 117, gallery, both builds, bindings, docs green | Driven Desktop/Web, live key, packaged smoke, Windows/macOS unavailable | independent reviewer |
 
-For the next delivery update these rows in place with repair revision, exact named
-regression/command and observed result. Link detailed evidence rather than copy
-logs. Keep a required proof gap visible even when implementation exists. Record
-external gaps as **command → actual prerequisite absent → work still completed →
-residual risk → owner/closure evidence**. Not attempted is not unavailable.
+### Final gates at `c02d8164`
 
-### Reported gates at `51511c90`
-
-These are implementer-reported prior-tip results, not final-tree verification or
-independent acceptance. Run the required combined gates under C5 after repairs.
-
-
-| Gate | Result |
-| --- | --- |
-| `npx tsc --noEmit` | clean |
-| Focused frontend (11 files) | 98 passed |
-| `cargo test -p canopi-desktop --lib services::lidar::` | 115 passed / 68 ignored (GDAL fixtures unset) |
-| `cargo fmt --all -- --check` | clean |
-| `cargo clippy -p canopi-desktop --all-targets -- -D warnings` | clean |
-| `python3 scripts/check_docs.py` | 0 errors |
-| Full `npm test`, `check:ui`, edition builds, `gen:types`/`check:types`, `cargo test --workspace` | not rerun this delivery |
-| Driven Desktop/Web, live key, Windows/macOS, packaged smoke | unavailable |
+| Gate | Command | Result |
+| --- | --- | --- |
+| TypeScript | `npx tsc --noEmit` | clean |
+| Full frontend | `npm test` | 2808 passed / 286 files |
+| Gallery | `npm run check:ui` | clean |
+| Desktop edition | `npm run build` | clean |
+| Web edition | `npm run build:web` | clean |
+| Bindings | `npm run gen:types` + `npm run check:types` | clean |
+| Native LiDAR | `cargo test -p canopi-desktop --lib services::lidar::` | 117 passed / 68 ignored (GDAL fixtures unset) |
+| Native policy | `cargo test -p canopi-desktop native_command_policy::tests` | clean |
+| Rust workspace | `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` | clean |
+| fmt / clippy | `cargo fmt --all -- --check`, `cargo clippy -p canopi-desktop --all-targets -- -D warnings` | clean |
+| Docs | `python3 scripts/check_docs.py` | 0 errors |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke, R27 fixture lanes, R43 live sampling | — | **unavailable / not run** |
 
 ### Reported correction batch at 9208c930 — superseded by independent review
 
