@@ -572,7 +572,11 @@
         "interpretation": "Interpretation",
         "createDataset": "Datensatz erstellen",
         "unitLabel": "Einheit",
-        "unitUnknown": "Einheit unbekannt"
+        "unitUnknown": "Einheit unbekannt",
+        "importing": "Import läuft…",
+        "importFailed": "Import fehlgeschlagen: {{reason}}",
+        "retryImport": "Import wiederholen",
+        "importCompleted": "Import abgeschlossen: {{sources}} Quelle(n)"
       },
       "analysis": {
         "title": "Analyse",
@@ -592,7 +596,9 @@
         "noResults": "Noch keine Ergebnisse für diese Eingabe.",
         "resultName": "Ergebnisname"
       },
-      "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen."
+      "webUnavailable": "Die Rasterdatensätze und Ergebnisse dieses Entwurfs bleiben hier erhalten, werden in der Web-Edition aber weder dargestellt noch verarbeitet. Öffnen Sie den Entwurf in der Desktop-App zum Importieren, Analysieren oder Anzeigen.",
+      "slopePercent": "Neigung (Prozent)",
+      "removeFromDesign": "Aus Entwurf entfernen"
     },
     "basemap": {
       "title": "Basiskarte",
@@ -616,7 +622,8 @@
       "noData": "Keine Daten an diesem Punkt",
       "stale": "Ebene geändert – erneut klicken",
       "unavailable": "Wert nicht verfügbar",
-      "escapeHint": "Esc zum Beenden"
+      "escapeHint": "Esc zum Beenden",
+      "sampleCentre": "Am Ansichtszentrum messen"
     }
   },
   "worldMap": {

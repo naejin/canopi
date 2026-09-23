@@ -572,7 +572,11 @@
         "interpretation": "解释",
         "createDataset": "创建数据集",
         "unitLabel": "单位",
-        "unitUnknown": "单位未知"
+        "unitUnknown": "单位未知",
+        "importing": "正在导入…",
+        "importFailed": "导入失败：{{reason}}",
+        "retryImport": "重试导入",
+        "importCompleted": "导入完成：{{sources}} 个源"
       },
       "analysis": {
         "title": "分析",
@@ -592,7 +596,9 @@
         "noResults": "此输入尚无结果。",
         "resultName": "结果名称"
       },
-      "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。"
+      "webUnavailable": "本设计的栅格数据集和结果在此保留，但网页版不会渲染或处理它们。请在桌面应用中打开本设计以导入、分析或显示。",
+      "slopePercent": "坡度（百分比）",
+      "removeFromDesign": "从设计中移除"
     },
     "basemap": {
       "title": "底图",
@@ -616,7 +622,8 @@
       "noData": "此处无数据",
       "stale": "图层已更改—请再次点击",
       "unavailable": "数值不可用",
-      "escapeHint": "按 Esc 停止"
+      "escapeHint": "按 Esc 停止",
+      "sampleCentre": "在视图中心取样"
     }
   },
   "worldMap": {

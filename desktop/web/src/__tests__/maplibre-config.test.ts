@@ -116,6 +116,8 @@ describe('maplibre config', () => {
     expect(contribution.available).toBe(true)
     expect(contribution.notice).toBeNull()
     expect(contribution.source.tiles[0]).toContain('tile.googleapis.com/v1/2dtiles')
-    expect(contribution.source.tiles[0]).toContain('key=fake-key')
+    // The key is not part of a published source descriptor; the map's tile
+    // transport adds it, and the session, to the fixed official endpoint.
+    expect(JSON.stringify(contribution)).not.toContain('fake-key')
   })
 })

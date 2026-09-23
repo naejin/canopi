@@ -572,7 +572,11 @@
         "interpretation": "解釈",
         "createDataset": "データセットを作成",
         "unitLabel": "単位",
-        "unitUnknown": "単位不明"
+        "unitUnknown": "単位不明",
+        "importing": "インポート中…",
+        "importFailed": "インポートに失敗しました: {{reason}}",
+        "retryImport": "インポートを再試行",
+        "importCompleted": "インポート完了: {{sources}} 件のソース"
       },
       "analysis": {
         "title": "解析",
@@ -592,7 +596,9 @@
         "noResults": "この入力の結果はまだありません。",
         "resultName": "結果名"
       },
-      "webUnavailable": "この設計のラスターデータセットと結果はここに保持されますが、Web 版では描画も処理もされません。インポート・解析・表示にはデスクトップアプリで設計を開いてください。"
+      "webUnavailable": "この設計のラスターデータセットと結果はここに保持されますが、Web 版では描画も処理もされません。インポート・解析・表示にはデスクトップアプリで設計を開いてください。",
+      "slopePercent": "傾斜（パーセント）",
+      "removeFromDesign": "デザインから削除"
     },
     "basemap": {
       "title": "ベースマップ",
@@ -616,7 +622,8 @@
       "noData": "この地点にデータがありません",
       "stale": "レイヤーが変更されました。もう一度クリックしてください",
       "unavailable": "値を取得できません",
-      "escapeHint": "Esc で終了"
+      "escapeHint": "Esc で終了",
+      "sampleCentre": "ビュー中央で計測"
     }
   },
   "worldMap": {

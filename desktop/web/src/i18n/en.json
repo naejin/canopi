@@ -563,7 +563,7 @@
         "rename": "Rename dataset",
         "renameConfirm": "Rename",
         "delete": "Delete from library",
-        "deleteImpact": "Deleting removes {analyses} analysis result(s) and their published assets.",
+        "deleteImpact": "Deleting removes {{analyses}} analysis result(s) and their published assets.",
         "measurement": "Measurement",
         "state": "State",
         "analyses": "Analyses",
@@ -572,7 +572,11 @@
         "interpretation": "Interpretation",
         "createDataset": "Create dataset",
         "unitLabel": "Unit",
-        "unitUnknown": "Unit unknown"
+        "unitUnknown": "Unit unknown",
+        "importing": "Importing…",
+        "importFailed": "Import failed: {{reason}}",
+        "retryImport": "Retry import",
+        "importCompleted": "Import complete: {{sources}} source(s)"
       },
       "analysis": {
         "title": "Analysis",
@@ -592,7 +596,9 @@
         "noResults": "No results yet for this input.",
         "resultName": "Result name"
       },
-      "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them."
+      "webUnavailable": "This Design’s raster datasets and results are preserved here but are not rendered or processed in the Web Edition. Open the Design in the Desktop app to import, analyse or display them.",
+      "slopePercent": "Slope (percent)",
+      "removeFromDesign": "Remove from Design"
     },
     "basemap": {
       "title": "Basemap",
@@ -616,7 +622,8 @@
       "noData": "No data at this point",
       "stale": "The layer changed — click again",
       "unavailable": "Value unavailable",
-      "escapeHint": "Esc to stop"
+      "escapeHint": "Esc to stop",
+      "sampleCentre": "Sample at view centre"
     }
   },
   "worldMap": {

@@ -572,7 +572,11 @@
         "interpretation": "해석",
         "createDataset": "데이터셋 만들기",
         "unitLabel": "단위",
-        "unitUnknown": "단위 알 수 없음"
+        "unitUnknown": "단위 알 수 없음",
+        "importing": "가져오는 중…",
+        "importFailed": "가져오기 실패: {{reason}}",
+        "retryImport": "가져오기 다시 시도",
+        "importCompleted": "가져오기 완료: 소스 {{sources}}개"
       },
       "analysis": {
         "title": "분석",
@@ -592,7 +596,9 @@
         "noResults": "이 입력에 대한 결과가 아직 없습니다.",
         "resultName": "결과 이름"
       },
-      "webUnavailable": "이 설계의 래스터 데이터셋과 결과는 여기에 보존되지만 웹 에디션에서는 렌더링되거나 처리되지 않습니다. 가져오기, 분석 또는 표시하려면 데스크톱 앱에서 설계를 여십시오."
+      "webUnavailable": "이 설계의 래스터 데이터셋과 결과는 여기에 보존되지만 웹 에디션에서는 렌더링되거나 처리되지 않습니다. 가져오기, 분석 또는 표시하려면 데스크톱 앱에서 설계를 여십시오.",
+      "slopePercent": "경사(퍼센트)",
+      "removeFromDesign": "디자인에서 제거"
     },
     "basemap": {
       "title": "배경 지도",
@@ -616,7 +622,8 @@
       "noData": "이 지점에 데이터가 없습니다",
       "stale": "레이어가 변경되었습니다. 다시 클릭하세요",
       "unavailable": "값을 사용할 수 없음",
-      "escapeHint": "Esc로 중지"
+      "escapeHint": "Esc로 중지",
+      "sampleCentre": "보기 중심에서 측정"
     }
   },
   "worldMap": {

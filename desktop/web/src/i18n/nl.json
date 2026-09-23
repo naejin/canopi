@@ -572,7 +572,11 @@
         "interpretation": "Interpretatie",
         "createDataset": "Dataset aanmaken",
         "unitLabel": "Eenheid",
-        "unitUnknown": "Eenheid onbekend"
+        "unitUnknown": "Eenheid onbekend",
+        "importing": "Importeren…",
+        "importFailed": "Import mislukt: {{reason}}",
+        "retryImport": "Import opnieuw proberen",
+        "importCompleted": "Import voltooid: {{sources}} bron(nen)"
       },
       "analysis": {
         "title": "Analyse",
@@ -592,7 +596,9 @@
         "noResults": "Nog geen resultaten voor deze invoer.",
         "resultName": "Resultaatnaam"
       },
-      "webUnavailable": "De rasterdatasets en resultaten van dit ontwerp blijven hier bewaard, maar worden in de Web-editie niet weergegeven of verwerkt. Open het ontwerp in de desktopapp om ze te importeren, analyseren of tonen."
+      "webUnavailable": "De rasterdatasets en resultaten van dit ontwerp blijven hier bewaard, maar worden in de Web-editie niet weergegeven of verwerkt. Open het ontwerp in de desktopapp om ze te importeren, analyseren of tonen.",
+      "slopePercent": "Helling (procent)",
+      "removeFromDesign": "Uit ontwerp verwijderen"
     },
     "basemap": {
       "title": "Basiskaart",
@@ -616,7 +622,8 @@
       "noData": "Geen gegevens op dit punt",
       "stale": "De laag is gewijzigd — klik opnieuw",
       "unavailable": "Waarde niet beschikbaar",
-      "escapeHint": "Esc om te stoppen"
+      "escapeHint": "Esc om te stoppen",
+      "sampleCentre": "Meten in het midden van de weergave"
     }
   },
   "worldMap": {

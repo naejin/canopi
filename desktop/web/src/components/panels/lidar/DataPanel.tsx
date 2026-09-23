@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import {
+  cancelOpenImport,
   createLidarLayer,
   deleteLidarLayer,
   fetchLidarLayerDeleteImpact,
@@ -11,9 +12,11 @@ import {
   installLidarLibraryObserver,
   lidarLibrary,
   lidarStatusMessage,
+  openImportJob,
 } from '../../../app/lidar/library-store'
 import { t } from '../../../i18n'
 import type { LidarDeleteImpact } from '../../../ipc/lidar'
+import type { LidarImportJob } from '../../../generated/contracts'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'
 import styles from './data-panel.module.css'
@@ -298,13 +301,29 @@ export function DataPanel() {
                       </div>
                     </div>
                   ) : null}
+                  {/*
+                    Preparation progress belongs to the surface that started it.
+                    The job itself is owned by the library, so closing this panel
+                    leaves it running and reopening shows it again; the user does
+                    not have to find another panel to finish or cancel an import.
+                  */}
+                  {openImportJob.value?.layer_id === layer.id ? (
+                    <ImportJobStatus
+                      job={openImportJob.value}
+                      onCancel={() => void run(() => cancelOpenImport())}
+                    />
+                  ) : null}
                   <div className={styles.rowActions}>
                     <button
                       type="button"
                       className={styles.secondary}
+                      disabled={isImportActive(openImportJob.value, layer.id)}
                       onClick={() => void run(() => startImportForLayer(layer.id))}
                     >
-                      {t('canvas.lidar.addTiffs')}
+                      {openImportJob.value?.layer_id === layer.id
+                        && openImportJob.value.state === 'Failed'
+                        ? t('canvas.lidar.data.retryImport')
+                        : t('canvas.lidar.addTiffs')}
                     </button>
                   </div>
                 </li>
@@ -313,6 +332,51 @@ export function DataPanel() {
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Whether one layer's import job is still doing work. */
+function isImportActive(job: LidarImportJob | null, layerId: string): boolean {
+  if (!job || job.layer_id !== layerId) return false
+  return job.state === 'Staging' || job.state === 'Applying'
+}
+
+/**
+ * One layer's import job: its phase, its progress, its outcome and the two
+ * actions that end it — Cancel while it runs, and Retry once it failed.
+ */
+function ImportJobStatus({
+  job,
+  onCancel,
+}: {
+  readonly job: LidarImportJob
+  readonly onCancel: () => void
+}) {
+  const active = job.state === 'Staging' || job.state === 'Applying'
+  return (
+    <div className={styles.importStatus} role="status">
+      <span className={styles.importState}>
+        {active ? t('canvas.lidar.data.importing') : t(`canvas.lidar.state.${job.state}`)}
+      </span>
+      {job.progress ? (
+        <progress
+          className={styles.importProgress}
+          max={100}
+          value={job.progress.percent}
+          aria-label={t('canvas.lidar.data.importing')}
+        />
+      ) : null}
+      {job.state === 'Failed' ? (
+        <p className={styles.error} role="alert">
+          {t('canvas.lidar.data.importFailed', { reason: job.message ?? '' })}
+        </p>
+      ) : null}
+      {active ? (
+        <button type="button" className={styles.secondary} onClick={onCancel}>
+          {t('canvas.lidar.cancelCreate')}
+        </button>
+      ) : null}
     </div>
   )
 }

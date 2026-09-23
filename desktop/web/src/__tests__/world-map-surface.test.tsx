@@ -39,8 +39,26 @@ class FakeWorldMap {
   })
   center = { lng: 0, lat: 14 }
   zoom = 1.15
+  // A real map exposes its event surface; the provider binding registers a
+  // style-ready listener on it, so a fake without one is not a map this surface
+  // can run against.
+  readonly listeners = new Map<string, Set<(event?: unknown) => void>>()
 
   constructor(readonly options: Record<string, unknown>) {}
+
+  on(type: string, listener: (event?: unknown) => void) {
+    const set = this.listeners.get(type) ?? new Set()
+    set.add(listener)
+    this.listeners.set(type, set)
+  }
+
+  off(type: string, listener: (event?: unknown) => void) {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  loaded() {
+    return true
+  }
 
   getCenter() {
     return this.center

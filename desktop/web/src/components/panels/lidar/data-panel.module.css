@@ -205,3 +205,24 @@
   font-size: var(--text-xs);
   cursor: pointer;
 }
+
+/* One layer's import progress: a state line, its bar and its own actions. */
+.importStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised, var(--color-surface));
+}
+
+.importState {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.importProgress {
+  width: 100%;
+  height: 6px;
+}

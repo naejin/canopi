@@ -572,7 +572,11 @@
         "interpretation": "Interpretação",
         "createDataset": "Criar conjunto",
         "unitLabel": "Unidade",
-        "unitUnknown": "Unidade desconhecida"
+        "unitUnknown": "Unidade desconhecida",
+        "importing": "A importar…",
+        "importFailed": "Falha na importação: {{reason}}",
+        "retryImport": "Tentar importar novamente",
+        "importCompleted": "Importação concluída: {{sources}} fonte(s)"
       },
       "analysis": {
         "title": "Análise",
@@ -592,7 +596,9 @@
         "noResults": "Ainda não há resultados para esta entrada.",
         "resultName": "Nome do resultado"
       },
-      "webUnavailable": "Os conjuntos de dados raster e resultados deste projeto são preservados aqui, mas não são renderizados nem processados na edição Web. Abra o projeto no aplicativo de desktop para importar, analisar ou exibir."
+      "webUnavailable": "Os conjuntos de dados raster e resultados deste projeto são preservados aqui, mas não são renderizados nem processados na edição Web. Abra o projeto no aplicativo de desktop para importar, analisar ou exibir.",
+      "slopePercent": "Declive (percentagem)",
+      "removeFromDesign": "Remover do projeto"
     },
     "basemap": {
       "title": "Mapa base",
@@ -616,7 +622,8 @@
       "noData": "Sem dados neste ponto",
       "stale": "A camada mudou — clique novamente",
       "unavailable": "Valor indisponível",
-      "escapeHint": "Esc para parar"
+      "escapeHint": "Esc para parar",
+      "sampleCentre": "Amostrar no centro da vista"
     }
   },
   "worldMap": {

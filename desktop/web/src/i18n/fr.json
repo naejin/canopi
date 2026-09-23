@@ -572,7 +572,11 @@
         "interpretation": "Interprétation",
         "createDataset": "Créer le jeu de données",
         "unitLabel": "Unité",
-        "unitUnknown": "Unité inconnue"
+        "unitUnknown": "Unité inconnue",
+        "importing": "Importation…",
+        "importFailed": "Échec de l’importation : {{reason}}",
+        "retryImport": "Réessayer l’importation",
+        "importCompleted": "Importation terminée : {{sources}} source(s)"
       },
       "analysis": {
         "title": "Analyse",
@@ -592,7 +596,9 @@
         "noResults": "Aucun résultat pour cette entrée.",
         "resultName": "Nom du résultat"
       },
-      "webUnavailable": "Les jeux de données raster et les résultats de ce projet sont conservés ici, mais ne sont ni affichés ni traités dans l’édition Web. Ouvrez le projet dans l’application de bureau pour les importer, les analyser ou les afficher."
+      "webUnavailable": "Les jeux de données raster et les résultats de ce projet sont conservés ici, mais ne sont ni affichés ni traités dans l’édition Web. Ouvrez le projet dans l’application de bureau pour les importer, les analyser ou les afficher.",
+      "slopePercent": "Pente (pourcentage)",
+      "removeFromDesign": "Retirer du projet"
     },
     "basemap": {
       "title": "Fond de carte",
@@ -616,7 +622,8 @@
       "noData": "Aucune donnée à ce point",
       "stale": "La couche a changé — cliquez à nouveau",
       "unavailable": "Valeur indisponible",
-      "escapeHint": "Échap pour arrêter"
+      "escapeHint": "Échap pour arrêter",
+      "sampleCentre": "Échantillonner au centre de la vue"
     }
   },
   "worldMap": {

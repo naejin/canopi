@@ -49,11 +49,13 @@ describe('shared basemap provider resolution', () => {
     if (resolved.state !== 'ready') throw new Error('google_satellite must be selectable')
     expect(resolved.descriptor.provider).toBe('google')
     expect(resolved.descriptor.official).toBe(true)
-    // The key is trimmed, and the session token placeholder stays unresolved:
-    // the session owner substitutes a live token that expires.
+    // The published template is credential-free. Both the live session token
+    // and the key are supplied per request by the map's tile transport, because
+    // a descriptor carrying either could be persisted, exported or logged.
     expect(resolved.descriptor.tiles).toEqual([
-      'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}&key=fake-recognizable-key',
+      'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}',
     ])
+    expect(JSON.stringify(resolved.descriptor)).not.toContain('fake-recognizable-key')
     expect(resolved.descriptor.notice).toBeNull()
   })
 

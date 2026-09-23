@@ -277,12 +277,34 @@ function removePresentedEntities(ids: string[]): void {
   reconcileInspectionWithPresentation()
 }
 
+/**
+ * Remove one entry from the Design's presentation.
+ *
+ * This is a document edit, not a library operation: the layer or result stays
+ * in the library, the change is undoable with the rest of the Design's history,
+ * and it applies to unavailable references too, which is their only remedy.
+ * Library deletion remains a separate, confirmed Data action.
+ */
+export function removePresentationEntry(id: string): void {
+  removePresentedEntities([id])
+}
+
+/**
+ * Run one library action, surfacing its failure through the shared status.
+ *
+ * The message is published *and* re-thrown. Publishing alone left a caller that
+ * renders its own error state with nothing to show — an Analysis run could fail
+ * with no visible explanation anywhere — while a caller that only awaited would
+ * have seen a resolved promise for a failed action.
+ */
 async function withLidarError(work: () => Promise<void>): Promise<void> {
   lidarStatusMessage.value = null
   try {
     await work()
   } catch (error) {
-    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error)
+    lidarStatusMessage.value = message
+    throw error instanceof Error ? error : new Error(message)
   }
 }
 

@@ -205,6 +205,15 @@ pub struct LidarAnalysisSummary {
     pub detail: Option<String>,
     pub bounds: Option<[f64; 4]>,
     pub value_range: Option<[f64; 2]>,
+    /// The unit this result was actually computed in.
+    ///
+    /// Read from the definition's own parameters rather than from the input
+    /// layer, so a slope in percent is never labelled with an elevation unit or
+    /// with the other slope unit. `None` for a definition written before the
+    /// unit was recorded, which the UI shows as degrees — the default the
+    /// analysis path itself applies.
+    #[serde(default)]
+    pub slope_unit: Option<LidarSlopeUnit>,
     pub tilesets: Vec<LidarTileset>,
 }
 

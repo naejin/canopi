@@ -8,6 +8,7 @@ import {
   ensureLidarPolling,
   installLidarLibraryObserver,
   lidarLibrary,
+  lidarStatusMessage,
   refreshLidarLibrary,
 } from '../../../app/lidar/library-store'
 import { t } from '../../../i18n'
@@ -50,6 +51,15 @@ export function AnalysisPanel() {
   const [unit, setUnit] = useState<'Degrees' | 'Percent'>('Degrees')
   const [resultName, setResultName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  /**
+   * A submitted run that has not settled yet.
+   *
+   * The library snapshot only reports Preparing after a refresh, so a second
+   * click during the initial request would start a duplicate definition. This
+   * latch closes that window without tying job ownership to this panel: the job
+   * itself keeps running when the panel unmounts.
+   */
+  const [submitting, setSubmitting] = useState(false)
 
   const layers = library?.layers ?? []
   const eligible = layers.filter((layer) => ineligibilityReason(layer) === null)
@@ -70,9 +80,14 @@ export function AnalysisPanel() {
       <DockPanelHeader title={t('canvas.lidar.analysis.title')} />
       <div className={styles.body}>
         <p className={styles.intro}>{t('canvas.lidar.analysis.intro')}</p>
-        {error ? (
+        {/*
+          One existing error path: the action publishes its failure to the shared
+          status and re-throws, so this shows the same text whichever way it is
+          read, and a failed Run can no longer settle silently.
+        */}
+        {error ?? lidarStatusMessage.value ? (
           <p className={styles.error} role="alert">
-            {error}
+            {error ?? lidarStatusMessage.value}
           </p>
         ) : null}
 
@@ -171,10 +186,11 @@ export function AnalysisPanel() {
         <button
           type="button"
           className={styles.primary}
-          disabled={chosen === null || run !== null}
+          disabled={chosen === null || run !== null || submitting}
           onClick={() => {
-            if (chosen === null) return
+            if (chosen === null || submitting) return
             setError(null)
+            setSubmitting(true)
             // A fresh job against the current head; the previous definition keeps
             // its own result until this one publishes.
             // A blank field stays unnamed rather than becoming the empty string.
@@ -183,9 +199,10 @@ export function AnalysisPanel() {
               .catch((cause: unknown) =>
                 setError(cause instanceof Error ? cause.message : String(cause)),
               )
+              .finally(() => setSubmitting(false))
           }}
         >
-          {run !== null
+          {submitting || run !== null
             ? t('canvas.lidar.analysis.running')
             : previousFailed
               ? t('canvas.lidar.analysis.retry')
@@ -207,6 +224,14 @@ export function AnalysisPanel() {
                     {/* The previous result stays visible while a refresh runs or
                         after a failure, so a reader never loses the last good
                         numbers to an unrelated error. */}
+                    {/* The row states the unit the result was actually
+                        computed in, so a percent slope is never labelled as
+                        degrees. */}
+                    <span className={styles.previousUnits}>
+                      {result.slope_unit === 'Percent'
+                        ? t('canvas.lidar.analysis.percent')
+                        : t('canvas.lidar.analysis.degrees')}
+                    </span>
                     {result.value_range ? (
                       <span className={styles.previousRange}>
                         {formatRange(result.value_range)}

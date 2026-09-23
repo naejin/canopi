@@ -28,6 +28,7 @@ import {
   setLidarEntryOpacity,
   setLidarEntryVisibility,
   movePresentationEntry,
+  removePresentationEntry,
   startImportForLayer,
 } from '../../../app/lidar/actions'
 import {
@@ -386,9 +387,13 @@ export function LidarLayersSection() {
           const layer = item.kind === 'Source'
             ? library?.layers.find((candidate) => candidate.id === item.id)
             : undefined
+          // A result states the unit it was computed in: labelling every row
+          // "slope (degrees)" misreports a percent result.
           const metadata = item.kind === 'Source'
             ? `${t(`canvas.lidar.kind.${layer?.measurement_kind ?? item.detail}`)} · ${sourceState(item)}`
-            : `${t('canvas.lidar.slopeDegrees')} · ${stateLabel(item.state)}`
+            : `${t(item.slopeUnit === 'Percent'
+                ? 'canvas.lidar.slopePercent'
+                : 'canvas.lidar.slopeDegrees')} · ${stateLabel(item.state)}`
           return (
             <div
               key={item.id}
@@ -409,34 +414,44 @@ export function LidarLayersSection() {
                 </span>
               </button>
               <MoveControls item={item} position={index} total={items.length} />
-              {item.kind === 'Source' && item.state !== 'unavailable' ? (
-                <ActionMenu label={t('canvas.lidar.actions')} items={[
-                  {
-                    label: t('canvas.rasterSample.title'),
-                    run: () => beginInspection({ kind: 'Source', id: item.id, name: item.name }),
-                  },
-                  { label: t('canvas.lidar.history'), run: () => openHistory(item) },
-                  { label: t('canvas.lidar.deleteFromLibrary'), danger: true, run: () => openLayerDelete(item) },
-                ]} />
-              ) : item.kind === 'Analysis' && item.state !== 'unavailable' ? (
-                <ActionMenu label={t('canvas.lidar.actions')} items={[
-                  {
-                    label: t('canvas.rasterSample.title'),
-                    run: () => beginInspection({ kind: 'Analysis', id: item.id, name: item.name }),
-                  },
-                  {
-                    label: t('canvas.lidar.deleteAnalysis'),
-                    danger: true,
-                    run: () => {
-                      select(item.id)
-                      setAnalysisDeleteId(item.id)
-                      setMode('delete')
-                    },
-                  },
-                ]} />
-              ) : (
-                <span className={styles.actionSlot} />
-              )}
+              {/*
+                Remove from Design is offered for every entry, unavailable
+                references included: it is a document edit that keeps the
+                library intact and is undoable with the Design's own history, so
+                it is never a reason to hide it behind a library operation.
+              */}
+              <ActionMenu label={t('canvas.lidar.actions')} items={[
+                ...(item.state === 'unavailable'
+                  ? []
+                  : [{
+                      label: t('canvas.rasterSample.title'),
+                      run: () => beginInspection({ kind: item.kind, id: item.id, name: item.name }),
+                    }]),
+                ...(item.kind === 'Source' && item.state !== 'unavailable'
+                  ? [{ label: t('canvas.lidar.history'), run: () => openHistory(item) }]
+                  : []),
+                {
+                  label: t('canvas.lidar.removeFromDesign'),
+                  run: () => removePresentationEntry(item.id),
+                },
+                ...(item.state !== 'unavailable'
+                  ? [item.kind === 'Source'
+                      ? {
+                          label: t('canvas.lidar.deleteFromLibrary'),
+                          danger: true,
+                          run: () => openLayerDelete(item),
+                        }
+                      : {
+                          label: t('canvas.lidar.deleteAnalysis'),
+                          danger: true,
+                          run: () => {
+                            select(item.id)
+                            setAnalysisDeleteId(item.id)
+                            setMode('delete')
+                          },
+                        }]
+                  : []),
+              ]} />
             </div>
           )
         })}

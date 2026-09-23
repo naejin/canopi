@@ -572,7 +572,11 @@
         "interpretation": "Interpretación",
         "createDataset": "Crear conjunto",
         "unitLabel": "Unidad",
-        "unitUnknown": "Unidad desconocida"
+        "unitUnknown": "Unidad desconocida",
+        "importing": "Importando…",
+        "importFailed": "Error de importación: {{reason}}",
+        "retryImport": "Reintentar importación",
+        "importCompleted": "Importación completada: {{sources}} fuente(s)"
       },
       "analysis": {
         "title": "Análisis",
@@ -592,7 +596,9 @@
         "noResults": "Aún no hay resultados para esta entrada.",
         "resultName": "Nombre del resultado"
       },
-      "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos."
+      "webUnavailable": "Los conjuntos de datos ráster y resultados de este diseño se conservan aquí, pero no se representan ni procesan en la edición web. Abra el diseño en la aplicación de escritorio para importarlos, analizarlos o mostrarlos.",
+      "slopePercent": "Pendiente (porcentaje)",
+      "removeFromDesign": "Quitar del diseño"
     },
     "basemap": {
       "title": "Mapa base",
@@ -616,7 +622,8 @@
       "noData": "Sin datos en este punto",
       "stale": "La capa cambió: haz clic de nuevo",
       "unavailable": "Valor no disponible",
-      "escapeHint": "Esc para detener"
+      "escapeHint": "Esc para detener",
+      "sampleCentre": "Muestrear en el centro de la vista"
     }
   },
   "worldMap": {

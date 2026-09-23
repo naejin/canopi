@@ -14,7 +14,9 @@ const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 function sessionBody(overrides: Record<string, unknown> = {}): unknown {
   return {
     session: 'fake-session-token',
-    expiry: 4_000_000_000,
+    // The documented createSession response carries expiry as an epoch-seconds
+    // string, not a number.
+    expiry: '4000000000',
     tileWidth: 512,
     tileHeight: 512,
     ...overrides,
@@ -108,12 +110,13 @@ describe('basemap provider session lifecycle', () => {
     })
 
     expect(seen.map((state) => state.state)).toEqual(['loading', 'ready', 'ready'])
-    // The key appears in the session URL only; the viewport request is
-    // authenticated by the session, and no state exposes the token.
+    // Both provider requests are authenticated: the documented viewport request
+    // carries the session *and* the API key. Neither reaches published state.
     expect(calls[0]?.url).toContain('key=fake-key')
     expect(calls[1]?.url).toContain('session=fake-session-token')
-    expect(calls[1]?.url).not.toContain('fake-key')
+    expect(calls[1]?.url).toContain('key=fake-key')
     expect(JSON.stringify(seen)).not.toContain('fake-session-token')
+    expect(JSON.stringify(seen)).not.toContain('fake-key')
     provider.dispose()
   })
 

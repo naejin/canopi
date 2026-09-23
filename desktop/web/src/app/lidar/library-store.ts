@@ -134,6 +134,13 @@ export interface LidarPresentationItem {
   name: string
   /** Measurement kind for source layers, analysis kind for results. */
   detail: string
+  /**
+   * The unit a result was computed in.
+   *
+   * `null` for a source layer, whose unit is read from the library summary, and
+   * for a definition written before the unit was recorded.
+   */
+  slopeUnit: LidarAnalysisSummary['slope_unit'] | null
   state: LidarAnalysisSummary['state'] | 'unavailable'
   visible: boolean
   opacity: number
@@ -165,6 +172,7 @@ export function readLidarPresentation(
               id: entry.id,
               name: layer.name,
               detail: layer.measurement_kind,
+              slopeUnit: null,
               state: layer.state,
               visible: entry.visible,
               opacity: entry.opacity,
@@ -177,6 +185,7 @@ export function readLidarPresentation(
               id: entry.id,
               name: entry.id,
               detail: 'unavailable',
+              slopeUnit: null,
               state: 'unavailable',
               visible: entry.visible,
               opacity: entry.opacity,
@@ -197,6 +206,8 @@ export function readLidarPresentation(
               id: analysis.id,
               name: analysisName(source?.name, analysis.kind),
               detail: analysis.kind,
+              // The result's own unit, never the input layer's.
+              slopeUnit: analysis.slope_unit ?? 'Degrees',
               state: analysis.state,
               visible: entry.visible,
               opacity: entry.opacity,
@@ -209,6 +220,7 @@ export function readLidarPresentation(
               id: entry.id,
               name: entry.id,
               detail: 'unavailable',
+              slopeUnit: null,
               state: 'unavailable',
               visible: entry.visible,
               opacity: entry.opacity,

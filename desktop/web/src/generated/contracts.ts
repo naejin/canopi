@@ -221,6 +221,16 @@ export type LidarAnalysisSummary = {
 	detail: string | null,
 	bounds: [number, number, number, number] | null,
 	value_range: [number, number] | null,
+	/**
+	 *  The unit this result was actually computed in.
+	 *
+	 *  Read from the definition's own parameters rather than from the input
+	 *  layer, so a slope in percent is never labelled with an elevation unit or
+	 *  with the other slope unit. `None` for a definition written before the
+	 *  unit was recorded, which the UI shows as degrees — the default the
+	 *  analysis path itself applies.
+	 */
+	slope_unit?: LidarSlopeUnit | null,
 	tilesets: LidarTileset[],
 };
 

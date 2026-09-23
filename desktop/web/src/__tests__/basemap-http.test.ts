@@ -67,6 +67,70 @@ describe('bounded browser basemap HTTP capability', () => {
     expect(response.json).toBeNull()
   })
 
+  it('enforces the byte cap on a stream that declares no length', async () => {
+    // A chunked answer has no Content-Length, so a check made before reading
+    // cannot bound it. The cap has to be enforced against the streamed bytes,
+    // and an oversized stream must be abandoned rather than drained.
+    let cancelled = false
+    let produced = 0
+    const chunk = new Uint8Array(64 * 1024).fill(0x78)
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        produced += chunk.byteLength
+        controller.enqueue(chunk)
+        // Far more than the cap: only an in-read bound stops this.
+        if (produced > BASEMAP_HTTP_MAX_BODY_BYTES * 8) controller.close()
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const http = createBrowserBasemapHttp(
+      vi.fn(async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })) as unknown as typeof fetch,
+    )
+    const response = await http.request({
+      url: 'https://example.invalid/session',
+      signal: new AbortController().signal,
+    })
+    expect(response.json).toBeNull()
+    expect(cancelled).toBe(true)
+    expect(produced).toBeLessThanOrEqual(BASEMAP_HTTP_MAX_BODY_BYTES * 2)
+  })
+
+  it('counts bytes rather than characters, so multibyte content cannot evade the cap', async () => {
+    // Each character below is three UTF-8 bytes, so a character-counted cap
+    // would admit three times the intended body.
+    const body = '€'.repeat(Math.ceil(BASEMAP_HTTP_MAX_BODY_BYTES / 3) + 1)
+    const http = createBrowserBasemapHttp(
+      vi.fn(async () =>
+        new Response(JSON.stringify({ padding: body }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })) as unknown as typeof fetch,
+    )
+    const response = await http.request({
+      url: 'https://example.invalid/session',
+      signal: new AbortController().signal,
+    })
+    expect(response.json).toBeNull()
+  })
+
+  it('still parses a body that fits the cap', async () => {
+    const http = createBrowserBasemapHttp(
+      vi.fn(async () =>
+        jsonResponse({ session: 'ok', expiry: '4000000000' })) as unknown as typeof fetch,
+    )
+    const response = await http.request({
+      url: 'https://example.invalid/session',
+      signal: new AbortController().signal,
+    })
+    expect(response.json).toEqual({ session: 'ok', expiry: '4000000000' })
+  })
+
   it('reports Retry-After in both its numeric and HTTP-date forms', async () => {
     const numeric = createBrowserBasemapHttp(
       vi.fn(async () =>
