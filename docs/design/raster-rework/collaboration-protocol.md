@@ -5,7 +5,7 @@ Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task state and follow-ups
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement), [delivery](../../workflow/delivery.md).
 
 The [ownership correction](completion-ownership-design.md) supplies the current
-map-lifecycle and settlement decisions against `291d0773`. It supersedes conflicting
+map-lifecycle and settlement decisions against `eb3b5425`. It supersedes conflicting
 assembly prescriptions in prior reviews; C0–C5 and remaining evidence stay in scope.
 The sole prompt owns execution order. TDD evidence is mandatory for changed behavior.
 
@@ -13,7 +13,7 @@ The sole prompt owns execution order. TDD evidence is mandatory for changed beha
 
 The main agent owns architectural coherence, decision-complete handoffs and independent review. The implementation agent owns execution, ordinary diagnosis/repairs, tests, routine design choices inside the settled boundaries and evidence. The user owns consequential scope/risk and remains courier. No subagent delegation or direct agent messaging is authorized. The project-wide architecture guide remains authoritative.
 
-On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The [completion contract](completion-design.md) and [source-import amendment](source-import-design.md) supply C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 now preserves candidate `291d0773` and the already integrated foundation. The source-import amendment, retained R15–R26 obligations and current R27–R51 corrections are part of this same assignment; new code is delivered for independent review, with integration/release separate.
+On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The [completion contract](completion-design.md) and [source-import amendment](source-import-design.md) supply C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 now preserves candidate `eb3b5425` and the already integrated foundation. The source-import amendment, retained R15–R26 obligations and current R27–R51 corrections are part of this same assignment; new code is delivered for independent review, with integration/release separate.
 
 ## One bounded loop
 
