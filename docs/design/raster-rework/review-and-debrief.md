@@ -324,6 +324,39 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
+**Ownership-correction synthesis at `86c74b14` (partial).** Commands and
+measurements live in the [receipt](completion-receipt.md#current-correction-acceptance).
+Independent acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** One `mountBasemapLifecycle` now owns provider/binding/
+   credits for Canvas, Location and WorldMap. Library reads are ordered with a
+   settlement fence; failed reads retain intent. Per-definition Retry, world-copy
+   coverage and low-capacity sparse refusal hold. Full frontend 2816 and native
+   118 suites, gallery, both builds and bindings are green. The capacity-plane
+   GDAL lane passed with live peak/scratch measurements. Driven Desktop/Web and
+   packaged builds remain unobserved.
+2. **Escapes and causes.** Failed-read fallthrough: implementation (catch-then-
+   then). Void fresh read over a mutable signal: design omission (store should
+   return the snapshot). Double initial paint after mount: implementation during
+   migration. Insensitive R50 detector until layer selection: test-oracle gap.
+   `sleep`-based R49 tests on Windows: environment limitation (now `#[cfg(unix)]`).
+3. **Necessity and reuse.** Reused provider/bind/contribution, library-store,
+   workflow, Design Edit, `capacity_probe`, engine `wait_cancellable`. GeoLibre
+   modulo/split ideas adapted locally. No new dependency or framework.
+4. **Working-method/tool changes.** TDD cycles with observed RED (L1 fallthrough,
+   L2 undefined return, L3 join hang, L4 regression, M1 missing mount, M5 world
+   copies, R48 low capacity, R50 zero buttons). Keep: real-store contract tests
+   over mock-masked void returns. Generated capacity plane via existing script
+   unlocked a previously “unavailable” lane — keep using documented generators.
+5. **Total delivery effort.** One courier-free continuation. Capacity-plane
+   generation (~10 min) was necessary discovery work, not an external block.
+   Cost otherwise unknown.
+6. **Next action.** Independent acceptance of `86c74b14`. Follow-ups in bd:
+   R51 in-flight native gate, R48 mid-write fault/retry, R50 IPC/native drive,
+   IGN MNT/MNH fixture lanes (fixture owner), driven Desktop/Web, live key,
+   packaged smoke. Integration and release remain separate.
+
+
 **Historical implementer synthesis at `c02d8164` (partial; qualified by the ownership correction).** Independent acceptance remains a separate
 entry by the main reviewer. Commands and results live in the
 [receipt](completion-receipt.md#current-correction-acceptance).

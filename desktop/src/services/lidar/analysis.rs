@@ -433,7 +433,10 @@ fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize) -> bool 
 /// reserve with checked arithmetic. Widely separated small members admit
 /// despite a large lattice envelope; occupied work beyond available storage
 /// is refused before any output is written.
-fn admit_sparse_slope_storage(scratch: &Path, occupied_blocks: usize) -> Result<(), String> {
+pub(super) fn admit_sparse_slope_storage(
+    scratch: &Path,
+    occupied_blocks: usize,
+) -> Result<(), String> {
     let side = u64::try_from(generation::CHUNK_SIDE)
         .map_err(|_| "chunk side is not representable".to_string())?;
     let halo_side = side
@@ -2186,6 +2189,26 @@ mod tests {
             "slope scratch left behind: {leftovers:?}"
         );
         drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+    #[test]
+    fn low_capacity_refuses_sparse_slope_admission_before_output() {
+        let root = scratch_root("sparse-admission-refuse");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        // Healthy control: ample capacity admits the same work.
+        {
+            let _guard = crate::services::lidar::paths::capacity_probe::override_available(
+                8 * 1024 * 1024 * 1024,
+            );
+            admit_sparse_slope_storage(&root, 4).expect("ample capacity admits");
+        }
+        // Capacity loss before output refuses the block without writing.
+        {
+            let _guard = crate::services::lidar::paths::capacity_probe::override_available(1);
+            let error = admit_sparse_slope_storage(&root, 4).expect_err("low capacity refuses");
+            assert!(error.contains("free"), "named capacity reason: {error}");
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 }

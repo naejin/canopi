@@ -14,7 +14,8 @@ The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
 `canopi-j571.1` from candidate `291d0773`, with foundation integrated at `f61f8494`.
 The [ownership correction](../design/raster-rework/completion-ownership-design.md)
-requires cohesive lifecycle owners, caller regressions and remaining R27–R51 evidence.
+M/L owners are delivered (`mountBasemapLifecycle`, ordered library reads); see the
+[receipt](../design/raster-rework/completion-receipt.md#current-correction-acceptance).
 Source-only publication and nullable exact/display facts are present; lifecycle,
 resource admission and evidence obligations remain. The
 [source-import amendment](../design/raster-rework/source-import-design.md) still
