@@ -4,17 +4,16 @@ Status: active — execution and evidence rules for whole-rework completion.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task state and follow-ups.
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement), [delivery](../../workflow/delivery.md).
 
-The [578a4f1c review and fixed repairs](completion-review-578a4f1c.md) are the
-current seam-specific addendum (R44–R51), refining the earlier repair decisions.
-Remaining R27/R43 and C0–C5 evidence stays in scope; no prior report establishes
-acceptance. The sole prompt owns execution order; the review supplies concrete
-counterexamples and fixed behavior, not a new product scope.
+The [ownership correction](completion-ownership-design.md) supplies the current
+map-lifecycle and settlement decisions against `291d0773`. It supersedes conflicting
+assembly prescriptions in prior reviews; C0–C5 and remaining evidence stay in scope.
+The sole prompt owns execution order. TDD evidence is mandatory for changed behavior.
 
 ## Ownership and continuation
 
 The main agent owns architectural coherence, decision-complete handoffs and independent review. The implementation agent owns execution, ordinary diagnosis/repairs, tests, routine design choices inside the settled boundaries and evidence. The user owns consequential scope/risk and remains courier. No subagent delegation or direct agent messaging is authorized. The project-wide architecture guide remains authoritative.
 
-On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The [completion contract](completion-design.md) and [source-import amendment](source-import-design.md) supply C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 now preserves candidate `578a4f1c` and the already integrated foundation. The source-import amendment, retained R15–R26 obligations and current R27–R51 corrections are part of this same assignment; new code is delivered for independent review, with integration/release separate.
+On 2026-09-22 the user selected the **whole remaining rework through a verified candidate; return only for material blockers**. The [completion contract](completion-design.md) and [source-import amendment](source-import-design.md) supply C0–C5 and fixed decisions. Do not reopen the engine/ordered-source choice, repeat accepted UI approval, or transfer facts discoverable in the repository to the user. C0 now preserves candidate `291d0773` and the already integrated foundation. The source-import amendment, retained R15–R26 obligations and current R27–R51 corrections are part of this same assignment; new code is delivered for independent review, with integration/release separate.
 
 ## One bounded loop
 
@@ -26,7 +25,7 @@ A changed private module shape, meaningful test strategy or contract-preserving 
 
 Implement through the contract's dependency gates; repair in-scope normal-workflow defects. Perform a fresh final diff/contract review and repair its findings before one consolidated delivery. The main agent then reviews changed risk boundaries and actual workflow evidence independently. Acceptance is scoped and is not integration or release.
 
-Use [current correction acceptance](completion-receipt.md#current-correction-acceptance) for R27–R51 and all C0–C5 evidence and the [correction debrief](review-and-debrief.md#final-correction-debrief-to-deliver) for the final synthesis. The candidate’s old “implemented, only observations missing” claim is superseded by the [current independent findings](completion-review-578a4f1c.md). The user approved repairs on the candidate before independent acceptance and integration into the normal checkout; no repair phase needs another prompt.
+Use [current correction acceptance](completion-receipt.md#current-correction-acceptance) for R27–R51 and all C0–C5 evidence and the [correction debrief](review-and-debrief.md#final-correction-debrief-to-deliver) for the final synthesis. The candidate’s old “implemented, only observations missing” claim is superseded by the [current ownership correction](completion-ownership-design.md). The user approved repairs on the candidate before independent acceptance and integration into the normal checkout; no repair phase needs another prompt.
 
 Block completion for demonstrated data loss, wrong scientific results, broken required workflows, violated resource/compatibility guarantees, missing required evidence or material false claims. Tie each finding to a reachable case, accepted invariant and impact. Cosmetics, speculative hardening, new analysis types and unrelated optimization become follow-ups. New requirements are not retroactive blockers.
 

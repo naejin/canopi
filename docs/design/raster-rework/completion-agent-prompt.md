@@ -1,8 +1,8 @@
 # Finish the raster candidate through verified production workflows
 
-Status: active — sole implementation prompt; continue reviewed candidate `578a4f1c`.
+Status: active — sole implementation prompt; continue reviewed candidate `291d0773`.
 Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
-Current guidance: [fixed repairs and reproductions](completion-review-578a4f1c.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
+Current guidance: [ownership correction](completion-ownership-design.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
 
 ## Assignment and first actions
 
@@ -16,12 +16,14 @@ Acceptance, primary-checkout integration and release remain separate.
 Inspect `git status --short --branch`, worktrees, ancestry and
 `bd show canopi-j571.1`; claim/resume that bead in the candidate worktree. Merge
 this committed documentation handoff with history preserved. Start from
-`578a4f1c` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
+`291d0773` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
 accepted repairs. Do not restart from the older documentation checkout. Its
 `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
 are user-owned: do not stage, stash, overwrite or discard them.
 
-Read the latest repair decisions, C0–C5 and the source-import amendment once.
+Read the ownership correction, C0–C5 and the source-import amendment once.
+The ownership correction is the current seam-specific authority; older reviews
+are historical evidence where their sequencing differs.
 Use relevant subsystem guides as each slice requires; older review records are
 supporting evidence, not a stack of alternate assignments. Reconcile the existing
 bead design/acceptance links to this prompt; do not create another completion bead.
@@ -32,8 +34,8 @@ assets and non-publishing platform checks early, then continue local work.
 
 | Order | Outcome and owned surfaces | Exit before continuing |
 | --- | --- | --- |
-| 1 | Correct provider coverage and attribution: `maplibre/basemap-*`, three map owners and their existing tests | Run the supplied coverage probe; commit ordinary regressions for its cases and malformed/bounded inputs; exercise actual control construction, withdrawal and Loading visibility |
-| 2 | Complete import settlement, targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Gated old/fresh reads, two-definition Retry, changed-head refusal, cancellation and native in-flight/early-NoData cases pass through real owners |
+| 1 | Consolidate the complete basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | TDD the M acceptance cases, starting with initial mount without events; migrate Canvas/Location/WorldMap and verify actual control ownership, coverage, replacement and disposal |
+| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | TDD the L acceptance cases with real store/workflow, including rejected-read recovery and overlapping completions; named two-definition Retry and native in-flight/early-NoData cases pass |
 | 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Capacity loss during output, real write fault, finite chunk timeout/uncapped source cancellation and retry pass; perform all available live resource/fixture measurements |
 | 4 | Demonstrate the combined product and deliver it: existing Desktop/Web/gallery recipes, receipt and guides | C0–C5 caller audit, required final-tree gates and available driven workflows complete; unsupported claims corrected and exact external gaps recorded |
 
@@ -43,15 +45,18 @@ Routine helper/API organization inside the named owners, small test gates, diagn
 regressions, i18n and contract-preserving fixes are delegated. Keep all eleven
 locales aligned if copy changes. Reuse accepted controls; no new analysis editor.
 
-Run focused tests while editing. First reproduce each concrete failure, then fix
+Use the repository TDD skill for every changed behavior: write one regression,
+run and inspect its intended RED, implement the smallest coherent GREEN, then
+refactor while green. Record the compact evidence required by the ownership
+correction; do not substitute a final test total for TDD. First reproduce each concrete failure, then fix
 it and examine its adjacent success/failure/replacement/disposal behavior. Do not
 mock away the owner or capability being verified. Record actual red/green evidence;
 source-traced findings without a reproduction are not retrospectively red tests.
 The supplied probes are starting points: committed tests must use the normal test
 runner and cannot depend on `/tmp` or ignored scratch artifacts.
 
-Use the two named GeoLibre longitude references for R47 and stop there unless a
-specific remaining problem warrants another exact source. Preserve existing
+Use the pinned GeoLibre references in the ownership correction for lifecycle and
+reconciliation patterns; no further toolkit survey is needed. Preserve existing
 `wbgeotiff` adoption. No engine search, whole-toolkit import, geometry dependency,
 generic scheduler, new qualification harness or speculative abstraction.
 

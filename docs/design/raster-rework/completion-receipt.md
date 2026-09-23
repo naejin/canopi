@@ -1,12 +1,32 @@
 # Raster rework completion receipt
 
-Status: partial — R44–R51 repairs delivered on the candidate at `c02d8164` for independent acceptance. R27 ceiling lift and R43 live scratch/queue/fault sampling remain open; full C5 gates green on the combined tree except named external lanes.
+Status: partial — candidate `291d0773` requires the ownership correction and remaining C0–C5 evidence; not independently accepted.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-Independent review at `578a4f1c` is recorded in the [latest repair decisions](completion-review-578a4f1c.md).
+The current assignment is the [ownership correction](completion-ownership-design.md).
+At `291d0773`, source inspection establishes skipped initial configuration delivery,
+failed-read fallthrough and independently coalesced read queues. Coverage world-copy,
+control ownership and Retry presentation require the named caller regressions in that
+contract. Earlier independent probes were reported in review; this documentation
+update did not rerun them. Do not call this update a new red/green test run.
+
+For the next delivery replace this paragraph with a compact acceptance table:
+**obligation → baseline/test command/intended RED → repair revision/GREEN → real
+caller exercised → remaining limit**. Include M/L, R44–R51, R27/R43 and C0–C5;
+reference shared evidence rather than duplicating it. Record exact missing commands,
+prerequisites, residual risk and closure owner separately from unimplemented tests.
+
+### Reported delivery at `291d0773` — qualified by current correction
+
+The following table and gates preserve the implementer's report at code `c02d8164`.
+“Done” and fresh-settlement claims are not current independent acceptance. R48/R51
+required local proof remains in scope, not an optional follow-up. Full gate totals do
+not establish mounted behavior, correct concurrent settlement or TDD history.
+
+Independent review at `578a4f1c` is recorded in the [prior repair decisions](completion-review-578a4f1c.md).
 This delivery repairs those findings on the combined tree at `c02d8164`
 (merge `aab27c35`, coverage `5734f1f9`, lifecycle `2cfea668`, map guards `c02d8164`).
 

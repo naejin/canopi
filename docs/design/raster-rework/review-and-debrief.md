@@ -1,19 +1,55 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — review of `578a4f1c` requires completion of R44–R51; final implementation synthesis and independent acceptance remain pending.
+Status: evidence — ownership correction against `291d0773` active; final synthesis and independent acceptance pending.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
-Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment continues candidate `578a4f1c` under `canopi-j571.1`.
+The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `291d0773` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
 named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
+
+### Ownership correction and next-use evidence
+
+The architecture comparison identified a design omission: existing helpers expose
+lifecycle steps whose callers must assemble correctly. The main reviewer also
+underweighted that architectural contribution when describing repeated escapes as
+mostly implementation/test failures. The next delivery tests whether two cohesive
+owners reduce those escapes without adding another framework.
+
+Use the existing six-question final debrief below, with one row per material lesson:
+**baseline failure/revision → design omission / implementation deviation / test gap /
+reviewer oversight / environment limitation → responsible role → smallest intervention
+→ failing detector and healthy control → next actual use/result → keep/revise/drop or
+untested → maintained artifact or bd follow-up**. Multiple classifications are valid.
+Do not infer a cause from a model name or from repeated failure alone.
+
+| Intervention to evaluate | Next real use and evidence | Adoption rule |
+| --- | --- | --- |
+| Complete lifecycle owners instead of caller-assembled helpers | M through three production map callers; L through failed read and overlapping completions with real store/workflow | Keep if prescribed behaviors pass and duplicate coordination is removed; record remaining caller obligations |
+| Vertical TDD at the claimed boundary | Intended RED then GREEN for each changed invariant; note any owner mock removed | Keep meaningful detectors; report tests that already passed or had fixture-only failures honestly |
+| One bounded caller/teardown self-review before delivery | Trace changed callers through failure, replacement and disposal; record defects caught before handoff and any independent-review escapes | Revise review coverage from escaped invariant families, not test-count targets |
+| Small improvements to existing tools/guides | A demonstrated failed command or misleading check, smallest repair, failing input and healthy control, next actual use | Retain only evidenced benefit; label unexercised benefit untested, defer broader tooling to bd |
+
+Record these events when discovered in the existing receipt/debrief and checkpoint
+execution in bd; no transcript diary or parallel Markdown task tracker. At delivery,
+replace this experiment's pending outcomes with observations. Reconcile disproved
+older lessons: the prior claim that initial observer delivery was unnecessary is
+not a durable rule, because every mounted caller must receive initial configuration.
+
+The final synthesis must name delivered user workflows, unresolved obligations,
+removed/retained machinery, TDD evidence, tested tooling changes and their next-use
+results, and architecture/reviewer corrections. Record time, cost and courier cycles
+only if observed; otherwise unknown. Do not claim savings from test totals or model
+choice. Main reviewer adds independent disposition and escaped defects to the same
+synthesis. Promote proven lessons into the narrowest existing test/script/guide in
+the implementation change; broader skills or automation need separate authorization.
 
 ### Independent disposition at 578a4f1c
 
@@ -23,7 +59,7 @@ tests passed independently; separate probes reproduced wrong wrapped coverage,
 nonterminating normalization, retained credit and attachment before a fresh read.
 The review also traced guessed Retry selection, one-time storage admission and an
 early NoData currency bypass. Native races/faults and full gates were not rerun by
-the reviewer. Details and fixed decisions live in the [current review](completion-review-578a4f1c.md).
+the reviewer. Details and fixed decisions live in the [prior review](completion-review-578a4f1c.md).
 
 The earlier implementation synthesis is preserved at `578a4f1c` in Git. Its claim
 that all R44–R51 invariants hold is superseded; do not treat that narrative or
@@ -288,7 +324,7 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
-**Synthesis at `c02d8164` (partial).** Independent acceptance remains a separate
+**Historical implementer synthesis at `c02d8164` (partial; qualified by the ownership correction).** Independent acceptance remains a separate
 entry by the main reviewer. Commands and results live in the
 [receipt](completion-receipt.md#current-correction-acceptance).
 
@@ -347,7 +383,7 @@ next-use evidence supports a benefit:
 
 ### Final synthesis
 
-Current disposition: changes required at `578a4f1c`. The next implementation
+Current disposition: ownership correction required at `291d0773`. The next implementation
 synthesis is pending the correction, followed by independent acceptance. Do not
 reuse an earlier “implemented” heading as evidence of complete current scope.
 Historical accepted outcomes and limitations follow; their old execution prompts,
