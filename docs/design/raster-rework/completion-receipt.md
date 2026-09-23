@@ -20,7 +20,7 @@ tip is `bf43af19`.
 | Boundary | Current evidence / required next proof |
 | --- | --- |
 | C0 preservation | **Done.** `f61f8494` integrates the accepted foundation; candidate work retained; handoff merged at `5dfae6bc`. `34e4ded4` and `f61f8494` both verified as ancestors of the delivered tip |
-| C1 / R26 import | **Partially implemented.** Publication no longer reads the composed pixels: metadata is derived from stored member facts, exact composed facts are nullable and labelled, and the display range is what tiles and previews consume. The staging/review/Apply route, the review's own scan and the preview generation are still production, so the amendment's single choose-files-first flow and `lidar_import_sources` are not there. See "C1 disposition" |
+| C1 / R26 import | **Partially implemented.** Publication no longer reads the composed pixels; exact composed facts are nullable and labelled; the display range is what tiles and previews consume; and the user flow is now choose files → explicit interpretation → Import → one job that prepares, validates and publishes atomically (`lidar_import_sources`), with cancellation, retry and progress in Data. **What remains is deletion, not design:** the shared staging call still runs the review's composed scan and renders before/after previews, and the retired stage/apply/preview commands are still registered though no production caller reaches them. See "C1 disposition" |
 | C2 / R23–R25 workbenches | **Repaired** at `bf43af19`: Data owns import progress/cancel/retry, Layers offers undoable Remove from Design, Analysis exposes failure/duplicate-submit/unit. Not live-verified in an isolated Desktop session this round |
 | C3 / R15–R18 inspection | **Repaired** at `85d19ca7` with R18's cancellation half and R16's published-result lane added later: the displayed point is sampled through `worldToGeo`, results resolve through `ResultManifest` and are read end to end in both units, lattice indices are signed, the session is fenced to the document session/entity/request/head, and the lookup is admitted into the shared bounded read queue and cancellable by the surface that started it. GDAL-backed oracle tests pass; live isolated-Desktop value verification not re-run |
 | C4 / R19–R22 providers | **Repaired** at `39cfb9a5`: authenticated outgoing tile request, keyed viewport request, string expiry, copyright/`maxZoomRects` adopted, style-readiness wait, one shared provider per map lifetime on Canvas/Location/WorldMap, disposal, renewal, and an in-read byte cap. Live restricted-key observation remains an external prerequisite |
@@ -103,45 +103,70 @@ undriven.
 
 ## C1 disposition and R26
 
-C1's amendment is **not implemented** in this round. Production import still runs
-`stage_import` → review → `apply_import`, still renders before/after previews
-(`import.rs` preview generation), and still calls `collection::measure` on the
-composed plan before publishing (`import.rs` apply, and `publish_snapshot_members`
-for reorder/remove/undo/restore). The old 24-file / 2 GiB-per-file / 2 GiB-total /
-400,000,000-processing-cell policy is therefore still the production admission
-rule, and R26's activation condition remains unmet in the sense the amendment
-defines: the new route's own resource evidence does not exist because the route
-does not.
+C1 is **partially implemented**: the flow, the command and the metadata split
+have landed, and what remains is deletion plus measurement.
 
-This is a scope and budget boundary, not an external blocker: no missing
-credential, fixture or platform prevents it. Naming it plainly is the honest
-alternative to shipping a half-migrated publication path.
+**Landed — publication metadata without reading composed pixels.** Catalogue v18
+relaxes `coverage_cells` to nullable and adds
+`display_min_value`/`display_max_value`/`display_basis`, preserving every existing
+exact value and labelling it `exact`, with an interrupted-upgrade rollback
+regression. The read model carries unknown coverage and the labelled display
+range end to end, and "unknown is not zero" is applied at composition readiness,
+the Layers empty state, the coverage fact, the history rows and the Data panel.
+`collection::measure` is now a derivation over stored member facts: exact facts
+are reported only when derivable (empty composition, one-member composition,
+all-members-empty), and everything else reports unknown exact coverage and range
+plus a `SourceEnvelope` display range. Tiles, review previews and legends consume
+the display range with a per-column fallback to the exact range. Reorder, remove,
+Undo and Restore therefore publish without decoding the prior collection, and the
+ordered lifecycle test still verifies the composed window, reorder, remove, undo
+and restore cell by cell.
 
-Every finding R15–R26 raised against the candidate's *code* now has a repair and
-a committed regression, except C1/R26 itself, which is the amendment below.
+*Two defects the GDAL lane caught while landing that:* a single four-argument
+`COALESCE` over the display and exact columns returned the *minimum* for both
+bounds, collapsing the colour domain to a constant; and the preview scale read
+only the exact columns, so an unknown exact range collapsed it. Both now fall
+back per column, and both failures are pinned by the lane.
 
-The remaining C1 work, in dependency order, is:
+**Landed — the user flow and its command.** `lidar_import_sources(layer_id,
+paths)` is the production route: one job prepares each source, validates the
+whole batch, publishes atomically and settles as complete, failed or cancelled,
+never entering `AwaitingReview`. The target head is captured before preparation
+and rechecked inside the publication transaction. Data opens the chooser first —
+cancelling it creates no dataset, job or asset — then shows the chosen files with
+a name suggested from the first one and an interpretation that must be chosen
+explicitly; adding to an existing dataset reuses that dataset's interpretation.
+A batch it cannot use refuses entirely and now names the user's file, where the
+staging error used to name the hashed staging copy.
 
-1. Derive publication metadata from stored member metadata: exact composed
-   `coverage_cells` becomes nullable (empty composition ⇒ zero; one unchanged
-   member ⇒ its exact facts) and a separately labelled display range with basis
-   `Exact` or `SourceEnvelope` is added. This needs an additive catalogue
-   migration and regenerated bindings, plus the presentation/tile/legend
-   consumers the contract lists.
-2. Delete the preview generation from `stage_import` and the composed scan from
-   both publication call sites, keeping real format/index/disk guards.
-3. Add `lidar_import_sources(layer_id, paths) -> job_id` and retire
-   `lidar_stage_import`/`lidar_apply_import` from production, with the batch
-   atomicity, expected-head capture and conflict rules the amendment fixes.
-4. Rebuild the Data import interaction as choose files → explicit interpretation
-   → Import → progress → cancel/retry, removing the review/Apply screen.
-5. Measure the new route: peak live scratch separate from durable bytes,
+**What still remains, in order.**
+
+1. **Delete the retired path, which is where the remaining cost lives.** The
+   one-step route calls the same `stage_import`, so the review's composed scan
+   (`review_coverage`) and both preview renders still run on every production
+   import even though nothing displays them. Removing them means separating
+   per-source preparation from the review comparison, dropping the preview fields
+   from the review contract, and deleting `lidar_stage_import`,
+   `lidar_apply_import`, `lidar_preview_import_decision`, their frontend consumers
+   and the ~60 preview references in the native tests. Until that lands the
+   honest statement is: **a production import still pays for one
+   whole-composition scan and two preview renders it does not use.**
+2. Retire those commands from the native registry and the sync-command policy
+   once their frontend consumers are gone.
+3. Measure the new route: peak live scratch separate from durable bytes,
    cancellation settlement, queue refusal, low-space/write failure at the real
    publication seam, and cold/three-warm display timing.
 
-Until (1)–(5) land, the retired compatibility claims (the overlap-replacement
-checkbox, compulsory merged-source publication and the Q prerequisite) remain
-retired, and no "unlimited capacity" claim is made.
+The old 24-file / 2 GiB-per-file / 2 GiB-total / 400,000,000-processing-cell
+policy is therefore still the production admission rule, and R26's activation
+condition remains unmet in the sense the amendment defines: the new route's own
+resource evidence does not exist. This is a scope and budget boundary, not an
+external blocker. Every finding R15–R26 raised against the candidate's *code* now
+has a repair and a committed regression; C1/R26 is the outstanding amendment.
+
+Until the deletion and the measurements land, the retired compatibility claims
+(the overlap-replacement checkbox, compulsory merged-source publication and the Q
+prerequisite) remain retired, and no "unlimited capacity" claim is made.
 
 
 For capacity report input identities, cell/byte counts, source/output TIFF format,
