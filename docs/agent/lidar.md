@@ -1,20 +1,23 @@
 # LiDAR implementation guide
 
-Use this entry point for raster import, overlap review, the shared library, analysis, or LiDAR presentation. The current foundation admits bounded, north-up, aligned single-band numeric rasters and persisted slope analysis. The [raster rework](../design/raster-data-analysis-rework.md) specifies future bounded import, Data/Analysis workbenches and shared Web maps; it does not change the current workflow until implemented. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
+Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `26eca68a` remains partial after independent review. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
 ## Accepted direction and current assignment
 
 The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-design.md): an ordered collection of source COGs, topmost-valid composition shared by display/analysis, whole-layer presentation visibility, and no compulsory merged-source raster for new edits. [ADR 0027](../adr/0027-ordered-cog-data-layers.md) supersedes ADR 0026 for new source composition. The correction at `34e4ded4` is [independently accepted in scope](../design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4); integration and release remain separate.
 
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
-`canopi-j571.1` from candidate `5d0a5e0b`, with foundation integrated at `f61f8494`.
-The [independent review](../design/raster-rework/completion-review-5d0a5e0b.md)
-requires R15–R26 repairs; candidate code is not independently accepted. The
-[source-import amendment](../design/raster-rework/source-import-design.md) settles
-the new bounded source-only route, separate display/exact metadata and removal of
-arbitrary input policy ceilings. This is intended behavior until implemented;
-read the candidate for current code. Preserve R12–R14's tile footprint, edit
-lifetime, traversal and teardown regressions and mounted-map evidence.
+`canopi-j571.1` from candidate `26eca68a`, with foundation integrated at `f61f8494`.
+The [current independent review](../design/raster-rework/completion-review-26eca68a.md)
+requires R27–R43 corrections under the [repair decisions](../design/raster-rework/completion-correction-design.md).
+Source-only publication and nullable exact/display facts are present; lifecycle,
+resource admission and evidence obligations remain. The
+[source-import amendment](../design/raster-rework/source-import-design.md) still
+supersedes arbitrary input ceilings once bounded consumers and safety evidence
+are established. Do not weaken that contract to match current caps or claim
+only external observations remain. Preserve R12–R26's meaningful regressions.
+Implementation, independent acceptance and integration into the user's primary
+checkout remain separate; reconcile the candidate's detailed inventory as repairs land.
 
 The delivered implementation lives on that branch, not in this documentation checkout: `services/lidar/collection.rs` owns snapshot membership, measurement and Undo/restore history; `generation.rs` owns the ordered resolver (`CollectionReader`) and the preserved-generation reader (`GenerationReader`); `tiles.rs` resolves display reads from the native and reduced windows it actually consumes; `mod.rs` exposes `layer_collection`, `layer_history_page`, the awaited edit entries (`apply_move`, `apply_remove`, `apply_undo`, `apply_restore` over `apply_member_edit`) and `settle_layer_edit`; `commands/lidar.rs` carries the five ordered commands; `desktop/web/src/app/lidar/` and `components/panels/lidar/` own the source list, History, import route and their request lifetimes.
 

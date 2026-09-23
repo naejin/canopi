@@ -1,213 +1,119 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — historical deliveries and independent review through `5d0a5e0b`; correction-cycle final synthesis remains pending.
+Status: evidence — independent review at `26eca68a` requires R27–R43 corrections; C1/R26 remains partial. Earlier delivery claims and measurements are revision-bound evidence, not acceptance. The next final synthesis and independent disposition are pending.
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
-Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
+Current guidance: [current corrections](completion-correction-design.md), [current review](completion-review-26eca68a.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The user authorized the full remaining sequence on 2026-09-22, with the implementation agent continuing through internal milestones and returning only for material blockers. The purpose is more useful delivery per necessary main-agent intervention while preserving architectural coherence and trustworthy review. Actual savings have not been measured. This section owns the final synthesis; bd owns resumable progress and the completion receipt owns detailed measurements.
+The current assignment continues candidate `26eca68a` under `canopi-j571.1`.
+The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
+supersede the earlier claim that only external observations remained. This section
+owns the next debrief; material older outcomes below remain evidence at their
+named revisions, not instructions to restart retired work. The six-question
+implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
+measurements remain in the completion receipt. It was not independent acceptance.
 
-### Correction cycle after independent review of 5d0a5e0b
+### Independent disposition at 26eca68a
 
-The [review](completion-review-5d0a5e0b.md) found R15–R26 despite the prior gate
-passes. The user's accepted [source-import amendment](source-import-design.md)
-also replaces the main agent's earlier conservative limit/mandatory measurement
-prescription. Both sides of this handoff must be evaluated: implementation gaps
-are not all design omissions, and the expensive import route was not an invention
-of the implementation agent. Preserve these distinctions in the final debrief.
+Ten diagnostic assertions failed while 44 tests passed. R27–R43 identify retained
+source ceilings, copy/hash/process/lock/admission gaps, job/inspection lifecycle
+failures, provider transition failures and a residue-versus-peak claim error.
+The candidate still requires code repairs as well as external evidence. All
+review tests were isolated; candidate and user-owned checkout files were untouched.
+No full native/platform rerun or live Google success was independently claimed.
 
-| Observed case | Classification / owner | Small intervention and next-use detector | Current disposition |
-| --- | --- | --- | --- |
-| Existing tests pass while tile session/viewport transport and attribution fail | Implementation plus test-boundary gap; implementer repairs, reviewer verifies | Assert actual outgoing tile/viewport authentication and installed attribution, with recognizable fake secrets excluded from exported/logged state | Five review probes establish escapes across provider/inspection; repair benefit pending |
-| Offset oracle repeats the implementation; real slope manifests never sampled | Scientific oracle/caller gap; implementer and reviewer | Known geographic cells/physical values through published source and slope readers at nonzero bearing/latitude | Pending |
-| Key-change test never changes key; inspection tests manually call unwired cleanup | Trigger/wiring gap; implementer | Drive settings and Design/head changes through their production owners; assert trigger happened and late work cannot publish | Pending |
-| Preview/full-composition preparation makes source admission depend on unrelated old pixels | Design overprescription; main agent | New source-only preparation and explicit unknown exact metadata; count prior-source pixel reads during append/reorder | Contract amended; implementation benefit pending |
-| Temporary-space cleanup was used as capacity evidence; safety gates remained unavailable | Measurement/acceptance gap; implementer, reviewer | Measure live peak, settled residue and durable bytes separately; inject real publication/write failure | Pending |
-| GUI progress stopped at lossy synthetic path typing | Environment/automation limitation, not established product root cause | Reuse clipboard paste or short owned fixture paths in the existing isolated recipe, then verify the same visible workflow | Pending; do not claim a chooser repair without evidence |
-
-Record a new event only when it changes a decision, exposes an escape, or justifies
-a specific tool/test/guide improvement. Reuse the event row instead of appending
-another round narrative. On the next actual use, record observed benefit, renewed
-failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
-model router, new dashboard or qualification framework is authorized.
-
-### Final correction debrief to deliver
-
-Replace pending synthesis with a short answer to these concrete questions:
-
-1. What now works through the actual app, and what still lacks observation? Link
-   the receipt instead of copying gates or screenshots into this section.
-2. Which R15–R26 defects escaped because the test never triggered the event,
-   tested the wrong boundary, copied an oracle, or omitted a production caller?
-   Which escaped the main agent's design/review, and which contradicted an existing
-   adequate instruction? Name the earliest economical detector for each group.
-3. Did source-only import remove old collection reads and mandatory preview work?
-   What replaced exact metadata, and did users receive truthful ranges/coverage?
-   Compare only equivalent observed inputs; the old/new pipeline differ.
-4. Which task-local test/script/guide changes demonstrably helped on their next
-   use? Give keep/revise/drop, owner and the one authoritative updated location.
-   Untested improvements remain proposals with a concrete next-use experiment.
-5. Which courier exchanges were material decisions/external prerequisites, and
-   which were avoidable continuations or missing handoff decisions? Report only
-   directly observed counts/time/cost, otherwise unknown. A round budget, test
-   count or presumed model price is not a productivity measurement.
-6. What bounded follow-ups remain in bd, and which instructions or tools should
-   be removed because they duplicate an existing owner or no longer apply?
-
-The main agent adds independent escapes and scoped acceptance to this same
-synthesis after review. Continuous improvement means using verified fixes in the
-next real task, not continuously increasing documentation or verification volume.
-A partial delivery has a partial debrief; absence of external evidence remains
-explicit. The previous “Final synthesis” below is historical at `2b39ee2a`, not the
-final disposition of the corrected candidate.
+The accepted contracts already specified most failed behavior. The recurring
+pattern is that a test proved an initial state or a helper while the obligation
+concerned a mounted caller over a later transition. The resource receipt also
+attached a stronger label to a measurement than its sampling point established.
+These observations support narrower detector/claim corrections; they do not prove
+that a language, model, token budget or larger process framework is the cause.
+The main agent owns earlier missed boundaries and any missing design decisions.
 
 ### Record during the work
 
-At each material failure or decision, update the existing receipt/bead with the revision, concrete trigger, accepted invariant, discovery boundary, smallest response and decisive evidence. Distinguish self-review discovery from independent escape. Record a tool's failure status as well as its output when the two disagree. Keep only events that can inform correctness, repeatability or cost; no exhaustive transcript or second tracker.
+Use bd for execution checkpoints and the receipt for reproducible verification.
+Here retain only observations useful for the final synthesis: trigger/revision,
+invariant, discovery stage (implementation/self-review/independent review), causal
+classification where supported, smallest intervention, evidence and next-use result.
+Consolidate repeated instances of one family. Do not keep a command diary or
+create a separate cost collector. Elapsed effort/cost, review time, repeat runs
+and courier exchanges are reported only when directly observed, otherwise unknown.
+Test totals and line counts are not productivity measures.
 
-Classify design omission, implementation deviation, test/oracle gap, reviewer oversight and environment/tool limitation separately, allowing overlap. Check whether existing instructions covered the behavior before blaming the handoff or proposing another rule. Main-agent design omissions and unnecessary prescribed complexity are first-class findings, not automatically implementer failures.
+### Final correction debrief to deliver
 
-Test each proposed intervention on a real next use. Keep/revise/drop is supported by a failing case plus healthy control or an observed recurrence prevented. A promising idea without such use remains untested. Apply small reversible task-local test/script/guide corrections, then return to product work. Broader skills/automation/dependency changes need a separate scoped proposal; do not install a workflow framework in the name of the debrief.
+Deliver one concise synthesis alongside the corrected candidate, with these six
+questions answered from evidence. A partial delivery gets a partial synthesis;
+independent acceptance remains a separate entry by the main agent.
+
+1. **What can the user now do?** Name inspected baseline and delivered revision,
+   real Desktop/Web workflows newly observed, retained compatibility, actual
+   admission/resource limits and exact external gaps. Link the receipt rather
+   than repeat its full gate/measurement tables.
+2. **What escaped, and why did the existing checks miss it?** Group by invariant
+   family, distinguishing design omission/contradiction, implementation deviation,
+   test/oracle gap, reviewer oversight, environment/tool limitation and reporting
+   error. Allow mixed causes and unknown causes. Include self-review discoveries,
+   not only fixes handed down by the reviewer. A covered rule does not need a
+   duplicate rule; identify the missing detector or caller observation.
+3. **What implementation complexity was necessary?** Identify existing owners
+   reused, obsolete machinery removed and any new helper/seam that earned its
+   maintenance cost. Explain the user capability or failure it serves. Do not
+   celebrate deletion that removed a required behavior or a meaningful test.
+4. **Which workflow/tool changes actually helped?** For each material intervention
+   use the compact table below. Distinguish applied-and-observed from applied-but-
+   untested and proposal-only. Show its next real use, or explicitly say it has
+   not had one. Promote a proven lesson into the narrowest maintained test,
+   script or guide and remove stale instructions; do not expand every fix into
+   repository-wide policy. Broader tooling/skill changes require a follow-up.
+5. **Where was effort or a user exchange avoidable?** Compare necessary scope/risk
+   decisions with routine continuation requests, repeated unchanged failures and
+   identical-code gate reruns. Record only actual scope/timing/cost observations.
+   The user's preference for cost-effective execution is a goal, not evidence
+   that this round saved money. Include main-agent planning/review overhead.
+6. **What should change next, and what would disprove it?** Give only the highest-
+   value remaining proposals, each tied to an observed failure, owner, existing
+   seam, next bounded trial and keep/revise/drop criterion. Create/reuse follow-up
+   beads for work outside this assignment. No general harness/agent framework
+   or skills rewrite merely because defects recurred.
+
+| Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
+| --- | --- | --- | --- | --- | --- |
+| Fill only for material interventions observed during this correction | Do not infer a model cause | Prefer existing tests/scripts/guides | Failing trigger and healthy control; distinguish next-use observation from prediction | Benefit unknown is valid | Link the artifact or bead |
+
+Remove the instructional example row when real interventions are recorded. Do not
+fill a quota. The reviewer adds its own escapes and acceptance disposition to the
+same record after delivery, without replacing the implementer's evidence.
 
 ### Interventions carried into this assignment
 
-| Observed failure / existing evidence | Smallest intervention already selected | What completion should evaluate |
-| --- | --- | --- |
-| Broad caller guidance missed edit navigation, out-of-order refresh and reduction-footprint contributors at `524eef55` | Preserve R12–R14's ordinary caller regressions when splitting the old panel and extending readers | Do they catch actual regressions before delivery? Add a new detector only for a demonstrated missing boundary. |
-| A live panel/catalogue pass was mistaken for a mounted-map pass | Confirm Location, observe pixels and correlate immutable head/result IDs; retain the actual evidence boundary | Does full Desktop/Web verification establish the claimed workflow and avoid partial-render screenshots being called complete? |
-| Isolated Desktop was initially declared unavailable; Xephyr recipe then worked twice | Reuse the tested edition-guide recipe, with profile/process ownership and fresh control positions | Record actual next-use result, failures and smallest correction; no replacement GUI framework. |
-| Retired Q/source-merge briefs and open-but-delivered beads contradict current scope | One completion prompt/contract, current routing and C0 tracker reconciliation | Does the executor start the correct work without rediscovering architecture or redoing accepted fixes? |
-| Routine continuation consumes courier/reviewer attention | One whole-rework authorization, concrete phase exits and resumable bd checkpoints | Classify actual exchanges: material decision, external prerequisite, acceptance or avoidable resumption. Do not infer counts from commits. |
-| Initial independent Rust command used an unwritable Cargo home | Reuse the inspected worktree toolchain and existing isolated cache | Did the next real command run without a cache/pin workaround? This is local setup evidence, not a new global rule. |
+Test these existing approaches on the current repairs; they are hypotheses until
+next-use evidence supports a benefit:
+
+- **Transition tests through owners:** initialize successfully, then change
+  panel/head/Design/key/viewport and observe settlement. This should detect the
+  lifecycle families behind R32–R42 before delivery. Stop at behavior assertions;
+  do not mirror private state or add exhaustive permutation infrastructure.
+- **Measurement-to-claim check:** for each material resource claim identify what,
+  where and when the producer samples. This should prevent R43's settled residue
+  being relabelled peak scratch. Repair a small existing sampler if needed.
+- **Contract-to-caller final pass:** check all C0–C5 after named regressions pass.
+  This should find omitted obligations beyond a reviewer example, such as
+  same-definition Retry, without reopening accepted architecture.
+- **One consolidated execution:** routine diagnosis, fixes, documentation and
+  self-review stay with the implementation agent; only actual material decisions
+  return through the user. Evaluate by working capability and escaped defects,
+  with observed effort where available, not by fewer messages alone.
 
 ### Final synthesis
 
-**Delivered 2026-09-22; verified at candidate `2b39ee2a` on
-`feature/raster-rework-completion`, containing `main` at `f61f8494`, which
-contains the accepted foundation `34e4ded4`. Evidence and limits live in the
-[completion receipt](completion-receipt.md); this section is the synthesis that
-contract asked for.**
-
-#### What works, and the exact limits
-
-Capability, capacity and command evidence are the receipt's to own. In summary:
-Desktop Data/Analysis/Layers ship with reusable datasets, ordered source import,
-priority, history and confirmed library deletion; Analysis runs slope in degrees
-or percent under an author-chosen result name; Layers is a flat geographic
-presentation list with independent result eyes; numeric inspection returns the
-physical value at a point; Web Location places coordinates and shares basemap
-providers. Production admits **24 files, 2 GiB per file, 2 GiB total and
-400,000,000 processing cells**, raised from a retired 25,000,000-cell bound that
-survives only as the legacy dense allocation guard. Measured on the real IGN
-fixtures: a 12-tile 48M-cell batch and a synthetic 400M-cell plane, the latter in
-798 s at 197 MiB peak.
-
-The limits that remain are **not** capacity but reach: the end-to-end Desktop
-import chain is unobserved because the native file chooser's autocompletion
-truncates a typed path, so everything behind Apply rests on unit and native
-tests rather than a driven run. Windows and macOS compilation, packaged-window
-smoke and the packaged Web artifact were never run. The official Google basemap
-path needs a real restricted key that does not exist here. Inspection values were
-never read off a live session. The receipt names each one; none is reported as a
-pass.
-
-#### Complexity that earned its place, and machinery that did not
-
-Reused rather than replaced: the ordered COG model, the SQLite catalogue with
-immutable generations, the surface-adapter seam and the shell-command
-composition. The additions that pay for themselves are the ones that deleted a
-falsehood — `resolve_units` refuses a unit nobody declared instead of storing
-`unitless`; `scan_source_facts` spans only valid samples so a NoData sentinel
-cannot dominate a range; `LIDAR_UNITS_UNKNOWN` distinguishes "not stated" from
-"dimensionless". `basemap-bind.ts` is ~70 lines that removed two map-recreation
-paths.
-
-Machinery removed: the overlap-replacement checkbox, compulsory merged-source
-publication and Q-as-prerequisite are retired rather than passed, and the epic
-description now says so.
-
-#### Material escapes, by invariant family
-
-Three families recurred, and each points at a missing detector rather than a
-missing test.
-
-**Interaction tests that could not fail.** The CSS structural guard's first
-version returned zero on the shipped-broken input; a low-space test passed with
-the production cleanup deleted; `lidar-data-panel`'s interpretation case
-dispatched a `change` event that never moved the radio, so it asserted a state it
-had not created. In each case the test looked healthy. The detector that would
-have caught all three is cheap and now applied: **probe that the subject actually
-changed before trusting the assertion**, by mutating the production code or
-reading the control's state.
-
-**Regression tests that encoded the defect.** Two tests actively required map
-recreation on a basemap change — the exact behaviour C4 forbids. Both were
-inverted rather than deleted, because the old assertion is the clearest
-description of what a reader must not reintroduce.
-
-**Whole-rule deletions.** A bulk selector cleanup removed a selector line
-together with its rule's body, silently disabling the focus-outline rule shared
-by nine controls, and that round was reported complete. The `css-module-policies`
-guard passed throughout because it checked token *values*, not rule *structure*.
-A blank line inside a prelude is now the detector, verified against the
-shipped-broken revision.
-
-Classification: the first family is a test-oracle gap; the second an
-implementation deviation the tests had blessed; the third an implementation
-deviation with a genuine guard gap. None was a design omission — the contracts
-were explicit in every case, and the failures were mine.
-
-#### Handoff decisions that were missing or overprescribed
-
-The completion contract was unusually complete. Two places cost real time.
-`completion-design.md` prescribed no window manager for the isolated session, so
-the GTK file chooser was unmapped and unreachable for several rounds; a window
-manager fixed it at the first attempt, and the guide now requires one. The
-low-space path was required to be verified but is not reachable by an
-unprivileged test here — no tmpfs mount, and `RLIMIT_FSIZE` is process-wide — so
-it is recorded as unverified with the probe evidence rather than papered over.
-Those are environment/handoff limitations, not implementer failures, and both
-were safely settled locally.
-
-#### Effort and exchanges
-
-Unknown in cost terms and deliberately not reconstructed. What is observable:
-one whole-rework authorization produced the sequence without routine resumption,
-which is the outcome the arrangement was testing. Rounds 20 and 25 were spent
-entirely on harness mechanics with no product evidence, and rounds 26–30 each
-landed product code, which is the honest shape of the return.
-
-#### Highest-value next interventions
-
-1. **Drive the import chain by breadcrumb and row** rather than typing a path
-   autocompletion can truncate, with the DOM feedback loop installed first. Trial:
-   a correct filename reaches GDAL and the review route appears. Owner: whoever
-   takes the next pass.
-2. **Run the two platform builds and one packaged smoke.** Trial: the packaged
-   window opens and lists the library. Owner: needs a Windows or macOS host.
-3. **Verify inspection against independently derived values in a live session.**
-   Trial: a clicked and a centre-keyed sample both match an independent oracle
-   across a bearing. Owner: next pass. The transform and pixel selection beneath
-   it are already checked against a hand-derived Web Mercator oracle by
-   `the_real_transform_lands_in_the_expected_cell`, mutation-verified by swapping
-   the coordinate pair, so what a live pass adds is the *session* — the click and
-   the centre key — rather than the geometry.
-
-Everything else on the list is capability that already exists and is waiting on
-one of those three.
-
-At consolidated delivery, replace provisional conclusions with a short revision-linked synthesis covering:
-
-- User capabilities that now work, exact supported capacity and remaining platform/service limitations; link the receipt rather than repeating test logs.
-- Necessary implementation complexity versus machinery removed or reused, with a concrete reason and any maintenance consequence.
-- Material escapes and pre-delivery discoveries, grouped by invariant family and classified by ownership. Repeated families call for a missing decision/detector, not a test quota.
-- Handoff decisions that were missing, contradictory or overprescribed; whether the implementer could safely settle them; smallest correction and outcome.
-- Tool/workflow interventions: observed failure → change → actual next-use evidence → keep/revise/drop → owner/follow-up. Clearly separate applied changes from untested proposals.
-- Observed effort and courier exchanges, with included implementation/test/review/waiting scope. If unavailable, say unknown; do not reconstruct token prices, model causes or savings from test/code volume.
-- The few highest-value next interventions with a falsifiable trial and decision owner. Do not turn a final debrief into an unbounded tooling backlog.
-
-The main agent appends one independent disposition for the actual candidate and records reviewer oversights/escapes. When accepted or explicitly stopped, consolidate duplicate interim conclusions and retire launch instructions. Promote demonstrated reusable lessons into ordinary regressions, an existing tool or the narrowest operating guide; link the maintained authority here. Do not update installed skills or shared automation without separate authority. Integration and release remain distinct observed events.
+Current disposition: changes required at `26eca68a`. The next implementation
+synthesis is pending the correction, followed by independent acceptance. Do not
+reuse an earlier “implemented” heading as evidence of complete current scope.
+Historical accepted outcomes and limitations follow; their old execution prompts,
+round limits and future-work language are revision-bound, not current authority.
 
 ## Ordered COG delivery and final debrief
 
@@ -881,4 +787,4 @@ were closed only because a probe or a failure pointed at them.
 
 ## Final debrief procedure
 
-Use [Ordered COG delivery and final debrief](#ordered-cog-delivery-and-final-debrief) for the current assignment and final synthesis. Historical DB/Q intervention details remain in the revision-linked review and receipt sections above; their old “next repair” instructions do not authorize further Q work. Evaluate their measured outcomes without restarting their workflows.
+Use [Whole-rework delivery and improvement](#whole-rework-delivery-and-improvement) and [Final correction debrief to deliver](#final-correction-debrief-to-deliver) for the current assignment. Ordered COG outcomes remain historical evidence. Historical DB/Q intervention details remain in the revision-linked review and receipt sections above; their old “next repair” instructions do not authorize further Q work. Evaluate their measured outcomes without restarting their workflows.

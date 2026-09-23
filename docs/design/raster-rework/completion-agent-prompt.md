@@ -1,126 +1,103 @@
-# Finish the raster rework: corrections, source import and verified delivery
+# Complete and self-review the raster candidate
 
-Status: active — sole implementation assignment after independent review of `5d0a5e0b` and the user's acceptance of the correction/import direction.
-Tracking: `canopi-j571.1` under `canopi-j571`; continue that bead and `feature/raster-rework-completion`.
-Current guidance: [completion contract](completion-design.md), [source import](source-import-design.md), [R15–R26 review](completion-review-5d0a5e0b.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
+Status: active — sole implementation prompt after review of `26eca68a` and the user's approval of repairs before integration.
+Tracking: `canopi-j571.1` under `canopi-j571`; continue `feature/raster-rework-completion`.
+Current guidance: [correction decisions](completion-correction-design.md), [review R27–R43](completion-review-26eca68a.md), [completion contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md).
 
-## Your mandate
+## Mandate
 
-Deliver the whole remaining rework as one reviewable candidate. Repair R15–R26,
-implement the simplified source import contract, finish the real Desktop/Web
-workflows and obtain every available required verification. The user has approved
-sustained implementation: continue through routine diagnosis, fixes, tests,
-internal phases, documentation and resumable context checkpoints without asking
-for another prompt. Return only for a material blocker or consolidated delivery.
-The next main-agent intervention should be architectural arbitration or independent
-review of working software, not ordinary implementation continuation.
+Deliver one working, thoroughly self-reviewed candidate. Complete the accepted
+C0–C5 requirements, repair R27–R43 and related in-scope defects, retain previous
+repairs, and obtain every available required verification. The user has approved
+sustained execution through these internal steps. Do not stop after a successful
+phase, a context checkpoint or routine gate failure to request another prompt.
+The main agent's next intervention should be a material architectural decision
+or independent acceptance of a concrete delivery, not ordinary debugging.
 
-The candidate already contains useful work. Preserve it and the accepted native
-foundation; do not restart the project or rewrite the raster engine. The review
-found code defects, not merely unavailable live observations. Read its concrete
-reproductions before trusting prior green test totals or capability claims.
+You own implementation, focused diagnosis, local choices, tests, evidence,
+operating-guide reconciliation and small proven task-local tooling improvements.
+The main agent owns fixed cross-subsystem design and independent acceptance;
+the user remains courier and owns scope and consequential risk. No subagents,
+automatic agent handoff, primary-checkout integration, release or branch cleanup
+are authorized. Finish repairs on the candidate before integration is considered.
 
-## Start here
+## First actions
 
-1. Read repository instructions, the completion contract and source-import design.
-   Use phase-specific guides routed there. Inspect status/worktrees/remotes and
-   `bd show canopi-j571.1`; claim/resume the existing bead. Do not create another
-   completion epic, bead or parallel implementation branch.
-2. Work from `5d0a5e0b` or its verified successor on
-   `feature/raster-rework-completion`, normally `.rq-scratch/wt-candidate`. Verify
-   `34e4ded4` and `f61f8494` ancestry. Foundation integration is already complete;
-   do not replay it. Merge this committed documentation handoff, retaining the
-   candidate's revision-labelled receipt/debrief evidence and current code.
-3. Preserve primary-checkout changes to `.beads/issues.jsonl`,
-   `desktop/src/native_operation.rs` and `.beads.gate.lock`, and all existing
-   evidence/worktrees. Follow the export reconciliation rule for dirty bead data.
-4. Update the existing bead's design/acceptance to this contract, then execute
-   C0–C5. Inventory fixtures, disk/RAM, isolated GUI setup, non-publishing platform
-   CI/package prerequisites and optional Google access early. No credentials in
-   chat, Git, reports or tracker. Missing external access blocks only that proof.
+1. Read `AGENTS.md`, the correction decisions and review, then C0–C5 and the
+   source-import contract. Load subsystem guides only for the slice being changed.
+   Older Q records and delivery diaries are historical evidence; read a specific
+   section only when a current invariant or unresolved question requires it.
+2. Inspect status/worktrees/remotes and `bd show canopi-j571.1`; claim/resume the
+   existing bead. Work in `.rq-scratch/wt-candidate` from `26eca68a` or a verified
+   successor, preserving `34e4ded4` and `f61f8494` ancestry. Merge this committed
+   docs handoff without replacing candidate code or losing measurement history.
+3. Preserve the primary checkout's `.beads/issues.jsonl`,
+   `desktop/src/native_operation.rs`, `.beads.gate.lock` and other user-owned work.
+   The primary checkout intentionally lacks the new Data/Analysis code; do not
+   switch or integrate it to make a smoke test display those panels.
+4. Reconcile the existing bead's design/acceptance with the active documents.
+   Use `--append-notes` for a progress checkpoint; `--notes` replaces history.
+   Establish the small lifecycle reproductions, and inventory disk/fixtures,
+   installed GUI tooling and available non-publishing platform checks early.
 
-## Decisions you should implement, not reopen
+## Execute through one consolidated delivery
 
-- Import is choose files → explicit interpretation → Import → bounded preparation
-  → atomic publication. Data owns progress/cancel/retry. No before/after previews,
-  second Apply screen or mandatory prior-composition pixel scan.
-- No arbitrary input byte/file/cell ceiling on the new streamed route after its
-  callers are bounded. Preserve real format/index limits, disk reserve, working
-  memory/cache/queue budgets, cancellation and legacy dense guards. Storage and
-  analysis have different resource admission.
-- Exact composed statistics may be unknown. Preserve old exact values, add a
-  separately labelled source-derived display range, and show unknown coverage
-  honestly. Do not invent an eager statistics job or substitute sums as union area.
-- Inspection uses the existing canvas `worldToGeo`, correct source/result readers
-  and units, signed coverage, real cancellation and Design/head/request fencing.
-- Official Google needs usable authenticated tile/viewport requests, metadata,
-  renewal and correct map lifecycle wiring. A token absent from all outgoing tile
-  requests is a defect, not a privacy success. Both editions retain their accepted
-  feature boundaries and one map owner.
-- Reuse current Data/Analysis/Layers primitives, Design Edit, job owners, native
-  GDAL/pinned reader, migrations and generated bindings. No new engine, generic
-  workflow framework, Python raster runtime or speculative abstraction. No
-  subagent delegation is authorized by this assignment.
+Follow [A–D](completion-correction-design.md#a--finish-the-import-and-inspection-lifecycle-first):
+repair import/inspection lifecycle and attempt a small real workflow; repair
+provider transitions through mounted callers; finish native resource admission
+and measurements; then self-review, combined gates and delivery. Repair a known
+dependency earlier where necessary. These are execution checkpoints, not approval
+barriers. Keep one bead/branch/receipt/debrief, with last verified revision and
+next action in bd so context changes are resumable.
 
-The contract settles cross-subsystem changes. Private module layout, helper
-extraction, bounded algorithms, test placement and ordinary debugging remain your
-judgment. Repair in-scope defects you discover; don't ask the user to choose local
-implementation details. Escalate a demonstrated conflict with a fixed scientific,
-ownership, compatibility or consequential product decision, not a failing test.
+The seventeen review examples are minimum counterexamples, not the whole test
+plan. For each changed invariant trace a production caller, its owner, a normal
+outcome and the material failure/replacement/teardown path. Change state after
+initial success: close/reopen, switch Design/head/key/locale, overlap requests,
+fail then recover. An initial render or a manually invoked helper does not prove
+wiring. Recreate useful scratch probes as ordinary committed regressions. Record
+observed red/green and healthy controls; do not invent earlier failures.
 
-## Work through the actual product
+Do not weaken contracts to match the candidate. In particular old input ceilings,
+uncancellable copy/hash, dense slope admission and missing live peak measurements
+are unfinished implementation/evidence, not external prerequisites. Preserve the
+one-step import, exact-versus-display distinction and historical library values.
+Use existing owners, pages, failpoints and native readers before adding helpers.
+A new abstraction needs a concrete caller or resource lifetime it simplifies.
 
-Establish small caller regressions first, then implement C1 and Data wiring. Run a
-real small Data import/reopen early; do not defer the first application workflow
-until after scale tests. Continue inspection and provider repairs, observing their
-live surfaces before the final gate run. Translate required UI strings in one
-cohesive pass across all 11 locales. Use the accepted references for visual
-components while applying the explicitly amended import interaction.
+Audit all C0–C5 once from final callers, including obligations not covered by the
+new probes (same-definition Analysis Retry and native inspection post-read currency
+among them). Repair in-scope self-review discoveries before returning. Use focused
+tests while editing; run required broad gates on the final combined tree, and
+rerun affected checks after code or rebase changes. No test-count, mutation-count
+or repeated full-suite quota. A docs-only revision can reuse unchanged code gates.
 
-Make each critical regression demonstrate the failure for the intended reason
-and a healthy control. Exercise real publication, map loading, changed keys,
-head/Design transitions and physical values. Do not mock the behavior under test,
-copy an implementation formula as its oracle, or report a passing assertion whose
-trigger never occurred. Reuse review probes where useful, but commit ordinary
-regressions independent of scratch paths. Record meaningful red/green evidence;
-there is no mutation-count or test-count target.
+If a small tool/guide change removes demonstrated friction, implement and test it
+inside the task, then resume product work. Record whether its next actual use
+helped. Avoid building another harness, skills package, generic workflow engine
+or productivity tracker. Proposed broad tooling changes become scoped follow-ups,
+not a detour. Use the [debrief contract](review-and-debrief.md#final-correction-debrief-to-deliver)
+throughout; it is not an essay to reconstruct after the work.
 
-Use focused checks while editing; run the required combined gates once the code
-settles, and rerun affected gates after code/rebase changes. Reuse caches and the
-edition guide's isolated GUI recipe; inspect resource/process ownership before
-starting or stopping anything. If chooser typing is unreliable, use clipboard
-paste or short owned fixture paths. Test the same user workflow rather than
-spending repeated rounds on unchanged automation failures.
+## Blockers and return boundary
 
-Keep bd resumable: last verified revision, completed outcome, blocker if any and
-next concrete action. Keep one receipt and one debrief, not a round-by-round diary.
-A checkpoint/context boundary is not completion. Continue independently useful
-work around missing credentials, fixtures or platforms; after exhausting available
-work return one partial delivery with exact external prerequisites. Never relabel
-required unavailable evidence as passed or repeatedly retry unchanged blockers.
+Continue all independent work around unavailable keys, fixtures, hosts or runners.
+Do not repeatedly retry unchanged environment failures. Provide exact missing
+prerequisites and runnable remaining observations in one partial delivery only
+when available work is exhausted. Time/context limits are checkpoints, not proof
+that unfinished code has become an external blocker.
 
-## Scope, review and return
+Escalate only a demonstrated conflict with a fixed contract, an unresolvable
+scientific/compatibility/ownership decision, new dependency/engine need, or action
+outside authorization. Supply revision/reproduction, impact, smallest alternatives,
+recommendation and work that can proceed. Routine local implementation decisions
+and failed tests remain yours to resolve. Never silently waive acceptance.
 
-No public release, paid service, user-profile mutation, destructive cleanup,
-branch deletion or integration of unaccepted new code is authorized. Follow C5 for
-existing non-publishing CI and draft review artifacts. Preserve merges when
-updating onto main; run combined gates on the resulting tree. Reclamation,
-per-occurrence naming, new analysis types and unrelated optimization remain
-follow-ups unless a demonstrated required flow depends on them.
-
-Before returning, review the final diff against the contract from its actual
-callers, repair in-scope findings, reconcile guides and current status links, and
-commit/push the candidate and intended bead export to both configured destinations.
-Verify exact remote revision, ancestry and clean status. Keep independent acceptance
-and release pending for their owners.
-
-Return one concise delivery with links to the receipt/debrief: revision/branch,
-R15–R26 disposition, new import behavior and actual limits, exact-versus-display
-metadata, real Desktop/Web/inspection/provider observations, resource measurements,
-gates/platform/package gaps, applied improvements and untested proposals, remaining
-material decisions and preserved user files. Full completion requires the contract's
-verified candidate; partial delivery must name what is missing and why.
-
-For a material blocker, give the exact revision/reproduction, conflicting contract,
-affected work, smallest viable alternatives, your recommendation and work that can
-continue. Do not ask for permission again for work this assignment already covers.
+At delivery reconcile the receipt, debrief and guides; update/export only intended
+bead records, commit and push the candidate to both configured destinations,
+verify identical tips and clean status, and retain independent acceptance pending.
+Return: revision/branch, user workflows actually observed, R27–R43 dispositions
+with regression evidence, actual remaining limits, resource/fault observations,
+combined gates and external gaps, self-review discoveries, applied versus proposed
+improvements, and preserved user files. Do not claim the whole amendment complete
+from a green existing suite or the previously measured 24-file/400M lanes.

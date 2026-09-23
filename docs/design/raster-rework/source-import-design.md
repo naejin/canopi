@@ -1,8 +1,8 @@
 # Source import without collection-wide preparation
 
-Status: active — accepted correction handoff after review of `5d0a5e0b`; not yet implemented.
+Status: active — partially implemented at `26eca68a`; source-only publication is present, resource admission and lifecycle corrections remain.
 Tracking: `canopi-j571.1` under `canopi-j571`.
-Current guidance: [completion contract](completion-design.md), [prompt](completion-agent-prompt.md), [review](completion-review-5d0a5e0b.md), [LiDAR](../../agent/lidar.md).
+Current guidance: [current corrections](completion-correction-design.md), [completion contract](completion-design.md), [prompt](completion-agent-prompt.md), [review](completion-review-5d0a5e0b.md), [LiDAR](../../agent/lidar.md).
 
 ## Decision and scope
 
