@@ -193,40 +193,59 @@ Test totals and line counts are not productivity measures.
 
 ### Final correction debrief to deliver
 
-Deliver one concise synthesis alongside the corrected candidate, with these six
-questions answered from evidence. A partial delivery gets a partial synthesis;
-independent acceptance remains a separate entry by the main agent.
+Delivered with the corrected candidate at `77de3367` (partial: large-fixture,
+live GUI/key and platform evidence unavailable). Independent acceptance remains
+a separate entry by the main agent.
 
-1. **What can the user now do?** Name inspected baseline and delivered revision,
-   real Desktop/Web workflows newly observed, retained compatibility, actual
-   admission/resource limits and exact external gaps. Link the receipt rather
-   than repeat its full gate/measurement tables.
-2. **What escaped, and why did the existing checks miss it?** Group by invariant
-   family, distinguishing design omission/contradiction, implementation deviation,
-   test/oracle gap, reviewer oversight, environment/tool limitation and reporting
-   error. Allow mixed causes and unknown causes. Include self-review discoveries,
-   not only fixes handed down by the reviewer. A covered rule does not need a
-   duplicate rule; identify the missing detector or caller observation.
-3. **What implementation complexity was necessary?** Identify existing owners
-   reused, obsolete machinery removed and any new helper/seam that earned its
-   maintenance cost. Explain the user capability or failure it serves. Do not
-   celebrate deletion that removed a required behavior or a meaningful test.
-4. **Which workflow/tool changes actually helped?** For each material intervention
-   use the compact table below. Distinguish applied-and-observed from applied-but-
-   untested and proposal-only. Show its next real use, or explicitly say it has
-   not had one. Promote a proven lesson into the narrowest maintained test,
-   script or guide and remove stale instructions; do not expand every fix into
-   repository-wide policy. Broader tooling/skill changes require a follow-up.
-5. **Where was effort or a user exchange avoidable?** Compare necessary scope/risk
-   decisions with routine continuation requests, repeated unchanged failures and
-   identical-code gate reruns. Record only actual scope/timing/cost observations.
-   The user's preference for cost-effective execution is a goal, not evidence
-   that this round saved money. Include main-agent planning/review overhead.
-6. **What should change next, and what would disprove it?** Give only the highest-
-   value remaining proposals, each tied to an observed failure, owner, existing
-   seam, next bounded trial and keep/revise/drop criterion. Create/reuse follow-up
-   beads for work outside this assignment. No general harness/agent framework
-   or skills rewrite merely because defects recurred.
+1. **What can the user now do?** At `77de3367` the product has the R27–R43
+   lifecycle repairs behind the accepted workflows: library-lived import
+   settlement with session-fenced Design attachment, inspection that invalidates
+   on head change and cancels re-aims, and map providers that follow key/locale
+   changes, coalesce viewport metadata and only publish Ready with validated
+   metadata. See the [receipt](completion-receipt.md#current-correction-acceptance).
+   Retained: v18 migration, source-only publication, exact/display split,
+   original/history compatibility, R12–R26 regressions. External gaps: no driven
+   Desktop/Web session, no live Google key, no Windows/macOS or packaged smoke,
+   no large-fixture ceiling lift, no live peak-scratch sample.
+2. **What escaped, and why did the existing checks miss it?** Three families.
+   (a) Lifecycle transitions: tests proved initial state or helpers while the
+   obligation was a mounted caller over a later transition (R32–R38). Detector
+   gap: assert the settled job, the displayed answer after a head change, or the
+   second configuration update — not only the first. (b) Claim boundary: R43
+   labelled post-settlement residue as peak; the sampling point never observed a
+   live peak. Reporting error owned by the implementer. (c) Design omission
+   (main agent): Ready-before-metadata and the dense-before-sparse admission
+   order were underspecified in earlier contracts. Self-review discovery: the
+   merge conflict resolver initially duplicated a status line in the debrief;
+   caught by reading the resolved file before commit.
+3. **What implementation complexity was necessary?** Reused existing owners:
+   `library-store` polling, Design Edit `upsertLidarEntry`, inspection session,
+   `BasemapProvider`/`basemap-bind`/`contribution`, GDAL `engine`. New and
+   earned: `app/lidar/workflow.ts` (Desktop-lifetime attachment intent) and
+   `installBasemapConfigObserver` (reactive config identity). No second job,
+   map or Design store. Dense slope guard retained where dense allocation
+   actually happens.
+4. **Which workflow/tool changes actually helped?**
+
+| Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
+| --- | --- | --- | --- | --- | --- |
+| Panel dispose stopped shared import polling | Implementation; implementer | Library observer no longer stops the timer; Desktop-lifetime workflow owns it | `lidar-library-store.test.ts` panel-unmount case | Keep (observed) | `library-store.ts`, `workflow.ts` |
+| useComputed captured plain key so the keyless prompt stayed cached | Implementation; implementer | Read signals inside the computed callback | `basemap-settings.test.tsx` clear-key prompt assertion | Keep (observed) | `BasemapSettings.tsx` |
+| Merge conflict status line duplicated | Process; implementer | Read resolved files before staging | Caught in this round before commit | Keep | collaboration protocol already covers it |
+| Live peak scratch sampling | Environment/limitation | Sampled only post-settlement residue historically | Unavailable this host | Untested; claim corrected | Receipt R43 row |
+
+5. **Where was effort or a user exchange avoidable?** No continuation prompt was
+   requested. One courier-free round. The docs-merge conflict required a
+   disposition decision already present in the mandate; no avoidable exchange.
+   Cost was not measured.
+6. **What should change next, and what would disprove it?** (a) Run the
+   amendment's large-fixture lanes and only then lift R27 ceilings — disprove by
+   a failing >24-file/>2-GiB/>400M-cell production admission without overrides.
+   (b) Sample live job/GDAL scratch during work for R43 — disprove by a peak
+   that matches settled residue. (c) Drive one isolated Desktop Data → display →
+   slope → inspection → save/reopen session — disprove by any broken step. All
+   are follow-up beads, not blockers to independent acceptance of the code
+   repairs.
 
 | Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
 | --- | --- | --- | --- | --- | --- |

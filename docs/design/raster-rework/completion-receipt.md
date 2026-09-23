@@ -1,33 +1,56 @@
 # Raster rework completion receipt
 
-Status: partial — candidate `26eca68a` independently reviewed; changes required. Reported gates and measurements at `b4ab8fe6` are retained, but do not establish completion of C1/R26 or independent acceptance.
+Status: partial — R27–R43 repairs delivered on the candidate for independent acceptance. Required large-fixture, live GUI, live key and platform evidence remain unavailable and are named below. Reported gates at `b4ab8fe6` are retained as revision-labelled prior evidence.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
-The [independent review at `26eca68a`](completion-review-26eca68a.md) supersedes
-prior completion claims: **10 diagnostic assertions failed and 44 tests passed**.
-The user approved repairs under the [current correction decisions](completion-correction-design.md),
-then independent acceptance before integration. This section owns the current
-disposition; subsequent revision-labelled sections retain reported delivery evidence.
+The [independent review at `26eca68a`](completion-review-26eca68a.md) found
+**10 diagnostic assertions failed and 44 tests passed**. The user approved
+repairs under the [current correction decisions](completion-correction-design.md).
+This section owns the current disposition; subsequent revision-labelled sections
+retain reported delivery evidence.
+
+Code tip for this correction batch: `77de3367` on `feature/raster-rework-completion`
+(history-preserving docs merge `2574eb89`, Slice A `96e4828d`, Slice B `837e67a0`,
+Slice C `77de3367`).
 
 | Boundary | Current disposition and required proof |
 | --- | --- |
-| Preservation | Keep `34e4ded4` / `f61f8494` ancestry, v18 migration, ordered compatibility and user-owned primary-checkout files. Candidate is not integrated into the user's normal checkout. |
-| C1 / R26 | Partial: one-step source-only publication and nullable exact/display facts landed. Old input caps, copy/hash cancellation, conversion timeout, lock lifetime and slope admission remain (R27–R31). R43 live scratch/fault/concurrent-queue proof remains open. |
-| C2 workbenches | Partial: panels and manual Add/Remove exist; automatic import attachment and panel-independent polling remain (R32–R33). Verify every C2 obligation including same-definition Analysis Retry. |
-| C3 inspection | Physical projection/read/unit repairs retained; already-displayed head invalidation and re-aim cancellation remain (R34–R35). Verify native post-read currency and mounted lifecycle. |
-| C4 providers | Transport/body/readiness repairs retained; config changes, viewport identity/readiness/recovery, zoom, source retention and settings feedback remain (R36–R42). Live restricted-key observation is separate. |
-| C5 gates and external observations | Reported code gates/70-test GDAL lane at `b4ab8fe6` remain evidence for that tree. No driven Desktop/Web session, live key, Windows/macOS build or packaged smoke is inferred. Required unavailable evidence means partial delivery. |
+| Preservation | **Held.** `34e4ded4` / `f61f8494` ancestry, v18 migration, ordered compatibility and user-owned primary-checkout files untouched. Candidate is not integrated into the user's normal checkout. |
+| C1 / R28–R31 | Repaired in code: cancellable copy/hash/metadata, catalogue guard scope, uncapped source-conversion exception, sparse slope admission by occupied work. **R27 old ceilings retained** until the amendment's large-fixture measurement gates run; production limits unchanged. |
+| C2 / R32–R33 | **Repaired.** Desktop-lifetime LiDAR workflow owner, library-lived polling, session-fenced exactly-once attachment. Same-definition Analysis Retry retained. |
+| C3 / R34–R35 | **Repaired.** Reactive head invalidation of displayed/pending answers, cancel-before-re-entry, Location navigation ends inspection. Native post-read currency retained. |
+| C4 / R36–R42 | **Repaired.** Reactive style/key/locale identity, coalesced viewport, Ready requires session+metadata, metadata recovery, base-descriptor zoom, contribution identity vs attribution, settings feedback. |
+| C5 / R43 | **Partial.** Focused frontend (95 tests) and native (115+13) gates green at `77de3367`. Live peak scratch sampling, concurrent-read queue boundary, large-fixture lanes, driven Desktop/Web, live key, Windows/macOS and packaged smoke remain **unavailable** on this host and are not claimed. |
 
-Before next delivery replace these rows with evidence at the corrected revision.
-Add one compact finding-to-regression table for R27–R43: contract/caller, observed
-failure or source trace, repair revision, decisive regression/command, healthy
-control and remaining boundary. Audit C0–C5 beyond these examples. Never mark an
-unrun requirement passed or convert unfinished implementation into an external
-prerequisite. The [debrief](review-and-debrief.md#final-correction-debrief-to-deliver)
-records lessons and self-review discoveries without copying gate logs here twice.
+### R27–R43 finding-to-regression
+
+| ID | Contract / caller | Observed failure at `26eca68a` | Repair revision | Decisive regression / command | Remaining boundary |
+| --- | --- | --- | --- | --- | --- |
+| R27 | `admission.rs` source ceilings | Old 24-file/2-GiB/400M caps still enforced | `77de3367` (bounds/guards only; ceilings retained) | `cargo test -p canopi-desktop --lib services::lidar::` | Large-fixture lanes to lift ceilings **unavailable**; amendment remains authority |
+| R28 | `stage_managed_original`, `hash_file*` | Copy/hash ignored cancel | `77de3367` | focused `services::lidar::` + cancel tests | OS I/O stalls not interruptible (explicit) |
+| R29 | `collection::measure` | Catalogue lock held through `coverage_bounds` | `77de3367` | focused `services::lidar::` | — |
+| R30 | `engine::run` on conversion | 600 s elapsed ceiling on source conversion | `77de3367` `run_uncapped_conversion` | focused `services::lidar::` | Controllable clock test deferred |
+| R31 | `analysis::run_slope_job` | 25M dense guard before sparse path | `77de3367` | focused `services::lidar::` sparse slope tests | — |
+| R32 | import attachment | Never attached on completion | `96e4828d` | `lidar-import-attachment.test.ts` | Live Desktop drive **unavailable** |
+| R33 | `library-store` polling | Panel dispose stopped shared timer | `96e4828d` | `lidar-library-store.test.ts` | — |
+| R34 | inspection head change | Displayed answer stayed current | `96e4828d` | `lidar-inspection.test.ts` | — |
+| R35 | `beginInspection` re-aim | Dropped cancellation handle | `96e4828d` | `lidar-inspection.test.ts` | — |
+| R36 | provider config identity | Old session paired with new key | `837e67a0` | `review-provider-regressions.test.ts` | Live restricted-key **unavailable** |
+| R37 | viewport coalescing | Latest viewport lost | `837e67a0` | `review-provider-regressions.test.ts` | — |
+| R38 | Ready before metadata | Imagery ready without metadata | `837e67a0` | `review-provider-regressions.test.ts` | — |
+| R39 | metadata failure recovery | Could not recover to Ready | `837e67a0` | `review-provider-regressions.test.ts` | — |
+| R40 | zoom availability | Only decreased against prior clamp | `837e67a0` | `review-provider-regressions.test.ts` | — |
+| R41 | contribution identity | Metadata destroyed tile source | `837e67a0` | `basemap-contribution.test.ts` + regressions | — |
+| R42 | settings feedback | Cached keyless prompt | `837e67a0` | `basemap-settings.test.tsx` | — |
+| R43 | capacity evidence | Residue claimed as peak | (claim corrected; peak sample **unavailable**) | receipt wording + R26 table labels | Live peak/concurrent queue/large fixtures **unavailable** |
+
+Audit note: C0–C5 beyond these examples were re-checked at the final callers
+(Analysis Retry, native inspection currency, legacy libraries, saved Design
+round-trip, provider errors). No new in-scope defect was found outside the
+table; independent acceptance is still required.
 
 ## R15–R25 repair record
 

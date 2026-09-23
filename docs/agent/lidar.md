@@ -8,16 +8,15 @@ The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-
 
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
 `canopi-j571.1` from candidate `26eca68a`, with foundation integrated at `f61f8494`.
-The [current independent review](../design/raster-rework/completion-review-26eca68a.md)
-requires R27–R43 corrections under the [repair decisions](../design/raster-rework/completion-correction-design.md).
-Source-only publication and nullable exact/display facts are present; lifecycle,
-resource admission and evidence obligations remain. The
-[source-import amendment](../design/raster-rework/source-import-design.md) still
-supersedes arbitrary input ceilings once bounded consumers and safety evidence
-are established. Do not weaken that contract to match current caps or claim
-only external observations remain. Preserve R12–R26's meaningful regressions.
-Implementation, independent acceptance and integration into the user's primary
-checkout remain separate; reconcile this inventory as repairs land.
+R27–R43 lifecycle, provider and native-admission repairs are delivered on the
+candidate for independent acceptance; see the
+[current receipt](../design/raster-rework/completion-receipt.md#current-correction-acceptance).
+The [source-import amendment](../design/raster-rework/source-import-design.md)
+still supersedes arbitrary input ceilings once bounded consumers and safety
+evidence are established. Do not weaken that contract to match current caps or
+claim only external observations remain. Preserve R12–R26's meaningful
+regressions. Implementation, independent acceptance and integration into the
+user's primary checkout remain separate.
 
 Implementation inventory (candidate `26eca68a`; update as repairs land). `services/lidar/collection.rs` owns snapshot membership, measurement and Undo/restore history: `measure` derives a composition's metadata from stored member facts without reading composed pixels, reporting an exact count only when it is derivable and a labelled `SourceEnvelope` display range otherwise; `generation.rs` owns the ordered resolver (`CollectionReader`) and the preserved-generation reader (`GenerationReader`); `tiles.rs` resolves display reads from the native and reduced windows it actually consumes, preferring the display range per column and falling back to the exact one; `admission.rs` owns the capacity policy (currently still 24 files, 2 GiB per file and per selection, `MAX_IMPORT_PROCESSING_CELLS` charged per occurrence, and `MAX_DENSE_ENVELOPE_CELLS` as the legacy dense-only guard — R27 retires those source ceilings only after bounded consumers and safety evidence); `import.rs` owns `stage_import` (preparation, validation and the guarded move to publishing) and `apply_import` (the atomic publication transaction); `inspection.rs` owns numeric inspection — `resolve_target`, `transform_point` through `gdaltransform`, the north-up half-open **signed** `containing_pixel`, and result units read from the published result's own parameters, with the request carrying only the WGS84 point the canvas produced through `worldToGeo`; `analysis.rs` owns slope publication and carries the author's result name through `AnalysisParameters::published_name`; `catalogue.rs` owns the schema, currently **v18**, whose migrations are additive and guarded per column; `mod.rs` exposes `layer_collection`, `layer_history_page`, the awaited edit entries (`apply_move`, `apply_remove`, `apply_undo`, `apply_restore` over `apply_member_edit`), `settle_layer_edit`, `begin_import_sources`/`finish_import_sources` and the display-request admission used by both tiles and inspection (`admit_sample_request`, `cancel_sample_request`); `commands/lidar.rs` carries the ordered commands plus `lidar_import_sources`, `lidar_sample_pixel`/`lidar_cancel_sample_pixel` and `lidar_create_analysis`'s `result_name`. On the frontend, `desktop/web/src/app/lidar/` and `components/panels/lidar/` own the Data, Analysis and Layers surfaces, the source list, History, the one-step import route with its progress/cancel/retry and their request lifetimes; `app/lidar/inspection.ts` owns the inspection session (`beginInspection`, `endInspection`, `interpretOutcome`, `setInspectionPointerHandler`) fenced to the document session, entity, request and expected head; `maplibre/basemap-bind.ts` is the only place a live map takes its basemap from a provider.
 
