@@ -109,23 +109,30 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
     removeLayer: (id) => map.removeLayer(id),
     removeSource: (id) => map.removeSource(id),
     addSource: (id, source) => map.addSource(id, source),
-    addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
+    addLayer: (layer, beforeId) => {
+      if (beforeId) map.addLayer(layer, beforeId)
+      else map.addLayer(layer)
+    },
     setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
-    replaceBasemapAttribution: map.replaceBasemapAttribution
-      ? (attribution: string) => map.replaceBasemapAttribution?.(attribution)
-      : (attribution: string) => {
-          const controls = deps.attributionControls
-          if (!controls) return
-          if (ownedAttribution) {
-            controls.remove(ownedAttribution)
-            ownedAttribution = null
-          }
-          ownedAttribution = controls.create({
-            compact: true,
-            customAttribution: attribution,
-          })
-          controls.add(ownedAttribution)
-        },
+  }
+  // Only expose the attribution adapter when a real control seam exists, so
+  // the contribution can fall back to source-carried credit.
+  if (map.replaceBasemapAttribution) {
+    target.replaceBasemapAttribution = (attribution: string) =>
+      map.replaceBasemapAttribution?.(attribution)
+  } else if (deps.attributionControls) {
+    const controls = deps.attributionControls
+    target.replaceBasemapAttribution = (attribution: string) => {
+      if (ownedAttribution) {
+        controls.remove(ownedAttribution)
+        ownedAttribution = null
+      }
+      ownedAttribution = controls.create({
+        compact: true,
+        customAttribution: attribution,
+      })
+      controls.add(ownedAttribution)
+    }
   }
 
   const apply = (state: BasemapProviderState): void => {
@@ -147,6 +154,7 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
     )
     deps.afterApply?.()
   }
+
 
   // Adopt whatever the provider already published. Without this a map created
   // after the provider resolved would show no basemap until the next change.
@@ -212,12 +220,24 @@ export function createAttributionControls(
     removeControl?(control: unknown): unknown
   },
 ): BasemapBindingDeps['attributionControls'] {
-  const AttributionControl = (maplibre as {
-    AttributionControl?: new (options?: {
-      compact?: boolean
-      customAttribution?: string | string[]
-    }) => unknown
-  } | null | undefined)?.AttributionControl
+  // Safe lookup: a partial maplibre stub or test mock may throw on a missing
+  // export rather than returning undefined.
+  let AttributionControl:
+    | (new (options?: {
+        compact?: boolean
+        customAttribution?: string | string[]
+      }) => unknown)
+    | undefined
+  try {
+    AttributionControl = (maplibre as {
+      AttributionControl?: new (options?: {
+        compact?: boolean
+        customAttribution?: string | string[]
+      }) => unknown
+    } | null | undefined)?.AttributionControl
+  } catch {
+    AttributionControl = undefined
+  }
   if (!AttributionControl || !map.addControl || !map.removeControl) return undefined
   const addControl = map.addControl.bind(map)
   const removeControl = map.removeControl.bind(map)
@@ -273,13 +293,25 @@ export function installBasemapConfigObserver(
   readPresentation: () => { readonly style: BasemapStyle },
   readViewport: () => BasemapViewport,
 ): () => void {
+  let mounted = false
   return effect(() => {
     // Subscribe to every configuration identity input.
     void googleMapsApiKey.value
     void locale.value
     const presentation = readPresentation()
     void presentation.style
-    provider.update(presentation, readViewport())
+    // The caller already applied the initial presentation; only later
+    // configuration identity changes update the already mounted provider.
+    if (!mounted) {
+      mounted = true
+      return
+    }
+    try {
+      provider.update(presentation, readViewport())
+    } catch {
+      // A map that rejects the new contribution reports through its own
+      // failure watcher; a settings change must not become an unhandled throw.
+    }
   })
 }
 

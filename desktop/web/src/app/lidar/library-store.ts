@@ -148,7 +148,7 @@ function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
   if (!snapshot) {
     return false
   }
-  return snapshot.analyses.some(
+  return (snapshot.analyses ?? []).some(
     (analysis) =>
       analysis.state === 'Preparing' ||
       analysis.state === 'Refreshing',

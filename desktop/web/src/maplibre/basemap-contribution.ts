@@ -155,10 +155,7 @@ export function reconcileBasemapContribution(
   if (installed && sameTileConfig(installed, tiles, tileSize, maxzoom)) {
     // Identical tile configuration retains the source and its loaded state.
     // Copyright-only: update attribution without removing the tile source.
-    // The source's own attribution field is left empty so stale basemap credit
-    // cannot linger there; the owned attribution control carries current credit
-    // while preserving every other source's credit.
-    if (target.replaceBasemapAttribution) {
+    if (typeof target.replaceBasemapAttribution === 'function') {
       target.replaceBasemapAttribution(attribution)
     }
     setBasemapContributionVisibility(target, true)
@@ -169,17 +166,19 @@ export function reconcileBasemapContribution(
   // removed before its source because MapLibre refuses to drop a source that a
   // layer still references; layer order is re-applied by the insertion anchor.
   removeContribution(target)
+  const hasAttributionAdapter = typeof target.replaceBasemapAttribution === 'function'
   target.addSource(MAPLIBRE_BASEMAP_SOURCE_ID, {
     type: 'raster',
     tiles: [...tiles],
     tileSize,
-    // Basemap credit lives on the map-owned attribution control so a
-    // copyright-only change never has to rebuild the tile source.
-    attribution: '',
+    // With an attribution adapter the credit lives on the map-owned control so
+    // a copyright-only change never rebuilds the source. Without one, the
+    // source carries the credit so the required attribution cannot disappear.
+    attribution: hasAttributionAdapter ? '' : attribution,
     maxzoom,
   })
-  if (target.replaceBasemapAttribution) {
-    target.replaceBasemapAttribution(attribution)
+  if (hasAttributionAdapter) {
+    target.replaceBasemapAttribution?.(attribution)
   }
   const layer = {
     id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,

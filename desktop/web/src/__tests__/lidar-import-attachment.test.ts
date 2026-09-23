@@ -295,11 +295,11 @@ describe('import attachment through the LiDAR workflow owner', () => {
       unknown: false,
     })
     // Hold the fresh settlement read; attachment must wait for it.
-    let releaseFresh: (() => void) | null = null
+    const gate: { release: (() => void) | null } = { release: null }
     refreshFreshMock.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          releaseFresh = () => {
+          gate.release = () => {
             // The fresh snapshot now lists the imported layer.
             librarySignal.value = {
               layers: [{ id: 'lyr-1', name: 'Ground', measurement_kind: 'GroundElevation', units: 'm', state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null, value_range: null, analysis_count: 0, tilesets: [] }],
@@ -315,7 +315,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
     await flush()
     // Fresh read still pending: no attachment against a stale snapshot.
     expect(upsertMock).not.toHaveBeenCalled()
-    releaseFresh?.()
+    gate.release?.()
     await flush()
     await flush()
     expect(upsertMock).toHaveBeenCalledTimes(1)

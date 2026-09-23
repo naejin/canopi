@@ -729,7 +729,7 @@ export function readViewportMetadata(
   if (
     !Number.isFinite(viewport.north) || !Number.isFinite(viewport.south)
     || !Number.isFinite(viewport.east) || !Number.isFinite(viewport.west)
-    || !Number.isFinite(viewport.zoom) || viewport.zoom <= 0
+    || !Number.isFinite(viewport.zoom)
     || viewport.north <= viewport.south
     || viewport.south < -90 || viewport.north > 90
     || Math.abs(viewport.west) > 360 || Math.abs(viewport.east) > 360

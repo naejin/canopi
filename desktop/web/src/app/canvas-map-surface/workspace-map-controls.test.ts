@@ -1025,8 +1025,7 @@ describe('WorkspaceMapControls', () => {
     map.addSource.mockImplementation(() => { throw failure })
 
     map.emit('style.load')
-
-    expect(reportFailure).toHaveBeenCalledWith(failure)
+    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
   })
 
   it('reports a restored basemap paint failure through the existing watcher', async () => {
@@ -1043,8 +1042,7 @@ describe('WorkspaceMapControls', () => {
     map.setPaintProperty.mockImplementation(() => { throw failure })
 
     map.emit('style.load')
-
-    expect(reportFailure).toHaveBeenCalledWith(failure)
+    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
   })
 
   it('reports one live presentation mutation failure through the existing watcher', async () => {
@@ -1086,8 +1084,7 @@ describe('WorkspaceMapControls', () => {
 
     map.clearStyle()
     map.emit('style.load')
-
-    expect(reportFailure).toHaveBeenCalledWith(failure)
+    await vi.waitFor(() => expect(reportFailure).toHaveBeenCalledWith(failure))
   })
 
   it('treats a synchronous source event as passive after the local style is admitted', async () => {
@@ -1388,7 +1385,7 @@ describe('WorkspaceMapControls shared basemap provider', () => {
       }
       return new Response(JSON.stringify({
         copyright: 'Imagery ©2026 Google',
-        maxZoomRects: [{ north: 49, south: 48, east: 3, west: 2, maxZoom: 20 }],
+        maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     }) as unknown as typeof fetch)
     const { googleMapsApiKey } = await import('../../app/settings/state')
