@@ -168,6 +168,39 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
 }
 
 describe('WorkspaceMapControls', () => {
+  it('acceptance: repeated basemap hide/show releases mount-owned movement listeners', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    try {
+      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+      const initial = map.listeners.get('moveend')?.size ?? 0
+      expect(initial).toBeGreaterThan(0)
+      for (let i = 0; i < 3; i++) {
+        controls.updateBasemapPresentation({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4 })
+        expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeUndefined()
+        controls.updateBasemapPresentation({ basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.4 })
+        expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+      }
+      expect(map.listeners.get('moveend')?.size).toBe(initial)
+    } finally { controls.releaseMap(admitted) }
+    expect(map.listeners.get('moveend')?.size ?? 0).toBe(0)
+  })
+
+  it('acceptance: workspace leaves attribution control ownership to the mount', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    try {
+      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+      expect(map.options.attributionControl).toBe(false)
+    } finally { controls.releaseMap(admitted) }
+  })
+
   it('requests antialiasing before the shared workspace creates its WebGL context', async () => {
     const { controls, maps } = createControls({ basemapVisible: false })
     const acquisition = controls.createMap(new AbortController().signal)

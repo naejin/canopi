@@ -526,6 +526,11 @@ fn publish_sparse_slope(
                 chunk_x,
                 chunk_y,
             )?);
+            #[cfg(test)]
+            super::acceptance_hooks::after_block(
+                &scratch,
+                chunks.last().is_some_and(|chunk| chunk.result.is_some()),
+            );
         }
 
         let mut coverage_cells = 0u64;
@@ -2211,4 +2216,5 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&root);
     }
+    include!("analysis_acceptance_tests.rs");
 }

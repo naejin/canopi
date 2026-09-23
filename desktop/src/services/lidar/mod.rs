@@ -5,6 +5,8 @@
 //! never dirty a Design, and no catalogue lock is held during raster
 //! computation.
 
+#[cfg(test)]
+mod acceptance_hooks;
 pub mod admission;
 pub mod analysis;
 pub mod catalogue;
