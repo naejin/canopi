@@ -1,8 +1,8 @@
 # Finish the raster candidate through verified production workflows
 
-Status: active — sole implementation prompt; continue reviewed candidate `eb3b5425`.
+Status: active — sole implementation prompt; continue reviewed candidate `68852cbd`.
 Tracking: `canopi-j571.1` under `canopi-j571`; existing `feature/raster-rework-completion`.
-Current guidance: [ownership correction](completion-ownership-design.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
+Current guidance: [reviewer-authored tests and evidence](completion-acceptance-tests.md), [ownership correction](completion-ownership-design.md), [C0–C5 contract](completion-design.md), [source-import amendment](source-import-design.md), [protocol](collaboration-protocol.md), [receipt](completion-receipt.md).
 
 ## Assignment and first actions
 
@@ -15,14 +15,19 @@ Acceptance, primary-checkout integration and release remain separate.
 
 Inspect `git status --short --branch`, worktrees, ancestry and
 `bd show canopi-j571.1`; claim/resume that bead in the candidate worktree. Merge
-this committed documentation handoff with history preserved. Start from
-`eb3b5425` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
-accepted repairs. Do not restart from the older documentation checkout. Its
+this committed documentation handoff and test commit `0a3a29f4` from
+`test/raster-acceptance-handoff`, with history preserved. The test branch already
+descends from `68852cbd`; do not restart from the documentation checkout. Start from
+`68852cbd` or its verified successor, retaining `34e4ded4`, `f61f8494` and subsequent
+accepted repairs. The primary documentation checkout’s
 `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock`
 are user-owned: do not stage, stash, overwrite or discard them.
 
-Read the [eb3b5425 findings and regression recipes](completion-ownership-design.md#review-at-eb3b5425-and-first-regression-cases),
-the remaining ownership contract, C0–C5 and the source-import amendment once.
+Start by running the [acceptance packet](completion-acceptance-tests.md): expect
+five frontend failures and 76 passing controls; the two native GDAL tests pass.
+The frontend failures are deliberate behavioral regressions, not a broken baseline
+to skip or bless with expected-failure markers. Then read the [ownership contract](completion-ownership-design.md),
+C0–C5 and the source-import amendment once.
 The ownership correction is the current seam-specific authority; older reviews
 are historical evidence where their sequencing differs.
 Use relevant subsystem guides as each slice requires; older review records are
@@ -35,9 +40,9 @@ assets and non-publishing platform checks early, then continue local work.
 
 | Order | Outcome and owned surfaces | Exit before continuing |
 | --- | --- | --- |
-| 1 | Consolidate the complete basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | Repair E1/E4 through actual Canvas/Location/WorldMap callers: initial mount, movement metadata, one attribution control, replacement/disposal; retain M coverage cases |
-| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Repair E2/E3 with real store/workflow/polling: automatic outage recovery and one attempt per job; repair E5 with name-based Retry; complete native in-flight/early-NoData proof |
-| 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Capacity loss during output, real write fault, finite chunk timeout/uncapped source cancellation and retry pass; perform all available live resource/fixture measurements |
+| 1 | Complete the existing basemap lifecycle under one owner: `maplibre/basemap-*`, three map owners and their existing tests | Make the four reviewer map regressions green; verify current bounds, zoom/credit updates, single-control ownership and mount listener cleanup; preserve healthy caller cases |
+| 2 | Consolidate ordered library reads and workflow-owned settlement; complete targeted Retry and inspection currency: `app/lidar`, Analysis panel, IPC/native LiDAR owners | Make late-disposal status regression green; retain E2/E3 and E5 controls; finish R50 action/IPC/native evidence and rerun supplied R51 proof |
+| 3 | Complete resource safety and available C1/R27/R43 evidence: existing admission, analysis, process and fixture seams | Run supplied native mid-write capacity/write/preservation/worker-retry tests; retain timeout/cancel checks and complete available R27/R43 measurements |
 | 4 | Demonstrate the combined product and deliver it: existing Desktop/Web/gallery recipes, receipt and guides | C0–C5 caller audit, required final-tree gates and available driven workflows complete; unsupported claims corrected and exact external gaps recorded |
 
 These are checkpoints, not requests for permission or separate deliveries.
@@ -45,6 +50,11 @@ Dependencies may justify reordering. Keep one writer; subagents are not authoriz
 Routine helper/API organization inside the named owners, small test gates, diagnosis,
 regressions, i18n and contract-preserving fixes are delegated. Keep all eleven
 locales aligned if copy changes. Reuse accepted controls; no new analysis editor.
+
+The reviewer owns the supplied test oracles; the implementer owns coherent repairs,
+additional discovery regressions and final verification. Passing the supplied packet
+is necessary but not sufficient for C0–C5 acceptance. Do not return for a new prompt
+after making only these tests green.
 
 Use the repository TDD skill for every changed behavior: write one regression,
 run and inspect its intended RED, implement the smallest coherent GREEN, then
@@ -96,7 +106,7 @@ Repair in-scope findings and repeat affected focused checks; no review-count quo
 Use the existing receipt as an acceptance cross-reference, not a second tracker:
 each E1–E5/M/L/R obligation links to a named test, actual boundary, observed result
 and residual limit. Check that test names and mock boundaries support the prose.
-No “done” row may still rely on a mocked owner, missing intended assertion, old-tip
+No “done” row may rely on a mocked owner for the behavior it claims, a missing intended assertion, or an old-tip
 gate or unwritten required local proof. This audit is implementation work, not a
 request for another reviewer round. Keep bd checkpoints sufficient to resume after
 context loss: current commit, remaining obligation, last failure and next command.

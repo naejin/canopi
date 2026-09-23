@@ -1,10 +1,34 @@
 # Raster rework completion receipt
 
-Status: partial — E1–E5 caller repairs delivered for independent acceptance. C5 gates green; IGN private fixtures, R51 in-flight native gate, R48 mid-write fault/retry and driven Desktop/Web remain named gaps. Not independently accepted.
+Status: partial — `68852cbd` still has caller/lifetime defects; reviewer-authored tests at `0a3a29f4` provide five frontend RED cases and passing scoped native R48/R51 proof.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
+
+The [reviewer test packet](completion-acceptance-tests.md) is the current evidence
+entry. Implementation baseline is `68852cbd`; merge test handoff `0a3a29f4`.
+
+| Boundary | Independent observation | Next delivery obligation |
+| --- | --- | --- |
+| Location / WorldMap movement | Healthy initial metadata, then request count stays 1 after move; both lack the event capability | Make actual mounted-caller regressions green |
+| Canvas mount listener ownership | Three hide/show cycles increase moveend listeners from 2 to 5 | Release mount-owned subscription before remount; final teardown stays clean |
+| Canvas attribution | Automatic control remains enabled alongside owned path | Single-control behavior, including retained other-source credits |
+| Settlement | E2/E3 and healthy completion controls pass; late disposed read overwrites status | Fence both success/error outcomes and retain recovery/single-attempt controls |
+| E5 / R50 | Names and row-selected UI Retry pass | Real action/IPC/native saved-definition evidence still required |
+| R48 | Generated two-block native test passes capacity and filesystem fault after output, preservation, cleanup and worker rerun | Retain test; do not claim scheduler/IPC retry or asset reclamation from it |
+| R51 | Generated native Value/hole/early-NoData controls reject deterministically interleaved head change | Retain test; no thread-stress or GUI claim |
+| Final-tree gates | Reviewer TypeScript, workspace Rust tests/check, fmt, strict workspace/all-target Clippy, docs pass; frontend focused packet intentionally 76 pass / 5 fail | Repair frontend REDs, then final C5 gates and available workflow/evidence lanes |
+
+Sensitivity evidence and exact commands are in the packet. Temporary wiring made all
+8 Location/WorldMap tests pass; removing native final currency checking failed early
+NoData. All experiment mutations were restored. These results do not establish full
+independent acceptance. Update these current rows in place after implementation.
+
+### Implementer report at 68852cbd — qualified by independent review
+
+The report below incorrectly says every map passes lifetime events; only Canvas did.
+Its all-E1–E5-repaired claim is superseded by the current evidence above.
 
 Caller-level E1–E5 repairs on the combined tree after merge `d38be95d`
 (ownership TDD retained from `86c74b14`/`eb3b5425`). TDD RED/GREEN recorded
@@ -31,6 +55,19 @@ per cycle through real owners where the contract required them.
 | Native LiDAR | `cargo test -p canopi-desktop --lib services::lidar::` | 118 passed / 68 ignored |
 | fmt / clippy / docs / workspace | `cargo fmt --check`, clippy `-D warnings`, `check_docs.py`, `cargo test --workspace` | clean |
 | Driven Desktop/Web, live key, Windows/macOS, packaged smoke, IGN fixtures, R51 in-flight gate, R48 mid-write | — | **unavailable / unfinished local proof** |
+
+### Capacity plane measurements at `86c74b14` (GDAL 3.8.4)
+
+Command: `CANOPI_LIDAR_CAPACITY_PLANE=/tmp/canopi-capacity-plane.tif cargo test -p canopi-desktop --lib e2e_capacity_plane -- --ignored --test-threads=1`
+
+- Plane 20000×20000 Float32, 1,677,741,340 bytes uncompressed, synthetic z=0.25x+0.5y-100
+- Imported 396,979,300 valid cells; durable 4,951,015,369 bytes in 9 files; temporary 0; job scratch empty after settlement
+- Cold tile 8734 ms; three warm repeats 0/0/0 ms
+- Seam window: 16 samples match the analytic plane; holes: 4 declared rectangles read as exactly NoData
+- Sampled process tree every 50 ms: baseline 15 MiB, peak total 200 MiB, incremental 184 MiB (lower bound; 7177 complete samples)
+
+These are retained implementer measurements, not rerun by the reviewer. Sampled
+process memory is not peak scratch, queue or fault evidence.
 
 ### Reported delivery at `291d0773` — qualified by current correction
 

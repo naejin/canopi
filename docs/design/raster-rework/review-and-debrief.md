@@ -1,19 +1,53 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — independent review at `eb3b5425` requires E1–E5 and local proof; final synthesis and independent acceptance pending.
+Status: evidence — review of `68852cbd` and reviewer test handoff `0a3a29f4`; implementation and independent acceptance pending.
 
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [ownership correction](completion-ownership-design.md), [current corrections](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
 ## Whole-rework delivery and improvement
 
-The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `eb3b5425` under `canopi-j571.1`.
+The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `68852cbd` under `canopi-j571.1`.
 The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
 supersede the earlier claim that only external observations remained. This section
 owns the next debrief; material older outcomes below remain evidence at their
 named revisions, not instructions to restart retired work. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
+
+### Reviewer-authored tests: next-use evaluation
+
+At `68852cbd`, independent probes verified recovery/single-attempt progress, while
+map caller wiring and lifecycle gaps survived helper tests. The user selected a new
+division of work: main reviewer writes and validates acceptance regressions; implementer
+makes them green, adds discovery tests, finishes evidence and self-reviews before one
+consolidated delivery. Test packet `0a3a29f4` records five behavioral frontend failures,
+76 passing controls and two passing native GDAL acceptance tests. No cost saving is
+claimed until observed; a stronger packet can still omit a relevant behavior.
+
+The reviewer owns a concrete oracle correction this session: initial map fakes lacked
+`getBounds`, so a temporary wiring repair still saw a constant fallback viewport.
+That was a fixture defect, not a product RED. Adding real bound behavior allowed the
+same two caller suites to pass with temporary wiring and fail on the untouched
+candidate. Native guard removal independently exposed stale early NoData; restored
+code passes. Record such corrections alongside implementer deviations, not as hidden
+extra implementation work.
+
+For the final synthesis evaluate **failure → owner/classification → smallest change →
+next-use evidence → keep/revise/drop/untested** in the existing six-question debrief:
+
+| Experiment | Measure on the next delivery |
+| --- | --- |
+| Reviewer-authored acceptance oracles | Which supplied failures become green without weakened assertions; which oracles required correction; which contract cases still escape |
+| Real caller and capability tests | Actual registered events, bounds, production lifetime methods and disposal match test doubles; no helper-only claim of mounted behavior |
+| Implementer bounded self-review | Defects caught before handoff versus independent-review escapes; required local proof completed rather than relabelled external |
+| Native deterministic fault seams | Reusable tests cover real reads/writes with healthy controls, no private fixtures or new runtime machinery; retain only useful hooks |
+| Receipt audit | Every completed claim matches revision, command, actual boundary and limitation; historical capacity measurements survive reconciliation |
+
+Record actual elapsed effort/cost or unknown, and avoidable continuation exchanges
+separately from necessary decisions. Broader automation or skill changes remain out
+of scope. Promote proven lessons into the narrowest existing tests/guides. The main
+reviewer must review beyond its own packet before independent acceptance.
 
 ### Independent disposition at eb3b5425
 
