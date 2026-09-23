@@ -102,6 +102,7 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
   let disposed = false
   let pending: BasemapProviderState | null = null
   let ownedAttribution: unknown = null
+  let ownedCredit: string | null = null
 
   const target: BasemapReconcileTarget = {
     getSource: (id) => map.getSource(id),
@@ -123,10 +124,15 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
   } else if (deps.attributionControls) {
     const controls = deps.attributionControls
     target.replaceBasemapAttribution = (attribution: string) => {
+      // Keep an existing control when its credit is unchanged.
+      if (ownedAttribution && ownedCredit === attribution) return
       if (ownedAttribution) {
         controls.remove(ownedAttribution)
         ownedAttribution = null
       }
+      ownedCredit = attribution
+      // Never create an extra empty control on withdrawal.
+      if (attribution === '') return
       ownedAttribution = controls.create({
         compact: true,
         customAttribution: attribution,
@@ -371,6 +377,16 @@ export interface BasemapMountOptions {
     addControl?(control: unknown, position?: string): unknown
     removeControl?(control: unknown): unknown
   }
+  /**
+   * Lifetime-owned event registration from the map host. The mount registers
+   * `moveend` once and unregisters on disposal. Host camera/UI listeners stay
+   * with their existing owners.
+   */
+  readonly events?: {
+    on(type: string, listener: () => void): void
+    off?(type: string, listener: () => void): void
+  }
+  readonly replaceBasemapAttribution?: (attribution: string) => void
 }
 
 export interface BasemapMountHandle {
@@ -387,9 +403,12 @@ export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMoun
     (options.maplibre && options.mapControls
       ? createAttributionControls(options.maplibre, options.mapControls)
       : undefined)
+  const mapTarget: BasemapReconcileTarget = options.replaceBasemapAttribution
+    ? { ...options.map, replaceBasemapAttribution: options.replaceBasemapAttribution }
+    : options.map
   const unbind = bindBasemapProvider({
     provider,
-    map: options.map,
+    map: mapTarget,
     ...(tileAuth ? { tileAuth } : {}),
     ...(options.styleReady ? { styleReady: options.styleReady } : {}),
     ...(options.beforeLayerId ? { beforeLayerId: options.beforeLayerId } : {}),
@@ -405,17 +424,22 @@ export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMoun
     () => ({ style: options.readStyle() }),
     options.readViewport,
   )
+  // The mount owns viewport-event subscription as well as configuration
+  // observation. Read the current map viewport when the event fires.
+  const onMoveEnd = () => provider.updateViewport(options.readViewport())
+  options.events?.on('moveend', onMoveEnd)
   return {
     update: (presentation, viewport) => provider.update(presentation, viewport),
     updateViewport: (viewport: BasemapViewport) => provider.updateViewport(viewport),
     dispose: () => {
+      options.events?.off?.('moveend', onMoveEnd)
       disposeObserver()
       unbind()
       provider.dispose()
       // Withdraw the contribution so teardown leaves no source, layer or
       // basemap-owned credit on a map that outlives the mount.
       try {
-        reconcileBasemapContribution(options.map, { state: 'idle' })
+        reconcileBasemapContribution(mapTarget, { state: 'idle' })
       } catch {
         // A map that rejects withdrawal still tears down its own resources.
       }

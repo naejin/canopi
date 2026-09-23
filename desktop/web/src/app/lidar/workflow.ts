@@ -10,6 +10,7 @@ import {
   lidarStatusMessage,
   openImportJob,
   peekImportAttachmentIntent,
+  libraryPollTick,
   libraryReadSequence,
   refreshLidarLibraryFresh,
   stopLidarPolling,
@@ -60,6 +61,10 @@ function settleImportAttachment(job: LidarImportJob): void {
     if (consumed) consumeAttachment(job, consumed)
     return
   }
+  // One attempt per job at a time. Repeated Complete observations must not
+  // start concurrent settlement reads.
+  if (settlingJobs.has(job.job_id)) return
+  settlingJobs.add(job.job_id)
   // Fence at the terminal observation: the settlement read must start after
   // this point, never join a read already under way.
   const fence = libraryReadSequence()
@@ -82,7 +87,14 @@ function settleImportAttachment(job: LidarImportJob): void {
       // error. Do not fall through to success or missing-target handling.
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
     })
+    .finally(() => {
+      // A failed attempt releases the guard for the next normal tick.
+      settlingJobs.delete(job.job_id)
+    })
 }
+
+/** Jobs with a settlement attempt currently in flight. */
+const settlingJobs = new Set<string>()
 
 let attachmentDisposer: (() => void) | null = null
 let installed = false
@@ -97,6 +109,9 @@ export function installLidarWorkflow(): void {
   disposeLidarWorkflow()
   installed = true
   attachmentDisposer = effect(() => {
+    // Retry pending settlement on each poll tick even when the job state
+    // remains Complete; a failed attempt must recover without a reopen.
+    void libraryPollTick.value
     const job = openImportJob.value
     if (!job) return
     settleImportAttachment(job)
@@ -110,6 +125,7 @@ export function disposeLidarWorkflow(): void {
   attachmentDisposer?.()
   attachmentDisposer = null
   clearImportAttachmentIntents()
+  settlingJobs.clear()
   if (installed) {
     stopLidarPolling()
     installed = false

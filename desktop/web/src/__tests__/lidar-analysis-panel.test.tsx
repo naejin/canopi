@@ -146,3 +146,64 @@ describe('Analysis panel per-definition Retry', () => {
     expect(analyseMock).not.toHaveBeenCalled()
   })
 })
+
+describe('E5 name-based Retry', () => {
+  let container: HTMLDivElement
+
+  beforeEach(() => {
+    locale.value = 'en'
+    retryAnalysisMock.mockClear()
+    analyseMock.mockClear()
+    library.state.layers = [{
+      ...eligibleLayer(),
+      measurement_kind: 'GroundElevation' as const,
+      state: 'Ready' as const,
+      tilesets: [{ style: 'elevation', source: { kind: 'native-generation', generation_id: 'gen-1' }, min_zoom: 0, max_zoom: 1, tile_size: 256, bounds: null }],
+    }]
+    library.state.analyses = [
+      {
+        id: 'adef-alpha', source_layer_id: 'lyr-1', kind: 'Slope', name: 'North slope', state: 'Failed' as const,
+        detail: 'a', bounds: null, value_range: null, slope_unit: 'Degrees' as const, tilesets: [],
+      },
+      {
+        id: 'adef-beta', source_layer_id: 'lyr-1', kind: 'Slope', name: 'South slope', state: 'Failed' as const,
+        detail: 'b', bounds: null, value_range: null, slope_unit: 'Degrees' as const, tilesets: [],
+      },
+    ]
+    container = document.createElement('div')
+    document.body.append(container)
+    act(() => {
+      render(<AnalysisPanel />, container)
+    })
+    const input = container.querySelector<HTMLInputElement>('input[name="analysis-input"]')
+    act(() => { input?.click() })
+  })
+
+  afterEach(() => {
+    render(null, container)
+    container.remove()
+  })
+
+  it('E5: shows stored names and retries the row identified by name', async () => {
+    const text = container.textContent ?? ''
+    expect(text).toContain('North slope')
+    expect(text).toContain('South slope')
+
+    // Find the Retry button on the row that displays South slope.
+    const rows = Array.from(container.querySelectorAll('li'))
+    const southRow = rows.find((row) => (row.textContent ?? '').includes('South slope'))
+    expect(southRow).toBeDefined()
+    const retry = Array.from(southRow?.querySelectorAll('button') ?? []).find((button) =>
+      (button.textContent ?? '').includes('Retry analysis'),
+    )
+    expect(retry).toBeDefined()
+
+    act(() => {
+      retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(retryAnalysisMock).toHaveBeenCalledWith('adef-beta', 'gen-1')
+    expect(analyseMock).not.toHaveBeenCalled()
+  })
+})

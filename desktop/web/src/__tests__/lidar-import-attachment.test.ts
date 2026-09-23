@@ -57,6 +57,7 @@ vi.mock('../app/lidar/library-store', async () => {
     refreshLidarLibrary: refreshLibraryMock,
     refreshLidarLibraryFresh: refreshFreshMock,
     libraryReadSequence: () => 0,
+    libraryPollTick: signal(0),
     trackImportJob: trackImportMock,
     stopLidarPolling: vi.fn(),
     installLidarLibraryObserver: vi.fn(() => () => {}),

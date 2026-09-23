@@ -185,7 +185,6 @@ export function useLocationMapEditingHost(
         context.lifetime.on('error', onMapRuntimeError)
         context.lifetime.on('move', onMove)
         context.lifetime.on('moveend', onMove)
-        context.lifetime.on('moveend', () => {})
         context.lifetime.on('click', onClick)
         updateMapState(context.map)
       },

@@ -355,6 +355,33 @@ that same synthesis. A disproved lesson is revised or dropped. Promote demonstra
 lessons to the narrowest existing test/script/guide and remove superseded guidance.
 Broader skill or shared tooling changes need their own user authorization.
 
+**E1–E5 caller-repair synthesis (partial).** Commands live in the
+[receipt](completion-receipt.md#current-correction-acceptance). Independent
+acceptance remains a separate entry by the main reviewer.
+
+1. **Product outcome.** Production maps register `moveend` through
+   `mountBasemapLifecycle`; settlement recovers after a failed read via the
+   poll tick and allows one attempt per job; attribution keeps one owned
+   control; Retry rows show stored names. Full frontend 2822, native 118,
+   gallery, both builds and bindings are green. Driven Desktop/Web remains
+   unobserved.
+2. **Escapes and causes.** Empty `moveend` handlers after migration:
+   implementation. Poll stopping at Complete while intent pending: implementation.
+   Concurrent settles on repeated Complete: implementation. Attribution
+   `ownedCredit` scoped inside the callback: implementation. Missing result
+   names: implementation. Vacuous E1 detector (asserted 0 listeners without
+   requiring registration): test-oracle gap, strengthened before RED.
+3. **Necessity and reuse.** Reused mount, store fence/poll tick, workflow
+   settlingJobs, `createAttributionControls`. No new framework.
+4. **Working-method/tool changes.** E2/E3 used the real store+workflow recipe
+   from the handoff; keep. Strengthening an insensitive detector before trusting
+   RED remains the cheapest correction.
+5. **Total delivery effort.** One courier-free continuation; cost unknown.
+6. **Next action.** Independent acceptance. Follow-ups in bd: R51 in-flight
+   native gate, R48 mid-write fault/retry, IGN fixture lanes, driven
+   Desktop/Web, live key, packaged smoke. Integration and release separate.
+
+
 **Historical implementer synthesis at `86c74b14` (partial; superseded by the independent disposition at `eb3b5425`).** Commands and
 measurements live in the [receipt](completion-receipt.md#current-correction-acceptance).
 Independent acceptance remains a separate entry by the main reviewer.

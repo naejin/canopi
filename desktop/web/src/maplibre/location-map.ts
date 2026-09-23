@@ -56,7 +56,9 @@ export function createLocationMapLibreMap(
     style: createMapLibreBasemapStyle(options.basemapStyle),
     center: options.center,
     zoom: options.zoom,
-    attributionControl: { compact: true },
+    // Attribution is owned by the basemap mount's single control, not the
+    // map's automatic AttributionControl (E4).
+    attributionControl: false,
     interactive: true,
     pitchWithRotate: false,
     dragRotate: false,

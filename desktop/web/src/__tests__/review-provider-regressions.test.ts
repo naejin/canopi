@@ -582,4 +582,105 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       readViewportMetadata(json, { west: -180, south: -4, east: 180, north: 4, zoom: 0 }),
     ).toBeNull()
   })
+
+  it('E1: mountBasemapLifecycle registers moveend and updates viewport metadata', async () => {
+    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
+    const sources = new Map<string, Record<string, unknown>>()
+    const layers = new Map<string, Record<string, unknown>>()
+    const listeners = new Map<string, Set<() => void>>()
+    const map = {
+      getSource: (id: string) => sources.get(id) ?? null,
+      getLayer: (id: string) => layers.get(id) ?? null,
+      removeLayer: (id: string) => void layers.delete(id),
+      removeSource: (id: string) => void sources.delete(id),
+      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
+      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
+      setLayoutProperty: (id: string, name: string, value: unknown) => {
+        const layer = layers.get(id)
+        if (layer && name === 'visibility') layer.layout = { visibility: value }
+      },
+    }
+    let viewport = { west: -10, south: -10, east: 10, north: 10, zoom: 2 }
+    let readCount = 0
+    const events = {
+      on(type: string, listener: () => void) {
+        const set = listeners.get(type) ?? new Set()
+        set.add(listener)
+        listeners.set(type, set)
+      },
+      off(type: string, listener: () => void) {
+        listeners.get(type)?.delete(listener)
+      },
+    }
+    const credits: string[] = []
+    const mount = mountBasemapLifecycle({
+      map,
+      tileAuth: null,
+      readStyle: () => 'street' as const,
+      readViewport: () => {
+        readCount += 1
+        return viewport
+      },
+      readVisible: () => true,
+      events,
+      replaceBasemapAttribution: (credit: string) => credits.push(credit),
+    })
+    expect(sources.size).toBe(1)
+    // The mount owns viewport-event subscription.
+    expect(listeners.get('moveend')?.size).toBe(1)
+
+    // A settled move must refresh viewport metadata without recreating the map.
+    const readsBeforeMove = readCount
+    viewport = { west: 20, south: 20, east: 40, north: 40, zoom: 8 }
+    listeners.get('moveend')?.forEach((listener) => listener())
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(readCount).toBeGreaterThan(readsBeforeMove)
+    expect(sources.size).toBe(1)
+    // Teardown unregisters the listener.
+    mount.dispose()
+    expect(listeners.get('moveend')?.size ?? 0).toBe(0)
+    expect(sources.size).toBe(0)
+  })
+
+  it('E4: one owned attribution control; identical credit preserves identity', async () => {
+    const { mountBasemapLifecycle } = await import('../maplibre/basemap-bind')
+    const sources = new Map<string, Record<string, unknown>>()
+    const layers = new Map<string, Record<string, unknown>>()
+    const map = {
+      getSource: (id: string) => sources.get(id) ?? null,
+      getLayer: (id: string) => layers.get(id) ?? null,
+      removeLayer: (id: string) => void layers.delete(id),
+      removeSource: (id: string) => void sources.delete(id),
+      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
+      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
+      setLayoutProperty: () => {},
+      addControl: vi.fn(),
+      removeControl: vi.fn(),
+    }
+    const controls = {
+      create: vi.fn(() => ({})),
+      add: vi.fn(),
+      remove: vi.fn(),
+    }
+    const mount = mountBasemapLifecycle({
+      map,
+      tileAuth: null,
+      readStyle: () => 'street' as const,
+      readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
+      readVisible: () => true,
+      attributionControls: controls,
+    })
+    expect(controls.create).toHaveBeenCalledTimes(1)
+    const first = controls.create.mock.results[0]?.value
+    // Identical credit must not recreate the control.
+    mount.update({ style: 'street' }, { west: -10, south: -10, east: 10, north: 10, zoom: 2 })
+    await Promise.resolve()
+    expect(controls.create).toHaveBeenCalledTimes(1)
+    expect(controls.remove).not.toHaveBeenCalled()
+    // Withdrawal clears only basemap credit and never adds an empty control.
+    mount.dispose()
+    expect(controls.create).toHaveBeenCalledTimes(1)
+    expect(controls.remove).toHaveBeenCalledWith(first)
+  })
 })

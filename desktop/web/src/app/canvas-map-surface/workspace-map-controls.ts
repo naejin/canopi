@@ -396,8 +396,8 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       },
       maplibre: (this.surface as { maplibre?: unknown }).maplibre,
       mapControls: map as unknown as Parameters<typeof mountBasemapLifecycle>[0]['mapControls'],
+      events: lifetime,
     })
-    lifetime.on('moveend', () => mount.updateViewport(readWorkspaceMapViewport(map)))
     attempt.basemapTeardown = () => mount.dispose()
     // The mount already applied current configuration; record it so the
     // caller's first presentation sync does not issue a duplicate update.

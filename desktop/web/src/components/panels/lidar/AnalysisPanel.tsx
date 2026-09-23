@@ -218,6 +218,10 @@ export function AnalysisPanel() {
                     <span className={styles.previousState}>
                       {t(`canvas.lidar.state.${result.state}`)}
                     </span>
+                    {/* The author's stored name identifies this definition. */}
+                    {result.name ? (
+                      <span className={styles.previousName}>{result.name}</span>
+                    ) : null}
                     {/* The previous result stays visible while a refresh runs or
                         after a failure, so a reader never loses the last good
                         numbers to an unrelated error. */}

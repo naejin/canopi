@@ -29,6 +29,14 @@ export const lidarLibrary = signal<LidarLibrarySnapshot | null>(null)
 export const openImportJob = signal<LidarImportJob | null>(null)
 export const lidarStatusMessage = signal<string | null>(null)
 
+/**
+ * Incremented after each polled tick that refreshed the library.
+ *
+ * The workflow observes this to retry a pending settlement even when the job
+ * state remains Complete. The store never imports the workflow.
+ */
+export const libraryPollTick = signal(0)
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
 /**
@@ -173,6 +181,14 @@ export function clearImportAttachmentIntents(): void {
   attachmentIntents.clear()
 }
 
+/** Whether any unconsumed attachment intent still needs a successful fresh read. */
+export function hasPendingAttachmentIntent(): boolean {
+  for (const intent of attachmentIntents.values()) {
+    if (!intent.consumed) return true
+  }
+  return false
+}
+
 function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
   if (!snapshot) {
     return false
@@ -214,7 +230,15 @@ async function pollLidarState(): Promise<void> {
   ) {
     await refreshLidarLibrary()
   }
-  if (!hasActiveWork(lidarLibrary.value) && !importIsActive(openImportJob.value)) {
+  // Keep polling while active work OR a pending settlement intent needs a
+  // successful fresh read. A failed attempt must recover on a later tick
+  // without reopen, click or settings change.
+  libraryPollTick.value += 1
+  if (
+    !hasActiveWork(lidarLibrary.value)
+    && !importIsActive(openImportJob.value)
+    && !hasPendingAttachmentIntent()
+  ) {
     stopLidarPolling()
   }
 }
@@ -224,8 +248,9 @@ async function pollLidarState(): Promise<void> {
  * user action; idle libraries stop polling to stay cheap.
  */
 export function ensureLidarPolling(): void {
-  void pollLidarState()
+  // Ensure the shared timer, do not force an extra tick when already polling.
   if (pollTimer !== null) return
+  void pollLidarState()
   pollTimer = setInterval(() => {
     void pollLidarState()
   }, LIDAR_POLL_INTERVAL_MS)
