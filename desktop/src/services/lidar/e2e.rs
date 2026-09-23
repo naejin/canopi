@@ -904,7 +904,11 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         import::GenerationStorageFormat::OrderedMembersV1,
         "the batch publishes as an ordered collection of source occurrences"
     );
-    assert_eq!(head.coverage_cells, Some(48_000_000));
+    // Twelve occurrences cannot be composed from metadata alone, so the
+    // generation claims no exact count; the batch's own member facts are the
+    // diagnostic, and its display range is a labelled source envelope.
+    assert_eq!(head.coverage_cells, None);
+    assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
     let members = {
         let connection = library.catalogue().unwrap();
         catalogue::collection_members(&connection, &head.id).unwrap()
@@ -951,13 +955,12 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         "every occurrence keeps a retained source COG"
     );
     println!(
-        "applied: {} cells, {} source occurrences, {} retained source COGs, range {:?}..{:?}",
-        head.coverage_cells
-            .expect("this fixture measured its coverage"),
-        members.len(),
-        source_cogs,
-        head.min_value,
-        head.max_value
+        "applied: {members_len} source occurrences, {source_cogs} retained source COGs, \
+         exact range {exact:?}, display range {display:?}..{display_max:?}",
+        members_len = members.len(),
+        exact = head.min_value.zip(head.max_value),
+        display = head.display_min_value,
+        display_max = head.display_max_value,
     );
 
     // Display: the layer presents native tiles and a tile over the data draws.
@@ -1038,14 +1041,27 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
-    assert_eq!(snapshot.layers[0].coverage_cells, Some(48_000_000));
+    // The reopened layer reports the same composition and, honestly, the same
+    // unknown exact coverage: a restart must not invent a count it never took.
+    assert_eq!(snapshot.layers[0].coverage_cells, None);
+    assert_eq!(
+        snapshot.layers[0]
+            .display_range
+            .map(|range| range.basis)
+            .map(|basis| format!("{basis:?}"))
+            .as_deref(),
+        Some("SourceEnvelope")
+    );
     assert!(matches!(
         snapshot.layers[0].tilesets[0].source,
         common_types::lidar::LidarTileSource::NativeGeneration { .. }
     ));
     println!(
-        "restart: {} cells",
-        snapshot.layers[0].coverage_cells.unwrap_or(0)
+        "restart: coverage {:?}, display range {:?}",
+        snapshot.layers[0].coverage_cells,
+        snapshot.layers[0]
+            .display_range
+            .map(|range| (range.min, range.max))
     );
 
     // The combined working set is a sampled process-tree total: the root plus
