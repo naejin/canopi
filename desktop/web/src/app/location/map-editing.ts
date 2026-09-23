@@ -180,6 +180,7 @@ export function useLocationMapEditingHost(
             styleReady: mapStyleReadiness(context.map, context.lifetime),
             maplibre: context.maplibre,
             mapControls: context.map,
+            events: context.lifetime,
           })
         context.lifetime.addCleanup(() => basemapMount.dispose())
         context.lifetime.on('error', onMapRuntimeError)

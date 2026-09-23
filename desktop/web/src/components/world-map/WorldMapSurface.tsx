@@ -106,12 +106,9 @@ export function WorldMapSurface({
             styleReady: mapStyleReadiness(context.map, context.lifetime),
             maplibre: context.maplibre,
             mapControls: context.map,
+            events: context.lifetime,
           })
         context.lifetime.addCleanup(() => basemapMount.dispose())
-        context.lifetime.on('moveend', () => {
-          // Viewport refresh stays with the map lifetime; the mount owns
-          // configuration observation.
-        })
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()

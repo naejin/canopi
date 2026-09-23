@@ -19,6 +19,8 @@ interface EventCapableMap {
 
 export interface MapLibreSurfaceLifetime {
   on(type: string, listener: MapLibreSurfaceEventListener): void
+  /** Unregister a listener registered through `on` before lifetime clear. */
+  off?(type: string, listener: MapLibreSurfaceEventListener): void
   addCleanup(cleanup: () => void): void
   clear(): void
 }
@@ -172,6 +174,11 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
     this.addCleanup(() => {
       map.off(type, listener)
     })
+  }
+
+  off(type: string, listener: MapLibreSurfaceEventListener): void {
+    const map = this.map as unknown as EventCapableMap
+    map.off(type, listener)
   }
 
   addCleanup(cleanup: () => void): void {

@@ -60,7 +60,8 @@ export function createWorkspaceMapLibreMap(
     maxZoom: WORKSPACE_MAP_MAX_ZOOM,
     renderWorldCopies: false,
     canvasContextAttributes: { antialias: true },
-    attributionControl: { compact: true },
+    // Attribution is owned by the basemap mount's single control (E4).
+    attributionControl: false,
     interactive: false,
     pitchWithRotate: false,
     dragRotate: false,

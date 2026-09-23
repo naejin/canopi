@@ -114,9 +114,6 @@ export async function refreshLidarLibraryFresh(
   inflight = (async () => {
     try {
       return await readLibrarySnapshot(startSequence)
-    } catch (error) {
-      lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
-      throw error
     } finally {
       if (freshRefreshInFlight === inflight) {
         freshRefreshInFlight = null

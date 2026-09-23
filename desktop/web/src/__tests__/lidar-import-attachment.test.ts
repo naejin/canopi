@@ -36,7 +36,7 @@ vi.mock('../ipc/lidar', () => ({
   lidarGetImportJob: vi.fn(),
 }))
 
-const refreshFreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const refreshFreshMock = vi.hoisted(() => vi.fn(() => Promise.resolve(undefined as unknown)))
 const librarySignal = vi.hoisted(() => ({
   value: {
     layers: [] as unknown[],
@@ -125,7 +125,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
       analyses: [],
       engine: { available: true, version: null, detail: null },
     }
-    refreshFreshMock.mockReset().mockResolvedValue(undefined)
+    refreshFreshMock.mockReset().mockImplementation(() => Promise.resolve(librarySignal.value))
   })
 
   it('attaches once on committed success in the submitting Design session', async () => {
@@ -300,15 +300,16 @@ describe('import attachment through the LiDAR workflow owner', () => {
     const gate: { release: (() => void) | null } = { release: null }
     refreshFreshMock.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
+        new Promise((resolve) => {
           gate.release = () => {
             // The fresh snapshot now lists the imported layer.
-            librarySignal.value = {
-              layers: [{ id: 'lyr-1', name: 'Ground', measurement_kind: 'GroundElevation', units: 'm', state: 'Ready', resolution_m: 0.5, coverage_cells: '1', bounds: null, value_range: null, analysis_count: 0, tilesets: [] }],
+            const snapshot = {
+              layers: [{ id: 'lyr-1', name: 'Ground', measurement_kind: 'GroundElevation' as const, units: 'm', state: 'Ready' as const, resolution_m: 0.5, coverage_cells: '1', bounds: null, value_range: null, analysis_count: 0, display_range: null, tilesets: [] }],
               analyses: [],
               engine: { available: true, version: null, detail: null },
             }
-            resolve()
+            librarySignal.value = snapshot
+            resolve(snapshot)
           }
         }),
     )
@@ -322,7 +323,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
     await flush()
     expect(upsertMock).toHaveBeenCalledTimes(1)
     expect(upsertMock).toHaveBeenCalledWith('Source', 'lyr-1')
-    refreshFreshMock.mockResolvedValue(undefined)
+    refreshFreshMock.mockImplementation(() => Promise.resolve(librarySignal.value))
   })
 
   it('R44: a deleted target after a fresh read consumes intent without attaching', async () => {
@@ -361,7 +362,7 @@ describe('import attachment through the LiDAR workflow owner', () => {
     expect(lidarStatusMessage.value ?? '').not.toContain('no longer in the library')
 
     // A later poll with unchanged Complete and a successful read attaches once.
-    refreshFreshMock.mockResolvedValue(undefined)
+    refreshFreshMock.mockImplementation(() => Promise.resolve(librarySignal.value))
     trackedJob.value = job('Complete')
     await flush()
     await flush()
