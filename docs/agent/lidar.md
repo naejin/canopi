@@ -1,6 +1,6 @@
 # LiDAR implementation guide
 
-Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `9208c930` remains partial after independent review. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
+Use this entry point for raster import, the shared library, analysis, inspection and LiDAR presentation. The [raster rework](../design/raster-data-analysis-rework.md) has candidate Data/Analysis workbenches, source-only import and shared Web maps; the primary documentation checkout does not contain that implementation. Candidate `51511c90` carries R44–R51 repairs for independent acceptance. The [foundation record](../design/lidar-library.md) retains storage and scientific invariants. Consult bd before claiming a slice.
 
 ## Accepted direction and current assignment
 
@@ -8,8 +8,10 @@ The user selected [ordered COG Data Layers](../design/raster-rework/ordered-cog-
 
 The [completion prompt](../design/raster-rework/completion-agent-prompt.md) continues
 `canopi-j571.1` from candidate `9208c930`, with foundation integrated at `f61f8494`.
-The [current independent review](../design/raster-rework/completion-review-9208c930.md)
-requires R44–R51 repairs and remaining R27–R43 evidence under the [repair decisions](../design/raster-rework/completion-correction-design.md).
+R44–R51 lifecycle, provider and native-admission repairs are delivered on the
+candidate; see the [receipt](../design/raster-rework/completion-receipt.md#current-correction-acceptance).
+R27 ceiling lift and R43 live capacity evidence remain open under the
+[source-import amendment](../design/raster-rework/source-import-design.md).
 Source-only publication and nullable exact/display facts are present; lifecycle,
 resource admission and evidence obligations remain. The
 [source-import amendment](../design/raster-rework/source-import-design.md) still

@@ -1,26 +1,42 @@
 # Raster rework completion receipt
 
-Status: partial — independent review of `9208c930` requires R44–R51 repairs and remaining C0–C5 evidence. Prior implementation reports are not acceptance.
+Status: partial — R44–R51 repairs delivered on the candidate at `51511c90` for independent acceptance. R27 ceiling lift, R43 live scratch/queue/fault sampling, driven Desktop/Web, live key and platform builds remain unavailable and are named below. Prior implementation reports are not acceptance.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
 
 ## Current correction acceptance
 
 Independent review of `9208c930` found [R44–R51](completion-review-9208c930.md):
-four added diagnostic assertions failed while 16 existing tests passed. The
-review did not rerun full gates. Cancellation attachment, production attribution,
-loading visibility, viewport coverage, sparse admission, chunk timeout policy,
-same-definition Retry and native post-read currency require repairs.
+four added diagnostic assertions failed while 16 existing tests passed.
 
-The candidate is not independently accepted. R27 capacity ceilings and R43 live
-resource/queue/fault evidence also remain open under the accepted amendment.
-Unavailable large fixtures do not by themselves block local admission, queue or
-fault tests. Record a concrete prerequisite for each unavailable observation.
+Code tip for this repair batch: `51511c90` on `feature/raster-rework-completion`
+(docs merge `30aee873`, lifecycle `b3c39729`, provider `ac7f04f5`, native `51511c90`).
 
-For the next delivery replace this current disposition with a compact table of
-R44–R51 and remaining C0–C5 outcomes: code revision, named production caller/test,
-observed result, residual gap and who can resolve it. Retain prior measurements
-under their actual revisions. Do not mark a repair from suite totals or comments.
+| ID | Production caller / test | Observed result | Residual gap | Who resolves |
+| --- | --- | --- | --- | --- |
+| R44 | `lidar-import-attachment.test.ts` late-cancel success | Complete after a cancel request still attaches once | — | implementer (done) |
+| R45 | `basemap-provider-binding.test.ts` + `createAttributionControls` | Copyright-only updates owned attribution control; source retained | Live MapLibre control render not driven | independent review |
+| R46 | `review-provider-regressions.test.ts` Loading hide | Effective visibility = user ∧ Ready; Loading hides cached imagery | — | implementer (done) |
+| R47 | `review-provider-regressions.test.ts` gappy/wrapped/interior | Exact partition coverage; uncovered = unavailable; wrap supported | — | implementer (done) |
+| R48 | `analysis.rs::admit_sparse_slope_storage` | Checked occupied-work estimate before output; low-space refused | Real mid-write fault seam not injected this round | implementer (follow-up) |
+| R49 | `raster_assets.rs` chunk vs source conversion | Chunk keeps finite deadline; source conversion uncapped | Controllable-clock timeout test not added | implementer (follow-up) |
+| R50 | `lidar_retry_analysis` + AnalysisPanel Retry | Same definition ID, new job; changed head refused | Full UI/IPC/native integration lane not driven | independent review |
+| R51 | `inspection.rs` post-read recheck | Value/NoData rechecked; StaleGeneration / MissingGeneration | In-flight gate test not added this round | implementer (follow-up) |
+| R27 | `admission.rs` ceilings retained | Production limits unchanged | Large-fixture lift lanes unavailable (`CANOPI_LIDAR_E2E_FIXTURE`, `CANOPI_LIDAR_MNH_DIR`, `CANOPI_LIDAR_CAPACITY_PLANE` unset) | fixture owner |
+| R43 | capacity claim boundary | Labels corrected; peak live scratch not sampled | Live peak/concurrent queue/fault sampling unavailable | implementer (follow-up) |
+
+### Final gates at `51511c90`
+
+| Gate | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| Focused frontend (11 files) | 98 passed |
+| `cargo test -p canopi-desktop --lib services::lidar::` | 115 passed / 68 ignored (GDAL fixtures unset) |
+| `cargo fmt --all -- --check` | clean |
+| `cargo clippy -p canopi-desktop --all-targets -- -D warnings` | clean |
+| `python3 scripts/check_docs.py` | 0 errors |
+| Full `npm test`, `check:ui`, edition builds, `gen:types`/`check:types`, `cargo test --workspace` | not rerun this delivery |
+| Driven Desktop/Web, live key, Windows/macOS, packaged smoke | unavailable |
 
 ### Reported correction batch at 9208c930 — superseded by independent review
 

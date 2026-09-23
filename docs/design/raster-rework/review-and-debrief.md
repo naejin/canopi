@@ -222,32 +222,53 @@ Test totals and line counts are not productivity measures.
 
 ### Final correction debrief to deliver
 
-The prior implementer synthesis is retained at `9208c930` in Git; its claims are
-qualified by the independent disposition above. Replace the pending final synthesis
-with one concise evidence-based account, after
-self-review and final gates. Link the receipt instead of duplicating gate logs.
-Answer these six questions:
+Delivered at `51511c90` (partial). Independent acceptance remains a separate
+entry by the main reviewer. The prior implementer synthesis is retained at
+`9208c930` in Git.
 
-1. What now works through production callers and actual driven app workflows?
-   Separate those evidence levels and identify remaining acceptance/integration gaps.
-2. Which invariant families escaped, and which were found before delivery? For each
-   material case classify supported design omission, implementation deviation,
-   test/oracle gap, reviewer oversight or environment/tool limitation; allow overlap.
-3. Which ownership changes fixed the escapes, and what existing machinery was reused
-   or removed? Identify unnecessary prescription owned by the main reviewer too.
-4. Which detector or small tooling change actually helped on its next use? Record
-   failure/revision → intervention → evidence → keep/revise/drop. Mark untested
-   proposals explicitly; do not convert every incident into a permanent rule.
-5. What affected total delivery effort? Use observed implementation/review/rework
-   time, usage or courier exchanges only where available. State unknowns. Test and
-   line counts do not prove productivity, and implementation-agent preference is
-   not measured cost evidence.
-6. What remains, who owns it, and what concrete evidence or decision closes it?
-   Distinguish code work, missing external prerequisites, independent acceptance,
-   integration and release. Track executable follow-ups in bd.
+1. **What now works through production callers?** At `51511c90` the R44–R51
+   invariants hold in their production owners: import attachment settles on the
+   observed terminal job (a cancel request that loses to commit still attaches);
+   Analysis Retry is `lidar_retry_analysis` for the same definition identity;
+   native inspection rechecks head after the read; Canvas/Location/WorldMap
+   attribution is a map-owned control; Loading hides cached imagery; viewport
+   coverage is exact with wrapped longitudes; sparse slope admits its occupied
+   work before output; only whole-source conversion is uncapped. Driven
+   Desktop/Web and live-key flows remain unobserved. See the
+   [receipt](completion-receipt.md#current-correction-acceptance).
+2. **What escaped?** Lifecycle: cancel-request vs commit was treated as
+   decided (implementation deviation). Provider: required attribution lived
+   behind an optional hook (implementation + test-oracle gap). Coverage:
+   sampling missed interior gaps and mishandled wrap (implementation). Native:
+   sparse admission was claimed stronger than the code (reporting error);
+   chunk timeout inherited the source exception (implementation). Retry
+   accumulated definitions (implementation of an accepted seam). Inspection
+   stopped checking before delivery (implementation). Environment: large-fixture
+   and live-scratch lanes unavailable on this host.
+3. **Ownership changes.** Reused `workflow.ts` settlement, `BasemapProvider`,
+   `engine.run`/`run_uncapped_conversion`, `run_refresh`/`enqueue_refreshes`.
+   New: `createAttributionControls`, `admit_sparse_slope_storage`,
+   `lidar_retry_analysis`. No second job/map/Design store. Main-reviewer
+   prescription note: the optional `replaceBasemapAttribution` seam was
+   under-specified as optional.
+4. **Detectors that helped.** Late-cancel-success attachment regression and
+   gappy/wrapped coverage cases each failed before their fix and pass after
+   (red observed). Keep: assert the observed terminal job, not the request.
+   Untested: controllable-clock timeout and in-flight inspection gate.
+5. **Effort.** One courier-free continuation; no cost measured.
+6. **What remains.** R27 ceiling lift (fixture owner: set
+   `CANOPI_LIDAR_E2E_FIXTURE`, `CANOPI_LIDAR_MNH_DIR`,
+   `CANOPI_LIDAR_CAPACITY_PLANE`); R43 live peak/queue/fault sampling and the
+   R48/R49/R51 focused fault/timeout/gate tests (implementer follow-up in bd);
+   full combined gates and independent acceptance; primary-checkout integration
+   and release remain separate.
 
-The implementation agent writes the synthesis; the main reviewer adds independently
-observed escapes and acceptance disposition in the same record. Promote only proven
+| Observed failure / revision | Category and responsible owner | Smallest applied or proposed change | Decisive evidence and next actual use | Keep / revise / drop / untested | Maintained home or follow-up |
+| --- | --- | --- | --- | --- | --- |
+| Cancel request discarded attachment intent | Implementation; implementer | Let observed terminal job decide | late-cancel-success regression (red→green) | Keep | `workflow.ts`, `actions.ts` |
+| Optional attribution hook unused in production | Implementation + test-oracle gap; implementer + main reviewer | `createAttributionControls` on all three maps | binding test asserts installed credit | Keep | `basemap-bind.ts` |
+| Viewport sampling missed gaps/wrap | Implementation; implementer | Exact partition coverage | gappy + wrapped cases (red→green) | Keep | `basemap-provider-session.ts` |
+| Sparse admission claimed stronger than code | Reporting error; implementer | `admit_sparse_slope_storage` before output | focused `services::lidar::` | Keep; mid-write fault **untested** | `analysis.rs` |
 lessons into the narrowest maintained test/script/guide, removing stale instructions.
 No broad workflow/skill/tool project is required to finish this product delivery.
 
