@@ -1,6 +1,6 @@
 # Raster delivery reviews and methodology debrief
 
-Status: evidence — historical deliveries and independent review through `5d0a5e0b`; correction-cycle final synthesis remains pending.
+Status: evidence — historical deliveries and independent review through `5d0a5e0b`; R15–R25 repaired and gated at `bf43af19`; C1/R26 and the correction-cycle synthesis remain open.
 Tracking: `canopi-j571`; completion execution in bd; accepted correction `canopi-jv8a.4`; historical Q `canopi-kqpp` remains frozen.
 Current guidance: [completion prompt](completion-agent-prompt.md), [contract](completion-design.md), [receipt](completion-receipt.md), [collaboration](collaboration-protocol.md), [delivery](../../workflow/delivery.md).
 
@@ -19,18 +19,67 @@ of the implementation agent. Preserve these distinctions in the final debrief.
 
 | Observed case | Classification / owner | Small intervention and next-use detector | Current disposition |
 | --- | --- | --- | --- |
-| Existing tests pass while tile session/viewport transport and attribution fail | Implementation plus test-boundary gap; implementer repairs, reviewer verifies | Assert actual outgoing tile/viewport authentication and installed attribution, with recognizable fake secrets excluded from exported/logged state | Five review probes establish escapes across provider/inspection; repair benefit pending |
-| Offset oracle repeats the implementation; real slope manifests never sampled | Scientific oracle/caller gap; implementer and reviewer | Known geographic cells/physical values through published source and slope readers at nonzero bearing/latitude | Pending |
-| Key-change test never changes key; inspection tests manually call unwired cleanup | Trigger/wiring gap; implementer | Drive settings and Design/head changes through their production owners; assert trigger happened and late work cannot publish | Pending |
+| Existing tests pass while tile session/viewport transport and attribution fail | Implementation plus test-boundary gap; implementer repairs, reviewer verifies | Assert actual outgoing tile/viewport authentication and installed attribution, with recognizable fake secrets excluded from exported/logged state | **Repaired** at `39cfb9a5`. The detector that mattered is asserting the URL the transport would actually emit, not the descriptor the caller sees: the old test asserted *no* token reached the map, which protected the broken behaviour. Five review probes reproduced escapes across provider/inspection; two are now committed inspection regressions and the provider ones became transport-level assertions |
+| Offset oracle repeats the implementation; real slope manifests never sampled | Scientific oracle/caller gap; implementer and reviewer | Known geographic cells/physical values through published source and slope readers at nonzero bearing/latitude | **Partly repaired** at `85d19ca7`. The offset model is deleted with the offset oracle, and the replacement GDAL test derives its expected cell from a published Web Mercator formula at non-equatorial latitude rather than from the implementation. The published-slope half is still open: no test samples a real published result cell through the panel, so that detector remains untested |
+| Key-change test never changes key; inspection tests manually call unwired cleanup | Trigger/wiring gap; implementer | Drive settings and Design/head changes through their production owners; assert trigger happened and late work cannot publish | **Repaired** at `39cfb9a5` and `85d19ca7`. The key-change test now mutates a live configuration object and asserts the new key reaches the transport; the head-change and Design-replacement cases drive the real store and assert the late answer cannot publish; the pointer disposer is owned by the session and released on exit |
 | Preview/full-composition preparation makes source admission depend on unrelated old pixels | Design overprescription; main agent | New source-only preparation and explicit unknown exact metadata; count prior-source pixel reads during append/reorder | Contract amended; implementation benefit pending |
 | Temporary-space cleanup was used as capacity evidence; safety gates remained unavailable | Measurement/acceptance gap; implementer, reviewer | Measure live peak, settled residue and durable bytes separately; inject real publication/write failure | Pending |
-| GUI progress stopped at lossy synthetic path typing | Environment/automation limitation, not established product root cause | Reuse clipboard paste or short owned fixture paths in the existing isolated recipe, then verify the same visible workflow | Pending; do not claim a chooser repair without evidence |
+| GUI progress stopped at lossy synthetic path typing | Environment/automation limitation, not established product root cause | Reuse clipboard paste or short owned fixture paths in the existing isolated recipe, then verify the same visible workflow | Still pending and not re-attempted this round; the corrected surfaces are gated but not driven in a live session, so no chooser claim is made |
+| A panel test changed a radio without the change event moving it; a CSS guard returned zero on the shipped-broken input; a low-space test passed with production cleanup deleted | Detector-integrity gap; implementer | Prove the subject changed before asserting on it, and check a guard against the real broken input rather than a synthetic one | **Reused and confirmed** this round: the new panel regressions were mutation-checked by reverting the status render and the submit latch, and the byte-cap test by restoring the old `response.text()` implementation. Four of them fail without their fix, so the assertions are load-bearing rather than decorative |
 
 Record a new event only when it changes a decision, exposes an escape, or justifies
 a specific tool/test/guide improvement. Reuse the event row instead of appending
 another round narrative. On the next actual use, record observed benefit, renewed
 failure, or “not tested”; only then decide keep/revise/drop. No generic skills,
 model router, new dashboard or qualification framework is authorized.
+
+### Correction debrief at `bf43af19` (partial)
+
+A short answer to the same questions, at the repaired tip, before independent
+acceptance. The remaining questions stay open until C1 lands.
+
+1. **What works through the actual app, and what lacks observation.** At
+   `bf43af19` the repaired code is gated, not driven: 283 frontend files /
+   2757 tests, `tsc`, the gallery check and both edition builds pass, and the
+   Rust workspace passes fmt, strict Clippy, its tests and the native command
+   policy guard. Nothing in this round was observed in a live isolated Desktop
+   or Web session, so the corrected inspection, provider, import-progress,
+   Remove-from-Design and Analysis surfaces still lack live proof. The
+   [receipt](completion-receipt.md) owns the per-finding evidence and the C1
+   disposition; no capability claim is made beyond compiled, tested code.
+2. **Which defects escaped, and through which gap.** All of R15–R22 escaped
+   because the tests never triggered the real event: the offset oracle restated
+   the implementation, the provider test asserted that *no* credential reached
+   the map (protecting the defect), the key-change test never changed a key, and
+   no test ever called the lifecycle cleanup the inspection session installed.
+   R23–R25 escaped because the test boundary sat at the action layer instead of
+   the panel that has to show the result. The earliest economical detector for
+   the first group is "assert the artifact the user or wire actually receives —
+   the outgoing URL, the published value, the late answer" rather than the
+   intermediate the code just computed; for the second it is one render of the
+   production component with the failure pre-armed. R23–R25 also escaped the
+   main agent's review, which found them; the C1 amendment was a design
+   overprescription owned by the main agent, not an implementation deviation.
+3. **Did source-only import remove the old reads?** No — C1 is not implemented,
+   so this question is unanswered rather than answered negatively. The old
+   composed scan and preview generation are still on the production path, and
+   the retired exact-metadata question therefore has no new answer.
+4. **Which local changes helped on their next use.** Keep, with the receipt as
+   the authoritative location: mutation-checking a new regression before
+   trusting it (it caught that the Analysis-panel assertions were load-bearing);
+   asserting a transport artifact rather than a descriptor; and the existing
+   `bd` checkpoint discipline, which made this resumable after a note-handling
+   mistake. Revise: `bd update --notes` replaces history — use `--append-notes`
+   for checkpoints, which is the one operating change this round produced.
+   Proposals, untested: none beyond the C1 work already listed in the receipt.
+5. **Courier exchanges.** None this round; the assignment's standing authority
+   covered every phase, and no credential, fixture or platform was requested.
+6. **Bounded follow-ups.** C1/R26 as sequenced in the receipt; the published
+   slope-result inspection case; live isolated Desktop and Web observation of
+   the corrected surfaces; the packaged smoke and the Windows/macOS builds.
+   Nothing in the existing instructions should be removed: the guides reconciled
+   this round (`docs/agent/lidar.md`, `docs/agent/maplibre.md`) now describe the
+   corrected behaviour.
 
 ### Final correction debrief to deliver
 
