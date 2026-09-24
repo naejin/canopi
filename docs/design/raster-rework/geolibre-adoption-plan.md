@@ -4,6 +4,8 @@ Status: proposed — product direction and import grouping accepted; a gallery-o
 Tracking: interactive reference `canopi-2c94`; create production execution beads only after authorization. Existing raster qualification remains in `canopi-j571.3` under `canopi-j571.1`; it is not silently replaced by this proposal.
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [edition development](../../agent/edition-development.md), [Canvas](../../agent/canvas-runtime.md), [MapLibre](../../agent/maplibre.md), [LiDAR](../../agent/lidar.md), [Design lifecycle](../../agent/document-lifecycle.md), [database](../../agent/database.md), and [interface contract](../../../.interface-design/system.md).
 
+Prepared assignment: [GeoLibre adoption implementation prompt](geolibre-adoption-agent-prompt.md). The user can forward or explicitly invoke it to start S0–S5; its presence does not start migration or establish visual acceptance.
+
 ## 1. Outcome and scope
 
 Deliver a functional Canopi with a fast, searchable library of reusable terrain data and a clear way to use it in a Design. Reuse GeoLibre geographic infrastructure while retaining Canopi's botanical canvas/tools, plant database, Calendar, Budget, Consortium, persistence and exports. Keep TypeScript/Preact and Rust; add no Python implementation or tooling.
