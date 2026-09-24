@@ -59,7 +59,11 @@ Classify material escapes without treating every defect as implementer failure:
 
 Categories can overlap; record uncertainty rather than inventing a cause. In the existing receipt/debrief, record baseline/delivery revisions, accepted outcomes, genuinely measured capabilities, escaped invariant families, self-review discoveries, corrected controls, coverage limits and authority needed next. Count elapsed effort/cost and courier cycles only when observed; test count and line count are not productivity measures. Do not infer a language/model cause from a sequence of repairs.
 
-For a proposed process improvement, record the concrete failure, smallest change, next slice that tests it and evidence that would justify keeping it. Promote demonstrated lessons into focused tests, tooling or operating guidance; skill changes and broader automation need their own authorization. A repeated family calls for resolving its missing decision or detector, not blindly repeating the same prompt or opening an unlimited repair loop.
+For a proposed process improvement, record the concrete failure, smallest change, next slice that tests it and evidence that would justify keeping it. Promote demonstrated lessons into focused tests, tooling or operating guidance; skill changes and broader automation need their own authorization.
+
+If an explicit corrective handoff returns with the same acceptance boundary still unproved, reassess before sending another expanded prompt. Identify whether the missing piece is a decision, detector, fixture, environment or implementation. Supply the smallest executable proof when test authoring is authorized, narrow the assignment when necessary, or recommend a user-authorized change of execution owner. This grants no automatic takeover or delegation. Corrective handoffs state the changed finding, reproduction and exit condition, linking unchanged contracts instead of repeating the delivery history.
+
+Evaluate this adjustment on the next comparable slice: did its first delivery cross the named production boundary, and did review uncover another escape in the same invariant family? Record observed courier cycles and effort when available; keep the change only if it improves acceptance quality or total delivery cost. Do not claim savings from shorter prompts or higher test counts alone.
 
 ## Documentation authority
 

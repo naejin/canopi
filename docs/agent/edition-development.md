@@ -71,6 +71,10 @@ When the user's own display, servers and ports must stay untouched, run the whol
 
 Stop Vite or Tauri with Ctrl-C and wait for the process to exit before removing an isolated profile. Reload resets gallery memory. Web reset means clearing the isolated origin storage or discarding its browser profile; Desktop reset means discarding the isolated OS app-data profile.
 
+For a sustained smoke session, finish builds and generated-file updates before driving the app. A `cargo tauri dev` watcher can restart the WebView during unrelated validation writes and invalidate interaction evidence. If that interferes, build the debug binary once with the intended frontend URL/configuration, then launch that exact binary directly inside the same isolated display, private bus and XDG profile, keeping its matching Vite host alive. Record the revision, binary path and frontend URL; rebuild deliberately after code changes. Do not assume that a later environment override changes configuration already embedded in the binary.
+
+Describe the interaction actually driven: a bridge calling the production import action proves that action and its native path, but not the OS chooser or pointer hit-testing. Keep those claims separate from browser reload persistence, live pixels and packaged smoke. Clean up only the session's own processes and profiles.
+
 ## Verification workflow
 
 Start with the narrowest Vitest file that crosses the behavior owner. Exercise shared behavior through both edition compositions and test differing storage or delivery adapters at their actual interfaces. Use real clicks, focus changes, keyboard events, resize, and scroll where the interaction depends on them. A jsdom click does not establish native WebView behavior.
