@@ -11,8 +11,7 @@ import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
 import { LocationPanel } from '../src/components/panels/LocationPanel'
 import { WebLocationPanel } from '../src/web/WebLocationPanel'
 import { WebLocalRasterPanel } from '../src/web/WebLocalRasterPanel'
-import { DataPanel } from '../src/components/panels/lidar/DataPanel'
-import { AnalysisPanel } from '../src/components/panels/lidar/AnalysisPanel'
+import { DataLibraryPanel } from '../src/components/panels/lidar/DataLibraryPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
@@ -34,8 +33,7 @@ import { t } from '../src/i18n'
 import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
-import { activity, galleryInitialLidarImportJob } from './memory-backend'
-import { openImportJob } from '../src/app/lidar/library-store'
+import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { readPlanningViewState } from '../src/app/planning-view/state'
@@ -66,9 +64,6 @@ const selectedSurface = signal<GallerySurface>(initial)
 const galleryCanvasReady = signal(false)
 const file = designFixture(fixtureState)
 designSessionStore.replaceCurrentDesignState(file, null, file.name)
-if (galleryInitialLidarImportJob) {
-  openImportJob.value = galleryInitialLidarImportJob
-}
 lidarMapViewBounds.value = fixtureState === 'located'
   ? [0.02, 48.21, 0.05, 48.23]
   : null
@@ -87,8 +82,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   ? {
       primary: { canvas: GalleryCanvasWorkspace, location: WebLocationPanel },
       side: {
-        data: () => <WebLocalRasterPanel title={t('canvas.lidar.data.title')} />,
-        analysis: () => <WebLocalRasterPanel title={t('canvas.lidar.analysis.title')} />,
+        data: () => <WebLocalRasterPanel title={t('canvas.lidar.library.title')} />,
         'species-key': WebSpeciesKeyPanel,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
@@ -101,8 +95,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   : {
       primary: { canvas: GalleryCanvasWorkspace, location: LocationPanel },
       side: {
-        data: DataPanel,
-        analysis: AnalysisPanel,
+        data: DataLibraryPanel,
         'species-key': DesktopSpeciesKeyPanel,
         layers: GalleryLayersSurface,
         calendar: CalendarPanel,

@@ -33,11 +33,8 @@ export function WebWorkspace({
   const surfaces = useMemo<WorkspaceSurfaces>(() => {
     const Canvas = () => <WebCanvasWorkspace controller={controller} />
     // Web preserves raster references but renders and processes no local
-    // assets, so both surfaces state that instead of offering dead controls.
-    const WebData = () => <WebLocalRasterPanel title={t('canvas.lidar.data.title')} />
-    const WebAnalysis = () => (
-      <WebLocalRasterPanel title={t('canvas.lidar.analysis.title')} />
-    )
+    // assets, so the Data Library surface states that instead of offering dead controls.
+    const WebData = () => <WebLocalRasterPanel title={t('canvas.lidar.library.title')} />
     return {
       primary: {
         canvas: Canvas,
@@ -47,7 +44,6 @@ export function WebWorkspace({
       side: {
         'species-key': WebSpeciesKeyPanel,
         data: WebData,
-        analysis: WebAnalysis,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
         budget: BudgetPanel,

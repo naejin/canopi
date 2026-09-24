@@ -397,25 +397,16 @@ export function interpretOutcome(outcome: LidarSampleOutcome): InspectionSample 
 /**
  * The immutable generation presentation currently reports for one entity.
  *
- * A source reports its tileset's native generation; an analysis reports its own
- * result generation. Reading it here keeps the expected-generation fence derived
- * from the same presentation the map is drawing.
+ * Reading it from the library snapshot keeps the expected-generation fence
+ * derived from the same generation the map display descriptor is drawing.
  */
 function readCurrentGenerationId(target: InspectionTarget): string | null {
   const library = lidarLibrary.value
   if (!library) return null
-  if (target.kind === 'Source') {
-    const layer = library.layers.find((candidate) => candidate.id === target.id)
-    const tileset = layer?.tilesets.find(
-      (candidate) => candidate.source.kind === 'native-generation',
-    )
-    return tileset && 'generation_id' in tileset.source ? tileset.source.generation_id : null
-  }
-  const analysis = library.analyses.find((candidate) => candidate.id === target.id)
-  const tileset = analysis?.tilesets.find(
-    (candidate) => candidate.source.kind === 'native-generation',
-  )
-  return tileset && 'generation_id' in tileset.source ? tileset.source.generation_id : null
+  const entity = target.kind === 'Source'
+    ? library.layers.find((candidate) => candidate.id === target.id)
+    : library.analyses.find((candidate) => candidate.id === target.id)
+  return entity?.generation_id ?? null
 }
 
 /**

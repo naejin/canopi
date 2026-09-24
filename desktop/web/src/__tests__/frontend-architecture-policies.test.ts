@@ -141,7 +141,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/canvas-runtime/desktop-adapter.ts',
       'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
       'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
-      'src/app/canvas-map-surface/lidar.ts',
+      'src/maplibre/raster-display/**',
       'src/app/lidar/**',
     ],
   },
@@ -1906,8 +1906,8 @@ describe('declarative frontend architecture policies', () => {
         targets: [
           '@tauri-apps/**', 'src/ipc/**',
           'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
-          'src/app/canvas-map-surface/lidar.ts',
-          'src/app/lidar/library-store.ts', 'src/app/lidar/tile-urls.ts',
+          'src/maplibre/raster-display/**',
+          'src/app/lidar/library-store.ts', 'src/app/lidar/display.ts',
         ],
       },
     ])).toEqual([])

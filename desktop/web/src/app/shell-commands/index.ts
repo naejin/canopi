@@ -17,7 +17,6 @@ export type ShellCommandIdByCapability = {
   readonly navigateFavorites: 'nav.favorites'
   readonly navigateSpeciesKey: 'nav.speciesKey'
   readonly navigateData: 'nav.data'
-  readonly navigateAnalysis: 'nav.analysis'
   readonly navigateLayers: 'nav.layers'
   readonly navigateCalendar: 'nav.calendar'
   readonly navigateBudget: 'nav.budget'
@@ -250,13 +249,8 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   },
   {
     capabilityId: 'navigateData', id: 'nav.data', family: 'navigation',
-    labelKey: 'canvas.lidar.data.title', chromeLabelKey: 'canvas.lidar.data.title', palette: true,
+    labelKey: 'canvas.lidar.library.title', chromeLabelKey: 'canvas.lidar.library.title', palette: true,
     panel: { panel: 'data', group: 'design', order: 1 },
-  },
-  {
-    capabilityId: 'navigateAnalysis', id: 'nav.analysis', family: 'navigation',
-    labelKey: 'canvas.lidar.analysis.title', chromeLabelKey: 'canvas.lidar.analysis.title', palette: true,
-    panel: { panel: 'analysis', group: 'design', order: 2 },
   },
   {
     capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation',

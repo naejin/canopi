@@ -31,14 +31,9 @@ const LayersPanel = lazy(async () => {
   return { default: module.LayersPanel }
 })
 
-const DataPanel = lazy(async () => {
-  const module = await import('../panels/lidar/DataPanel')
-  return { default: module.DataPanel }
-})
-
-const AnalysisPanel = lazy(async () => {
-  const module = await import('../panels/lidar/AnalysisPanel')
-  return { default: module.AnalysisPanel }
+const DataLibraryPanel = lazy(async () => {
+  const module = await import('../panels/lidar/DataLibraryPanel')
+  return { default: module.DataLibraryPanel }
 })
 
 const BudgetPanel = lazy(async () => {
@@ -70,11 +65,7 @@ function LayersSurface() {
 }
 
 function DataSurface() {
-  return <DataPanel />
-}
-
-function AnalysisSurface() {
-  return <AnalysisPanel />
+  return <DataLibraryPanel />
 }
 
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
@@ -88,7 +79,6 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
     'design-notebook': DesignNotebookSurface,
     'species-key': SpeciesKeyPanel,
     data: DataSurface,
-    analysis: AnalysisSurface,
     layers: LayersSurface,
     calendar: CalendarPanel,
     budget: BudgetPanel,

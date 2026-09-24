@@ -1,34 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const createLayerMock = vi.hoisted(() => vi.fn())
-const createAnalysisMock = vi.hoisted(() => vi.fn())
+const importItemMock = vi.hoisted(() => vi.fn())
+const retryImportMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const dismissImportMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const renameLayerMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const renameAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const retryAnalysisMock = vi.hoisted(() => vi.fn())
 const deleteLayerMock = vi.hoisted(() => vi.fn())
+const deleteAnalysisMock = vi.hoisted(() => vi.fn())
+const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const upsertMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
+const moveMock = vi.hoisted(() => vi.fn())
+const patchMock = vi.hoisted(() => vi.fn())
 const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
+const reconcileInspectionMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
 
-const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-
 vi.mock('../ipc/lidar', () => ({
-  lidarApplyImport: vi.fn(),
   lidarCancelAnalysisJob: cancelAnalysisMock,
-  lidarCancelImport: vi.fn(),
-  lidarCreateAnalysis: createAnalysisMock,
-  lidarRetryAnalysis: retryAnalysisMock,
-  lidarCreateLayer: createLayerMock,
-  lidarDeleteAnalysis: vi.fn(),
+  lidarCancelImport: vi.fn().mockResolvedValue(undefined),
+  lidarDeleteAnalysis: deleteAnalysisMock,
   lidarDeleteLayer: deleteLayerMock,
   lidarDeleteLayerImpact: vi.fn(),
-  lidarRenameLayer: vi.fn(),
-  lidarLayerHistory: vi.fn(),
-  lidarStageImport: vi.fn(),
+  lidarDismissImport: dismissImportMock,
+  lidarImportItem: importItemMock,
+  lidarLayerCollection: vi.fn(),
+  lidarRenameAnalysis: renameAnalysisMock,
+  lidarRenameLayer: renameLayerMock,
+  lidarRetryAnalysis: retryAnalysisMock,
+  lidarRetryImport: retryImportMock,
 }))
 
 vi.mock('../app/design-edit/lidar', () => ({
-  patchLidarEntryById: vi.fn(),
+  moveLidarEntry: moveMock,
+  patchLidarEntryById: patchMock,
   removeLidarEntries: removeMock,
   upsertLidarEntry: upsertMock,
 }))
@@ -38,12 +45,13 @@ vi.mock('../app/lidar/library-store', async () => {
   return {
     ensureLidarPolling: ensurePollingMock,
     lidarStatusMessage: makeSignal<string | null>(null),
-    openImportJob: makeSignal(null),
-    refreshOpenImportJob: vi.fn(),
     refreshLidarLibrary: refreshMock,
-    trackImportJob: vi.fn(),
   }
 })
+
+vi.mock('../app/lidar/inspection', () => ({
+  reconcileInspectionWithPresentation: reconcileInspectionMock,
+}))
 
 vi.mock('../app/document-session/store', () => ({
   designSessionStore: { sessionIdentity },
@@ -51,13 +59,23 @@ vi.mock('../app/document-session/store', () => ({
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }))
 
+import { open } from '@tauri-apps/plugin-dialog'
 import {
-  analyseLayerAsSlope,
+  addToDesign,
   cancelAnalysisJob,
-  createLidarLayer,
-  deleteLidarLayer,
+  chooseImportFiles,
+  deleteLibraryItem,
+  dismissLibraryImport,
+  importLibraryItem,
+  moveReference,
+  removeFromDesign,
+  renameLibraryItem,
+  retryFailedCalculation,
+  retryLibraryImport,
   runningAnalysisJobId,
+  setLidarEntryVisibility,
 } from '../app/lidar/actions'
+import { lidarStatusMessage } from '../app/lidar/library-store'
 
 interface Deferred<T> {
   readonly promise: Promise<T>
@@ -70,49 +88,62 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve }
 }
 
-describe('LiDAR action session isolation', () => {
+const designEdits = () => [upsertMock, removeMock, moveMock, patchMock]
+  .reduce((total, mock) => total + mock.mock.calls.length, 0)
+
+describe('Data Library actions', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     sessionIdentity.value = 'design-a'
-    createLayerMock.mockReset()
-    createAnalysisMock.mockReset()
-    deleteLayerMock.mockReset()
-    upsertMock.mockReset()
-    removeMock.mockReset()
-    refreshMock.mockClear()
-    ensurePollingMock.mockClear()
+    lidarStatusMessage.value = null
   })
 
-  it('does not present a newly created library layer in a Design opened mid-command', async () => {
-    const pending = deferred<string>()
-    createLayerMock.mockReturnValue(pending.promise)
-    const creation = createLidarLayer('Ground', 'GroundElevation')
-
-    sessionIdentity.value = 'design-b'
-    pending.resolve('layer-1')
-    await creation
-
-    expect(refreshMock).toHaveBeenCalled()
-    expect(upsertMock).not.toHaveBeenCalled()
+  it('creates nothing when the file chooser is cancelled', async () => {
+    vi.mocked(open).mockResolvedValue(null)
+    await expect(chooseImportFiles('Choose')).resolves.toBeNull()
+    expect(importItemMock).not.toHaveBeenCalled()
   })
 
-  it('does not present an analysis result in a Design opened while analysis starts', async () => {
-    const pending = deferred<{ definition_id: string; job_id: string }>()
-    createAnalysisMock.mockReturnValue(pending.promise)
-    const analysis = analyseLayerAsSlope('layer-1')
+  it('imports into the library only, in the listed priority order', async () => {
+    importItemMock.mockResolvedValue({ layer_id: 'layer-1', job_id: 'job-1' })
+    await importLibraryItem(['/b.tif', '/a.tif'], 'Ground', 'GroundElevation', { label: 'm', unknown: false })
 
-    sessionIdentity.value = 'design-b'
-    pending.resolve({ definition_id: 'analysis-1', job_id: 'job-1' })
-    await analysis
-
-    expect(refreshMock).toHaveBeenCalled()
-    expect(upsertMock).not.toHaveBeenCalled()
+    expect(importItemMock).toHaveBeenCalledWith('Ground', 'GroundElevation', { label: 'm', unknown: false }, ['/b.tif', '/a.tif'])
     expect(ensurePollingMock).toHaveBeenCalled()
+    expect(designEdits()).toBe(0)
   })
 
-  it('does not remove presentation entries from a Design opened during deletion', async () => {
+  it('never edits the Design for rename, retry or dismiss', async () => {
+    await renameLibraryItem('Source', 'layer-1', 'Terrain')
+    await renameLibraryItem('Analysis', 'analysis-1', 'Steepness')
+    await retryLibraryImport('layer-2')
+    await dismissLibraryImport('layer-3')
+
+    expect(renameLayerMock).toHaveBeenCalledWith('layer-1', 'Terrain')
+    expect(renameAnalysisMock).toHaveBeenCalledWith('analysis-1', 'Steepness')
+    expect(retryImportMock).toHaveBeenCalledWith('layer-2')
+    expect(dismissImportMock).toHaveBeenCalledWith('layer-3')
+    expect(designEdits()).toBe(0)
+  })
+
+  it('publishes and rethrows a refused library operation', async () => {
+    renameLayerMock.mockRejectedValueOnce(new Error('name is empty'))
+    await expect(renameLibraryItem('Source', 'layer-1', ' ')).rejects.toThrow('name is empty')
+    expect(lidarStatusMessage.value).toBe('name is empty')
+  })
+
+  it('removes the deleted item from the Design that asked for the deletion', async () => {
+    deleteAnalysisMock.mockResolvedValue(undefined)
+    await deleteLibraryItem('Analysis', 'analysis-1')
+
+    expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
+    expect(reconcileInspectionMock).toHaveBeenCalled()
+  })
+
+  it('does not remove references from a Design opened during deletion', async () => {
     const pending = deferred<void>()
     deleteLayerMock.mockReturnValue(pending.promise)
-    const deletion = deleteLidarLayer('layer-1', ['analysis-1'])
+    const deletion = deleteLibraryItem('Source', 'layer-1')
 
     sessionIdentity.value = 'design-b'
     pending.resolve()
@@ -122,61 +153,49 @@ describe('LiDAR action session isolation', () => {
     expect(removeMock).not.toHaveBeenCalled()
   })
 
-  it('remembers the job a run started so Cancel can name it', async () => {
-    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-1', job_id: 'job-77' })
-    await analyseLayerAsSlope('lyr-1', 'Percent')
-    // The library snapshot reports result state but not job identity, so the
-    // receipt is the only handle on the run the user actually started.
-    expect(runningAnalysisJobId('adef-1')).toBe('job-77')
-    expect(runningAnalysisJobId('adef-unknown')).toBeNull()
-    // The chosen unit is the recipe's own parameter, not a relabelled result.
-    expect(createAnalysisMock).toHaveBeenCalledWith(
-      'lyr-1',
-      'Slope',
-      // A run started without a name stays unnamed rather than being given one.
-      { slope_unit: 'Percent', name: null },
-      null,
-    )
+  it('keeps the Design unchanged when the library refuses a deletion', async () => {
+    deleteLayerMock.mockRejectedValue(new Error('saved results depend on this data'))
+    await expect(deleteLibraryItem('Source', 'layer-1')).rejects.toThrow()
+    expect(removeMock).not.toHaveBeenCalled()
   })
 
-  it('forwards the result name the author gave the run', async () => {
-    createAnalysisMock.mockClear()
-    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-3', job_id: 'job-99' })
+  it('remembers the job a retried calculation started so Cancel can name it', async () => {
+    retryAnalysisMock.mockResolvedValue({ definition_id: 'analysis-1', job_id: 'job-7' })
+    await retryFailedCalculation('analysis-1', 'generation-1')
 
-    await analyseLayerAsSlope('lyr-1', 'Degrees', 'Bank slope')
-
-    // The name reaches both the definition's parameters and the command, so a
-    // refresh republishes the same name instead of renaming the user's result.
-    expect(createAnalysisMock).toHaveBeenCalledWith(
-      'lyr-1',
-      'Slope',
-      { slope_unit: 'Degrees', name: 'Bank slope' },
-      'Bank slope',
-    )
+    expect(retryAnalysisMock).toHaveBeenCalledWith('analysis-1', 'generation-1')
+    expect(runningAnalysisJobId('analysis-1')).toBe('job-7')
+    await expect(cancelAnalysisJob('analysis-1')).resolves.toBe(true)
+    expect(cancelAnalysisMock).toHaveBeenCalledWith('job-7')
+    expect(runningAnalysisJobId('analysis-1')).toBeNull()
   })
 
-  it('cancels only a run this session started', async () => {
-    // Nothing started for this definition, so there is nothing to cancel and no
-    // guessed job id is sent.
-    expect(await cancelAnalysisJob('adef-unknown')).toBe(false)
+  it('cancels only a calculation this session started', async () => {
+    await expect(cancelAnalysisJob('analysis-unknown')).resolves.toBe(false)
     expect(cancelAnalysisMock).not.toHaveBeenCalled()
+  })
+})
 
-    createAnalysisMock.mockResolvedValue({ definition_id: 'adef-2', job_id: 'job-88' })
-    await analyseLayerAsSlope('lyr-1')
-    expect(await cancelAnalysisJob('adef-2')).toBe(true)
-    expect(cancelAnalysisMock).toHaveBeenCalledWith('job-88')
-    // A cancelled run is forgotten, so a second Cancel does not resend it.
-    expect(await cancelAnalysisJob('adef-2')).toBe(false)
+describe('Design data references', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('adds and removes references through Design Edit', () => {
+    addToDesign('Analysis', 'analysis-1')
+    removeFromDesign('analysis-1')
+
+    expect(upsertMock).toHaveBeenCalledWith('Analysis', 'analysis-1')
+    expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
   })
 
-  it('R50: a Design switch during retry cannot present into the replacement Design', async () => {
-    const pending = deferred<{ definition_id: string; job_id: string }>()
-    retryAnalysisMock.mockReturnValue(pending.promise)
-    const { retryAnalysis } = await import('../app/lidar/actions')
-    const promise = retryAnalysis('adef-retry', 'gen-1')
-    sessionIdentity.value = 'design-b'
-    pending.resolve({ definition_id: 'adef-retry', job_id: 'job-retry' })
-    await promise
-    expect(upsertMock).not.toHaveBeenCalled()
+  it('ends inspection in the same interaction that hides a reference', () => {
+    setLidarEntryVisibility('layer-1', false)
+    expect(patchMock).toHaveBeenCalledWith('layer-1', { visible: false })
+    expect(reconcileInspectionMock).toHaveBeenCalled()
+  })
+
+  it('maps front and back onto the saved back-to-front order', () => {
+    moveReference('layer-1', 'front')
+    moveReference('layer-1', 'back')
+    expect(moveMock.mock.calls).toEqual([['layer-1', 'down'], ['layer-1', 'up']])
   })
 })

@@ -92,16 +92,8 @@ function libraryWithGeneration(generationId: string) {
         bounds: [0, 0, 1, 1],
         value_range: null,
         analysis_count: 0,
-        tilesets: [
-          {
-            style: 'elevation',
-            source: { kind: 'native-generation', generation_id: generationId },
-            min_zoom: 13,
-            max_zoom: 17,
-            tile_size: 256,
-            bounds: [0, 0, 1, 1],
-          },
-        ],
+        generation_id: generationId,
+        tilesets: [],
       },
     ],
     analyses: [],

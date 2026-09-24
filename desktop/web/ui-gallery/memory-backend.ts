@@ -19,6 +19,7 @@ let stamps: SavedObjectStamp[] = state === 'empty' ? [] : ['Orchard guild', 'Pol
 const lidarBounds: [number, number, number, number] = [-0.427, 48.305, -0.413, 48.314]
 let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
   id: 'lidar-ground',
+  generation_id: 'lidar-ground-g1',
   name: state === 'long'
     ? 'IGN bare-earth elevation — La Maignannerie regional survey comparison layer'
     : 'IGN ground elevation',
@@ -30,21 +31,14 @@ let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
   bounds: lidarBounds,
   value_range: [131.2, 287.8],
   display_range: { min: 131.2, max: 287.8, basis: 'Exact' },
-  tilesets: [{
-    style: 'elevation',
-    source: {
-      kind: 'legacy-asset',
-      path_template: '/lidar-prototype/assets/mnt-elevation-{z}.png',
-    },
-    min_zoom: 13,
-    max_zoom: 17,
-    tile_size: 256,
-    bounds: lidarBounds,
-  }],
+  tilesets: [],
   analysis_count: 1,
+  import_job: null,
 }]
 let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   id: 'lidar-slope',
+  generation_id: 'lidar-slope-g1',
+  input_generation_id: 'lidar-ground-g1',
   source_layer_id: 'lidar-ground',
   kind: 'Slope',
   name: null,
@@ -52,41 +46,23 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   detail: null,
   bounds: lidarBounds,
   value_range: [0, 41.6],
-  tilesets: [{
-    style: 'slope',
-    source: {
-      kind: 'legacy-asset',
-      path_template: '/lidar-prototype/assets/mnt-hillshade-{z}.png',
-    },
-    min_zoom: 13,
-    max_zoom: 17,
-    tile_size: 256,
-    bounds: lidarBounds,
-  }],
+  slope_unit: 'Degrees',
+  tilesets: [],
 }]
-function createGalleryLidarImport(layerId: string): LidarImportJob {
+function galleryImport(layerId: string, name: string, kind: LidarLayerSummary['measurement_kind'], job: Partial<LidarImportJob>): LidarLayerSummary {
   return {
-    job_id: 'gallery-import',
-    layer_id: layerId,
-    state: 'Staging',
-    message: null,
-    progress: { phase: 'PreparingRaster', percent: 42 },
+    id: layerId, generation_id: null, name, measurement_kind: kind, units: 'm', state: 'Preparing',
+    resolution_m: null, coverage_cells: null, bounds: null, value_range: null, display_range: null,
+    tilesets: [], analysis_count: 0,
+    import_job: { job_id: `job-${layerId}`, layer_id: layerId, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 42 }, ...job },
   }
 }
-
-
-let lidarImportJob: LidarImportJob | null = null
 if (state === 'lidar-progress') {
-  lidarImportJob = createGalleryLidarImport('lidar-ground')
+  lidarLayers = [...lidarLayers,
+    galleryImport('lidar-canopy', 'Canopy height 2024', 'AboveGroundHeight', { state: 'Applying', progress: { phase: 'RenderingMap', percent: 68 } }),
+    galleryImport('lidar-broken', 'Survey tile 0712', 'SurfaceElevation', { state: 'Failed', message: 'The file is not a readable raster.', progress: null }),
+  ]
 }
-if (state === 'lidar-progress' && lidarImportJob) {
-  lidarImportJob = {
-    ...lidarImportJob,
-    state: 'Applying',
-    progress: { phase: 'RenderingMap', percent: 68 },
-  }
-}
-export const galleryInitialLidarImportJob = lidarImportJob
 export const activity = signal('All changes stay in memory. Reload to reset.')
 export function convertFileSrc(path: string) { return path }
 export async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -131,26 +107,43 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
         analyses: lidarAnalyses,
         engine: { available: true, version: '3.8.4', detail: null },
       }; break
-    case 'lidar_create_layer': {
+    case 'lidar_import_item': {
       const id = `lidar-layer-${sequence++}`
-      lidarLayers = [...lidarLayers, {
-        id,
-        name: String(args.name),
-        measurement_kind: 'GroundElevation',
-        units: 'm',
-        state: 'Preparing',
-        resolution_m: null,
-        coverage_cells: '0',
-        display_range: null,
-        bounds: null,
-        value_range: null,
-        tilesets: [],
-        analysis_count: 0,
-      }]
-      activity.value = 'Created a ground layer in memory.'
-      result = id
+      lidarLayers = [...lidarLayers, galleryImport(id, String(args.name), args.kind as LidarLayerSummary['measurement_kind'], {})]
+      activity.value = 'Started a library import in memory.'
+      result = { layer_id: id, job_id: `job-${id}` }
       break
     }
+    case 'lidar_retry_import':
+      lidarLayers = lidarLayers.map(layer => layer.id === args.layerId && layer.import_job
+        ? { ...layer, import_job: { ...layer.import_job, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 5 } } }
+        : layer)
+      activity.value = 'Retried the import in memory.'
+      result = { layer_id: String(args.layerId), job_id: `job-${String(args.layerId)}` }
+      break
+    case 'lidar_dismiss_import':
+    case 'lidar_delete_layer': {
+      const id = String(args.layerId)
+      lidarLayers = lidarLayers.filter(candidate => candidate.id !== id)
+      activity.value = 'Removed the library item in memory.'
+      result = undefined
+      break
+    }
+    case 'lidar_cancel_import':
+      lidarLayers = lidarLayers.map(layer => layer.import_job && layer.import_job.job_id === args.jobId
+        ? { ...layer, import_job: { ...layer.import_job, state: 'Cancelled' as const, progress: null } }
+        : layer)
+      activity.value = 'Cancelled the import without publishing.'
+      result = undefined
+      break
+    case 'lidar_rename_layer':
+      lidarLayers = lidarLayers.map(layer => layer.id === args.layerId ? { ...layer, name: String(args.name) } : layer)
+      result = undefined
+      break
+    case 'lidar_rename_analysis':
+      lidarAnalyses = lidarAnalyses.map(analysis => analysis.id === args.definitionId ? { ...analysis, name: String(args.name) } : analysis)
+      result = undefined
+      break
     case 'lidar_delete_layer_impact': {
       const id = String(args.layerId)
       const layer = lidarLayers.find(candidate => candidate.id === id)
@@ -158,79 +151,33 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = { layer_name: layer?.name ?? id, analysis_count: ids.length, analysis_ids: ids }
       break
     }
-    case 'lidar_delete_layer': {
-      const id = String(args.layerId)
-      lidarLayers = lidarLayers.filter(candidate => candidate.id !== id)
-      lidarAnalyses = lidarAnalyses.filter(candidate => candidate.source_layer_id !== id)
-      activity.value = 'Deleted the LiDAR layer in memory.'
+    case 'lidar_delete_analysis': {
+      const removed = lidarAnalyses.find(candidate => candidate.id === String(args.definitionId))
+      lidarAnalyses = lidarAnalyses.filter(candidate => candidate !== removed)
+      lidarLayers = lidarLayers.map(layer => layer.id === removed?.source_layer_id
+        ? { ...layer, analysis_count: layer.analysis_count - 1 }
+        : layer)
+      activity.value = 'Deleted the result in memory.'
       result = undefined
       break
     }
-    case 'lidar_delete_analysis':
-      lidarAnalyses = lidarAnalyses.filter(candidate => candidate.id !== String(args.definitionId))
-      activity.value = 'Deleted the analysis in memory.'
-      result = undefined
-      break
-    case 'lidar_stage_import':
-      lidarImportJob = createGalleryLidarImport(String(args.layerId))
-      activity.value = 'Staged the sample raster in memory.'
-      result = lidarImportJob.job_id
-      break
-    case 'lidar_get_import_job': result = lidarImportJob; break
-    case 'lidar_preview_import_decision':
+    case 'lidar_layer_collection':
       result = {
-        add_uncovered: Boolean(args.addUncovered),
-        replace_overlap: Boolean(args.replaceOverlap),
-        before_preview_path: '/lidar-prototype/assets/mnt-elevation-0.png',
-        after_preview_path: '/lidar-prototype/assets/mnt-elevation-1.png',
+        layer_id: String(args.layerId), head_generation_id: null, member_count: 4, undo_available: false, undo_target: null,
+        sources: ['LHD_FXX_0712_6250', 'LHD_FXX_0712_6251', 'LHD_FXX_0713_6250', 'LHD_FXX_0713_6251']
+          .map((stem, index) => ({
+            member_id: `source-${index}`, kind: 'raster', filename: `${stem}.tif`, interpretation_id: null, base_generation_id: null,
+            width: 2000, height: 2000, pixel_size_m: 0.5, coverage_cells: '1000000', value_range: [131.2, 287.8] as [number, number],
+          })),
+        next_member_cursor: null,
       }
       break
-    case 'lidar_apply_import':
-      if (lidarImportJob) lidarImportJob = { ...lidarImportJob, state: 'Complete', message: 'Published 4,000,000 cells.' }
-      activity.value = 'Applied the LiDAR import in memory.'
-      result = undefined
-      break
-    case 'lidar_cancel_import':
-      if (lidarImportJob) lidarImportJob = { ...lidarImportJob, state: 'Cancelled', message: null }
-      activity.value = 'Cancelled the LiDAR import without publishing.'
-      result = undefined
-      break
-    case 'lidar_create_analysis': {
-      const layerId = String(args.layerId)
-      const definitionId = `lidar-analysis-${sequence++}`
-      const requestedName = typeof args.resultName === 'string' ? args.resultName.trim() : ''
-      lidarAnalyses = [...lidarAnalyses, {
-        id: definitionId,
-        source_layer_id: layerId,
-        kind: 'Slope',
-        name: requestedName.length > 0 ? requestedName : null,
-        state: 'Ready',
-        detail: null,
-        bounds: lidarBounds,
-        value_range: [0, 41.6],
-        tilesets: [],
-      }]
-      lidarLayers = lidarLayers.map(layer => layer.id === layerId
-        ? { ...layer, analysis_count: layer.analysis_count + 1 }
-        : layer)
-      activity.value = 'Created a slope analysis in memory.'
-      result = { definition_id: definitionId, job_id: `job-${definitionId}` }
+    case 'lidar_display_descriptor': {
+      // The gallery serves no managed derivatives, so previews stay placeholders.
+      const request = args.request as { kind: string; entity_id: string; generation_id: string | null }
+      result = { kind: request.kind, entity_id: request.entity_id, generation_id: request.generation_id, profile: 'gallery', state: 'Unavailable', message: null, assets: [] }
       break
     }
-    case 'lidar_layer_history':
-      result = [{
-        id: 'gallery-generation',
-        created_at: file.created_at,
-        coverage_cells: '4000000',
-        members: ['gallery-sha256'],
-        roles: ['add'],
-        job_ids: ['gallery-import'],
-        is_head: true,
-      }]; break
-    case 'lidar_undo_import':
-      activity.value = 'Republished the layer without the selected import in memory.'
-      result = undefined
-      break
     default: throw new Error(`Gallery backend has no fixture for ${command}.`)
   }
   return structuredClone(result) as T

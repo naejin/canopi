@@ -125,7 +125,7 @@ export function disposeLidarDisplayDescriptors(): void {
 }
 
 /** Replicates Tauri v2 `convertFileSrc` so pure projection stays testable. */
-function defaultToAssetUrl(path: string): string {
+export function lidarAssetUrl(path: string): string {
   const encoded = encodeURIComponent(path)
   const platform = typeof navigator !== 'undefined' ? navigator.platform : ''
   return platform.startsWith('Win') ? `http://asset.localhost/${encoded}` : `asset://localhost/${encoded}`
@@ -176,7 +176,7 @@ export function lidarDisplayLayers(
   items: readonly LidarPresentationItem[],
   descriptors: ReadonlyMap<string, LidarDisplayDescriptor>,
   unitsOf: (item: LidarPresentationItem) => string = () => '',
-  toAssetUrl: typeof convertFileSrc = defaultToAssetUrl,
+  toAssetUrl: typeof convertFileSrc = lidarAssetUrl,
 ): RasterDisplayLayer[] {
   const layers: RasterDisplayLayer[] = []
   for (const item of items) {

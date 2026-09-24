@@ -1,11 +1,9 @@
 import { signal } from '@preact/signals'
 import type {
   LidarLibrarySnapshot,
-  LidarImportJob,
   LidarPresentationEntryKind,
 } from '../../generated/contracts'
 import {
-  lidarGetImportJob,
   lidarListLibrary,
   type LidarAnalysisSummary,
   type LidarLayerSummary,
@@ -19,42 +17,19 @@ const LIDAR_POLL_INTERVAL_MS = 1500
 
 /** Library-side snapshot; null until the first successful read. */
 export const lidarLibrary = signal<LidarLibrarySnapshot | null>(null)
-
-/**
- * The import job this session is tracking.
- *
- * A job is progress, not a decision: the one-step route has no review to return
- * to, so this exists for the progress, cancel and retry the Data surface shows.
- */
-export const openImportJob = signal<LidarImportJob | null>(null)
 export const lidarStatusMessage = signal<string | null>(null)
-
-/**
- * Incremented after each polled tick that refreshed the library.
- *
- * The workflow observes this to retry a pending settlement even when the job
- * state remains Complete. The store never imports the workflow.
- */
-export const libraryPollTick = signal(0)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<void> | null = null
 /**
- * Monotonic read-start sequence.
- *
- * A queued fresh read may serve multiple callers only if it starts after all
- * their fences. Settlement records the sequence at terminal observation and
- * must not join a read already started at that point.
+ * Monotonic read-start sequence: an older passive response cannot overwrite a
+ * snapshot from a read that started later.
  */
 let readStartSequence = 0
 let publishedReadSequence = 0
-let freshRefreshInFlight: Promise<LidarLibrarySnapshot> | null = null
-let freshRefreshStartSequence = 0
 
 async function readLibrarySnapshot(startSequence: number): Promise<LidarLibrarySnapshot> {
   const snapshot = await lidarListLibrary()
-  // Publish in read-start order: an older passive response cannot overwrite
-  // newer state.
   if (startSequence >= publishedReadSequence) {
     publishedReadSequence = startSequence
     lidarLibrary.value = snapshot
@@ -64,11 +39,8 @@ async function readLibrarySnapshot(startSequence: number): Promise<LidarLibraryS
 }
 
 /**
- * Refresh the library snapshot.
- *
- * Passive overlapping callers coalesce onto the in-flight read. Settlement
- * must not use this entry: waiting for an earlier read does not make its
- * snapshot fresh.
+ * Refresh the library snapshot. Overlapping callers coalesce onto the read in
+ * flight; a failed read keeps the previous snapshot (Web has no library).
  */
 export async function refreshLidarLibrary(): Promise<void> {
   if (refreshInFlight) {
@@ -80,8 +52,6 @@ export async function refreshLidarLibrary(): Promise<void> {
     try {
       await readLibrarySnapshot(startSequence)
     } catch (error) {
-      // Passive library read failures leave the previous snapshot in place;
-      // the rest of the app keeps working (Web Edition has no library at all).
       lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
     } finally {
       refreshInFlight = null
@@ -90,173 +60,31 @@ export async function refreshLidarLibrary(): Promise<void> {
   return refreshInFlight
 }
 
-/**
- * Start a library read that begins after `afterSequence`.
- *
- * Settlement uses this entry so attachment never consumes a snapshot that
- * predates the terminal observation. One shared follow-up read may satisfy
- * multiple callers only when it starts after all their fences. A fresh read
- * does not join an earlier passive read that was already under way.
- */
-export async function refreshLidarLibraryFresh(
-  afterSequence: number = readStartSequence,
-): Promise<LidarLibrarySnapshot> {
-  if (
-    freshRefreshInFlight &&
-    freshRefreshStartSequence > afterSequence
-  ) {
-    return freshRefreshInFlight
-  }
-  readStartSequence += 1
-  const startSequence = readStartSequence
-  freshRefreshStartSequence = startSequence
-  let inflight!: Promise<LidarLibrarySnapshot>
-  inflight = (async () => {
-    try {
-      return await readLibrarySnapshot(startSequence)
-    } finally {
-      if (freshRefreshInFlight === inflight) {
-        freshRefreshInFlight = null
-      }
-    }
-  })()
-  freshRefreshInFlight = inflight
-  return inflight
+/** Whether any library operation is still running: imports or calculations. */
+export function hasActiveLibraryWork(snapshot: LidarLibrarySnapshot | null): boolean {
+  if (!snapshot) return false
+  return snapshot.layers.some((layer) =>
+    layer.import_job?.state === 'Staging' || layer.import_job?.state === 'Applying')
+    || snapshot.analyses.some((analysis) =>
+      analysis.state === 'Preparing' || analysis.state === 'Refreshing')
 }
 
-/** The current read-start sequence, used as a settlement fence. */
-export function libraryReadSequence(): number {
-  return readStartSequence
-}
-
-export interface ImportAttachmentIntent {
-  readonly jobId: string
-  readonly layerId: string
-  readonly designIdentity: object
-  consumed: boolean
-}
-
-const attachmentIntents = new Map<string, ImportAttachmentIntent>()
-
-/**
- * Record that a successful import submission should attach its layer when the
- * job commits, but only in the Design session that submitted it.
- */
-export function recordImportAttachmentIntent(
-  jobId: string,
-  layerId: string,
-  designIdentity: object,
-): void {
-  attachmentIntents.set(jobId, {
-    jobId,
-    layerId,
-    designIdentity,
-    consumed: false,
-  })
-}
-
-/** Drop a pending attachment without presenting anything. */
-export function discardImportAttachmentIntent(jobId: string): void {
-  attachmentIntents.delete(jobId)
-}
-
-/** The unconsumed attachment intent for one job, if any. */
-export function peekImportAttachmentIntent(jobId: string): ImportAttachmentIntent | null {
-  return attachmentIntents.get(jobId) ?? null
-}
-
-/** Consume the intent for one job, returning it if it was still pending. */
-export function consumeImportAttachmentIntent(jobId: string): ImportAttachmentIntent | null {
-  const intent = attachmentIntents.get(jobId)
-  if (!intent || intent.consumed) return null
-  intent.consumed = true
-  attachmentIntents.delete(jobId)
-  return intent
-}
-
-export function clearImportAttachmentIntents(): void {
-  attachmentIntents.clear()
-}
-
-/** Whether any unconsumed attachment intent still needs a successful fresh read. */
-export function hasPendingAttachmentIntent(): boolean {
-  for (const intent of attachmentIntents.values()) {
-    if (!intent.consumed) return true
-  }
-  return false
-}
-
-function hasActiveWork(snapshot: LidarLibrarySnapshot | null): boolean {
-  if (!snapshot) {
-    return false
-  }
-  return (snapshot.analyses ?? []).some(
-    (analysis) =>
-      analysis.state === 'Preparing' ||
-      analysis.state === 'Refreshing',
-  )
-}
-
-function importIsActive(job: LidarImportJob | null): boolean {
-  return job?.state === 'Staging' || job?.state === 'Applying'
-}
-
-export async function refreshOpenImportJob(): Promise<void> {
-  const tracked = openImportJob.value
-  if (tracked === null) return
-  try {
-    const next = await lidarGetImportJob(tracked.job_id)
-    if (openImportJob.value?.job_id !== tracked.job_id) return
-    openImportJob.value = next
-  } catch (error) {
-    lidarStatusMessage.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
-/**
- * One polled tick: job and library refresh together so a terminal job and the
- * library head it published are observed as a pair. A second library read after
- * a terminal job closes the window where the job settled but the head is stale.
- */
 async function pollLidarState(): Promise<void> {
-  await Promise.all([refreshLidarLibrary(), refreshOpenImportJob()])
-  const job = openImportJob.value
-  if (
-    job !== null &&
-    (job.state === 'Complete' || job.state === 'Cancelled' || job.state === 'Failed')
-  ) {
-    await refreshLidarLibrary()
-  }
-  // Keep polling while active work OR a pending settlement intent needs a
-  // successful fresh read. A failed attempt must recover on a later tick
-  // without reopen, click or settings change.
-  libraryPollTick.value += 1
-  if (
-    !hasActiveWork(lidarLibrary.value)
-    && !importIsActive(openImportJob.value)
-    && !hasPendingAttachmentIntent()
-  ) {
-    stopLidarPolling()
-  }
+  await refreshLidarLibrary()
+  if (!hasActiveLibraryWork(lidarLibrary.value)) stopLidarPolling()
 }
 
 /**
- * Poll while analysis work is in flight so result states settle without any
- * user action; idle libraries stop polling to stay cheap.
+ * Poll while library work runs so operations settle without any user action;
+ * an idle library stops polling. Work belongs to the library, not a panel or
+ * a Design: closing the dock or switching Designs never stops it.
  */
 export function ensureLidarPolling(): void {
-  // Ensure the shared timer, do not force an extra tick when already polling.
   if (pollTimer !== null) return
   void pollLidarState()
   pollTimer = setInterval(() => {
     void pollLidarState()
   }, LIDAR_POLL_INTERVAL_MS)
-}
-
-export async function trackImportJob(jobId: string): Promise<void> {
-  const job = await lidarGetImportJob(jobId)
-  openImportJob.value = job
-  ensureLidarPolling()
 }
 
 export function stopLidarPolling(): void {
@@ -267,20 +95,13 @@ export function stopLidarPolling(): void {
 }
 
 /**
- * Subscribe a surface to the shared library snapshot.
- *
- * Panel navigation must not stop active-job settlement: the Desktop-lifetime
- * workflow owner owns the timer, and this observer only refreshes immediately
- * on mount so reopening Data/Analysis/Layers shows current progress at once.
+ * Subscribe a surface to the shared library snapshot: refresh on mount and
+ * keep polling while work runs. Unmounting never stops library work.
  */
 export function installLidarLibraryObserver(): () => void {
   void refreshLidarLibrary()
   ensureLidarPolling()
-  return () => {
-    // Intentionally does not stop polling. Native jobs remain library-owned
-    // even after a panel unmounts; idle polling stops on its own when nothing
-    // needs settlement.
-  }
+  return () => {}
 }
 
 export interface LidarPresentationItem {
@@ -369,7 +190,7 @@ export function readLidarPresentation(
           ? {
               kind: entry.kind,
               id: analysis.id,
-              name: analysisName(source?.name, analysis.kind),
+              name: analysis.name ?? analysisName(source?.name, analysis.kind),
               detail: analysis.kind,
               // The result's own unit, never the input layer's.
               slopeUnit: analysis.slope_unit ?? 'Degrees',
