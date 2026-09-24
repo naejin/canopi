@@ -1,12 +1,12 @@
 # Raster foundation, Data and Analysis workbenches
 
-Status: active — broader product contract; [completion handoff](raster-rework/completion-design.md) now authorizes the remaining whole-rework implementation through a verified candidate. Ordered correction accepted at `34e4ded4`; integration/release not yet claimed; Q remains frozen.
+Status: partial — repaired stack integrated for user review; remaining qualification is in `canopi-j571.3`. The GeoLibre adoption plan supersedes the Data/Analysis/history target for subsequent migration; sections below retain the prior delivery contract and evidence. Q remains frozen.
 Tracking: `canopi-j571`; completion execution uses one child bead; foundation `canopi-jv8a`, workbenches `canopi-j8mp`, historical qualification `canopi-kqpp`, deferred `canopi-5neg`.
 Current guidance: [LiDAR](../agent/lidar.md), [MapLibre](../agent/maplibre.md), [edition development](../agent/edition-development.md), and [document lifecycle](../agent/document-lifecycle.md).
 
 ## Mandate and delivery boundary
 
-**Current execution authority:** the [completion prompt](raster-rework/completion-agent-prompt.md) and [contract](raster-rework/completion-design.md) continue candidate `5d0a5e0b` through R15–R26 corrections, independent source import, Desktop workbenches/inspection, Web/shared providers and final verification. Foundation integration is already complete at `f61f8494`. The [ordered COG design](raster-rework/ordered-cog-design.md) owns source composition; source order determines the highest valid sample for display and analysis. Existing dense/sparse data remains readable. The old source-merge and replacement-checkbox requirements are superseded.
+**Current routing:** use the [completion receipt](raster-rework/completion-receipt.md#current-correction-acceptance) and [remaining qualification prompt](raster-rework/completion-agent-prompt.md) for the integrated candidate. Completed repair prompts are not fresh assignments. For the subsequent migration use the [GeoLibre adoption plan](raster-rework/geolibre-adoption-plan.md): library/display first, two dock surfaces, contextual analysis later. Its accepted scope removes dataset history, library Undo, source editing and automatic analysis refresh; preserve old data/results, Design undo and botanical/planning features. The older three-panel and mutable-collection requirements below do not override that target. [ADR 0027](../adr/0027-ordered-cog-data-layers.md) records the amendments.
 
 Retain Float32, engine, validity and ownership contracts. The [source-import amendment](raster-rework/source-import-design.md) governs new import interaction, nullable exact composed statistics, separately labelled display ranges, metadata-only publication and resource admission. It supersedes earlier mandatory review/composition scans and arbitrary input ceilings; lower historical sections are not alternate implementation authority. No precision migration is authorized. ADR 0027 retains the source-composition rationale.
 
@@ -16,11 +16,11 @@ The first complete analysis is slope. Hydrology, canopy analysis, and globe rend
 
 No SQLite-to-DuckDB migration, general SQL console, plugin marketplace, visual processing model builder, split-map comparison, national data mirror, implicit upload, point-cloud import, service worker, or offline Web map archive is included. PDF map/raster export remains outside scope under [ADR 0024](../adr/0024-shared-canvas-pdf-export.md). Existing local Desktop raster use must work offline after installation/import; online basemaps retain provider-dependent availability.
 
-This artifact owns settled product/scientific/provider behavior. The completion contract owns current sequencing, capacity policy, scope and delivery boundaries. The accepted HTML reference is a production UI reference, not proof of native/browser implementation. Platform and live-provider claims require their actual evidence.
+This artifact retains prior product/scientific/provider decisions, subject to the migration amendments above. The completion receipt owns delivered evidence and remaining qualification; the adoption plan owns subsequent migration scope. The accepted HTML reference is a production UI reference, not proof of native/browser implementation. Platform and live-provider claims require their actual evidence.
 
 ### Start and continuation contract
 
-Use the [completion prompt](raster-rework/completion-agent-prompt.md), integrate the accepted `34e4ded4` foundation under C0, and continue C1–C5 as one assignment. Bd owns resumable execution. No new UI approval is needed for faithful implementation of `0e696722`; material deviations return through the user.
+The original C0–C5 implementation and HTML-reference assignment are historical. Use the remaining-qualification prompt only for its named scope; do not repeat integration or rebuild superseded UI. Bd owns execution state, and migration implementation requires its own authorization.
 
 ## Evidence and existing work
 

@@ -7,11 +7,7 @@ Current guidance: [ownership correction](completion-ownership-design.md), [curre
 
 ## Whole-rework delivery and improvement
 
-The current assignment follows the [ownership correction](completion-ownership-design.md) from candidate `de336a7d` under `canopi-j571.1`.
-The [review](completion-review-26eca68a.md) and [correction decisions](completion-correction-design.md)
-supersede the earlier claim that only external observations remained. This section
-owns the next debrief; material older outcomes below remain evidence at their
-named revisions, not instructions to restart retired work. The six-question
+The repaired stack is integrated for user review; the [current receipt](completion-receipt.md#current-correction-acceptance) owns delivered evidence and `canopi-j571.3` owns remaining qualification. The correction evaluations below remain evidence at their named revisions, not current repair assignments. The separate [GeoLibre adoption debrief contract](geolibre-adoption-plan.md#10-review-debrief-and-cost-control) evaluates library/display first and contextual analysis later, including deliberate feature removal and actual user latency. The six-question
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
 
@@ -1345,4 +1341,4 @@ were closed only because a probe or a failure pointed at them.
 
 Use [Whole-rework delivery and improvement](#whole-rework-delivery-and-improvement) and [Final correction debrief to deliver](#final-correction-debrief-to-deliver) for the current assignment. Ordered COG outcomes remain historical evidence. Historical DB/Q intervention details remain in the revision-linked review and receipt sections above; their old “next repair” instructions do not authorize further Q work. Evaluate their measured outcomes without restarting their workflows.
 
-The subsequent [whole-application GeoLibre adoption proposal](geolibre-adoption-plan.md) defines a separate [review and debrief contract](geolibre-adoption-plan.md#10-review-debrief-and-cost-control). Once authorized and delivered, record its actual capability coverage, upstream reuse, performance/resource comparisons, escaped defects and observed effort here under a distinct adoption section. The proposal's research and targets are not completed migration evidence; do not merge them into the prior delivery's acceptance claims.
+The subsequent [whole-application GeoLibre adoption proposal](geolibre-adoption-plan.md) defines a separate [review and debrief contract](geolibre-adoption-plan.md#10-review-debrief-and-cost-control). Once authorized and delivered, record its first usable library milestone separately from later analysis and final qualification: actual workflow coverage, deliberately removed features, upstream reuse, performance/resource comparisons, escaped defects and observed effort. Record the earlier plan's excessive preservation of history/source editing/automatic refresh as a corrected planning scope error. Evaluate whether the smaller workflow and real caller proof reduced subsequent rework; no savings are claimed before measurement. Keep this under a distinct adoption section. The proposal's research and targets are not completed migration evidence; do not merge them into the prior delivery's acceptance claims.

@@ -12,12 +12,15 @@ completed repair prompts.
 For remaining qualification, use the completion prompt and current receipt; the
 repaired stack is already integrated for user review. For the subsequent
 performance and UX work, read the proposed [whole-application GeoLibre adoption
-plan](geolibre-adoption-plan.md). It covers every current Canopi capability,
-upstream reuse, migration and final acceptance. Upstream display semantics,
-preservation of current edition capabilities and GeoLibre slope for new analyses
-are user-accepted decisions. Existing Horn definitions/results retain their
-method. The remaining proposal and implementation authorization are separate;
-do not restart completed repairs or infer execution authority from those choices.
+plan](geolibre-adoption-plan.md). Its first milestone is a searchable reusable
+Data Library with fast display and a separate Layers presentation dock; contextual
+Slope follows. Dataset history, source editing, library Undo and automatic
+analysis refresh are intentionally removed from that target. Existing data and
+results, botanical/planning features, Design undo and edition boundaries remain
+protected. Upstream display and GeoLibre for new Slope calculations are accepted;
+failed legacy-operation Retry retains its method. Use this plan for migration
+scope, not the older three-panel/history requirements. Implementation remains
+separate; do not restart completed repairs.
 
 The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. The candidate’s historical production ceilings are replaced only as the new bounded source route and its safety evidence land. Q is frozen/unqualified; do not restart its tooling.
 
@@ -25,7 +28,7 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 
 | Artifact | Purpose |
 | --- | --- |
-| [Whole-application GeoLibre adoption plan](geolibre-adoption-plan.md) | Proposed complete Canopi migration: reuse decisions, preserved features, compatibility, UX, TDD, performance and whole-app delivery |
+| [Whole-application GeoLibre adoption plan](geolibre-adoption-plan.md) | Library/display first, two-surface UX, explicit feature removals, contextual analysis next; reuse, compatibility, TDD and whole-app acceptance |
 | [Latest review and fixed repairs](completion-review-de336a7d.md) | Teardown reproduction, exact R50 proof boundaries and evidence classification |
 | [Prior R44–R51 review](completion-review-9208c930.md) | Retained baseline obligations; latest review refines incomplete repairs |
 | [Remaining qualification](completion-agent-prompt.md) | Continuation boundary and prerequisites; completed repair kickoff retired |
