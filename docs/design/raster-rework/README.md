@@ -13,9 +13,11 @@ For remaining qualification, use the completion prompt and current receipt; the
 repaired stack is already integrated for user review. For the subsequent
 performance and UX work, read the proposed [whole-application GeoLibre adoption
 plan](geolibre-adoption-plan.md). It covers every current Canopi capability,
-upstream reuse, migration and final acceptance, including explicit proposed
-contract amendments. It is not authorization to restart repairs or implement a
-migration before its product decisions are accepted.
+upstream reuse, migration and final acceptance. Upstream display semantics,
+preservation of current edition capabilities and GeoLibre slope for new analyses
+are user-accepted decisions. Existing Horn definitions/results retain their
+method. The remaining proposal and implementation authorization are separate;
+do not restart completed repairs or infer execution authority from those choices.
 
 The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. The candidate’s historical production ceilings are replaced only as the new bounded source route and its safety evidence land. Q is frozen/unqualified; do not restart its tooling.
 
