@@ -127,6 +127,7 @@ pub fn run() {
             commands::lidar::lidar_import_item,
             commands::lidar::lidar_retry_import,
             commands::lidar::lidar_dismiss_import,
+            commands::lidar::lidar_rename_analysis,
             commands::lidar::lidar_layer_collection,
         ])
         .setup(|app| {

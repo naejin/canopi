@@ -358,3 +358,45 @@ fn an_import_publishes_one_fixed_item_with_display_ready_and_nothing_refreshes()
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Renaming a result is metadata: its values, input and identity stay, and
+/// nothing is enqueued.
+#[test]
+fn renaming_a_result_changes_only_its_name() {
+    let root = scratch("rename-result");
+    let library = LidarLibrary::open(&root).unwrap();
+    let (layer_id, _) = library
+        .record_import_item(
+            "Orchard",
+            LidarMeasurementKind::GroundElevation,
+            None,
+            false,
+            &[root.join("a.tif")],
+        )
+        .unwrap();
+    seed_result(
+        &library.catalogue().unwrap(),
+        &layer_id,
+        "adef-named",
+        "gen-input",
+    );
+    library
+        .rename_analysis("adef-named", "  North slope ")
+        .unwrap();
+    let snapshot = library.library_snapshot().unwrap();
+    let result = snapshot
+        .analyses
+        .iter()
+        .find(|analysis| analysis.id == "adef-named")
+        .unwrap();
+    assert_eq!(result.name.as_deref(), Some("North slope"));
+    assert_eq!(result.input_generation_id.as_deref(), Some("gen-input"));
+    assert_eq!(result.generation_id.as_deref(), Some("agen-adef-named"));
+    assert!(library.rename_analysis("adef-named", "   ").is_err());
+    assert!(library.rename_analysis("adef-missing", "Name").is_err());
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_analysis_jobs"),
+        0
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

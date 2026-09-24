@@ -423,3 +423,21 @@ pub async fn lidar_dismiss_import(
         )
         .await
 }
+
+/// Rename one saved result; metadata only.
+#[tauri::command]
+pub async fn lidar_rename_analysis(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    definition_id: String,
+    name: String,
+) -> Result<(), String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar rename analysis",
+            move || library.rename_analysis(&definition_id, &name),
+        )
+        .await
+}

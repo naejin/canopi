@@ -605,6 +605,37 @@ impl LidarLibrary {
         Ok(())
     }
 
+    /// Rename a saved result. The name is library metadata: values, input and
+    /// identity are unchanged, and a failed operation's Retry keeps the name.
+    pub fn rename_analysis(&self, definition_id: &str, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("Result name must not be empty".to_string());
+        }
+        let connection = self.catalogue()?;
+        let definition = analysis::definition_row(&connection, definition_id)?
+            .ok_or_else(|| format!("Analysis {definition_id} does not exist"))?;
+        let mut parameters = analysis::parse_parameters(&definition.parameters_json)?;
+        parameters.name = Some(name.to_string());
+        let parameters_json = serde_json::to_string(&parameters).map_err(|e| e.to_string())?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "UPDATE lidar_analysis_definitions SET parameters_json = ?2 WHERE id = ?1",
+                rusqlite::params![definition_id, parameters_json],
+            )
+            .map_err(|e| format!("Failed to rename the result: {e}"))?;
+        transaction
+            .execute(
+                "UPDATE lidar_analysis_generations SET name = ?2 WHERE definition_id = ?1",
+                rusqlite::params![definition_id, name],
+            )
+            .map_err(|e| format!("Failed to rename the result: {e}"))?;
+        transaction.commit().map_err(|e| e.to_string())
+    }
+
     pub fn delete_impact(
         &self,
         layer_id: &str,
