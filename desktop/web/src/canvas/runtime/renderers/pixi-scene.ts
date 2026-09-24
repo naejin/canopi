@@ -1,5 +1,7 @@
 import { speciesFocusOpacity } from '../species-key'
 import { instrumentSceneRenderer } from './profile'
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import 'pixi.js/unsafe-eval'
 import { Application, Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,

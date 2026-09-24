@@ -1,3 +1,5 @@
+// Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import 'pixi.js/unsafe-eval'
 import { Container, Text, WebGLRenderer } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
