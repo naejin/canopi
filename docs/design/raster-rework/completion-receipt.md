@@ -1,8 +1,33 @@
 # Raster rework completion receipt
 
-Status: partial — reviewer takeover after `82354620` finishes the named local repairs and R50 boundary proof; remaining whole-candidate qualification is tracked in `canopi-j571.3`. Integration/release not performed.
+Status: partial — reviewer takeover after `82354620` finishes the named local repairs and R50 boundary proof; remaining whole-candidate qualification is tracked in `canopi-j571.3`. Integrated for user review; full qualification and release remain outstanding.
 Tracking: `canopi-j571`; completion implementation `canopi-j571.1`. bd owns progress.
 Current guidance: [prompt](completion-agent-prompt.md), [contract](completion-design.md), [previous receipt](ordered-cog-receipt.md), [debrief](review-and-debrief.md#whole-rework-delivery-and-improvement).
+
+## Integration for user review — 2026-09-24
+
+`canopi-t3ai` integrates candidate `1bcf8060` and process guidance `a1917b01`
+through merge `af3f61a4`, followed by this documentation/Beads reconciliation.
+All inventoried topic tips are ancestors of the combined tree; the other topic
+branches needed no additional merges. Main is advanced without rewriting history.
+Branches and old worktrees remain until the user's review passes.
+
+Combined-tree gates: TypeScript, all **2840 frontend tests / 289 files**, gallery,
+Desktop and Web builds, generated bindings (no drift), Rust formatting, strict
+Clippy, workspace check/tests (**366 desktop tests passed / 73 ignored**),
+**3 native acceptance proofs**, and documentation validation all passed.
+Commands are the same as the local-gates table below; integration logs reside in
+`/tmp/canopi-integration-gates/` on this host. Existing build chunk warnings remain.
+
+Review from `/home/daylon/projects/canopi/.rq-scratch/wt-integration` with
+`cargo tauri dev`. Dependencies, pinned fonts and a copy of the existing plant DB
+are prepared; this worktree shares the candidate's compiled build cache. The
+primary checkout's Beads snapshot, Rust formatting edit and gate lock are preserved.
+No user application profile or saved Design was changed by this integration.
+
+`canopi-j571.1` awaits review/qualification, and `canopi-j571.3` retains the named
+missing evidence. Integration is not full acceptance, packaged qualification or
+release. The remaining-qualification prompt is not a new repair assignment.
 
 ## Current correction acceptance
 
@@ -1036,7 +1061,7 @@ caught the hole-tuple defect before any measurement depended on it.
 
 Untested proposals (no evidence of benefit yet, not installed): none recorded.
 
-## Final disposition and delivery
+## Historical candidate disposition before integration
 
 - Integrated accepted stack: `main` = `f61f8494`, which contains the independently
   accepted foundation `34e4ded4`.
@@ -1074,5 +1099,5 @@ smoke; observe a live provider session. Each is a specific missing observation, 
 missing capability.
 
 The main agent's independent review still owns acceptance of this candidate.
-Nothing here is integrated beyond the C0 foundation, and no public release is
-claimed.
+That historical delivery stopped at the C0 integration boundary. The integration
+section above supersedes its branch status; no public release is claimed.

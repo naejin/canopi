@@ -1,6 +1,6 @@
 # Raster rework handoffs and debrief
 
-Status: partial — local ownership/retry repair work completed after `82354620`; remaining qualification is tracked in `canopi-j571.3`.
+Status: partial — repaired stack integrated for user review; combined gates pass. Remaining qualification is tracked in `canopi-j571.3`.
 Tracking: `canopi-j571.1` under `canopi-j571`; bd owns task status and follow-ups.
 Current guidance: [current prompt](completion-agent-prompt.md), [completion contract](completion-design.md), [product contract](../raster-data-analysis-rework.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
@@ -23,7 +23,7 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 | --- | --- |
 | [Latest review and fixed repairs](completion-review-de336a7d.md) | Teardown reproduction, exact R50 proof boundaries and evidence classification |
 | [Prior R44–R51 review](completion-review-9208c930.md) | Retained baseline obligations; latest review refines incomplete repairs |
-| [Whole-rework execution prompt](completion-agent-prompt.md) | Sole current assignment; sustained implementation through one verified candidate |
+| [Remaining qualification](completion-agent-prompt.md) | Continuation boundary and prerequisites; completed repair kickoff retired |
 | [Completion contract](completion-design.md) | Existing candidate continuation, correction interfaces, workbenches, inspection, providers and final gates |
 | [Source-import contract](source-import-design.md) | Streamed source preparation, metadata-only publication, exact/display statistics, resource and compatibility decisions |
 | [Current correction decisions](completion-correction-design.md) | Repair ownership, lifecycle decisions, sequence and falsifiable exits at `26eca68a` |

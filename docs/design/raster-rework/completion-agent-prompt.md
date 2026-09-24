@@ -6,9 +6,9 @@ Current guidance: [current receipt](completion-receipt.md#current-correction-acc
 
 Do not restart the completed repair assignment. Read the current bead and receipt
 before continuing qualification. Preserve the actual-command/native publication
-proof, frontend caller tests and all accepted repairs. Work from the candidate
-branch, not the older primary documentation checkout; user-owned primary files
-remain untouched. No integration, release or cleanup is implied by this record.
+proof, frontend caller tests and all accepted repairs. Use the integrated review tree identified in the current receipt once integration
+verification completes; preserve user-owned primary files. Integration is separately
+authorized under `canopi-t3ai`; release and branch deletion remain unauthorized.
 
 Remaining evidence and exact known limits are recorded once in the receipt. Finish
 feasible local qualification with existing tools; required private inputs, keys or

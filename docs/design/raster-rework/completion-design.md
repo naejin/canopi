@@ -1,14 +1,14 @@
 # Raster rework completion contract
 
-Status: active — ownership correction against candidate `68852cbd`; not independently accepted.
-Tracking: `canopi-j571.1` under `canopi-j571`; continue the existing candidate bead/branch. No replacement epic or duplicate implementation bead.
-Current guidance: [ownership correction](completion-ownership-design.md), [execution prompt](completion-agent-prompt.md), [correction decisions](completion-correction-design.md), [prior review](completion-review-578a4f1c.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Status: partial — local repairs delivered at `1bcf8060`; integration verification is tracked in `canopi-t3ai`, remaining qualification in `canopi-j571.3`.
+Tracking: `canopi-j571.1` under `canopi-j571`; bd owns acceptance and follow-ups.
+Current guidance: [current receipt](completion-receipt.md), [remaining qualification](completion-agent-prompt.md), [broader product contract](../raster-data-analysis-rework.md), [ordered-source contract](ordered-cog-design.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
-The [ownership correction](completion-ownership-design.md) is the current
-seam-specific addendum and supersedes conflicting assembly prescriptions in earlier
-reviews. Continue candidate `68852cbd`; preserve R44–R51 repairs where correct.
-Remaining R27/R43 and C0–C5 evidence stays in scope. The sole prompt owns execution
-order; prior reviews provide historical counterexamples, not alternate assignments.
+This is the accepted C0–C5 behavior contract. The ownership/correction records
+retain rationale and regression evidence; their old candidate revisions and repair
+sequences are historical, not instructions to repeat completed implementation.
+Use the current receipt and qualification bead for remaining evidence. Integration
+for user review does not establish full qualification or release.
 
 ## Outcome, authority and exclusions
 
