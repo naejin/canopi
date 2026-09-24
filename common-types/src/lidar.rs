@@ -201,6 +201,10 @@ pub struct LidarLayerSummary {
     pub display_range: Option<LidarDisplayRange>,
     pub tilesets: Vec<LidarTileset>,
     pub analysis_count: u32,
+    /// The latest import operation of this item: progress while it runs, and
+    /// the reason and Retry while an unpublished item's import failed.
+    #[serde(default)]
+    pub import_job: Option<LidarImportJob>,
 }
 
 /// Where a display range came from.
@@ -235,6 +239,10 @@ pub struct LidarAnalysisSummary {
     /// Current published result generation, when one exists.
     #[serde(default)]
     pub generation_id: Option<String>,
+    /// The source generation this result was calculated from. A published
+    /// result keeps describing that input even if the source moved on.
+    #[serde(default)]
+    pub input_generation_id: Option<String>,
     pub source_layer_id: String,
     pub kind: LidarAnalysisKind,
     /// The name its author gave this result.
@@ -387,6 +395,15 @@ pub struct LidarImportJob {
     pub state: LidarImportJobState,
     pub message: Option<String>,
     pub progress: Option<LidarImportProgress>,
+}
+
+/// Receipt for one submitted import operation: the fixed library item it
+/// publishes and the job that prepares it.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct LidarImportReceipt {
+    pub layer_id: String,
+    pub job_id: String,
 }
 
 /// Receipt returned when an analysis definition is created and its first

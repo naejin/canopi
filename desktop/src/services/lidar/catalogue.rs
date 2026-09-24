@@ -6,7 +6,10 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-pub const CATALOGUE_VERSION: i32 = 18;
+/// v19 (GeoLibre adoption) fixes published items and removes automatic refresh.
+/// A binary that only knows v18 must refuse it: it would still mutate sources
+/// and dispatch every slope definition as Horn.
+pub const CATALOGUE_VERSION: i32 = 19;
 
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
@@ -162,6 +165,7 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
         16 => SCHEMA_V16,
         17 => SCHEMA_V17,
         18 => SCHEMA_V18,
+        19 => SCHEMA_V19,
         _ => unreachable!("catalogue migration gap"),
     };
     transaction
@@ -266,6 +270,38 @@ fn apply_migration(connection: &Connection, next: i32) -> Result<(), String> {
                 .map_err(|e| format!("Failed to add the collection member job: {e}"))?;
         }
     }
+    if next == 19 {
+        for (table, column, definition) in [
+            // The saved selection of one import, in its priority order, so
+            // Retry resubmits exactly what the user chose.
+            ("lidar_import_jobs", "request_json", "TEXT"),
+            // Provenance of newly published results; legacy rows stay null and
+            // are read as the definition's recipe version describes them.
+            ("lidar_analysis_generations", "method_id", "TEXT"),
+            ("lidar_analysis_generations", "recipe_version", "INTEGER"),
+        ] {
+            if !table_has_column(&transaction, table, column)? {
+                transaction
+                    .execute(
+                        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+                        [],
+                    )
+                    .map_err(|e| format!("Failed to add {table}.{column}: {e}"))?;
+            }
+        }
+        // Automatic refresh is retired. An attempt that never replaced a
+        // complete result stays a saved result, without an in-place Retry.
+        transaction
+            .execute(
+                "UPDATE lidar_analysis_jobs
+                 SET state = 'retired',
+                     message = 'automatic refresh retired; the saved result is kept'
+                 WHERE state IN ('preparing', 'refreshing', 'failed', 'cancelled')
+                   AND definition_id IN (SELECT definition_id FROM lidar_analysis_heads)",
+                [],
+            )
+            .map_err(|e| format!("Failed to retire automatic refresh attempts: {e}"))?;
+    }
     if next == 6 {
         if !table_has_column(&transaction, "lidar_import_jobs", "progress_phase")? {
             transaction
@@ -328,6 +364,10 @@ fn table_has_column(connection: &Connection, table: &str, column: &str) -> Resul
         .map_err(|e| e.to_string())?;
     Ok(names.iter().any(|name| name == column))
 }
+
+/// v19: fixed library items. Column additions and the retirement of automatic
+/// refresh attempts are applied in `apply_migration`, guarded per column.
+const SCHEMA_V19: &str = "";
 
 /// Durable-library additions: exact footprint spatial index and the
 /// import-job link on acceptance decisions.
@@ -1022,32 +1062,6 @@ pub fn list_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitio
     Ok(rows)
 }
 
-/// Every analysis definition in the library, oldest first.
-///
-/// Used at library open to reconcile dependent results against their source
-/// heads without needing to know which layers exist first.
-pub fn list_all_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitionRow>, String> {
-    let mut statement = connection
-        .prepare(
-            "SELECT id, layer_id, kind, parameters_json
-             FROM lidar_analysis_definitions ORDER BY created_at, id",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok(AnalysisDefinitionRow {
-                id: row.get(0)?,
-                layer_id: row.get(1)?,
-                kind: row.get(2)?,
-                parameters_json: row.get(3)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(rows)
-}
-
 pub fn list_definitions_for_layer(
     connection: &Connection,
     layer_id: &str,
@@ -1295,8 +1309,6 @@ pub fn interpretation_filename(
 /// Bounded like the other catalogue pages so a source refresh can never expand
 /// a layer's whole lifetime membership into one response.
 pub const MEMBER_PAGE_MAX: i64 = 200;
-/// Largest history page a caller may request.
-pub const VERSION_PAGE_MAX: i64 = 100;
 
 /// One bounded page of a snapshot's ordered members, top-first.
 ///
@@ -2169,7 +2181,6 @@ pub fn publish_generation_chunks(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::lidar::collection;
 
     /// Rewrite a current catalogue into the v17 shape, for an upgrade test.
     ///
@@ -2954,6 +2965,130 @@ mod tests {
         );
     }
 
+    /// The v19 upgrade (fixed library items) keeps every identity, parameter
+    /// and saved result, backs the old catalogue up first, and retires only
+    /// automatic refresh attempts that never replaced a saved result. A
+    /// failed first calculation keeps its explicit Retry.
+    #[test]
+    fn v19_upgrade_keeps_results_and_retires_only_refresh_attempts() {
+        let root = std::env::temp_dir().join(new_id("canopi-catalogue-v19"));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("lidar-library.sqlite");
+        {
+            let connection = open(&path).expect("fresh catalogue opens");
+            connection
+                .execute_batch(
+                    "INSERT INTO lidar_source_layers
+                        (id, name, measurement_kind, units, created_at)
+                     VALUES ('layer', 'Layer', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('gen-a', 'layer', '0', NULL, NULL, '{}', 1, 0, 1, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES ('layer', 'gen-a');
+                     INSERT INTO lidar_analysis_definitions
+                        (id, layer_id, kind, version, parameters_json, created_at)
+                     VALUES ('adef-saved', 'layer', 'slope', 1, '{\"slope_unit\":\"Percent\"}', '0'),
+                            ('adef-first', 'layer', 'slope', 1, '{}', '0');
+                     INSERT INTO lidar_analysis_generations
+                        (id, definition_id, source_generation_id, engine_version, state, result_path,
+                         quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
+                         bounds_3857, published_at)
+                     VALUES ('agen-saved', 'adef-saved', 'gen-a', 'GDAL 3.8', 'complete', '', NULL,
+                             '{}', 1, 0, 1, '[0,0,1,1]', '0');
+                     INSERT INTO lidar_analysis_heads(definition_id, generation_id)
+                     VALUES ('adef-saved', 'agen-saved');
+                     INSERT INTO lidar_analysis_jobs
+                        (id, definition_id, source_generation_id, state, message, created_at, updated_at)
+                     VALUES ('job-refresh', 'adef-saved', 'gen-a', 'failed', 'refresh failed', '1', '1'),
+                            ('job-first', 'adef-first', 'gen-a', 'failed', 'first failed', '1', '1');
+                     INSERT INTO lidar_import_jobs(id, layer_id, state, created_at, updated_at)
+                     VALUES ('imp-a', 'layer', 'complete', '0', '0');
+                     ALTER TABLE lidar_import_jobs DROP COLUMN request_json;
+                     ALTER TABLE lidar_analysis_generations DROP COLUMN method_id;
+                     ALTER TABLE lidar_analysis_generations DROP COLUMN recipe_version;
+                     UPDATE lidar_catalogue_meta SET value = '18' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+
+        let connection = open(&path).expect("the v18 catalogue migrates");
+        assert_eq!(schema_version(&connection).unwrap(), 19);
+        let backup: String = connection
+            .query_row(
+                "SELECT value FROM lidar_catalogue_meta WHERE key = 'last_backup_path'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(backup.contains(".backup-v18-"), "{backup}");
+        let backed_up = Connection::open(&backup).unwrap();
+        assert_eq!(
+            schema_version(&backed_up).unwrap(),
+            18,
+            "the backup keeps the old shape"
+        );
+
+        let job = |id: &str| -> (String, Option<String>) {
+            connection
+                .query_row(
+                    "SELECT state, message FROM lidar_analysis_jobs WHERE id = ?1",
+                    [id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap()
+        };
+        assert_eq!(job("job-refresh").0, "retired");
+        assert_eq!(
+            job("job-first"),
+            ("failed".to_string(), Some("first failed".to_string()))
+        );
+        let definitions: Vec<(String, i64, String)> = {
+            let mut statement = connection
+                .prepare("SELECT id, version, parameters_json FROM lidar_analysis_definitions ORDER BY id")
+                .unwrap();
+            statement
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        assert_eq!(
+            definitions,
+            [
+                ("adef-first".to_string(), 1, "{}".to_string()),
+                (
+                    "adef-saved".to_string(),
+                    1,
+                    "{\"slope_unit\":\"Percent\"}".to_string()
+                ),
+            ],
+            "existing definitions stay recipe version 1 with their parameters"
+        );
+        assert_eq!(
+            head_analysis_generation(&connection, "adef-saved")
+                .unwrap()
+                .map(|row| row.id),
+            Some("agen-saved".to_string())
+        );
+        for (table, column) in [
+            ("lidar_import_jobs", "request_json"),
+            ("lidar_analysis_generations", "method_id"),
+            ("lidar_analysis_generations", "recipe_version"),
+        ] {
+            assert!(
+                table_has_column(&connection, table, column).unwrap(),
+                "{table}.{column}"
+            );
+        }
+        // An older binary refuses any schema above its own through the same
+        // guard the `newer than supported` test exercises, so recording 19
+        // is what stops a v18 build from mutating fixed sources.
+        drop(connection);
+        drop(backed_up);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A failed v18 upgrade leaves the v17 catalogue exactly as it was.
     ///
     /// The rebuild drops and recreates the generation table, so a failure part
@@ -3107,27 +3242,6 @@ mod tests {
         assert_eq!(newer.previous_generation_id, None);
         assert!(!newer.undo_available);
         assert!(!older.undo_available);
-        // Entries without a recorded operation read neutrally rather than as a
-        // guessed import.
-        let page = collection::history_page(&connection, "layer", None, None, 10).unwrap();
-        assert_eq!(page.versions.len(), 2);
-        assert!(
-            page.versions.iter().all(|entry| entry.operation.is_none()),
-            "a migrated version has no recorded operation: {:?}",
-            page.versions
-                .iter()
-                .map(|entry| &entry.operation)
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            page.versions
-                .iter()
-                .map(|entry| entry.sequence)
-                .collect::<Vec<_>>(),
-            vec![2, 1],
-            "and still has a unique identity cue"
-        );
-
         // A new change on the migrated head records the head as its target, so
         // Undo works from there exactly as on a fresh library.
         connection
@@ -3147,13 +3261,6 @@ mod tests {
             .expect("the new change is recorded");
         assert!(after.undo_available);
         assert_eq!(after.previous_generation_id.as_deref(), Some("newer"));
-        let page = collection::history_page(&connection, "layer", None, None, 10).unwrap();
-        assert_eq!(
-            page.versions
-                .first()
-                .and_then(|entry| entry.operation.as_deref()),
-            Some("import")
-        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

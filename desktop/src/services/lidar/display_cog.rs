@@ -42,9 +42,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
 /// Largest side of a composed part, in 1024-cell chunks.
 const PART_CHUNKS: i64 = 8;
-/// Invalid cells in a composed part. No stored elevation, height or slope can
-/// hold the most negative finite Float32.
-const PART_NODATA: f32 = f32::MIN;
+/// Invalid cells in a composed part: -2^127, exactly representable in Float32
+/// and Float64 and written with a round-trip decimal, so every reader that
+/// compares samples with the tag in either precision sees the same value. No
+/// stored elevation, height or slope holds it.
+const PART_NODATA: f32 = -1.701_411_8e38;
 
 /// How one derivative is produced.
 #[derive(Clone)]
@@ -823,6 +825,37 @@ impl LidarLibrary {
     }
 }
 
+impl LidarLibrary {
+    /// Prepare the display derivative of every staged source before the
+    /// import publishes, inside the import job: a new item is displayable the
+    /// moment it appears. A failure or cancellation here publishes nothing.
+    pub(super) fn prepare_staged_display(
+        &self,
+        staging: &super::import::StagedImport,
+        cancel: &AtomicBool,
+    ) -> Result<(), String> {
+        for source in &staging.sources {
+            let Some(cog) = &source.source_cog else {
+                continue;
+            };
+            let part = PartSpec {
+                key: format!("asset-{}-{}", cog.sha256, nodata_tag(cog.nodata)),
+                source: PartSource::Asset {
+                    path: cog.resolve(&self.inner.paths, source.job_id.as_deref())?,
+                    nodata: cog.nodata,
+                },
+            };
+            if ready_part(self, &part.key)?.is_some() {
+                continue;
+            }
+            let (prepared, bytes) = self.prepare_part(&part, &source.crs_wkt, cancel)?;
+            let display = self.display()?;
+            record(&display, &part.key, &prepared, bytes)?;
+        }
+        Ok(())
+    }
+}
+
 /// `gdal_translate` options of the display profile, before the positionals.
 fn display_arguments(nodata: Option<f32>) -> Vec<String> {
     let mut args: Vec<String> = [
@@ -854,7 +887,10 @@ fn display_arguments(nodata: Option<f32>) -> Vec<String> {
     .collect();
     if let Some(nodata) = nodata {
         args.push("-a_nodata".to_string());
-        args.push(format!("{nodata:e}"));
+        // Shortest round-trip form of the exact value: a rounded decimal such
+        // as f32::MIN's "-3.4028235e38" parses to a different f64 and makes the
+        // renderer draw invalid cells.
+        args.push(format!("{:?}", f64::from(nodata)));
     }
     args
 }
@@ -965,6 +1001,15 @@ mod tests {
             panic!("composed part")
         };
         assert_eq!(chunks, &[(200, 3)]);
+    }
+
+    #[test]
+    fn the_part_sentinel_round_trips_through_its_decimal_tag() {
+        assert_eq!(PART_NODATA, -(2.0_f32.powi(127)));
+        let tag = format!("{:?}", f64::from(PART_NODATA));
+        let parsed: f64 = tag.parse().unwrap();
+        assert_eq!(parsed, f64::from(PART_NODATA), "{tag}");
+        assert_eq!(parsed as f32, PART_NODATA);
     }
 
     #[test]
@@ -1178,6 +1223,175 @@ mod gdal_tests {
             .map(|asset| std::fs::metadata(&asset.path).unwrap().modified().unwrap())
             .collect();
         assert_eq!(before, after);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod chunk_display_tests {
+    use super::*;
+
+    /// A legacy sparse generation displays from one part per group of occupied
+    /// chunks: distant coverage produces two small parts, never one raster
+    /// spanning the empty space between them.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn distant_legacy_chunks_display_as_separate_parts_without_the_gap() {
+        let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-chunks"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let manifest = serde_json::json!({
+            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
+            "nodata": -9999.0,
+            "crs_wkt": "EPSG:3857",
+            "members": [],
+            "engine_version": "test",
+            "created_at": "0",
+            "format": "cog-chunks-v1",
+        });
+        {
+            let connection = library.catalogue().unwrap();
+            connection
+                .execute_batch(&format!(
+                    "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
+                     VALUES ('lyr-legacy', 'Legacy', 'ground-elevation', 'm', '0');
+                     INSERT INTO lidar_layer_generations
+                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                         coverage_cells, min_value, max_value, bounds_3857)
+                     VALUES ('gen-legacy', 'lyr-legacy', '0', NULL, NULL, '{manifest}', 32, 1, 2, '[0,0,1,1]');
+                     INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES ('lyr-legacy', 'gen-legacy');"
+                ))
+                .unwrap();
+        }
+        let near: Vec<f32> = (0..16)
+            .map(|index| if index == 5 { f32::NAN } else { 1.0 })
+            .collect();
+        let far = vec![2.0f32; 16];
+        generation::publish_test_chunk(&library, "gen-legacy", 0, 0, 4, 4, &near);
+        generation::publish_test_chunk(&library, "gen-legacy", 300, 0, 4, 4, &far);
+
+        library
+            .prepare_display_now(LidarSampleEntityKind::Source, "lyr-legacy")
+            .unwrap();
+        let descriptor = library
+            .display_descriptor(&LidarDisplayRequest {
+                kind: LidarSampleEntityKind::Source,
+                entity_id: "lyr-legacy".to_string(),
+                expected_generation_id: Some("gen-legacy".to_string()),
+                retry: false,
+            })
+            .unwrap();
+        assert_eq!(descriptor.state, LidarDisplayState::Ready, "{descriptor:?}");
+        assert_eq!(descriptor.assets.len(), 2, "one part per distant group");
+        for asset in &descriptor.assets {
+            let output = library
+                .inner
+                .engine
+                .run(
+                    super::super::engine::GdalProgram::Info,
+                    &["-json".to_string(), asset.path.clone()],
+                    None,
+                )
+                .unwrap();
+            let info: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+            assert_eq!(
+                info["size"],
+                serde_json::json!([1024, 1024]),
+                "a part covers its own chunk only"
+            );
+            // gdalinfo prints a Float32 tag at float precision; the renderer
+            // parses the TIFF tag itself, so check the stored text round-trips.
+            assert_eq!(
+                info["bands"][0]["noDataValue"]
+                    .as_f64()
+                    .map(|value| value as f32),
+                Some(PART_NODATA),
+                "invalid cells use the display sentinel"
+            );
+            assert_eq!(stored_nodata_tag(&asset.path), Some(f64::from(PART_NODATA)));
+        }
+        // The far part starts 300 chunks east of the near one.
+        let west: Vec<f64> = descriptor
+            .assets
+            .iter()
+            .map(|asset| asset.bounds[0])
+            .collect();
+        assert!(west[1] > west[0], "{west:?}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The GDAL_NODATA TIFF tag text, parsed as the WASM renderer parses it.
+    fn stored_nodata_tag(path: &str) -> Option<f64> {
+        let bytes = std::fs::read(path).ok()?;
+        let text = String::from_utf8_lossy(&bytes);
+        text.split('\0')
+            .filter(|chunk| chunk.contains('e') && chunk.starts_with('-'))
+            .find_map(|chunk| chunk.trim().parse::<f64>().ok())
+    }
+
+    /// A derivative that cannot be written leaves a failed, retryable display
+    /// state; the numeric generation is untouched and a retry succeeds once
+    /// space returns.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_failed_derivative_write_is_retryable_and_publishes_nothing_partial() {
+        let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-capacity"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let manifest = serde_json::json!({
+            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
+            "nodata": -9999.0, "crs_wkt": "EPSG:3857", "members": [], "engine_version": "test",
+            "created_at": "0", "format": "cog-chunks-v1",
+        });
+        library
+            .catalogue()
+            .unwrap()
+            .execute_batch(&format!(
+                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
+                 VALUES ('lyr-cap', 'Capacity', 'ground-elevation', 'm', '0');
+                 INSERT INTO lidar_layer_generations
+                    (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                     coverage_cells, min_value, max_value, bounds_3857)
+                 VALUES ('gen-cap', 'lyr-cap', '0', NULL, NULL, '{manifest}', 16, 1, 1, '[0,0,1,1]');
+                 INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES ('lyr-cap', 'gen-cap');"
+            ))
+            .unwrap();
+        generation::publish_test_chunk(&library, "gen-cap", 0, 0, 4, 4, &[1.0; 16]);
+
+        {
+            let _full = super::super::paths::capacity_probe::override_available(1024);
+            let error = library
+                .prepare_display_now(LidarSampleEntityKind::Source, "lyr-cap")
+                .unwrap_err();
+            assert!(error.contains("needs at least"), "{error}");
+        }
+        assert!(
+            std::fs::read_dir(library.inner.paths.display_cog_dir())
+                .unwrap()
+                .next()
+                .is_none(),
+            "nothing partial is published"
+        );
+        assert!(
+            std::fs::read_dir(library.inner.paths.display_cog_staging_dir())
+                .unwrap()
+                .next()
+                .is_none(),
+            "the failed write left no staging file"
+        );
+        library
+            .prepare_display_now(LidarSampleEntityKind::Source, "lyr-cap")
+            .unwrap();
+        let ready = library
+            .display_descriptor(&LidarDisplayRequest {
+                kind: LidarSampleEntityKind::Source,
+                entity_id: "lyr-cap".to_string(),
+                expected_generation_id: None,
+                retry: false,
+            })
+            .unwrap();
+        assert_eq!(ready.state, LidarDisplayState::Ready);
+        assert_eq!(ready.assets.len(), 1);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

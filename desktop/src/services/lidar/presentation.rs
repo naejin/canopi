@@ -57,17 +57,29 @@ pub fn library_snapshot(
                 }
                 None => (Some(0), None, None, None, None, Vec::new()),
             };
+        let import_job = latest_import_job(connection, &layer.id)?;
+        // A published item is Ready and stays fixed. An unpublished item is
+        // its import operation: preparing while it runs, failed otherwise, and
+        // never presented as a ready empty dataset.
+        let state = if head.is_some() {
+            LidarResultState::Ready
+        } else {
+            match import_job.as_ref().map(|job| job.state) {
+                Some(
+                    common_types::lidar::LidarImportJobState::Staging
+                    | common_types::lidar::LidarImportJobState::Applying
+                    | common_types::lidar::LidarImportJobState::AwaitingReview,
+                ) => LidarResultState::Preparing,
+                _ => LidarResultState::Failed,
+            }
+        };
         layer_summaries.push(LidarLayerSummary {
             id: layer.id.clone(),
             generation_id: head.as_ref().map(|head| head.id.clone()),
             name: layer.name.clone(),
             measurement_kind: parse_measurement_kind(&layer.measurement_kind),
             units: layer.units.clone(),
-            state: if head.is_some() {
-                LidarResultState::Ready
-            } else {
-                LidarResultState::Preparing
-            },
+            state,
             resolution_m,
             coverage_cells,
             bounds,
@@ -75,6 +87,7 @@ pub fn library_snapshot(
             display_range,
             tilesets,
             analysis_count,
+            import_job,
         });
     }
 
@@ -82,71 +95,16 @@ pub fn library_snapshot(
     for definition in definitions {
         let head_result = catalogue::head_analysis_generation(connection, &definition.id)?;
         let latest_job = catalogue::latest_analysis_job_state(connection, &definition.id)?;
-        // Readiness is a fact about identity, not about a job having once
-        // succeeded: a result is current only while the source generation it
-        // captured is still the layer's head, and only while that composition
-        // holds something to analyse. Deriving it here is what keeps a
-        // restart, a failed refresh or a cancelled refresh from presenting an
-        // old result as the current one.
-        let layer_head = catalogue::head_generation(connection, &definition.layer_id)?;
-        let composition_ready = match layer_head.as_ref() {
-            None => false,
-            Some(head) => {
-                let manifest = super::import::read_generation_manifest(&head.manifest_json)?;
-                if manifest.format.is_ordered_collection() {
-                    catalogue::collection_member_count(connection, &head.id)? > 0
-                } else {
-                    // Unknown coverage is not empty coverage: a composition that
-                    // was never counted still has its members.
-                    head.coverage_cells != Some(0)
-                }
-            }
-        };
-        let current_source = layer_head.as_ref().map(|head| head.id.as_str());
-        let result_is_current = head_result
-            .as_ref()
-            .is_some_and(|result| Some(result.source_generation_id.as_str()) == current_source);
-        let (state, detail) = match (latest_job.as_deref(), &head_result) {
-            (Some("preparing"), _) => (LidarResultState::Preparing, None),
-            (Some("refreshing"), _) => (LidarResultState::Refreshing, None),
-            (Some("failed"), Some(_result)) if result_is_current => (
-                LidarResultState::Ready,
-                Some("last refresh failed; showing the previous complete result".to_string()),
-            ),
-            (Some("failed"), Some(_result)) => (
-                LidarResultState::Incomplete,
-                Some(
-                    "this result describes an earlier composition; the current one has no \
-                     published slope yet"
-                        .to_string(),
-                ),
-            ),
-            (Some("failed"), None) => (LidarResultState::Failed, Some(String::new())),
-            (Some("cancelled"), Some(_result)) if result_is_current => {
-                (LidarResultState::Ready, None)
-            }
-            (Some("cancelled"), Some(_result)) => (
-                LidarResultState::Incomplete,
-                Some(
-                    "this result describes an earlier composition; the current one has no \
-                     published slope yet"
-                        .to_string(),
-                ),
-            ),
-            (Some("cancelled"), None) => (LidarResultState::Failed, Some("cancelled".to_string())),
-            (_, Some(result)) if !composition_ready => (
-                LidarResultState::Incomplete,
-                Some("the layer's current composition is empty".to_string()),
-            ),
-            (_, Some(result)) if !result_is_current => (
-                LidarResultState::Incomplete,
-                Some(
-                    "this result describes an earlier composition; a refresh is pending"
-                        .to_string(),
-                ),
-            ),
-            (_, Some(result)) => (parse_result_state(&result.state), None),
-            (_, None) => (LidarResultState::Preparing, None),
+        // A published result is a fixed library item: it describes the input
+        // generation it was calculated from, whatever happened to that source
+        // afterwards, and nothing refreshes it. Without a result the item is
+        // its operation: preparing while the job runs, failed otherwise.
+        let (state, detail) = match (&head_result, latest_job.as_deref()) {
+            (Some(result), _) => (parse_result_state(&result.state), None),
+            (None, Some("preparing") | Some("refreshing")) => (LidarResultState::Preparing, None),
+            (None, Some("cancelled")) => (LidarResultState::Failed, Some("cancelled".to_string())),
+            (None, Some(_)) => (LidarResultState::Failed, Some(String::new())),
+            (None, None) => (LidarResultState::Preparing, None),
         };
         // The name belongs to the published result, so an unnamed or pre-v17
         // generation reports none and the UI falls back to the kind.
@@ -192,6 +150,9 @@ pub fn library_snapshot(
         analysis_summaries.push(LidarAnalysisSummary {
             id: definition.id.clone(),
             generation_id: head_result.as_ref().map(|result| result.id.clone()),
+            input_generation_id: head_result
+                .as_ref()
+                .map(|result| result.source_generation_id.clone()),
             source_layer_id: definition.layer_id.clone(),
             kind: parse_analysis_kind(&definition.kind)?,
             name: result_name,
@@ -222,6 +183,27 @@ pub fn library_snapshot(
         analyses: analysis_summaries,
         engine: engine_status,
     })
+}
+
+/// The latest import operation recorded for one item.
+fn latest_import_job(
+    connection: &Connection,
+    layer_id: &str,
+) -> Result<Option<common_types::lidar::LidarImportJob>, String> {
+    use rusqlite::OptionalExtension as _;
+    let job_id: Option<String> = connection
+        .query_row(
+            "SELECT id FROM lidar_import_jobs WHERE layer_id = ?1
+             ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            [layer_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read the item's import: {e}"))?;
+    match job_id {
+        Some(job_id) => super::import_job_summary(connection, &job_id),
+        None => Ok(None),
+    }
 }
 
 /// The display range of a source generation.

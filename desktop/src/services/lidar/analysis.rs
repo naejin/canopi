@@ -1162,68 +1162,6 @@ pub fn capability(kind: LidarAnalysisKind, measurement_kind: &str) -> Result<(),
     }
 }
 
-/// Mark stale result heads and enqueue one refresh per definition after an
-/// accepted source change. Returns (job_id, definition_id, parameters_json,
-/// source_generation_id) for the orchestrator to spawn.
-pub fn enqueue_refreshes(
-    connection: &rusqlite::Connection,
-    layer_id: &str,
-) -> Vec<(String, String, String, String)> {
-    let layer_head = match catalogue::head_generation(connection, layer_id) {
-        Ok(Some(head)) => head.id,
-        _ => return Vec::new(),
-    };
-    let definitions = match catalogue::list_definitions_for_layer(connection, layer_id) {
-        Ok(defs) => defs,
-        Err(_) => return Vec::new(),
-    };
-    let mut enqueued = Vec::new();
-    for definition in definitions {
-        let head_result = catalogue::head_analysis_generation(connection, &definition.id)
-            .ok()
-            .flatten();
-        let already_current = head_result
-            .as_ref()
-            .map(|r| r.source_generation_id == layer_head)
-            .unwrap_or(false);
-        if already_current {
-            continue;
-        }
-        let active = matches!(
-            catalogue::latest_analysis_job_state(connection, &definition.id)
-                .ok()
-                .flatten()
-                .as_deref(),
-            Some("preparing") | Some("refreshing")
-        );
-        if active {
-            continue;
-        }
-        let job_id = new_id("anl");
-        let state = if head_result.is_some() {
-            "refreshing"
-        } else {
-            "preparing"
-        };
-        let inserted = connection
-            .execute(
-                "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5, ?5)",
-                rusqlite::params![job_id, definition.id, layer_head, state, now_iso()],
-            )
-            .is_ok();
-        if inserted {
-            enqueued.push((
-                job_id,
-                definition.id,
-                definition.parameters_json.clone(),
-                layer_head.clone(),
-            ));
-        }
-    }
-    enqueued
-}
-
 /// Startup recovery: jobs interrupted by a restart fail explicitly so the UI
 /// never reports ghost activity; published results are unaffected.
 pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(), String> {

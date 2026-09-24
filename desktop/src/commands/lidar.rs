@@ -5,7 +5,6 @@
 //! receipts or snapshots. All heavy work runs through the managed Native
 //! Operation Executor.
 
-use crate::services::lidar::import;
 use crate::{native_operation::NativeOperationExecutor, services::lidar::LidarLibrary};
 use common_types::lidar::{
     LidarAnalysisKind, LidarAnalysisParameters, LidarEngineStatus, LidarLibrarySnapshot,
@@ -38,34 +37,6 @@ pub async fn lidar_list_library(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar library snapshot",
             move || library.library_snapshot(),
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn lidar_create_layer(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    name: String,
-    measurement_kind: common_types::lidar::LidarMeasurementKind,
-    // `unit_label` and `unit_unknown` declare the unit of an "other continuous"
-    // dataset. Elevation and height are always metres and refuse both.
-    unit_label: Option<String>,
-    unit_unknown: Option<bool>,
-) -> Result<String, String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar create layer",
-            move || {
-                library.create_layer(
-                    &name,
-                    measurement_kind,
-                    unit_label.as_deref(),
-                    unit_unknown.unwrap_or(false),
-                )
-            },
         )
         .await
 }
@@ -117,41 +88,6 @@ pub async fn lidar_delete_layer(
             move || library.delete_layer(&layer_id),
         )
         .await
-}
-
-/// Import selected sources into one Data Layer in a single job.
-///
-/// This is the production route: the Import action is the commit intent, so the
-/// batch is prepared, validated and published under one job without a review
-/// screen or a preview. Progress, cancellation and the terminal outcome are the
-/// job's own state, which the Data surface reads. The target head is captured
-/// before preparation begins and rechecked inside the publication transaction,
-/// so a head that moved is a conflict rather than a rebase.
-#[tauri::command]
-pub async fn lidar_import_sources(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    paths: Vec<String>,
-) -> Result<String, String> {
-    if paths.is_empty() {
-        return Err("no files were selected for import".to_string());
-    }
-    let library_for_record = library.inner().clone();
-    let layer_id_for_record = layer_id.clone();
-    let job_id = executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar import admission",
-            move || library_for_record.record_import_job(&layer_id_for_record),
-        )
-        .await?;
-    library.inner().begin_import_sources(
-        &job_id,
-        &layer_id,
-        paths.into_iter().map(std::path::PathBuf::from).collect(),
-    )?;
-    Ok(job_id)
 }
 
 #[tauri::command]
@@ -288,24 +224,6 @@ pub async fn lidar_retry_analysis(
         .await
 }
 
-/// One bounded page of a layer's publication history.
-#[tauri::command]
-pub async fn lidar_layer_history(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    cursor: Option<String>,
-) -> Result<common_types::lidar::LidarLayerHistoryPage, String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar layer history",
-            move || library.layer_history_page(&layer_id, cursor.as_deref()),
-        )
-        .await
-}
-
 /// One bounded page of a layer's ordered source composition.
 #[tauri::command]
 pub async fn lidar_layer_collection(
@@ -321,129 +239,6 @@ pub async fn lidar_layer_collection(
             "lidar layer collection",
             move || library.layer_collection(&layer_id, cursor.as_deref()),
         )
-        .await
-}
-
-/// Admit one ordered-member edit before any work is created.
-async fn admit_layer_edit(
-    library: &LidarLibrary,
-    executor: &NativeOperationExecutor,
-    layer_id: String,
-    member_id: Option<String>,
-    expected_head: Option<String>,
-) -> Result<(), String> {
-    let library = library.clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar layer edit admission",
-            move || {
-                library.validate_layer_edit(
-                    &layer_id,
-                    member_id.as_deref(),
-                    expected_head.as_deref(),
-                )
-            },
-        )
-        .await
-}
-
-/// Move one source one position in the layer's priority list.
-#[tauri::command]
-pub async fn lidar_move_layer_source(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    member_id: String,
-    towards_top: bool,
-    expected_head: Option<String>,
-) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-    admit_layer_edit(
-        library.inner(),
-        executor.inner(),
-        layer_id.clone(),
-        Some(member_id.clone()),
-        expected_head.clone(),
-    )
-    .await?;
-    library
-        .inner()
-        .apply_move(&layer_id, &member_id, towards_top, expected_head)
-        .await
-}
-
-/// Detach one source from the layer's current composition.
-#[tauri::command]
-pub async fn lidar_remove_layer_source(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    member_id: String,
-    expected_head: Option<String>,
-) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-    admit_layer_edit(
-        library.inner(),
-        executor.inner(),
-        layer_id.clone(),
-        Some(member_id.clone()),
-        expected_head.clone(),
-    )
-    .await?;
-    library
-        .inner()
-        .apply_remove(&layer_id, &member_id, expected_head)
-        .await
-}
-
-/// Undo the layer's last change by publishing the preceding snapshot.
-#[tauri::command]
-pub async fn lidar_undo_layer_change(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    expected_head: Option<String>,
-) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-    admit_layer_edit(
-        library.inner(),
-        executor.inner(),
-        layer_id.clone(),
-        None,
-        expected_head.clone(),
-    )
-    .await?;
-    library.inner().apply_undo(&layer_id, expected_head).await
-}
-
-/// Publish one older version as the layer's new head.
-#[tauri::command]
-pub async fn lidar_restore_layer_version(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    version_id: String,
-    expected_head: Option<String>,
-) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-    let library_for_check = library.inner().clone();
-    let layer_for_check = layer_id.clone();
-    let version_for_check = version_id.clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar version admission",
-            move || {
-                let owner = import::version_layer(&library_for_check, &version_for_check)?;
-                if owner != layer_for_check {
-                    return Err(format!(
-                        "version {version_for_check} belongs to another layer"
-                    ));
-                }
-                Ok(())
-            },
-        )
-        .await?;
-    library
-        .inner()
-        .apply_restore(&layer_id, &version_id, expected_head)
         .await
 }
 
@@ -554,6 +349,77 @@ pub async fn lidar_display_descriptor(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar display descriptor",
             move || library.display_descriptor(&request),
+        )
+        .await
+}
+
+/// Import selected files as one new fixed library item.
+///
+/// The item and its job are created together only when the user submits the
+/// selection; cancelling the file picker creates nothing. Preparation,
+/// display derivatives and publication run as one job: a failure or
+/// cancellation publishes none of the batch.
+#[tauri::command]
+pub async fn lidar_import_item(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    name: String,
+    measurement_kind: common_types::lidar::LidarMeasurementKind,
+    // `unit_label` and `unit_unknown` declare the unit of an "other continuous"
+    // dataset. Elevation and height are always metres and refuse both.
+    unit_label: Option<String>,
+    unit_unknown: Option<bool>,
+    paths: Vec<String>,
+) -> Result<common_types::lidar::LidarImportReceipt, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar import item",
+            move || {
+                library.import_item(
+                    &name,
+                    measurement_kind,
+                    unit_label.as_deref(),
+                    unit_unknown.unwrap_or(false),
+                    paths.into_iter().map(std::path::PathBuf::from).collect(),
+                )
+            },
+        )
+        .await
+}
+
+/// Retry a failed or cancelled import with its saved selection, keeping the
+/// same library item. A published item cannot be retried.
+#[tauri::command]
+pub async fn lidar_retry_import(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+) -> Result<common_types::lidar::LidarImportReceipt, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar retry import",
+            move || library.retry_import(&layer_id),
+        )
+        .await
+}
+
+/// Remove an unpublished item whose import failed or was cancelled.
+#[tauri::command]
+pub async fn lidar_dismiss_import(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    layer_id: String,
+) -> Result<(), String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar dismiss import",
+            move || library.dismiss_import(&layer_id),
         )
         .await
 }

@@ -37,7 +37,7 @@ use common_types::lidar::{
 };
 use engine::GdalEngine;
 use paths::LidarPaths;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension as _};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::MutexGuard;
@@ -45,13 +45,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub type LidarSnapshot = common_types::lidar::LidarLibrarySnapshot;
-
-/// One ordered-member edit request, dispatched under the heavy raster lease.
-enum MemberEdit {
-    Move(String, bool),
-    Remove(String),
-    Restore(String),
-}
 
 #[derive(Clone)]
 pub struct LidarLibrary {
@@ -285,43 +278,8 @@ impl LidarLibrary {
         if let Ok(mut slot) = self.inner.executor.lock() {
             *slot = Some(executor);
         }
-        // Startup reconciliation: a library opened after a source change whose
-        // refresh never ran, failed or was cancelled is re-scheduled once the
-        // executor exists. Enqueuing is not a retry loop — it is the once-per-
-        // open version of what an Apply already does, and a definition whose
-        // result is current is skipped by the same orchestration.
-        self.schedule_startup_refreshes();
-    }
-
-    /// Re-schedule dependent refreshes for layers whose current result is not
-    /// the current head.
-    fn schedule_startup_refreshes(&self) {
-        let stale_layers = {
-            let Ok(connection) = self.catalogue() else {
-                return;
-            };
-            let Ok(definitions) = catalogue::list_all_definitions(&connection) else {
-                return;
-            };
-            let mut layers = Vec::new();
-            for definition in definitions {
-                let Ok(Some(head)) = catalogue::head_generation(&connection, &definition.layer_id)
-                else {
-                    continue;
-                };
-                let current = catalogue::head_analysis_generation(&connection, &definition.id)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|result| result.source_generation_id == head.id);
-                if !current && !layers.contains(&definition.layer_id) {
-                    layers.push(definition.layer_id.clone());
-                }
-            }
-            layers
-        };
-        for layer_id in stale_layers {
-            self.refresh_dependents(&layer_id);
-        }
+        // Nothing is enqueued here: a saved result is a fixed library item and
+        // no analysis runs merely because the library reopened.
     }
 
     fn executor(&self) -> Result<crate::native_operation::NativeOperationExecutor, String> {
@@ -568,10 +526,6 @@ impl LidarLibrary {
         Ok(())
     }
 
-    fn refresh_snapshot_quiet(&self) {
-        let _ = self.library_snapshot();
-    }
-
     pub fn engine_status(&self) -> common_types::lidar::LidarEngineStatus {
         match self.inner.engine.discover() {
             Ok(tools) => common_types::lidar::LidarEngineStatus {
@@ -606,6 +560,8 @@ impl LidarLibrary {
         inspection::sample(self, &self.inner.engine, cancel, request)
     }
 
+    /// Test support: an empty item row, as older builds created before import.
+    #[cfg(test)]
     pub fn create_layer(
         &self,
         name: &str,
@@ -670,6 +626,7 @@ impl LidarLibrary {
         let (definition_ids, job_ids) = {
             let connection = self.catalogue()?;
             let definitions = catalogue::list_definitions_for_layer(&connection, layer_id)?;
+            refuse_dependent_results(&connection, layer_id, definitions.len())?;
             let definition_ids = definitions
                 .into_iter()
                 .map(|definition| definition.id)
@@ -697,6 +654,20 @@ impl LidarLibrary {
         let transaction = connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
+        // Recheck inside the transaction: a result created meanwhile keeps its
+        // input.
+        let dependents: i64 = transaction
+            .query_row(
+                "SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        refuse_dependent_results(
+            &transaction,
+            layer_id,
+            usize::try_from(dependents).unwrap_or(usize::MAX),
+        )?;
         for definition_id in &definition_ids {
             delete_analysis_rows(&transaction, definition_id)?;
         }
@@ -804,60 +775,6 @@ impl LidarLibrary {
             let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(&definition_id));
         }
         Ok(())
-    }
-
-    /// One bounded page of a layer's publication history, newest first.
-    ///
-    /// The first call captures the traversal's upper bound; later pages carry
-    /// it in the cursor, so versions published while the user pages through
-    /// History cannot shift the window under them.
-    pub fn layer_history_page(
-        &self,
-        layer_id: &str,
-        cursor: Option<&str>,
-    ) -> Result<common_types::lidar::LidarLayerHistoryPage, String> {
-        let (upper_rowid, after_rowid) = match cursor {
-            Some(cursor) => {
-                let (upper, after) = collection::decode_version_cursor(cursor)?;
-                (Some(upper), Some(after))
-            }
-            None => (None, None),
-        };
-        let connection = self.catalogue()?;
-        let page = collection::history_page(
-            &connection,
-            layer_id,
-            upper_rowid,
-            after_rowid,
-            common_types::lidar::LAYER_HISTORY_PAGE,
-        )?;
-        Ok(common_types::lidar::LidarLayerHistoryPage {
-            layer_id: layer_id.to_string(),
-            head_generation_id: catalogue::head_generation(&connection, layer_id)?
-                .map(|row| row.id),
-            versions: page
-                .versions
-                .into_iter()
-                .map(|entry| common_types::lidar::LidarGenerationHistoryEntry {
-                    id: entry.generation_id,
-                    created_at: entry.created_at,
-                    coverage_cells: entry.coverage_cells.map(|cells| cells.max(0) as u64),
-                    display_range: entry.display_min_value.zip(entry.display_max_value).map(
-                        |(min, max)| common_types::lidar::LidarDisplayRange {
-                            min,
-                            max,
-                            basis: display_range_basis(entry.display_basis.as_deref()),
-                        },
-                    ),
-                    source_count: u32::try_from(entry.member_count).unwrap_or(u32::MAX),
-                    sequence: u32::try_from(entry.sequence.max(0)).unwrap_or(u32::MAX),
-                    is_head: entry.is_current,
-                    restorable: entry.restorable,
-                    operation: entry.operation,
-                })
-                .collect(),
-            next_cursor: page.next_cursor,
-        })
     }
 
     /// The ordered composition of one Data Layer, one bounded member page at a
@@ -1200,242 +1117,9 @@ impl LidarLibrary {
         let _ = std::fs::remove_dir_all(scratch);
     }
 
-    /// Short admission read for one ordered-member edit.
-    ///
-    /// The command path runs this through the native executor before any work
-    /// is created, so a stale or unknown edit is refused without taking the
-    /// heavy raster lease or spawning a job.
-    /// Short admission read for one ordered-member edit.
-    ///
-    /// The command path runs this through the native executor before any work
-    /// is created, so a stale or unknown edit is refused without taking the
-    /// heavy raster lease or spawning a job.
-    pub fn validate_layer_edit(
-        &self,
-        layer_id: &str,
-        member_id: Option<&str>,
-        expected_head: Option<&str>,
-    ) -> Result<(), String> {
-        let connection = self.catalogue()?;
-        let head = catalogue::head_generation(&connection, layer_id)?
-            .ok_or_else(|| "layer has no accepted coverage".to_string())?;
-        if let Some(expected) = expected_head
-            && expected != head.id
-        {
-            return Err(
-                "the layer changed since this edit was prepared; refresh and try again".to_string(),
-            );
-        }
-        if let Some(member_id) = member_id {
-            let ordered = import::read_generation_manifest(&head.manifest_json)
-                .map(|manifest| manifest.format.is_ordered_collection())
-                .unwrap_or(false);
-            let members = if ordered {
-                catalogue::collection_members(&connection, &head.id)?
-            } else {
-                Vec::new()
-            };
-            // A pre-transition head has no ordered rows yet; it presents the one
-            // previous-composition member its next edit will produce.
-            let known = members.iter().any(|row| row.member_id == member_id)
-                || (!ordered && member_id == format!("prev-{}", head.id));
-            if !known {
-                return Err(format!("no source {member_id} in this layer"));
-            }
-        }
-        Ok(())
-    }
-
-    /// Run one ordered-member edit and settle it before returning.
-    ///
-    /// The command awaits the real work and its settlement, so the caller learns
-    /// what actually happened — the authoritative head, whether a snapshot was
-    /// published, or the named refusal — instead of an acknowledgement that the
-    /// work was merely queued. Pre-commit failure is an error; a publication
-    /// that committed is success even when a later cleanup or refresh step
-    /// reports a diagnostic.
-    async fn apply_member_edit(
-        &self,
-        layer_id: &str,
-        expected_head: Option<String>,
-        edit: Option<MemberEdit>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        let scope = format!("collection-{layer_id}");
-        // The lease is taken before any work exists, so a competing heavy job is
-        // refused promptly and never waits behind this one.
-        let lease = HeavyJobLease::acquire(self, &scope)?;
-        let executor = self.executor()?;
-        let flag = self.register_cancel(&scope);
-        let library = self.clone();
-        let layer = layer_id.to_string();
-        let layer_for_work = layer.clone();
-        let outcome = executor
-            .run(
-                crate::native_operation::NativeOperationClass::Local,
-                "lidar layer edit",
-                move || {
-                    let _lease = lease;
-                    let head = expected_head.as_deref();
-                    match edit {
-                        Some(MemberEdit::Move(member_id, towards_top)) => import::move_member(
-                            &library,
-                            &layer_for_work,
-                            &member_id,
-                            towards_top,
-                            head,
-                            &flag,
-                        ),
-                        Some(MemberEdit::Remove(member_id)) => import::remove_member(
-                            &library,
-                            &layer_for_work,
-                            &member_id,
-                            head,
-                            &flag,
-                        ),
-                        Some(MemberEdit::Restore(version_id)) => import::restore_version(
-                            &library,
-                            &layer_for_work,
-                            &version_id,
-                            head,
-                            &flag,
-                        ),
-                        None => import::undo_last_change(&library, &layer_for_work, head, &flag),
-                    }
-                },
-            )
-            .await;
-        self.settle_layer_edit(&layer, &scope, outcome)
-    }
-
-    /// Undo the last change of one layer from the version list.
-    pub async fn apply_undo(
-        &self,
-        layer_id: &str,
-        expected_head: Option<String>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        self.apply_member_edit(layer_id, expected_head, None).await
-    }
-
-    /// Restore one older version as the new head.
-    pub async fn apply_restore(
-        &self,
-        layer_id: &str,
-        version_id: &str,
-        expected_head: Option<String>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        self.apply_member_edit(
-            layer_id,
-            expected_head,
-            Some(MemberEdit::Restore(version_id.to_string())),
-        )
-        .await
-    }
-
-    /// Move one source one position in the layer's priority list.
-    pub async fn apply_move(
-        &self,
-        layer_id: &str,
-        member_id: &str,
-        towards_top: bool,
-        expected_head: Option<String>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        self.apply_member_edit(
-            layer_id,
-            expected_head,
-            Some(MemberEdit::Move(member_id.to_string(), towards_top)),
-        )
-        .await
-    }
-
-    /// Detach one source from the layer's current composition.
-    pub async fn apply_remove(
-        &self,
-        layer_id: &str,
-        member_id: &str,
-        expected_head: Option<String>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        self.apply_member_edit(
-            layer_id,
-            expected_head,
-            Some(MemberEdit::Remove(member_id.to_string())),
-        )
-        .await
-    }
-
-    /// Settle one ordered-member edit and report what happened.
-    ///
-    /// A committed snapshot is success even when a later cleanup or refresh
-    /// scheduling step reports a diagnostic; a pre-commit failure or
-    /// cancellation stays a named error. The returned head is the
-    /// authoritative one after settlement, so a caller never has to guess
-    /// whether its request landed.
-    pub(crate) fn settle_layer_edit(
-        &self,
-        layer_id: &str,
-        scope: &str,
-        outcome: Result<import::ApplyOutcome, String>,
-    ) -> Result<common_types::lidar::LidarLayerEditOutcome, String> {
-        let applied = match outcome {
-            Ok(applied) => applied,
-            Err(error) => {
-                self.settle_cancel(scope);
-                self.refresh_snapshot_quiet();
-                tracing::warn!(layer_id, error, "LiDAR layer edit failed");
-                return Err(error);
-            }
-        };
-        self.settle_cancel(scope);
-        self.refresh_snapshot_quiet();
-        // A committed numeric edit invalidates every dependent result: the
-        // refresh is what keeps Ready from describing a composition the layer
-        // no longer has.
-        if applied.changed {
-            self.refresh_dependents(layer_id);
-        }
-        let head = self
-            .catalogue()
-            .ok()
-            .and_then(|connection| {
-                catalogue::head_generation(&connection, layer_id)
-                    .ok()
-                    .flatten()
-            })
-            .map(|row| row.id);
-        tracing::info!(
-            layer_id,
-            summary = applied.summary(),
-            "LiDAR layer snapshot settled"
-        );
-        Ok(common_types::lidar::LidarLayerEditOutcome {
-            head_generation_id: head,
-            changed: applied.changed,
-            message: applied.message,
-        })
-    }
-
     pub fn get_import_job(&self, job_id: &str) -> Result<Option<LidarImportJob>, String> {
         let connection = self.catalogue()?;
-        let Some(row) = catalogue::get_import_job(&connection, job_id)? else {
-            return Ok(None);
-        };
-        let progress = row
-            .progress_phase
-            .as_deref()
-            .and_then(parse_import_progress_phase)
-            .zip(row.progress_percent)
-            .and_then(|(phase, percent)| {
-                u8::try_from(percent)
-                    .ok()
-                    .filter(|percent| *percent <= 100)
-                    .map(|percent| LidarImportProgress { phase, percent })
-            });
-        Ok(Some(LidarImportJob {
-            job_id: row.id,
-            layer_id: row.layer_id,
-            state: parse_import_state(&row.state),
-            message: row.message,
-            progress,
-        }))
+        import_job_summary(&connection, job_id)
     }
 
     pub(crate) fn record_import_progress(
@@ -1537,8 +1221,224 @@ impl LidarLibrary {
         }
     }
 
+    /// Record one import as a new fixed library item and its first job.
+    ///
+    /// Picking files creates nothing; submitting them creates exactly one item
+    /// and one job, together. The saved request keeps the selection order,
+    /// which is the item's source priority, so Retry resubmits it unchanged.
+    pub fn record_import_item(
+        &self,
+        name: &str,
+        measurement_kind: common_types::lidar::LidarMeasurementKind,
+        unit_label: Option<&str>,
+        unit_unknown: bool,
+        paths: &[PathBuf],
+    ) -> Result<(String, String), String> {
+        if paths.is_empty() {
+            return Err("no files were selected for import".to_string());
+        }
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("Layer name must not be empty".to_string());
+        }
+        let units = resolve_units(measurement_kind, unit_label, unit_unknown)?;
+        let request = import_request_json(paths)?;
+        let layer_id = new_id("lyr");
+        let job_id = new_id("imp");
+        let connection = self.catalogue()?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start the import record: {e}"))?;
+        let now = now_iso();
+        transaction
+            .execute(
+                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![layer_id, name, measurement_kind.as_str(), units, now],
+            )
+            .map_err(|e| format!("Failed to create the library item: {e}"))?;
+        transaction
+            .execute(
+                "INSERT INTO lidar_import_jobs(id, layer_id, state, request_json, created_at, updated_at)
+                 VALUES(?1, ?2, 'staging', ?3, ?4, ?4)",
+                rusqlite::params![job_id, layer_id, request, now],
+            )
+            .map_err(|e| format!("Failed to record the import: {e}"))?;
+        transaction
+            .commit()
+            .map_err(|e| format!("Failed to record the import: {e}"))?;
+        Ok((layer_id, job_id))
+    }
+
+    /// Record a new job for an unpublished item whose import failed or was
+    /// cancelled, reusing the item identity and its saved request.
+    pub fn record_import_retry(
+        &self,
+        layer_id: &str,
+    ) -> Result<(String, String, Vec<PathBuf>), String> {
+        let connection = self.catalogue()?;
+        catalogue::get_layer(&connection, layer_id)?
+            .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
+        if catalogue::head_generation(&connection, layer_id)?.is_some() {
+            return Err(
+                "this item is already published; import new files as a new item".to_string(),
+            );
+        }
+        let latest: Option<(String, Option<String>)> = connection
+            .query_row(
+                "SELECT state, request_json FROM lidar_import_jobs WHERE layer_id = ?1
+                 ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                [layer_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| format!("Failed to read the import: {e}"))?;
+        let Some((state, request)) = latest else {
+            return Err("this item has no saved import to retry".to_string());
+        };
+        if !matches!(state.as_str(), "failed" | "cancelled") {
+            return Err("this import is still running".to_string());
+        }
+        let request = request.ok_or_else(|| {
+            "this import was recorded before its selection was saved; choose the files again"
+                .to_string()
+        })?;
+        let paths = parse_import_request(&request)?;
+        let job_id = new_id("imp");
+        connection
+            .execute(
+                "INSERT INTO lidar_import_jobs(id, layer_id, state, request_json, created_at, updated_at)
+                 VALUES(?1, ?2, 'staging', ?3, ?4, ?4)",
+                rusqlite::params![job_id, layer_id, request, now_iso()],
+            )
+            .map_err(|e| format!("Failed to record the import retry: {e}"))?;
+        Ok((layer_id.to_string(), job_id, paths))
+    }
+
+    /// Remove an unpublished item whose import failed or was cancelled.
+    ///
+    /// Only that operation's own metadata and scratch go; a published item is
+    /// deleted through the library deletion guard instead.
+    pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
+        let job_ids: Vec<String> = {
+            let connection = self.catalogue()?;
+            if catalogue::head_generation(&connection, layer_id)?.is_some() {
+                return Err(
+                    "this item is published; delete it from the library instead".to_string()
+                );
+            }
+            let running: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
+                     AND state IN ('staging', 'awaiting_review', 'applying'))",
+                    [layer_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if running {
+                return Err("this import is still running; cancel it first".to_string());
+            }
+            let mut statement = connection
+                .prepare("SELECT id FROM lidar_import_jobs WHERE layer_id = ?1")
+                .map_err(|e| e.to_string())?;
+            statement
+                .query_map([layer_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        let connection = self.catalogue()?;
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|e| e.to_string())?;
+        // Recheck inside the transaction: a publication that committed after
+        // the read above keeps its item.
+        if catalogue::head_generation(&transaction, layer_id)?.is_some() {
+            return Err("this item is published; delete it from the library instead".to_string());
+        }
+        transaction
+            .execute(
+                "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
+                [layer_id],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute("DELETE FROM lidar_source_layers WHERE id = ?1", [layer_id])
+            .map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())?;
+        drop(connection);
+        for job_id in job_ids {
+            if let Err(error) = import::settle_job_root(self, &job_id) {
+                tracing::warn!(job_id, error = %error, "dismissed import kept its root for recovery");
+            }
+        }
+        Ok(())
+    }
+
+    /// Record and start one import as a new library item.
+    pub fn import_item(
+        &self,
+        name: &str,
+        measurement_kind: common_types::lidar::LidarMeasurementKind,
+        unit_label: Option<&str>,
+        unit_unknown: bool,
+        paths: Vec<PathBuf>,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        let (layer_id, job_id) =
+            self.record_import_item(name, measurement_kind, unit_label, unit_unknown, &paths)?;
+        self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    /// Retry a failed or cancelled unpublished import with its saved request.
+    pub fn retry_import(
+        &self,
+        layer_id: &str,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        let (layer_id, job_id, paths) = self.record_import_retry(layer_id)?;
+        if let Some(missing) = paths.iter().find(|path| !path.is_file()) {
+            let message = format!(
+                "{} is no longer available; choose the files again",
+                missing
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| missing.display().to_string())
+            );
+            self.fail_import_job(&job_id, &message);
+            return Err(message);
+        }
+        self.start_recorded_import(&layer_id, &job_id, paths)
+    }
+
+    fn start_recorded_import(
+        &self,
+        layer_id: &str,
+        job_id: &str,
+        paths: Vec<PathBuf>,
+    ) -> Result<common_types::lidar::LidarImportReceipt, String> {
+        if let Err(error) = self.begin_import_sources(job_id, layer_id, paths) {
+            // A job that could not start is an honest failed operation.
+            self.fail_import_job(job_id, &error);
+            return Err(error);
+        }
+        Ok(common_types::lidar::LidarImportReceipt {
+            layer_id: layer_id.to_string(),
+            job_id: job_id.to_string(),
+        })
+    }
+
+    fn fail_import_job(&self, job_id: &str, message: &str) {
+        if let Ok(connection) = self.catalogue() {
+            let _ = connection.execute(
+                "UPDATE lidar_import_jobs SET state = 'failed', message = ?2, updated_at = ?3
+                 WHERE id = ?1 AND state = 'staging'",
+                rusqlite::params![job_id, message, now_iso()],
+            );
+        }
+    }
+
     /// Record the import job row (short catalogue write; called through the
     /// executor from the command).
+    #[cfg(test)]
     pub fn record_import_job(&self, layer_id: &str) -> Result<String, String> {
         let job_id = new_id("imp");
         let connection = self.catalogue()?;
@@ -1569,6 +1469,18 @@ impl LidarLibrary {
         layer_id: &str,
         source_paths: Vec<PathBuf>,
     ) -> Result<(), String> {
+        {
+            // A published item's content is fixed. Refusing here, before any
+            // lease or job work, also stops a stale caller that still thinks
+            // it can append to an item.
+            let connection = self.catalogue()?;
+            if catalogue::head_generation(&connection, layer_id)?.is_some() {
+                return Err(
+                    "this item is already published and its content is fixed; import the files as a new item"
+                        .to_string(),
+                );
+            }
+        }
         let lease = HeavyJobLease::acquire(self, job_id)?;
         let executor = self.executor()?;
         let flag = self.register_cancel(job_id);
@@ -1605,13 +1517,23 @@ impl LidarLibrary {
                         // anything becomes visible; a partial batch is never
                         // published as a success.
                         import::ensure_whole_batch_compatible(&staging)?;
+                        // Display derivatives are staged under the same job, so
+                        // the item can be drawn as soon as it is published.
+                        library_for_work.record_import_progress(
+                            &job_id_for_stage,
+                            LidarImportProgressPhase::RenderingMap,
+                            1,
+                        );
+                        library_for_work.prepare_staged_display(&staging, &flag)?;
                         // Preparation marked the job publishing once the batch
                         // validated. Publication rechecks the captured head in
                         // its own
                         // transaction, so a head that moved during preparation
                         // is a conflict rather than a silently rebased import.
                         import::apply_import(&library_for_work, &staging, true, false, &flag)
-                            .map(|_| ())
+                            .map(|outcome| {
+                                tracing::info!(summary = outcome.summary(), message = ?outcome.message, "LiDAR import published");
+                            })
                     },
                 )
                 .await;
@@ -1669,30 +1591,9 @@ impl LidarLibrary {
             }
         }
         self.settle_cancel(job_id);
-        // A committed publication makes every result derived from this layer's
-        // previous head stale, so one refresh per definition is enqueued. A
-        // failed or cancelled import published nothing and invalidates nothing.
-        if published {
-            self.refresh_dependents(layer_id);
-        }
-    }
-
-    fn refresh_dependents(&self, layer_id: &str) {
-        let enqueued = {
-            let connection = self.catalogue();
-            let Ok(connection) = connection else {
-                return;
-            };
-            analysis::enqueue_refreshes(&connection, layer_id)
-        };
-        for (job_id, definition_id, parameters_json, source_generation_id) in enqueued {
-            let library = self.clone();
-            tauri::async_runtime::spawn(async move {
-                library
-                    .run_refresh(job_id, definition_id, parameters_json, source_generation_id)
-                    .await;
-            });
-        }
+        // Import publishes a new fixed item; it never touches another item or
+        // enqueues analysis.
+        let _ = (published, layer_id);
     }
 
     /// Wait for the library-wide heavy lease without holding an executor
@@ -1766,19 +1667,13 @@ impl LidarLibrary {
             .await;
         match outcome {
             Ok(analysis::AnalysisOutcome { stale: true, .. }) => {
-                let layer_id = self.catalogue().ok().and_then(|connection| {
+                // The pinned input is no longer the source head: nothing is
+                // published and nothing is re-targeted to the newer head.
+                if let Ok(connection) = self.catalogue() {
                     let _ = connection.execute(
-                        "UPDATE lidar_analysis_jobs SET state = 'cancelled', message = 'superseded by a newer source generation', updated_at = ?2 WHERE id = ?1",
+                        "UPDATE lidar_analysis_jobs SET state = 'failed', message = 'the input changed before the result was published', updated_at = ?2 WHERE id = ?1",
                         rusqlite::params![job_id, now_iso()],
                     );
-                    connection.query_row(
-                        "SELECT layer_id FROM lidar_analysis_definitions WHERE id = ?1",
-                        [&definition_id],
-                        |row| row.get::<_, String>(0),
-                    ).ok()
-                });
-                if let Some(layer_id) = layer_id {
-                    self.refresh_dependents(&layer_id);
                 }
             }
             Ok(outcome) => {
@@ -1819,7 +1714,7 @@ impl LidarLibrary {
         let layer = catalogue::get_layer(&connection, layer_id)?
             .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
         analysis::capability(kind, layer.measurement_kind.as_str())?;
-        catalogue::head_generation(&connection, layer_id)?
+        let input = catalogue::head_generation(&connection, layer_id)?
             .ok_or_else(|| "Layer has no accepted coverage to analyse yet".to_string())?;
         let definition_id = new_id("adef");
         // The name rides with the definition's parameters, so a refresh
@@ -1843,27 +1738,31 @@ impl LidarLibrary {
                 rusqlite::params![definition_id, layer_id],
             )
             .map_err(|e| e.to_string())?;
-        // Enqueue the first job through the standard refresh path so the
-        // receipt carries the real job identity.
-        let enqueued = analysis::enqueue_refreshes(&connection, layer_id);
-        let receipt = enqueued
-            .iter()
-            .find(|(_, definition, _, _)| definition == &definition_id)
-            .map(
-                |(job_id, definition, _, _)| common_types::lidar::LidarAnalysisReceipt {
-                    definition_id: definition.clone(),
-                    job_id: job_id.clone(),
-                },
-            );
-        for (job_id, definition_id, parameters_json, source_generation_id) in enqueued {
+        // One job for this new definition only, pinned to the input generation
+        // it was created from; other results are never touched.
+        let job_id = new_id("anl");
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
+                 VALUES(?1, ?2, ?3, 'preparing', ?4, ?4)",
+                rusqlite::params![job_id, definition_id, input.id, now_iso()],
+            )
+            .map_err(|e| format!("Failed to enqueue the analysis: {e}"))?;
+        {
             let library = self.clone();
+            let job_id = job_id.clone();
+            let definition_id = definition_id.clone();
+            let source_generation_id = input.id.clone();
             tauri::async_runtime::spawn(async move {
                 library
                     .run_refresh(job_id, definition_id, parameters_json, source_generation_id)
                     .await;
             });
         }
-        receipt.ok_or_else(|| "analysis refresh could not be enqueued".to_string())
+        Ok(common_types::lidar::LidarAnalysisReceipt {
+            definition_id,
+            job_id,
+        })
     }
 
     /// Retry one existing analysis definition against its current source head.
@@ -1997,6 +1896,32 @@ impl LidarLibrary {
     }
 }
 
+/// Refuse to delete a source that saved results were calculated from.
+///
+/// Results keep their meaning only while their input exists, so they are
+/// deleted explicitly first; there is no cascade and no orphan result.
+fn refuse_dependent_results(
+    connection: &Connection,
+    layer_id: &str,
+    dependents: usize,
+) -> Result<(), String> {
+    if dependents == 0 {
+        return Ok(());
+    }
+    let name = catalogue::get_layer(connection, layer_id)?
+        .map(|layer| layer.name)
+        .unwrap_or_else(|| layer_id.to_string());
+    Err(format!(
+        "{name} has {dependents} saved result{} calculated from it; delete {} first",
+        if dependents == 1 { "" } else { "s" },
+        if dependents == 1 {
+            "that result"
+        } else {
+            "those results"
+        }
+    ))
+}
+
 /// Drop cached display tiles of generations a deletion removed.
 fn invalidate_tile_cache_for_collected(library: &LidarLibrary, generation_ids: &[String]) {
     for generation_id in generation_ids {
@@ -2030,6 +1955,9 @@ fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<
 
 // Runtime helpers remain below this large in-file regression module so the
 // production service implementation above stays contiguous.
+#[cfg(test)]
+mod fixed_library_tests;
+
 #[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
@@ -2190,7 +2118,7 @@ mod tests {
     /// lock.
     ///
     /// `layer_collection` holds the catalogue connection while it reads the
-    /// layer's history. Calling a public method that takes the same mutex again
+    /// layer's members. Calling a public method that takes the same mutex again
     /// deadlocks the whole library, and an empty layer — the case a user hits
     /// first — took exactly that path. The read runs on its own thread with a
     /// deadline so a regression fails instead of hanging the suite.
@@ -2212,8 +2140,7 @@ mod tests {
             let (sender, receiver) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 let page = library.layer_collection(&layer_id, None);
-                let history = library.layer_history_page(&layer_id, None);
-                let _ = sender.send((page, history));
+                let _ = sender.send(page);
             });
             receiver
                 .recv_timeout(std::time::Duration::from_secs(20))
@@ -2222,7 +2149,7 @@ mod tests {
                 })
         };
 
-        let (page, history) = read(
+        let page = read(
             "a collection read of an empty layer",
             library.clone(),
             layer_id.clone(),
@@ -2233,23 +2160,13 @@ mod tests {
         assert!(page.sources.is_empty());
         assert!(page.head_generation_id.is_none());
         assert!(!page.undo_available, "an empty layer has nothing to undo");
-        let history = history.expect("the history page reads");
-        assert!(history.versions.is_empty());
 
-        // A bounded member page and a bounded history page are the same public
-        // surface, so both are exercised on the same thread.
-        let (page, history) = read(
+        let page = read(
             "a paged read of an empty layer",
             library.clone(),
             layer_id.clone(),
         );
         assert!(page.expect("the paged summary reads").sources.is_empty());
-        assert!(
-            history
-                .expect("the paged history reads")
-                .versions
-                .is_empty()
-        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -2355,6 +2272,10 @@ mod tests {
             seed_analysis(&connection, &layer_id, "analysis-delete");
         }
 
+        // A saved result is deleted explicitly first; the source then removes
+        // every row that references it.
+        assert!(library.delete_layer(&layer_id).is_err());
+        library.delete_analysis("analysis-delete").unwrap();
         library.delete_layer(&layer_id).unwrap();
         let connection = library.catalogue().unwrap();
         for table in [
@@ -2808,6 +2729,58 @@ fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
+/// One import job as the UI reads it.
+pub(crate) fn import_job_summary(
+    connection: &Connection,
+    job_id: &str,
+) -> Result<Option<LidarImportJob>, String> {
+    let Some(row) = catalogue::get_import_job(connection, job_id)? else {
+        return Ok(None);
+    };
+    let progress = row
+        .progress_phase
+        .as_deref()
+        .and_then(parse_import_progress_phase)
+        .zip(row.progress_percent)
+        .and_then(|(phase, percent)| {
+            u8::try_from(percent)
+                .ok()
+                .filter(|percent| *percent <= 100)
+                .map(|percent| LidarImportProgress { phase, percent })
+        });
+    Ok(Some(LidarImportJob {
+        job_id: row.id,
+        layer_id: row.layer_id,
+        state: parse_import_state(&row.state),
+        message: row.message,
+        progress,
+    }))
+}
+
+/// The saved selection of one import, in priority order.
+fn import_request_json(paths: &[PathBuf]) -> Result<String, String> {
+    let paths: Vec<String> = paths
+        .iter()
+        .map(|path| {
+            path.to_str()
+                .map(str::to_string)
+                .ok_or_else(|| format!("{} is not a valid file path", path.display()))
+        })
+        .collect::<Result<_, _>>()?;
+    serde_json::to_string(&serde_json::json!({ "paths": paths }))
+        .map_err(|e| format!("Failed to save the import selection: {e}"))
+}
+
+fn parse_import_request(json: &str) -> Result<Vec<PathBuf>, String> {
+    #[derive(serde::Deserialize)]
+    struct Request {
+        paths: Vec<String>,
+    }
+    let request: Request = serde_json::from_str(json)
+        .map_err(|e| format!("The saved import selection is unreadable: {e}"))?;
+    Ok(request.paths.into_iter().map(PathBuf::from).collect())
+}
+
 fn parse_import_state(raw: &str) -> LidarImportJobState {
     match raw {
         "awaiting_review" => LidarImportJobState::AwaitingReview,
@@ -2843,7 +2816,8 @@ fn parse_result_state(raw: &str) -> LidarResultState {
         "ready" | "complete" => LidarResultState::Ready,
         "refreshing" => LidarResultState::Refreshing,
         "incomplete" => LidarResultState::Incomplete,
-        "failed" | "cancelled" => LidarResultState::Failed,
+        // A retired automatic refresh never replaced its saved result.
+        "failed" | "cancelled" | "retired" => LidarResultState::Failed,
         _ => LidarResultState::Preparing,
     }
 }

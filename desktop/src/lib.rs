@@ -109,11 +109,9 @@ pub fn run() {
             commands::geocoding::geocode_address,
             commands::lidar::lidar_engine_status,
             commands::lidar::lidar_list_library,
-            commands::lidar::lidar_create_layer,
             commands::lidar::lidar_rename_layer,
             commands::lidar::lidar_delete_layer_impact,
             commands::lidar::lidar_delete_layer,
-            commands::lidar::lidar_import_sources,
             commands::lidar::lidar_get_import_job,
             commands::lidar::lidar_cancel_import,
             commands::lidar::lidar_create_analysis,
@@ -126,12 +124,10 @@ pub fn run() {
             commands::lidar::lidar_sample_pixel,
             commands::lidar::lidar_cancel_sample_pixel,
             commands::lidar::lidar_display_descriptor,
-            commands::lidar::lidar_layer_history,
+            commands::lidar::lidar_import_item,
+            commands::lidar::lidar_retry_import,
+            commands::lidar::lidar_dismiss_import,
             commands::lidar::lidar_layer_collection,
-            commands::lidar::lidar_move_layer_source,
-            commands::lidar::lidar_remove_layer_source,
-            commands::lidar::lidar_undo_layer_change,
-            commands::lidar::lidar_restore_layer_version,
         ])
         .setup(|app| {
             // Logging

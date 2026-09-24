@@ -3059,6 +3059,11 @@ pub(crate) fn stage_and_publish(
 /// Undo one accepted import: republish the layer coverage without the
 /// interpretation that import introduced. Immutable history stays on disk.
 /// Everything a member-list edit needs from the accepted head.
+// Published sources are fixed items (GeoLibre adoption, catalogue v19): the
+// product no longer reorders, removes, undoes or restores source membership.
+// These builders remain for tests only, to construct the historical
+// compositions older builds published so compatibility readers stay covered.
+#[cfg(test)]
 struct SnapshotBase {
     manifest: GenerationManifest,
     generation_id: String,
@@ -3074,11 +3079,13 @@ struct SnapshotBase {
 /// no target restores the empty initial composition, while an unavailable one
 /// means the walk is exhausted. Conflating them would make Undo either loop on
 /// the empty composition or stop one step early.
+#[cfg(test)]
 struct UndoState {
     target: Option<String>,
     available: bool,
 }
 
+#[cfg(test)]
 impl UndoState {
     /// The state an ordinary user change records: it points at the head it
     /// replaced, which is always reachable.
@@ -3091,6 +3098,7 @@ impl UndoState {
 }
 
 /// Read the accepted head's manifest, identity and Undo state.
+#[cfg(test)]
 fn snapshot_base(library: &LidarLibrary, layer_id: &str) -> Result<SnapshotBase, String> {
     let connection = library.catalogue()?;
     let head = catalogue::head_generation(&connection, layer_id)?
@@ -3105,6 +3113,7 @@ fn snapshot_base(library: &LidarLibrary, layer_id: &str) -> Result<SnapshotBase,
 }
 
 /// The manifest member list of a snapshot, keeping the accepted convention.
+#[cfg(test)]
 fn snapshot_manifest_members(members: &[collection::SnapshotMember]) -> Vec<String> {
     members
         .iter()
@@ -3119,6 +3128,7 @@ fn snapshot_manifest_members(members: &[collection::SnapshotMember]) -> Vec<Stri
 /// composition is a no-op even when it was published as a different snapshot,
 /// and two occurrences of the same bytes stay distinct because their member
 /// identities are distinct.
+#[cfg(test)]
 fn occurrence_identities(
     members: &[collection::SnapshotMember],
 ) -> Vec<(String, String, Option<String>, Option<String>)> {
@@ -3143,6 +3153,7 @@ fn occurrence_identities(
 /// and advance the head in one short transaction — or leave the previous head
 /// authoritative.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn publish_snapshot_members(
     library: &LidarLibrary,
     layer_id: &str,
@@ -3209,6 +3220,7 @@ fn publish_snapshot_members(
 }
 
 /// The accepted member list of a layer, top-first.
+#[cfg(test)]
 fn accepted_members(
     library: &LidarLibrary,
     base: &SnapshotBase,
@@ -3230,6 +3242,7 @@ fn accepted_members(
 }
 
 /// The member list one recorded version replays.
+#[cfg(test)]
 fn version_members(
     library: &LidarLibrary,
     version_id: &str,
@@ -3249,6 +3262,7 @@ fn version_members(
 }
 
 /// Check the caller's expected head against the accepted one.
+#[cfg(test)]
 fn ensure_expected_head(base: &SnapshotBase, expected_head: Option<&str>) -> Result<(), String> {
     if let Some(expected) = expected_head
         && expected != base.generation_id
@@ -3269,6 +3283,7 @@ fn ensure_expected_head(base: &SnapshotBase, expected_head: Option<&str>) -> Res
 /// target's own next-Undo state, which is what makes repeated Undo continue
 /// backwards instead of toggling. Restoring publishes a new generation; no
 /// accepted history is deleted.
+#[cfg(test)]
 pub fn undo_last_change(
     library: &LidarLibrary,
     layer_id: &str,
@@ -3331,6 +3346,7 @@ pub fn undo_last_change(
 /// replaced and can itself be undone. Restoring a version whose ordered
 /// occurrence identities already match the current composition publishes
 /// nothing.
+#[cfg(test)]
 pub fn restore_version(
     library: &LidarLibrary,
     layer_id: &str,
@@ -3372,6 +3388,7 @@ pub fn restore_version(
 ///
 /// An edge move is a no-op rather than an error, and an idempotent request
 /// publishes nothing: no meaningless history and no analysis refresh.
+#[cfg(test)]
 pub fn move_member(
     library: &LidarLibrary,
     layer_id: &str,
@@ -3421,6 +3438,7 @@ pub fn move_member(
 ///
 /// The occurrence's asset and every accepted version stay in the library: a
 /// removal changes the current composition, never the retained data.
+#[cfg(test)]
 pub fn remove_member(
     library: &LidarLibrary,
     layer_id: &str,
@@ -3477,17 +3495,6 @@ pub fn undo_import(
     undo_last_change(library, &layer_id, None, cancel)
 }
 
-/// The layer a version belongs to, checked before restoring it.
-pub fn version_layer(library: &LidarLibrary, version_id: &str) -> Result<String, String> {
-    let connection = library.catalogue()?;
-    connection
-        .query_row(
-            "SELECT layer_id FROM lidar_layer_generations WHERE id = ?1",
-            [version_id],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|_| format!("version {version_id} is missing"))
-}
 #[allow(clippy::too_many_arguments)]
 pub fn publish_display(
     library: &LidarLibrary,
@@ -5731,44 +5738,6 @@ mod tests {
                 assert_eq!(valid[index], 0, "cell {index}");
             }
         }
-        // Every earlier version is still listed and still restorable.
-        let history = reopened.layer_history_page(&layer_id, None).unwrap();
-        assert!(
-            history.versions.len() >= 6,
-            "every publication stays in history: {}",
-            history.versions.len()
-        );
-        assert_eq!(
-            history
-                .versions
-                .iter()
-                .filter(|entry| entry.is_head)
-                .count(),
-            1,
-            "exactly one head is marked current"
-        );
-        assert!(
-            history
-                .versions
-                .iter()
-                .any(|entry| entry.id == stacked_head.id),
-            "the removed source's version is retained"
-        );
-        assert!(
-            history
-                .versions
-                .iter()
-                .all(|entry| entry.operation.is_some() && entry.source_count <= 2),
-            "each version names its recorded operation and its source count"
-        );
-        assert!(
-            history
-                .versions
-                .iter()
-                .filter(|entry| entry.is_head)
-                .all(|entry| !entry.restorable),
-            "the current version is not offered as a restore of itself"
-        );
         // A stale edit is refused by name instead of applying to a newer order.
         let stale = move_member(
             &reopened,
@@ -5780,177 +5749,6 @@ mod tests {
         )
         .expect_err("a stale edit is refused");
         assert!(stale.contains("changed since this edit"), "{stale}");
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// `canopi-kko3`: an undo that changes the layer head refreshes the
-    /// dependent analysis instead of leaving the slope of the removed coverage
-    /// presented as the current ready result.
-    ///
-    /// The control is the Apply path, whose refresh was already correct: both
-    /// numeric changes run through the same dependent-refresh orchestration, so
-    /// the analysis is recomputed from the restored composition rather than
-    /// re-pointed at a historical result.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn an_undo_refreshes_the_dependent_analysis_it_restored() {
-        use super::super::analysis;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-undo-refresh"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let bottom =
-            write_placed_fixture(&engine, &root, "bottom", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
-        let top = write_placed_fixture(&engine, &root, "top", 20.0, 1000.0, 60, 45, -9999.0, 9.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "undo refresh",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first applies");
-        let first_generation = head_of(&library, &layer_id).id;
-
-        // Create the analysis and run its first job exactly as the command path
-        // does, so a real result is published for the first generation.
-        let receipt = library
-            .create_analysis(
-                &layer_id,
-                common_types::lidar::LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("analysis definition is created");
-        let parameters = {
-            let connection = library.catalogue().unwrap();
-            let json: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            analysis::parse_parameters(&json).unwrap()
-        };
-        let run_job = |job_id: &str, source_generation: &str| {
-            let outcome = analysis::run_slope_job(
-                &library,
-                job_id,
-                &receipt.definition_id,
-                &parameters,
-                source_generation,
-                &cancel,
-            )
-            .expect("the slope job runs");
-            assert!(outcome.published, "a result is published");
-        };
-        // One catalogue read at a time: the connection is a single mutex-guarded
-        // handle, so a nested lock would deadlock rather than wait.
-        let analysis_source = || -> String {
-            let connection = library.catalogue().unwrap();
-            let head: String = connection
-                .query_row(
-                    "SELECT generation_id FROM lidar_analysis_heads WHERE definition_id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            connection
-                .query_row(
-                    "SELECT source_generation_id FROM lidar_analysis_generations WHERE id = ?1",
-                    [&head],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        let latest_job = || -> (String, String) {
-            let connection = library.catalogue().unwrap();
-            connection
-                .query_row(
-                    "SELECT id, source_generation_id FROM lidar_analysis_jobs
-                     WHERE definition_id = ?1 ORDER BY rowid DESC LIMIT 1",
-                    [&receipt.definition_id],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .unwrap()
-        };
-        run_job(&receipt.job_id, &first_generation);
-        assert_eq!(analysis_source(), first_generation);
-
-        // Control: the Apply path refreshes its dependent analysis, and that
-        // refresh publishes a result for the new head.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
-        let stacked = apply_import(&library, &staging_two, true, false, &cancel).expect("applies");
-        library.finish_import_sources(&job_two, &layer_id, Ok(()));
-        let (apply_job, apply_source) = latest_job();
-        assert_ne!(apply_job, receipt.job_id, "Apply enqueues a refresh");
-        assert_eq!(apply_source, stacked.generation_id);
-        run_job(&apply_job, &apply_source);
-        assert_eq!(
-            analysis_source(),
-            stacked.generation_id,
-            "the Apply path's refresh makes the new composition current"
-        );
-
-        // The undo must refresh too: it goes through the same settlement path.
-        let undone = undo_last_change(&library, &layer_id, None, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let settled = library
-            .settle_layer_edit(&layer_id, "undo-refresh-test", Ok(undone.clone()))
-            .expect("a committed undo settles");
-        assert!(settled.changed, "the undo reported its publication");
-        let (undo_job, undo_source) = latest_job();
-        assert_ne!(undo_job, apply_job, "the undo enqueues its own refresh");
-        assert_eq!(
-            undo_source, undone.generation_id,
-            "the refresh recomputes from the composition the undo restored"
-        );
-        run_job(&undo_job, &undo_source);
-        assert_eq!(
-            analysis_source(),
-            undone.generation_id,
-            "the analysis head matches the restored generation"
-        );
-        assert_ne!(
-            analysis_source(),
-            stacked.generation_id,
-            "no current result still describes the composition the user undid"
-        );
-
-        // An idempotent no-op publishes nothing and enqueues no meaningless
-        // work: restoring the version that is already current is refused as a
-        // no-op rather than published as a new head.
-        let current_head = head_of(&library, &layer_id).id;
-        let no_change = restore_version(&library, &layer_id, &current_head, None, &cancel)
-            .expect("restore runs");
-        assert!(
-            !no_change.changed,
-            "restoring the current version changes nothing"
-        );
-        let settled_noop = library
-            .settle_layer_edit(&layer_id, "undo-refresh-noop", Ok(no_change))
-            .expect("a no-op settles");
-        assert!(
-            !settled_noop.changed,
-            "a no-op edit reports that it published nothing"
-        );
-        let (after_noop, _) = latest_job();
-        assert_eq!(
-            after_noop, undo_job,
-            "a no-op edit publishes and refreshes nothing"
-        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -6446,234 +6244,6 @@ mod tests {
             outcome.stale && !outcome.published,
             "the superseded job is stale, not failed: {}",
             outcome.summary()
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-6: readiness is a fact about identity, not about a job having once
-    /// succeeded.
-    ///
-    /// A result whose captured source is no longer the head must not present
-    /// itself as current — including after a restart, where no callback runs.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn an_old_result_is_not_ready_after_the_head_changes() {
-        use super::super::analysis;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-stale-ready"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "stale ready",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
-        let receipt = library
-            .create_analysis(
-                &layer_id,
-                common_types::lidar::LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("analysis definition is created");
-        let parameters = {
-            let connection = library.catalogue().unwrap();
-            let json: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            analysis::parse_parameters(&json).unwrap()
-        };
-        let head = head_of(&library, &layer_id).id;
-        let outcome = analysis::run_slope_job(
-            &library,
-            &receipt.job_id,
-            &receipt.definition_id,
-            &parameters,
-            &head,
-            &cancel,
-        )
-        .expect("the slope job runs");
-        assert!(outcome.published);
-        let state_of = |library: &LidarLibrary| {
-            library
-                .library_snapshot()
-                .unwrap()
-                .analyses
-                .into_iter()
-                .find(|analysis| analysis.id == receipt.definition_id)
-                .expect("the analysis is listed")
-        };
-        assert_eq!(
-            state_of(&library).state,
-            common_types::lidar::LidarResultState::Ready
-        );
-
-        // The head changes without a refresh having run.
-        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
-        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
-        // Cancel the enqueued refresh so the state is derived, not settled.
-        let queued = {
-            let connection = library.catalogue().unwrap();
-            connection
-                .execute(
-                    "UPDATE lidar_analysis_jobs SET state = 'cancelled'
-                     WHERE definition_id = ?1 AND state IN ('preparing', 'refreshing')",
-                    [&receipt.definition_id],
-                )
-                .unwrap()
-        };
-        let _ = queued;
-        let stale = state_of(&library);
-        assert_ne!(
-            stale.state,
-            common_types::lidar::LidarResultState::Ready,
-            "an old result is not current for a new head: {stale:?}"
-        );
-        assert_eq!(
-            stale.state,
-            common_types::lidar::LidarResultState::Incomplete
-        );
-        assert!(
-            stale.detail.is_some(),
-            "the stale state explains itself: {stale:?}"
-        );
-
-        // A restart derives the same state, because nothing depends on a
-        // callback having fired.
-        drop(library);
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        let after_restart = state_of(&reopened);
-        assert_eq!(
-            after_restart.state,
-            common_types::lidar::LidarResultState::Incomplete,
-            "a restart does not resurrect a Ready result: {after_restart:?}"
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-7: Undo reaches the empty composition once, then stops; restoring an
-    /// equal composition publishes nothing.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn undo_stops_at_empty_and_restoring_an_equal_composition_is_a_no_op() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-undo-boundary"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "undo boundary",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job, staging) = stage_review(&library, &layer_id, &[first], &cancel);
-        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
-        let imported = head_of(&library, &layer_id).id;
-
-        // The first change can be undone to the empty composition.
-        let summary = library.layer_collection(&layer_id, None).unwrap();
-        assert!(summary.undo_available, "the import can be undone");
-        assert_eq!(
-            summary.undo_target, None,
-            "its target is the empty composition"
-        );
-        assert_eq!(summary.sources.len(), 1);
-
-        let undone = undo_last_change(&library, &layer_id, Some(&imported), &cancel)
-            .expect("undo publishes");
-        assert!(undone.changed);
-        let empty = library.layer_collection(&layer_id, None).unwrap();
-        assert_eq!(empty.member_count, 0, "the layer is empty");
-        assert!(!empty.undo_available, "the walk is exhausted");
-        assert_eq!(empty.undo_target, None);
-
-        // Another Undo is refused without publishing anything.
-        let exhausted = undo_last_change(&library, &layer_id, None, &cancel).expect("undo runs");
-        assert!(!exhausted.changed, "an exhausted Undo publishes nothing");
-        assert_eq!(
-            exhausted.generation_id, undone.generation_id,
-            "and it keeps the head it already had"
-        );
-        assert!(exhausted.message.is_some(), "and it explains itself");
-
-        // Restoring the import is an ordinary change and is itself undoable.
-        let restored =
-            restore_version(&library, &layer_id, &imported, None, &cancel).expect("restores");
-        assert!(restored.changed);
-        assert_eq!(
-            library
-                .layer_collection(&layer_id, None)
-                .unwrap()
-                .member_count,
-            1
-        );
-        let restored_summary = library.layer_collection(&layer_id, None).unwrap();
-        assert!(restored_summary.undo_available);
-        assert_eq!(
-            restored_summary.undo_target.as_deref(),
-            Some(undone.generation_id.as_str()),
-            "restoring records the head it replaced"
-        );
-
-        // Restoring the same composition again is a no-op: the ordered
-        // occurrence identities already match.
-        let equal =
-            restore_version(&library, &layer_id, &imported, None, &cancel).expect("restore runs");
-        assert!(
-            !equal.changed,
-            "an equal composition is not republished: {:?}",
-            equal.message
-        );
-
-        // History records what happened rather than inferring it.
-        let history = library.layer_history_page(&layer_id, None).unwrap();
-        let operations: Vec<Option<String>> = history
-            .versions
-            .iter()
-            .map(|entry| entry.operation.clone())
-            .collect();
-        assert_eq!(
-            operations,
-            vec![
-                Some("restore".to_string()),
-                Some("undo".to_string()),
-                Some("import".to_string())
-            ],
-            "each version names its own operation"
-        );
-        assert_eq!(
-            history
-                .versions
-                .iter()
-                .map(|entry| entry.sequence)
-                .collect::<Vec<_>>(),
-            vec![3, 2, 1],
-            "and a unique cue"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -9185,9 +8755,123 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A saved result is a fixed library item (GeoLibre adoption): it keeps
+    /// describing the input generation it was calculated from. When a legacy
+    /// catalogue's source head moved on, the result stays Ready, names its
+    /// input, and nothing is enqueued — also after a restart.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn an_earlier_result_stays_a_ready_fixed_item_after_a_legacy_head_change() {
+        use super::super::analysis;
+
+        let engine = GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-stale-ready"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
+        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
+
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let layer_id = library
+            .create_layer(
+                "stale ready",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
+        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                common_types::lidar::LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                    name: None,
+                },
+                None,
+            )
+            .expect("analysis definition is created");
+        let parameters = {
+            let connection = library.catalogue().unwrap();
+            let json: String = connection
+                .query_row(
+                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            analysis::parse_parameters(&json).unwrap()
+        };
+        let head = head_of(&library, &layer_id).id;
+        let outcome = analysis::run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parameters,
+            &head,
+            &cancel,
+        )
+        .expect("the slope job runs");
+        assert!(outcome.published);
+        let state_of = |library: &LidarLibrary| {
+            library
+                .library_snapshot()
+                .unwrap()
+                .analyses
+                .into_iter()
+                .find(|analysis| analysis.id == receipt.definition_id)
+                .expect("the analysis is listed")
+        };
+        let ready = state_of(&library);
+        assert_eq!(ready.state, common_types::lidar::LidarResultState::Ready);
+        assert_eq!(ready.input_generation_id.as_deref(), Some(head.as_str()));
+
+        // A head change the product no longer offers, as an older build made it.
+        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
+        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
+        let jobs = |library: &LidarLibrary| -> i64 {
+            library
+                .catalogue()
+                .unwrap()
+                .query_row(
+                    "SELECT COUNT(*) FROM lidar_analysis_jobs WHERE definition_id = ?1",
+                    [&receipt.definition_id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let jobs_before = jobs(&library);
+        let kept = state_of(&library);
+        assert_eq!(
+            kept.state,
+            common_types::lidar::LidarResultState::Ready,
+            "{kept:?}"
+        );
+        assert_eq!(kept.input_generation_id.as_deref(), Some(head.as_str()));
+        assert_eq!(
+            kept.generation_id, ready.generation_id,
+            "the result itself is unchanged"
+        );
+
+        drop(library);
+        let reopened = LidarLibrary::open(&root).expect("library reopens");
+        let restarted = state_of(&reopened);
+        assert_eq!(
+            restarted.state,
+            common_types::lidar::LidarResultState::Ready
+        );
+        assert_eq!(restarted.generation_id, ready.generation_id);
+        assert_eq!(jobs(&reopened), jobs_before, "no refresh is enqueued");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A committed publication is irreversible success: a journal-clear failure
     /// keeps the retry evidence, reports a diagnostic, and still settles as a
-    /// complete job through the real caller, including its dependent refresh.
+    /// complete job through the real caller, which never enqueues analysis.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_cleanup_failure_after_commit_is_still_a_successful_publication() {
@@ -9286,10 +8970,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .unwrap();
-            assert!(
-                refreshes >= 1,
-                "the committed layer enqueued its dependent refresh"
-            );
+            assert_eq!(refreshes, 0, "a publication never enqueues analysis");
         }
 
         let generations_before = generation_count(&library, &layer_id);

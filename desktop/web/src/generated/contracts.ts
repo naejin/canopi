@@ -209,6 +209,11 @@ export type LidarAnalysisSummary = {
 	id: string,
 	// Current published result generation, when one exists.
 	generation_id?: string | null,
+	/**
+	 *  The source generation this result was calculated from. A published
+	 *  result keeps describing that input even if the source moved on.
+	 */
+	input_generation_id?: string | null,
 	source_layer_id: string,
 	kind: LidarAnalysisKind,
 	/**
@@ -375,6 +380,15 @@ export type LidarImportProgress = {
 export type LidarImportProgressPhase = "ComposingLayer" | "PreparingRaster" | "RenderingMap" | "Finalizing";
 
 /**
+ *  Receipt for one submitted import operation: the fixed library item it
+ *  publishes and the job that prepares it.
+ */
+export type LidarImportReceipt = {
+	layer_id: string,
+	job_id: string,
+};
+
+/**
  *  The ordered composition and published versions of one Data Layer.
  *
  *  `sources` is the layer's priority list exactly as the UI must show it:
@@ -476,6 +490,11 @@ export type LidarLayerSummary = {
 	display_range: LidarDisplayRange | null,
 	tilesets: LidarTileset[],
 	analysis_count: number,
+	/**
+	 *  The latest import operation of this item: progress while it runs, and
+	 *  the reason and Retry while an unpublished item's import failed.
+	 */
+	import_job?: LidarImportJob | null,
 };
 
 export type LidarLibrarySnapshot = {
