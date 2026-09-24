@@ -9,11 +9,13 @@ reviewer execution, actual command/publication proof, final gates and scoped liv
 smoke. Remaining whole-candidate qualification stays partial; do not restart the
 completed repair prompts.
 
-Start with the completion prompt and correction decisions, then C0–C5 and the
-source-import contract. The implementation agent continues all authorized repairs,
-verification and self-review without routine continuation prompts. Finish all
-independent work around unavailable external prerequisites before a consolidated
-partial delivery. No new code is integrated or released before independent review.
+For remaining qualification, use the completion prompt and current receipt; the
+repaired stack is already integrated for user review. For the subsequent
+performance and UX work, read the proposed [whole-application GeoLibre adoption
+plan](geolibre-adoption-plan.md). It covers every current Canopi capability,
+upstream reuse, migration and final acceptance, including explicit proposed
+contract amendments. It is not authorization to restart repairs or implement a
+migration before its product decisions are accepted.
 
 The ordered correction at `34e4ded4` is [accepted in its named scope](ordered-cog-review.md#accepted-correction-at-34e4ded4). Preserve native integration `a5fc7d7b`, C1/C2, the eleven-group repair and R12–R14 regressions. The candidate’s historical production ceilings are replaced only as the new bounded source route and its safety evidence land. Q is frozen/unqualified; do not restart its tooling.
 
@@ -21,6 +23,7 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 
 | Artifact | Purpose |
 | --- | --- |
+| [Whole-application GeoLibre adoption plan](geolibre-adoption-plan.md) | Proposed complete Canopi migration: reuse decisions, preserved features, compatibility, UX, TDD, performance and whole-app delivery |
 | [Latest review and fixed repairs](completion-review-de336a7d.md) | Teardown reproduction, exact R50 proof boundaries and evidence classification |
 | [Prior R44–R51 review](completion-review-9208c930.md) | Retained baseline obligations; latest review refines incomplete repairs |
 | [Remaining qualification](completion-agent-prompt.md) | Continuation boundary and prerequisites; completed repair kickoff retired |

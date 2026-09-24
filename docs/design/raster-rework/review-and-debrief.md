@@ -1344,3 +1344,5 @@ were closed only because a probe or a failure pointed at them.
 ## Final debrief procedure
 
 Use [Whole-rework delivery and improvement](#whole-rework-delivery-and-improvement) and [Final correction debrief to deliver](#final-correction-debrief-to-deliver) for the current assignment. Ordered COG outcomes remain historical evidence. Historical DB/Q intervention details remain in the revision-linked review and receipt sections above; their old “next repair” instructions do not authorize further Q work. Evaluate their measured outcomes without restarting their workflows.
+
+The subsequent [whole-application GeoLibre adoption proposal](geolibre-adoption-plan.md) defines a separate [review and debrief contract](geolibre-adoption-plan.md#10-review-debrief-and-cost-control). Once authorized and delivered, record its actual capability coverage, upstream reuse, performance/resource comparisons, escaped defects and observed effort here under a distinct adoption section. The proposal's research and targets are not completed migration evidence; do not merge them into the prior delivery's acceptance claims.
