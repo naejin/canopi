@@ -36,8 +36,8 @@ export interface MapLibreMapInstance {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   remove(): void
-  on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
-  off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
+  on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
+  off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   project?(lnglat: [number, number]): { x: number; y: number }
   getPitch?(): number
   getZoom?(): number

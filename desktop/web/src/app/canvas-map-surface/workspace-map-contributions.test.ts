@@ -5,7 +5,7 @@ import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-s
 import type { TerrainProtocolSupport } from '../../maplibre/terrain'
 import { WorkspaceMapContributions } from './workspace-map-contributions'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
-import type { LidarMapLayer } from './lidar-sync'
+import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 
 class ContributionMap implements MapLibreMapInstance {
   readonly sources = new Map<string, { setData(data: unknown): void }>()
@@ -38,8 +38,31 @@ const terrainSupport: TerrainProtocolSupport = {
   sharedDemProtocolUrl: 'dem://tiles', contourProtocolUrl: () => 'contour://tiles',
 }
 
-function layer(id = 'lidar-a', overrides: Partial<LidarMapLayer> = {}): LidarMapLayer {
-  return { id, name: id, visible: true, opacity: 1, urlTemplate: `${id}/{z}/{x}/{y}`, minZoom: 1, maxZoom: 18, bounds: [1, 2, 3, 4], ...overrides }
+function layer(id = 'lidar-a', overrides: Partial<RasterDisplayLayer> = {}): RasterDisplayLayer {
+  return { id, name: id, opacity: 1, assets: [{ url: `asset://localhost/${id}.tif`, bbox: [1, 2, 3, 4] }], bounds: [1, 2, 3, 4], rescale: [0, 10], colormap: 'terrain', reversed: false, ...overrides }
+}
+
+/** Records what the contributions ask of the renderer; adds map layers on demand like the engine. */
+class FakeRasterDisplay implements RasterDisplay {
+  readonly syncs: { ids: string[]; beforeId: string | undefined }[] = []
+  disposed = false
+  disposeCalls = 0
+  added: string[] = []
+  syncError: Error | null = null
+  constructor(readonly map: ContributionMap, readonly onLayersChanged: () => void) {}
+  sync(layers: readonly RasterDisplayLayer[], beforeId: string | undefined) {
+    if (this.syncError) throw this.syncError
+    this.syncs.push({ ids: layers.map((candidate) => candidate.id), beforeId })
+  }
+  /** Simulate the engine adding a layer after its header loaded (drawn on top). */
+  arrive(id: string) {
+    this.map.order.push(id)
+    this.added.push(id)
+    this.onLayersChanged()
+  }
+  layerIds() { return this.added.filter((id) => this.map.order.includes(id)) }
+  state() { return undefined }
+  dispose() { this.disposed = true; this.disposeCalls += 1 }
 }
 
 function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionSnapshot> = {}): WorkspaceMapContributionSnapshot {
@@ -65,9 +88,13 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
   const logError = vi.fn()
   const failure = vi.fn()
   let active = true
-  const manager = new WorkspaceMapContributions({ sessionIdentity: identity, onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError })
+  let raster!: FakeRasterDisplay
+  const manager = new WorkspaceMapContributions({
+    sessionIdentity: identity, onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError,
+    createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
+  })
   manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
-  return { identity, map, states, failure, bounds, diagnostics, manager, loadTerrainSupport, logError, expire: () => { active = false } }
+  return { identity, map, states, failure, bounds, diagnostics, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
 }
 
 function deferred<T>() {
@@ -80,41 +107,6 @@ function deferred<T>() {
 async function flush() { await Promise.resolve(); await Promise.resolve() }
 
 describe('WorkspaceMapContributions', () => {
-  it.each(['removeLayer', 'removeSource'] as const)('fails hard when partial LiDAR add rollback cannot %s', (removeMethod) => {
-    const f = fixture()
-    f.manager.update(snapshot(f.identity))
-    const add = f.map.addLayer.getMockImplementation()!
-    f.map.addLayer.mockImplementation((candidate) => {
-      add(candidate)
-      if (candidate.id === 'lidar-a') throw new Error('partial LiDAR add')
-    })
-    const cleanup = new Error(`${removeMethod} failed`)
-    f.map[removeMethod].mockImplementation(() => { throw cleanup })
-    f.manager.restoreStyle()
-    expect(f.failure).toHaveBeenCalledExactlyOnceWith(cleanup)
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: cleanup.message })
-    const mutations = f.map.addSource.mock.calls.length
-    f.manager.update(snapshot(f.identity))
-    f.manager.restoreStyle()
-    expect(f.map.addSource).toHaveBeenCalledTimes(mutations)
-    expect(f.failure).toHaveBeenCalledOnce()
-  })
-
-  it.each(['source error', 'obsolete'] as const)('fails hard when %s LiDAR removal fails', (reason) => {
-    const f = fixture()
-    f.manager.update(snapshot(f.identity))
-    f.manager.restoreStyle()
-    const cleanup = new Error('LiDAR removal failed')
-    f.map.removeSource.mockImplementation(() => { throw cleanup })
-    if (reason === 'source error') f.manager.handleSourceError({ sourceId: 'lidar-a', error: new Error('tile failed') })
-    else f.manager.update(snapshot(f.identity, { lidar: [] }))
-    expect(f.failure).toHaveBeenCalledExactlyOnceWith(cleanup)
-    expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: cleanup.message })
-    const mutations = f.map.addSource.mock.calls.length
-    f.manager.update(snapshot(f.identity))
-    expect(f.map.addSource).toHaveBeenCalledTimes(mutations)
-  })
-
   it.each([
     ['rebuild', 'removeLayer'], ['rebuild', 'removeSource'],
     ['source error', 'removeLayer'], ['source error', 'removeSource'],
@@ -151,33 +143,20 @@ describe('WorkspaceMapContributions', () => {
     expect(f.failure).toHaveBeenCalledOnce()
   })
 
-  it('fences reentrant LiDAR rollback without reporting a hard failure', () => {
-    const f = fixture()
-    f.manager.update(snapshot(f.identity))
-    const add = f.map.addLayer.getMockImplementation()!
-    f.map.addLayer.mockImplementationOnce((candidate) => { add(candidate); throw new Error('partial add') })
-    const remove = f.map.removeLayer.getMockImplementation()!
-    f.map.removeLayer.mockImplementationOnce((id) => {
-      remove(id)
-      f.manager.update(snapshot(f.identity, { lidar: [] }))
-    })
-    f.manager.restoreStyle()
-    expect(f.failure).not.toHaveBeenCalled()
-    expect(f.map.getSource('lidar-a')).toBeUndefined()
-    expect(f.states.at(-1)?.status).toBe('ready')
-  })
-
   it.each([
     ['overlay', 'initial'], ['overlay', 'live'], ['overlay', 'reload'],
     ['order', 'initial'], ['order', 'live'], ['order', 'reload'],
   ] as const)('fails once for %s failure during %s work and fences subsequent updates', (kind, phase) => {
     const f = fixture()
     const input = snapshot(f.identity)
+    // The renderer already drew its layer on top; the band must be reordered.
+    f.raster.added.push('lidar-a')
+    f.map.order.push('lidar-a')
     f.manager.update(input)
     if (phase !== 'initial') f.manager.restoreStyle()
     if (phase === 'reload') {
       f.map.sources.clear()
-      f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene')
+      f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene', 'lidar-a')
     }
     const error = new Error(`${kind} failed`)
     if (kind === 'overlay') {
@@ -233,49 +212,70 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error' })
   })
 
-  it('admits latest immutable inputs on style readiness and reconstructs their semantic order', async () => {
+  it('hands the latest immutable band to the renderer only once the style is ready, beneath the scene', () => {
     const f = fixture()
-    const input = snapshot(f.identity, { lidar: [layer('lidar-b'), layer('lidar-a')] })
-    f.manager.update(input)
-    expect(f.map.addSource).not.toHaveBeenCalled()
+    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-b'), layer('lidar-a')] }))
+    expect(f.raster.syncs).toEqual([])
     f.manager.restoreStyle()
-    expect(f.map.order.indexOf('lidar-b')).toBeLessThan(f.map.order.indexOf('lidar-a'))
-    expect(f.map.order.indexOf('lidar-a')).toBeLessThan(f.map.order.indexOf('canopi-shared-scene'))
-    expect(f.map.order.indexOf('canopi-shared-scene')).toBeLessThan(f.map.order.indexOf('panel-target-hover-zones-fill'))
-    expect(f.loadTerrainSupport).not.toHaveBeenCalled()
-    f.map.sources.clear()
-    f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene')
-    f.manager.restoreStyle()
-    expect(f.map.getLayer('lidar-b')).toBeTruthy()
+    expect(f.raster.syncs.at(-1)).toEqual({ ids: ['lidar-b', 'lidar-a'], beforeId: 'canopi-shared-scene' })
     expect(f.states.at(-1)?.status).toBe('ready')
     expect(f.bounds).toHaveBeenLastCalledWith([1, 2, 3, 4])
   })
 
-  it('keeps opacity paint-only and rebuilds only the changed raster source', () => {
+  it('reorders renderer layers that arrive asynchronously into the band below the scene', () => {
     const f = fixture()
-    f.manager.update(snapshot(f.identity, { lidar: [layer(), layer('lidar-b')] }))
+    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-b'), layer('lidar-a')] }))
     f.manager.restoreStyle()
-    f.map.addSource.mockClear(); f.map.removeSource.mockClear(); f.map.setPaintProperty.mockClear()
-    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-b'), layer('lidar-a', { opacity: 0.2 })] }))
-    expect(f.map.addSource).not.toHaveBeenCalled()
-    expect(f.map.setPaintProperty).toHaveBeenCalledWith('lidar-a', 'raster-opacity', 0.2)
-    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-a', { urlTemplate: 'new/{z}/{x}/{y}', opacity: 0.2 }), layer('lidar-b')] }))
-    expect(f.map.addSource.mock.calls.map(([id]) => id)).toEqual(['lidar-a'])
-    expect(f.map.removeSource.mock.calls.map(([id]) => id)).toEqual(['lidar-a'])
-    expect(f.map.remove).not.toHaveBeenCalled()
+    f.raster.arrive('lidar-a')
+    f.raster.arrive('lidar-b')
+    expect(f.map.order.indexOf('basemap-raster')).toBeLessThan(f.map.order.indexOf('lidar-b'))
+    expect(f.map.order.indexOf('lidar-b')).toBeLessThan(f.map.order.indexOf('lidar-a'))
+    expect(f.map.order.indexOf('lidar-a')).toBeLessThan(f.map.order.indexOf('canopi-shared-scene'))
+    expect(f.map.order.indexOf('canopi-shared-scene')).toBeLessThan(f.map.order.indexOf('panel-target-hover-zones-fill'))
+    // A style reload hands the same band over again and restores its order.
+    f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene', 'lidar-a', 'lidar-b')
+    f.manager.restoreStyle()
+    expect(f.map.order.indexOf('lidar-b')).toBeLessThan(f.map.order.indexOf('canopi-shared-scene'))
+    expect(f.map.order.indexOf('lidar-a')).toBeLessThan(f.map.order.indexOf('canopi-shared-scene'))
+    expect(f.failure).not.toHaveBeenCalled()
   })
 
-  it('coalesces reentrant updates and clears partially added obsolete sources', () => {
+  it('treats ordering failure after an asynchronous renderer change as a hard failure', () => {
     const f = fixture()
     f.manager.update(snapshot(f.identity))
-    f.map.addSource.mockImplementationOnce((id) => {
-      f.map.sources.set(id, { setData: vi.fn() })
-      f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-new')] }))
-    })
     f.manager.restoreStyle()
-    expect(f.map.getSource('lidar-a')).toBeUndefined()
-    expect(f.map.getLayer('lidar-new')).toBeTruthy()
+    const error = new Error('raster ordering failed')
+    f.map.moveLayer.mockImplementation(() => { throw error })
+    f.raster.arrive('lidar-a')
+    expect(f.failure).toHaveBeenCalledExactlyOnceWith(error)
+    expect(f.raster.disposed).toBe(true)
+  })
+
+  it('keeps a renderer failure passive for editing and the other contributions', () => {
+    const f = fixture()
+    f.raster.syncError = new Error('renderer rejected the band')
+    f.manager.update(snapshot(f.identity))
+    f.manager.restoreStyle()
+    expect(f.failure).not.toHaveBeenCalled()
     expect(f.states.at(-1)?.status).toBe('ready')
+    expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
+    expect(f.logError).toHaveBeenCalled()
+    expect(f.manager.handleSourceError({ sourceId: 'mlrcog0-src-lidar-a', error: new Error('tile') })).toBe(true)
+    expect(f.failure).not.toHaveBeenCalled()
+  })
+
+  it('clears the band for a disconnected Design and ignores the renderer after disposal', () => {
+    const f = fixture()
+    f.manager.update(snapshot(f.identity))
+    f.manager.restoreStyle()
+    f.manager.update(null)
+    expect(f.raster.syncs.at(-1)?.ids).toEqual([])
+    f.manager.dispose()
+    f.manager.dispose()
+    expect(f.raster.disposeCalls).toBe(1)
+    f.map.moveLayer.mockClear()
+    f.raster.arrive('lidar-late')
+    expect(f.map.moveLayer).not.toHaveBeenCalled()
   })
 
   it('latest terrain and style generation win when async loads settle out of order', async () => {
@@ -315,20 +315,6 @@ describe('WorkspaceMapContributions', () => {
     expect(f.map.addSource).not.toHaveBeenCalled()
   })
 
-  it('omits only failed LiDAR, does not retry on opacity/target changes, and recovers on source replacement', () => {
-    const f = fixture()
-    f.manager.update(snapshot(f.identity, { lidar: [layer(), layer('lidar-b')] }))
-    f.manager.restoreStyle()
-    expect(f.manager.handleSourceError({ sourceId: 'lidar-a', error: new Error('tile') })).toBe(true)
-    expect(f.map.getLayer('lidar-a')).toBeUndefined()
-    expect(f.map.getLayer('lidar-b')).toBeTruthy()
-    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-a', { opacity: 0.2 }), layer('lidar-b')] }))
-    expect(f.map.getLayer('lidar-a')).toBeUndefined()
-    expect(f.states.at(-1)?.status).toBe('ready')
-    f.manager.update(snapshot(f.identity, { lidar: [layer('lidar-a', { urlTemplate: 'repaired' })] }))
-    expect(f.map.getLayer('lidar-a')).toBeTruthy()
-  })
-
   it('fences reentrant disposal during a source mutation before another layer can be added', () => {
     const f = fixture()
     f.manager.update(snapshot(f.identity))
@@ -340,16 +326,6 @@ describe('WorkspaceMapContributions', () => {
     expect(f.map.addLayer).not.toHaveBeenCalled()
     expect(f.map.sources.size).toBe(0)
     expect(f.states.at(-1)?.status).toBe('idle')
-  })
-
-  it('omits a synchronously failing LiDAR source and retains the remaining band', () => {
-    const f = fixture()
-    f.manager.update(snapshot(f.identity, { lidar: [layer(), layer('lidar-b')] }))
-    f.map.addSource.mockImplementationOnce(() => { throw new Error('invalid tile URL') })
-    f.manager.restoreStyle()
-    expect(f.map.getLayer('lidar-a')).toBeUndefined()
-    expect(f.map.getLayer('lidar-b')).toBeTruthy()
-    expect(f.states.at(-1)?.status).toBe('ready')
   })
 
   it('clears partial terrain if a source mutation synchronously disables terrain', async () => {
@@ -373,7 +349,7 @@ describe('WorkspaceMapContributions', () => {
     f.manager.restoreStyle()
     await flush()
     expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error', terrainErrorMessage: 'terrain offline' })
-    expect(f.map.getLayer('lidar-a')).toBeTruthy()
+    expect(f.raster.syncs.at(-1)?.ids).toEqual(['lidar-a'])
     expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
   })
 
@@ -383,7 +359,7 @@ describe('WorkspaceMapContributions', () => {
     f.manager.restoreStyle()
     f.manager.update(null)
     const published = f.states.length
-    expect(f.manager.handleSourceError({ sourceId: 'lidar-a' })).toBe(true)
+    expect(f.manager.handleSourceError({ sourceId: 'mlrcog0-src-lidar-a' })).toBe(true)
     expect(f.manager.handleSourceError({ sourceId: 'terrain-dem' })).toBe(true)
     expect(f.states).toHaveLength(published)
     expect(f.states.at(-1)?.status).toBe('idle')

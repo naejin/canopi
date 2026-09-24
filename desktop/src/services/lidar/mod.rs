@@ -12,6 +12,7 @@ pub mod analysis;
 pub mod catalogue;
 mod collection;
 pub mod display;
+mod display_cog;
 #[cfg(test)]
 mod e2e;
 pub mod engine;
@@ -79,6 +80,8 @@ pub(crate) struct LidarLibraryInner {
     display: Mutex<DisplayAdmission>,
     /// Shared reproducible tile cache, bounded in memory and on disk.
     tile_cache: Mutex<tile_cache::DisplayTileCache>,
+    /// One lane preparing display derivatives, separate from numeric jobs.
+    display_preparation: Mutex<display_cog::DisplayPreparation>,
 }
 
 /// Most display reads that may run at once, library-wide.
@@ -263,6 +266,7 @@ impl LidarLibrary {
                 compat_leases: Mutex::new(HashMap::new()),
                 display: Mutex::new(DisplayAdmission::default()),
                 tile_cache: Mutex::new(tile_cache::DisplayTileCache::open(&display_cache_dir)?),
+                display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
         };
         // Recovery: interrupted jobs fail explicitly; published results and
@@ -429,6 +433,9 @@ impl LidarLibrary {
         // behind. Only staging roots are removed: published `gen-*` dirs,
         // member assets and immutable originals are never candidates.
         self.prune_staging_roots()?;
+        // Display derivatives nobody registered, and interrupted writes, can go
+        // now: no WebView reader exists before the library opens.
+        display_cog::prune_display_derivatives(self)?;
         // A job that crashed before its publish transaction left chunk rows
         // that were never readable. Removing them cannot revoke an accepted
         // generation; only physical assets remain for reclamation.
@@ -2784,6 +2791,16 @@ fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
                 bounds_3857 TEXT NOT NULL,
                 tile_count INTEGER NOT NULL,
                 bytes INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS display_cogs (
+                key TEXT PRIMARY KEY,
+                file TEXT NOT NULL,
+                bytes INTEGER NOT NULL,
+                west REAL NOT NULL,
+                south REAL NOT NULL,
+                east REAL NOT NULL,
+                north REAL NOT NULL,
                 created_at TEXT NOT NULL
             );",
         )

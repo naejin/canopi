@@ -59,6 +59,7 @@ pub fn library_snapshot(
             };
         layer_summaries.push(LidarLayerSummary {
             id: layer.id.clone(),
+            generation_id: head.as_ref().map(|head| head.id.clone()),
             name: layer.name.clone(),
             measurement_kind: parse_measurement_kind(&layer.measurement_kind),
             units: layer.units.clone(),
@@ -190,6 +191,7 @@ pub fn library_snapshot(
         };
         analysis_summaries.push(LidarAnalysisSummary {
             id: definition.id.clone(),
+            generation_id: head_result.as_ref().map(|result| result.id.clone()),
             source_layer_id: definition.layer_id.clone(),
             kind: parse_analysis_kind(&definition.kind)?,
             name: result_name,

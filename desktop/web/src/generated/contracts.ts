@@ -207,6 +207,8 @@ export type LidarAnalysisReceipt = {
 // Library-side summary of an analysis definition and its current result.
 export type LidarAnalysisSummary = {
 	id: string,
+	// Current published result generation, when one exists.
+	generation_id?: string | null,
 	source_layer_id: string,
 	kind: LidarAnalysisKind,
 	/**
@@ -241,6 +243,33 @@ export type LidarDeleteImpact = {
 	analysis_ids: string[],
 };
 
+// One display derivative file, in the entity's source-priority order.
+export type LidarDisplayAsset = {
+	/**
+	 *  Absolute path of an immutable display COG inside the scoped display
+	 *  directory; the frontend converts it to an asset URL and never stores it.
+	 */
+	path: string,
+	// WGS84 footprint `[west, south, east, north]`.
+	bounds: [number, number, number, number],
+};
+
+export type LidarDisplayDescriptor = {
+	kind: LidarSampleEntityKind,
+	entity_id: string,
+	// The generation these derivatives describe, when the entity has one.
+	generation_id: string | null,
+	// Versioned display profile; part of every derivative's identity.
+	profile: string,
+	state: LidarDisplayState,
+	message: string | null,
+	// Top-first: the first listed asset wins where assets overlap.
+	assets: LidarDisplayAsset[],
+	// Derivatives already prepared out of `total_assets`.
+	prepared_assets: number,
+	total_assets: number,
+};
+
 // The range a generation is displayed with, and what it is based on.
 export type LidarDisplayRange = {
 	min: number,
@@ -263,6 +292,29 @@ export type LidarDisplayRangeBasis =
  *  extremes.
  */
 "SourceEnvelope";
+
+export type LidarDisplayRequest = {
+	kind: LidarSampleEntityKind,
+	// Layer id or analysis definition id, matching `kind`.
+	entity_id: string,
+	// The immutable generation the caller is about to draw, when known.
+	expected_generation_id: string | null,
+	// Restart a failed preparation instead of reporting the failure again.
+	retry?: boolean,
+};
+
+// Whether an entity's display derivative can be drawn now.
+export type LidarDisplayState =
+// Derivatives for the current generation are being prepared.
+"Preparing" |
+// Every derivative exists; `assets` can be rendered.
+"Ready" |
+// Nothing can be drawn: the entity, its generation or its data is gone.
+"Unavailable" |
+// Preparation failed; a later request with `retry` starts it again.
+"Failed" |
+// The entity's current generation is not the one the caller expected.
+"Stale";
 
 // Detected external raster engine used behind the narrow LiDAR adapter.
 export type LidarEngineStatus = {
@@ -400,6 +452,8 @@ export type LidarLayerSource = {
 
 export type LidarLayerSummary = {
 	id: string,
+	// Current immutable head generation, when the item has been published.
+	generation_id?: string | null,
 	name: string,
 	measurement_kind: LidarMeasurementKind,
 	units: string,

@@ -234,8 +234,9 @@ describe('WorkspaceMapControls', () => {
     }
   })
 
+  // Raster rollback belongs to the upstream renderer adapter; terrain keeps
+  // the synchronous rollback contract here.
   it.each([
-    ['LiDAR', 'removeLayer'], ['LiDAR', 'removeSource'],
     ['terrain', 'removeLayer'], ['terrain', 'removeSource'],
   ] as const)('releases the map after %s rollback cannot %s', async (kind, removeMethod) => {
     const states = vi.fn()
@@ -249,8 +250,8 @@ describe('WorkspaceMapControls', () => {
     const admitted = await acquisition
     const failure = vi.fn((error: unknown) => controls.releaseMap(admitted, error))
     controls.watchFailure(admitted, failure)
-    const partialLayer = kind === 'LiDAR' ? 'lidar-partial' : 'hillshade-layer'
-    const partialSource = kind === 'LiDAR' ? 'lidar-partial' : 'terrain-dem'
+    const partialLayer = 'hillshade-layer'
+    const partialSource = 'terrain-dem'
     const add = map.addLayer.getMockImplementation()!
     map.addLayer.mockImplementation((candidate, before) => {
       add(candidate, before)
@@ -265,7 +266,7 @@ describe('WorkspaceMapControls', () => {
     const input: WorkspaceMapContributionSnapshot = {
       ...targetContribution(controls.sessionIdentity),
       terrain: { ...targetContribution(controls.sessionIdentity).terrain, hillshadeVisible: kind === 'terrain' },
-      lidar: kind === 'terrain' ? [] : [{ id: 'lidar-partial', name: 'partial', visible: true, opacity: 1, urlTemplate: 'local/{z}/{x}/{y}', minZoom: 1, maxZoom: 18, bounds: [1, 2, 3, 4] }],
+      lidar: [],
     }
     controls.updateMapContributions(input)
     await vi.waitFor(() => expect(failure).toHaveBeenCalledExactlyOnceWith(cleanup))
@@ -400,7 +401,7 @@ describe('WorkspaceMapControls', () => {
     const acquisition = controls.createMap(new AbortController().signal)
     const input: WorkspaceMapContributionSnapshot = {
       sessionIdentity: controls.sessionIdentity,
-      lidar: [{ id: 'lidar-test', name: 'test', visible: true, opacity: 1, urlTemplate: 'local/{z}/{x}/{y}', minZoom: 1, maxZoom: 18, bounds: [1, 2, 3, 4] }],
+      lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
       overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
       frame: null, designExtentMeters: 0,
@@ -412,15 +413,13 @@ describe('WorkspaceMapControls', () => {
     const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID, type: 'custom' }
     map.addLayer(scene)
     controls.installStyleRestorer(admitted, () => map.addLayer(scene))
-    controls.updateMapContributions({ ...input, lidar: [{ ...input.lidar[0]!, opacity: 0.2 }] })
+    controls.updateMapContributions({ ...input })
     expect(maps).toHaveLength(1)
-    expect(map.setPaintProperty).toHaveBeenCalledWith('lidar-test', 'raster-opacity', 0.2)
     map.clearStyle()
     map.emit('style.load')
-    expect(map.getLayersOrder()).toEqual([MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'lidar-test', MAPLIBRE_SHARED_SCENE_LAYER_ID])
+    expect(map.getLayersOrder()).toEqual([MAPLIBRE_BASEMAP_RASTER_LAYER_ID, MAPLIBRE_SHARED_SCENE_LAYER_ID])
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'raster-opacity', 0.4)
     map.remove.mockImplementation(() => {
-      expect(map.getSource('lidar-test')).toBeUndefined()
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
       expect(bounds).toHaveBeenLastCalledWith(null)
       expect(diagnostics).toHaveBeenLastCalledWith(null, null)

@@ -14,9 +14,14 @@ import type {
   LidarMeasurementKind,
   LidarSampleOutcome,
   LidarSampleRequest,
+  LidarDisplayDescriptor,
+  LidarDisplayRequest,
 } from '../generated/contracts'
 
 export type {
+  LidarDisplayAsset,
+  LidarDisplayDescriptor,
+  LidarDisplayState,
   LidarTileset,
   LidarGenerationHistoryEntry,
   LidarLayerCollection,
@@ -214,4 +219,15 @@ export async function lidarSamplePixel(
 export async function lidarCancelSamplePixel(requestId: string): Promise<void> {
   if (!requestId) return
   await invoke('lidar_cancel_sample_pixel', { requestId })
+}
+
+/**
+ * Describe one entity's display derivatives, starting their preparation when
+ * missing. The expected generation fences the answer: a head that moved since
+ * the caller aimed returns `Stale`, never newer data under the old identity.
+ */
+export async function lidarDisplayDescriptor(
+  request: LidarDisplayRequest,
+): Promise<LidarDisplayDescriptor> {
+  return invoke('lidar_display_descriptor', { request })
 }

@@ -2,12 +2,12 @@ import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import type { MapFrame } from '../../canvas/maplibre-camera'
 import type { MapLibreApi } from '../../maplibre/loader'
 import type { TerrainLayerState, TerrainProtocolSupport } from '../../maplibre/terrain'
-import type { LidarMapLayer } from './lidar-sync'
+import type { RasterDisplay, RasterDisplayLayer, RasterDisplayMap, RasterDisplayOptions } from '../../maplibre/raster-display/adapter'
 import type { CanvasMapSurfaceOverlaySnapshot } from './overlays'
 
 export interface WorkspaceMapContributionSnapshot {
   readonly sessionIdentity: object
-  readonly lidar: readonly Readonly<LidarMapLayer>[]
+  readonly lidar: readonly Readonly<RasterDisplayLayer>[]
   readonly terrain: TerrainLayerState
   readonly overlays: CanvasMapSurfaceOverlaySnapshot
   readonly frame: MapFrame | null
@@ -18,11 +18,14 @@ export interface WorkspaceMapContributionAdapter {
   read(runtime: CanvasQuerySurface): WorkspaceMapContributionSnapshot | null
   readonly loadTerrainSupport?: (maplibre: MapLibreApi) => Promise<TerrainProtocolSupport>
   /**
-   * Register any map protocols this edition serves itself. Desktop installs
-   * the bounded raster tile protocol here; an edition without it leaves the
-   * hook undefined and stays free of native raster transport.
+   * Create the map-lifetime raster display for this edition. Desktop renders
+   * library data through the upstream renderer; an edition without local data
+   * leaves the hook undefined and never loads the renderer.
    */
-  readonly installRasterProtocol?: (maplibre: MapLibreApi) => void
+  readonly createRasterDisplay?: (
+    map: RasterDisplayMap,
+    options: Pick<RasterDisplayOptions, 'onLayersChanged'>,
+  ) => RasterDisplay
   readonly publishViewBounds?: (bounds: [number, number, number, number] | null) => void
 }
 
@@ -34,7 +37,12 @@ export function captureWorkspaceMapContributions(
     ...snapshot,
     lidar: Object.freeze(snapshot.lidar.map((layer) => Object.freeze({
       ...layer,
-      bounds: Object.freeze([...layer.bounds]) as LidarMapLayer['bounds'],
+      bounds: Object.freeze([...layer.bounds]) as RasterDisplayLayer['bounds'],
+      rescale: Object.freeze([...layer.rescale]) as RasterDisplayLayer['rescale'],
+      assets: Object.freeze(layer.assets.map((asset) => Object.freeze({
+        ...asset,
+        bbox: Object.freeze([...asset.bbox]) as RasterDisplayLayer['bounds'],
+      }))),
     }))),
     terrain: Object.freeze({ ...snapshot.terrain }),
     overlays: Object.freeze({

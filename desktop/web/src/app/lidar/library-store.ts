@@ -302,6 +302,10 @@ export interface LidarPresentationItem {
   order: number
   bounds: [number, number, number, number] | null
   tilesets: LidarTileset[]
+  /** Current immutable generation; display and inspection aim at it. */
+  generationId: string | null
+  /** Stretch domain in the stored units, when known. */
+  displayRange: [number, number] | null
 }
 
 /**
@@ -334,6 +338,10 @@ export function readLidarPresentation(
               order: entry.order,
               bounds: layer.bounds ?? null,
               tilesets: layer.tilesets,
+              generationId: layer.generation_id ?? null,
+              displayRange: layer.display_range
+                ? [layer.display_range.min, layer.display_range.max]
+                : layer.value_range ?? null,
             }
           : {
               kind: entry.kind,
@@ -347,6 +355,8 @@ export function readLidarPresentation(
               order: entry.order,
               bounds: null,
               tilesets: [],
+              generationId: null,
+              displayRange: null,
             },
       )
     } else {
@@ -369,6 +379,8 @@ export function readLidarPresentation(
               order: entry.order,
               bounds: analysis.bounds ?? null,
               tilesets: analysis.tilesets,
+              generationId: analysis.generation_id ?? null,
+              displayRange: analysis.value_range ?? null,
             }
           : {
               kind: entry.kind,
@@ -382,6 +394,8 @@ export function readLidarPresentation(
               order: entry.order,
               bounds: null,
               tilesets: [],
+              generationId: null,
+              displayRange: null,
             },
       )
     }

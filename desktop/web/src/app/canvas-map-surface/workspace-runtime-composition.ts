@@ -116,7 +116,7 @@ export function createWorkspaceRuntimeComposition(
     container: options.container,
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
-      installRasterProtocol: options.mapContributions.installRasterProtocol,
+      createRasterDisplay: options.mapContributions.createRasterDisplay,
       publishViewBounds: options.mapContributions.publishViewBounds,
       onStateChange: options.onMapStateChange,
     },

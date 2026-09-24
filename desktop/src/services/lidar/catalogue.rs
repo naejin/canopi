@@ -1358,6 +1358,31 @@ pub fn collection_member_count(
 /// A sparse generation's `manifest_json` grid describes the lattice its chunks
 /// are addressed in, not how far the published records actually reach, so a
 /// compatibility read that trusted the rectangle would drop real coverage.
+/// Published chunk coordinates of one generation and role, row-major.
+///
+/// Coordinates only: display planning groups occupied chunks without opening
+/// any raster, so distant sparse coverage never implies the empty space between.
+pub fn published_chunk_coordinates(
+    connection: &Connection,
+    generation_id: &str,
+    role: &str,
+) -> Result<Vec<(i64, i64)>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT chunk_x, chunk_y FROM lidar_generation_chunks
+             WHERE generation_id = ?1 AND role = ?2 AND state = 'published'
+             ORDER BY chunk_y, chunk_x",
+        )
+        .map_err(|e| format!("Failed to list generation chunks: {e}"))?;
+    statement
+        .query_map(rusqlite::params![generation_id, role], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| format!("Failed to list generation chunks: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to list generation chunks: {e}"))
+}
+
 pub fn generation_chunk_extent(
     connection: &Connection,
     generation_id: &str,

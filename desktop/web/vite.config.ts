@@ -37,6 +37,16 @@ export default defineConfig(({ mode }) => {
         '#species-catalog-live': speciesCatalogLiveAdapter,
       },
     },
+    optimizeDeps: {
+      // The WASM decoder packages resolve their .wasm files relative to their
+      // own module URL; pre-bundling would move them away from those files.
+      exclude: ['cog-tiler-wasm', 'whitebox-wasm'],
+      esbuildOptions: { target: 'es2022' },
+    },
+    worker: {
+      // The raster decode lane imports geotiff codecs dynamically.
+      format: 'es' as const,
+    },
     server: {
       port: isWebEdition ? 1421 : 1420,
       strictPort: true,
@@ -49,6 +59,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      target: 'es2022',
       outDir: isWebEdition ? "dist-web" : "dist",
       emptyOutDir: true,
       rollupOptions: {
@@ -56,6 +67,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return undefined;
+            if (id.includes("maplibre-gl-raster") || id.includes("@deck.gl") || id.includes("@luma.gl") || id.includes("@developmentseed") || id.includes("@math.gl") || id.includes("@loaders.gl")) return "raster-display";
             if (id.includes("maplibre-gl")) return "maplibre-gl";
             if (id.includes("@tauri-apps")) return "tauri";
             if (id.includes("i18next")) return "i18n";

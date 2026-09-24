@@ -536,3 +536,24 @@ pub fn lidar_cancel_sample_pixel(library: State<'_, LidarLibrary>, request_id: S
     }
     library.cancel_sample_request(&request_id);
 }
+
+/// Describe the display derivatives of one entity's current generation.
+///
+/// Missing derivatives start preparing in the library's display lane; the
+/// response then says `Preparing` and the caller asks again. Only managed file
+/// paths inside the scoped display directory are returned, never bytes.
+#[tauri::command]
+pub async fn lidar_display_descriptor(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    request: common_types::lidar::LidarDisplayRequest,
+) -> Result<common_types::lidar::LidarDisplayDescriptor, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar display descriptor",
+            move || library.display_descriptor(&request),
+        )
+        .await
+}

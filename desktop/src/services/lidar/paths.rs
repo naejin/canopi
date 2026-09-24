@@ -25,6 +25,8 @@ impl LidarPaths {
             self_prepared_dir(&root),
             self_display_dir(&root),
             root.join("display-tiles"),
+            root.join("display-cog"),
+            root.join("display-cog-staging"),
             root.join("assets"),
             root.join("jobs"),
         ] {
@@ -113,6 +115,19 @@ impl LidarPaths {
             .join(entity_id)
             .join(generation_id)
             .join(style)
+    }
+
+    /// Published display derivatives: immutable, content-keyed tiled COGs the
+    /// WebView reads through the scoped asset protocol. Regenerable, never
+    /// numeric authority.
+    pub fn display_cog_dir(&self) -> PathBuf {
+        self.root.join("display-cog")
+    }
+
+    /// Derivatives being written; outside the asset scope so a partial file is
+    /// never readable. A file is renamed into `display_cog_dir` only once complete.
+    pub fn display_cog_staging_dir(&self) -> PathBuf {
+        self.root.join("display-cog-staging")
     }
 
     pub fn jobs_dir(&self) -> PathBuf {

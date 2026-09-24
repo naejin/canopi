@@ -178,6 +178,9 @@ pub const LIDAR_UNITS_UNKNOWN: &str = "unknown";
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerSummary {
     pub id: String,
+    /// Current immutable head generation, when the item has been published.
+    #[serde(default)]
+    pub generation_id: Option<String>,
     pub name: String,
     pub measurement_kind: LidarMeasurementKind,
     pub units: String,
@@ -229,6 +232,9 @@ pub struct LidarDisplayRange {
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarAnalysisSummary {
     pub id: String,
+    /// Current published result generation, when one exists.
+    #[serde(default)]
+    pub generation_id: Option<String>,
     pub source_layer_id: String,
     pub kind: LidarAnalysisKind,
     /// The name its author gave this result.
@@ -491,6 +497,69 @@ pub enum LidarSampleOutcome {
     Unavailable {
         reason: LidarSampleUnavailableReason,
     },
+}
+
+// Display derivatives: regenerable tiled COGs with overviews that the upstream
+// WASM renderer reads through the scoped asset protocol. They are never source
+// members, heads or results; numeric inspection and analysis keep reading the
+// exact numeric generation.
+
+/// Whether an entity's display derivative can be drawn now.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarDisplayState {
+    /// Derivatives for the current generation are being prepared.
+    Preparing,
+    /// Every derivative exists; `assets` can be rendered.
+    Ready,
+    /// Nothing can be drawn: the entity, its generation or its data is gone.
+    Unavailable,
+    /// Preparation failed; a later request with `retry` starts it again.
+    Failed,
+    /// The entity's current generation is not the one the caller expected.
+    Stale,
+}
+
+/// One display derivative file, in the entity's source-priority order.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayAsset {
+    /// Absolute path of an immutable display COG inside the scoped display
+    /// directory; the frontend converts it to an asset URL and never stores it.
+    pub path: String,
+    /// WGS84 footprint `[west, south, east, north]`.
+    pub bounds: [f64; 4],
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayRequest {
+    pub kind: LidarSampleEntityKind,
+    /// Layer id or analysis definition id, matching `kind`.
+    pub entity_id: String,
+    /// The immutable generation the caller is about to draw, when known.
+    pub expected_generation_id: Option<String>,
+    /// Restart a failed preparation instead of reporting the failure again.
+    #[serde(default)]
+    pub retry: bool,
+}
+
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarDisplayDescriptor {
+    pub kind: LidarSampleEntityKind,
+    pub entity_id: String,
+    /// The generation these derivatives describe, when the entity has one.
+    pub generation_id: Option<String>,
+    /// Versioned display profile; part of every derivative's identity.
+    pub profile: String,
+    pub state: LidarDisplayState,
+    pub message: Option<String>,
+    /// Top-first: the first listed asset wins where assets overlap.
+    pub assets: Vec<LidarDisplayAsset>,
+    /// Derivatives already prepared out of `total_assets`.
+    pub prepared_assets: u32,
+    pub total_assets: u32,
 }
 
 // `.canopi` presentation section: ordered references to library layers and

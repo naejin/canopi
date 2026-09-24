@@ -10,6 +10,9 @@ const FORBIDDEN_DUCKDB_WASM_PATTERN = "duckdb-.*\\\\.wasm";
 const scannedExtensions = new Set([".html", ".js", ".mjs"]);
 const forbiddenAssetNamePatterns = [
   new RegExp(FORBIDDEN_DUCKDB_WASM_PATTERN, "i"),
+  // Local raster display is Desktop-only; the Web Edition must not ship its decoders.
+  /whitebox_wasm_bg.*\.wasm/i,
+  /cog_tiler_wasm_bg.*\.wasm/i,
 ];
 const forbiddenPatterns = [
   "@tauri-apps",
@@ -25,6 +28,8 @@ const forbiddenPatterns = [
   "ipc/geocoding",
   "ipc/problem-report",
   "plugin-dialog",
+  "maplibre-gl-raster",
+  "canopi-raster-display",
 ];
 
 if (!existsSync(distRoot)) {

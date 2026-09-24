@@ -22,6 +22,7 @@
         "scope": [
           "$APPDATA/image-cache/**",
           "$APPDATA/lidar/display/**",
+          "$APPDATA/lidar/display-cog/*.tif",
           "$APPDATA/lidar/jobs/*/preview-before.png",
           "$APPDATA/lidar/jobs/*/preview-after.png",
           "$APPDATA/lidar/jobs/*/preview-before-??.png",
@@ -30,7 +31,7 @@
       },
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost blob: data: https:",
         "connect-src": "'self' ipc: http://ipc.localhost https: asset: http://asset.localhost",
