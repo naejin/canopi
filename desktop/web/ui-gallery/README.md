@@ -6,6 +6,7 @@ The gallery mounts production workspace and panel components with at most one li
 
 Direct links:
 
+- [New Data Library and Layers reference](http://127.0.0.1:1422/library-reference.html) — interactive migration proposal, with simulated data and a schematic Design view; see the contract below.
 - [Plant color](http://127.0.0.1:1422/?surface=color)
 - [Plant symbol](http://127.0.0.1:1422/?surface=symbol)
 - [Species key](http://127.0.0.1:1422/?surface=key)
@@ -20,7 +21,7 @@ Direct links:
 - [Desktop workspace](http://127.0.0.1:1422/?surface=workspace)
 - [Web workspace](http://127.0.0.1:1422/?surface=workspace&edition=web)
 
-Add `state=empty|mixed|long|located|dense`, `theme=dark`, `locale=fr`, or `panelWidth=320|352|480|800`. `surface=workspace` uses the real edition command projection and shared workspace composition; its extra command row keeps production panel-toggle behavior. Header review controls select their requested story idempotently, so moving between Calendar variants keeps the Calendar dock open while changing expansion. Add `edition=web` to use browser-safe registrations and exercise the production stacked dock breakpoint on a narrow viewport. The Web workspace deliberately has no Location, Design Notebook, or other unavailable Desktop command. Edition links reload the page instead of mounting two canvas owners together. Calendar fixtures use September 2026 so visual reviews are deterministic. Empty appearance stories intentionally have no editable selection. Both header review controls and the real canvas toolbar remain interactive. For a fresh selection after clicking the canvas, reload.
+Add `state=empty|mixed|long|located|dense`, `theme=dark`, `locale=fr`, or `panelWidth=320|352|480|800`. `surface=workspace` uses the real edition command projection and shared workspace composition; its extra command row keeps production panel-toggle behavior. Header review controls select their requested story idempotently, so moving between Calendar variants keeps the Calendar dock open while changing expansion. Add `edition=web` to use browser-safe registrations and exercise the production stacked dock breakpoint on a narrow viewport. Web includes its browser-safe Location and unavailable-local-data panels, but no Design Notebook. Desktop registers its production Data/Analysis panels. Edition links reload the page instead of mounting two canvas owners together. Calendar fixtures use September 2026 so visual reviews are deterministic. Empty appearance stories intentionally have no editable selection. Both header review controls and the real canvas toolbar remain interactive. For a fresh selection after clicking the canvas, reload.
 
 Check with `npm run check:ui`. The gallery lives outside `src` and normal build inputs. Its Vite config rejects builds and owns a separate dependency cache, so it can run with Desktop Vite on port 1420 and real Web Edition on port 1421. All ports are strict: stop the existing owner instead of accepting Vite's next available port. Add fixtures for new reusable states; do not copy production markup into the gallery.
 
@@ -31,9 +32,17 @@ Use `?surface=favorites&edition=web` to review the production Web Favorites comp
 
 Reloading reconstructs the gallery session and resets its memory state. Stop it with Ctrl-C. Real Web Edition storage, DuckDB catalog loading, browser downloads, Tauri IPC/WebView behavior, native file dialogs, and packaged-app behavior remain outside this host; use the [edition development guide](../../../docs/agent/edition-development.md) to choose those checks safely.
 
-## Raster rework HTML references
+## Data Library and Layers interactive reference
 
-Open [the reference hub](http://127.0.0.1:1422/raster-reference-prototype/index.html) using the same development server. The seven linked HTML mockups cover Data, import, Analysis, Layers, inspection, Location and basemaps. They are a separate throwaway proposal, not production component stories; the user approved revision `0e696722` on 2026-09-18. All state and credentials are synthetic and memory-only. The [implementation plan's reference contract](../../../docs/design/raster-data-analysis-rework.md#html-ui-reference-contract) maps exact files and state URLs to production slices and records their limitations. Never import `raster-reference-prototype/` into production; rebuild the accepted design with existing components. Keep these references until their production slices have been reviewed, then retire them and update the plan links together.
+Use `/library-reference.html` for the accepted library-first migration direction. It is an isolated Preact reference using shared production header/search/menu controls and tokens; it does not replace the current workspace. The [plan's reference contract](../../../docs/design/raster-rework/geolibre-adoption-plan.md#interactive-reference-and-implementation-handoff) owns its scope, implementation handoff and limitations.
+
+Query parameters: `state=ready|empty|importing|failed|unavailable|long`, `theme=dark`. Start with empty; Import selects sample TIFF names, then one name for the batch. The review-strip Complete import / Fail import controls advance its simulated job. Exercise search/details/Back, Add to either sample Design, Layers visibility/order/opacity, Fit/Inspect, Remove and reuse. Rename/delete and cancel/retry work in memory. Reload resets state. Reference copy is English; no native files, data engine, persistent storage or real botanical editing is involved.
+
+Run `npm run check:ui` and `npx vitest run src/__tests__/library-reference.test.ts src/__tests__/library-reference-ui.test.tsx` from `desktop/web/`. For actual browser regression, [browser-smoke.mjs](library-reference/browser-smoke.mjs) contains an async Playwright `page` function; navigate to this local gallery first, then invoke it using an existing browser runner/tool. Its `filename` input accepts the absolute file path. It checks the production-gallery registration gap as well as the new reference journey and narrow/dark states. It is not a standalone Node command and adds no dependency.
+
+## Historical raster rework HTML references
+
+The [older reference hub](http://127.0.0.1:1422/raster-reference-prototype/index.html) retains the seven mockups approved at `0e696722` on 2026-09-18. Their Data/Analysis/history/source-edit flows are superseded for GeoLibre migration by the interactive reference above. They remain evidence of the prior delivery, not instructions to rebuild those screens. The [historical reference contract](../../../docs/design/raster-data-analysis-rework.md#html-ui-reference-contract) records their original scope. Never import either fixture implementation into production.
 
 ## Historical LiDAR study
 

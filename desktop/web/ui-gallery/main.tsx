@@ -9,6 +9,10 @@ import { LayersPanel } from '../src/components/panels/LayersPanel'
 import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
 import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
 import { LocationPanel } from '../src/components/panels/LocationPanel'
+import { WebLocationPanel } from '../src/web/WebLocationPanel'
+import { WebLocalRasterPanel } from '../src/web/WebLocalRasterPanel'
+import { DataPanel } from '../src/components/panels/lidar/DataPanel'
+import { AnalysisPanel } from '../src/components/panels/lidar/AnalysisPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
@@ -26,7 +30,7 @@ import { plantColorMenuOpen } from '../src/canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../src/canvas/plant-symbol-menu-state'
 import { plantDbStatus } from '../src/app/health/state'
 import { theme, locale } from '../src/app/settings/state'
-import '../src/i18n'
+import { t } from '../src/i18n'
 import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
@@ -81,8 +85,10 @@ plantDbStatus.value = 'available'
 
 const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   ? {
-      primary: { canvas: GalleryCanvasWorkspace },
+      primary: { canvas: GalleryCanvasWorkspace, location: WebLocationPanel },
       side: {
+        data: () => <WebLocalRasterPanel title={t('canvas.lidar.data.title')} />,
+        analysis: () => <WebLocalRasterPanel title={t('canvas.lidar.analysis.title')} />,
         'species-key': WebSpeciesKeyPanel,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
@@ -95,6 +101,8 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   : {
       primary: { canvas: GalleryCanvasWorkspace, location: LocationPanel },
       side: {
+        data: DataPanel,
+        analysis: AnalysisPanel,
         'species-key': DesktopSpeciesKeyPanel,
         layers: GalleryLayersSurface,
         calendar: CalendarPanel,
@@ -114,6 +122,7 @@ function Gallery() {
       <button onClick={() => { theme.value = theme.value === 'light' ? 'dark' : 'light' }}>{theme.value === 'light' ? 'Dark' : 'Light'} theme</button>
     </header>
     <nav className={styles.review} aria-label="Review surfaces">
+      <a href="/library-reference.html">New Data Library reference ↗</a>
       {Object.entries(GALLERY_SURFACES)
         .filter(([key]) => edition === 'desktop' || key !== 'notebook')
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
