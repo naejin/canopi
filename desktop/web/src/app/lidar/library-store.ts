@@ -7,11 +7,10 @@ import {
   lidarListLibrary,
   type LidarAnalysisSummary,
   type LidarLayerSummary,
-  type LidarTileset,
 } from '../../ipc/lidar'
 import { currentDesign } from '../document-session/store'
 
-export type { LidarAnalysisSummary, LidarLayerSummary, LidarTileset }
+export type { LidarAnalysisSummary, LidarLayerSummary }
 
 const LIDAR_POLL_INTERVAL_MS = 1500
 
@@ -122,7 +121,6 @@ export interface LidarPresentationItem {
   opacity: number
   order: number
   bounds: [number, number, number, number] | null
-  tilesets: LidarTileset[]
   /** Current immutable generation; display and inspection aim at it. */
   generationId: string | null
   /** Stretch domain in the stored units, when known. */
@@ -158,7 +156,6 @@ export function readLidarPresentation(
               opacity: entry.opacity,
               order: entry.order,
               bounds: layer.bounds ?? null,
-              tilesets: layer.tilesets,
               generationId: layer.generation_id ?? null,
               displayRange: layer.display_range
                 ? [layer.display_range.min, layer.display_range.max]
@@ -175,7 +172,6 @@ export function readLidarPresentation(
               opacity: entry.opacity,
               order: entry.order,
               bounds: null,
-              tilesets: [],
               generationId: null,
               displayRange: null,
             },
@@ -199,7 +195,6 @@ export function readLidarPresentation(
               opacity: entry.opacity,
               order: entry.order,
               bounds: analysis.bounds ?? null,
-              tilesets: analysis.tilesets,
               generationId: analysis.generation_id ?? null,
               displayRange: analysis.value_range ?? null,
             }
@@ -214,7 +209,6 @@ export function readLidarPresentation(
               opacity: entry.opacity,
               order: entry.order,
               bounds: null,
-              tilesets: [],
               generationId: null,
               displayRange: null,
             },

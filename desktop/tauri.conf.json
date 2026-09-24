@@ -21,12 +21,7 @@
         "enable": true,
         "scope": [
           "$APPDATA/image-cache/**",
-          "$APPDATA/lidar/display/**",
-          "$APPDATA/lidar/display-cog/*.tif",
-          "$APPDATA/lidar/jobs/*/preview-before.png",
-          "$APPDATA/lidar/jobs/*/preview-after.png",
-          "$APPDATA/lidar/jobs/*/preview-before-??.png",
-          "$APPDATA/lidar/jobs/*/preview-after-??.png"
+          "$APPDATA/lidar/display-cog/*.tif"
         ]
       },
       "csp": {

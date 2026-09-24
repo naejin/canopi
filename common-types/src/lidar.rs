@@ -116,39 +116,6 @@ pub struct LidarEngineStatus {
     pub detail: Option<String>,
 }
 
-/// Where one tileset's pixels come from.
-///
-/// The distinction is explicit so a generation stored as sparse resolved
-/// chunks never has to invent a filesystem path it does not own: the desktop
-/// either resolves a preserved legacy pyramid's asset directory, or renders
-/// the immutable generation on demand behind the raster protocol.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(tag = "kind")]
-pub enum LidarTileSource {
-    /// Preserved display pyramid: an absolute filesystem tile path template
-    /// ending in `{z}_{x}_{y}.png`, resolved to a local asset URL.
-    #[serde(rename = "legacy-asset")]
-    LegacyAsset { path_template: String },
-    /// Immutable generation rendered by the library on demand.
-    #[serde(rename = "native-generation")]
-    NativeGeneration { generation_id: String },
-}
-
-/// Display tile metadata for one generation and style.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarTileset {
-    pub style: String,
-    pub source: LidarTileSource,
-    pub min_zoom: u32,
-    pub max_zoom: u32,
-    pub tile_size: u32,
-    /// Geographic bounds as `[west, south, east, north]` WGS84 degrees for
-    /// direct use by MapLibre. Prepared catalogue rows remain EPSG:3857.
-    pub bounds: [f64; 4],
-}
-
 /// Library-side summary of a source layer.
 /// How an "other continuous" dataset's values are labelled.
 ///
@@ -199,7 +166,6 @@ pub struct LidarLayerSummary {
     pub value_range: Option<[f64; 2]>,
     /// The range styling and legends use, labelled by how it was derived.
     pub display_range: Option<LidarDisplayRange>,
-    pub tilesets: Vec<LidarTileset>,
     pub analysis_count: u32,
     /// The latest import operation of this item: progress while it runs, and
     /// the reason and Retry while an unpublished item's import failed.
@@ -264,7 +230,6 @@ pub struct LidarAnalysisSummary {
     /// analysis path itself applies.
     #[serde(default)]
     pub slope_unit: Option<LidarSlopeUnit>,
-    pub tilesets: Vec<LidarTileset>,
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -273,30 +238,6 @@ pub struct LidarLibrarySnapshot {
     pub layers: Vec<LidarLayerSummary>,
     pub analyses: Vec<LidarAnalysisSummary>,
     pub engine: LidarEngineStatus,
-}
-
-/// Immutable published generation of a source layer, for layer history.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarGenerationHistoryEntry {
-    pub id: String,
-    pub created_at: String,
-    /// Exact valid cells, or `None` when that count is not known.
-    pub coverage_cells: Option<u64>,
-    pub display_range: Option<LidarDisplayRange>,
-    /// Position of this version in the layer's publication order, counting from
-    /// the oldest. Unique within the layer, so it is the identity cue History
-    /// shows instead of numbering that makes consecutive imports read alike.
-    pub sequence: u32,
-    /// User operation this version recorded (`import`, `reorder`, `remove`,
-    /// `undo`, `restore`). Absent for a version migrated from a catalogue that
-    /// did not record one; the UI names those neutrally rather than guessing.
-    pub operation: Option<String>,
-    /// Occurrences in this version's ordered composition.
-    pub source_count: u32,
-    pub is_head: bool,
-    /// Whether this version can be restored as the new head.
-    pub restorable: bool,
 }
 
 /// One occurrence in a Data Layer's priority list, topmost first.
@@ -322,27 +263,19 @@ pub struct LidarLayerSource {
     pub value_range: [f64; 2],
 }
 
-/// The ordered composition and published versions of one Data Layer.
+/// The ordered source files of one fixed library item.
 ///
-/// `sources` is the layer's priority list exactly as the UI must show it:
-/// index 0 is the topmost source and its valid samples cover every source below
-/// it. `head_generation_id` is the immutable snapshot the list describes, which
-/// every edit echoes back so a stale edit fails by name instead of applying to
-/// a newer order.
+/// `sources` is the item's priority list exactly as the UI shows it: index 0
+/// is the topmost source and its valid samples cover every source below it.
+/// `head_generation_id` is the immutable snapshot the list describes.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerCollection {
     pub layer_id: String,
-    /// Immutable snapshot this page describes. Every edit echoes it back, so a
-    /// request prepared against a superseded head fails by name.
+    /// Immutable snapshot this page describes.
     pub head_generation_id: Option<String>,
     /// Occurrences in the whole current composition, not only this page.
     pub member_count: u32,
-    /// Whether Undo is offered from this head at all. An available Undo with no
-    /// target restores the empty composition; an unavailable one is exhausted.
-    pub undo_available: bool,
-    /// Snapshot Undo restores; absent means the empty composition.
-    pub undo_target: Option<String>,
     /// One bounded page of the top-first priority list.
     pub sources: Vec<LidarLayerSource>,
     /// Cursor for the next member page, when the composition has more.
@@ -351,33 +284,6 @@ pub struct LidarLayerCollection {
 
 /// Largest source-list page a caller may request.
 pub const LAYER_MEMBER_PAGE: i64 = 200;
-/// Largest history page a caller may request.
-pub const LAYER_HISTORY_PAGE: i64 = 100;
-
-/// What one awaited ordered-layer edit did.
-///
-/// `changed` distinguishes a published snapshot from a request that was
-/// legitimately a no-op, and `head_generation_id` is the authoritative head
-/// after settlement, so the caller never has to infer whether its edit landed.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLayerEditOutcome {
-    pub head_generation_id: Option<String>,
-    pub changed: bool,
-    pub message: Option<String>,
-}
-
-/// One bounded page of a Data Layer's publication history, newest first.
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarLayerHistoryPage {
-    pub layer_id: String,
-    pub head_generation_id: Option<String>,
-    pub versions: Vec<LidarGenerationHistoryEntry>,
-    /// Cursor for the next page, when older versions exist.
-    pub next_cursor: Option<String>,
-}
-
 /// Impact summary shown before a layer deletion is confirmed.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -618,38 +524,3 @@ pub struct LidarPresentationEntry {
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The frontend reads these exact keys: a tagged tile source carries the
-    /// variant in `kind` and keeps snake_case payload fields, like every other
-    /// tagged contract in this crate.
-    #[test]
-    fn tile_source_wire_shape_is_tagged_and_stable() {
-        let legacy = LidarTileset {
-            style: "elevation".to_string(),
-            source: LidarTileSource::LegacyAsset {
-                path_template: "/data/{z}_{x}_{y}.png".to_string(),
-            },
-            min_zoom: 13,
-            max_zoom: 17,
-            tile_size: 256,
-            bounds: [-1.0, 48.0, 0.0, 49.0],
-        };
-        let json = serde_json::to_string(&legacy).unwrap();
-        assert!(json.contains(r#""kind":"legacy-asset""#), "{json}");
-        assert!(json.contains(r#""path_template""#), "{json}");
-        assert!(!json.contains("path-template"), "{json}");
-
-        let native = LidarTileSource::NativeGeneration {
-            generation_id: "gen-1".to_string(),
-        };
-        let json = serde_json::to_string(&native).unwrap();
-        assert_eq!(
-            json,
-            r#"{"kind":"native-generation","generation_id":"gen-1"}"#
-        );
-    }
-}

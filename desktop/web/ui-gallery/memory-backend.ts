@@ -31,7 +31,6 @@ let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
   bounds: lidarBounds,
   value_range: [131.2, 287.8],
   display_range: { min: 131.2, max: 287.8, basis: 'Exact' },
-  tilesets: [],
   analysis_count: 1,
   import_job: null,
 }]
@@ -47,13 +46,11 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   bounds: lidarBounds,
   value_range: [0, 41.6],
   slope_unit: 'Degrees',
-  tilesets: [],
 }]
 function galleryImport(layerId: string, name: string, kind: LidarLayerSummary['measurement_kind'], job: Partial<LidarImportJob>): LidarLayerSummary {
   return {
     id: layerId, generation_id: null, name, measurement_kind: kind, units: 'm', state: 'Preparing',
-    resolution_m: null, coverage_cells: null, bounds: null, value_range: null, display_range: null,
-    tilesets: [], analysis_count: 0,
+    resolution_m: null, coverage_cells: null, bounds: null, value_range: null, display_range: null, analysis_count: 0,
     import_job: { job_id: `job-${layerId}`, layer_id: layerId, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 42 }, ...job },
   }
 }

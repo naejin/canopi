@@ -50,9 +50,8 @@ impl LidarPaths {
         self.root.join("lidar-display-cache.sqlite")
     }
 
-    /// Reproducible on-demand display tiles. Never authority: entries are
-    /// derivatives of immutable generations and may be evicted at any time.
-    pub fn tile_cache_dir(&self) -> PathBuf {
+    /// The retired on-demand PNG tile cache, reclaimed when the library opens.
+    pub fn retired_tile_cache_dir(&self) -> PathBuf {
         self.root.join("display-tiles")
     }
 
@@ -98,23 +97,9 @@ impl LidarPaths {
         self.root.join("prepared")
     }
 
-    pub fn display_dir(&self) -> PathBuf {
+    /// The retired PNG display pyramids, reclaimed when the library opens.
+    pub fn retired_pyramid_dir(&self) -> PathBuf {
         self.root.join("display")
-    }
-
-    /// Bounded display tile pyramid for one published entity generation.
-    pub fn display_generation_dir(
-        &self,
-        entity_kind: &str,
-        entity_id: &str,
-        generation_id: &str,
-        style: &str,
-    ) -> PathBuf {
-        self.display_dir()
-            .join(entity_kind)
-            .join(entity_id)
-            .join(generation_id)
-            .join(style)
     }
 
     /// Published display derivatives: immutable, content-keyed tiled COGs the

@@ -1,20 +1,19 @@
 //! Library-side presentation snapshots for IPC consumers.
 //!
-//! The snapshot joins catalogue identity/status with registered display
-//! tilesets. Document-side visibility/opacity/order live in `.canopi` via the
+//! The snapshot reports catalogue identity, status and current generations;
+//! the map draws each generation through its display descriptor. Document-side visibility/opacity/order live in `.canopi` via the
 //! Design Edit seam; the library never reads documents.
 
 use super::catalogue;
 use super::engine::GdalEngine;
 use common_types::lidar::{
     LidarAnalysisKind, LidarAnalysisSummary, LidarEngineStatus, LidarLayerSummary,
-    LidarLibrarySnapshot, LidarResultState, LidarTileSource, LidarTileset,
+    LidarLibrarySnapshot, LidarResultState,
 };
 use rusqlite::Connection;
 
 pub fn library_snapshot(
     connection: &Connection,
-    display_connection: &Connection,
     engine: &GdalEngine,
 ) -> Result<LidarLibrarySnapshot, String> {
     let layers = catalogue::list_layers(connection)?;
@@ -24,39 +23,29 @@ pub fn library_snapshot(
         let head = catalogue::head_generation(connection, &layer.id)?;
         let analysis_count =
             catalogue::list_definitions_for_layer(connection, &layer.id)?.len() as u32;
-        let (coverage_cells, display_range, resolution_m, bounds, value_range, tilesets) =
-            match &head {
-                Some(head) => {
-                    let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
-                        .ok()
-                        .and_then(|v| <[f64; 4]>::try_from(v).ok())
-                        .map(bounds_3857_to_wgs84);
-                    let range = match (head.min_value, head.max_value) {
-                        (Some(min), Some(max)) => Some([min, max]),
-                        _ => None,
-                    };
-                    let manifest =
-                        super::import::read_generation_manifest(&head.manifest_json).ok();
-                    let registered =
-                        tilesets_for(display_connection, "source", &layer.id, head.id.clone());
-                    let tilesets = if registered.is_empty() {
-                        native_tilesets("elevation", &head.id, manifest.as_ref(), bounds)
-                    } else {
-                        registered
-                    };
-                    (
-                        head.coverage_cells.map(|cells| cells.max(0) as u64),
-                        display_range_of(head),
-                        manifest
-                            .as_ref()
-                            .map(|manifest| manifest.grid.pixel_size().0),
-                        bounds,
-                        range,
-                        tilesets,
-                    )
-                }
-                None => (Some(0), None, None, None, None, Vec::new()),
-            };
+        let (coverage_cells, display_range, resolution_m, bounds, value_range) = match &head {
+            Some(head) => {
+                let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
+                    .ok()
+                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
+                    .map(bounds_3857_to_wgs84);
+                let range = match (head.min_value, head.max_value) {
+                    (Some(min), Some(max)) => Some([min, max]),
+                    _ => None,
+                };
+                let manifest = super::import::read_generation_manifest(&head.manifest_json).ok();
+                (
+                    head.coverage_cells.map(|cells| cells.max(0) as u64),
+                    display_range_of(head),
+                    manifest
+                        .as_ref()
+                        .map(|manifest| manifest.grid.pixel_size().0),
+                    bounds,
+                    range,
+                )
+            }
+            None => (Some(0), None, None, None, None),
+        };
         let import_job = latest_import_job(connection, &layer.id)?;
         // A published item is Ready and stays fixed. An unpublished item is
         // its import operation: preparing while it runs, failed otherwise, and
@@ -85,7 +74,6 @@ pub fn library_snapshot(
             bounds,
             value_range,
             display_range,
-            tilesets,
             analysis_count,
             import_job,
         });
@@ -116,7 +104,7 @@ pub fn library_snapshot(
         )
         .ok()
         .and_then(|parameters| parameters.slope_unit);
-        let (bounds, value_range, tilesets) = match &head_result {
+        let (bounds, value_range) = match &head_result {
             Some(result) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)
                     .ok()
@@ -126,26 +114,9 @@ pub fn library_snapshot(
                     (Some(min), Some(max)) => Some([min, max]),
                     _ => None,
                 };
-                // An analysis generation carries a result manifest, not a
-                // source manifest: parse it as what it is.
-                let manifest =
-                    serde_json::from_str::<super::analysis::ResultManifest>(&result.manifest_json)
-                        .ok();
-                let registered = tilesets_for(
-                    display_connection,
-                    "analysis",
-                    &definition.id,
-                    result.id.clone(),
-                );
-                // A sparse result owns no pyramid; it is rendered on demand.
-                let tilesets = if registered.is_empty() {
-                    native_tilesets("slope", &result.id, manifest.as_ref(), bounds)
-                } else {
-                    registered
-                };
-                (bounds, range, tilesets)
+                (bounds, range)
             }
-            None => (None, None, Vec::new()),
+            None => (None, None),
         };
         analysis_summaries.push(LidarAnalysisSummary {
             id: definition.id.clone(),
@@ -161,7 +132,6 @@ pub fn library_snapshot(
             bounds,
             value_range,
             slope_unit,
-            tilesets,
         });
     }
 
@@ -230,134 +200,6 @@ fn display_range_of(
             _ => None,
         },
     }
-}
-
-/// The parts of either manifest an on-demand tileset needs.
-trait NativeTileManifest {
-    fn format(&self) -> super::import::GenerationStorageFormat;
-    fn grid(&self) -> &super::grid::RasterGrid;
-}
-
-impl NativeTileManifest for super::import::GenerationManifest {
-    fn format(&self) -> super::import::GenerationStorageFormat {
-        self.format
-    }
-
-    fn grid(&self) -> &super::grid::RasterGrid {
-        &self.grid
-    }
-}
-
-impl NativeTileManifest for super::analysis::ResultManifest {
-    fn format(&self) -> super::import::GenerationStorageFormat {
-        self.format
-    }
-
-    fn grid(&self) -> &super::grid::RasterGrid {
-        &self.grid
-    }
-}
-
-/// Zoom ceiling shared with the legacy pyramid renderer.
-const MAX_ZOOM_CEILING: u32 = 22;
-/// Pyramid depth presented for an on-demand generation.
-const NATIVE_ZOOM_LEVELS: u32 = 5;
-/// Web Mercator world size in metres.
-const WEB_MERCATOR_WORLD: f64 = 40_075_016.685_578_49;
-
-/// Build the on-demand tileset of a generation that owns no display pyramid.
-///
-/// The zoom range mirrors the legacy pyramid rule (native resolution is the
-/// deepest level, four coarser levels above it), so switching a layer between
-/// storage formats does not change how it is framed on the map.
-fn native_tilesets<M: NativeTileManifest>(
-    style: &str,
-    generation_id: &str,
-    manifest: Option<&M>,
-    bounds: Option<[f64; 4]>,
-) -> Vec<LidarTileset> {
-    let Some(manifest) = manifest else {
-        return Vec::new();
-    };
-    // A generation with no stored display pyramid is rendered on demand: a
-    // published resolved-chunk generation and an ordered source collection
-    // alike. A preserved dense generation keeps its published asset pyramid.
-    if !matches!(
-        manifest.format(),
-        super::import::GenerationStorageFormat::CogChunksV1
-            | super::import::GenerationStorageFormat::OrderedMembersV1
-    ) {
-        return Vec::new();
-    }
-    let Some(bounds) = bounds else {
-        return Vec::new();
-    };
-    let pixel = manifest.grid().pixel_size().0;
-    if !(pixel.is_finite() && pixel > 0.0) {
-        return Vec::new();
-    }
-    let max_zoom = (WEB_MERCATOR_WORLD / 256.0 / pixel)
-        .log2()
-        .floor()
-        .clamp(0.0, f64::from(MAX_ZOOM_CEILING)) as u32;
-    vec![LidarTileset {
-        style: style.to_string(),
-        source: LidarTileSource::NativeGeneration {
-            generation_id: generation_id.to_string(),
-        },
-        min_zoom: max_zoom.saturating_sub(NATIVE_ZOOM_LEVELS - 1),
-        max_zoom,
-        tile_size: 256,
-        bounds,
-    }]
-}
-
-fn tilesets_for(
-    display_connection: &Connection,
-    entity_kind: &str,
-    entity_id: &str,
-    generation_id: String,
-) -> Vec<LidarTileset> {
-    let mut statement = match display_connection.prepare(
-        "SELECT style, path_template, min_zoom, max_zoom, bounds_3857
-         FROM tilesets WHERE entity_kind = ?1 AND entity_id = ?2 AND generation_id = ?3
-         ORDER BY style",
-    ) {
-        Ok(statement) => statement,
-        Err(_) => return Vec::new(),
-    };
-    let rows = statement.query_map(
-        rusqlite::params![entity_kind, entity_id, generation_id],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        },
-    );
-    let Ok(rows) = rows else {
-        return Vec::new();
-    };
-    rows.flatten()
-        .filter_map(|(style, template, min_zoom, max_zoom, bounds)| {
-            let bounds = serde_json::from_str::<Vec<f64>>(&bounds)
-                .ok()
-                .and_then(|v| <[f64; 4]>::try_from(v).ok())?;
-            Some(LidarTileset {
-                style,
-                source: LidarTileSource::LegacyAsset {
-                    path_template: template,
-                },
-                min_zoom: min_zoom.clamp(0, 30) as u32,
-                max_zoom: max_zoom.clamp(0, 30) as u32,
-                tile_size: 256,
-                bounds: bounds_3857_to_wgs84(bounds),
-            })
-        })
-        .collect()
 }
 
 fn bounds_3857_to_wgs84(bounds: [f64; 4]) -> [f64; 4] {

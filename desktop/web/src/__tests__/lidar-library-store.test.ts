@@ -32,7 +32,6 @@ function importing(state: LidarImportJob['state']): LidarLibrarySnapshot {
     bounds: null,
     value_range: null,
     display_range: null,
-    tilesets: [],
     analysis_count: 0,
     import_job: { job_id: 'job-1', layer_id: 'layer-1', state, message: null, progress: null },
   }

@@ -21,7 +21,6 @@ export type {
   LidarDisplayAsset,
   LidarDisplayDescriptor,
   LidarDisplayState,
-  LidarTileset,
   LidarLayerCollection,
   LidarLayerSource,
   LidarAnalysisSummary,

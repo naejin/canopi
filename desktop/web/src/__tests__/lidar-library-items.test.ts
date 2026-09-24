@@ -14,7 +14,6 @@ function layer(id: string, name: string, overrides: Partial<LidarLayerSummary> =
     bounds: [0, 0, 1, 1],
     value_range: [10, 20],
     display_range: null,
-    tilesets: [],
     analysis_count: 0,
     import_job: null,
     ...overrides,
@@ -34,7 +33,6 @@ function slope(id: string, source: string, overrides: Partial<LidarAnalysisSumma
     bounds: [0, 0, 1, 1],
     value_range: [0, 40],
     slope_unit: 'Degrees',
-    tilesets: [],
     ...overrides,
   } as LidarAnalysisSummary
 }

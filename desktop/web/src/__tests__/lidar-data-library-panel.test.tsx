@@ -47,16 +47,14 @@ import { locale } from '../app/settings/state'
 function layer(id: string, name: string, overrides: Partial<LidarLayerSummary> = {}): LidarLayerSummary {
   return {
     id, name, generation_id: `${id}-g1`, measurement_kind: 'GroundElevation', units: 'm', state: 'Ready',
-    resolution_m: 0.5, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [1, 2], display_range: null,
-    tilesets: [], analysis_count: 0, import_job: null, ...overrides,
+    resolution_m: 0.5, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [1, 2], display_range: null, analysis_count: 0, import_job: null, ...overrides,
   }
 }
 
 function slope(id: string, source: string, overrides: Partial<LidarAnalysisSummary> = {}): LidarAnalysisSummary {
   return {
     id, generation_id: `${id}-g1`, input_generation_id: `${source}-g1`, source_layer_id: source, kind: 'Slope',
-    name: null, state: 'Ready', detail: null, bounds: [0, 0, 1, 1], value_range: [0, 30], slope_unit: 'Degrees',
-    tilesets: [], ...overrides,
+    name: null, state: 'Ready', detail: null, bounds: [0, 0, 1, 1], value_range: [0, 30], slope_unit: 'Degrees', ...overrides,
   } as LidarAnalysisSummary
 }
 

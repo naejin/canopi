@@ -913,11 +913,11 @@ pub struct GenerationRow {
     /// values a user accepted.
     #[allow(dead_code)]
     pub base_generation_id: Option<String>,
-    /// Snapshot Undo restores from this head. Absent with `undo_available`
-    /// means Undo restores the empty initial composition.
+    /// Recorded pre-v19 undo lineage. Fixed items offer no Undo; only the
+    /// legacy history builders kept for migration tests follow it.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub previous_generation_id: Option<String>,
-    /// Whether Undo is offered from this head at all. An unavailable Undo is
-    /// exhausted rather than pointed at the empty composition.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub undo_available: bool,
 }
 
@@ -1716,33 +1716,6 @@ pub fn generation_row(
         .map_err(|e| format!("Failed to read generation {generation_id}: {e}"))
 }
 
-/// The manifest of one sparse generation, checked against its owner.
-///
-/// A tile request names an entity and a generation; the join is what makes
-/// "this generation belongs to this entity" a catalogue fact rather than a
-/// caller's assumption.
-pub fn chunked_generation_manifest(
-    connection: &Connection,
-    entity_kind: &str,
-    entity_id: &str,
-    generation_id: &str,
-) -> Result<Option<String>, String> {
-    let (table, owner_column) = match entity_kind {
-        "source" => ("lidar_layer_generations", "layer_id"),
-        "analysis" => ("lidar_analysis_generations", "definition_id"),
-        other => return Err(format!("unknown raster entity kind {other}")),
-    };
-    // The table and column names come from this closed match, never from a
-    // caller, and every bound value still travels as a placeholder.
-    let sql = format!("SELECT manifest_json FROM {table} WHERE id = ?1 AND {owner_column} = ?2");
-    connection
-        .query_row(&sql, rusqlite::params![generation_id, entity_id], |row| {
-            row.get::<_, String>(0)
-        })
-        .optional()
-        .map_err(|e| format!("Failed to read generation manifest: {e}"))
-}
-
 /// One published resolved-chunk reference.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenerationChunkRow {
@@ -2036,29 +2009,6 @@ pub fn generation_chunk_page(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to read chunk page: {e}"))?;
     Ok(rows)
-}
-
-/// One published chunk reference by exact coordinate, when it exists.
-pub fn generation_chunk_at(
-    connection: &Connection,
-    generation_id: &str,
-    role: &str,
-    chunk_x: i64,
-    chunk_y: i64,
-) -> Result<Option<ChunkAssetRow>, String> {
-    let sql = format!(
-        "{CHUNK_ASSET_COLUMNS}
-     WHERE g.generation_id = ?1 AND g.role = ?2 AND g.chunk_x = ?3 AND g.chunk_y = ?4
-       AND g.state = 'published'"
-    );
-    connection
-        .query_row(
-            &sql,
-            rusqlite::params![generation_id, role, chunk_x, chunk_y],
-            map_chunk_row,
-        )
-        .optional()
-        .map_err(|e| format!("Failed to read chunk reference: {e}"))
 }
 
 /// Published chunk references of one generation and role, ordered by position.
@@ -3543,16 +3493,6 @@ mod tests {
             generation_chunk_page(&connection, "gen-1", "resolved", Some(negative), None, 10)
                 .unwrap()
                 .is_empty()
-        );
-        // An exact coordinate lookup is bounded to one record.
-        let one = generation_chunk_at(&connection, "gen-1", "resolved", 1, 1)
-            .unwrap()
-            .expect("the record exists");
-        assert_eq!((one.chunk_x, one.chunk_y), (1, 1));
-        assert!(
-            generation_chunk_at(&connection, "gen-1", "resolved", 4, 4)
-                .unwrap()
-                .is_none()
         );
         // The index carries the read order, so paging needs no sort step.
         let plan: String = connection

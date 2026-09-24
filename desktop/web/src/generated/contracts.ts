@@ -238,7 +238,6 @@ export type LidarAnalysisSummary = {
 	 *  analysis path itself applies.
 	 */
 	slope_unit?: LidarSlopeUnit | null,
-	tilesets: LidarTileset[],
 };
 
 // Impact summary shown before a layer deletion is confirmed.
@@ -328,32 +327,6 @@ export type LidarEngineStatus = {
 	detail: string | null,
 };
 
-// Immutable published generation of a source layer, for layer history.
-export type LidarGenerationHistoryEntry = {
-	id: string,
-	created_at: string,
-	// Exact valid cells, or `None` when that count is not known.
-	coverage_cells: string | null,
-	display_range: LidarDisplayRange | null,
-	/**
-	 *  Position of this version in the layer's publication order, counting from
-	 *  the oldest. Unique within the layer, so it is the identity cue History
-	 *  shows instead of numbering that makes consecutive imports read alike.
-	 */
-	sequence: number,
-	/**
-	 *  User operation this version recorded (`import`, `reorder`, `remove`,
-	 *  `undo`, `restore`). Absent for a version migrated from a catalogue that
-	 *  did not record one; the UI names those neutrally rather than guessing.
-	 */
-	operation: string | null,
-	// Occurrences in this version's ordered composition.
-	source_count: number,
-	is_head: boolean,
-	// Whether this version can be restored as the new head.
-	restorable: boolean,
-};
-
 export type LidarImportJob = {
 	job_id: string,
 	layer_id: string,
@@ -389,56 +362,22 @@ export type LidarImportReceipt = {
 };
 
 /**
- *  The ordered composition and published versions of one Data Layer.
+ *  The ordered source files of one fixed library item.
  *
- *  `sources` is the layer's priority list exactly as the UI must show it:
- *  index 0 is the topmost source and its valid samples cover every source below
- *  it. `head_generation_id` is the immutable snapshot the list describes, which
- *  every edit echoes back so a stale edit fails by name instead of applying to
- *  a newer order.
+ *  `sources` is the item's priority list exactly as the UI shows it: index 0
+ *  is the topmost source and its valid samples cover every source below it.
+ *  `head_generation_id` is the immutable snapshot the list describes.
  */
 export type LidarLayerCollection = {
 	layer_id: string,
-	/**
-	 *  Immutable snapshot this page describes. Every edit echoes it back, so a
-	 *  request prepared against a superseded head fails by name.
-	 */
+	// Immutable snapshot this page describes.
 	head_generation_id: string | null,
 	// Occurrences in the whole current composition, not only this page.
 	member_count: number,
-	/**
-	 *  Whether Undo is offered from this head at all. An available Undo with no
-	 *  target restores the empty composition; an unavailable one is exhausted.
-	 */
-	undo_available: boolean,
-	// Snapshot Undo restores; absent means the empty composition.
-	undo_target: string | null,
 	// One bounded page of the top-first priority list.
 	sources: LidarLayerSource[],
 	// Cursor for the next member page, when the composition has more.
 	next_member_cursor: string | null,
-};
-
-/**
- *  What one awaited ordered-layer edit did.
- *
- *  `changed` distinguishes a published snapshot from a request that was
- *  legitimately a no-op, and `head_generation_id` is the authoritative head
- *  after settlement, so the caller never has to infer whether its edit landed.
- */
-export type LidarLayerEditOutcome = {
-	head_generation_id: string | null,
-	changed: boolean,
-	message: string | null,
-};
-
-// One bounded page of a Data Layer's publication history, newest first.
-export type LidarLayerHistoryPage = {
-	layer_id: string,
-	head_generation_id: string | null,
-	versions: LidarGenerationHistoryEntry[],
-	// Cursor for the next page, when older versions exist.
-	next_cursor: string | null,
 };
 
 /**
@@ -488,7 +427,6 @@ export type LidarLayerSummary = {
 	value_range: [number, number] | null,
 	// The range styling and legends use, labelled by how it was derived.
 	display_range: LidarDisplayRange | null,
-	tilesets: LidarTileset[],
 	analysis_count: number,
 	/**
 	 *  The latest import operation of this item: progress while it runs, and
@@ -602,37 +540,6 @@ export type LidarSampleUnavailableReason =
 "UnsupportedInput";
 
 export type LidarSlopeUnit = "Degrees" | "Percent";
-
-/**
- *  Where one tileset's pixels come from.
- *
- *  The distinction is explicit so a generation stored as sparse resolved
- *  chunks never has to invent a filesystem path it does not own: the desktop
- *  either resolves a preserved legacy pyramid's asset directory, or renders
- *  the immutable generation on demand behind the raster protocol.
- */
-export type LidarTileSource =
-/**
- *  Preserved display pyramid: an absolute filesystem tile path template
- *  ending in `{z}_{x}_{y}.png`, resolved to a local asset URL.
- */
-{ kind: "legacy-asset"; path_template: string } |
-// Immutable generation rendered by the library on demand.
-{ kind: "native-generation"; generation_id: string };
-
-// Display tile metadata for one generation and style.
-export type LidarTileset = {
-	style: string,
-	source: LidarTileSource,
-	min_zoom: number,
-	max_zoom: number,
-	tile_size: number,
-	/**
-	 *  Geographic bounds as `[west, south, east, north]` WGS84 degrees for
-	 *  direct use by MapLibre. Prepared catalogue rows remain EPSG:3857.
-	 */
-	bounds: [number, number, number, number],
-};
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
 

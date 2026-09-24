@@ -11,7 +11,6 @@ pub mod admission;
 pub mod analysis;
 pub mod catalogue;
 mod collection;
-pub mod display;
 mod display_cog;
 #[cfg(test)]
 mod e2e;
@@ -27,8 +26,7 @@ mod prepared_raster;
 pub mod presentation;
 pub mod probe;
 mod raster_assets;
-mod tile_cache;
-mod tiles;
+mod raster_info;
 
 use catalogue::{new_id, now_iso};
 use common_types::lidar::{
@@ -71,8 +69,6 @@ pub(crate) struct LidarLibraryInner {
     heavy_job: Mutex<Option<String>>,
     /// Bounded display read admission, separate from the heavy lease.
     display: Mutex<DisplayAdmission>,
-    /// Shared reproducible tile cache, bounded in memory and on disk.
-    tile_cache: Mutex<tile_cache::DisplayTileCache>,
     /// One lane preparing display derivatives, separate from numeric jobs.
     display_preparation: Mutex<display_cog::DisplayPreparation>,
 }
@@ -244,7 +240,6 @@ impl Drop for HeavyJobLease {
 impl LidarLibrary {
     pub fn open(app_data_dir: &std::path::Path) -> Result<Self, String> {
         let paths = LidarPaths::open(app_data_dir)?;
-        let display_cache_dir = paths.tile_cache_dir();
         let catalogue = catalogue::open(&paths.catalogue_path())?;
         let display_cache = open_display_cache(&paths.display_cache_path())?;
         let library = Self {
@@ -258,7 +253,6 @@ impl LidarLibrary {
                 heavy_job: Mutex::new(None),
                 compat_leases: Mutex::new(HashMap::new()),
                 display: Mutex::new(DisplayAdmission::default()),
-                tile_cache: Mutex::new(tile_cache::DisplayTileCache::open(&display_cache_dir)?),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
         };
@@ -297,23 +291,6 @@ impl LidarLibrary {
         )?))
     }
 
-    /// Drop cached display tiles of one generation. Best effort: the cache is
-    /// a reproducible derivative, so a failure here is never user-visible.
-    fn invalidate_tile_cache(&self, generation_id: &str) {
-        if let Ok(mut cache) = self.tile_cache() {
-            cache.invalidate_generation(generation_id);
-        }
-    }
-
-    pub(crate) fn tile_cache(
-        &self,
-    ) -> Result<MutexGuard<'_, tile_cache::DisplayTileCache>, String> {
-        self.inner
-            .tile_cache
-            .lock()
-            .map_err(|_| "LiDAR display tile cache poisoned".to_string())
-    }
-
     pub(crate) fn display(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.inner
             .display_cache
@@ -322,8 +299,8 @@ impl LidarLibrary {
     }
 
     /// Best-effort bounded cleanup at startup: job scratch dirs for settled
-    /// jobs, abandoned analysis staging dirs, and display tilesets of
-    /// superseded generations (they can be re-rendered on demand).
+    /// jobs, abandoned staging dirs, unregistered display derivatives and the
+    /// retired PNG display stores.
     fn prune_transient_artifacts(&self) -> Result<(), String> {
         let connection = self.catalogue()?;
         let settled: Vec<(String, String)> = {
@@ -382,11 +359,11 @@ impl LidarLibrary {
                 ));
             }
         }
-        // Display cache writes are owned and atomic; a session that died
-        // mid-write leaves only temp files, which are never readable entries.
-        if let Ok(cache) = self.tile_cache() {
-            cache.discard_interrupted_writes();
-        }
+        // The retired PNG tile cache and pyramids are reproducible derivatives
+        // no reader uses any more: display COGs replaced them and a v19
+        // catalogue refuses the older binaries that drew them. Reclaim once.
+        let _ = std::fs::remove_dir_all(self.inner.paths.retired_tile_cache_dir());
+        let _ = std::fs::remove_dir_all(self.inner.paths.retired_pyramid_dir());
         // Write jobs that crashed before publication left `staging-*` roots
         // behind. Only staging roots are removed: published `gen-*` dirs,
         // member assets and immutable originals are never candidates.
@@ -402,88 +379,6 @@ impl LidarLibrary {
             let discarded = catalogue::discard_unpublished_chunks(&connection)?;
             if discarded > 0 {
                 tracing::info!(discarded, "discarded unpublished raster chunk rows");
-            }
-        }
-        // Superseded generations keep their immutable numeric history but
-        // lose their display tilesets (re-renderable on demand).
-        let live_generation_ids: Vec<String> = {
-            let connection = self.catalogue()?;
-            let mut statement = connection
-                .prepare(
-                    "SELECT generation_id FROM lidar_layer_heads
-                     UNION SELECT generation_id FROM lidar_analysis_heads",
-                )
-                .map_err(|e| e.to_string())?;
-            let rows = statement
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?;
-            drop(statement);
-            rows
-        };
-        {
-            let display = self.display()?;
-            if live_generation_ids.is_empty() {
-                display
-                    .execute_batch("DELETE FROM tilesets")
-                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
-            } else {
-                let placeholders = vec!["?"; live_generation_ids.len()].join(", ");
-                let sql =
-                    format!("DELETE FROM tilesets WHERE generation_id NOT IN ({placeholders})");
-                let mut statement = display
-                    .prepare(&sql)
-                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
-                statement
-                    .execute(rusqlite::params_from_iter(live_generation_ids.iter()))
-                    .map_err(|e| format!("Failed to prune display tilesets: {e}"))?;
-            }
-        }
-        // Remove on-disk display generation dirs that have no tileset row.
-        let live: std::collections::HashSet<String> = {
-            let display = self.display()?;
-            let mut statement = display
-                .prepare(
-                    "SELECT entity_kind || '/' || entity_id || '/' || generation_id FROM tilesets",
-                )
-                .map_err(|e| e.to_string())?;
-            let rows = statement
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?;
-            rows.into_iter().collect()
-        };
-        let display_root = self.inner.paths.display_dir();
-        for kind_dir in std::fs::read_dir(&display_root)
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            for entity_dir in std::fs::read_dir(kind_dir.path())
-                .into_iter()
-                .flatten()
-                .flatten()
-            {
-                for gen_dir in std::fs::read_dir(entity_dir.path())
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                {
-                    let key = format!(
-                        "{}/{}/{}",
-                        kind_dir.file_name().to_string_lossy(),
-                        entity_dir.file_name().to_string_lossy(),
-                        gen_dir.file_name().to_string_lossy()
-                    );
-                    // Style subdirectories live inside a generation. Keep the
-                    // directory only when the display registry owns that exact
-                    // entity generation.
-                    if !live.contains(&key) {
-                        let _ = std::fs::remove_dir_all(gen_dir.path());
-                    }
-                }
             }
         }
         Ok(())
@@ -543,8 +438,7 @@ impl LidarLibrary {
 
     pub fn library_snapshot(&self) -> Result<LidarSnapshot, String> {
         let connection = self.catalogue()?;
-        let display = self.display()?;
-        presentation::library_snapshot(&connection, &display, &self.inner.engine)
+        presentation::library_snapshot(&connection, &self.inner.engine)
     }
 
     /// One bounded numeric inspection lookup.
@@ -793,16 +687,13 @@ impl LidarLibrary {
         transaction.commit().map_err(|e| e.to_string())?;
         drop(connection);
 
-        self.remove_display_entity("source", layer_id);
         for generation_id in removed_generations {
-            self.invalidate_tile_cache(&generation_id);
             // The layer's preserved compositions stop being readable here, so
             // this is the owner's release point for their prepared leases.
             self.release_compat_lease(&generation_id);
         }
         let _ = std::fs::remove_dir_all(self.inner.paths.layer_pipeline_dir(layer_id));
         for definition_id in definition_ids {
-            self.remove_display_entity("analysis", &definition_id);
             let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(&definition_id));
         }
         Ok(())
@@ -842,10 +733,6 @@ impl LidarLibrary {
                 && !row.id.is_empty()
         });
         let head_id = head.as_ref().map(|row| row.id.clone());
-        let (undo_available, undo_target) = head
-            .as_ref()
-            .map(|row| (row.undo_available, row.previous_generation_id.clone()))
-            .unwrap_or((false, None));
         let (member_rows, member_count) = match head_id.as_deref().filter(|_| head_ordered) {
             Some(head) => {
                 if let Some(cursor_head) = cursor_head.as_deref()
@@ -941,8 +828,6 @@ impl LidarLibrary {
             layer_id: layer_id.to_string(),
             head_generation_id: head_id,
             member_count: u32::try_from(member_count.max(0)).unwrap_or(u32::MAX),
-            undo_available,
-            undo_target,
             sources,
             next_member_cursor,
         })
@@ -1033,38 +918,6 @@ impl LidarLibrary {
             {
                 flag.store(true, Ordering::Relaxed);
             }
-        }
-    }
-
-    /// Render one bounded display tile as encoded PNG bytes.
-    ///
-    /// An empty tile returns the shared transparent PNG, so "no coverage" is a
-    /// successful draw of nothing; an unreadable generation returns an error,
-    /// which the caller must surface as unavailable rather than transparent.
-    #[allow(clippy::too_many_arguments)]
-    pub fn render_tile(
-        &self,
-        entity_kind: &str,
-        entity_id: &str,
-        generation_id: &str,
-        style: &str,
-        z: u32,
-        x: u32,
-        y: u32,
-        cancel: &AtomicBool,
-    ) -> Result<Vec<u8>, String> {
-        let request = tiles::TileRequest {
-            entity_kind: entity_kind.to_string(),
-            entity_id: entity_id.to_string(),
-            generation_id: generation_id.to_string(),
-            style: style.to_string(),
-            z,
-            x,
-            y,
-        };
-        match tiles::render_tile(self, &request, cancel)? {
-            tiles::TileOutcome::Png(bytes) => Ok(bytes),
-            tiles::TileOutcome::Empty => Ok(tiles::transparent_tile()?.to_vec()),
         }
     }
 
@@ -1888,42 +1741,14 @@ impl LidarLibrary {
             self.cancel_job(&job_id);
         }
         let connection = self.catalogue()?;
-        let result_generations: Vec<String> = {
-            let mut statement = connection
-                .prepare("SELECT id FROM lidar_analysis_generations WHERE definition_id = ?1")
-                .map_err(|e| e.to_string())?;
-            statement
-                .query_map([definition_id], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
-        };
         let transaction = connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
         delete_analysis_rows(&transaction, definition_id)?;
         transaction.commit().map_err(|e| e.to_string())?;
         drop(connection);
-        self.remove_display_entity("analysis", definition_id);
-        invalidate_tile_cache_for_collected(self, &result_generations);
         let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(definition_id));
         Ok(())
-    }
-
-    fn remove_display_entity(&self, entity_kind: &str, entity_id: &str) {
-        if let Ok(display) = self.display() {
-            let _ = display.execute(
-                "DELETE FROM tilesets WHERE entity_kind = ?1 AND entity_id = ?2",
-                rusqlite::params![entity_kind, entity_id],
-            );
-        }
-        let _ = std::fs::remove_dir_all(
-            self.inner
-                .paths
-                .display_dir()
-                .join(entity_kind)
-                .join(entity_id),
-        );
     }
 }
 
@@ -1951,13 +1776,6 @@ fn refuse_dependent_results(
             "those results"
         }
     ))
-}
-
-/// Drop cached display tiles of generations a deletion removed.
-fn invalidate_tile_cache_for_collected(library: &LidarLibrary, generation_ids: &[String]) {
-    for generation_id in generation_ids {
-        library.invalidate_tile_cache(generation_id);
-    }
 }
 
 fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<(), String> {
@@ -2190,7 +2008,6 @@ mod tests {
         assert_eq!(page.member_count, 0, "an empty layer has no occurrences");
         assert!(page.sources.is_empty());
         assert!(page.head_generation_id.is_none());
-        assert!(!page.undo_available, "an empty layer has nothing to undo");
 
         let page = read(
             "a paged read of an empty layer",
@@ -2625,90 +2442,43 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// The PNG tile cache and pyramids retired with the upstream renderer are
+    /// reclaimed when the library opens, and the retired pyramid registry is
+    /// dropped, while display derivatives keep their registry.
     #[test]
-    fn startup_pruning_keeps_live_display_generation_and_removes_stale_one() {
+    fn startup_reclaims_the_retired_png_display_stores() {
         let root = std::env::temp_dir().join(new_id("lidar-prune-test"));
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
-        let layer_id = library
-            .create_layer(
-                "Pruning fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
+        let pyramid = library
+            .inner
+            .paths
+            .retired_pyramid_dir()
+            .join("source/layer/gen/elevation");
+        let tiles = library.inner.paths.retired_tile_cache_dir();
+        std::fs::create_dir_all(&pyramid).unwrap();
+        std::fs::create_dir_all(&tiles).unwrap();
+        std::fs::write(pyramid.join("13_0_0.png"), b"png").unwrap();
+        std::fs::write(tiles.join("entry.png"), b"png").unwrap();
+        library
+            .display()
+            .unwrap()
+            .execute_batch("CREATE TABLE tilesets (key TEXT PRIMARY KEY)")
             .unwrap();
-        let live_generation = new_id("gen");
-        let stale_generation = new_id("gen");
-        {
-            let connection = library.catalogue().unwrap();
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_generations
-                 (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
-                  coverage_cells, min_value, max_value, bounds_3857)
-                 VALUES (?1, ?2, ?3, '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
-                    rusqlite::params![live_generation, layer_id, now_iso()],
-                )
-                .unwrap();
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
-                    rusqlite::params![layer_id, live_generation],
-                )
-                .unwrap();
-        }
-        let live_dir = library.inner.paths.display_generation_dir(
-            "source",
-            &layer_id,
-            &live_generation,
-            "elevation",
-        );
-        let stale_dir = library.inner.paths.display_generation_dir(
-            "source",
-            &layer_id,
-            &stale_generation,
-            "elevation",
-        );
-        std::fs::create_dir_all(&live_dir).unwrap();
-        std::fs::create_dir_all(&stale_dir).unwrap();
-        std::fs::write(live_dir.join("13_0_0.png"), b"live").unwrap();
-        std::fs::write(stale_dir.join("13_0_0.png"), b"stale").unwrap();
-        {
-            let display = library.display().unwrap();
-            for (generation, dir) in [
-                (&live_generation, &live_dir),
-                (&stale_generation, &stale_dir),
-            ] {
-                display
-                    .execute(
-                        "INSERT INTO tilesets
-                     (key, entity_kind, entity_id, generation_id, style, dir, path_template,
-                      min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
-                     VALUES (?1, 'source', ?2, ?3, 'elevation', ?4, ?5,
-                             13, 13, '[0,0,1,1]', 1, 4, ?6)",
-                        rusqlite::params![
-                            format!("source/{layer_id}/{generation}/elevation"),
-                            layer_id,
-                            generation,
-                            dir.display().to_string(),
-                            dir.join("{z}_{x}_{y}.png").display().to_string(),
-                            now_iso(),
-                        ],
-                    )
-                    .unwrap();
-            }
-        }
         drop(library);
 
         let reopened = LidarLibrary::open(&root).unwrap();
-        assert!(live_dir.join("13_0_0.png").is_file());
-        assert!(!stale_dir.exists());
+        assert!(!reopened.inner.paths.retired_pyramid_dir().exists());
+        assert!(!reopened.inner.paths.retired_tile_cache_dir().exists());
         let display = reopened.display().unwrap();
-        let remaining: i64 = display
-            .query_row("SELECT COUNT(*) FROM tilesets", [], |row| row.get(0))
+        let tables: Vec<String> = display
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
             .unwrap();
-        assert_eq!(remaining, 1);
+        assert_eq!(tables, ["display_cogs"]);
         drop(display);
         drop(reopened);
         std::fs::remove_dir_all(root).unwrap();
@@ -2730,21 +2500,7 @@ fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
         .map_err(|e| format!("Failed to open display cache {}: {e}", path.display()))?;
     connection
         .execute_batch(
-            "CREATE TABLE IF NOT EXISTS tilesets (
-                key TEXT PRIMARY KEY,
-                entity_kind TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                generation_id TEXT NOT NULL,
-                style TEXT NOT NULL,
-                dir TEXT NOT NULL,
-                path_template TEXT NOT NULL,
-                min_zoom INTEGER NOT NULL,
-                max_zoom INTEGER NOT NULL,
-                bounds_3857 TEXT NOT NULL,
-                tile_count INTEGER NOT NULL,
-                bytes INTEGER NOT NULL,
-                created_at TEXT NOT NULL
-            );
+            "DROP TABLE IF EXISTS tilesets;
             CREATE TABLE IF NOT EXISTS display_cogs (
                 key TEXT PRIMARY KEY,
                 file TEXT NOT NULL,

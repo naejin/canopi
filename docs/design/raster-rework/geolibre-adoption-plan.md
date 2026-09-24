@@ -1,6 +1,6 @@
 # Canopi application plan: GeoLibre reuse and a simpler Data Library
 
-Status: authorized — the user assigned S0–S5 production implementation on 2026-09-24 through the [implementation prompt](geolibre-adoption-agent-prompt.md). Delivery evidence is recorded in the [adoption receipt](geolibre-adoption-receipt.md); integration, release, branch cleanup, skill edits, subagents and live-library experiments remain separately authorized.
+Status: active — the user assigned S0–S5 production implementation on 2026-09-24 through the [implementation prompt](geolibre-adoption-agent-prompt.md). Delivery evidence is recorded in the [adoption receipt](geolibre-adoption-receipt.md); integration, release, branch cleanup, skill edits, subagents and live-library experiments remain separately authorized.
 Tracking: epic `canopi-8shm` (S0 `canopi-8shm.1` … S5 `canopi-8shm.6`) on branch `feature/geolibre-adoption`. Interactive reference `canopi-2c94` is complete. Existing raster qualification remains in `canopi-j571.3` under `canopi-j571.1`; it is not silently replaced by this plan.
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [edition development](../../agent/edition-development.md), [Canvas](../../agent/canvas-runtime.md), [MapLibre](../../agent/maplibre.md), [LiDAR](../../agent/lidar.md), [Design lifecycle](../../agent/document-lifecycle.md), [database](../../agent/database.md), and [interface contract](../../../.interface-design/system.md).
 

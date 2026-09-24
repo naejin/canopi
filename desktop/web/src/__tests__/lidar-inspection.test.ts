@@ -93,7 +93,6 @@ function libraryWithGeneration(generationId: string) {
         value_range: null,
         analysis_count: 0,
         generation_id: generationId,
-        tilesets: [],
       },
     ],
     analyses: [],

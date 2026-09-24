@@ -35,8 +35,7 @@ import { locale } from '../app/settings/state'
 function layer(id: string, name: string): LidarLayerSummary {
   return {
     id, name, generation_id: `${id}-g1`, measurement_kind: 'GroundElevation', units: 'm', state: 'Ready',
-    resolution_m: 1, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [100, 200], display_range: null,
-    tilesets: [], analysis_count: 0, import_job: null,
+    resolution_m: 1, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [100, 200], display_range: null, analysis_count: 0, import_job: null,
   }
 }
 

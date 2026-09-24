@@ -118,8 +118,6 @@ pub fn run() {
             commands::lidar::lidar_retry_analysis,
             commands::lidar::lidar_get_analysis_job_status,
             commands::lidar::lidar_cancel_analysis_job,
-            commands::lidar::lidar_raster_tile,
-            commands::lidar::lidar_cancel_raster_tile,
             commands::lidar::lidar_delete_analysis,
             commands::lidar::lidar_sample_pixel,
             commands::lidar::lidar_cancel_sample_pixel,

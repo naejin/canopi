@@ -70,129 +70,64 @@ fn report_library_bytes(label: &str, root: &std::path::Path) -> (u64, u64, u64, 
     (durable, durable_files, temporary, temporary_files)
 }
 
-fn assert_png_has_visible_pixels(engine: &engine::GdalEngine, path: &std::path::Path) {
-    assert!(path.is_file(), "PNG is missing: {}", path.display());
-    let output = engine
-        .run(
-            engine::GdalProgram::Info,
-            &[
-                "-json".to_string(),
-                "-stats".to_string(),
-                path.display().to_string(),
-            ],
-            None,
-        )
-        .expect("PNG opens through GDAL");
-    let info: serde_json::Value = serde_json::from_str(&output.stdout).expect("PNG info is JSON");
-    let alpha = info["bands"]
-        .as_array()
-        .and_then(|bands| {
-            bands
-                .iter()
-                .find(|band| band["colorInterpretation"].as_str() == Some("Alpha"))
-        })
-        .expect("PNG has an alpha band");
-    let maximum = alpha["metadata"][""]["STATISTICS_MAXIMUM"]
-        .as_str()
-        .and_then(|value| value.parse::<f64>().ok())
-        .or_else(|| alpha["maximum"].as_f64())
-        .expect("alpha statistics include a maximum");
-    assert!(
-        maximum > 0.0,
-        "PNG is fully transparent: {}",
-        path.display()
-    );
-}
-
-fn assert_tileset_has_visible_pixels(
-    engine: &engine::GdalEngine,
-    tileset: &common_types::lidar::LidarTileset,
-) {
-    let template = match &tileset.source {
-        common_types::lidar::LidarTileSource::LegacyAsset { path_template } => {
-            path_template.clone()
-        }
-        common_types::lidar::LidarTileSource::NativeGeneration { .. } => {
-            panic!("a published dense generation keeps its asset pyramid")
-        }
-    };
-    let directory = std::path::Path::new(&template)
-        .parent()
-        .expect("tileset template has a parent");
-    let mut pngs = std::fs::read_dir(directory)
-        .expect("tileset directory exists")
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("png"))
-        .collect::<Vec<_>>();
-    assert!(!pngs.is_empty(), "tileset directory contains PNG files");
-    pngs.sort_by_key(|path| {
-        std::fs::metadata(path)
-            .map(|metadata| metadata.len())
-            .unwrap_or(0)
-    });
-    assert_png_has_visible_pixels(engine, pngs.last().expect("largest tile exists"));
-}
-
-/// Render one real tile from an on-demand tileset and return it with its
-/// coordinates.
-///
-/// An ordered composition draws from its members' payloads instead of a
-/// pre-generated pyramid, so "has visible pixels" means the shared renderer
-/// returns a drawn 256x256 tile. The advertised zooms are walked from the
-/// coarsest level up, because a fine level may fall outside the fixture.
-fn render_native_tile(
+/// The display route draws one entity: its derivatives prepare for the
+/// current generation and together hold valid values. Returns that generation.
+fn assert_displays(
     library: &LidarLibrary,
-    layer_id: &str,
-    tileset: &common_types::lidar::LidarTileset,
-    cancel: &AtomicBool,
-) -> (String, u32, u32, u32, Vec<u8>) {
-    let generation_id = match &tileset.source {
-        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
-            generation_id.clone()
-        }
-        _ => panic!("an on-demand tileset must name the generation it reads"),
-    };
-    for z in (0..=tileset.max_zoom).rev() {
-        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
-        let half = 20_037_508.342_789_244;
-        let bounds = {
-            let connection = library.catalogue().unwrap();
-            let raw: String = connection
-                .query_row(
-                    "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
-                    [&generation_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            serde_json::from_str::<Vec<f64>>(&raw).unwrap()
-        };
-        let centre_x = (bounds[0] + bounds[2]) / 2.0;
-        let centre_y = (bounds[1] + bounds[3]) / 2.0;
-        let x = ((centre_x + half) / span).floor() as u32;
-        let y = ((half - centre_y) / span).floor() as u32;
-        let bytes = library
-            .render_tile(
-                "source",
-                layer_id,
-                &generation_id,
-                "elevation",
-                z,
-                x,
-                y,
-                cancel,
+    kind: common_types::lidar::LidarSampleEntityKind,
+    entity_id: &str,
+) -> String {
+    library
+        .prepare_display_now(kind, entity_id)
+        .expect("display derivatives prepare");
+    let descriptor = library
+        .display_descriptor(&common_types::lidar::LidarDisplayRequest {
+            kind,
+            entity_id: entity_id.to_string(),
+            expected_generation_id: None,
+            retry: false,
+        })
+        .expect("descriptor reads");
+    assert_eq!(
+        descriptor.state,
+        common_types::lidar::LidarDisplayState::Ready,
+        "{:?}",
+        descriptor.message
+    );
+    assert!(
+        !descriptor.assets.is_empty(),
+        "a displayed entity has assets"
+    );
+    let valid = descriptor.assets.iter().any(|asset| {
+        let output = library
+            .inner
+            .engine
+            .run(
+                engine::GdalProgram::Info,
+                &[
+                    "-json".to_string(),
+                    "-stats".to_string(),
+                    "--config".to_string(),
+                    "GDAL_PAM_ENABLED".to_string(),
+                    "NO".to_string(),
+                    asset.path.clone(),
+                ],
+                None,
             )
-            .expect("tile renders");
-        // An empty tile is the shared transparent 1x1 PNG; a drawn tile is a
-        // full 256x256 image.
-        let drawn = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-            .map(|image| image.width() == 256 && image.height() == 256)
-            .unwrap_or(false);
-        if drawn {
-            return (generation_id, z, x, y, bytes);
-        }
-    }
-    panic!("the on-demand tileset drew nothing at any advertised zoom");
+            .expect("derivative opens through GDAL");
+        let info: serde_json::Value = serde_json::from_str(&output.stdout).expect("info is JSON");
+        info["bands"][0]["metadata"][""]["STATISTICS_VALID_PERCENT"]
+            .as_str()
+            .and_then(|value| value.parse::<f64>().ok())
+            .is_some_and(|percent| percent > 0.0)
+    });
+    assert!(
+        valid,
+        "the display derivatives of {entity_id} hold no valid values"
+    );
+    descriptor
+        .generation_id
+        .expect("a ready descriptor names its generation")
 }
 
 fn assert_known_slope(engine: &engine::GdalEngine, root: &std::path::Path, cancel: &AtomicBool) {
@@ -354,7 +289,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(completed_job.progress, None);
     println!("published: {}", outcome.summary());
 
-    // Snapshot shows the layer with an elevation tileset.
+    // Snapshot shows the layer with its display derivatives.
     let snapshot = library.library_snapshot().expect("snapshot");
     assert_eq!(snapshot.layers.len(), 1);
     let layer = &snapshot.layers[0];
@@ -365,14 +300,11 @@ fn e2e_import_publish_slope_restart_reuse() {
             .expect("this fixture measured its coverage")
             > 3_000_000
     );
-    assert!(
-        layer
-            .tilesets
-            .iter()
-            .any(|t| t.style == "elevation" && t.max_zoom >= t.min_zoom)
+    assert_displays(
+        &library,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &layer_id,
     );
-    assert!(!layer.tilesets.is_empty(), "display pyramid registered");
-    assert_tileset_has_visible_pixels(&engine, &layer.tilesets[0]);
 
     // 4. One persisted slope result via the analysis pipeline.
     let receipt = library
@@ -434,14 +366,14 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(snapshot.analyses.len(), 1);
     let analysis = &snapshot.analyses[0];
     assert_eq!(analysis.state, common_types::lidar::LidarResultState::Ready);
-    assert!(
-        analysis.tilesets.iter().any(|t| t.style == "slope"),
-        "slope tileset registered"
+    assert_displays(
+        &library,
+        common_types::lidar::LidarSampleEntityKind::Analysis,
+        &analysis.id,
     );
-    assert_tileset_has_visible_pixels(&engine, &analysis.tilesets[0]);
     println!("analysis ready: {:?}", analysis.value_range);
 
-    // 5. Restart reuse: reopen the library; layers, results, tilesets and
+    // 5. Restart reuse: reopen the library; layers, results, displays and
     // immutable originals all survive without recomputation.
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
@@ -452,12 +384,16 @@ fn e2e_import_publish_slope_restart_reuse() {
         snapshot.analyses[0].state,
         common_types::lidar::LidarResultState::Ready
     );
-    assert!(
-        !snapshot.analyses[0].tilesets.is_empty(),
-        "tilesets survive restart"
+    assert_displays(
+        &reopened,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &snapshot.layers[0].id,
     );
-    assert_tileset_has_visible_pixels(&engine, &snapshot.layers[0].tilesets[0]);
-    assert_tileset_has_visible_pixels(&engine, &snapshot.analyses[0].tilesets[0]);
+    assert_displays(
+        &reopened,
+        common_types::lidar::LidarSampleEntityKind::Analysis,
+        &snapshot.analyses[0].id,
+    );
     let engine_status = reopened.engine_status();
     assert!(engine_status.available);
     assert_eq!(
@@ -528,7 +464,11 @@ fn e2e_import_publish_slope_restart_reuse() {
             .expect("this fixture measured its coverage")
             > 3_000_000
     );
-    assert_tileset_has_visible_pixels(&engine, &after_dense_undo.layers[0].tilesets[0]);
+    assert_displays(
+        &reopened,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &layer_id,
+    );
     let (unchanged_head, unchanged_members) = {
         let connection = reopened.catalogue().unwrap();
         (
@@ -599,18 +539,15 @@ fn e2e_import_publish_slope_restart_reuse() {
             .map(|cells| cells.max(0) as u64),
         "undo restores the dense composition's own coverage"
     );
-    let reverted_tileset = after_undo.layers[0]
-        .tilesets
-        .iter()
-        .find(|tileset| tileset.style == "elevation")
-        .expect("the restored composition stays displayable");
-    let (tile_generation, z, x, y, bytes) =
-        render_native_tile(&reopened, &layer_id, reverted_tileset, &cancel);
+    let displayed_generation = assert_displays(
+        &reopened,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &layer_id,
+    );
     assert_eq!(
-        tile_generation, undo.generation_id,
+        displayed_generation, undo.generation_id,
         "the restored head is what the map reads"
     );
-    println!("restored tile {z}/{x}/{y}: {} bytes", bytes.len());
     let undo_head = {
         let connection = reopened.catalogue().unwrap();
         catalogue::head_generation(&connection, &layer_id)
@@ -731,34 +668,12 @@ fn e2e_sparse_generation_lifecycle() {
         head.max_value
     );
 
-    // 2. The layer presents an on-demand tileset and renders real pixels.
-    let snapshot = library.library_snapshot().expect("snapshot");
-    let tileset = snapshot.layers[0]
-        .tilesets
-        .iter()
-        .find(|tileset| tileset.style == "elevation")
-        .expect("a sparse layer is displayable");
-    let (generation_id, z, x, y, bytes) = render_native_tile(&library, &layer_id, tileset, &cancel);
-    println!("native tile {z}/{x}/{y}: {} bytes", bytes.len());
-    assert!(bytes.len() > 100, "a drawn tile is a real PNG");
-
-    // A second request is served from the bounded cache.
-    let (hits_before, _) = library.tile_cache().unwrap().counters();
-    let again = library
-        .render_tile(
-            "source",
-            &layer_id,
-            &generation_id,
-            "elevation",
-            z,
-            x,
-            y,
-            &cancel,
-        )
-        .expect("tile renders again");
-    let (hits_after, _) = library.tile_cache().unwrap().counters();
-    assert_eq!(again, bytes, "the cached tile is the drawn tile");
-    assert!(hits_after > hits_before, "the repeat is a cache hit");
+    // 2. The layer's display derivatives prepare and hold its values.
+    let generation_id = assert_displays(
+        &library,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &layer_id,
+    );
 
     // 3. Slope over the chunked head publishes sparse result and quality.
     let receipt = library
@@ -834,17 +749,13 @@ fn e2e_sparse_generation_lifecycle() {
         analysis_head.max_value
     );
     let snapshot = library.library_snapshot().expect("snapshot after analysis");
-    let analysis_tileset = snapshot.analyses[0]
-        .tilesets
-        .iter()
-        .find(|tileset| tileset.style == "slope")
-        .expect("a sparse result is displayable");
-    assert!(matches!(
-        analysis_tileset.source,
-        common_types::lidar::LidarTileSource::NativeGeneration { .. }
-    ));
+    assert_displays(
+        &library,
+        common_types::lidar::LidarSampleEntityKind::Analysis,
+        &snapshot.analyses[0].id,
+    );
 
-    // 4. Restart reuse: the sparse head, its tiles and its result survive.
+    // 4. Restart reuse: the sparse head, its display and its result survive.
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
@@ -853,25 +764,14 @@ fn e2e_sparse_generation_lifecycle() {
         Some(head.coverage_cells.unwrap_or(0).max(0) as u64),
         "coverage survives restart"
     );
-    assert!(matches!(
-        snapshot.layers[0].tilesets[0].source,
-        common_types::lidar::LidarTileSource::NativeGeneration { .. }
-    ));
-    let rendered = reopened
-        .render_tile(
-            "source",
-            &layer_id,
-            &generation_id,
-            "elevation",
-            z,
-            x,
-            y,
-            &cancel,
-        )
-        .expect("tile renders after restart");
     assert_eq!(
-        rendered, bytes,
-        "the same immutable head renders the same tile"
+        assert_displays(
+            &reopened,
+            common_types::lidar::LidarSampleEntityKind::Source,
+            &layer_id
+        ),
+        generation_id,
+        "the same immutable head is displayed after restart"
     );
 
     // 5. Undo republishes from the remaining occurrences.
@@ -1112,92 +1012,17 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         display_max = head.display_max_value,
     );
 
-    // Display: the layer presents native tiles and a tile over the data draws.
-    let snapshot = library.library_snapshot().expect("snapshot");
-    let tileset = snapshot.layers[0]
-        .tilesets
-        .iter()
-        .find(|tileset| tileset.style == "elevation")
-        .expect("a sparse layer is displayable");
-    let generation_id = match &tileset.source {
-        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
-            generation_id.clone()
-        }
-        _ => panic!("a sparse generation has no asset template"),
-    };
-    let bounds: Vec<f64> = {
-        let connection = library.catalogue().unwrap();
-        let raw: String = connection
-            .query_row(
-                "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
-                [&generation_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        serde_json::from_str(&raw).unwrap()
-    };
-    let centre_x = (bounds[0] + bounds[2]) / 2.0;
-    let centre_y = (bounds[1] + bounds[3]) / 2.0;
-    let mut drawn = 0usize;
-    let mut drawn_bytes = 0usize;
-    for z in (tileset.min_zoom..=tileset.max_zoom).rev().take(4) {
-        let span = 40_075_016.685_578_49 / f64::from(1u32 << z);
-        let half = 20_037_508.342_789_244;
-        let x = ((centre_x + half) / span).floor() as u32;
-        let y = ((half - centre_y) / span).floor() as u32;
-        let cold = std::time::Instant::now();
-        let bytes = library
-            .render_tile(
-                "source",
-                &layer_id,
-                &generation_id,
-                "elevation",
-                z,
-                x,
-                y,
-                &cancel,
-            )
-            .expect("tile renders");
-        let cold = cold.elapsed();
-        // Three repeats of the same coordinate: the warm cost the map pays
-        // while panning back over a tile it has already drawn.
-        let mut repeats = Vec::with_capacity(3);
-        for _ in 0..3 {
-            let started = std::time::Instant::now();
-            let again = library
-                .render_tile(
-                    "source",
-                    &layer_id,
-                    &generation_id,
-                    "elevation",
-                    z,
-                    x,
-                    y,
-                    &cancel,
-                )
-                .expect("tile renders again");
-            repeats.push(started.elapsed());
-            assert_eq!(again, bytes, "a repeat renders the same immutable tile");
-        }
-        let visible = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-            .map(|image| image.width() == 256 && image.height() == 256)
-            .unwrap_or(false);
-        println!(
-            "tile {z}/{x}/{y}: {} bytes{}, cold {:.0} ms, three repeats {:.0}/{:.0}/{:.0} ms",
-            bytes.len(),
-            if visible { "" } else { " (empty)" },
-            cold.as_secs_f64() * 1000.0,
-            repeats[0].as_secs_f64() * 1000.0,
-            repeats[1].as_secs_f64() * 1000.0,
-            repeats[2].as_secs_f64() * 1000.0
-        );
-        if visible {
-            drawn += 1;
-            drawn_bytes += bytes.len();
-        }
-    }
-    assert!(drawn > 0, "a tile over the batch centre must draw");
-    println!("drawn tiles: {drawn} ({drawn_bytes} bytes)");
+    // Display: the layer's derivatives prepare and hold its values.
+    let prepared = std::time::Instant::now();
+    assert_displays(
+        &library,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &layer_id,
+    );
+    println!(
+        "display derivatives prepared in {:.0} ms",
+        prepared.elapsed().as_secs_f64() * 1000.0
+    );
 
     // The resource contract separates durable bytes, which a restart must
     // reproduce, from temporary bytes, which a settled job must not leave behind.
@@ -1227,10 +1052,6 @@ fn e2e_mnh_batch_import_apply_display_restart() {
             .as_deref(),
         Some("SourceEnvelope")
     );
-    assert!(matches!(
-        snapshot.layers[0].tilesets[0].source,
-        common_types::lidar::LidarTileSource::NativeGeneration { .. }
-    ));
     println!(
         "restart: coverage {:?}, display range {:?}",
         snapshot.layers[0].coverage_cells,
@@ -1437,77 +1258,16 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
     );
 
     let result_layer_id = snapshot.layers[0].id.clone();
-    let generation_id = match &snapshot.layers[0].tilesets[0].source {
-        common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
-            generation_id.clone()
-        }
-        other => panic!("expected a native generation, got {other:?}"),
-    };
-
-    // Display: a tile over the plane's middle draws real pixels.
-    let bounds: Vec<f64> = {
-        let connection = reopened.catalogue().unwrap();
-        let raw: String = connection
-            .query_row(
-                "SELECT bounds_3857 FROM lidar_layer_generations WHERE id = ?1",
-                [&generation_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        serde_json::from_str(&raw).unwrap()
-    };
-    let centre_x = (bounds[0] + bounds[2]) / 2.0;
-    let centre_y = (bounds[1] + bounds[3]) / 2.0;
-    let zoom = snapshot.layers[0].tilesets[0].min_zoom.max(10);
-    let span = 40_075_016.685_578_49 / f64::from(1u32 << zoom);
-    let half = 20_037_508.342_789_244;
-    let tile_x = ((centre_x + half) / span).floor() as u32;
-    let tile_y = ((half - centre_y) / span).floor() as u32;
-    let cold = std::time::Instant::now();
-    let tile = reopened
-        .render_tile(
-            "source",
-            &result_layer_id,
-            &generation_id,
-            "elevation",
-            zoom,
-            tile_x,
-            tile_y,
-            &cancel,
-        )
-        .expect("capacity tile renders");
-    let cold = cold.elapsed();
-    // Three repeats of the same immutable coordinate: the observed warm cost,
-    // reported as a measurement and never as a quota.
-    let mut repeats = Vec::with_capacity(3);
-    for _ in 0..3 {
-        let started = std::time::Instant::now();
-        let again = reopened
-            .render_tile(
-                "source",
-                &result_layer_id,
-                &generation_id,
-                "elevation",
-                zoom,
-                tile_x,
-                tile_y,
-                &cancel,
-            )
-            .expect("capacity tile renders again");
-        repeats.push(started.elapsed());
-        assert_eq!(again, tile, "a repeat renders the same immutable tile");
-    }
-    let visible = image::load_from_memory_with_format(&tile, image::ImageFormat::Png)
-        .map(|image| image.width() == 256 && image.height() == 256)
-        .unwrap_or(false);
-    assert!(visible, "a tile over the plane must draw");
+    // Display: the plane's derivatives prepare and hold its values.
+    let prepared = std::time::Instant::now();
+    let generation_id = assert_displays(
+        &reopened,
+        common_types::lidar::LidarSampleEntityKind::Source,
+        &result_layer_id,
+    );
     println!(
-        "tile {zoom}/{tile_x}/{tile_y}: {} bytes, cold {:.0} ms, three repeats {:.0}/{:.0}/{:.0} ms",
-        tile.len(),
-        cold.as_secs_f64() * 1000.0,
-        repeats[0].as_secs_f64() * 1000.0,
-        repeats[1].as_secs_f64() * 1000.0,
-        repeats[2].as_secs_f64() * 1000.0
+        "display derivatives prepared in {:.0} ms",
+        prepared.elapsed().as_secs_f64() * 1000.0
     );
 
     // Bounded numeric reads through the same resolver display and analysis use.

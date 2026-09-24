@@ -1,6 +1,6 @@
 # GeoLibre adoption — delivery receipt
 
-Status: in progress — S0 inventory recorded; later slices append evidence here as they land.
+Status: partial — S0–S3 evidence recorded; S4 and S5 append theirs as they land.
 Tracking: epic `canopi-8shm`; branch `feature/geolibre-adoption` from `feature/data-library-reference` `d6e1b65c` (itself `main` `e01e7d07` plus the plan and gallery reference).
 Current guidance: [adoption plan](geolibre-adoption-plan.md), [LiDAR guide](../../agent/lidar.md), [MapLibre guide](../../agent/maplibre.md).
 

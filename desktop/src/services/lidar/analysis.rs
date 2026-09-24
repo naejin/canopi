@@ -9,13 +9,9 @@
 
 use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
-use super::display::ColorRamp;
 use super::generation;
 use super::grid::RasterGrid;
-use super::import::{
-    GenerationManifest, publish_display, read_generation_manifest, remove_display_publication,
-    validate_working_grid,
-};
+use super::import::{GenerationManifest, read_generation_manifest, validate_working_grid};
 use super::prepared_raster::PreparedRaster;
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
 use serde::{Deserialize, Serialize};
@@ -207,7 +203,7 @@ fn slope_eligibility(
             "slope requires metre elevations; this layer reports '{layer_units}'"
         ));
     }
-    let info = super::display::gdalinfo_json(engine, cancel, raster)?;
+    let info = super::raster_info::gdalinfo_json(engine, cancel, raster)?;
     let wkt = info
         .get("coordinateSystem")
         .and_then(|system| system.get("wkt"))
@@ -314,8 +310,8 @@ fn compute_slope_block(
     // treat it as invalid before anything is persisted. A slope value can
     // never be negative, so a negative marker is unambiguous; a non-negative
     // one could collide with a real flat/sloped cell and is refused by name.
-    let info = super::display::gdalinfo_json(engine, cancel, &block_path)?;
-    let block_nodata = super::display::band_nodata(&info);
+    let info = super::raster_info::gdalinfo_json(engine, cancel, &block_path)?;
+    let block_nodata = super::raster_info::band_nodata(&info);
     if let Some(marker) = block_nodata
         && marker.is_finite()
         && marker >= 0.0
@@ -890,8 +886,8 @@ pub fn run_slope_job(
 
     // The analysis engine chooses the output nodata marker; read it back so
     // statistics and display treat unknown cells as unknown.
-    let result_info = super::display::gdalinfo_json(engine, cancel, &result_path)?;
-    let result_nodata = super::display::band_nodata(&result_info).or(Some(manifest.nodata));
+    let result_info = super::raster_info::gdalinfo_json(engine, cancel, &result_path)?;
+    let result_nodata = super::raster_info::band_nodata(&result_info).or(Some(manifest.nodata));
 
     // Exact result statistics, streamed in bounded windows from the slope
     // output's controlled derivative.
@@ -956,31 +952,15 @@ pub fn run_slope_job(
     staging.keep();
     let final_result = generation_dir.join("result.tif");
     let final_quality = generation_dir.join("quality.bin");
-    if let Err(error) = publish_display(
-        library,
-        cancel,
-        "analysis",
-        definition_id,
-        &generation_id,
-        &final_result,
-        result_nodata,
-        &ColorRamp::slope_degrees(),
-        None,
-    ) {
-        let _ = std::fs::remove_dir_all(&generation_dir);
-        return Err(error);
-    }
     {
         let connection = match library.catalogue() {
             Ok(connection) => connection,
             Err(error) => {
-                remove_display_publication(library, "analysis", definition_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
         };
         if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
-            remove_display_publication(library, "analysis", definition_id, &generation_id);
             let _ = std::fs::remove_dir_all(&generation_dir);
             return Err(error.to_string());
         }
@@ -1053,14 +1033,12 @@ pub fn run_slope_job(
             Ok(()) => {
                 if let Err(error) = connection.execute_batch("COMMIT") {
                     let _ = connection.execute_batch("ROLLBACK");
-                    remove_display_publication(library, "analysis", definition_id, &generation_id);
                     let _ = std::fs::remove_dir_all(&generation_dir);
                     return Err(error.to_string());
                 }
             }
             Err(error) if error == "source layer changed during analysis publication" => {
                 let _ = connection.execute_batch("ROLLBACK");
-                remove_display_publication(library, "analysis", definition_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Ok(AnalysisOutcome {
                     published: false,
@@ -1072,7 +1050,6 @@ pub fn run_slope_job(
             }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
-                remove_display_publication(library, "analysis", definition_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
@@ -1456,9 +1433,10 @@ mod tests {
             &cancel,
         )
         .expect("result converts");
-        let info = super::super::display::gdalinfo_json(engine, &cancel, &published.result_path)
-            .expect("result info");
-        let nodata = super::super::display::band_nodata(&info);
+        let info =
+            super::super::raster_info::gdalinfo_json(engine, &cancel, &published.result_path)
+                .expect("result info");
+        let nodata = super::super::raster_info::band_nodata(&info);
         let (mut min, mut max, mut cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
         for chunk in raw.chunks_exact(4) {
             let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);

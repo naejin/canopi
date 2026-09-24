@@ -12,7 +12,6 @@ use super::LidarLibrary;
 use super::admission;
 use super::catalogue::{self, new_id, now_iso};
 use super::collection;
-use super::display::{self, ColorRamp};
 use super::engine::{GdalEngine, GdalProgram};
 use super::generation::{self};
 use super::grid::{self, GeoTransform, RasterGrid, ValidMask, remap_mask_checked, union_grid};
@@ -2864,54 +2863,17 @@ pub fn apply_import(
         .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
     let final_mosaic = generation_dir.join("mosaic.tif");
     let final_coverage = generation_dir.join("coverage.bin");
-    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::RenderingMap, 65);
-    let last_display_percent = std::cell::Cell::new(65u8);
-    let display_progress = |progress: display::DisplayProgress| {
-        let percent = 65
-            + u8::try_from(
-                progress.completed_steps.saturating_mul(31) / progress.total_steps.max(1),
-            )
-            .unwrap_or(31)
-            .min(31);
-        if percent > last_display_percent.get() {
-            last_display_percent.set(percent);
-            library.record_import_progress(
-                &staging.job_id,
-                LidarImportProgressPhase::RenderingMap,
-                percent,
-            );
-        }
-    };
-    if let Err(error) = publish_display(
-        library,
-        cancel,
-        "source",
-        &layer_id,
-        &generation_id,
-        &final_mosaic,
-        Some(staging.layer_nodata),
-        &ColorRamp::elevation_range(
-            composed.min_value,
-            composed.max_value.max(composed.min_value + 1.0),
-        ),
-        Some(&display_progress),
-    ) {
-        let _ = std::fs::remove_dir_all(&generation_dir);
-        return Err(error);
-    }
     library.record_import_progress(&staging.job_id, LidarImportProgressPhase::Finalizing, 98);
     {
         let connection = match library.catalogue() {
             Ok(connection) => connection,
             Err(error) => {
-                remove_display_publication(library, "source", &layer_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
         };
         promotion_probe::check(promotion_probe::FaultPoint::BeforeTransaction)?;
         if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
-            remove_display_publication(library, "source", &layer_id, &generation_id);
             let _ = std::fs::remove_dir_all(&generation_dir);
             return Err(error.to_string());
         }
@@ -3011,14 +2973,12 @@ pub fn apply_import(
             Ok(()) => {
                 if let Err(error) = connection.execute_batch("COMMIT") {
                     let _ = connection.execute_batch("ROLLBACK");
-                    remove_display_publication(library, "source", &layer_id, &generation_id);
                     let _ = std::fs::remove_dir_all(&generation_dir);
                     return Err(error.to_string());
                 }
             }
             Err(error) => {
                 let _ = connection.execute_batch("ROLLBACK");
-                remove_display_publication(library, "source", &layer_id, &generation_id);
                 let _ = std::fs::remove_dir_all(&generation_dir);
                 return Err(error);
             }
@@ -3493,112 +3453,6 @@ pub fn undo_import(
             .map_err(|_| "import has no accepted publication to undo".to_string())?
     };
     undo_last_change(library, &layer_id, None, cancel)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn publish_display(
-    library: &LidarLibrary,
-    cancel: &AtomicBool,
-    entity_kind: &str,
-    entity_id: &str,
-    generation_id: &str,
-    numeric_raster: &Path,
-    nodata: Option<f32>,
-    ramp: &ColorRamp,
-    progress: Option<&dyn Fn(display::DisplayProgress)>,
-) -> Result<(), String> {
-    let style = ramp.style_name();
-    let dir =
-        library
-            .inner
-            .paths
-            .display_generation_dir(entity_kind, entity_id, generation_id, style);
-    let pyramid = match display::generate_pyramid(
-        &library.inner.engine,
-        cancel,
-        numeric_raster,
-        nodata,
-        ramp,
-        &dir,
-        progress,
-    ) {
-        Ok(pyramid) => pyramid,
-        Err(error) => {
-            let _ = std::fs::remove_dir_all(&dir);
-            tracing::warn!(
-                entity_kind,
-                entity_id,
-                generation_id,
-                error,
-                "LiDAR display rendering failed; generation publication aborted"
-            );
-            return Err(format!("LiDAR display rendering failed: {error}"));
-        }
-    };
-    if pyramid.tile_count == 0 || pyramid.bytes == 0 {
-        let _ = std::fs::remove_dir_all(&dir);
-        return Err("LiDAR display rendering produced no tile content".to_string());
-    }
-    let display = library.display().inspect_err(|_| {
-        let _ = std::fs::remove_dir_all(&dir);
-    })?;
-    let key = format!("{entity_kind}/{entity_id}/{generation_id}/{style}");
-    let bounds_json = serde_json::to_string(&pyramid.bounds_3857).map_err(|error| {
-        let _ = std::fs::remove_dir_all(&dir);
-        error.to_string()
-    })?;
-    display
-        .execute(
-            "INSERT INTO tilesets(key, entity_kind, entity_id, generation_id, style, dir, path_template, min_zoom, max_zoom, bounds_3857, tile_count, bytes, created_at)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
-             ON CONFLICT(key) DO UPDATE SET
-                dir=excluded.dir, path_template=excluded.path_template,
-                min_zoom=excluded.min_zoom, max_zoom=excluded.max_zoom,
-                bounds_3857=excluded.bounds_3857, tile_count=excluded.tile_count,
-                bytes=excluded.bytes",
-            rusqlite::params![
-                key,
-                entity_kind,
-                entity_id,
-                generation_id,
-                style,
-                dir.display().to_string(),
-                pyramid.path_template,
-                pyramid.min_zoom as i64,
-                pyramid.max_zoom as i64,
-                bounds_json,
-                pyramid.tile_count as i64,
-                pyramid.bytes as i64,
-                now_iso(),
-            ],
-        )
-        .map_err(|error| {
-            let _ = std::fs::remove_dir_all(&dir);
-            format!("Failed to register LiDAR display tiles: {error}")
-        })?;
-    Ok(())
-}
-
-pub(crate) fn remove_display_publication(
-    library: &LidarLibrary,
-    entity_kind: &str,
-    entity_id: &str,
-    generation_id: &str,
-) {
-    if let Ok(display) = library.display() {
-        let _ = display.execute(
-            "DELETE FROM tilesets WHERE entity_kind = ?1 AND entity_id = ?2 AND generation_id = ?3",
-            rusqlite::params![entity_kind, entity_id, generation_id],
-        );
-    }
-    let generation_dir = library
-        .inner
-        .paths
-        .display_dir()
-        .join(entity_kind)
-        .join(entity_id)
-        .join(generation_id);
-    let _ = std::fs::remove_dir_all(generation_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -5238,8 +5092,9 @@ mod tests {
 
     /// The CRS this engine reports for a raster, as a source probe would.
     fn declared_wkt(engine: &GdalEngine, raster: &Path) -> String {
-        let info = super::super::display::gdalinfo_json(engine, &AtomicBool::new(false), raster)
-            .expect("gdalinfo reads the fixture");
+        let info =
+            super::super::raster_info::gdalinfo_json(engine, &AtomicBool::new(false), raster)
+                .expect("gdalinfo reads the fixture");
         info.get("coordinateSystem")
             .and_then(|system| system.get("wkt"))
             .and_then(|wkt| wkt.as_str())
@@ -7316,33 +7171,13 @@ mod tests {
         assert!(valid.iter().all(|byte| *byte == 1));
         assert!(samples.iter().all(|value| *value == 7.0));
 
-        // Display: the layer still presents and renders a native tile.
-        let snapshot = library.library_snapshot().expect("snapshot");
-        let tileset = snapshot.layers[0]
-            .tilesets
-            .iter()
-            .find(|tileset| tileset.style == "elevation")
-            .expect("displayable");
-        let generation_id = match &tileset.source {
-            common_types::lidar::LidarTileSource::NativeGeneration { generation_id } => {
-                generation_id.clone()
-            }
-            _ => panic!("a sparse generation has no asset template"),
-        };
-        let span = 40_075_016.685_578_49 / f64::from(1u32 << 20);
-        let half = 20_037_508.342_789_244;
+        // Display: the layer's derivatives still prepare for its head.
         library
-            .render_tile(
-                "source",
+            .prepare_display_now(
+                common_types::lidar::LidarSampleEntityKind::Source,
                 &layer_id,
-                &generation_id,
-                "elevation",
-                20,
-                ((250.0 + half) / span).floor() as u32,
-                ((half - 250.0) / span).floor() as u32,
-                &cancel,
             )
-            .expect("tile renders");
+            .expect("a grandfathered layer stays displayable");
 
         // Undo restores accepted history without re-admitting anything.
         let undone = undo_import(&library, &job_id, &cancel).expect("undo publishes");
@@ -8070,169 +7905,6 @@ mod tests {
     ) -> PathBuf {
         write_placed_fixture(engine, dir, name, origin_x, origin_y, 1, 1, -9999.0, value)
     }
-    /// A tile whose samples read reduced cells keeps every source that reaches
-    /// those footprints, including one that lies outside the sample centres.
-    ///
-    /// Tile 14/8192/8191 starts at the layer anchor with a 1 m lattice, so its
-    /// samples are ~9.55 native cells apart and the first one is minified to
-    /// level 3. That sample reads reduced cells (0, 0) and (1, 0) plus their
-    /// vertical neighbours, whose footprints cover native cells `[0, 16)` while
-    /// the mapped sample centres start at cell 4. A candidate prefilter built
-    /// from the sample centres alone therefore drops a source holding only
-    /// cells 0..2 and draws nothing, even though those cells are exactly what
-    /// the first reduction cell averages.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_tile_near_its_edge_keeps_the_sources_inside_its_reduction_footprint() {
-        use super::super::display::ColorRamp;
-        use super::super::tiles;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("ordered-tile-edge"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        // The layer anchor is the north-west corner of the tile, so both
-        // sources sit on lattice cells [0, 2) — the footprint of the first
-        // reduced cell, reached by no sample centre.
-        let bounds = tiles::tile_bounds_3857(14, 8192, 8191);
-        let bottom = write_placed_fixture(
-            &engine,
-            &root,
-            "edge-bottom",
-            bounds[0],
-            bounds[3],
-            2,
-            2,
-            -9999.0,
-            7.0,
-        );
-        // Imported second, so it is the topmost occurrence and wins where the
-        // two overlap: the composed cells are 7 above 9 below the seam.
-        let top = write_placed_fixture(
-            &engine,
-            &root,
-            "edge-top",
-            bounds[0],
-            bounds[3] - 1.0,
-            2,
-            2,
-            -9999.0,
-            9.0,
-        );
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "tile edge",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_first_job, first_staging) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        apply_import(&library, &first_staging, true, false, &cancel).expect("first applies");
-        let (_second_job, second_staging) = stage_review(&library, &layer_id, &[top], &cancel);
-        let stacked =
-            apply_import(&library, &second_staging, true, false, &cancel).expect("second applies");
-
-        // The published composition overlaps by two cells, so its exact values
-        // are 7 and 9 rather than either source's constant.
-        let head = head_of(&library, &layer_id);
-        assert_eq!(head.id, stacked.generation_id);
-        assert_eq!(head.coverage_cells, None);
-        assert_eq!(head.min_value, None);
-        assert_eq!(head.max_value, None);
-        assert_eq!(head.display_min_value, Some(7.0));
-        assert_eq!(head.display_max_value, Some(9.0));
-
-        let request = |z: u32, x: u32, y: u32| tiles::TileRequest {
-            entity_kind: "source".to_string(),
-            entity_id: layer_id.clone(),
-            generation_id: stacked.generation_id.clone(),
-            style: "elevation".to_string(),
-            z,
-            x,
-            y,
-        };
-
-        // The minified tile resolves its first reduced cell from both sources:
-        // the composed cell mean is (2 * 7 + 4 * 9) / 6, and only that cell
-        // holds coverage, so exactly the corner sample is painted. Its index is
-        // the one the fixture was placed against: the floor of the derived index
-        // sits on a tile boundary where the floating-point value rounds down.
-        let png = match tiles::render_tile(&library, &request(14, 8192, 8191), &cancel).unwrap() {
-            tiles::TileOutcome::Png(bytes) => bytes,
-            tiles::TileOutcome::Empty => {
-                panic!("the two edge sources contribute to the first level-3 reduction cell")
-            }
-        };
-        let (width, height, rgba) = decode_tile(&png);
-        assert_eq!((width, height), (tiles::TILE_PIXELS, tiles::TILE_PIXELS));
-        let ramp = ColorRamp::elevation_range(7.0, 9.0);
-        let composed = (2.0 * 7.0 + 4.0 * 9.0) / 6.0;
-        let expected = ramp.colour_for(composed).expect("8.33 is inside the ramp");
-        let painted: Vec<[u8; 4]> = rgba
-            .chunks_exact(4)
-            .filter(|pixel| pixel[3] == 255)
-            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
-            .collect();
-        assert_eq!(
-            painted.len(),
-            1,
-            "only the corner sample interpolates the one occupied reduced cell"
-        );
-        assert_eq!(
-            (painted[0][0], painted[0][1], painted[0][2]),
-            expected,
-            "the painted sample is the composed overlap mean"
-        );
-
-        // Native scale reads the same composition through its own two-cell
-        // window: the source is still found and the tile is mostly transparent.
-        // The tile is the one holding the source's own centre, away from the
-        // boundary that makes a derived index ambiguous.
-        let world = {
-            let world = tiles::tile_bounds_3857(0, 0, 0);
-            world[2] - world[0]
-        };
-        let span = world / f64::from(1u32 << 17);
-        let half = world / 2.0;
-        let png = match tiles::render_tile(
-            &library,
-            &request(
-                17,
-                ((bounds[0] + 1.0 + half) / span).floor() as u32,
-                ((half - bounds[3] + 1.0) / span).floor() as u32,
-            ),
-            &cancel,
-        )
-        .unwrap()
-        {
-            tiles::TileOutcome::Png(bytes) => bytes,
-            tiles::TileOutcome::Empty => panic!("the source is present at native scale"),
-        };
-        let (_, _, rgba) = decode_tile(&png);
-        let painted = rgba.chunks_exact(4).filter(|pixel| pixel[3] == 255).count();
-        assert!(painted > 0, "the source draws at native scale");
-        assert!(
-            painted < (tiles::TILE_PIXELS * tiles::TILE_PIXELS) as usize,
-            "a 2x2 m source does not fill a 305 m tile"
-        );
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// Decode a rendered tile into RGBA8 pixels.
-    fn decode_tile(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
-        let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-            .expect("tile is a PNG")
-            .to_rgba8();
-        (image.width(), image.height(), image.into_raw())
-    }
-
     /// A failed publication rolls its own promotions back, keeps a reused asset
     /// and leaves the accepted head readable.
     #[test]

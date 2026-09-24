@@ -19,7 +19,6 @@ function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentation
     opacity: 0.8,
     order: 0,
     bounds: [0, 0, 1, 1],
-    tilesets: [],
     generationId: 'gen-2',
     displayRange: [104, 132],
     ...overrides,
