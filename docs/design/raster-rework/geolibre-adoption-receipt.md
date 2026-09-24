@@ -53,3 +53,25 @@ Setup: baseline `d6e1b65c` release build with debug assertions (needed for the i
 | Warm native tile cache after reload | 0.65 s | 0.70 s | 0.43 s / 7.7 s | 68 (463 ms) |
 
 Baseline import times on the same build: IGN tile 1.5 s, 24 adjacent 2000×2000 tiles 19.8 s, 20000×20000 capacity plane 59.7 s. Display-derivative preparation of the capacity plane with `gdal_translate -of COG` (DEFLATE, 256 blocks, AVERAGE overviews, 2 threads): 18.2 s, 335 MB peak RSS, 21 MB output.
+
+## S1 — upstream renderer in the Desktop WebView
+
+Revision `9d84640a`. Route: `maplibre-gl-raster@0.14.15` public `LayerManager` with `engine: 'cog-tiler-wasm'`, `cog-tiler-wasm@0.4.0` and `whitebox-wasm@0.6.0` hosted in two module-worker lanes (`desktop/web/src/maplibre/raster-display/`), MapLibre 6.10.0 deduplicated. No upstream file is patched: the adapter uses the public `LayerManagerDeps` seam (`loadCogTiler`, `loadMosaic`, `computeAutoStats`). Two upstream behaviours needed adapter glue, recorded with tests: the engine never forwards MapLibre's abort signal (the pool drops queued tiles outside the live viewport, newest first), and it gates its first map mutation on `isStyleLoaded()`, which stays false while basemap tiles load, then waits for a style event a settled style never emits (the adapter re-applies on `idle`/`sourcedata` until every desired layer reaches the map; found by driving the 24-source mosaic in the app, RED test in `raster-display-adapter.test.ts`). `CogSource.tileCache` is replaced per source with a lane-wide LRU so one 128 MiB decoded-block budget covers all sources; the worker fails loudly if the pinned module stops exposing that field.
+
+Driven proof (release build with debug assertions and the production CSP, isolated profile on Xephyr `:99`, llvmpipe software GL, `results-s1-journey.json`):
+
+- A v6 Design with 30 plants over the IGN MNH item: select-all + Delete during a decode burst made Undo available after 36 ms while 15 tiles decoded in the following 2 s; one frame gap above 50 ms (56 ms). Undo restored the plants above the raster band.
+- Canvas → Location during a decode burst disposed the renderer client with 8 queued and 10 in-flight renders; both lanes stopped and no tile was delivered afterwards; no page error. Returning to Canvas recreated the map (style load), restarted two lanes and delivered the first tile after 1.2 s.
+- External origins fetched: the OSM basemap only. WASM, worker and CRS handling are bundled/offline (no `epsg.io` request).
+
+Derivative preparation (library display lane, same profile): IGN tile 1 derivative in about 1 s; 24 adjacent 2000×2000 tiles, 24 derivatives in 21.7 s; 20000×20000 capacity plane in 20.4 s; 30 MB total on disk.
+
+Ready-data display after a page reload (derivatives prepared, renderer caches cold, OS file cache warm), timed at the worker-lane boundary from the recent-Design click; 32 scripted wheel interactions per item:
+
+| Item | First tile | Viewport complete | Interactions needing new tiles: p50 / p95 / max |
+| --- | --- | --- | --- |
+| IGN MNH tile | 1.29 s | 1.43 s | 274 / 667 / 667 ms (7) |
+| 24-tile mosaic | 1.01 s | 1.19 s | 413 / 940 / 940 ms (6) |
+| Capacity plane | 1.11 s | 1.40 s | 357 / 649 / 649 ms (8) |
+
+The 2 s first-useful-viewport target is met on this environment. The 250 ms warm pan/zoom p95 target is **missed** for interactions that need new tiles (most interactions need none; p50 of all interactions is 0 ms). A four-lane measurement lowered the tile-bearing p95 to 594–631 ms but delayed the first tile to 1.19–1.53 s, so the plan's two lanes are kept. The remaining cost is per-tile reprojection/colorizing in the WASM path on software GL; no further optimisation program was started. Compared with the captured baseline cold route (first tile 5.0 s, viewport 29.8 s, p95 19.6 s) the migrated route removes the native per-tile rendering stall; the warm native tile cache (p95 0.43 s) remains faster for repeat interactions over already-rendered areas.
