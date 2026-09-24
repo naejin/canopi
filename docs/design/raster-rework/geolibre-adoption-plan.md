@@ -1,6 +1,6 @@
 # Canopi application plan: GeoLibre reuse and a simpler Data Library
 
-Status: proposed — user-approved product direction: library and fast display first, two dock surfaces, no dataset history or automatic analysis refresh; contextual analysis follows. Import grouping remains a blocking product decision for the import slice. Implementation is not yet authorized.
+Status: proposed — user-approved product direction: library and fast display first, two dock surfaces, one fixed item per import, no dataset history or automatic analysis refresh; contextual analysis follows. Import grouping is settled. Implementation is not yet authorized.
 Tracking: user-requested planning; create execution beads only after authorization. Existing raster qualification remains in `canopi-j571.3` under `canopi-j571.1`; it is not silently replaced by this proposal.
 Current guidance: [architecture ownership](../../workflow/architecture-ownership.md), [edition development](../../agent/edition-development.md), [Canvas](../../agent/canvas-runtime.md), [MapLibre](../../agent/maplibre.md), [LiDAR](../../agent/lidar.md), [Design lifecycle](../../agent/document-lifecycle.md), [database](../../agent/database.md), and [interface contract](../../../.interface-design/system.md).
 
@@ -36,7 +36,9 @@ Keep the existing .canopi v6 reference format and its admission rules. Use a ver
 
 ### Import grouping decision
 
-Pending user answer: should a multi-file selection create one fixed combined library item, or one item per file? Recommended: one combined item per compatible batch, using the existing ordered-source reader with fixed contents. This choice blocks the import model and its fixtures, not the renderer proof, shell simplification or compatibility investigation. Do not treat the recommendation as approved until answered.
+**Accepted by the user on 2026-09-24: one fixed library item per import.** A submitted selection of one or several compatible TIFFs publishes one named item referencing the independent managed source assets. Reuse the existing ordered-source reader. Importing more files later creates another item; it never appends to or replaces the contents of an existing one. Shared source bytes may use existing deduplication without collapsing distinct library identities. Retrying a failed import retains its item/request identity and creates a new job, avoiding duplicate successful items.
+
+Retain whole-batch compatibility checks for measurement, units, CRS and aligned lattice. If any selected source is incompatible or preparation fails, publish none of the batch; show the affected file and reason rather than silently splitting the selection or accepting a subset. Preserve the displayed selection order in the saved request and snapshot: the first listed valid source wins at an overlap, and NoData reveals the next valid source. Show this rule with the file list when overlap exists; no source-priority editor is added. Retry preserves the same order.
 
 Grouping is metadata, not a request to merge pixels into a giant raster. Keep independent source assets and per-asset overviews, select viewport candidates and process analysis in bounded windows. Test adjacent tiles and distant footprints separately: empty gaps must not cause full-union allocation. File count, total processing and cache/decoder limits still require admission and measurement; a logical collection does not make size unlimited.
 
@@ -219,7 +221,7 @@ Clicking the name/preview opens details in the same dock. Back restores search, 
 
 Open the native picker before creating anything. Cancelling it creates no item/job and does not dirty the Design. Read metadata, suggest an editable name, and ask only for interpretation required to use the samples correctly. Ground elevation versus surface/height cannot be guessed from a filename; unknown semantics remain explicitly unknown and ineligible for Slope. Unsupported/incompatible input is explained beside the relevant file before publication.
 
-Import saves to the library. It does **not** implicitly attach to a Design or move its camera: the visible Add to Design action is the single attachment step. After success reveal the new item while preserving the user's search state for Back. For several files use the resolved grouping contract in section 1. No empty-dataset setup, existing-destination picker, before/after comparison, source-priority editor or separate Apply stage.
+Import saves to the library. It does **not** implicitly attach to a Design or move its camera: the visible Add to Design action is the single attachment step. After success reveal the new item while preserving the user's search state for Back. A multi-file selection produces one item under the accepted grouping contract in section 1; source filenames remain available in details. No empty-dataset setup, existing-destination picker, before/after comparison, source-priority editor or separate Apply stage.
 
 Progress and errors appear beside the affected operation, with Cancel/Retry. Closing the dock or changing Design leaves library work running; only explicit Cancel cancels it. A failed import remains an honest failed operation, never a Ready empty dataset. Retry uses the saved request and new job identity; a missing original file requires choosing it again and revalidating it. Dismissing a never-published failed/cancelled item removes only that operation's unreferenced staging/metadata. Late completion cannot reinsert a dismissed item or attach into another Design.
 
@@ -324,6 +326,9 @@ These expectations follow the accepted library/presentation separation, not the 
 | Starting state and action | Expected observation |
 | --- | --- |
 | Empty library; open picker then cancel | No item/job/reference created; Design stays clean. |
+| Import two compatible adjacent TIFFs together, then import a third separately | First submission creates one item covering both source footprints; the second creates a different item. Independent assets remain separate; the first item's content/identity is unchanged. |
+| Import distant or overlapping TIFFs as one batch | Distant gaps cause no full-union raster allocation. Overlap uses the saved first-listed-valid rule for native inspection/analysis; display follows the upstream amendment. Retry preserves file order. |
+| One incompatible or failed source in a multi-file import | No subset is published and no Ready item is reported; the affected file is identified. A successful Retry publishes the same item once. |
 | Import completes while Design A is replaced by B | Item appears in the global library; neither Design receives an implicit attachment. |
 | Search/type filter → details → Back | Query, filter, scroll and focus restored; no raster import/read is repeated to restore list state. |
 | Add an item to A twice, hide it, then inspect its library row | One reference; row says Added; second Add did not reset presentation. |
