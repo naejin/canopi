@@ -75,3 +75,41 @@ Ready-data display after a page reload (derivatives prepared, renderer caches co
 | Capacity plane | 1.11 s | 1.40 s | 357 / 649 / 649 ms (8) |
 
 The 2 s first-useful-viewport target is met on this environment. The 250 ms warm pan/zoom p95 target is **missed** for interactions that need new tiles (most interactions need none; p50 of all interactions is 0 ms). A four-lane measurement lowered the tile-bearing p95 to 594–631 ms but delayed the first tile to 1.19–1.53 s, so the plan's two lanes are kept. The remaining cost is per-tile reprojection/colorizing in the WASM path on software GL; no further optimisation program was started. Compared with the captured baseline cold route (first tile 5.0 s, viewport 29.8 s, p95 19.6 s) the migrated route removes the native per-tile rendering stall; the warm native tile cache (p95 0.43 s) remains faster for repeat interactions over already-rendered areas.
+
+## S2 — fixed library and migration
+
+Revisions `c3417d69` (fixed items, v19 catalogue, refresh retirement) and `7b165a7a` (result rename). Native proof: `services::lidar::fixed_library_tests` (delete guard, import item/retry/dismiss, empty import refused, GDAL publish with display ready and nothing refreshed, rename) and the v19 migration test in `catalogue.rs`.
+
+Real-binary migration proof (S3 measurement build `16e4e392`, release with debug assertions, Xephyr `:99`): a legacy library written by the baseline v18 binary (`d6e1b65c`) — three sources (among them the 24-tile composition with three history versions and the capacity plane), two Horn results (Degrees on the 24 tiles, Percent on the plane) and four settled analysis jobs — was copied with hardlinks broken and opened.
+
+- Catalogue v18 → v19; `VACUUM INTO` backup `lidar-library.sqlite.backup-v18-…` written first.
+- Layer and result identities, names, current generations and units identical before and after; all 20 recorded `lidar_sample_pixel` outcomes identical (18 values, 2 NoData).
+- No job spawned: analysis jobs stayed 4 complete, import jobs 3 complete; generations 5 and 4 unchanged. Legacy results keep `method_id`/`recipe_version` NULL and show Horn.
+- The retired `display/` and `display-tiles/` stores were reclaimed on open.
+- The baseline v18 binary then refused the migrated library at start-up: "LiDAR catalogue schema version 19 is newer than supported 18"; the catalogue stayed at v19.
+
+## S3 — Data Library and Layers
+
+Revisions `b7af2976` (Data Library dock, Layers data band, removal of Data/Analysis panels, Analysis navigation, history/source editors and 85 obsolete strings) and `16e4e392` (native tile route retired: `tiles.rs`, `tile_cache.rs`, PNG pyramid publication at import and analysis, `lidar_raster_tile`, the `tilesets` contract, history/edit contract types; asset scope narrowed to `$APPDATA/lidar/display-cog/*.tif`; `gdalwarp` no longer required; about 4,800 lines removed).
+
+Driven Desktop journey (`adoption-bench/s3-journey.mjs`, `results-s3-journey.json`; fresh profile, real GTK file chooser driven through XTest, production UI and IPC throughout; IGN LiDAR HD MNH tile `0445_6806`, 2000×2000 at 0.5 m):
+
+| Step | Result |
+| --- | --- |
+| Chooser cancel | no form, no item |
+| Import (submit → Ready, display derivatives included) | accepted in 146 ms, Ready in 3.1 s |
+| Row preview after Ready | 0.34 s |
+| Search hit / no match / clear | found; "No data matches" shown; list restored |
+| Add to Design → first map tile | 0.65 s (12 tiles within 1.5 s) |
+| Select-all + Delete while tiles decode → Undo available | 81 ms |
+| Layers: Fit, Return offered, legend, Inspect | all present; Inspect pressed |
+| Sample at view centre | 0.0000 m at 48.299927, −0.432810 in 192 ms |
+| Remove from Design | band empty; item stays in the library |
+| Reuse in Design B → first tile | 0.46 s |
+| Save both, reopen | A has no data reference; B lists the item and draws it |
+
+No page errors. Deliberately removed surfaces are absent: no Analysis navigation, no History. Earlier runs of the same journey (import 3.2 s, first tile 0.54 s, reuse 0.50 s) agree.
+
+Gates at `16e4e392`: `npx tsc --noEmit`; full Vitest 286 files / 2795 tests; `npm run check:ui`; `npm run build`; `npm run build:web` (boundary check passes); `npm run gen:types` + `check:types`; `cargo fmt --check`; `cargo clippy --workspace --all-targets -D warnings`; `cargo test --workspace` (358 lib tests); serial GDAL lane 65 passed, 3 failed only for missing fixtures (IGN MNT tile absent on this machine for the dense and sparse e2e lanes; capacity plane not set) — the capacity-plane lane then passed with `CANOPI_LIDAR_CAPACITY_PLANE` set (display derivatives for the 397M-cell plane in 12.9 s, seams and NoData holes exact). The dense and sparse e2e lanes remain **unverified** here for want of the IGN MNT fixture.
+
+Environment notes: release binaries resolve the plant database from `/usr/lib/Canopi` (schema 8), so the catalog reports "corrupt" in these runs; this does not affect the library. The first GTK chooser in a fresh nested session can wait on GVFS start-up.
