@@ -2,7 +2,7 @@
 
 Status: evidence.
 Tracking: `canopi-ltck.1`.
-Current guidance: [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md), [MapLibre](../agent/maplibre.md).
+Current guidance: [ADR 0001](../adr/0001-geolocated-map-canvas.md), [MapLibre](../agent/maplibre.md).
 
 This dated inventory records inputs to the completed v2 rendering experiment. Paths, versions and gaps below describe its pinned baseline, not current defects. Consult the linked operating guides for present ownership.
 

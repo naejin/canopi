@@ -25,7 +25,7 @@ Review is proportional to risk. Do not create an architecture committee for ever
 For architecture-sensitive work, the main agent inspects relevant code, callers, tests and accepted decisions before handing off. One current handoff must identify:
 
 - Outcome, inspected revision, scope, existing work to preserve and explicit exclusions.
-- Fixed decisions: interfaces and dependencies; data/resource owners; setup, update, cancellation and teardown; failures/recovery; compatibility/migration; applicable security and resource constraints.
+- Fixed decisions: interfaces and dependencies; data/resource owners; setup, update, cancellation and teardown; failures/recovery; handling of old data (refuse, set aside or delete; no migrations); applicable security and resource constraints.
 - Delegated choices: what the implementer may decide locally without another courier exchange.
 - Evidence: representative inputs, positive and failure cases, independently derived expected outcomes, required gates, unavailable environments and acceptance owner.
 - Execution limits: first action, internal milestones, stop/escalation conditions and actions requiring separate user authorization.

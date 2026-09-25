@@ -42,13 +42,13 @@ The [protocol](collaboration-protocol.md) owns raster-specific execution/evidenc
 | [Ordered COG independent review](ordered-cog-review.md) | Acceptance at `34e4ded4`; earlier findings and evidence limits retained by revision |
 | [Ordered COG delivery receipt](ordered-cog-receipt.md) | Implementer revisions, capabilities, gate lane, finding-to-regression map, mounted-map evidence, migration limits and unavailable observations |
 | [Ordered COG design](ordered-cog-design.md) | Fixed product, persistence, lifecycle, UI and acceptance decisions, including the repair contract |
-| [Ordered COG ADR](../../adr/0027-ordered-cog-data-layers.md) | User-selected replacement for compulsory merged-source publication |
+| [Ordered COG ADR](../../adr/0002-geolibre-module-reuse.md) | User-selected replacement for compulsory merged-source publication |
 | [Bounded-generation completion assignment](bounded-generation-completion-agent-prompt.md) | Retired: delivered through `0696bd3d`; C1/C2 accepted in scope, product closure partial |
 | [Delivered BG1–BG5 assignment](bounded-generation-correction-agent-prompt.md) | Retired; preserve the improvements delivered through `9ad85c18` |
 | [Bounded-generation independent review](bounded-generation-review.md) | `6a5130b3` disposition, source evidence and limits of independently repeated tests |
 | [Bounded-generation initial assignment](bounded-generation-agent-prompt.md) | Retired kickoff; continue the correction, not a new bead or baseline |
 | [Bounded-generation design](bounded-generation-design.md) | Historical source-merge design; superseded for new work by the ordered COG design |
-| [Sparse-generation ADR](../../adr/0026-sparse-raster-generations.md) | Historical decision; superseded for new source composition by ADR 0027, preserved assets remain readable |
+| [Sparse-generation ADR](../../adr/0002-geolibre-module-reuse.md) | Historical decision; superseded for new source composition by ADR 0027, preserved assets remain readable |
 | [GeoLibre review-correction assignment](geolibre-integration-followup-agent-prompt.md) | Retired; D1/R1 accepted at `a5fc7d7b` |
 | [GeoLibre independent review](geolibre-integration-review.md) | Original findings and final bounded-scope acceptance, with independently rerun evidence |
 | [GeoLibre integration assignment](geolibre-integration-agent-prompt.md) | Retired G1–G5 prompt; correction independently accepted at `a5fc7d7b` |

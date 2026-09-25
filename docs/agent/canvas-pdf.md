@@ -1,6 +1,6 @@
 # Canvas PDF
 
-Canvas PDF exports are derived files. The Design Session and canvas retain ownership of authored content, history, dirty state, and save acknowledgement. See [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) for product scope.
+Canvas PDF exports are derived files. The Design Session and canvas retain ownership of authored content, history, dirty state, and save acknowledgement. See [ADR 0008](../adr/0008-canvas-pdf-export.md) for product scope.
 
 ## Shared pipeline
 
@@ -13,7 +13,7 @@ Canvas PDF exports are derived files. The Design Session and canvas retain owner
 
 ## Assets and delivery
 
-- Runtime dependencies are pinned to PDFKit 0.20.2 and Fontkit 2.0.4 by [ADR 0024](../adr/0024-shared-canvas-pdf-export.md), with native-engine evidence recorded separately. The browser-specific declarations describe only the used pinned surface; the legacy Node typings do not describe its named browser export accurately.
+- Runtime dependencies are pinned to PDFKit 0.20.2 and Fontkit 2.0.4 by [ADR 0008](../adr/0008-canvas-pdf-export.md), with native-engine evidence recorded separately. The browser-specific declarations describe only the used pinned surface; the legacy Node typings do not describe its named browser export accurately.
 - `font-assets.json` pins Noto Sans 2.008 Latin regular/semibold and Noto Sans CJK 2.004 SC/JP/KR files by upstream URL and SHA-256. `npm run prepare:pdf-fonts` materializes ignored `public/pdf-fonts/` assets and licenses. Dev, builds, and the full test command run this prerequisite. Cached valid files work without upstream access; build packaging includes all five fonts (about 50 MB total). Runtime loads only required fonts from its own edition base URL and verifies their bytes.
 - `#canvas-pdf-platform` is a compile-time edition alias. Browser delivery clicks a prepared PDF Blob URL during the initiating gesture and reports a download request, then releases the URL. Native delivery uses the dialog and executor-backed `save_canvas_pdf` command; the service validates the payload and writes the exact bytes through operation-owned temporary-file replacement. This path has no `.canopi` backup or persistence acknowledgement. `save_canvas_pdf` is the only PDF delivery command; native snapshot-PDF rendering and platform PDF stubs are retired.
 - Tauri CSP permits same-app font fetches and blob workers. Keep browser and native assets on the same shared pipeline. `npm run build:web` still enforces the browser boundary and per-asset hosting limits.

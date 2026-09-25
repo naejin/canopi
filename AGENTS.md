@@ -1,298 +1,108 @@
 # Agent Operating Contract
 
-These instructions are for AI agents working in this repository. Optimize for long-term project health, reviewable changes, and reliable handoff over local speed.
+Rules for AI agents working in this repository. Optimize for long-term project health, reviewable changes and reliable handoff over local speed. Architecture: [`docs/architecture.md`](docs/architecture.md). Decisions: [`docs/adr/`](docs/adr/).
 
-## Operating Priorities
+## Priorities
 
-- Preserve user work. Run `git status --short --branch` before editing, and treat pre-existing dirty or untracked files as user-owned unless explicitly told otherwise.
-- Track implementation work in `bd`. Do not use markdown TODO lists, TodoWrite, TaskCreate, or ad hoc task trackers.
-- Keep scope narrow. Implement the claimed bead; create follow-up beads for new work instead of silently expanding scope.
-- Prefer small, reversible changes. Avoid broad rewrites unless the bead explicitly calls for one.
-- Never weaken tests, type checks, lint rules, or architecture guardrails just to make a gate pass. If a guardrail is wrong, document why and replace it with an equivalent or stronger guardrail.
-- Do not introduce runtime dependencies unless the bead or PR explains why existing project patterns are insufficient.
-
-## Architecture Ownership
-
-- The main user-facing agent owns project-wide architectural coherence, decision-complete design handoffs and independent implementation review. Follow [architecture ownership and user-mediated delivery](docs/workflow/architecture-ownership.md).
-- The implementation agent owns execution, tests and routine local decisions within the accepted design. Escalate material changes to shared contracts, persistence, ownership, dependencies or cross-subsystem behavior; do not silently redesign or weaken acceptance.
-- The user retains product, priority, scope and consequential-risk authority and remains the courier between design/review and implementation unless explicitly changing that arrangement. This grants no automatic delegation, implementation, integration or release authority.
-- Distinguish design omissions, implementation deviations, test gaps and reviewer oversights when improving the workflow; the main agent owns resolving omissions in its design.
-
-## Agent Docs Maintenance
-
-- Optimize all `docs/` content for agentic coding and development: retain actionable contracts, ownership, decision rationale, reproducible evidence, and release operations. Remove duplicated instructions, conversational history, expired execution prompts, and user tutorials that duplicate development contracts. Follow [documentation placement and authority](docs/README.md).
-
-- Treat `AGENTS.md`, `docs/agent/*.md`, and `docs/workflow/*.md` as living operating docs, not append-only notes.
-- Update agent docs in the same change when code moves, architecture boundaries change, commands change, quality gates change, or a repeated gotcha becomes a durable rule.
-- Prefer replacing or deleting stale instructions over adding exceptions. If two rules conflict, resolve the conflict before ending the work.
-- Keep `AGENTS.md` focused on repo-wide rules. Put subsystem-specific details in `docs/agent/*.md` and link to them from here.
-- Do not add one-off bug memories to `AGENTS.md`. Add a regression test, a code comment near the invariant, or a focused subsystem note instead.
-- Before closing an implementation bead, reconcile affected operating guides and the design record's status/current-guidance links. Follow [delivery and integration](docs/workflow/delivery.md) before declaring work integrated or removing branches.
-- In the final handoff, mention agent-doc updates made, or explicitly say none were needed when the work changed architecture, commands, generated files, or quality gates.
-
-## Repository Map
-
-- `desktop/src/`: Rust Tauri backend, IPC commands, DB access, platform code, and services.
-- `desktop/web/src/`: Preact frontend, canvas runtime, UI components, app controllers, and `__tests__/`.
-- `desktop/web/src/app/`: frontend orchestration and application coordination.
-- `common-types/`: authored cross-language contracts for Rust, TypeScript, generated adapters, and static artifacts. Regenerate checked-in outputs when these change.
-- `bindings-gen/`: codegen for frontend transport bindings.
-- `scripts/`: database preparation and release tooling.
-- `docs/README.md`: documentation map and placement rules.
-- `docs/agent/`: subsystem-specific guidance for future agents.
-- `docs/workflow/`: issue, triage, domain-document, and delivery workflow guidance. `docs/agents/` contains redirects for installed skills.
-- `.interface-design/`: design system documentation.
-
-## Subsystem Guides
-
-- [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings persistence.
-- [Frontend guide](docs/agent/frontend-patterns.md): short routing guide for runtime, workbenches, browser state, chrome, localization and tests.
-- [Edition development](docs/agent/edition-development.md): safe Desktop/Web/gallery setup, ports, fixtures, isolation, verification selection, and handoff.
-- [Canvas runtime](docs/agent/canvas-runtime.md): runtime seams, scene ownership, rendering, interaction, Target projection.
-- [Canvas PDF](docs/agent/canvas-pdf.md): shared print layout, temporary page setup, fonts, preview, delivery, and validation.
-- [MapLibre](docs/agent/maplibre.md): basemap and terrain integration, projection, camera sync.
-- [LiDAR](docs/agent/lidar.md): library/import/analysis ownership, current limitations, and validation routes.
-- [Database](docs/agent/database.md): plant DB schema, query builder, FTS, translations, canopi-data export.
-- [Build and release](docs/agent/build-release.md): build commands, release workflow, platform/native rules.
-- [Problem reporting](docs/agent/problem-reporting.md): local Problem Reports, Diagnostic Bundle privacy boundary, reporting UI seams.
-- [Web Edition website integration](docs/agent/web-edition-website-integration.md): handoff for publishing the built Web Edition artifact from the website repository.
-
-## Agent Skills
-
-Repo-local skills live in the ignored `.agents/skills/` directory as flat skill folders copied from the public skill catalog. Do not force-add `.agents/` to git unless the repository policy changes.
-
-- [Issue tracker](docs/workflow/issue-tracker.md): bd conventions for task, bug, feature, epic, chore, and decision tracking.
-- [Triage workflow](docs/workflow/triage-workflow.md): readiness labels and durable brief conventions for bd beads.
-- [Domain docs](docs/workflow/domain.md): project vocabulary and decision docs that skills should read before planning or editing.
-- [Delivery and integration](docs/workflow/delivery.md): implemented, verified, integrated, and released states; branch cleanup.
-
-Read the relevant subsystem guide before changing that area; routing pages select the detailed guide to read. For UI/UX, start with [.interface-design/system.md](.interface-design/system.md), then only the relevant surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`. Prototype consequential uncertainty; reuse accepted components directly. Do not load every design/frontend guide by default. Code establishes current behavior; accepted contracts establish intended behavior. Correct stale descriptive guidance, but track a code violation of an accepted contract in bd rather than weakening the contract. Historical plans and execution prompts do not authorize new work or override current rules.
-
-## Common Commands
-
-```bash
-# Full app dev, from project root
-cargo tauri dev
-
-# Frontend only, from desktop/web
-npm run dev
-
-# Web Edition development, from desktop/web
-npm run dev:web
-
-# Memory-only UI gallery, from desktop/web
-npm run dev:ui
-
-# Typecheck gallery and build both edition frontends, from desktop/web
-npm run check:editions
-
-# Web Edition static build, from desktop/web
-npm run build:web
-
-# Web Edition release artifact, from desktop/web
-npm run package:web
-
-# Web Edition root-subdomain artifact, from desktop/web
-npm run package:web:root
-
-# Frontend tests
-cd desktop/web && npm test
-
-# TypeScript check
-cd desktop/web && npx tsc --noEmit
-
-# Rust formatting check matching CI
-cargo fmt --all -- --check
-
-# Rust lint gate matching CI
-CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings
-
-# Regenerate shared TypeScript bindings
-cd desktop/web && npm run gen:types
-
-# Verify generated bindings are committed
-cd desktop/web && npm run check:types
-
-# Rust workspace check without plant DB
-CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
-
-# Rust tests
-CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace
-
-# Native command execution architecture guard
-CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests
-
-# Verify Species Catalog contract, Filter storage references, and generated Rust facts
-python3 scripts/species_catalog_contract.py check
-
-# Verify pinned Unicode facts used by every Species Search normalizer
-python3 scripts/species_search_unicode_facts.py check
-
-# Refresh committed Species Catalog Rust facts after an authored contract change
-python3 scripts/species_catalog_contract.py emit-rust --write
-
-# The bindings commands above also verify and refresh the Web Species Catalog
-# shared admission module and declaration. Their Python CLI aliases delegate to
-# the same Rust transaction; do not publish those files independently.
-
-# Generate plant DB
-python3 scripts/prepare-db.py
-
-# Generate reduced Web Edition Species Catalog assets
-cd desktop/web && npm run generate:web-catalog
-
-# Build release
-cargo build --release
-```
-
-## Start Workflow
-
-1. Run `bd prime` when you need the full issue workflow or command reference.
-2. Run `git status --short --branch` before making changes.
-3. For implementation work, inspect available work with `bd ready`, or inspect the requested bead with `bd show <id>`.
-4. Claim implementation work before coding with `bd update <id> --claim`.
-5. For implementation beads, start from `main`, run `git pull --rebase`, then create a scoped branch such as `refactor/document-session-transition`. Canopi v2 beads instead continue on `feature/geolibre-adoption` (see Branch And Git Hygiene).
-6. Direct `main` work is acceptable only for explicitly requested mainline maintenance, small docs-only updates, or repository administration.
-7. Reviews, planning, diagnostics, and purely advisory work do not require a bead, branch, commit, or push unless files change.
-
-## Branch And Git Hygiene
-
-- Use one branch per implementation bead unless the user explicitly requests otherwise.
-- Exception: all Canopi v2 work (the breaking release: GeoLibre adoption and backward-compatibility removal) shares one branch, `feature/geolibre-adoption`, so v2 has one linear history and one checkout to review with `cargo tauri dev`. Commit each v2 bead there instead of opening a new branch.
-- Preserve accepted fixes in the user's active development checkout across tasks. Use a separate worktree when a new bead starts from a baseline missing those fixes. Before reporting an integrated fix complete, verify that the delivered checkout contains every required fix commit and run the combined checks there; pushing separate branches does not establish integration.
-- Preserve accepted merge commits when updating a feature branch: use `git pull --rebase=merges` or `git rebase --rebase-merges`. A plain rebase can discard implementation recorded in a merge commit; verify the required commits and resulting tree before pushing.
-- Name branches by intent: `feature/...`, `fix/...`, `refactor/...`, `test/...`, or `docs/...`.
-- Stage only files intentionally changed for the bead. Do not stage unrelated dirty files.
-- If unrelated tracked changes block rebase, testing, or push, ask before stashing unless the user has already approved autostash for that operation.
-- Never use destructive git commands such as `git reset --hard` or `git checkout -- <file>` unless the user explicitly requests them.
-- Keep generated files in the same commit as the source change that produced them.
-- Use commit messages matching the existing style, for example `fix(frontend): ...`, `test(frontend): ...`, `docs: ...`, or `refactor(backend): ...`.
-
-## Coding Style
-
-- Follow existing file style; do not reformat unrelated code.
-- TypeScript and Preact use 2-space indentation.
-- Preact components use `PascalCase`; functions and signals use `camelCase`; CSS module files use `kebab-case`.
-- Rust follows standard Rust style: `snake_case` for functions/modules and `CamelCase` for types.
-- Add comments only when they clarify non-obvious behavior, invariants, or architecture boundaries.
-
-## Quality Gates
-
-- Docs-only changes do not require code tests, but the final handoff must say tests were skipped because the change was docs-only.
-- Documentation changes require `python3 scripts/check_docs.py`; validator changes also require `python3 -m unittest scripts.test_check_docs`.
-- Add frontend tests under `desktop/web/src/__tests__/` as `*.test.ts` or `*.test.tsx`. Existing colocated `*.test.ts` runtime tests are also part of the full Vitest suite.
-- Bug fixes require focused regression tests, especially around document lifecycle, canvas runtime, IPC boundaries, persistence, and shared contracts.
-- Frontend changes require `cd desktop/web && npx tsc --noEmit` and focused Vitest coverage.
-- Shared edition composition changes also require `cd desktop/web && npm run check:ui`, `cd desktop/web && npm run build`, and `cd desktop/web && npm run build:web`.
-- Run `cd desktop/web && npm test` when the frontend surface area is broad or the change touches shared runtime behavior.
-- Shared contract changes require `cd desktop/web && npm run gen:types` and `cd desktop/web && npm run check:types`.
-- Species Catalog storage-contract changes require `python3 scripts/species_catalog_contract.py check`, the focused Python contract/preparation/Web tests, binding regeneration checks, and strict verification of any prepared DB artifact.
-- Web Species Catalog artifact-contract changes require the focused Python artifact/generator tests, `cd desktop/web && npm run gen:types`, `cd desktop/web && npm run check:types`, and the focused browser-admission and packaging tests.
-- Rust changes require `cargo fmt --all -- --check`, `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`, and `CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace`.
-- Native Tauri command or executor changes require `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests`; the full Rust suite also runs this guard.
-- Persistence, database, IPC, or shared type changes require the relevant frontend checks plus `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`.
-- Before pushing Rust, shared-contract, or mixed architecture branches, rebase or pull onto latest `main` and rerun the relevant CI-parity gates after that rebase.
-- If `main` already fails formatting, Clippy, generated-binding, or typecheck gates, create a separate maintenance bead and land the baseline repair before rebasing feature branches. Do not hide pre-existing gate repairs inside unrelated feature commits.
-- If a required gate cannot be run, record the exact command, failure reason, and residual risk in the bead and final handoff.
-
-## Subagent Rules
-
-- Use subagents when they help: bounded exploration, independent verification, or disjoint implementation slices. No explicit user request is needed.
-- Give each implementation subagent explicit file or module ownership.
-- Do not let two agents edit the same files in parallel.
-- Tell subagents they are not alone in the codebase and must not revert other agents' or user changes.
-- The main agent remains responsible for integration, final review, quality gates, bead updates, and push.
-
-## Bead Lifecycle
-
-- Keep the bead status accurate: claim before coding, update when scope changes, and close only after acceptance criteria and local quality gates are satisfied.
-- Create follow-up beads for deferred work, discovered bugs, missing tests, or architectural cleanup that is outside the current scope.
-- Use `bd remember` for durable project knowledge. Do not create memory files.
-- When closing a bead, include a concrete reason that mentions the shipped outcome and any tests run or skipped.
-
-## Handoff Expectations
-
-- File beads for remaining follow-up work before ending an implementation session.
-- Run the required quality gates for the files changed.
-- Commit all intended changes, including `.beads/issues.jsonl` when bead metadata changed.
-- Pull with rebase before pushing unless doing so would disturb user-owned work.
-- Push the current branch. For feature/refactor beads, push the bead branch with upstream tracking; push `main` only for intentional mainline work.
-- Run `git status --short --branch` after pushing and verify the branch is up to date with its upstream.
-- Final handoff for committed work must include the bead id, commit hash, branch pushed, tests run or skipped, and any user-owned files left untouched.
-
-## Project Overview
-
-### Tech Stack
-
-- Backend: Rust workspace (Tauri v2 + rusqlite + specta)
-- Frontend: Preact + `@preact/signals` + TypeScript + Vite + CSS Modules
-- Canvas: PixiJS primary renderer + Canvas2D fallback, scene-owned runtime via `SceneCanvasRuntime`
-- i18n: i18next core, not react-i18next, with 11 UI languages
-- Maps: MapLibre GL JS + maplibre-contour
-- Native: lib-c on Linux, macOS/Windows stubs
-
-### Current Layout
-
-- Left: canvas toolbar with drawing tools, plant color and plant symbol actions, and grid/snap/ruler toggles.
-- Center: canvas workspace.
-- Right: `PanelBar` with Canvas/Location primary navigation and Species Key, Layers, Calendar, Budget, Consortium, Design Notebook, Species Catalog, and Favorites side panels in one resizable dock.
-- Bottom: compact canvas utility bar with zoom controls.
-- Title bar: logo, file name, lang/theme toggle, menu controls, and window controls.
-
-### Design Direction
-
-- Field notebook aesthetic: parchment, ink, ochre palette. Use `desktop/web/src/styles/global.css` tokens.
-- Green never belongs in UI chrome; green is reserved for canvas plant symbols. UI accent is ochre `#A06B1F`.
-- Theme is light/dark only, no system option.
-- Depth is borders-first, without dramatic shadows.
-
-## Architecture Rules
-
-### Document Authority
-
-- The `.canopi` file has two authorities.
-- Canvas scene state is owned by `SceneStore`: plants, zones, annotations, groups, Design Object locks, plant species colors, plant species symbols, species code reservations, and layers. Mutations flow through the canvas runtime.
-- Non-canvas document state is owned by the document layer: consortiums, timeline, budget, `budget_currency`, `spatial_frame`, description, and extra. Mutations flow through the Design Edit seam in `desktop/web/src/app/design-edit/`.
-- Save composition happens through the document-session/persistence seam and the canvas document surface. Neither authority should duplicate the other's data.
-- Panels that read canvas entities should use read-only runtime query surfaces, not mirrored signals, unless the guide documents an intentional mirror.
-
-### Action Layer
-
-- Controller/action modules must not import other controller/action modules. Write boundaries under `app/*/controller.ts` should stay leaf modules.
-- Import direction is components -> actions/controllers/workbenches -> Design Edit or state.
-- Cross-concern orchestration belongs in a higher workflow module, such as `app/document-session/workflows.ts`, not in leaf action modules.
-- Workflow modules that install `effect()` own their disposer with an `installX()` / `disposeX()` module-level singleton.
-
-### Resource Ownership
-
-- Every resource-owning surface must have one explicit lifecycle owner for setup, update, and teardown.
-- Applies to canvas runtime, renderer host, MapLibre instances, timers, listeners, async cancellation tokens, and DOM overlays.
-- Module-level `effect()` and `addEventListener` must store disposers and clean up via `import.meta.hot.dispose()` when used under Vite HMR.
-
-### Native Execution
-
-- Every `#[tauri::command]` must be registered exactly once and be either executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`.
-- Do not add a synchronous allowance for filesystem, SQLite, network, rendering, encoding/decoding, compression, process/thread, sleeping, or unbounded CPU work. Direct global blocking-pool calls belong only in `desktop/src/native_operation.rs`.
-
-## Before Writing Code
-
-- Explore the codebase first with `rg`/`rg --files` and read the files you will reference or edit.
-- Use external docs only when changing library/API behavior or when local code is insufficient. Prefer official docs.
-- If Context7, taoki, `/simplify`, or other assistant-specific tools are available, use them only when they help; do not block on them when they are absent.
-- For UI work, reference the Design Direction section and existing CSS tokens before adding styles.
-- For multi-phase or delegated work, define file ownership so only one writer edits a file at a time.
-- For multi-feature i18n work, batch all i18n keys in one early phase to reduce 11-file merge conflicts.
-- When adding a new filterable species field, update `common-types/plant-filter-fields.json` (`fields` for dynamic filters or `fixed_filters` for top-level `SpeciesFilter` behavior), regenerate bindings, update all 11 locale files, and update detail UI if the field is shown there.
-
-## Banned Patterns
-
-- No React: import from `preact`, `preact/hooks`, or `preact/compat`, never `react`.
-- No Konva. Canvas rendering goes through `SceneCanvasRuntime` + `RendererHost`.
-- No Tailwind. Use CSS Modules.
-- No Zustand/Redux/MobX. Use `@preact/signals`.
-- No react-i18next. Use `import { t } from '../i18n'`.
-- No connection pools for rusqlite. Use `Mutex<Connection>`.
-- No typeshare. Use `specta::Type`.
-- No string-formatted SQL. Use prepared statements with placeholders.
-- No raw `rgba()` in CSS Modules. Use color tokens.
-- No `font-weight: 500`. Use `400` or `600`.
+- Preserve user work. Run `git status --short --branch` before editing; treat pre-existing dirty or untracked files as user-owned. Never stage, revert or stash them.
+- Track work in `bd` (`bd prime` for the command reference). No markdown TODO lists or other trackers. Use `bd remember` for durable project knowledge.
+- Keep scope to the claimed bead; file follow-up beads for new work.
+- Prefer small, reversible changes. Never weaken tests, type checks, lint rules or guardrails to pass a gate; replace a wrong guardrail with an equal or stronger one and say why.
+- Add runtime dependencies only when the bead or commit explains why existing code and GeoLibre modules are insufficient.
+- The user decides product, priority, scope and consequential risk. The main agent owns architectural coherence and review; see [architecture ownership](docs/workflow/architecture-ownership.md).
+
+## The five v2 principles
+
+1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. No separate local canvas, no Design location.
+2. **Every design object is geolocated.** Files store WGS84 lon/lat; metres exist only in the runtime's session plane.
+3. **Reuse GeoLibre before writing code.** Copy framework-free modules with attribution or depend on light packages; never fork the app or import its React code.
+4. **No backward compatibility.** No migrations, legacy readers, compatibility shims or old-format fixtures. Old data is refused, set aside or deleted.
+5. **Delete, don't deprecate.** Remove dead code, docs, tests, scripts and dependencies in the change that makes them dead.
+
+## Repository map
+
+- `desktop/src/`: Rust Tauri backend: IPC commands, services, DB access, platform code.
+- `desktop/web/src/`: Preact frontend: `app/` orchestration and workbenches, `canvas/` scene runtime, `maplibre/` map integration, `components/`, `web/` Web adapters, `__tests__/`.
+- `common-types/`: authored cross-language contracts; regenerate checked-in outputs when they change.
+- `bindings-gen/`: TypeScript transport codegen. `scripts/`: DB preparation, docs check, release tooling.
+- `docs/`: [documentation map](docs/README.md). `.interface-design/`: UI design system.
+
+## Guides
+
+- [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings.
+- [Frontend](docs/agent/frontend-patterns.md): runtime, workbenches, browser state, chrome, localization, tests.
+- [Editions](docs/agent/edition-development.md): Desktop/Web/gallery setup, ports, fixtures, verification selection.
+- [Canvas runtime](docs/agent/canvas-runtime.md): scene ownership, rendering, interaction.
+- [Canvas PDF](docs/agent/canvas-pdf.md): print layout, fonts, preview, delivery.
+- [MapLibre](docs/agent/maplibre.md): map layers, basemap, camera.
+- [LiDAR](docs/agent/lidar.md): Data Library, import, analysis.
+- [Database](docs/agent/database.md): plant DB, query builder, FTS, translations.
+- [Build and release](docs/agent/build-release.md): all build/check commands, release, native rules.
+- [Problem reporting](docs/agent/problem-reporting.md): Diagnostic Bundle privacy boundary.
+- [Web publishing](docs/agent/web-edition-website-integration.md): Web artifact handoff to the website.
+- Workflow: [issue tracker](docs/workflow/issue-tracker.md), [triage](docs/workflow/triage-workflow.md), [domain docs](docs/workflow/domain.md), [delivery](docs/workflow/delivery.md).
+- UI/UX: start at [.interface-design/system.md](.interface-design/system.md), then one surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`.
+
+Read the relevant guide before changing an area. Code shows current behaviour; accepted contracts show intended behaviour. Fix stale guidance; track a code violation of a contract in bd.
+
+## Branch and git
+
+- **All Canopi v2 work is on `feature/geolibre-adoption`.** Commit every v2 bead there; do not open per-bead branches. Pull with `git pull --rebase=merges` before starting and push after each bead.
+- Non-v2 maintenance: start from `main`, branch by intent (`feature/`, `fix/`, `refactor/`, `test/`, `docs/`).
+- Prefer a separate worktree for implementation so the user's `cargo tauri dev` checkout is not disturbed; ask the user to pull.
+- Stage only files you changed. Keep generated files in the commit that produced them. Ask before stashing unrelated changes.
+- Never run destructive git commands (`reset --hard`, `checkout -- <file>`) unless the user asks.
+- Commit messages follow the existing style: `fix(frontend): ...`, `refactor(backend): ...`, `docs: ...`.
+
+## Subagents
+
+Subagents are allowed without asking for exploration, verification or disjoint implementation slices. Give each implementation subagent explicit file ownership, never let two agents edit the same file, and tell them not to revert others' changes. The main agent owns integration, review, gates, beads and push.
+
+## Quality gates
+
+| Change | Gates |
+|---|---|
+| Any Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` |
+| Native commands | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
+| Shared contracts | `cd desktop/web && npm run gen:types && npm run check:types` |
+| Frontend | `cd desktop/web && npx tsc --noEmit && npm test` (zero failures, zero unhandled errors) |
+| Shared composition | `cd desktop/web && npm run check:ui && npm run build && npm run build:web` |
+| Species catalog contract | `python3 scripts/species_catalog_contract.py check` plus the focused Python tests |
+| LiDAR | GDAL + GeoLibre ignored lanes; see the [LiDAR guide](docs/agent/lidar.md) |
+| Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
+
+- Write the failing behavioural test first. Bug fixes need a focused regression test. Frontend tests live in `desktop/web/src/__tests__/` as `*.test.ts(x)`.
+- Docs-only changes skip code tests; say so in the handoff.
+- A gate that cannot run is recorded with the exact command, reason and residual risk in the bead and handoff.
+
+## Architecture rules
+
+- **Authorities.** The scene runtime (`SceneStore` via `SceneCanvasRuntime`) owns design objects and mutates through runtime transactions. Design Edit (`app/design-edit/`) owns budget, currency, timeline, consortiums, description and extra. The map layer store owns map layers. Settings own last view, basemap, satellite provider, device key, locale and theme. Neither document authority duplicates the other; panels read canvas entities through read-only runtime queries.
+- **Coordinates.** Persisted positions are lon/lat. Runtime geometry uses metres in the session plane. Camera moves never move objects.
+- **Action layer.** Import direction is components → actions/controllers/workbenches → Design Edit or state. `app/*/controller.ts` modules are leaves and never import each other; cross-concern orchestration lives in workflow modules that own their `effect()` disposers (`installX()` / `disposeX()`).
+- **Resource ownership.** Every resource (runtime, renderer, MapLibre instance, timer, listener, cancellation token, DOM overlay) has one lifecycle owner for setup, update and teardown. Module-level `effect()` and listeners store disposers and clean up under `import.meta.hot.dispose()`.
+- **Native execution.** Every `#[tauri::command]` is registered once and is executor-backed async or a reviewed bounded synchronous command in `desktop/src/native_command_policy.rs`. No synchronous filesystem, SQLite, network, rendering, encoding, compression, process, sleeping or unbounded CPU work. Global blocking-pool calls only in `desktop/src/native_operation.rs`.
+- **Species fields.** A new filterable field updates `common-types/plant-filter-fields.json`, regenerated bindings, all 11 locale files and the detail UI if shown.
+
+## Banned patterns
+
+- React (use `preact`, `preact/hooks`, `preact/compat`), Tailwind (use CSS Modules), Zustand/Redux/MobX (use `@preact/signals`), react-i18next (use `import { t } from '../i18n'`).
+- rusqlite connection pools (use `Mutex<Connection>`), typeshare (use `specta::Type`), string-formatted SQL (use placeholders).
+- Raw `rgba()` in CSS Modules (use colour tokens) and `font-weight: 500` (use 400 or 600).
+
+## Style
+
+Follow the surrounding file. TypeScript/Preact: 2-space indent, `PascalCase` components, `camelCase` functions and signals, `kebab-case` CSS module files. Rust: standard style. Comment only non-obvious behaviour, invariants and boundaries. UI direction (field-notebook palette, ochre accent, no green chrome) is in [.interface-design/system.md](.interface-design/system.md).
+
+## Docs
+
+`AGENTS.md`, `docs/architecture.md`, `docs/agent/` and `docs/workflow/` are living docs: update them in the same change when code, commands, gates or boundaries move. Replace or delete stale text instead of adding exceptions. Record durable decisions as ADRs. No one-off bug notes here; use a test or a code comment.
+
+## Handoff checklist
+
+1. Gates for the changed files run and pass (or are recorded as skipped with reason).
+2. Follow-up beads filed; bead closed with a receipt: what shipped, commits, tests run or skipped.
+3. Affected guides, architecture and ADRs updated, or the handoff says none were needed.
+4. Intended files committed (including `.beads/issues.jsonl` when bead metadata changed); pull with rebase; push.
+5. `git status --short --branch` shows the branch up to date with its upstream.
+6. Final message: bead id, commit hash, branch pushed, tests run or skipped, user-owned files left untouched, what to try in `cargo tauri dev`.

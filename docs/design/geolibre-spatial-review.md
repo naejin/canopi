@@ -2,7 +2,7 @@
 
 Status: completed.
 Tracking: `canopi-ltck` (implementation), `canopi-8j2j` (planning).
-Current guidance: [ADR 0025](../adr/0025-always-anchored-spatial-workspace.md), [Canvas runtime](../agent/canvas-runtime.md), [MapLibre](../agent/maplibre.md), [Document lifecycle](../agent/document-lifecycle.md).
+Current guidance: [ADR 0001](../adr/0001-geolocated-map-canvas.md), [Canvas runtime](../agent/canvas-runtime.md), [MapLibre](../agent/maplibre.md), [Document lifecycle](../agent/document-lifecycle.md).
 
 Historical implementation handoff, completed 2026-09-16. The retained contracts and qualification evidence describe that execution. Current ownership and commands belong to the guides above; this record does not authorize new work. Public release is a separate operation. Current task state belongs in bd.
 

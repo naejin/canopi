@@ -47,6 +47,14 @@ candidates are not cancelled by those validation workflows.
 For daily host commands, exact working directories, ports, prerequisites, storage isolation, and verification selection, use the [edition development guide](edition-development.md).
 
 ```bash
+# Full Desktop app dev, from the repository root
+cargo tauri dev
+
+# Frontend-only, Web Edition, and memory-only UI gallery dev servers
+cd desktop/web && npm run dev
+cd desktop/web && npm run dev:web
+cd desktop/web && npm run dev:ui
+
 # Rust workspace check without local bundled plant DB
 CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
 
@@ -80,6 +88,18 @@ cd desktop/web && npm run generate:web-catalog
 # Species Catalog contract/generated-fact drift
 python3 scripts/species_catalog_contract.py check
 
+# Refresh committed Species Catalog Rust facts after an authored contract change
+python3 scripts/species_catalog_contract.py emit-rust --write
+
+# Pinned Unicode facts used by every Species Search normalizer
+python3 scripts/species_search_unicode_facts.py check
+
+# Native command execution architecture guard
+CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests
+
+# Generate the plant DB
+python3 scripts/prepare-db.py
+
 # Refresh bindings-compiler-owned generated adapters, including Web Catalog admission
 cd desktop/web && npm run gen:types
 
@@ -92,6 +112,8 @@ python3 scripts/species_catalog_contract.py verify-db --profile prepared desktop
 # Release build
 cargo build --release
 ```
+
+The bindings commands also verify and refresh the Web Species Catalog shared admission module and declaration. Their Python CLI aliases delegate to the same Rust transaction; do not publish those files independently.
 
 ## Frontend Dependency Maintenance
 
@@ -153,13 +175,13 @@ The [production PDF workflow](../../.github/workflows/pdf-production-probe.yml) 
 - The dedicated root-subdomain artifact command is `cd desktop/web && npm run package:web:root`. It sets `CANOPI_WEB_BASE_PATH=/` before Vite emits assets and packages a root-base artifact named `canopi-web-edition-root-v<version>-<commit>.tar.gz` with `basePath: "/"` and SPA fallback `/* -> /index.html`. Use this artifact for `https://web.projectcanopi.com/`; do not deploy the default `/app/` artifact at a domain root.
 - The Web Edition Species Catalog command is `cd desktop/web && npm run generate:web-catalog`. It emits ignored DuckDB-queryable Parquet catalog shards under `desktop/web/public/canopi-catalog/` from the authored `common-types/web-species-catalog-artifact.json` contract; run it from a checkout with local canopi-data exports when catalog assets are needed for packaging or adapter testing. Refresh all bindings-compiler-owned adapters, including the browser/Node admission module, with `npm run gen:types`, and verify them with `npm run check:types`. The Python contract script's `check` and legacy `emit --write` commands delegate to those Rust operations; only its `render` command writes caller-owned staging output for the Rust compiler.
 
-- Deployments consume the versioned app artifact, not app source as an Astro component package, workspace dependency, submodule, or copied component tree. The production Web target uses the root artifact at `web.projectcanopi.com`; the website installer also supports `/app/` artifacts for subpath hosting. See the [website integration guide](web-edition-website-integration.md) and [ADR 0012](../adr/0012-web-edition-static-app-bundle.md).
-- Verify the selected artifact commit, manifest, and checksums before deployment; keep generated assets out of website source history. ADR 0012 retains public versioned release assets as the intended production distribution path, but the current desktop release-candidate and promotion workflows do not package or publish Web archives automatically. Package and publish the chosen Web artifact explicitly for that path; sibling-checkout copies are for local development.
+- Deployments consume the versioned app artifact, not app source as an Astro component package, workspace dependency, submodule, or copied component tree. The production Web target uses the root artifact at `web.projectcanopi.com`; the website installer also supports `/app/` artifacts for subpath hosting. See the [website integration guide](web-edition-website-integration.md) and [ADR 0005](../adr/0005-web-edition-scope.md).
+- Verify the selected artifact commit, manifest, and checksums before deployment; keep generated assets out of website source history. [ADR 0005](../adr/0005-web-edition-scope.md) keeps public versioned release assets as the intended production distribution path, but the current desktop release-candidate and promotion workflows do not package or publish Web archives automatically. Package and publish the chosen Web artifact explicitly for that path; sibling-checkout copies are for local development.
 - The web build uses the `/app/` base path by default. `CANOPI_WEB_BASE_PATH=/` is the only supported override for root-subdomain artifacts. The package manifest records the matching SPA fallback: `/app/* -> /app/index.html` for default artifacts or `/* -> /index.html` for root artifacts. It also records a catalog summary with `canopi-catalog/manifest.json`, the generated catalog asset format, supported filter keys, and required catalog file paths.
-- Web Edition uses compile-time browser adapters for shared edition boundaries, not runtime feature flags in shared modules. Web Edition build checks should reject Tauri-only imports in browser chunks and fail if any generated app, WASM, worker, catalog, template, or image-metadata asset exceeds the Cloudflare Pages per-asset limit. Design Templates are Web-only and use the static catalog/import modules directly; assets and any allowed static origins are configured in `desktop/web/src/web/static-design-templates.ts`. See `docs/adr/0021-web-edition-compile-time-adapters.md`.
+- Web Edition uses compile-time browser adapters for shared edition boundaries, not runtime feature flags in shared modules. Web Edition build checks should reject Tauri-only imports in browser chunks and fail if any generated app, WASM, worker, catalog, template, or image-metadata asset exceeds the Cloudflare Pages per-asset limit. Design Templates are Web-only and use the static catalog/import modules directly; assets and any allowed static origins are configured in `desktop/web/src/web/static-design-templates.ts`. See `docs/adr/0005-web-edition-scope.md`.
 - Keep web catalog and DuckDB-WASM assets sharded/compressed enough for Cloudflare Pages limits; do not hide oversized files inside the website build. As of Cloudflare Pages docs last checked 2026-07-04, a single Pages asset is limited to 25 MiB and Free-plan sites contain up to 20,000 files. `npm run package:web` admits the catalog through the generated contract module, verifies every admitted file's presence/size/checksum, rejects symbolic links and raw `duckdb-*.wasm` files, and scans emitted chunks for Tauri runtime markers such as `__TAURI_INTERNALS__`.
 - Web Edition DuckDB-WASM should load DuckDB's own worker/WASM through CDN-selected bundles instead of self-hosting the npm package's raw WASM files in `dist-web`.
-- Web Edition v1 is not offline-first: do not add service workers, PWA install flows, or app-managed precache behavior unless a later decision changes the cache/update model. See `docs/adr/0022-web-edition-not-offline-first.md`.
+- Web Edition v1 is not offline-first: do not add service workers, PWA install flows, or app-managed precache behavior unless a later decision changes the cache/update model. See `docs/adr/0005-web-edition-scope.md`.
 
 ## Generated Contract Publication
 
@@ -194,7 +216,7 @@ gh run view <run-id> --json status,conclusion,jobs --jq '.status + " " + ((.conc
 
 - Platform trait lives in `desktop/src/platform/mod.rs`, not `common-types`.
 - Lib crates export marker structs; `platform/mod.rs` implements the trait through conditional modules.
-- The platform trait exposes native PNG snapshot export only. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines the shared Canvas PDF pipeline and executor-backed byte delivery; no OS-specific PDF renderer remains. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
+- The platform trait exposes native PNG snapshot export only. [ADR 0008](../adr/0008-canvas-pdf-export.md) defines the shared Canvas PDF pipeline and executor-backed byte delivery; no OS-specific PDF renderer remains. File watching, thumbnail generation, and Linux desktop registration are not supported platform capabilities.
 - macOS and Windows platform code is stubbed behind `#[cfg(target_os = "...")]`.
 - CI validates platform compilation on actual platforms.
 

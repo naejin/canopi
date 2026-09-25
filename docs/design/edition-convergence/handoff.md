@@ -19,7 +19,7 @@ The resulting authorities are:
 
 - [Edition development](../../agent/edition-development.md) for safe setup, ports, fixtures, isolation, check selection, and handoff.
 - [Document lifecycle](../../agent/document-lifecycle.md#canvas-host-lifecycle-assessment) and [Canvas Runtime](../../agent/canvas-runtime.md) for the retained canvas-host boundary.
-- [Frontend workbenches](../../agent/frontend-workbenches.md#catalog-presentation-assessment) and [ADR 0008](../../adr/0008-species-catalog-storage-adapters.md) for the catalog presentation and storage boundary.
+- [Frontend workbenches](../../agent/frontend-workbenches.md#catalog-presentation-assessment) and [ADR 0006](../../adr/0006-species-catalog-storage.md) for the catalog presentation and storage boundary.
 - [Frontend validation](../../agent/frontend-validation.md) and [build/release](../../agent/build-release.md) for executable gates and their limits.
 - [UI gallery](../../../desktop/web/ui-gallery/README.md) for disposable Desktop/Web workspace scenarios.
 

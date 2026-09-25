@@ -2,7 +2,7 @@
 
 2026-09-09 · `canopi-cd7x.1` · prerequisite of `canopi-orpp`.
 
-The user approved checking the recommended PDFKit foundation in actual desktop WebViews before investing in export UI. This gate followed an isolated encoder comparison and supplies compatibility evidence for the subsequent foundation choice; physical defaults still require paper review. [ADR 0024](adr/0024-shared-canvas-pdf-export.md) remains the accepted scope.
+The user approved checking the recommended PDFKit foundation in actual desktop WebViews before investing in export UI. This gate followed an isolated encoder comparison and supplies compatibility evidence for the subsequent foundation choice; physical defaults still require paper review. [ADR 0008](adr/0008-canvas-pdf-export.md) remains the accepted scope.
 
 ## Verified evidence
 

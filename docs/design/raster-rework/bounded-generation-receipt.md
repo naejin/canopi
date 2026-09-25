@@ -2,7 +2,7 @@
 
 Status: evidence — consolidated implementer report for `canopi-jv8a.4` (B1–B5): the storage layer, the whole caller migration, bounded slope and job ownership, the bounded display transport and its cache budgets, and the representative runs are **implemented, measured and verified**, with sparse publication as the production default and the production admission limits deliberately retained. The five gaps the [independent review](bounded-generation-review.md) found at `1fcab504` are answered by the BG1–BG5 correction, the three it found at `9ad85c18` by the BG6–BG8 completion, and the four it found at `eb64a853` by the BG6-A/BG7-A/B/C completion, both recorded below; the two product-closure corrections C1/C2 from the forwarded scope freeze are recorded below with their real-Desktop smoke evidence. Independently reviewed: no — this completion awaits the main agent's disposition. Integrated or released: no.
 Tracking: `canopi-jv8a.4` (parent `canopi-jv8a`, epic `canopi-j571`); `canopi-jv8a.3` is linked work inside B3.
-Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0026-sparse-raster-generations.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [complete design](bounded-generation-design.md), [storage decision](../../adr/0002-geolibre-module-reuse.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## Scope actually delivered
 

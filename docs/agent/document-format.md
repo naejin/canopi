@@ -4,12 +4,11 @@ Part of the [Document lifecycle guide](document-lifecycle.md). For Scene transac
 
 ## Save And Format Contract
 
-- Lightweight web-edition work must still create, open, edit, and export real Canopi Designs rather than a separate web sketch format. Browser storage/file adapters may replace Tauri filesystem dialogs, but they should feed the normal Design Session and save-composition seams. Unsupported web-edition sections should be preserved when loaded where possible and emitted as valid empty sections for new web-created Designs. See `docs/adr/0009-web-edition-uses-design-format.md`.
-- Legacy browser v1 storage keeps raw valid Draft documents when saving unrelated Settings, Species or stamp partitions. New schema defaults must not expand Draft payloads during those writes and exhaust a near-full quota. Draft projection returns decoded documents for readers and migration; current v2 partition isolation remains unchanged.
-- The web edition should provide browser-local Design drafts and autosave as the active browser save target, with explicit `.canopi` download/export as the durable portable save path. Browser Drafts are internal autosave/recovery state in v1, not a visible Drafts list, and must not reuse desktop Design Notebook semantics such as Notebook Sections, saved paths, or file reveal actions. Do not make direct save-back to an imported file the v1 foundation, and do not introduce a backend requirement for storing user Designs. [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) approves Canvas PDF as a separate sharing and printing artifact; it does not change Design persistence. Other Web export exclusions follow that ADR. The Browser App Shell should present its implemented capabilities directly instead of reusing desktop native file chrome. See `docs/adr/0010-web-edition-browser-drafts.md` and `docs/adr/0020-web-edition-browser-app-shell.md`.
-- Platform-specific persistence, settings, and file adapters should be selected by the desktop or web Vite entry at compile time, not through runtime web-vs-Tauri feature flags inside shared Design Session modules. See `docs/adr/0021-web-edition-compile-time-adapters.md`.
+- Lightweight web-edition work must still create, open, edit, and export real Canopi Designs rather than a separate web sketch format. Browser storage/file adapters may replace Tauri filesystem dialogs, but they should feed the normal Design Session and save-composition seams. Unsupported web-edition sections should be preserved when loaded where possible and emitted as valid empty sections for new web-created Designs. See [ADR 0005](../adr/0005-web-edition-scope.md).
+- The web edition should provide browser-local Design drafts and autosave as the active browser save target, with explicit `.canopi` download/export as the durable portable save path. Browser Drafts are internal autosave/recovery state in v1, not a visible Drafts list, and must not reuse desktop Design Notebook semantics such as Notebook Sections, saved paths, or file reveal actions. Do not make direct save-back to an imported file the v1 foundation, and do not introduce a backend requirement for storing user Designs. Canvas PDF and GeoJSON are derived exports; they do not change Design persistence ([ADR 0005](../adr/0005-web-edition-scope.md)). The Browser App Shell should present its implemented capabilities directly instead of reusing desktop native file chrome.
+- Platform-specific persistence, settings, and file adapters should be selected by the desktop or web Vite entry at compile time, not through runtime web-vs-Tauri feature flags inside shared Design Session modules. See [ADR 0005](../adr/0005-web-edition-scope.md).
 - Preserve `created_at` from loaded files.
-- Preserve loaded document sections on save: timeline, budget, consortiums, description, `spatial_frame`, and extra fields.
+- Preserve loaded document sections on save: timeline, budget, consortiums, description, and extra fields.
 - Preserve per-object non-visual fields such as plant notes, planted date, quantity, and zone notes.
 - Preserve unknown top-level fields through document `extra`.
 - Spread `extra` first when composing persisted output so known fields remain authoritative.
@@ -41,10 +40,10 @@ Part of the [Document lifecycle guide](document-lifecycle.md). For Scene transac
 
 ## Export Boundaries
 
-- [ADR 0024](../adr/0024-shared-canvas-pdf-export.md) defines Canvas PDF scope; the [Canvas PDF guide](canvas-pdf.md) owns implementation and validation guidance for its shared pipeline and desktop/Web delivery.
+- [ADR 0008](../adr/0008-canvas-pdf-export.md) defines Canvas PDF scope; the [Canvas PDF guide](canvas-pdf.md) owns implementation and validation guidance for its shared pipeline and desktop/Web delivery.
 - Canvas PDF is derived output. Capture settled canvas state through the query role without requesting or acknowledging Design persistence. Export must not clear dirty state, change Scene content/history, or modify the Design to make it printable.
 - Print setup belongs to the current opaque Design Session identity. It survives preview closure and editing, rebuilds from current content on reopen, and is discarded on replacement. Keep it out of `.canopi` and persistent settings.
-- All map backgrounds and Timeline/Budget/Consortium PDF sections remain deferred. The old structured Design Report and Rust `printpdf` implementation stay retired under ADR 0011; the native snapshot-PDF command/renderers are also removed. PNG snapshot export remains separate.
+- All map backgrounds and Timeline/Budget/Consortium PDF sections remain deferred. The old structured Design Report and Rust `printpdf` implementation stay retired under [ADR 0008](../adr/0008-canvas-pdf-export.md); the native snapshot-PDF command/renderers are also removed. PNG snapshot export remains separate.
 
 ## Adding Document Fields
 
@@ -59,10 +58,10 @@ Part of the [Document lifecycle guide](document-lifecycle.md). For Scene transac
 
 ## File Format Admission
 
-- `CURRENT_CANOPI_FILE_VERSION` lives in `common-types/src/design.rs`; it is the single native/Web version authority. Format v6 is the only shipping admission target. Missing, older, and future versions fail before document replacement; Canopi ships no v1-v5 converter.
+- `CURRENT_CANOPI_FILE_VERSION` lives in `common-types/src/design.rs`; it is the single native/Web version authority. Format v7 is the only admission target: every persisted position is a WGS84 `GeoPoint { lon, lat }` and there is no Design-level anchor ([ADR 0001](../adr/0001-geolocated-map-canvas.md)). Missing, older, and future versions fail with `unsupported_version` before document replacement; Canopi ships no converter ([ADR 0003](../adr/0003-no-backward-compatibility.md)). `canopi-fxil.2` moves the code from v6 to v7.
 - Missing-version, minimum-version, future-version, Web Mercator latitude, and stable ingestion-error facts live beside it and are emitted in `desktop/web/src/generated/canopi-design-format.ts`. The bindings compiler validates those facts against `common-types/canopi-design-conformance.json` before publishing or checking generated files.
-- Keep native and Web ingestion equivalent: exact-version admission, obsolete-root rejection, generated-schema/Serde decoding, spatial-frame validation, bearing canonicalization to `[0, 360)`, and unknown-root normalization.
-- A future format change requires an explicit compatibility decision. Update the authored shared contract and conformance corpus first; do not add an implicit migration in a `Deserialize` implementation.
+- Keep native and Web ingestion equivalent: exact-version admission, obsolete-root rejection, generated-schema/Serde decoding, lon/lat range validation, and unknown-root normalization.
+- A future format change bumps the version and refuses the previous one. Update the authored shared contract and conformance corpus first; never convert old data in a `Deserialize` implementation.
 - Bump `CURRENT_CANOPI_FILE_VERSION`, then run `cd desktop/web && npm run gen:types` and `npm run check:types` so the generated Web version/schema remain committed.
 - `CURRENT_CANOPI_FILE_VERSION` is a `u32` to match `CanopiFile.version`; cast to `u64` only at JSON boundaries.
 

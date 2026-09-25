@@ -17,6 +17,13 @@ Read this contract, then the relevant family guide. Do not read every guide or r
 
 Implementation and ownership rules start at [frontend guidance](../docs/agent/frontend-patterns.md). Domain terms remain in CONTEXT.md; this contract does not redefine them.
 
+## Direction and workspace layout
+
+- Field-notebook aesthetic: parchment, ink and ochre. The UI accent is ochre `#A06B1F` (use the token, not the hex). Green never appears in UI chrome; it is reserved for plant symbols on the canvas.
+- Theme is light or dark only; there is no system option.
+- Depth is borders-first, without dramatic shadows.
+- Workspace: the map canvas fills the centre. Left: canvas toolbar (drawing tools, plant colour and symbol actions, grid/snap/ruler toggles). Canvas controls: the inspection lens (loupe) icon button with the place-search pin icon button below it. Right: `PanelBar` with Species Key, Layers, Calendar, Budget, Consortium, Design Notebook, Species Catalog and Favorites in one resizable dock. Bottom: compact utility bar with zoom controls. Title bar: logo, file name, language/theme toggle, menus and window controls.
+
 ## Visual hierarchy
 
 Use existing tokens in desktop/web/src/styles/global.css as the single source for palette, spacing, typography, radii, control sizes, transitions, and semantic data colors. Inspect the relevant declarations when choosing a value. Do not copy token tables into guides or introduce a parallel theme.

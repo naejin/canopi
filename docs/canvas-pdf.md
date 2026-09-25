@@ -1,6 +1,6 @@
 # Canvas PDF behavior checks
 
-Use this as a compact acceptance reference when changing the export UI. The [implementation guide](agent/canvas-pdf.md) owns module boundaries, physical layout constants and regression commands; [ADR 0024](adr/0024-shared-canvas-pdf-export.md) owns accepted scope. Measured output and physical-print limitations belong in the [validation record](canvas-pdf-validation.md).
+Use this as a compact acceptance reference when changing the export UI. The [implementation guide](agent/canvas-pdf.md) owns module boundaries, physical layout constants and regression commands; [ADR 0008](adr/0008-canvas-pdf-export.md) owns accepted scope. Measured output and physical-print limitations belong in the [validation record](canvas-pdf-validation.md).
 
 | Surface | Behavior to preserve |
 | --- | --- |

@@ -17,8 +17,8 @@ Read the [design contract](../system.md) first.
 
 
 ## Panel Bar (right edge)
-- 44px wide via `--chrome-rail-width`, always visible for Canvas and Location
-- Commands come from the application command graph: Canvas/Location primary navigation plus Design Notebook, Species Catalog, and Favorites side panels
+- 44px wide via `--chrome-rail-width`, always visible
+- Commands come from the application command graph: Design Notebook, Species Catalog, and Favorites side panels
 - Active state: ochre right border + ochre icon color
 - Primary commands switch workspace; side commands toggle the corresponding panel
 

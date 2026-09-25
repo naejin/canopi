@@ -155,7 +155,7 @@ Previous-composition members retain their exact historical numeric resolver. For
 
 Under the user-accepted display decision in section 1, native-cell topmost-valid composition remains authoritative for numeric reads and analysis. Display uses upstream per-source overviews, the saved source priority and transparent NoData. It uses one layer-wide stretch, units and legend, not a different automatic scale per member. At low zoom this is a visualization of the collection, not its exact reduced numeric grid. This is the accepted migration target, not a claim that the current renderer has changed.
 
-Example proving the distinction: upper source `[100, NoData]`, lower source `[0, 0]`. Exact composed-cell mean is `50`; independently reduced upper-source display can show `100` over that footprint. The implementation must preserve numeric inspection and analysis while testing/recording this allowed visual difference. This is why adopting a stock mosaic is an explicit amendment of [ADR 0027](../../adr/0027-ordered-cog-data-layers.md) and the [ordered composition contract](ordered-cog-design.md), not a claim of pixel equivalence.
+Example proving the distinction: upper source `[100, NoData]`, lower source `[0, 0]`. Exact composed-cell mean is `50`; independently reduced upper-source display can show `100` over that footprint. The implementation must preserve numeric inspection and analysis while testing/recording this allowed visual difference. This is why adopting a stock mosaic is an explicit amendment of [ADR 0002](../../adr/0002-geolibre-module-reuse.md) and the [ordered composition contract](ordered-cog-design.md), not a claim of pixel equivalence.
 
 ADR 0027 and the ordered composition contract now record this accepted display amendment. During implementation, migrate old exact-display tests to the accepted behavior while preserving numeric cases, exact historical priority/validity and saved-result meaning. History UI and mutation tests are superseded by the fixed-item contract; compatibility reads are not. Do not quietly delete the tests to get the package green.
 
@@ -267,7 +267,7 @@ Verification entry points: [model behavior tests](../../../desktop/web/src/__tes
 
 ## 7. Migration, compatibility and deletion
 
-> **Superseded for migration (2026-09-25).** The user chose a breaking Canopi v2: older LiDAR libraries are deleted on first open and v2 keeps no migration, historical reader or Horn recipe. See [ADR 0027](../../adr/0027-ordered-cog-data-layers.md#canopi-v2-compatibility-removal--accepted-2026-09-25). The cutover steps below that preserve old data are historical; the fixed-item, recovery and deletion rules still apply.
+> **Superseded for migration (2026-09-25).** The user chose a breaking Canopi v2: older LiDAR libraries are deleted on first open and v2 keeps no migration, historical reader or Horn recipe. See [ADR 0002](../../adr/0002-geolibre-module-reuse.md). The cutover steps below that preserve old data are historical; the fixed-item, recovery and deletion rules still apply.
 
 ### Fixed items with existing storage
 

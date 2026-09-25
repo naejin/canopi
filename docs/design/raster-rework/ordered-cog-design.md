@@ -2,7 +2,7 @@
 
 Status: completed — ordered-source implementation and R12–R14 correction delivered through `34e4ded4`; named correction scope independently accepted. Integration/release are separate; sections below retain the delivered contract.
 Tracking: `canopi-jv8a.4`, related `canopi-kko3`, parent `canopi-j571`; completion assignment reconciles bead status.
-Current guidance: [completion contract](completion-design.md), [current prompt](completion-agent-prompt.md), [accepted review](ordered-cog-review.md#accepted-correction-at-34e4ded4), [decision](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md).
+Current guidance: [completion contract](completion-design.md), [current prompt](completion-agent-prompt.md), [accepted review](ordered-cog-review.md#accepted-correction-at-34e4ded4), [decision](../../adr/0002-geolibre-module-reuse.md), [LiDAR](../../agent/lidar.md).
 
 
 The exclusions and execution instructions below describe the completed foundation scope. New capacity, workbench, inspection and Web work is governed by the completion contract; numeric, ownership and historical compatibility invariants remain binding. The migration amendment below supersedes the editable-source/history product for new work. The [source-import amendment](source-import-design.md) supersedes its compulsory review/measurement and input-policy ceilings for the new route after bounded implementation; exact historical composition/validity remains protected.

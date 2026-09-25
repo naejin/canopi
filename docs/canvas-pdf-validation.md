@@ -5,7 +5,7 @@ The field layout proposal was approved on **2026-09-10** and integrated under
 The 2026-09-11 field-print revisions supersede their bracket, separate-key and
 overview-index defaults. The explicit-coverage correction below removes automatic
 annotation sheets introduced during that polish. Readability consent remains retired. The [behavior checks](canvas-pdf.md),
-[ADR 0024](adr/0024-shared-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
+[ADR 0008](adr/0008-canvas-pdf-export.md) and [agent guide](agent/canvas-pdf.md)
 describe the current behaviour.
 
 ## Release review (`canopi-bw80`, 2026-09-11)

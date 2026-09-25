@@ -17,7 +17,7 @@
 
 ---
 
-Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas, planning panels, and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, Location editing, Design Notebook, and native file management.
+Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas, planning panels, and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, LiDAR Data Library, Design Notebook, and native file management. Every Design is drawn directly on the map.
 
 ## Features
 
@@ -27,7 +27,7 @@ Canopi combines a Species Catalog with an interactive canvas for designing agroe
 
 **Planning panels** -- Desktop and Web share the Timeline for scheduling work, Budget with per-species pricing and CSV export, and Consortium planning across Strata and Succession Phases with canvas hover sync.
 
-**Desktop Location** -- MapLibre-powered Location editing, geocoding search, and a canvas basemap with terrain overlays.
+**Map canvas** -- Designs are drawn on a MapLibre map with basemap, satellite, LiDAR and terrain references, and place search in both editions.
 
 **File format** -- `.canopi` JSON documents with autosave and dirty tracking. Desktop saves files; Web Edition keeps browser drafts and downloads portable `.canopi` files. [Canvas PDF](docs/canvas-pdf.md) exports an overview and optional scaled detail sheets with complete plant legends on desktop and Web.
 
@@ -129,7 +129,8 @@ canopi/
 - [`docs/README.md`](docs/README.md) — documentation map, authority, and placement rules
 - [`AGENTS.md`](AGENTS.md) — agent operating contract, architecture rules, and coding standards
 - [`CONTEXT.md`](CONTEXT.md) — domain vocabulary
-- [`docs/adr/`](docs/adr/) — architectural decisions and their history
+- [`docs/architecture.md`](docs/architecture.md) — v2 architecture: principles, authorities, geolocation, map stack
+- [`docs/adr/`](docs/adr/) — architectural decisions
 - [`docs/agent/`](docs/agent/) — current subsystem implementation guidance
 - [`docs/release.md`](docs/release.md) — release operations
 - [Web Edition integration](docs/agent/web-edition-website-integration.md) — static artifacts and website handoff

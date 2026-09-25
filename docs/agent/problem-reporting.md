@@ -5,7 +5,7 @@ Use this guide when changing Problem Report, Report Summary, or Diagnostic Bundl
 ## Product Boundary
 
 - Problem Reports are local-first. Do not add automatic upload, telemetry, email drafts, or GitHub issue creation unless a bead explicitly changes the support-channel decision.
-- Web Edition v1 does not expose Problem Report, Diagnostic Bundle generation, native report-folder creation, or folder reveal behavior. See `docs/adr/0015-web-edition-omits-problem-report.md`.
+- Web Edition v1 does not expose Problem Report, Diagnostic Bundle generation, native report-folder creation, or folder reveal behavior. See `docs/adr/0005-web-edition-scope.md`.
 - The default Diagnostic Bundle must exclude Design contents, precise Location, screenshots, and raw filesystem paths.
 - Diagnostic settings summaries may include current behavior-driving preferences only; do not retain or report placeholder settings that have no runtime consumer.
 - Current Design contents may be included only through an explicit, off-by-default user consent control. When included, the bundle manifest and Report Summary must identify the sensitive attachment.

@@ -15,7 +15,7 @@ Canopi uses a single-context domain-doc layout.
 - Create ADRs in `docs/adr/` only for decisions that are hard to reverse, surprising without context, and the result of a real trade-off.
 - Keep subsystem guidance in `docs/agent/`.
 - Separate implemented behavior, accepted future direction, and historical evidence explicitly. An accepted ADR does not by itself mean its feature has shipped.
-- Keep ADRs focused on decisions, trade-offs, and supersession; link to subsystem guides for current module inventories, commands, and migration procedures. Preserve historical rationale when simplifying an ADR.
+- Keep ADRs focused on decisions, trade-offs, and supersession; link to subsystem guides for current module inventories and commands. Rewrite or delete an ADR when its decision changes.
 - When code violates an accepted rule, track the defect in `bd` and distinguish current behavior from the intended contract; do not silently weaken the rule to match the defect.
 - Keep skill workflow context in `docs/workflow/`; old `docs/agents/` paths are redirects.
 - Keep skill docs focused on agent behavior; do not add auxiliary READMEs inside individual skill folders.

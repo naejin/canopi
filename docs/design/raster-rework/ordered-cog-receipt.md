@@ -2,7 +2,7 @@
 
 Status: evidence — ordered COG correction delivered through `34e4ded4` and independently accepted in the named R12–R14 scope; see the [disposition](ordered-cog-review.md#accepted-correction-at-34e4ded4). Integration/release and broader completion remain separate.
 Tracking: `canopi-jv8a.4` (status reconciliation delegated to the completion assignment); `canopi-kko3` is resolved by the delivered recompute-after-Undo decision; parent `canopi-jv8a`, epic `canopi-j571`.
-Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agent-prompt.md), [ADR 0027](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [design](ordered-cog-design.md), [assignment](ordered-cog-agent-prompt.md), [ADR 0002](../../adr/0002-geolibre-module-reuse.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 ## What is delivered
 

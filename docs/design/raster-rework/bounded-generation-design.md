@@ -2,7 +2,7 @@
 
 Status: retired — source-merge design delivered through `0696bd3d` with partial product acceptance; superseded for new work by the ordered COG design. Historical assets/readers and useful safety/scientific tests remain supported.
 Tracking: `canopi-jv8a.4`, parent `canopi-jv8a`, epic `canopi-j571`.
-Current guidance: [ordered COG design](ordered-cog-design.md), [current assignment](ordered-cog-agent-prompt.md), [ADR 0027](../../adr/0027-ordered-cog-data-layers.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
+Current guidance: [ordered COG design](ordered-cog-design.md), [current assignment](ordered-cog-agent-prompt.md), [ADR 0002](../../adr/0002-geolibre-module-reuse.md), [LiDAR](../../agent/lidar.md), [delivery](../../workflow/delivery.md).
 
 The sections below record the previous B1–B5 design for interpreting delivered code and evidence. They are not execution instructions. The user has replaced materialized source merges and overlap decisions with ordered independent COGs; do not restore the old architecture freeze. Preserve compatibility and tested invariants as specified in the replacement. Earlier baseline/worktree, current-scope and future-work wording below is historical.
 

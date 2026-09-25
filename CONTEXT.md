@@ -23,7 +23,7 @@ _Avoid_: Document session, file session, canvas session
 **Web Edition**:
 A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo.
 _Avoid_: Web sketch, catalog site, demo app
-_Note_: Web Edition v1 omits the visible Location Workbench and Recent Design list while preserving the saved Spatial Frame and browser-local autosave state behind the app surface.
+_Note_: Web Edition omits the Recent Design list and keeps browser-local autosave state behind the app surface.
 
 **Browser App Shell**:
 The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome.
@@ -59,7 +59,7 @@ A user-named, manually ordered grouping inside the Design Notebook. A notebook s
 _Avoid_: Folder, tag, category
 
 **Design Edit**:
-A non-canvas change to Design-owned state, including Location, Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
+A non-canvas change to Design-owned state, including Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state.
 _Avoid_: Document mutation, panel action, direct currentDesign write
 
 **App Command Graph**:
@@ -74,16 +74,20 @@ _Avoid_: Raw runtime, canvas service, renderer API
 A concrete adapter that connects Canvas Runtime Surface implementation to app-owned state such as settings projection, Design Session dirty-state, Design file composition, and Target Presentation. Canvas runtime app adapters belong at the app/canvas seam and must not become canvas scene authority.
 _Avoid_: Runtime helper, app bridge, global canvas state
 
-**Spatial Frame**:
-The required geographic placement of a Design: one WGS84 anchor, the Design's north bearing, Placement Status, and site metadata. Design objects retain local-metre geometry; changing the spatial frame intentionally changes their geographic placement without changing that geometry.
-_Avoid_: Optional Location, map center, viewport
+**Session Plane**:
+The runtime's local metre plane for the open Design, centred on the objects' bounds (or the view centre for an empty Design). Files store every design object position in WGS84 longitude/latitude; the session plane converts them to metres for tools, snapping, measurements and PDF layout, and is rebuilt when the view moves more than 10 km from its origin.
+_Avoid_: Design location, anchor, spatial frame
 
-**Placement Status**:
-Whether a Design's Spatial Frame is `provisional` or `confirmed`. Provisional placement supports local editing and independently georeferenced raster work without claiming a real site. Visibility of geographic layers and camera movement never confirm placement.
-_Avoid_: Location visibility, map readiness
+**Place Search**:
+The canvas control (pin button under the inspection lens) that finds a place by name or coordinates and moves the view there. Place Search moves only the camera; design objects never move.
+_Avoid_: Location editing, geocoding panel
+
+**Last View**:
+The camera position (longitude, latitude, zoom) the app remembers in settings. A new Design opens at the Last View.
+_Avoid_: Design location, default site
 
 **Shared Spatial Workspace**:
-The active Canvas composition that presents local botanical editing and geographic contributions through one camera and render lifecycle. MapLibre owns the live camera and frame while the shared renderer is active; Canvas2D owns the fallback camera only after an explicit handoff. The workspace derives presentation from Design, Scene, LiDAR, settings, and Target authorities without owning them.
+The active Canvas composition that presents local botanical editing and geographic contributions through one camera and render lifecycle. MapLibre owns the live camera and frame. The workspace derives presentation from Design, Scene, LiDAR, settings, and Target authorities without owning them.
 _Avoid_: Second map canvas, camera follower, map-owned Design state
 
 **Canvas Map Surface**:
@@ -91,15 +95,15 @@ A historical implementation name retained in some module paths and map-status ty
 _Avoid_: Active workspace authority, second renderer surface
 
 **MapLibre Host**:
-The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The MapLibre Host does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, or Target Presentation overlays; those remain in caller-specific adapters.
+The app runtime seam for MapLibre resource lifetime across map-backed surfaces, including lazy loading, map creation, teardown, resize observation, basemap style rebuilds, preserved view state, and initialization failure state. The MapLibre Host does not own Design data, Design Template selection, workspace camera commands, terrain, or Target Presentation overlays; those remain in caller-specific adapters.
 _Avoid_: Map component, map helper, direct maplibregl ownership
 
 **MapLibre Surface Adapter**:
-The typed adapter seam above the MapLibre Host for map-backed surfaces. A MapLibre Surface Adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a caller-specific adapter. It does not own Design data, Spatial Frame edits, Design Template selection, workspace camera commands, terrain, markers, or Target Presentation overlays.
+The typed adapter seam above the MapLibre Host for map-backed surfaces. A MapLibre Surface Adapter owns typed current-map access, per-map event listener cleanup, map-lifetime cleanup callbacks, and forwarding host lifecycle events to a caller-specific adapter. It does not own Design data, Design Template selection, workspace camera commands, terrain, markers, or Target Presentation overlays.
 _Avoid_: Map component helper, host wrapper, map ref state
 
 **Canvas Layer Presentation**:
-The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, Placement Status cues, and layer-related commands. Canvas Layer Presentation turns scene Layer state, settings-backed map layer preferences, terrain settings, and Spatial Frame readiness into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, placement drafts, Shared Spatial Workspace lifecycle, or settings persistence.
+The app-facing presentation seam for Layer chrome, map layer visibility, terrain layer controls, active layer selection, and layer-related commands. Canvas Layer Presentation turns scene Layer state, settings-backed map layer preferences, and terrain settings into caller-ready layer read models while routing writes to the correct authority. It does not own Design data, Scene Edit state, placement drafts, Shared Spatial Workspace lifecycle, or settings persistence.
 _Avoid_: Layer panel state, map layer helper, terrain UI state
 
 **Problem Report**:
@@ -314,18 +318,6 @@ _Avoid_: Line, ruler line, spacing object
 The positive center-to-center distance between placed plants in plant spacing. A plant spacing interval is expressed as a physical distance, not as canopy overlap or plant radius.
 _Avoid_: Gap, radius, endpoint spacing
 
-**Location**:
-The user-facing actual site projected from a confirmed Spatial Frame, expressed as latitude, longitude, and optionally altitude. Every Design has a Spatial Frame; a provisional frame supplies a computational anchor without asserting a Location.
-_Avoid_: Optional coordinate authority, map pin, camera center
-
-**Location Workbench**:
-The interaction surface for previewing, confirming, resetting, presenting, and validating a Design's Spatial Frame and Location. A Location Workbench may support address search, coordinate entry, map picking, and altitude where the product surface offers them, but it does not own canvas scene data.
-_Avoid_: Map panel state, location input state, basemap status helper
-
-**Location Notice**:
-A user-facing cue that reports active site/map readiness for a design with a Location, such as loading, precision, or map/terrain availability. A clean ready map does not need a location notice or coordinate summary. A location notice is informational; it does not set, clear, or validate the design's location.
-_Avoid_: Basemap feedback, map warning, location tooltip
-
 **Climate Zone**:
 A broad climate classification associated with a site or design template. Climate zone helps designers compare templates and site suitability at a high level.
 _Avoid_: Hardiness zone
@@ -391,11 +383,11 @@ The ordered Succession Phases, ordered Strata, default Consortium entry timing, 
 _Avoid_: Consortium renderer constants, timeline model
 
 **Design Template**:
-A reusable design that can be imported as the starting point for a new design. A design template usually includes location, placed plants, and descriptive metadata.
+A reusable design that can be imported as the starting point for a new design. A design template contains geolocated design objects and descriptive metadata and is placed relative to the current view on insert.
 _Avoid_: Community template, file template
 
 **Site Adaptation**:
-A retired concept for checking whether Species in a Design or Design Template suit a target site. ADR 0023 records that Canopi has no mounted Site Adaptation workflow; current Design Template imports open as Designs without compatibility or replacement steps.
+A retired concept for checking whether Species in a Design or Design Template suit a target site. [ADR 0006](docs/adr/0006-species-catalog-storage.md) records that Canopi has no mounted Site Adaptation workflow; current Design Template imports open as Designs without compatibility or replacement steps.
 _Avoid_: Template adaptation, plant review
 
 ## Flagged Ambiguities
@@ -485,13 +477,7 @@ A **Target** names what a planning entry refers to. A selection is a temporary u
 A **Target** is the stored or derived subject a planning entry refers to. **Target Presentation** is runtime hover/selection state over targets and must not become the authority for planning entries or canvas selection.
 
 **Scene Edit vs Design Edit**:
-A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, Location, description, or extra fields.
-
-**Spatial Frame vs Location**:
-The **Spatial Frame** is always saved and may be provisional. **Location** is the confirmed-site projection presented to the user.
-
-**Location vs Location Workbench**:
-A **Location** is the confirmed site. The **Location Workbench** previews and commits the Spatial Frame that establishes it. The Web Edition preserves the Spatial Frame but does not mount the visible Location Workbench.
+A **Scene Edit** changes canvas-owned Design state and should be handled by the canvas runtime. A **Design Edit** changes non-canvas Design state such as Budget Items, Timeline Actions, Consortiums, description, or extra fields.
 
 **Planning Projection vs Design Authority**:
 A **Planning Projection** is derived runtime state for planning surfaces. It must not become the authority for Design planning entries, placed plants, or canvas scene state.
@@ -545,7 +531,7 @@ A **Timeline Action** is the scheduled work in the Design. The **Timeline Action
 
 Designer: "I want to create a design for a small food forest."
 
-Developer: "That design can include placed plants, zones, timeline actions, budget items, consortium planning, and location details."
+Developer: "That design can include placed plants, zones, timeline actions, budget items, consortium planning, all drawn on the map at the real site."
 
 Designer: "Can I add the same species more than once?"
 
@@ -595,9 +581,9 @@ Designer: "If I hide a layer, is that just a UI toggle?"
 
 Developer: "Layer visibility is canvas-owned design state. Changing it is a scene edit, so it belongs with canvas undo, dirty state, and save behavior."
 
-Designer: "Can I search for an address and keep the site's altitude?"
+Designer: "Can I search for an address?"
 
-Developer: "On desktop, yes. Web Edition v1 preserves saved Location data when opening and downloading Designs, but does not expose Location editing."
+Developer: "Yes, in both editions. Place search moves the map to the site; your design objects stay where they are."
 
 Designer: "Can a timeline action apply to every apple tree in the design?"
 
@@ -625,7 +611,7 @@ Developer: "Yes, if their consortium entries occupy different succession phases.
 
 Designer: "If a template includes a Species outside my hardiness zone, does Canopi replace it?"
 
-Developer: "No. Canopi currently imports Design Templates unchanged. ADR 0023 retired Site Adaptation, Compatibility Checks, and Replacement Suggestions."
+Developer: "No. Canopi currently imports Design Templates unchanged. ADR 0006 retired Site Adaptation, Compatibility Checks, and Replacement Suggestions."
 
 Designer: "Is the template's climate zone the same as a Species hardiness zone?"
 
