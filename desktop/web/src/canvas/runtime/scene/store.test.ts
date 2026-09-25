@@ -221,12 +221,10 @@ describe('scene store', () => {
     const secondLayer = secondPersisted.layers[0]
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
-    expect(persisted.layers).toHaveLength(8)
+    expect(persisted.layers).toHaveLength(6)
     expect(firstLayer).not.toBe(secondLayer)
     expect(persisted.plantSpeciesSymbols).toEqual({})
     expect(persisted.layers.map((layer: { name: string; visible: boolean }) => [layer.name, layer.visible])).toEqual([
-      ['base', true],
-      ['contours', false],
       ['climate', false],
       ['zones', true],
       ['water', false],
@@ -234,8 +232,8 @@ describe('scene store', () => {
       ['measurement-guides', true],
       ['annotations', true],
     ])
-    firstLayer.visible = false
-    expect(secondLayer.visible).toBe(true)
+    firstLayer.visible = true
+    expect(secondLayer.visible).toBe(false)
     expect(persisted.plants).toHaveLength(0)
     expect(persisted.measurementGuides).toEqual([])
     expect(session.selectedTargets).toEqual([])

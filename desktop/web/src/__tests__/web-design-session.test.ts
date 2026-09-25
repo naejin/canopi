@@ -59,8 +59,6 @@ describe('browser Design Session lifecycle', () => {
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [
-        { name: 'base', visible: true, locked: false, opacity: 1 },
-        { name: 'contours', visible: false, locked: false, opacity: 1 },
         { name: 'climate', visible: false, locked: false, opacity: 1 },
         { name: 'zones', visible: true, locked: false, opacity: 1 },
         { name: 'water', visible: false, locked: false, opacity: 1 },
@@ -100,9 +98,9 @@ describe('browser Design Session lifecycle', () => {
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
     expect(firstLayer).not.toBe(secondLayer)
-    expect(secondLayer.visible).toBe(true)
-    firstLayer.visible = false
-    expect(secondLayer.visible).toBe(true)
+    expect(secondLayer.visible).toBe(false)
+    firstLayer.visible = true
+    expect(secondLayer.visible).toBe(false)
   })
 
   it('composes a new browser Design as v7 without a spatial frame through draft and download', async () => {
@@ -146,7 +144,7 @@ describe('browser Design Session lifecycle', () => {
       const downloaded = JSON.parse(download.text) as Record<string, unknown>
       expect(downloaded.version).toBe(7)
       expect(downloaded).not.toHaveProperty('spatial_frame')
-      expect(decodeCanopiDesign(downloaded).layers.find((layer) => layer.name === 'base')?.visible).toBe(true)
+      expect(decodeCanopiDesign(downloaded).layers.find((layer) => layer.name === 'zones')?.visible).toBe(true)
     } finally {
       detach()
     }

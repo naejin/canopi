@@ -10,18 +10,6 @@ pub(crate) struct NewDesignLayerDefaults {
 
 pub(crate) const NEW_DESIGN_LAYER_DEFAULTS: &[NewDesignLayerDefaults] = &[
     NewDesignLayerDefaults {
-        name: "base",
-        visible: true,
-        locked: false,
-        opacity: 1.0_f32,
-    },
-    NewDesignLayerDefaults {
-        name: "contours",
-        visible: false,
-        locked: false,
-        opacity: 1.0_f32,
-    },
-    NewDesignLayerDefaults {
         name: "climate",
         visible: false,
         locked: false,

@@ -374,7 +374,6 @@ function createTestSettingsAdapter(
       return () => {}
     },
     layerProjections: {
-      isAppOwnedLayerProjection: (name) => name === 'base' || name === 'contours',
       syncFromLayers: () => {},
       syncLayer: () => {},
     },

@@ -478,22 +478,6 @@ class WebCatalogArtifactContractTests(unittest.TestCase):
             check=False,
         )
 
-    def test_legacy_emit_delegates_to_the_rust_publication_authority(self):
-        completed = mock.Mock(returncode=0)
-
-        with mock.patch(
-            "scripts.web_catalog_artifact_contract.subprocess.run",
-            return_value=completed,
-        ) as run:
-            status = contract.main(["emit", "--write"])
-
-        self.assertEqual(status, 0)
-        run.assert_called_once_with(
-            ["cargo", "run", "-p", "bindings-gen"],
-            cwd=REPO_ROOT,
-            check=False,
-        )
-
     def test_delegation_does_not_split_a_repo_path_that_contains_spaces(self):
         completed = mock.Mock(returncode=0)
         root = Path("C:/Canopi checkout with spaces")

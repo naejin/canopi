@@ -51,7 +51,7 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 
 ## Panel And Canvas Reactivity
 
-- Layer chrome should consume Canvas Layer Presentation from `app/canvas-layer-presentation/presentation.ts` for visible Layer rows and layer row commands. Components should not hard-code scene/map/terrain Layer authority or special-case `base`, `contours`, and `hillshading` outside that seam.
+- Layer chrome should consume Canvas Layer Presentation from `app/canvas-layer-presentation/presentation.ts` for visible Layer rows and layer row commands. Components should not hard-code scene/map Layer authority outside that seam: scene Layers are Design edits, while Basemap, Satellite, Contours and Hillshade belong to the map layer store (`app/map-layers/`).
 - Planning surfaces that combine Design planning entries, placed plants, and localized names should go through `desktop/web/src/app/planning-projection/`.
 - Budget UI should consume the Budget Item Workbench from `app/budget/workbench.ts`; that workbench consumes Planning Projection read models and owns price draft lifecycle, currency commands, export behavior, formatting, and Budget Target presentation.
 - Calendar UI should consume `app/timeline/calendar-workbench.ts`; it owns editor drafts, civil-date form mapping, completion commands, Target presentation, and predecessor-Design guards. Calendar date grouping and month-grid inputs belong in Planning Projection; civil-date parsing and arithmetic belong in `app/timeline/civil-date.ts`.

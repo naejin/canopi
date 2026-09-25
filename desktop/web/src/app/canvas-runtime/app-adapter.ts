@@ -20,8 +20,6 @@ import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 import { t } from '../../i18n'
 
-const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
-
 export interface CanvasRuntimeAppCapabilities {
   readonly presentationData: CanvasRuntimePresentationDataAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
@@ -89,7 +87,6 @@ export function createAppCanvasRuntimeAppAdapter(
         onChange()
       }),
       layerProjections: {
-        isAppOwnedLayerProjection: (name) => APP_OWNED_LAYER_PROJECTIONS.has(name),
         syncFromLayers,
         syncLayer,
       },
@@ -103,7 +100,6 @@ function syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource
   const opacities = { ...layerOpacity.value }
 
   for (const layer of layers) {
-    if (APP_OWNED_LAYER_PROJECTIONS.has(layer.name)) continue
     visibility[layer.name] = layer.visible
     locks[layer.name] = layer.locked
     opacities[layer.name] = layer.opacity
@@ -117,8 +113,6 @@ function syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource
 }
 
 function syncLayer(layer: CanvasRuntimeLayerProjectionSource): void {
-  if (APP_OWNED_LAYER_PROJECTIONS.has(layer.name)) return
-
   batch(() => {
     layerVisibility.value = {
       ...layerVisibility.value,

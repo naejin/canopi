@@ -371,8 +371,6 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   }
 
   private setSceneLayerStateWhenSettled(name: string, edit: SceneLayerEdit): boolean {
-    if (this.options.settings.layerProjections.isAppOwnedLayerProjection(name)) return false
-
     return this.options.sceneEdits.run('scene-layer-settings', (tx) => {
       tx.mutate((draft) => {
         const layer = draft.layers.find((entry) => entry.name === name)

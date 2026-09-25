@@ -694,6 +694,38 @@ class GenerateWebCatalogTests(unittest.TestCase):
             publish.assert_not_called()
             self.assertEqual(snapshot_directory(output_dir), output_before)
 
+    def test_older_catalog_layout_is_refused_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_path = root / "canopi-export-test.db"
+            output_dir = root / "catalog"
+            create_export_fixture(export_path)
+            (output_dir / "species").mkdir(parents=True)
+            (output_dir / "species" / "species-0000.parquet").write_bytes(
+                b"older species asset"
+            )
+            (output_dir / "manifest.json").write_text(
+                json.dumps({"version": 1, "asset_format": "parquet"}),
+                encoding="utf-8",
+            )
+            output_before = snapshot_directory(output_dir)
+
+            with (
+                mock.patch.object(generator, "publish_output_dir") as publish,
+                self.assertRaises(ValueError) as raised,
+            ):
+                generator.generate_web_catalog(
+                    export_path=export_path,
+                    output_dir=output_dir,
+                    species_shard_count=1,
+                    image_shard_count=1,
+                )
+
+            self.assertIn(str(output_dir), str(raised.exception))
+            self.assertIn("not a generator-owned catalog", str(raised.exception))
+            publish.assert_not_called()
+            self.assertEqual(snapshot_directory(output_dir), output_before)
+
     def test_generation_rejects_missing_caller_owned_storage_dependencies(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

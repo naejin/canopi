@@ -138,18 +138,13 @@ describe('Canvas Runtime app adapter composition', () => {
     }
   })
 
-  it('projects scene-owned Layers while preserving app-owned map Layers', () => {
+  it('projects scene-owned Layers', () => {
     const adapter = createAdapter()
 
     adapter.settings.layerProjections.syncFromLayers([
-      { name: 'base', visible: false, locked: true, opacity: 0.2 },
       { name: 'plants', visible: false, locked: true, opacity: 0.45 },
     ])
 
-    // App-owned map rows live in the map layer store, never in the scene projections.
-    expect(layerVisibility.value).not.toHaveProperty('base')
-    expect(layerLockState.value).not.toHaveProperty('base')
-    expect(layerOpacity.value).not.toHaveProperty('base')
     expect(layerVisibility.value.plants).toBe(false)
     expect(layerLockState.value.plants).toBe(true)
     expect(layerOpacity.value.plants).toBe(0.45)
@@ -164,7 +159,6 @@ describe('Canvas Runtime app adapter composition', () => {
     expect(layerVisibility.value.zones).toBe(false)
     expect(layerLockState.value.zones).toBe(true)
     expect(layerOpacity.value.zones).toBe(0.6)
-    expect(adapter.settings.layerProjections.isAppOwnedLayerProjection('contours')).toBe(true)
   })
 
   it('lets the Desktop root supply native presentation and Saved Stamp capture', () => {

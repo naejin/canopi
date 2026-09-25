@@ -2,18 +2,6 @@
   "contract_version": 1,
   "layers": [
     {
-      "name": "base",
-      "visible": true,
-      "locked": false,
-      "opacity": 1.0
-    },
-    {
-      "name": "contours",
-      "visible": false,
-      "locked": false,
-      "opacity": 1.0
-    },
-    {
       "name": "climate",
       "visible": false,
       "locked": false,

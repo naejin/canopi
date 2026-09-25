@@ -1699,7 +1699,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Browser Canvas Runtime does not rebuild shared app policy',
     from: ['src/web/browser-canvas-runtime.ts'],
     names: [
-      'APP_OWNED_LAYER_PROJECTIONS',
       'mutateSettingsProjection',
       'syncFromLayers',
       'syncLayer',

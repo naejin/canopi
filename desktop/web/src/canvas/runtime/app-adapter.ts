@@ -62,7 +62,6 @@ export interface CanvasRuntimeSettingsAdapter {
 }
 
 export interface CanvasRuntimeLayerProjectionAdapter {
-  isAppOwnedLayerProjection(name: string): boolean
   syncFromLayers(layers: ReadonlyArray<CanvasRuntimeLayerProjectionSource>): void
   syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
 }
@@ -133,7 +132,6 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       subscribeLocale: subscribeImmediately,
       subscribeChromeOverlay: subscribeImmediately,
       layerProjections: {
-        isAppOwnedLayerProjection: () => false,
         syncFromLayers: (layers) => {
           layerProjections.clear()
           for (const layer of layers) layerProjections.set(layer.name, layer)

@@ -330,11 +330,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_default_has_eight_layers() {
+    fn test_create_default_has_six_layers() {
         let design = create_default();
         assert_eq!(design.version, CURRENT_CANOPI_FILE_VERSION);
         assert_eq!(design.name, "Untitled");
-        assert_eq!(design.layers.len(), 8);
+        assert_eq!(design.layers.len(), 6);
         assert!(design.measurement_guides.is_empty());
     }
 
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(second.name, "Second Design");
         assert_eq!(second.created_at, "2026-07-03T00:00:00Z");
         first.layers[0].name = "changed".to_owned();
-        assert_eq!(second.layers[0].name, "base");
+        assert_eq!(second.layers[0].name, "climate");
     }
 
     #[test]
@@ -363,8 +363,6 @@ mod tests {
         assert_eq!(
             by_name,
             std::collections::HashMap::from([
-                ("base", true),
-                ("contours", false),
                 ("climate", false),
                 ("zones", true),
                 ("water", false),
@@ -387,7 +385,7 @@ mod tests {
         let loaded = load_from_file(&path).expect("load should succeed");
         assert_eq!(loaded.name, original.name);
         assert_eq!(loaded.version, original.version);
-        assert_eq!(loaded.layers.len(), 8);
+        assert_eq!(loaded.layers.len(), 6);
 
         // Clean up
         let _ = std::fs::remove_file(&path);
