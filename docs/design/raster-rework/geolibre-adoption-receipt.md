@@ -134,3 +134,44 @@ Driven Desktop proof (`adoption-bench/s4-journey.mjs`, `results-s4-journey.json`
 | Same binary without the CLI | `slope_engine` unavailable with its reason; create refused by name; nothing created; both saved results Ready |
 
 No page errors. Gates: `tsc`; Vitest 286 files / 2804 tests; `check:ui`; `check:types`; `cargo fmt --check`; `cargo clippy -D warnings`; `cargo test --workspace` (364 lib tests); GDAL analysis/fixed-library/display lanes and both GeoLibre lanes pass. Not done here: release bundling of the sidecar (tracked in bd) and Windows/macOS execution of the CLI.
+
+## S5 — whole-app candidate and consolidated handoff
+
+**Journey candidate:** `c7623f10`, a debug build with the production frontend bundle. A debug build is needed because an unbundled release binary resolves its plant database to the installed `/usr/lib/Canopi`, which has an older schema. The GeoLibre CLI sits beside the binary. One fresh isolated profile on Xephyr `:99` ran every journey, using real X pointer and keyboard input and native GTK dialogs (`adoption-bench/run-final.sh`, `results-final-*.json`). None reported a page error.
+
+| Journey | Result |
+| --- | --- |
+| Whole app | New Design; Catalog search, Tree filter and favorite; stamp placement with real clicks; select-all, Delete and Undo; Budget price → €25.00 and CSV `Apple,2,12.50,25.00,EUR` through the native dialog; Calendar action; Consortium reflects the placement; Save As (2 plants and the action saved); Export to PDF (`%PDF-`); reopen keeps plants and price |
+| Library (S3) | Chooser cancel creates nothing; import Ready in 6.1 s (debug native); preview 0.36 s; search, no match, clear; Add → first tile 0.44 s; plant delete during decode visible in 64 ms; Fit, Inspect and legend; sample 0.0000 m; Remove keeps the item; reuse in Design B → 0.36 s; save/reopen |
+| Slope (S4) | From Layers → attached in 13.8 s, inspect 24.0950° (analytic 24.0948°); from the library in Percent → stored Percent, not attached; details name the GeoLibre method and engine; reopen |
+| Failures | Unsaved switch: Cancel keeps the change, Don't Save opens a new Design, the file is unchanged; cancelling a running calculation (145 ms) shows "Cancelled", and Retry republishes under the same name (13.0 s); a deleted library item shows "Unavailable data" in the Design that referenced it; the app stopped during an import's preparation reopens it as "interrupted by restart", and Retry reaches Ready |
+| Web (served `dist-web`, Firefox) | Opens a Desktop Design with a LiDAR reference; the Data Library states that raster data is preserved but not rendered on Web and offers no Import; the downloaded `.canopi` keeps the reference (equal fields); only external host is the OSM basemap |
+| UI gallery (driven) | Data Library, details, Layers and the Calculate slope form render in the production composition |
+
+Defects fixed in S5, found by these journeys:
+- a running or failed calculation showed a fallback name instead of its own;
+- a cancelled calculation was labelled "Calculation failed";
+- radio buttons used the browser's default accent instead of ochre.
+
+Gates at the delivered head: `tsc`; Vitest 287 files / 2815 tests; `check:ui`; `npm run build`; `npm run build:web` (with the boundary scan); `gen:types` and `check:types`; `cargo fmt --check`; `cargo clippy --workspace --all-targets -D warnings`; `cargo test --workspace` (364 lib tests); native command policy; `check_docs`. Ignored GDAL and GeoLibre lanes pass, except the two e2e lanes that need the absent IGN MNT fixture (`canopi-8shm.8`).
+
+### Consolidated handoff
+
+- **Branch:** `feature/geolibre-adoption`, pushed. Journey candidate `c7623f10`; later commits change docs and one CSS accent only.
+- **Beads:** S0–S5 are closed. Open follow-ups: GeoLibre sidecar bundling in release builds and per-OS proof; the dense and sparse e2e lanes with the IGN MNT fixture (`canopi-8shm.8`); the existing GDAL bundling follow-up. Epic `canopi-8shm` stays open until integration is authorized.
+- **Review checkout:** the worktree `.rq-scratch/wt-adoption`. To review in the running app:
+  1. `scripts/build-geolibre-cli.sh`.
+  2. `export CANOPI_GEOLIBRE_BIN=<printed path>`.
+  3. With GDAL tools on `PATH`, run `cargo tauri dev` from the worktree root, ideally with an isolated `XDG_*` profile (edition-development guide).
+  4. Open a located Design and use Data Library → Import → Add → Layers → Calculate slope.
+- **Upstream code:** adopted unchanged through public seams: `maplibre-gl-raster` 0.14.15, `cog-tiler-wasm` 0.4.0, `whitebox-wasm` 0.6.0, and `geolibre-cli` 1.5.3 at `aac2b743`. No upstream file is patched. The adapter glue and the private `CogSource.tileCache` dependency are described in the S1 section.
+- **Custom code retired:** the native tile renderer, tile cache, PNG pyramids, the tileset contract, history, source editing and automatic refresh, the Analysis panel and navigation, and the Data/Analysis panels.
+- **Performance:** the S1 table (release build): first useful viewport 1.0–1.3 s. The 250 ms tile-bearing pan/zoom p95 is **missed** (0.65–0.94 s). The full three-way baseline comparison was waived by the user.
+- **Not verified:**
+  - Windows WebView2 and macOS WKWebView;
+  - packaged installers, including sidecar bundling;
+  - peak RSS, idle overhead and read-byte counts across processes;
+  - the IGN MNT e2e lanes;
+  - map-unavailable failure injection.
+- **Readiness:** the candidate is ready for local user review. It is not platform-qualified, integrated or released.
+- **User work:** the primary checkout's `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock` were not touched.

@@ -11,6 +11,68 @@ The repaired stack is integrated for user review; the [current receipt](completi
 implementer synthesis at `b4ab8fe6` is retained in Git at `26eca68a`; its reported
 measurements remain in the completion receipt. It was not independent acceptance.
 
+### GeoLibre adoption delivery (S0–S5) — 2026-09-25
+
+Scope: the authorized [GeoLibre adoption](geolibre-adoption-plan.md) on `feature/geolibre-adoption`, from base `d6e1b65c`. Evidence is in the [adoption receipt](geolibre-adoption-receipt.md); this is the implementer's own synthesis, not independent acceptance. Integration and release were not authorized and did not happen.
+
+**Milestones.** The first usable library milestone (S0–S3) landed at `16e4e392`, with receipt `8428878c`. Its Desktop journey passed: import, search, preview, Add, Fit/Inspect, Remove, reuse in a second Design, save/reopen. Contextual analysis (S4) landed at `b95f3727`. The whole-app candidate is `c7623f10`. On that candidate, one fresh profile ran:
+- Catalog search, filter, favorite and real-pointer placement; canvas edit/undo;
+- Budget price and CSV export, a Calendar action, Consortium;
+- Save As, PDF export and reopen;
+- the S3 library journey and the S4 slope journey;
+- failure paths: unsaved switch, cancel then retry, a deleted referenced item, an import interrupted by a restart.
+
+The served Web build opened a Desktop Design, stated the raster limitation and downloaded the Design with its references intact.
+
+**Deliberately retired:** dataset History, Restore, library Undo, published-source append/reorder/remove, automatic refresh, the Analysis panel and its navigation, the native PNG tile renderer, tile cache and pyramids, and the `tilesets` and history/edit contracts (about 4,800 lines in `16e4e392`). The earlier plan's preservation of history, source editing and automatic refresh was a planning scope error corrected by the user, not an implementation defect.
+
+**Upstream reuse:**
+- Used unchanged through public seams: `maplibre-gl-raster` 0.14.15 `LayerManager` (the `cog-tiler-wasm` engine), `cog-tiler-wasm` 0.4.0 and `whitebox-wasm` 0.6.0.
+- The `geolibre` CLI is built from `geolibre-rust` `aac2b743` and run as a child process.
+- Nothing upstream was patched. The adapter glue compensates for three upstream behaviours: the engine ignores abort signals, so the pool filters relevance; the first map mutation waits on `isStyleLoaded()`, so the adapter nudges it on `idle`/`sourcedata`; and `CogSource.tileCache` is replaced with a lane-wide LRU. The last relies on a non-public field and fails loudly if it disappears; that is the main update burden.
+- Rejected: the `@geolibre/*` barrels, the Python/WASI detour and DuckDB.
+
+**Measured** (Xephyr and llvmpipe on this Linux host; baseline measured before the user waived the full three-way comparison):
+
+| | Baseline | Adopted |
+| --- | --- | --- |
+| First tile of a ready item, cold renderer | 5.0 s | 1.0–1.3 s |
+| Viewport complete | 29.8 s | 1.2–1.4 s |
+| Tile-bearing interaction p95 | 19.6 s cold, 0.43 s warm | 0.65–0.94 s |
+
+The 2 s first-viewport target is met; the 250 ms p95 target is **missed** for interactions that need new tiles.
+
+Preparation costs:
+- 24 tiles: 21.7 s.
+- 400M-cell plane: 20.4 s in the app, 12.9 s in the native lane.
+- IGN tile import to Ready: 3.1 s in release, 6.2 s in debug.
+- Slope on 4M cells: 10.6–15.3 s, including attachment.
+
+Peak RSS across processes, idle overhead and read-byte counts were **not** measured for S3–S5. Windows and macOS are unverified.
+
+**Detector quality and escapes.** Behavioural REDs caught real defects before delivery:
+- the style-readiness stall (S1);
+- a NoData tag that did not round-trip (S2);
+- an unknown recipe being rejected only after the input was read (S4);
+- the 1026-cell resolver cap, exposed only by the real GeoLibre run while static gates were green (S4);
+- unfinished calculations shown under a fallback name (S5 driven journey);
+- a cancelled calculation labelled as failed (S5).
+
+Escapes and their causes:
+- **Design omission in the S2 read model:** failed calculations reported no input, so Retry was never offered. Found while designing S4's Retry.
+- **Process slip:** S4 was committed with one unformatted line. Fixed in `32ab041b`.
+- **Verification error in the S4 receipt:** it claimed a percent result that was actually degrees, because the script set two form fields in one synchronous call. The S5 rerun caught it; the receipt now carries the correction and the real percent proof.
+
+Most journey failures during S3–S5 were harness faults (bridge reply handling, dock toggling, native dialogs), not product faults. The edition-development guide now records that recipe.
+
+**Effort.** One implementation session (2026-09-24 afternoon to 2026-09-25 morning) with two user messages: the baseline waiver and a progress check. There were no courier cycles, and model cost is not available. No savings are claimed.
+
+**Process changes tested:**
+- *Prove the real library journey before analysis.* S3's journey found no product defect but settled the harness. S4 and S5 then reused it, and the S5 whole-app pass found two product defects and one evidence error. **Keep**; the journeys live in `.rq-scratch/adoption-bench/`, and the recipe is in the edition-development guide.
+- *Run the actual upstream and native path early.* The real CLI run found the window cap and the NoData round-trip issue that unit gates could not. **Keep**; enforced by the ignored GeoLibre lanes in `analysis.rs` and the build-script revision test.
+
+Independent review of these claims is still owed.
+
 ### Next-use evaluation after de336a7d
 
 The implementation repaired F1 and added useful replacement/finally controls. F2's
