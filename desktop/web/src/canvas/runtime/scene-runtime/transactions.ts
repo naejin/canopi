@@ -70,8 +70,6 @@ export interface SettledSceneReader {
 export interface SceneHistoryCommands {
   readonly canUndo: ReadonlySignal<boolean>
   readonly canRedo: ReadonlySignal<boolean>
-  readonly nextUndoSequence: ReadonlySignal<number | null>
-  readonly nextRedoSequence: ReadonlySignal<number | null>
   undo(): boolean
   redo(): boolean
 }
@@ -219,12 +217,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       && !this._isPresentationMaintenanceBusy()
       && this._history.canRedo.value
   })
-  readonly nextUndoSequence = computed(() => this.canUndo.value
-    ? this._history.nextUndoSequence.value
-    : null)
-  readonly nextRedoSequence = computed(() => this.canRedo.value
-    ? this._history.nextRedoSequence.value
-    : null)
 
   constructor(options: SceneRuntimeEditCoordinatorOptions) {
     this._sceneStore = options.sceneStore

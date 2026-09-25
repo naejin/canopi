@@ -172,7 +172,6 @@ export function createSceneRuntimeConstruction(
   })
   const chrome = new SceneRuntimeChromeCoordinator()
   const disposeEffects: Array<() => void> = []
-  disposeEffects.push(() => history.dispose())
   const rendering = new SceneRuntimeRenderScheduler({
     getRenderer: () => renderer,
     getViewport: () => camera.viewport,
