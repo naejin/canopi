@@ -573,7 +573,7 @@
         "google": "Google"
       },
       "eoxResolution": "Imágenes Sentinel-2 sin nubes, unos 10 m por píxel.",
-      "googleKeyRequired": "Introduce tu clave de API de Google Maps para cargar las imágenes de Google."
+      "googleKeyOptional": "Sin clave, Canopi usa los mosaicos satelitales públicos de Google. Añade tu clave de API de Google Maps para usar la API oficial Map Tiles."
     }
   },
   "worldMap": {

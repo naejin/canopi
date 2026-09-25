@@ -23,5 +23,6 @@ MIT License text:
 ## Map data shown at runtime
 
 - OpenFreeMap vector tiles and styles: "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (shown on the map).
+- Google satellite imagery: "© Google" (shown on the map). Without a key the public `mt1.google.com` tiles are used; with the user's key, the Google Map Tiles API and its viewport copyright.
 - EOX Sentinel-2 cloudless 2017 (`s2cloudless-2017_3857`): "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2017)", CC BY 4.0 (shown on the map).
 - Place search: Nominatim, "Search by Nominatim · © OpenStreetMap contributors" (shown with results), ODbL.

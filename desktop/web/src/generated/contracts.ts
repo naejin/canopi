@@ -605,10 +605,11 @@ export type ProblemReportSensitiveAttachments = {
 };
 
 /**
- *  Satellite imagery providers: EOX Sentinel-2 cloudless (keyless, CC BY
- *  4.0) or Google Map Tiles with a device key.
+ *  Satellite imagery providers: Google (keyless public tiles, or the
+ *  official Map Tiles API with a device key) or EOX Sentinel-2 cloudless
+ *  (keyless, CC BY 4.0, about 10 m per pixel).
  */
-export type SatelliteProvider = "eox" | "google";
+export type SatelliteProvider = "google" | "eox";
 
 export type SavedObjectStamp = {
 	id: string,
@@ -640,7 +641,7 @@ export type Settings = {
 	 *
 	 *  Device-local browser credential: it is stored with the rest of the
 	 *  device settings, never in a Design, export, diagnostic bundle, error
-	 *  text or log. Without a key the Google satellite provider is unavailable.
+	 *  text or log. Without a key the Google satellite provider uses keyless tiles.
 	 */
 	google_maps_api_key?: string | null,
 	contour_visible: boolean,

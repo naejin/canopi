@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = {
   "basemap_style": "liberty",
   "basemap_visible": true,
   "basemap_opacity": 1.0,
-  "satellite_provider": "eox",
+  "satellite_provider": "google",
   "satellite_visible": false,
   "satellite_opacity": 1.0,
   "google_maps_api_key": null,
@@ -53,6 +53,6 @@ export const SETTINGS_BASEMAP_STYLES = [
 ] as const satisfies readonly BasemapStyle[]
 
 export const SETTINGS_SATELLITE_PROVIDERS = [
-  "eox",
-  "google"
+  "google",
+  "eox"
 ] as const satisfies readonly SatelliteProvider[]

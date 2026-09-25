@@ -15,7 +15,7 @@ import {
 } from '../../maplibre/config'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import { OPENFREEMAP_BASEMAPS } from '../../maplibre/openfreemap-basemap'
-import { EOX_SATELLITE_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
+import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
 
@@ -1659,7 +1659,7 @@ describe('WorkspaceMapControls Satellite provider', () => {
     }
   })
 
-  it('shows no imagery and makes no request for Google without a key', async () => {
+  it('shows Google keyless imagery without a session request when no key is set', async () => {
     const { googleMapsApiKey } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
     const { controls, maps } = createControls({
@@ -1671,13 +1671,13 @@ describe('WorkspaceMapControls Satellite provider', () => {
     await acquisition
     await Promise.resolve()
 
-    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
-    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
     expect(styleFetch).not.toHaveBeenCalled()
     expect(map.remove).not.toHaveBeenCalled()
   })
 
-  it('withdraws EOX imagery when the provider switches to Google without a key', async () => {
+  it('replaces EOX imagery with Google keyless tiles when the provider switches without a key', async () => {
     const { googleMapsApiKey } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
     const { controls, maps } = createControls()
@@ -1689,8 +1689,7 @@ describe('WorkspaceMapControls Satellite provider', () => {
 
     controls.updateBackgroundPresentation(background({}, { provider: 'google', visible: true }))
 
-    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
-    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
     expect(styleFetch).not.toHaveBeenCalled()
   })
 })

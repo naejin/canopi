@@ -573,7 +573,7 @@
         "google": "Google"
       },
       "eoxResolution": "Sentinel-2 雲なし画像、1 ピクセルあたり約 10 m。",
-      "googleKeyRequired": "Google の画像を読み込むには Google Maps API キーを入力してください。"
+      "googleKeyOptional": "キーがない場合、Canopi は Google の公開衛星タイルを使用します。公式の Map Tiles API を使うには Google Maps API キーを追加してください。"
     }
   },
   "worldMap": {

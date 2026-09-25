@@ -46,7 +46,7 @@ describe('readWorkspaceActivationSnapshot', () => {
         initialCenter: { lat: 48.86, lon: 2.35 },
         background: {
           basemap: { style: 'positron', visible: true, opacity: 0 },
-          satellite: { provider: 'eox', visible: false, opacity: 1 },
+          satellite: { provider: 'google', visible: false, opacity: 1 },
           locale: 'fr',
         },
       }),

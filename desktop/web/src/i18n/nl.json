@@ -573,7 +573,7 @@
         "google": "Google"
       },
       "eoxResolution": "Wolkenvrije Sentinel-2-beelden, ongeveer 10 m per pixel.",
-      "googleKeyRequired": "Voer je Google Maps-API-sleutel in om Google-beelden te laden."
+      "googleKeyOptional": "Zonder sleutel gebruikt Canopi de openbare satelliettegels van Google. Voeg je Google Maps API-sleutel toe om de officiële Map Tiles API te gebruiken."
     }
   },
   "worldMap": {

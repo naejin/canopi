@@ -573,7 +573,7 @@
         "google": "Google"
       },
       "eoxResolution": "Sentinel-2 구름 없는 영상, 픽셀당 약 10m.",
-      "googleKeyRequired": "Google 영상을 불러오려면 Google Maps API 키를 입력하세요."
+      "googleKeyOptional": "키가 없으면 Canopi는 Google의 공개 위성 타일을 사용합니다. 공식 Map Tiles API를 사용하려면 Google Maps API 키를 추가하세요."
     }
   },
   "worldMap": {

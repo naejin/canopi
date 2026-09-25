@@ -8,7 +8,7 @@ import {
   type SatelliteProviderResponse,
   type SatelliteProviderState,
 } from '../maplibre/satellite-provider-session'
-import { GOOGLE_KEY_REQUIRED_REASON } from '../maplibre/satellite-provider'
+import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
@@ -85,7 +85,7 @@ describe('satellite provider session lifecycle', () => {
     provider.dispose()
   })
 
-  it('reports Google without a key as unavailable without making any request', () => {
+  it('serves Google without a key from the keyless tiles without any session request', () => {
     const { http, calls } = scriptedHttp([ok({})])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: '  ' })
     const seen = recorder(provider)
@@ -93,12 +93,10 @@ describe('satellite provider session lifecycle', () => {
     provider.update({ provider: 'google' }, VIEWPORT)
 
     const last = provider.snapshot()
-    expect(last).toEqual({
-      state: 'unavailable',
-      provider: 'google',
-      reason: GOOGLE_KEY_REQUIRED_REASON,
-    })
-    expect(seen.map((state) => state.state)).toEqual(['unavailable'])
+    if (last.state !== 'ready') throw new Error('expected ready')
+    expect(last.descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+    expect(last.descriptor.official).toBe(false)
+    expect(seen.map((state) => state.state)).toEqual(['ready'])
     expect(calls).toEqual([])
     provider.dispose()
   })

@@ -221,7 +221,7 @@ describe('LayerPanel', () => {
     })
 
     expect(mapLayers.value.satellite.provider).toBe('google')
-    expect(container.textContent).toContain('Enter your Google Maps API key to load Google imagery.')
+    expect(container.textContent).toContain("Without a key, Canopi uses Google's public satellite tiles.")
 
     const keyInput = container.querySelector<HTMLInputElement>('input[type="password"]')
     expect(keyInput).toBeTruthy()
@@ -237,7 +237,7 @@ describe('LayerPanel', () => {
     expect(googleMapsApiKey.value).toBe('device-key')
     expect(container.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe('')
     expect(container.textContent).not.toContain('device-key')
-    expect(container.textContent).not.toContain('Enter your Google Maps API key to load Google imagery.')
+    expect(container.textContent).not.toContain("Without a key, Canopi uses Google's public satellite tiles.")
     expect(container.textContent).toContain('Key saved on this device.')
     await Promise.resolve()
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -251,7 +251,7 @@ describe('LayerPanel', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(googleMapsApiKey.value).toBeNull()
-    expect(container.textContent).toContain('Enter your Google Maps API key to load Google imagery.')
+    expect(container.textContent).toContain("Without a key, Canopi uses Google's public satellite tiles.")
   })
 
   it('shows map layer detail controls without a Design Location action', async () => {

@@ -62,9 +62,9 @@ function layers(overrides: {
 }
 
 describe('map layer store', () => {
-  it('starts with a visible Liberty Basemap and hidden EOX Satellite', () => {
+  it('starts with a visible Liberty Basemap and hidden Google Satellite', () => {
     expect(mapLayers.value.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(mapLayers.value.satellite).toEqual({ provider: 'eox', visible: false, opacity: 1 })
+    expect(mapLayers.value.satellite).toEqual({ provider: 'google', visible: false, opacity: 1 })
     expect(mapLayers.value.contours.visible).toBe(false)
     expect(mapLayers.value.hillshade.visible).toBe(false)
     expect(mapBackground.value).toBe('basemap')
@@ -174,7 +174,7 @@ describe('map layer store', () => {
     }))
 
     expect(normalized.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(normalized.satellite).toEqual({ provider: 'eox', visible: false, opacity: 0 })
+    expect(normalized.satellite).toEqual({ provider: 'google', visible: false, opacity: 0 })
     expect(normalized.contours.opacity).toBe(1)
     expect(normalized.hillshade.opacity).toBe(DEFAULT_SETTINGS.hillshade_opacity)
   })
@@ -182,7 +182,7 @@ describe('map layer store', () => {
   it('normalizes action input before it reaches the store and settings', async () => {
     setMapLayerOpacity('basemap', 0.5)
     setBasemapStyle('bright')
-    setSatelliteProvider('google')
+    setSatelliteProvider('eox')
     vi.runAllTimers()
     await Promise.resolve()
     saveSettings.mockClear()
@@ -194,11 +194,11 @@ describe('map layer store', () => {
     await Promise.resolve()
 
     expect(mapLayers.value.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(mapLayers.value.satellite.provider).toBe('eox')
+    expect(mapLayers.value.satellite.provider).toBe('google')
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({
       basemap_style: 'liberty',
       basemap_opacity: 1,
-      satellite_provider: 'eox',
+      satellite_provider: 'google',
     }))
   })
 })

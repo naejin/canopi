@@ -265,7 +265,7 @@ describe('settings projection', () => {
     expect(theme.value).toBe('light')
     expect(mapLayers.value.basemap.style).toBe('liberty')
     expect(mapLayers.value.basemap.opacity).toBe(1)
-    expect(mapLayers.value.satellite.provider).toBe('eox')
+    expect(mapLayers.value.satellite.provider).toBe('google')
     expect(mapLayers.value.satellite.opacity).toBe(1)
     expect(mapLayers.value.contours.opacity).toBe(0)
     expect(mapLayers.value.contours.intervalMeters).toBe(13)
@@ -290,7 +290,7 @@ describe('settings projection', () => {
       theme: 'light',
       basemap_style: 'liberty',
       basemap_opacity: 0,
-      satellite_provider: 'eox',
+      satellite_provider: 'google',
       satellite_opacity: 1,
       contour_opacity: 1,
       contour_interval: 8,

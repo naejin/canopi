@@ -203,7 +203,7 @@ describe('Canvas Layer Presentation', () => {
         detail: {
           type: 'satellite',
           provider: 'eox',
-          providers: ['eox', 'google'],
+          providers: ['google', 'eox'],
           hasGoogleKey: false,
         },
       },

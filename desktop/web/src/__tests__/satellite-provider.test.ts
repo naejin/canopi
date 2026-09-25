@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EOX_SATELLITE_ATTRIBUTION,
   EOX_SATELLITE_TILES,
-  GOOGLE_KEY_REQUIRED_REASON,
+  GOOGLE_KEYLESS_TILES,
   GOOGLE_SESSION_TILES,
   resolveSatelliteAvailability,
 } from '../maplibre/satellite-provider'
@@ -24,7 +24,7 @@ describe('shared satellite provider resolution', () => {
     }
   })
 
-  it('marks Google without a key unavailable instead of substituting another provider', () => {
+  it('serves Google keylessly from its public tile endpoint until a key is configured', () => {
     for (const config of [
       {},
       { googleMapsApiKey: undefined },
@@ -32,11 +32,13 @@ describe('shared satellite provider resolution', () => {
       { googleMapsApiKey: '   ' },
     ]) {
       const resolved = resolveSatelliteAvailability('google', config)
-      expect(resolved).toEqual({
-        state: 'unavailable',
-        provider: 'google',
-        reason: GOOGLE_KEY_REQUIRED_REASON,
-      })
+      if (resolved.state !== 'ready') throw new Error('google must be ready without a key')
+      expect(resolved.descriptor.provider).toBe('google')
+      expect(resolved.descriptor.official).toBe(false)
+      expect(resolved.descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+      expect(GOOGLE_KEYLESS_TILES).toBe('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}')
+      expect(resolved.descriptor.attribution).toContain('Google')
+      expect(resolved.descriptor.maxzoom).toBe(20)
     }
   })
 

@@ -29,7 +29,6 @@ import {
 import {
   EOX_SATELLITE_ATTRIBUTION,
   EOX_SATELLITE_TILES,
-  GOOGLE_KEY_REQUIRED_REASON,
   GOOGLE_SESSION_TILES,
   type SatelliteDescriptor,
 } from '../maplibre/satellite-provider'
@@ -171,7 +170,7 @@ describe('satellite contribution reconciliation', () => {
   it('withdraws the contribution for idle and unavailable providers', () => {
     const states: SatelliteProviderState[] = [
       { state: 'idle' },
-      { state: 'unavailable', provider: 'google', reason: GOOGLE_KEY_REQUIRED_REASON },
+      { state: 'unavailable', provider: 'google', reason: 'session-failed' },
     ]
     for (const state of states) {
       const { target, sources, layers } = recordingTarget()

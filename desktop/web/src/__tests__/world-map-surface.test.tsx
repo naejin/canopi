@@ -8,7 +8,7 @@ import { WorldMapSurface } from '../components/world-map/WorldMapSurface'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import type { MapBackgroundHandle, MapBackgroundOptions } from '../maplibre/map-background'
-import { EOX_SATELLITE_TILES } from '../maplibre/satellite-provider'
+import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 import type { TemplateMeta } from '../types/community'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -454,12 +454,13 @@ describe('WorldMapSurface', () => {
     expect(map.sources.has('ofm-openmaptiles')).toBe(false)
     expect(map.layers.has('ofm:water')).toBe(false)
 
-    // Google without a device key is genuinely unavailable: the EOX tiles are
-    // withdrawn rather than left on screen under Google's name.
+    // Google without a device key switches to its keyless tiles on the same
+    // map; EOX tiles never stay on screen under Google's name.
     act(() => {
       setMapLayers({ satellite: { provider: 'google' } })
     })
-    await vi.waitFor(() => expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false))
+    await vi.waitFor(() => expect((map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] } | undefined)?.tiles)
+      .toEqual([GOOGLE_KEYLESS_TILES]))
 
     // Satellite off restores the Basemap.
     act(() => {

@@ -49,7 +49,7 @@ pub struct Settings {
     ///
     /// Device-local browser credential: it is stored with the rest of the
     /// device settings, never in a Design, export, diagnostic bundle, error
-    /// text or log. Without a key the Google satellite provider is unavailable.
+    /// text or log. Without a key the Google satellite provider uses keyless tiles.
     #[serde(default)]
     pub google_maps_api_key: Option<String>,
     pub contour_visible: bool,
@@ -84,7 +84,7 @@ impl Default for Settings {
             basemap_style: BasemapStyle::Liberty,
             basemap_visible: true,
             basemap_opacity: 1.0,
-            satellite_provider: SatelliteProvider::Eox,
+            satellite_provider: SatelliteProvider::Google,
             satellite_visible: false,
             satellite_opacity: 1.0,
             google_maps_api_key: None,
@@ -117,14 +117,15 @@ settings_enum! {
 }
 
 settings_enum! {
-    /// Satellite imagery providers: EOX Sentinel-2 cloudless (keyless, CC BY
-    /// 4.0) or Google Map Tiles with a device key.
+    /// Satellite imagery providers: Google (keyless public tiles, or the
+    /// official Map Tiles API with a device key) or EOX Sentinel-2 cloudless
+    /// (keyless, CC BY 4.0, about 10 m per pixel).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
     #[serde(rename_all = "lowercase")]
     pub enum SatelliteProvider {
         #[default]
-        Eox,
         Google,
+        Eox,
     }
 }
 
@@ -226,7 +227,7 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
         assert!(settings.basemap_visible);
-        assert_eq!(settings.satellite_provider, SatelliteProvider::Eox);
+        assert_eq!(settings.satellite_provider, SatelliteProvider::Google);
         assert!(!settings.satellite_visible);
         let unknown: Settings = serde_json::from_value(serde_json::json!({
             "basemap_style": "street",
@@ -234,7 +235,7 @@ mod tests {
         }))
         .expect("unknown map choices fall back to defaults");
         assert_eq!(unknown.basemap_style, BasemapStyle::Liberty);
-        assert_eq!(unknown.satellite_provider, SatelliteProvider::Eox);
+        assert_eq!(unknown.satellite_provider, SatelliteProvider::Google);
     }
 
     #[test]

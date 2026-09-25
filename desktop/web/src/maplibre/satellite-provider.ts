@@ -9,9 +9,11 @@ import type { SatelliteProvider } from '../generated/contracts'
  * - `eox` is EOX Sentinel-2 cloudless 2017 (CC BY 4.0), keyless, about 10 m
  *   per pixel. Esri World Imagery was not adopted: its Master License Agreement
  *   does not clearly allow keyless display in a free third-party app.
- * - `google` is the official Map Tiles API and needs the user's device key.
- *   Without a key it is unavailable and the UI prompts for one; there is no
- *   keyless Google path.
+ * - `google` (the default) serves Google's public `mt1.google.com` tiles
+ *   keylessly, as GeoLibre's basemap control does. That endpoint is not a
+ *   published API and Google's terms do not cover using it directly; the
+ *   user chose it for its resolution. With the user's device key it switches
+ *   to the official Map Tiles API session tiles.
  */
 export interface SatelliteProviderConfig {
   /** Device-local Google Maps API key. */
@@ -31,9 +33,7 @@ export interface SatelliteDescriptor {
   readonly official: boolean
 }
 
-export type SatelliteAvailability =
-  | { readonly state: 'ready'; readonly descriptor: SatelliteDescriptor }
-  | { readonly state: 'unavailable'; readonly provider: SatelliteProvider; readonly reason: string }
+export type SatelliteAvailability = { readonly state: 'ready'; readonly descriptor: SatelliteDescriptor }
 
 export const EOX_SATELLITE_TILES =
   'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2017_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg'
@@ -49,9 +49,11 @@ const EOX_MAX_ZOOM = 17
  */
 export const GOOGLE_SESSION_TILES =
   'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}'
+/** Google's public satellite tiles (`lyrs=s`), used while no device key is set. */
+export const GOOGLE_KEYLESS_TILES = 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
 const GOOGLE_ATTRIBUTION = '&copy; Google'
 const GOOGLE_MAX_ZOOM = 22
-export const GOOGLE_KEY_REQUIRED_REASON = 'google-key-required'
+const GOOGLE_KEYLESS_MAX_ZOOM = 20
 
 export function resolveSatelliteAvailability(
   provider: SatelliteProvider,
@@ -59,7 +61,17 @@ export function resolveSatelliteAvailability(
 ): SatelliteAvailability {
   if (provider === 'google') {
     if (!config.googleMapsApiKey?.trim()) {
-      return { state: 'unavailable', provider, reason: GOOGLE_KEY_REQUIRED_REASON }
+      return {
+        state: 'ready',
+        descriptor: {
+          provider,
+          tiles: [GOOGLE_KEYLESS_TILES],
+          tileSize: 256,
+          maxzoom: GOOGLE_KEYLESS_MAX_ZOOM,
+          attribution: GOOGLE_ATTRIBUTION,
+          official: false,
+        },
+      }
     }
     return {
       state: 'ready',

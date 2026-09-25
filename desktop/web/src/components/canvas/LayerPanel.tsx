@@ -236,7 +236,7 @@ function GoogleKeyForm({ hasKey, onSave }: { hasKey: boolean; onSave(key: string
         setSaved(true)
       }}
     >
-      {!hasKey && <p className={styles.layerNote} role="status">{t('canvas.satellite.googleKeyRequired')}</p>}
+      {!hasKey && <p className={styles.layerNote}>{t('canvas.satellite.googleKeyOptional')}</p>}
       <label className={styles.controlRow}>
         <span className={styles.controlLabel}>{t('canvas.basemap.googleKey')}</span>
         <input

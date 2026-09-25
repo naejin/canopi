@@ -4,7 +4,7 @@ import { googleMapsApiKey } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
-import { EOX_SATELLITE_TILES } from '../maplibre/satellite-provider'
+import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 
 const STYLE: VectorStyleDocument = {
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
@@ -122,12 +122,13 @@ describe('map background band', () => {
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
   })
 
-  it('shows nothing remote for Google without a device key', async () => {
+  it('serves Google keyless tiles with Google credit when no device key is set', async () => {
     const { map, background } = mount()
     background.update(presentation({ satelliteVisible: true, provider: 'google' }))
     await settle()
-    expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
-    expect(ids(map)).toEqual(['basemap-background', 'canopi-scene'])
+    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+    expect(ids(map)).toEqual(['basemap-background', MAPLIBRE_SATELLITE_LAYER_ID, 'canopi-scene'])
+    expect(String(map.controls[0]!.options.customAttribution ?? '')).toContain('Google')
   })
 
   it('adds no remote source when every background row is hidden', async () => {

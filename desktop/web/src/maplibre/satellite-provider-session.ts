@@ -215,22 +215,13 @@ export class SatelliteImageryProvider {
     this.configIdentity = nextIdentity
 
     const resolved = resolveSatelliteAvailability(presentation.provider, config)
-    if (resolved.state === 'unavailable') {
-      this.session = null
-      this.credentials?.clear()
-      this.viewportMetadata = null
-      this.baseDescriptor = null
-      // A provider change or a cleared key must not leave the previous provider's
-      // session usable by an in-flight map request.
-      this.publish({ state: 'unavailable', provider: presentation.provider, reason: resolved.reason })
-      return
-    }
 
     this.baseDescriptor = resolved.descriptor
 
     if (!resolved.descriptor.official) {
-      // EOX needs no session and no viewport metadata, so there is no loading
-      // state to show and no request.
+      // Keyless tiles (EOX, public Google) need no session and no viewport
+      // metadata, so there is no loading state to show and no request. A
+      // cleared key drops the previous session with it.
       this.session = null
       this.credentials?.clear()
       this.viewportMetadata = null

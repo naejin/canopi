@@ -7,7 +7,7 @@ import {
 import { applySatelliteVisibility, bindSatelliteProvider } from '../maplibre/satellite-bind'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
-import { EOX_SATELLITE_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
+import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
 
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
@@ -127,19 +127,18 @@ describe('satellite provider binding', () => {
     dispose()
   })
 
-  it('withdraws the contribution when the provider cannot serve', () => {
+  it('replaces EOX imagery with Google keyless tiles when the provider changes without a key', () => {
     const provider = new SatelliteImageryProvider(inertHttp, {})
     provider.update({ provider: 'eox' }, VIEWPORT)
     const map = recordingMap()
     const dispose = bindSatelliteProvider({ provider, map: map.target })
 
-    // Google with no device key is a real unavailable state, not a reason to
-    // keep EOX imagery on screen under Google's name.
+    // EOX imagery never stays on screen under Google's name.
     provider.update({ provider: 'google' }, VIEWPORT)
 
-    expect(provider.snapshot().state).toBe('unavailable')
-    expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
-    expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(false)
+    expect(provider.snapshot().state).toBe('ready')
+    expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles).toEqual([GOOGLE_KEYLESS_TILES])
+    expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
     dispose()
   })
 
