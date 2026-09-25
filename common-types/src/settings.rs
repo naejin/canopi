@@ -32,7 +32,6 @@ pub struct Settings {
     pub theme: Theme,
     pub snap_to_grid: bool,
     pub snap_to_guides: bool,
-    pub auto_save_interval_s: u32,
     pub side_panel_width: Option<u32>,
     pub saved_stamps_frame_height: Option<u32>,
     /// OpenFreeMap vector style of the Basemap row.
@@ -75,7 +74,6 @@ impl Default for Settings {
             theme: Theme::Light,
             snap_to_grid: true,
             snap_to_guides: true,
-            auto_save_interval_s: 60,
             side_panel_width: None,
             saved_stamps_frame_height: None,
             basemap_style: BasemapStyle::Liberty,
@@ -194,7 +192,7 @@ mod tests {
             serde_json::json!({ "basemap_style": "street" }),
             serde_json::json!({ "theme": "sepia" }),
             serde_json::json!({ "locale": "xx" }),
-            serde_json::json!({ "auto_save_interval_s": "soon" }),
+            serde_json::json!({ "snap_to_grid": "sometimes" }),
         ] {
             assert!(
                 serde_json::from_value::<Settings>(invalid.clone()).is_err(),
@@ -216,5 +214,18 @@ mod tests {
         assert_eq!(settings.satellite_opacity, 0.4);
         let serialized = serde_json::to_value(settings).expect("settings should serialize");
         assert!(serialized.get("satellite_provider").is_none());
+    }
+
+    #[test]
+    fn retired_auto_save_interval_key_loads_and_is_not_emitted() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "auto_save_interval_s": 60,
+            "snap_to_grid": false
+        }))
+        .expect("settings with the retired autosave interval key should load");
+
+        assert!(!settings.snap_to_grid);
+        let serialized = serde_json::to_value(settings).expect("settings should serialize");
+        assert!(serialized.get("auto_save_interval_s").is_none());
     }
 }

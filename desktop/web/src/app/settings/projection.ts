@@ -17,7 +17,6 @@ import { sidePanelWidth } from '../shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
   MIN_FAVORITES_FRAME_HEIGHT,
-  autoSaveIntervalMs,
   googleMapsApiKey,
   lastView,
   locale,
@@ -35,7 +34,6 @@ export interface SettingsProjectionDraft {
   googleMapsApiKey: string | null
   snapToGrid: boolean
   snapToGuides: boolean
-  autoSaveIntervalMs: number
   plantSpacingIntervalM: number
   lastView: LastView | null
   sidePanel: {
@@ -118,7 +116,6 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     googleMapsApiKey: googleMapsApiKey.value,
     snapToGrid: snapToGridEnabled.value,
     snapToGuides: snapToGuidesEnabled.value,
-    autoSaveIntervalMs: autoSaveIntervalMs.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
     lastView: lastView.value,
     sidePanel: {
@@ -151,7 +148,6 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     googleMapsApiKey: draft.googleMapsApiKey,
     snapToGrid: draft.snapToGrid,
     snapToGuides: draft.snapToGuides,
-    autoSaveIntervalMs: Math.max(0, Math.round(draft.autoSaveIntervalMs)),
     plantSpacingIntervalM: normalizePositiveMeters(
       draft.plantSpacingIntervalM,
       FALLBACK_PLANT_SPACING_INTERVAL_M,
@@ -174,7 +170,6 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     googleMapsApiKey.value = draft.googleMapsApiKey
     snapToGridEnabled.value = draft.snapToGrid
     snapToGuidesEnabled.value = draft.snapToGuides
-    autoSaveIntervalMs.value = draft.autoSaveIntervalMs
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
     if (!sameLastView(lastView.value, draft.lastView)) lastView.value = draft.lastView
     sidePanelWidth.value = draft.sidePanel.width
@@ -189,7 +184,6 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     theme: draft.theme,
     snap_to_grid: draft.snapToGrid,
     snap_to_guides: draft.snapToGuides,
-    auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
     last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
@@ -244,7 +238,6 @@ function projectSettingsToSignals(settings: Settings): Settings {
     googleMapsApiKey: settings.google_maps_api_key ?? null,
     snapToGrid: settings.snap_to_grid,
     snapToGuides: settings.snap_to_guides,
-    autoSaveIntervalMs: settings.auto_save_interval_s * 1000,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
     lastView: settings.last_view ?? null,
     sidePanel: {

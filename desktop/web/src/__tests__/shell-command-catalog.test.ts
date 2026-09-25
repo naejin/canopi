@@ -115,7 +115,7 @@ describe('App Command Graph shell catalog', () => {
 
     const projection = projectShellCommandCatalog(catalog, {
       hasDesign: false,
-      designDirty: false,
+      revertAvailable: false,
       activePanel: 'canvas',
       sidePanel: 'favorites',
     }, (key) => `translated:${key}`)

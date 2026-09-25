@@ -1,4 +1,7 @@
+import { useState } from 'preact/hooks'
 import { t } from '../i18n'
+import { locale } from '../app/settings/state'
+import { DraftList } from '../components/shared/DraftList'
 import styles from '../components/shared/WelcomeScreen.module.css'
 import {
   browserDesignSessionController,
@@ -12,6 +15,7 @@ interface WebWelcomeScreenProps {
 export function WebWelcomeScreen({
   controller = browserDesignSessionController,
 }: WebWelcomeScreenProps) {
+  const [drafts, setDrafts] = useState(() => controller.listDrafts())
   return (
     <div
       className={styles.welcome}
@@ -50,6 +54,17 @@ export function WebWelcomeScreen({
           </button>
         </div>
       </div>
+
+      <DraftList
+        drafts={drafts}
+        locale={locale.value}
+        onOpen={(id) => { void controller.openDraft(id).catch(logWebWelcomeError) }}
+        onDelete={(id) => {
+          const deleted = controller.deleteDraft(id)
+          if (!deleted.ok) logWebWelcomeError(deleted.error)
+          setDrafts(controller.listDrafts())
+        }}
+      />
     </div>
   )
 }

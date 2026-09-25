@@ -1,5 +1,5 @@
-// .canopi Design files: admission, durable writes, autosave
-pub mod autosave;
+// .canopi Design files: admission, durable writes, fingerprints, drafts
+pub mod drafts;
 pub mod format;
 mod new_design_defaults;
 
@@ -103,67 +103,35 @@ fn operation_sidecar_path(dest: &Path, role: &str) -> PathBuf {
 /// Run one write operation at a time for a process-local storage resource.
 ///
 /// The permit deliberately spans blocking file I/O: its invariant is that the
-/// complete backup/write/replace sequence for one target or store is indivisible.
+/// complete check/write/replace sequence for one target is indivisible, so a
+/// fingerprint check and the write it admits cannot interleave with another
+/// write to the same file.
 fn with_write_admission<T>(resource: &Path, operation: impl FnOnce() -> T) -> T {
-    with_write_admissions(&[resource], operation)
-}
-
-/// Run one write operation while holding every named storage resource.
-///
-/// Keys are normalized, sorted, and deduplicated before their permits are
-/// acquired. Deterministic ordering lets overlapping resource families share
-/// a boundary without deadlocking one another.
-fn with_write_admissions<T>(resources: &[&Path], operation: impl FnOnce() -> T) -> T {
-    let mut keys = resources
-        .iter()
-        .map(|resource| write_admission_key(resource))
-        .collect::<Vec<_>>();
-    keys.sort();
-    keys.dedup();
-
+    let key = write_admission_key(resource);
     let registry = WRITE_ADMISSIONS.get_or_init(|| Mutex::new(HashMap::new()));
-    let admissions = {
+    let admission = {
         let mut admissions = registry.lock().unwrap_or_else(|poisoned| {
             tracing::warn!("Recovering poisoned Design write admission registry");
             poisoned.into_inner()
         });
         admissions.retain(|_, admission| admission.strong_count() > 0);
-        keys.into_iter()
-            .map(|key| {
-                let admission = admissions
-                    .get(&key)
-                    .and_then(Weak::upgrade)
-                    .unwrap_or_else(|| {
-                        let admission = Arc::new(Mutex::new(()));
-                        admissions.insert(key.clone(), Arc::downgrade(&admission));
-                        admission
-                    });
-                (key, admission)
+        admissions
+            .get(&key)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| {
+                let admission = Arc::new(Mutex::new(()));
+                admissions.insert(key.clone(), Arc::downgrade(&admission));
+                admission
             })
-            .collect::<Vec<_>>()
     };
-    let _permits = admissions
-        .iter()
-        .map(|(key, admission)| {
-            admission.lock().unwrap_or_else(|poisoned| {
-                tracing::warn!(
-                    "Recovering poisoned Design write admission for {}",
-                    key.display()
-                );
-                poisoned.into_inner()
-            })
-        })
-        .collect::<Vec<_>>();
+    let _permit = admission.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("Recovering poisoned Design write admission");
+        poisoned.into_inner()
+    });
     operation()
 }
 
 fn write_admission_key(resource: &Path) -> PathBuf {
-    if resource.is_dir() {
-        return resource
-            .canonicalize()
-            .unwrap_or_else(|_| absolute_path(resource));
-    }
-
     let parent = resource
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -174,6 +142,28 @@ fn write_admission_key(resource: &Path) -> PathBuf {
     resource
         .file_name()
         .map_or(parent.clone(), |name| parent.join(name))
+}
+
+/// Fingerprint of a Design file's exact bytes: lowercase hex SHA-256.
+///
+/// A save that expects a fingerprint writes only while the file on disk still
+/// has it, so a change made outside Canopi is detected instead of overwritten.
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
+    crate::services::lidar::grid::sha256_hex(bytes)
+}
+
+/// [`fingerprint`] of the file at `path`, streamed so an unexpectedly large
+/// replacement is never buffered whole. `None` when no file is there.
+pub(crate) fn fingerprint_file(path: &Path) -> std::io::Result<Option<String>> {
+    use sha2::{Digest, Sha256};
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    Ok(Some(format!("{:x}", hasher.finalize())))
 }
 
 fn absolute_path(path: &Path) -> PathBuf {
@@ -527,6 +517,27 @@ mod tests {
         assert!(
             operation_sidecars(&root, "old").is_empty(),
             "a successfully restored fallback must not leak its rollback sidecar"
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_fingerprint_is_the_lowercase_sha256_of_its_bytes() {
+        let root = unique_root("fingerprint_file");
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("garden.canopi");
+        fs::write(&target, b"abc").unwrap();
+
+        let expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert_eq!(fingerprint(b"abc"), expected);
+        assert_eq!(
+            fingerprint_file(&target).unwrap().as_deref(),
+            Some(expected)
+        );
+        assert_eq!(
+            fingerprint_file(&root.join("missing.canopi")).unwrap(),
+            None
         );
 
         let _ = fs::remove_dir_all(root);

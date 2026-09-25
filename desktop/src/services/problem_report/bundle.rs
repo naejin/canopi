@@ -117,7 +117,6 @@ fn settings_summary(context: &ProblemReportContext) -> serde_json::Value {
         json!({
             "locale": settings.locale,
             "theme": settings.theme,
-            "auto_save_interval_s": settings.auto_save_interval_s,
             "basemap_style": settings.basemap_style,
             "basemap_visible": settings.basemap_visible,
             "satellite_visible": settings.satellite_visible,

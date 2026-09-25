@@ -11,7 +11,6 @@ import {
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { sidePanelWidth } from '../app/shell/state'
 import {
-  autoSaveIntervalMs,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
@@ -34,7 +33,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     theme: 'light',
     snap_to_grid: false,
     snap_to_guides: true,
-    auto_save_interval_s: 60,
     side_panel_width: null,
     basemap_style: 'liberty',
     basemap_visible: true,
@@ -57,7 +55,6 @@ function resetProjectionSignals(): void {
   lastView.value = null
   locale.value = 'en'
   theme.value = 'light'
-  autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = true
   sidePanelWidth.value = null
@@ -130,7 +127,6 @@ describe('settings projection', () => {
       theme: 'dark',
       snap_to_grid: true,
       snap_to_guides: false,
-      auto_save_interval_s: 45,
       side_panel_width: 460,
       saved_stamps_frame_height: 280,
       basemap_style: 'bright',
@@ -148,7 +144,6 @@ describe('settings projection', () => {
 
     expect(locale.value).toBe('fr')
     expect(theme.value).toBe('dark')
-    expect(autoSaveIntervalMs.value).toBe(45_000)
     expect(snapToGridEnabled.value).toBe(true)
     expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
@@ -171,7 +166,6 @@ describe('settings projection', () => {
       settings.theme = 'dark'
       settings.snapToGrid = true
       settings.snapToGuides = false
-      settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
       settings.mapLayers = {
@@ -188,7 +182,6 @@ describe('settings projection', () => {
       theme: 'dark',
       snap_to_grid: true,
       snap_to_guides: false,
-      auto_save_interval_s: 15,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
       basemap_style: 'dark',
@@ -927,7 +920,7 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|snapToGuidesEnabled|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
     }
 
     // The Layers presentation routes map rows through the map layer actions

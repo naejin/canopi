@@ -15,9 +15,6 @@ export const googleMapsApiKey = signal<string | null>(
   DEFAULT_SETTINGS.google_maps_api_key ?? null,
 )
 
-/** Autosave interval in milliseconds — hydrated from platform settings on startup. */
-export const autoSaveIntervalMs = signal<number>(DEFAULT_SETTINGS.auto_save_interval_s * 1000)
-
 /** The camera view last shown on a Design; a new Design opens here. */
 export const lastView = signal<LastView | null>(DEFAULT_SETTINGS.last_view ?? null)
 

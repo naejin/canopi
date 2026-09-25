@@ -217,13 +217,23 @@ export function createDesignNotebookWorkbench(
         currentDesign.value !== admittedDesign
         || activePath.value !== admittedPath
       ) return false
-      const settlement = admittedPath
-        ? await saveCurrent()
-        : await saveAsCurrent()
-      if (!isLifetimeCurrent(admittedLifetime)) return false
-      if (settlement?.status !== 'applied' || !settlement.path) return false
-      const savedPath = settlement.path
-      const savedDesign = settlement.content
+      let savedPath: string
+      let savedDesign: CanopiFile
+      if (admittedPath) {
+        // A file home: continuous save writes it; the reference names that file.
+        const written = await saveCurrent()
+        if (!isLifetimeCurrent(admittedLifetime)) return false
+        const design = currentDesign.value
+        if (!written || activePath.value !== admittedPath || !design) return false
+        savedPath = admittedPath
+        savedDesign = design
+      } else {
+        const settlement = await saveAsCurrent()
+        if (!isLifetimeCurrent(admittedLifetime)) return false
+        if (settlement?.status !== 'applied' || !settlement.path) return false
+        savedPath = settlement.path
+        savedDesign = settlement.content
+      }
 
       await addDesignReferenceAdapter(savedPath, savedDesign)
       if (!isLifetimeCurrent(admittedLifetime)) return false

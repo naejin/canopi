@@ -7,6 +7,7 @@ import type { Locale } from "../types/settings";
 import { t } from "../i18n";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import { Dropdown, type DropdownItem } from "../components/shared/Dropdown";
+import { SaveStatusLabel } from "../components/shared/SaveStatusLabel";
 import {
   type BrowserShellChromeProjection,
   type BrowserShellDesignIdentity,
@@ -24,6 +25,7 @@ interface BrowserAppShellProps {
   readonly commandProjection: BrowserShellChromeProjection;
   readonly designIdentity?: BrowserShellDesignIdentity | null;
   readonly onRenameDesign?: (name: string) => void;
+  readonly onRetrySave?: () => void;
   readonly children?: ComponentChildren;
 }
 
@@ -31,6 +33,7 @@ export function BrowserAppShell({
   commandProjection,
   designIdentity = null,
   onRenameDesign,
+  onRetrySave,
   children,
 }: BrowserAppShellProps) {
   const currentLocale = locale.value;
@@ -160,28 +163,28 @@ export function BrowserAppShell({
               }}
             />
           ) : designIdentity ? (
-            <button
-              type="button"
-              className={styles.designTitleButton}
-              data-web-design-title-button
-              aria-label={t("titleBar.renameDesignName")}
-              onDblClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                beginDesignNameEdit();
-              }}
-            >
-              <span className={styles.designTitle} data-web-design-title>
-                {visibleTitle}
-              </span>
-              {designIdentity.dirty ? (
-                <span
-                  className={styles.dirtyDot}
-                  data-web-design-dirty
-                  aria-label={t("titleBar.unsavedChanges")}
-                />
-              ) : null}
-            </button>
+            <>
+              <button
+                type="button"
+                className={styles.designTitleButton}
+                data-web-design-title-button
+                aria-label={t("titleBar.renameDesignName")}
+                onDblClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  beginDesignNameEdit();
+                }}
+              >
+                <span className={styles.designTitle} data-web-design-title>
+                  {visibleTitle}
+                </span>
+              </button>
+              <SaveStatusLabel
+                status={designIdentity.saveStatus}
+                onRetry={() => onRetrySave?.()}
+                onResolveConflict={() => onRetrySave?.()}
+              />
+            </>
           ) : (
             <span className={styles.designTitle} data-web-design-title>
               {visibleTitle}

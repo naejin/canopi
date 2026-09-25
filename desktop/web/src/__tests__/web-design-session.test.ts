@@ -4,9 +4,11 @@ import { beginTimelineActionEdit } from '../app/design-edit'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import {
+  createDesignSessionStoreTestFixture,
   createMemoryDesignSessionStore,
   designSessionStore,
 } from '../app/document-session/store'
+import { CONTINUOUS_SAVE_DELAY_MS } from '../app/document-session/continuous-save'
 import {
   createDesignSessionWorkflowRunner,
   type DesignSessionWorkflowRunner,
@@ -25,12 +27,12 @@ import {
   type BrowserCanopiDownload,
   type BrowserOpenedCanopiFile,
   type BrowserDesignFileAdapter,
+  type BrowserPageLifecycleTarget,
 } from '../web/browser-design-session'
 import type { CanopiFile } from '../types/design'
 import {
   editDesignSessionForTest,
   markDesignSessionDirtyForTest,
-  reconcileDesignSessionForTest,
 } from './support/design-session-edit'
 
 const NOW = new Date('2026-07-04T12:00:00.000Z')
@@ -131,6 +133,8 @@ describe('browser Design Session lifecycle', () => {
 
     try {
       await controller.newDesign()
+      markDesignSessionDirtyForTest(store)
+      await expect(controller.continuousSave.flush()).resolves.toBe(true)
 
       expect(lastComposed.current?.version).toBe(7)
       expect(lastComposed.current).not.toHaveProperty('spatial_frame')
@@ -512,7 +516,8 @@ describe('browser Design Session lifecycle', () => {
     expect(parsed.consortiums).toEqual([])
     expect(parsed.future_top_level).toEqual({ keep: true })
     expect(parsed).not.toHaveProperty('extra')
-    expect(store.isDesignDirty()).toBe(false)
+    // A download is an export: the Draft home still lacks these edits.
+    expect(store.isDesignDirty()).toBe(true)
     expect(store.readDesignPath()).toBeNull()
   })
 
@@ -556,25 +561,21 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignPath()).toBeNull()
   })
 
-  it('retries download settlement without downloading the exact snapshot twice', async () => {
+  it('exports a download without acknowledging the Canvas baseline', async () => {
     const adapter = testFileAdapter()
     const store = createMemoryDesignSessionStore({
-      file: makeCanopiFile({ name: 'Retry Garden' }),
+      file: makeCanopiFile({ name: 'Export Garden' }),
       path: null,
-      name: 'Retry Garden',
+      name: 'Export Garden',
     })
     const controller = createBrowserDesignSessionController({
       store,
       fileAdapter: adapter,
       appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
       now: () => NOW,
-      createDraftId: () => 'draft-retry-garden',
+      createDraftId: () => 'draft-export-garden',
     })
-    const acknowledgeSaved = vi.fn()
-      .mockImplementationOnce(() => {
-        throw new Error('clean publication failed')
-      })
-      .mockReturnValue('applied' as const)
+    const acknowledgeSaved = vi.fn(() => 'applied' as const)
     const canvas = testCanvasDocumentSurface({
       captureForPersistence: vi.fn((_metadata, document) => ({
         content: document,
@@ -588,8 +589,9 @@ describe('browser Design Session lifecycle', () => {
     await expect(controller.downloadCanopi()).resolves.toBeUndefined()
 
     expect(adapter.downloadCanopiFile).toHaveBeenCalledOnce()
-    expect(acknowledgeSaved).toHaveBeenCalledTimes(3)
-    expect(store.isDesignDirty()).toBe(false)
+    expect(acknowledgeSaved).not.toHaveBeenCalled()
+    expect(store.isDesignDirty()).toBe(true)
+    expect(controller.listDrafts()).toEqual([])
     detach()
   })
 
@@ -612,7 +614,8 @@ describe('browser Design Session lifecycle', () => {
     }
   })
 
-  it('autosaves Browser Drafts and reopens them as detached Designs', async () => {
+  it('continuously saves Browser Drafts after the delay and reopens them as detached Designs', async () => {
+    vi.useFakeTimers()
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const draftIds = ['draft-browser-patio', 'draft-new-untitled']
@@ -623,17 +626,20 @@ describe('browser Design Session lifecycle', () => {
       now: () => NOW,
       createDraftId: () => draftIds.shift() ?? 'draft-extra',
     })
-    const disposeAutosave = controller.installAutosave()
+    const uninstall = controller.installContinuousSave(testPage())
 
     try {
       await controller.newDesign()
       controller.renameDesign('Browser Patio')
       editDesignSessionForTest(store, (design) => ({
         ...design,
-        description: 'Autosaved locally',
+        description: 'Saved continuously',
       }))
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS - 1)
+      expect(controller.listDrafts()).toEqual([])
+      expect(controller.continuousSave.status.value).toBe('saving')
 
+      await vi.advanceTimersByTimeAsync(1)
       expect(controller.listDrafts()).toEqual([
         {
           id: 'draft-browser-patio',
@@ -641,17 +647,143 @@ describe('browser Design Session lifecycle', () => {
           updatedAt: NOW.toISOString(),
         },
       ])
+      expect(controller.continuousSave.status.value).toBe('saved')
 
       await controller.newDesign()
-      expect(controller.openDraft('draft-browser-patio')).toBe(true)
+      await expect(controller.openDraft('draft-browser-patio')).resolves.toBe(true)
 
       expect(store.readDesignPath()).toBeNull()
       expect(store.readDesignName()).toBe('Browser Patio')
-      expect(store.readCurrentDesign()?.description).toBe('Autosaved locally')
+      expect(store.readCurrentDesign()?.description).toBe('Saved continuously')
       expect(store.isDesignDirty()).toBe(false)
     } finally {
-      disposeAutosave()
+      uninstall()
+      vi.useRealTimers()
     }
+  })
+
+  it('flushes the Draft when the page is hidden or unloaded', async () => {
+    vi.useFakeTimers()
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => 'draft-page-lifecycle',
+    })
+    const page = testPage()
+    const uninstall = controller.installContinuousSave(page)
+
+    try {
+      await controller.newDesign()
+      editDesignSessionForTest(store, (design) => ({ ...design, description: 'hidden' }))
+      page.document.visibilityState = 'hidden'
+      page.document.dispatchEvent(new Event('visibilitychange'))
+      expect(appDataStore.loadDraft('draft-page-lifecycle')?.description).toBe('hidden')
+
+      editDesignSessionForTest(store, (design) => ({ ...design, description: 'unloaded' }))
+      page.window.dispatchEvent(new Event('pagehide'))
+      expect(appDataStore.loadDraft('draft-page-lifecycle')?.description).toBe('unloaded')
+    } finally {
+      uninstall()
+      vi.useRealTimers()
+    }
+  })
+
+  it('writes the current Design before a replacement and asks only when that write fails', async () => {
+    const storage = memoryStorage()
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage })
+    const draftIds = ['draft-first', 'draft-second', 'draft-third']
+    const requestSaveDecision = vi.fn(async () => 'cancel' as const)
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      createDraftId: () => draftIds.shift() ?? 'draft-extra',
+      requestSaveDecision: requestSaveDecision as never,
+    })
+
+    await controller.newDesign()
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'first edits' }))
+    await controller.newDesign()
+    expect(requestSaveDecision).not.toHaveBeenCalled()
+    expect(appDataStore.loadDraft('draft-first')?.description).toBe('first edits')
+
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'unwritable' }))
+    storage.failWrites = true
+    await controller.newDesign()
+    expect(requestSaveDecision).toHaveBeenCalledWith({
+      kind: 'flush-failed',
+      purpose: 'replace',
+      conflict: false,
+    })
+    expect(store.readCurrentDesign()?.description).toBe('unwritable')
+
+    requestSaveDecision.mockResolvedValueOnce('discard' as never)
+    await controller.newDesign()
+    expect(store.readCurrentDesign()?.description).toBeNull()
+    expect(controller.continuousSave.status.value).toBe('saved')
+  })
+
+  it('reverts to the version opened and writes it to the same Draft', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-revert',
+      file: makeCanopiFile({ name: 'Revert Garden', description: 'as opened' }),
+      now: NOW.toISOString(),
+    })
+    const requestSaveDecision = vi.fn(async (): Promise<'revert' | 'cancel'> => 'cancel')
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      requestSaveDecision: requestSaveDecision as never,
+    })
+    expect(controller.restoreLatestDraft()).toBe(true)
+    expect(controller.continuousSave.revertAvailable.value).toBe(false)
+
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'changed' }))
+    await controller.continuousSave.flush()
+    expect(appDataStore.loadDraft('draft-revert')?.description).toBe('changed')
+    expect(controller.continuousSave.revertAvailable.value).toBe(true)
+
+    // Cancelling the confirmation keeps the changed Design.
+    await expect(controller.revertDesign()).resolves.toBe(false)
+    expect(requestSaveDecision).toHaveBeenCalledWith({ kind: 'revert' })
+    expect(store.readCurrentDesign()?.description).toBe('changed')
+
+    requestSaveDecision.mockResolvedValueOnce('revert')
+    await expect(controller.revertDesign()).resolves.toBe(true)
+    expect(store.readCurrentDesign()?.description).toBe('as opened')
+    expect(controller.continuousSave.revertAvailable.value).toBe(false)
+    await expect(controller.continuousSave.flush()).resolves.toBe(true)
+    expect(appDataStore.loadDraft('draft-revert')?.description).toBe('as opened')
+  })
+
+  it('deletes a Draft other than the open one', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    for (const id of ['draft-old', 'draft-open']) {
+      appDataStore.saveDraft({ id, file: makeCanopiFile({ name: id }), now: NOW.toISOString() })
+    }
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+    expect(controller.restoreLatestDraft()).toBe(true)
+    expect(store.readDesignName()).toBe('draft-open')
+
+    expect(controller.deleteDraft('draft-open').ok).toBe(false)
+    expect(controller.deleteDraft('draft-old').ok).toBe(true)
+    expect(controller.listDrafts().map((draft) => draft.id)).toEqual(['draft-open'])
   })
 
   it('restores the newest Browser Draft into an empty Design Session', () => {
@@ -701,41 +833,8 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignName()).toBe('Untitled')
   })
 
-  it('autosaves a Design that is already dirty when autosave installs', async () => {
-    const initial = makeCanopiFile({
-      name: 'Already Dirty Garden',
-      description: 'unsaved before installation',
-    })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
-    markDesignSessionDirtyForTest(store)
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => NOW,
-      createDraftId: () => 'draft-already-dirty',
-    })
-    const onDraftSaved = vi.fn()
-    const disposeAutosave = controller.installAutosave({ onDraftSaved })
-
-    try {
-      await Promise.resolve()
-
-      expect(onDraftSaved).toHaveBeenCalledOnce()
-      expect(appDataStore.loadDraft('draft-already-dirty')?.description)
-        .toBe('unsaved before installation')
-      expect(store.isDesignDirty()).toBe(false)
-    } finally {
-      disposeAutosave()
-    }
-  })
-
-  it('does not autosave visible Timeline previews until they commit', async () => {
+  it('does not save visible Timeline previews until they commit', async () => {
+    vi.useFakeTimers()
     const initial = makeCanopiFile({
       name: 'Preview Garden',
       timeline: [{
@@ -751,18 +850,18 @@ describe('browser Design Session lifecycle', () => {
         order: 0,
       }],
     })
-    designSessionStore.replaceCurrentDesignState(initial, null, initial.name)
-    designSessionStore.resetDirtyBaselines()
+    createDesignSessionStoreTestFixture(designSessionStore).reset()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({ id: 'draft-timeline-preview', file: initial, now: NOW.toISOString() })
+    const saveDraft = vi.spyOn(appDataStore, 'saveDraft')
     const controller = createBrowserDesignSessionController({
       store: designSessionStore,
       appDataStore,
       fileAdapter: testFileAdapter(),
       now: () => NOW,
-      createDraftId: () => 'draft-timeline-preview',
     })
-    const onDraftSaved = vi.fn()
-    const disposeAutosave = controller.installAutosave({ onDraftSaved })
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const uninstall = controller.installContinuousSave(testPage())
     const edit = beginTimelineActionEdit({
       type: 'move',
       actionId: 'timeline-preview',
@@ -773,125 +872,31 @@ describe('browser Design Session lifecycle', () => {
 
     try {
       edit.applyPixelDelta(10)
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
 
       expect(designSessionStore.readCurrentDesign()?.timeline[0]).toMatchObject({
         start_date: '2026-04-02',
         end_date: '2026-04-04',
       })
-      expect(onDraftSaved).not.toHaveBeenCalled()
-      expect(controller.listDrafts()).toEqual([])
+      expect(saveDraft).not.toHaveBeenCalled()
 
       edit.applyPixelDelta(20)
-      await Promise.resolve()
-
-      expect(onDraftSaved).not.toHaveBeenCalled()
-      expect(controller.listDrafts()).toEqual([])
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
+      expect(saveDraft).not.toHaveBeenCalled()
 
       edit.commit()
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
-      expect(onDraftSaved).toHaveBeenCalledOnce()
+      expect(saveDraft).toHaveBeenCalledOnce()
       expect(appDataStore.loadDraft('draft-timeline-preview')?.timeline[0]).toMatchObject({
         start_date: '2026-04-03',
         end_date: '2026-04-05',
       })
     } finally {
       edit.abort()
-      disposeAutosave()
-    }
-  })
-
-  it('autosaves every committed change while Canvas keeps the Design dirty', async () => {
-    const initial = makeCanopiFile({ name: 'Continuously Dirty Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const saveDraft = vi.spyOn(appDataStore, 'saveDraft')
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => NOW,
-      createDraftId: () => 'draft-continuously-dirty',
-    })
-    const detach = controller.attachCanvasSession(testCanvasDocumentSurface())
-    const disposeAutosave = controller.installAutosave()
-
-    try {
-      store.setCanvasClean(false)
-      await Promise.resolve()
-      expect(store.isDesignDirty()).toBe(true)
-      saveDraft.mockClear()
-
-      editDesignSessionForTest(store, (design) => ({
-        ...design,
-        description: 'first committed change',
-      }))
-      await Promise.resolve()
-
-      expect(saveDraft).toHaveBeenCalledOnce()
-      expect(store.isDesignDirty()).toBe(true)
-
-      editDesignSessionForTest(store, (design) => ({
-        ...design,
-        description: 'second committed change',
-      }))
-      await Promise.resolve()
-
-      expect(saveDraft).toHaveBeenCalledTimes(2)
-      expect(appDataStore.loadDraft('draft-continuously-dirty')?.description)
-        .toBe('second committed change')
-      expect(store.isDesignDirty()).toBe(true)
-    } finally {
-      disposeAutosave()
-      detach()
-    }
-  })
-
-  it('reschedules clean reconciliation after an explicit Draft supersedes a queued write', async () => {
-    const initial = makeCanopiFile({ name: 'Reconciled Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => NOW,
-      createDraftId: () => 'draft-reconciled-garden',
-    })
-    const onDraftSaved = vi.fn()
-    const disposeAutosave = controller.installAutosave({ onDraftSaved })
-
-    try {
-      reconcileDesignSessionForTest(store, (design) => ({
-        ...design,
-        description: 'first reconciliation',
-      }))
-      expect(controller.saveCurrentDraft()).toMatchObject({ ok: true })
-      expect(appDataStore.loadDraft('draft-reconciled-garden')?.description)
-        .toBe('first reconciliation')
-
-      reconcileDesignSessionForTest(store, (design) => ({
-        ...design,
-        description: 'second reconciliation',
-      }))
-      await Promise.resolve()
-      await Promise.resolve()
-
-      expect(onDraftSaved).toHaveBeenCalledOnce()
-      expect(appDataStore.loadDraft('draft-reconciled-garden')?.description)
-        .toBe('second reconciliation')
-      expect(store.isDesignDirty()).toBe(false)
-    } finally {
-      disposeAutosave()
+      uninstall()
+      createDesignSessionStoreTestFixture(designSessionStore).reset()
+      vi.useRealTimers()
     }
   })
 
@@ -920,7 +925,7 @@ describe('browser Design Session lifecycle', () => {
     })
 
     const opening = controller.openCanopi()
-    expect(controller.openDraft('later-draft')).toBe(true)
+    await expect(controller.openDraft('later-draft')).resolves.toBe(true)
     pendingOpen.resolve({
       fileName: 'older-picker.canopi',
       text: JSON.stringify(makeCanopiFile({ name: 'Older Picker Design' })),
@@ -944,7 +949,10 @@ describe('browser Design Session lifecycle', () => {
     })
 
     await controller.newDesign()
+    markDesignSessionDirtyForTest(store)
     await controller.newDesign()
+    markDesignSessionDirtyForTest(store)
+    await controller.continuousSave.flush()
 
     expect(controller.listDrafts()).toEqual([
       {
@@ -973,7 +981,7 @@ describe('browser Design Session lifecycle', () => {
 
     await controller.newDesign()
     controller.renameDesign('Renamed Patio')
-    controller.saveCurrentDraft()
+    await controller.continuousSave.flush()
 
     expect(controller.listDrafts()).toEqual([
       {
@@ -998,20 +1006,26 @@ describe('browser Design Session lifecycle', () => {
     })
 
     await controller.newDesign()
+    markDesignSessionDirtyForTest(store)
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await expect(controller.continuousSave.flush()).resolves.toBe(false)
+    logError.mockRestore()
 
     expect(store.readCurrentDesign()?.name).toBe('Untitled')
     expect(store.readDesignPath()).toBeNull()
-    expect(store.autosaveFailed.value).toBe(true)
+    expect(store.isDesignDirty()).toBe(true)
+    expect(controller.continuousSave.status.value).toBe('error')
     expect(controller.listDrafts()).toEqual([])
   })
 
   it('serializes attached canvas state into Browser Drafts', async () => {
-    const store = createMemoryDesignSessionStore({
-      file: makeCanopiFile({ name: 'Canvas Draft' }),
-      path: null,
-      name: 'Canvas Draft',
-    })
+    const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-canvas-draft',
+      file: makeCanopiFile({ name: 'Canvas Draft' }),
+      now: NOW.toISOString(),
+    })
     const controller = createBrowserDesignSessionController({
       store,
       appDataStore,
@@ -1047,10 +1061,11 @@ describe('browser Design Session lifecycle', () => {
     }))
     const canvas = testCanvasDocumentSurface({ captureForPersistence })
     controller.attachCanvasSession(canvas)
+    expect(controller.restoreLatestDraft()).toBe(true)
+    store.setCanvasClean(false)
 
-    const saved = controller.saveCurrentDraft()
+    await expect(controller.continuousSave.flush()).resolves.toBe(false)
 
-    expect(saved?.ok).toBe(true)
     expect(captureForPersistence).toHaveBeenCalledOnce()
     expect(appDataStore.loadDraft('draft-canvas-draft')?.plants).toEqual([
       {
@@ -1108,7 +1123,7 @@ describe('browser Design Session lifecycle', () => {
       name: 'Template Display',
       file: makeCanopiFile({ name: 'Template Replacement' }),
     })
-    expect(controller.openDraft('draft-replacement')).toBe(true)
+    await expect(controller.openDraft('draft-replacement')).resolves.toBe(true)
 
     expect(vi.mocked(canvas.replaceDocument).mock.calls.map(([file]) => file.name)).toEqual([
       'Untitled',
@@ -1124,20 +1139,16 @@ describe('browser Design Session lifecycle', () => {
     expect(workflowRunner.dispose).toHaveBeenCalledOnce()
   })
 
-  it('defers Browser Draft autosave until attached replacement releases Scene authority', async () => {
-    const initial = makeCanopiFile({ name: 'Existing Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
+  it('defers the Draft write until an attached replacement releases Scene authority', async () => {
+    vi.useFakeTimers()
+    const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
       store,
       appDataStore,
       fileAdapter: testFileAdapter(),
       now: () => NOW,
-      createDraftId: () => 'draft-replacement-autosave',
+      createDraftId: () => 'draft-replacement-save',
     })
     let replacementFinalizerActive = false
     const captureForPersistence = vi.fn((
@@ -1160,32 +1171,40 @@ describe('browser Design Session lifecycle', () => {
       }),
     })
     const detach = controller.attachCanvasSession(canvas)
-    const disposeAutosave = controller.installAutosave()
+    const uninstall = controller.installContinuousSave(testPage())
     captureForPersistence.mockClear()
 
-    await expect(controller.newDesign()).resolves.toBeUndefined()
-    await Promise.resolve()
+    try {
+      await expect(controller.openCanopiTemplate({
+        name: 'Template Garden',
+        file: makeCanopiFile({ name: 'Template Garden' }),
+      })).resolves.toBe('opened')
+      expect(captureForPersistence).not.toHaveBeenCalled()
 
-    expect(captureForPersistence).toHaveBeenCalledTimes(2)
-    expect(appDataStore.loadDraft('draft-replacement-autosave')?.name).toBe('Untitled')
-    disposeAutosave()
-    detach()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
+      expect(captureForPersistence).toHaveBeenCalledOnce()
+      expect(appDataStore.loadDraft('draft-replacement-save')?.name).toBe('Template Garden')
+    } finally {
+      uninstall()
+      detach()
+      vi.useRealTimers()
+    }
   })
 
-  it('contains a queued autosave capture failure and retries the still-dirty Design', async () => {
-    const initial = makeCanopiFile({ name: 'Autosave Retry Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
+  it('reports a Draft capture failure and saves the still-dirty Design after the next change', async () => {
+    vi.useFakeTimers()
+    const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    appDataStore.saveDraft({
+      id: 'draft-save-retry',
+      file: makeCanopiFile({ name: 'Save Retry Garden' }),
+      now: NOW.toISOString(),
+    })
     const controller = createBrowserDesignSessionController({
       store,
       appDataStore,
       fileAdapter: testFileAdapter(),
       now: () => NOW,
-      createDraftId: () => 'draft-autosave-retry',
     })
     const captureFailure = new CanvasAuthorityBusyError('document-settlement')
     let captureIsBusy = true
@@ -1196,99 +1215,40 @@ describe('browser Design Session lifecycle', () => {
       }),
     })
     const detach = controller.attachCanvasSession(canvas)
-    const onDraftSaved = vi.fn()
-    const disposeAutosave = controller.installAutosave({ onDraftSaved })
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const uninstall = controller.installContinuousSave(testPage())
     const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     try {
       editDesignSessionForTest(store, (design) => ({
         ...design,
-        description: 'First autosave attempt',
+        description: 'First save attempt',
       }))
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
-      expect(logError).toHaveBeenCalledWith(
-        'Browser Design Session command failed:',
-        captureFailure,
-      )
-      expect(onDraftSaved).not.toHaveBeenCalled()
+      expect(logError).toHaveBeenCalledWith('Continuous save failed:', captureFailure)
       expect(store.isDesignDirty()).toBe(true)
-      expect(store.autosaveFailed.value).toBe(true)
-      expect(controller.listDrafts()).toEqual([])
+      expect(controller.continuousSave.status.value).toBe('error')
+      expect(appDataStore.loadDraft('draft-save-retry')?.description).toBeNull()
 
       captureIsBusy = false
       editDesignSessionForTest(store, (design) => ({
         ...design,
-        description: 'Retried after Canvas settled',
+        description: 'Saved after Canvas settled',
       }))
-      await Promise.resolve()
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
-      expect(onDraftSaved).toHaveBeenCalledOnce()
       expect(store.isDesignDirty()).toBe(false)
-      expect(store.autosaveFailed.value).toBe(false)
-      expect(appDataStore.loadDraft('draft-autosave-retry')?.description).toBe(
-        'Retried after Canvas settled',
+      expect(controller.continuousSave.status.value).toBe('saved')
+      expect(appDataStore.loadDraft('draft-save-retry')?.description).toBe(
+        'Saved after Canvas settled',
       )
     } finally {
       captureIsBusy = false
-      disposeAutosave()
+      uninstall()
       logError.mockRestore()
       detach()
-    }
-  })
-
-  it('contains autosave-failure publication errors inside the queued task', async () => {
-    const initial = makeCanopiFile({ name: 'Autosave Publication Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
-      fileAdapter: testFileAdapter(),
-      now: () => NOW,
-      createDraftId: () => 'draft-autosave-publication',
-    })
-    const captureFailure = new CanvasAuthorityBusyError('document-settlement')
-    const publicationFailure = new Error('autosave failure publication failed')
-    let captureIsBusy = true
-    const canvas = testCanvasDocumentSurface({
-      captureForPersistence: vi.fn(() => {
-        if (captureIsBusy) throw captureFailure
-        return persistenceCapture(initial)
-      }),
-    })
-    const detach = controller.attachCanvasSession(canvas)
-    const disposeAutosave = controller.installAutosave()
-    const disposeFailureEffect = effect(() => {
-      if (store.autosaveFailed.value) throw publicationFailure
-    })
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-
-    try {
-      editDesignSessionForTest(store, (design) => ({
-        ...design,
-        description: 'Trigger contained failure',
-      }))
-      await Promise.resolve()
-
-      expect(logError).toHaveBeenCalledWith(
-        'Browser Design Session command failed:',
-        captureFailure,
-      )
-      expect(logError).toHaveBeenCalledWith(
-        'Browser Design Session command failed:',
-        publicationFailure,
-      )
-    } finally {
-      captureIsBusy = false
-      disposeFailureEffect()
-      disposeAutosave()
-      logError.mockRestore()
-      detach()
+      vi.useRealTimers()
     }
   })
 
@@ -1346,13 +1306,9 @@ describe('browser Design Session lifecycle', () => {
     expect(workflowRunner.dispose).toHaveBeenCalledOnce()
   })
 
-  it('reschedules autosave when an intervening draft acknowledgement publishes a newer edit', async () => {
+  it('writes again when an intervening draft acknowledgement publishes a newer edit', async () => {
     const initial = makeCanopiFile({ name: 'Autosave Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
+    const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
       store,
@@ -1361,6 +1317,7 @@ describe('browser Design Session lifecycle', () => {
       createDraftId: () => 'draft-reentrant-edit',
       now: () => NOW,
     })
+    appDataStore.saveDraft({ id: 'draft-reentrant-edit', file: initial, now: NOW.toISOString() })
     const acknowledgeSaved = vi.fn()
       .mockImplementationOnce(() => {
         editDesignSessionForTest(store, (design) => ({
@@ -1378,15 +1335,16 @@ describe('browser Design Session lifecycle', () => {
       })),
     })
     const detach = controller.attachCanvasSession(canvas)
-    const disposeAutosave = controller.installAutosave()
+    vi.useFakeTimers()
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const uninstall = controller.installContinuousSave(testPage())
 
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: 'First queued edit',
     }))
-    controller.saveCurrentDraft()
-    await Promise.resolve()
-    await Promise.resolve()
+    await controller.continuousSave.flush()
+    await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
     expect(appDataStore.loadDraft('draft-reentrant-edit')?.description).toBe(
       'Edit published during acknowledgement',
@@ -1394,17 +1352,14 @@ describe('browser Design Session lifecycle', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(acknowledgeSaved).toHaveBeenCalledTimes(2)
 
-    disposeAutosave()
+    uninstall()
     detach()
+    vi.useRealTimers()
   })
 
-  it('reschedules autosave when an intervening acknowledgement commits a Canvas-only edit', async () => {
+  it('writes again when an intervening acknowledgement commits a Canvas-only edit', async () => {
     const initial = makeCanopiFile({ name: 'Canvas Autosave Garden' })
-    const store = createMemoryDesignSessionStore({
-      file: initial,
-      path: null,
-      name: initial.name,
-    })
+    const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
       store,
@@ -1413,6 +1368,7 @@ describe('browser Design Session lifecycle', () => {
       createDraftId: () => 'draft-canvas-reentrant-edit',
       now: () => NOW,
     })
+    appDataStore.saveDraft({ id: 'draft-canvas-reentrant-edit', file: initial, now: NOW.toISOString() })
     const acknowledgeSaved = vi.fn()
       .mockImplementationOnce(() => {
         store.setCanvasClean(true)
@@ -1452,12 +1408,13 @@ describe('browser Design Session lifecycle', () => {
       }),
     })
     const detach = controller.attachCanvasSession(canvas)
-    const disposeAutosave = controller.installAutosave()
+    vi.useFakeTimers()
+    expect(controller.restoreLatestDraft()).toBe(true)
+    const uninstall = controller.installContinuousSave(testPage())
 
     store.setCanvasClean(false)
-    controller.saveCurrentDraft()
-    await Promise.resolve()
-    await Promise.resolve()
+    await controller.continuousSave.flush()
+    await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
     expect(appDataStore.loadDraft('draft-canvas-reentrant-edit')?.plants).toEqual([
       expect.objectContaining({ id: 'scene-2' }),
@@ -1465,8 +1422,9 @@ describe('browser Design Session lifecycle', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(acknowledgeSaved).toHaveBeenCalledTimes(2)
 
-    disposeAutosave()
+    uninstall()
     detach()
+    vi.useRealTimers()
   })
 
   it('preserves draft ownership when an attached draft replacement fails', async () => {
@@ -1498,12 +1456,12 @@ describe('browser Design Session lifecycle', () => {
     })
     const detach = controller.attachCanvasSession(canvas)
 
-    expect(() => controller.openDraft('target-draft')).toThrow('canvas replacement failed')
+    await expect(controller.openDraft('target-draft')).rejects.toThrow('canvas replacement failed')
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: 'Old Design remains active',
     }))
-    controller.saveCurrentDraft()
+    await controller.continuousSave.flush()
 
     expect(appDataStore.loadDraft('active-draft')?.description).toBe(
       'Old Design remains active',
@@ -1524,6 +1482,8 @@ describe('browser Design Session lifecycle', () => {
       now: () => NOW,
     })
     await controller.newDesign()
+    markDesignSessionDirtyForTest(store)
+    await controller.continuousSave.flush()
     const target = makeCanopiFile({ name: 'Finalized Target Draft' })
     expect(appDataStore.saveDraft({
       id: 'target-draft',
@@ -1532,20 +1492,19 @@ describe('browser Design Session lifecycle', () => {
     }).ok).toBe(true)
     const canvas = testCanvasDocumentSurface()
     const detach = controller.attachCanvasSession(canvas)
-    const disposeAutosave = controller.installAutosave()
     vi.mocked(canvas.showCanvasChrome).mockImplementationOnce(() => {
       throw new Error('chrome publication failed')
     })
 
-    expect(() => controller.openDraft('target-draft')).toThrow('chrome publication failed')
-    await Promise.resolve()
-    await Promise.resolve()
+    await expect(controller.openDraft('target-draft')).rejects.toThrow('chrome publication failed')
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'after failure' }))
+    await controller.continuousSave.flush()
 
     expect(store.readDesignName()).toBe('Finalized Target Draft')
-    expect(appDataStore.loadDraft('target-draft')?.name).toBe('Finalized Target Draft')
+    expect(appDataStore.loadDraft('target-draft')?.description).toBe('after failure')
     expect(appDataStore.loadDraft('active-draft')?.name).toBe('Untitled')
+    expect(appDataStore.loadDraft('active-draft')?.description).toBeNull()
 
-    disposeAutosave()
     detach()
   })
 
@@ -2133,6 +2092,16 @@ function testFileAdapter(
     downloadCanopiFile: vi.fn(async () => undefined),
     ...overrides,
   }
+}
+
+function testPage(): BrowserPageLifecycleTarget & {
+  readonly document: EventTarget & { visibilityState: DocumentVisibilityState }
+  readonly window: EventTarget
+} {
+  const document = Object.assign(new EventTarget(), {
+    visibilityState: 'visible' as DocumentVisibilityState,
+  })
+  return { document, window: new EventTarget() }
 }
 
 function testCanvasDocumentSurface(

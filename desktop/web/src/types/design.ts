@@ -14,7 +14,8 @@ export type DesignSummary = Contracts.DesignSummary
 export type DesignNotebookEntry = Contracts.DesignNotebookEntry
 export type DesignNotebookSection = Contracts.DesignNotebookSection
 export type DesignNotebookSnapshot = Contracts.DesignNotebookSnapshot
-export type AutosaveEntry = Contracts.AutosaveEntry
+export type DesignDraftSummary = Contracts.DesignDraftSummary
+export type DesignSaveOutcome = Contracts.DesignSaveOutcome
 export type Consortium = Contracts.Consortium
 
 export interface PlacedPlant extends Omit<Contracts.PlacedPlant, 'id' | 'color' | 'symbol' | 'pinned_name'> {
@@ -37,4 +38,10 @@ export interface CanopiFile extends Omit<
   budget: BudgetItem[]
   plants: PlacedPlant[]
   extra?: Record<string, unknown>
+}
+
+/** A Design read from a file, with the fingerprint its next save must find. */
+export interface LoadedDesign {
+  file: CanopiFile
+  fingerprint: string
 }

@@ -92,6 +92,10 @@ pub fn run() {
             commands::design::save_design,
             commands::design::load_design,
             commands::design::get_recent_files,
+            commands::design::save_design_draft,
+            commands::design::load_design_draft,
+            commands::design::list_design_drafts,
+            commands::design::delete_design_draft,
             commands::design_notebook::get_design_notebook,
             commands::design_notebook::create_notebook_section,
             commands::design_notebook::add_design_reference_to_notebook,
@@ -102,9 +106,6 @@ pub fn run() {
             commands::design_notebook::reorder_notebook_sections,
             commands::design_notebook::reorder_design_references,
             commands::design_notebook::relocate_design_reference,
-            commands::design::autosave_design,
-            commands::design::list_autosaves,
-            commands::design::recover_autosave,
             commands::export::export_file,
             commands::export::read_geojson_file,
             commands::export::save_canvas_pdf,
@@ -144,6 +145,8 @@ pub fn run() {
             // User DB (writable, in app data dir)
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            design::drafts::remove_retired_autosave_store(&data_dir);
+            app.manage(design::drafts::DesignDrafts::new(&data_dir));
             let user_db_path = data_dir.join("user.db");
             let user_db = match db::UserDb::open(&user_db_path) {
                 Ok(user_db) => user_db,

@@ -2,12 +2,16 @@ import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import type {
   CanopiFile,
+  DesignDraftSummary,
   DesignNotebookSection,
   DesignNotebookSnapshot,
+  DesignSaveOutcome,
   DesignSummary,
+  LoadedDesign,
 } from '../types/design'
 import { designPath } from '../app/document-session/store'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
+import { DesignHomeConflictError } from '../app/document-session/continuous-save'
 import {
   prepareDesignWriteDestination,
   type PreparedDesignWriteDestination,
@@ -36,22 +40,34 @@ export async function selectDesignSavePath({
   return filePath
 }
 
-/** Couple one native target family to its matching write effect. */
-export function prepareDesignWrite(path: string): PreparedDesignWriteDestination {
+/**
+ * Couple one native Design file to its write. The write refuses to replace a
+ * file that no longer holds `expectedFingerprint` (`null` overwrites) and
+ * reports the written fingerprint before the save settles.
+ */
+export function prepareDesignWrite(
+  path: string,
+  expectedFingerprint: string | null,
+  onWritten: (fingerprint: string) => void,
+): PreparedDesignWriteDestination {
   return prepareDesignWriteDestination({
     resource: `native-design:${path}`,
     destinationPath: path,
-    write: (content) => saveDesign(path, content).then(() => undefined),
+    write: async (content) => {
+      const outcome = await saveDesign(path, content, expectedFingerprint)
+      if (outcome.kind === 'conflict') {
+        throw new DesignHomeConflictError(outcome.current_fingerprint === null)
+      }
+      onWritten(outcome.fingerprint)
+    },
   })
 }
 
-/** Couple recovery to the shared autosave store and its pruning side effect. */
-export function prepareRecoveryWrite(
-  destinationHint: string | null,
-): PreparedDesignWriteDestination {
+/** Couple one Design Draft in app data to its write. */
+export function prepareDraftWrite(id: string): PreparedDesignWriteDestination {
   return prepareDesignWriteDestination({
-    resource: 'native-recovery-store',
-    write: (content) => autosaveDesign(content, destinationHint),
+    resource: `native-draft:${id}`,
+    write: (content) => saveDesignDraft(id, content),
   })
 }
 
@@ -59,7 +75,7 @@ export function prepareRecoveryWrite(
  * Show a native Open dialog, then load the chosen design.
  * Returns the loaded CanopiFile. Throws "Dialog cancelled" if user dismisses.
  */
-export async function openDesignDialog(): Promise<{ file: CanopiFile; path: string }> {
+export async function openDesignDialog(): Promise<LoadedDesign & { path: string }> {
   const currentPath = designPath.peek()
   const defaultDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/') + 1) : undefined
   const selected = await open({
@@ -70,22 +86,46 @@ export async function openDesignDialog(): Promise<{ file: CanopiFile; path: stri
   if (!selected) throw new Error('Dialog cancelled')
   // open() returns string | string[] | null depending on `multiple`
   const filePath = typeof selected === 'string' ? selected : (selected as string[])[0]!
-  const file: CanopiFile = await invoke('load_design', { path: filePath })
-  return { file, path: filePath }
+  const loaded = await loadDesign(filePath)
+  return { ...loaded, path: filePath }
 }
 
 // ---------------------------------------------------------------------------
 // Direct IPC wrappers — keep Design writers private to prepared destinations.
 // ---------------------------------------------------------------------------
 
-/** Save design to an existing path (Ctrl+S after first save). */
-async function saveDesign(path: string, content: CanopiFile): Promise<string> {
-  return invoke('save_design', { path, content: encodeCanopiDesign(content) })
+/** Write a Design file unless it changed on disk since `expectedFingerprint`. */
+async function saveDesign(
+  path: string,
+  content: CanopiFile,
+  expectedFingerprint: string | null,
+): Promise<DesignSaveOutcome> {
+  return invoke('save_design', {
+    path,
+    content: encodeCanopiDesign(content),
+    expectedFingerprint,
+  })
 }
 
-/** Load a design from a known path (e.g. recent files). */
-export async function loadDesign(path: string): Promise<CanopiFile> {
+/** Load a design from a known path (e.g. recent files) with its fingerprint. */
+export async function loadDesign(path: string): Promise<LoadedDesign> {
   return invoke('load_design', { path })
+}
+
+async function saveDesignDraft(id: string, content: CanopiFile): Promise<void> {
+  return invoke('save_design_draft', { id, content: encodeCanopiDesign(content) })
+}
+
+export async function loadDesignDraft(id: string): Promise<CanopiFile> {
+  return invoke('load_design_draft', { id })
+}
+
+export async function listDesignDrafts(): Promise<DesignDraftSummary[]> {
+  return invoke('list_design_drafts')
+}
+
+export async function deleteDesignDraft(id: string): Promise<void> {
+  return invoke('delete_design_draft', { id })
 }
 
 /** Create a new empty design with default layers. */
@@ -147,9 +187,4 @@ export async function reorderNotebookSections(sectionIds: string[]): Promise<voi
 
 export async function reorderDesignReferences(paths: string[]): Promise<void> {
   return invoke('reorder_design_references', { paths })
-}
-
-/** Silent autosave to app data dir. */
-async function autosaveDesign(content: CanopiFile, path: string | null): Promise<void> {
-  return invoke('autosave_design', { content: encodeCanopiDesign(content), path })
 }

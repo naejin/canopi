@@ -14,6 +14,7 @@ import {
 } from "./browser-design-session";
 import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
 import { WorkspaceDialogs } from "../components/workspace/WorkspaceComposition";
+import { SaveProblemDialog } from "../components/shared/SaveProblemDialog";
 import { WebWorkspace } from "./WebWorkspace";
 import { createBrowserGeoJsonWorkflow } from "./browser-geojson";
 import { currentCanvasSession } from "../canvas/session";
@@ -43,6 +44,7 @@ export function WebApp({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled: hasDesign,
+    revertAvailable: controller.continuousSave.revertAvailable.value,
     geoJsonEnabled: hasDesign && currentCanvasSession.value !== null,
     templatesEnabled,
     capabilities: shellCapabilities,
@@ -54,7 +56,7 @@ export function WebApp({
     } catch (error) {
       logWebAppCommandError(error);
     }
-    return controller.installAutosave();
+    return controller.installContinuousSave();
   }, [controller]);
 
   return (
@@ -63,6 +65,9 @@ export function WebApp({
         commandProjection={commandProjection}
         designIdentity={designIdentity}
         onRenameDesign={(name) => controller.renameDesign(name)}
+        onRetrySave={() => {
+          void controller.continuousSave.flush().catch(logWebAppCommandError);
+        }}
       >
         {workspace ?? (
           <WebWorkspace
@@ -73,6 +78,7 @@ export function WebApp({
         )}
       </BrowserAppShell>
       <WorkspaceDialogs />
+      <SaveProblemDialog />
     </div>
   );
 }

@@ -40,7 +40,7 @@ Every resource (runtime, renderer, MapLibre instance, timer, listener, observer,
 ## Commands and shortcuts
 
 - `commands/registry.ts` is the public App Command Graph seam. The catalog, projections and shortcut adapter live in `commands/graph/`, which callers never import directly. `MenuBar`, `CommandPalette`, the panel bar, `CanvasToolbar` and `shortcuts/manager.ts` all consume the registry and never duplicate actions, availability, active state or shortcut maps.
-- `app/shell-commands/index.ts` owns platform-neutral shell command ids (`file.new`, `file.open`, `file.save`, `file.saveAs`, `file.downloadCanopi`, `file.exportCanvasPdf`, `file.importGeoJson`, `file.exportGeoJson`, panel navigation), label keys, shortcut matching and chrome projection. Desktop and `web/browser-shell-commands.ts` compose it from explicit capabilities. The module stays free of Tauri, Web, IPC, persistence and settings adapters.
+- `app/shell-commands/index.ts` owns platform-neutral shell command ids (`file.new`, `file.open`, `file.save`, `file.saveAs`, `file.revert`, `file.downloadCanopi`, `file.exportCanvasPdf`, `file.importGeoJson`, `file.exportGeoJson`, panel navigation), label keys, shortcut matching and chrome projection. Desktop and `web/browser-shell-commands.ts` compose it from explicit capabilities. The module stays free of Tauri, Web, IPC, persistence and settings adapters.
 - Execution availability can differ from projection availability. The Plant Database command runs from the welcome state, and an active side-panel entry stays enabled so it can close.
 - A canvas tool command navigates to the canvas only when it is invoked from another primary panel, and it preserves an open side panel.
 

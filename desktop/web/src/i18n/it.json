@@ -227,11 +227,8 @@
       "open": "Apri design",
       "save": "Salva",
       "saveAs": "Salva come",
-      "unsavedChanges": "Modifiche non salvate",
-      "saveBeforeClose": "Salvare prima di chiudere?",
-      "saveBeforeCloseMessage": "Hai modifiche non salvate. Salvare prima di chiudere?",
-      "dontSave": "Non salvare",
-      "cancel": "Annulla"
+      "cancel": "Annulla",
+      "revert": "Ripristina la versione aperta"
     },
     "layers": {
       "layerPanel": "Livelli",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Informazioni su Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Modifiche non salvate",
     "untitledDesign": "Progetto senza titolo",
     "renameDesignName": "Rinomina progetto",
     "designNameInput": "Nome del progetto"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "L’elemento {{feature}} ha una geometria non valida.",
       "invalid_coordinates": "L’elemento {{feature}} ha coordinate fuori dall’intervallo di longitudine/latitudine WGS84."
     }
+  },
+  "saveStatus": {
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "error": "Impossibile salvare",
+    "retry": "Riprova",
+    "conflict": "Modificato fuori da Canopi"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Impossibile salvare le modifiche",
+    "flushFailedMessage": "Canopi non è riuscito a scrivere le ultime modifiche. Riprova oppure scartale per continuare.",
+    "flushFailedCloseMessage": "Canopi non è riuscito a scrivere le ultime modifiche. Riprova oppure chiudi senza salvarle.",
+    "conflictPendingMessage": "Questo file è stato modificato fuori da Canopi, quindi le ultime modifiche non sono state scritte. Scartale per continuare, oppure annulla e risolvi prima la modifica.",
+    "retry": "Riprova",
+    "discard": "Scarta modifiche",
+    "closeWithoutSaving": "Chiudi senza salvare",
+    "conflictTitle": "Modificato fuori da Canopi",
+    "conflictMessage": "Un altro programma ha modificato questo file dall'ultimo salvataggio di Canopi. Scegli quale versione tenere.",
+    "fileGoneTitle": "File spostato o eliminato",
+    "fileGoneMessage": "Il file di questo design è stato spostato o eliminato. Salva di nuovo la tua versione o salvala altrove.",
+    "keepMine": "Mantieni la mia versione",
+    "useFile": "Usa la versione del file",
+    "saveCopy": "Salva la mia come copia…",
+    "saveElsewhere": "Salva con nome…",
+    "revertTitle": "Tornare alla versione all'apertura?",
+    "revertMessage": "Tutte le modifiche fatte dall'apertura di questo design verranno sostituite.",
+    "revertConfirm": "Ripristina"
+  },
+  "drafts": {
+    "title": "Bozze",
+    "delete": "Elimina bozza: {{name}}",
+    "confirmDelete": "Eliminare questa bozza?",
+    "confirmDeleteAction": "Elimina"
   }
 }

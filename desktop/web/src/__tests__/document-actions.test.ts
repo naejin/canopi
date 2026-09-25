@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => {
   return {
     canvasSession: null as any,
     saveDesign: vi.fn(),
-    autosaveDesign: vi.fn(),
+    saveDesignDraft: vi.fn(),
+    deleteDesignDraft: vi.fn(),
+    requestSaveDecision: vi.fn(),
     selectDesignSavePath: vi.fn(),
     openDesignDialog: vi.fn(),
     loadDesign: vi.fn(),
@@ -31,19 +33,21 @@ vi.mock('../ipc/design', async () => {
     '../app/document-session/write-admission'
   )
   return {
-    saveDesign: mocks.saveDesign,
-    autosaveDesign: mocks.autosaveDesign,
     selectDesignSavePath: mocks.selectDesignSavePath,
-    prepareDesignWrite: (path: string) => prepareDesignWriteDestination({
+    prepareDesignWrite: (
+      path: string,
+      _expectedFingerprint: string | null,
+      onWritten: (fingerprint: string) => void,
+    ) => prepareDesignWriteDestination({
       resource: `native-design:${path}`,
       destinationPath: path,
-      write: (content) => mocks.saveDesign(path, content).then(() => undefined),
+      write: (content) => mocks.saveDesign(path, content).then(() => onWritten('fp-written')),
     }),
-    prepareRecoveryWrite: (destinationHint: string | null) =>
-      prepareDesignWriteDestination({
-        resource: 'native-recovery-store',
-        write: (content) => mocks.autosaveDesign(content, destinationHint),
-      }),
+    prepareDraftWrite: (id: string) => prepareDesignWriteDestination({
+      resource: `native-draft:${id}`,
+      write: (content) => mocks.saveDesignDraft(id, content),
+    }),
+    deleteDesignDraft: mocks.deleteDesignDraft,
     openDesignDialog: mocks.openDesignDialog,
     loadDesign: mocks.loadDesign,
     newDesign: mocks.newDesign,
@@ -54,21 +58,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   message: mocks.message,
 }))
 
-vi.mock('../i18n', () => ({
-  t: (key: string) => {
-    switch (key) {
-      case 'canvas.file.save':
-        return 'Save'
-      case 'canvas.file.dontSave':
-        return "Don't Save"
-      case 'canvas.file.cancel':
-        return 'Cancel'
-      case 'canvas.file.unsavedChanges':
-        return 'Unsaved changes'
-      default:
-        return key
-    }
-  },
+vi.mock('../app/document-session/save-problem', () => ({
+  requestSaveProblemDecision: mocks.requestSaveDecision,
 }))
 
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
@@ -87,10 +78,14 @@ import {
   openDesign,
   openDesignAsTemplate,
   openDesignFromPath,
+  revertDesign,
   saveCurrentDesign,
 } from '../app/document-session/actions'
 import { setPendingTemplateImport } from '../app/document-session/store'
-import { resetDesignSessionStateForTests } from '../app/document-session/transition'
+import {
+  designContinuousSave,
+  resetDesignSessionStateForTests,
+} from '../app/document-session/transition'
 import type { CanopiFile } from '../types/design'
 
 function makeFile(name: string): CanopiFile {
@@ -112,6 +107,10 @@ function makeFile(name: string): CanopiFile {
     updated_at: '2026-03-29T00:00:00.000Z',
     extra: {},
   }
+}
+
+function loaded(file: CanopiFile, fingerprint = 'fp-loaded') {
+  return { file, fingerprint }
 }
 
 function makeEngine() {
@@ -182,9 +181,13 @@ beforeEach(() => {
   resetDesignSessionStateForTests()
   mocks.canvasSession = makeSession()
   mocks.saveDesign.mockReset()
-  mocks.saveDesign.mockResolvedValue('/designs/current.canopi')
-  mocks.autosaveDesign.mockReset()
-  mocks.autosaveDesign.mockResolvedValue(undefined)
+  mocks.saveDesign.mockResolvedValue(undefined)
+  mocks.saveDesignDraft.mockReset()
+  mocks.saveDesignDraft.mockResolvedValue(undefined)
+  mocks.deleteDesignDraft.mockReset()
+  mocks.deleteDesignDraft.mockResolvedValue(undefined)
+  mocks.requestSaveDecision.mockReset()
+  mocks.requestSaveDecision.mockResolvedValue('cancel')
   mocks.selectDesignSavePath.mockReset()
   mocks.selectDesignSavePath.mockResolvedValue('/designs/current.canopi')
   mocks.openDesignDialog.mockReset()
@@ -200,20 +203,24 @@ beforeEach(() => {
   resetDirtyBaselines()
   designSessionFixture.nonCanvasRevision = 0
   designSessionFixture.detachedCanvasDirty = false
+  designContinuousSave.beginSession({ draftId: null, fingerprint: 'fp-current', writePending: false })
 
   activeTool.value = 'rectangle'
   selectedObjectIds.value = new Set(['selected-1'])
 })
 
 describe('document replacement actions', () => {
-  it('replaces the active document after discard', async () => {
+  it('writes a dirty Design to its file home, then replaces it without asking', async () => {
     designSessionFixture.nonCanvasRevision = 1
-    mocks.message.mockResolvedValue("Don't Save")
-    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
 
     await openDesignFromPath('/designs/next.canopi')
 
-    expect(mocks.saveDesign).not.toHaveBeenCalled()
+    expect(mocks.requestSaveDecision).not.toHaveBeenCalled()
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      '/designs/current.canopi',
+      expect.objectContaining({ name: 'Current' }),
+    )
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
     expect(mocks.canvasSession.replaceDocument).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Next', extra: {} }),
@@ -223,26 +230,38 @@ describe('document replacement actions', () => {
     expect(currentDesign.value?.name).toBe('Next')
     expect(designName.value).toBe('Next')
     expect(designPath.value).toBe('/designs/next.canopi')
+    expect(designContinuousSave.readHome()).toEqual({
+      kind: 'file',
+      path: '/designs/next.canopi',
+      fingerprint: 'fp-loaded',
+    })
     expect(mocks.canvasSession.showCanvasChrome).toHaveBeenCalled()
     expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })
 
-  it('cancels replacement before loading when the user cancels', async () => {
+  it('keeps the current Design when its write fails and the user cancels', async () => {
     designSessionFixture.nonCanvasRevision = 1
-    mocks.message.mockResolvedValue('Cancel')
+    mocks.saveDesign.mockRejectedValue(new Error('disk full'))
+    mocks.requestSaveDecision.mockResolvedValue('cancel')
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     await openDesignFromPath('/designs/next.canopi')
+    logError.mockRestore()
 
+    expect(mocks.requestSaveDecision).toHaveBeenCalledWith({
+      kind: 'flush-failed',
+      purpose: 'replace',
+      conflict: false,
+    })
     expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
     expect(designPath.value).toBe('/designs/current.canopi')
   })
 
-  it('saves first when the user chooses save', async () => {
+  it('acknowledges the Canvas baseline when writing before replacement', async () => {
     mocks.canvasSession.loadDocument(makeFile('Current'))
     designSessionFixture.nonCanvasRevision = 1
-    mocks.message.mockResolvedValue('Save')
-    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
 
     await openDesignFromPath('/designs/next.canopi')
 
@@ -255,17 +274,21 @@ describe('document replacement actions', () => {
     expect(mocks.canvasSession.zoomToFit).toHaveBeenCalled()
   })
 
-  it('treats save-dialog cancellation as a cancelled replacement', async () => {
+  it('discards unwritable changes only when the user chooses to', async () => {
     designSessionFixture.nonCanvasRevision = 1
-    designSessionFixture.path = null
-    mocks.message.mockResolvedValue('Save')
-    mocks.selectDesignSavePath.mockRejectedValue(new Error('Dialog cancelled'))
+    mocks.saveDesign.mockRejectedValue(new Error('disk full'))
+    mocks.requestSaveDecision
+      .mockResolvedValueOnce('retry')
+      .mockResolvedValueOnce('discard')
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     await openDesignFromPath('/designs/next.canopi')
+    logError.mockRestore()
 
-    expect(mocks.loadDesign).not.toHaveBeenCalled()
-    expect(currentDesign.value?.name).toBe('Current')
-    expect(designPath.value).toBe(null)
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(2)
+    expect(mocks.requestSaveDecision).toHaveBeenCalledTimes(2)
+    expect(currentDesign.value?.name).toBe('Next')
   })
 
   it('propagates load failures without replacing the document', async () => {
@@ -278,13 +301,13 @@ describe('document replacement actions', () => {
   })
 
   it('cancels queued loads before they apply to a fresh engine', async () => {
-    const queued = deferred<CanopiFile>()
+    const queued = deferred<ReturnType<typeof loaded>>()
     designSessionFixture.pendingDesignPath = '/designs/queued.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
     const cancel = consumeQueuedDocumentLoad(mocks.canvasSession)
     cancel()
-    queued.resolve(makeFile('Queued'))
+    queued.resolve(loaded(makeFile('Queued')))
     await flushMicrotasks()
 
     expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
@@ -292,7 +315,7 @@ describe('document replacement actions', () => {
   })
 
   it('surfaces queued-load failures and keeps the pending path for retry', async () => {
-    const queued = deferred<CanopiFile>()
+    const queued = deferred<ReturnType<typeof loaded>>()
     designSessionFixture.pendingDesignPath = '/designs/broken.canopi'
     mocks.loadDesign.mockReturnValue(queued.promise)
 
@@ -308,13 +331,15 @@ describe('document replacement actions', () => {
     )
   })
 
-  it('returns cancelled for template import when the user cancels replacement', async () => {
+  it('returns cancelled for template import when the user cancels after a failed write', async () => {
     designSessionFixture.nonCanvasRevision = 1
-    mocks.message.mockResolvedValue('Cancel')
+    mocks.saveDesign.mockRejectedValue(new Error('disk full'))
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     await expect(openDesignAsTemplate(
       { file: makeFile('Downloaded Template'), name: 'Forest Edge' },
     )).resolves.toBe('cancelled')
+    logError.mockRestore()
 
     expect(mocks.loadDesign).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
@@ -322,8 +347,10 @@ describe('document replacement actions', () => {
 
   it('does not apply a decoded template after its acquisition intent is cancelled', async () => {
     designSessionFixture.nonCanvasRevision = 1
+    mocks.saveDesign.mockRejectedValue(new Error('disk full'))
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const decision = deferred<string>()
-    mocks.message.mockReturnValue(decision.promise)
+    mocks.requestSaveDecision.mockReturnValue(decision.promise)
     let cancelled = false
 
     const opening = openDesignAsTemplate(
@@ -332,16 +359,17 @@ describe('document replacement actions', () => {
     )
     await flushMicrotasks()
     cancelled = true
-    decision.resolve("Don't Save")
+    decision.resolve('discard')
 
     await expect(opening).resolves.toBe('cancelled')
+    logError.mockRestore()
     expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(currentDesign.value?.name).toBe('Current')
   })
 
   it('applies a known path while the canvas session is detached', async () => {
     mocks.canvasSession = null
-    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
 
     await openDesignFromPath('/designs/next.canopi')
 
@@ -353,11 +381,10 @@ describe('document replacement actions', () => {
     expect(pendingDesignPath.value).toBe(null)
   })
 
-  it('saves before detached replacement when requested by the dirty guard', async () => {
+  it('writes the detached Design to its home before replacement', async () => {
     mocks.canvasSession = null
     designSessionFixture.nonCanvasRevision = 1
-    mocks.message.mockResolvedValue('Save')
-    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
 
     await openDesignFromPath('/designs/next.canopi')
 
@@ -381,23 +408,23 @@ describe('document replacement actions', () => {
     expect(pendingDesignPath.value).toBe('/designs/next.canopi')
   })
 
-  it('does not prompt for unsaved changes when no document is open', async () => {
+  it('does not ask anything when no document is open', async () => {
     designSessionFixture.file = null
     designSessionFixture.path = null
     designSessionFixture.nonCanvasRevision = 1
     designSessionFixture.detachedCanvasDirty = true
-    mocks.loadDesign.mockResolvedValue(makeFile('Next'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Next')))
 
     await openDesignFromPath('/designs/next.canopi')
 
-    expect(mocks.message).not.toHaveBeenCalled()
+    expect(mocks.requestSaveDecision).not.toHaveBeenCalled()
     expect(mocks.loadDesign).toHaveBeenCalledWith('/designs/next.canopi')
     expect(currentDesign.value).toEqual(expect.objectContaining({ name: 'Next' }))
   })
 
   it('opens template imports while the canvas session is detached', async () => {
     mocks.canvasSession = null
-    mocks.loadDesign.mockResolvedValue(makeFile('Downloaded Template'))
+    mocks.loadDesign.mockResolvedValue(loaded(makeFile('Downloaded Template')))
 
     await expect(openDesignAsTemplate(
       { file: makeFile('Downloaded Template'), name: 'Forest Edge' },
@@ -407,6 +434,8 @@ describe('document replacement actions', () => {
     expect(designName.value).toBe('Forest Edge')
     expect(designPath.value).toBe(null)
     expect(pendingTemplateImport.value).toBe(null)
+    expect(designContinuousSave.readHome()).toMatchObject({ kind: 'draft' })
+    expect(designContinuousSave.status.value).toBe('saving')
   })
 
   it('queues template imports when neither document state nor canvas session is ready', async () => {
@@ -531,6 +560,7 @@ describe('document replacement actions', () => {
     mocks.openDesignDialog.mockResolvedValue({
       file: makeFile('Dialog Pick'),
       path: '/designs/dialog.canopi',
+      fingerprint: 'fp-dialog',
     })
 
     await openDesign()
@@ -551,18 +581,74 @@ describe('document replacement actions', () => {
     expect(currentDesign.value?.name).toBe('Untitled')
     expect(designName.value).toBe('Untitled')
     expect(designPath.value).toBe(null)
+    expect(designContinuousSave.readHome()).toMatchObject({ kind: 'draft' })
+    expect(designContinuousSave.status.value).toBe('saved')
   })
 
-  it('saves the canonical document snapshot when no canvas session is mounted', async () => {
+  it('saves the canonical document snapshot to its file when no canvas session is mounted', async () => {
     mocks.canvasSession = null
     designSessionFixture.name = 'Detached'
+    designSessionFixture.nonCanvasRevision = 1
 
-    await saveCurrentDesign()
+    await expect(saveCurrentDesign()).resolves.toBe(true)
 
     expect(mocks.saveDesign).toHaveBeenCalledWith(
       '/designs/current.canopi',
       expect.objectContaining({ name: 'Detached' }),
     )
     expect(designName.value).toBe('Detached')
+    expect(designContinuousSave.readHome()).toMatchObject({ fingerprint: 'fp-written' })
   })
+
+  it('saves a draft home with Save As, then forgets the draft', async () => {
+    mocks.canvasSession = null
+    mocks.newDesign.mockResolvedValue(makeFile('Untitled'))
+    await newDesignAction()
+    designSessionFixture.nonCanvasRevision = 1
+    await designContinuousSave.flush()
+    const draftHome = designContinuousSave.readHome()
+    expect(draftHome).toMatchObject({ kind: 'draft' })
+    expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(1)
+    mocks.selectDesignSavePath.mockResolvedValue('/designs/saved.canopi')
+
+    await expect(saveCurrentDesign()).resolves.toBe(true)
+
+    expect(mocks.saveDesign).toHaveBeenCalledWith(
+      '/designs/saved.canopi',
+      expect.objectContaining({ name: 'Untitled' }),
+    )
+    expect(designPath.value).toBe('/designs/saved.canopi')
+    expect(designContinuousSave.readHome()).toEqual({
+      kind: 'file',
+      path: '/designs/saved.canopi',
+      fingerprint: 'fp-written',
+    })
+    expect(mocks.deleteDesignDraft).toHaveBeenCalledWith(
+      draftHome?.kind === 'draft' ? draftHome.id : null,
+    )
+  })
+
+  it('reverts to the version opened and writes it back to the file', async () => {
+    mocks.canvasSession = null
+    mocks.loadDesign.mockResolvedValue(loaded({ ...makeFile('Opened'), description: 'as opened' }))
+    await openDesignFromPath('/designs/opened.canopi')
+    expect(designContinuousSave.revertAvailable.value).toBe(false)
+    const { editDesignSessionForTest } = await import('./support/design-session-edit')
+    const { designSessionStore } = await import('../app/document-session/store')
+    editDesignSessionForTest(designSessionStore, (design) => ({ ...design, description: 'edited' }))
+    expect(designContinuousSave.revertAvailable.value).toBe(true)
+    mocks.requestSaveDecision.mockResolvedValueOnce('revert')
+
+    await revertDesign()
+    await designContinuousSave.flush()
+
+    expect(currentDesign.value?.description).toBe('as opened')
+    expect(designPath.value).toBe('/designs/opened.canopi')
+    expect(mocks.saveDesign).toHaveBeenLastCalledWith(
+      '/designs/opened.canopi',
+      expect.objectContaining({ description: 'as opened' }),
+    )
+    expect(designContinuousSave.revertAvailable.value).toBe(false)
+  })
+
 })

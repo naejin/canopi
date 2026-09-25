@@ -24,12 +24,14 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
-import { currentDesign, designDirty, designName } from '../../app/document-session/store'
+import { currentDesign, designName } from '../../app/document-session/store'
 import { createGeoJsonWorkflow } from '../../app/geojson/workflow'
 import { desktopGeoJsonFiles, presentDesktopGeoJsonNotice } from '../../ipc/geojson'
 import {
+  designRevertAvailable,
   newDesignAction,
   openDesign,
+  revertDesign,
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../../app/document-session/actions'
@@ -76,6 +78,7 @@ type DesktopShellCapabilityId =
   | 'openDesign'
   | 'saveDesign'
   | 'saveDesignAs'
+  | 'revertDesign'
   | 'exportCanvasPdf'
   | 'importGeoJson'
   | 'exportGeoJson'
@@ -114,7 +117,7 @@ export interface AppCommandDefinition {
 export function readAppCommandState(): AppCommandState {
   return {
     hasDesign: currentDesign.value !== null,
-    designDirty: designDirty.value,
+    revertAvailable: designRevertAvailable.value,
     canvas: getCurrentCanvasCommandSurface(),
     canvasHasSelection: currentCanvasHasSelection.value,
     canvasSpatialEditingAvailable: currentCanvasQuerySurface.value?.viewport.value.mode !== 'overview',
@@ -275,11 +278,15 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   },
   saveDesign: {
     execute: () => runAsyncCommand('Save design', saveCurrentDesign),
-    isExecutionDisabled: (state) => !state.hasDesign || !state.designDirty,
+    isExecutionDisabled: (state) => !state.hasDesign,
   },
   saveDesignAs: {
     execute: () => runAsyncCommand('Save design as', saveAsCurrentDesign),
     isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  revertDesign: {
+    execute: () => runAsyncCommand('Revert design', revertDesign),
+    isExecutionDisabled: (state) => !state.hasDesign || !state.revertAvailable,
   },
   exitApp: {
     execute: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),

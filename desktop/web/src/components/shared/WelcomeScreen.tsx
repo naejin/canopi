@@ -1,21 +1,33 @@
 import { useEffect, useMemo } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { newDesignAction, openDesign, openDesignFromPath } from '../../app/document-session/actions'
+import {
+  newDesignAction,
+  openDesign,
+  openDesignDraft,
+  openDesignFromPath,
+} from '../../app/document-session/actions'
+import { createDesignDraftsController } from '../../app/design-drafts'
 import { createRecentFilesController } from '../../app/recent-files'
+import { DraftList } from './DraftList'
+import { formatRelativeDate } from './relative-date'
 import styles from './WelcomeScreen.module.css'
 
 export function WelcomeScreen() {
   const recentFilesController = useMemo(() => createRecentFilesController(), [])
+  const draftsController = useMemo(() => createDesignDraftsController(), [])
 
   useEffect(() => {
     void recentFilesController.load()
+    void draftsController.load()
     return () => {
       recentFilesController.dispose()
+      draftsController.dispose()
     }
-  }, [recentFilesController])
+  }, [recentFilesController, draftsController])
 
   const recentFiles = recentFilesController.recentFiles.value
+  const drafts = draftsController.drafts.value
 
   return (
     <div className={styles.welcome} role="region" aria-label={t('canvas.emptyWelcome')}>
@@ -51,6 +63,17 @@ export function WelcomeScreen() {
         </div>
       </div>
 
+      <DraftList
+        drafts={drafts.map((draft) => ({
+          id: draft.id,
+          name: draft.name,
+          updatedAt: draft.updated_at,
+        }))}
+        locale={locale.value}
+        onOpen={(id) => { void openDesignDraft(id).catch(logWelcomeError) }}
+        onDelete={(id) => { void draftsController.remove(id).catch(logWelcomeError) }}
+      />
+
       {recentFiles.length > 0 && (
         <div className={styles.recentSection}>
           <h2 className={styles.recentTitle}>{t('canvas.emptyRecentFiles')}</h2>
@@ -70,7 +93,7 @@ export function WelcomeScreen() {
                   <div className={styles.recentInfo}>
                     <span className={styles.recentName}>{file.name}</span>
                     <span className={styles.recentMeta}>
-                      {formatDate(file.updated_at, locale.value)}
+                      {formatRelativeDate(file.updated_at, locale.value)}
                       {file.plant_count > 0 && ` · ${file.plant_count} plants`}
                     </span>
                   </div>
@@ -84,18 +107,6 @@ export function WelcomeScreen() {
   )
 }
 
-function formatDate(iso: string, lang: string): string {
-  try {
-    const d = new Date(iso)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays < 7) {
-      const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
-      return rtf.format(-diffDays, 'day')
-    }
-    return d.toLocaleDateString(lang)
-  } catch {
-    return ''
-  }
+function logWelcomeError(error: unknown): void {
+  console.error('Welcome screen command failed:', error)
 }

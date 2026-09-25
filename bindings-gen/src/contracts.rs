@@ -4,7 +4,9 @@ use specta_typescript::{BigIntExportBehavior, SerdeMode, Typescript};
 pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error::Error>> {
     let types = TypeCollection::default()
         .register::<common_types::design::Annotation>()
-        .register::<common_types::design::AutosaveEntry>()
+        .register::<common_types::design::LoadedDesign>()
+        .register::<common_types::design::DesignSaveOutcome>()
+        .register::<common_types::design::DesignDraftSummary>()
         .register::<common_types::design::BudgetItem>()
         .register::<common_types::design::CanopiFile>()
         .register::<common_types::design::Consortium>()

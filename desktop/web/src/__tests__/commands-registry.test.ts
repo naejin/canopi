@@ -9,7 +9,7 @@ import {
 } from '../app/canvas-settings/signals'
 import { theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { designSessionFixture } from './support/design-session-state'
+import { designSessionFixture, resetDirtyBaselines } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
 import { problemReportDialogOpen } from '../app/problem-report/state'
 import {
@@ -228,7 +228,7 @@ describe('command registry canvas tool switching', () => {
     designSessionFixture.nonCanvasSavedRevision = 0
     const newSpy = vi.spyOn(documentActions, 'newDesignAction').mockResolvedValue(undefined)
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
-    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(true)
     const saveAsSpy = vi.spyOn(documentActions, 'saveAsCurrentDesign').mockResolvedValue(null)
 
     getCommand('file.new').action()
@@ -249,9 +249,9 @@ describe('command registry canvas tool switching', () => {
     )).toBe(false)
   })
 
-  it('looks up disabled state and dispatch through the public App Command Graph seam', () => {
+  it('enables Save for any open Design, clean or not', () => {
     const saveCommand = getAppCommand('file.save')
-    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(null)
+    const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(true)
 
     if (!saveCommand) throw new Error('Missing file.save command')
     expect(saveCommand.disabled()).toBe(true)
@@ -274,8 +274,7 @@ describe('command registry canvas tool switching', () => {
       updated_at: '',
       extra: {},
     }
-    designSessionFixture.nonCanvasRevision = 1
-    designSessionFixture.nonCanvasSavedRevision = 0
+    resetDirtyBaselines()
 
     expect(saveCommand.disabled()).toBe(false)
 

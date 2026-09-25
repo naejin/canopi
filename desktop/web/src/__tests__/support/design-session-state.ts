@@ -18,7 +18,6 @@ export const pendingTemplateImport = fixture.pendingTemplateImport
 export const nonCanvasRevision = fixture.nonCanvasRevision
 export const nonCanvasSavedRevision = fixture.nonCanvasSavedRevision
 export const persistenceDiverged = fixture.persistenceDiverged
-export const autosaveFailed = designSessionStore.autosaveFailed
 export const canvasClean = fixture.canvasClean
 export const detachedCanvasDirty = fixture.detachedCanvasDirty
 export const canvasDirty = designSessionStore.canvasDirty
@@ -50,9 +49,6 @@ export const designSessionFixture = {
   },
   set persistenceDiverged(diverged: boolean) {
     fixture.setState({ persistenceDiverged: diverged })
-  },
-  set autosaveFailed(failed: boolean) {
-    fixture.setState({ autosaveFailed: failed })
   },
   set canvasClean(clean: boolean) {
     fixture.setState({ canvasClean: clean })

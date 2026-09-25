@@ -227,11 +227,8 @@
       "open": "Ouvrir un design",
       "save": "Enregistrer",
       "saveAs": "Enregistrer sous",
-      "unsavedChanges": "Modifications non enregistrées",
-      "saveBeforeClose": "Enregistrer avant de fermer ?",
-      "saveBeforeCloseMessage": "Vous avez des modifications non enregistrées. Enregistrer avant de fermer ?",
-      "dontSave": "Ne pas enregistrer",
-      "cancel": "Annuler"
+      "cancel": "Annuler",
+      "revert": "Revenir à la version ouverte"
     },
     "layers": {
       "layerPanel": "Calques",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "À propos de Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Modifications non enregistrées",
     "untitledDesign": "Planche sans titre",
     "renameDesignName": "Renommer la planche",
     "designNameInput": "Nom de la planche"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "L’entité {{feature}} a une géométrie invalide.",
       "invalid_coordinates": "L’entité {{feature}} a des coordonnées hors des limites de longitude/latitude WGS84."
     }
+  },
+  "saveStatus": {
+    "saving": "Enregistrement…",
+    "saved": "Enregistré",
+    "error": "Échec de l'enregistrement",
+    "retry": "Réessayer",
+    "conflict": "Modifié hors de Canopi"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Impossible d'enregistrer vos modifications",
+    "flushFailedMessage": "Canopi n'a pas pu écrire vos dernières modifications. Réessayez, ou abandonnez-les pour continuer.",
+    "flushFailedCloseMessage": "Canopi n'a pas pu écrire vos dernières modifications. Réessayez, ou fermez sans les enregistrer.",
+    "conflictPendingMessage": "Ce fichier a été modifié hors de Canopi, vos dernières modifications n'ont donc pas été écrites. Abandonnez-les pour continuer, ou annulez et résolvez d'abord la modification.",
+    "retry": "Réessayer",
+    "discard": "Abandonner les modifications",
+    "closeWithoutSaving": "Fermer sans enregistrer",
+    "conflictTitle": "Modifié hors de Canopi",
+    "conflictMessage": "Un autre programme a modifié ce fichier depuis le dernier enregistrement par Canopi. Choisissez la version à conserver.",
+    "fileGoneTitle": "Fichier déplacé ou supprimé",
+    "fileGoneMessage": "Le fichier de ce design a été déplacé ou supprimé. Enregistrez à nouveau votre version, ou enregistrez-la ailleurs.",
+    "keepMine": "Garder ma version",
+    "useFile": "Utiliser la version du fichier",
+    "saveCopy": "Enregistrer la mienne comme copie…",
+    "saveElsewhere": "Enregistrer sous…",
+    "revertTitle": "Revenir à la version d'ouverture ?",
+    "revertMessage": "Toutes les modifications faites depuis l'ouverture de ce design seront remplacées.",
+    "revertConfirm": "Revenir"
+  },
+  "drafts": {
+    "title": "Brouillons",
+    "delete": "Supprimer le brouillon : {{name}}",
+    "confirmDelete": "Supprimer ce brouillon ?",
+    "confirmDeleteAction": "Supprimer"
   }
 }

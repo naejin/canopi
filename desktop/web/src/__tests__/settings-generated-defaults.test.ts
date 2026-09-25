@@ -7,7 +7,6 @@ import {
 import { sidePanelWidth } from '../app/shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
-  autoSaveIntervalMs,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
@@ -20,7 +19,6 @@ describe('generated settings defaults', () => {
   it('initialize every settings-backed projection signal', () => {
     expect(locale.value).toBe(DEFAULT_SETTINGS.locale)
     expect(theme.value).toBe(DEFAULT_SETTINGS.theme)
-    expect(autoSaveIntervalMs.value).toBe(DEFAULT_SETTINGS.auto_save_interval_s * 1000)
     expect(plantSpacingIntervalM.value).toBe(DEFAULT_SETTINGS.plant_spacing_interval_m)
     expect(sidePanelWidth.value).toBe(DEFAULT_SETTINGS.side_panel_width)
     expect(savedStampsFrameHeight.value).toBe(

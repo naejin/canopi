@@ -76,23 +76,13 @@
   outline-offset: 1px;
 }
 
-.dirtyDot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-danger);
-  margin-left: var(--space-1-5);
-  flex-shrink: 0;
-  vertical-align: middle;
-}
-
 .dragRegion {
   flex: 1;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
 }
 
 .settings {

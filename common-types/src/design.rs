@@ -695,11 +695,32 @@ pub struct DesignNotebookSnapshot {
     pub sections: Vec<DesignNotebookSection>,
 }
 
+/// A Design read from a file, with the fingerprint (SHA-256 of the file's
+/// bytes) its next continuous save must still find on disk.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct AutosaveEntry {
-    pub path: String,
+pub struct LoadedDesign {
+    pub file: CanopiFile,
+    pub fingerprint: String,
+}
+
+/// The result of writing a Design to its file.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DesignSaveOutcome {
+    /// Written; `fingerprint` is what the next save must expect.
+    Saved { path: String, fingerprint: String },
+    /// The file changed outside Canopi since `expected_fingerprint`; nothing
+    /// was written. `current_fingerprint` is `None` when the file is gone.
+    Conflict { current_fingerprint: Option<String> },
+}
+
+/// A Design draft: an unsaved (Untitled) Design kept in app data until the
+/// user saves it as a file or deletes it.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct DesignDraftSummary {
+    pub id: String,
     pub name: String,
-    pub saved_at: String,
+    pub updated_at: String,
 }
 
 #[cfg(test)]

@@ -1,3 +1,3 @@
 [alias]
 # Rust coverage ratchet: the floor is the measured baseline; raise it, never lower it.
-cov = "llvm-cov --workspace --locked --summary-only --fail-under-lines 65.8 --fail-under-functions 59.6 --fail-under-regions 64.9"
+cov = "llvm-cov --workspace --locked --summary-only --fail-under-lines 66.4 --fail-under-functions 60.8 --fail-under-regions 65.5"

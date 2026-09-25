@@ -227,11 +227,8 @@
       "open": "Abrir diseño",
       "save": "Guardar",
       "saveAs": "Guardar como",
-      "unsavedChanges": "Cambios sin guardar",
-      "saveBeforeClose": "¿Guardar antes de cerrar?",
-      "saveBeforeCloseMessage": "Tienes cambios sin guardar. ¿Guardar antes de cerrar?",
-      "dontSave": "No guardar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "revert": "Volver a la versión abierta"
     },
     "layers": {
       "layerPanel": "Capas",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Acerca de Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Cambios sin guardar",
     "untitledDesign": "Diseño sin título",
     "renameDesignName": "Renombrar diseño",
     "designNameInput": "Nombre del diseño"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "La entidad {{feature}} tiene una geometría no válida.",
       "invalid_coordinates": "La entidad {{feature}} tiene coordenadas fuera del rango de longitud/latitud WGS84."
     }
+  },
+  "saveStatus": {
+    "saving": "Guardando…",
+    "saved": "Guardado",
+    "error": "No se pudo guardar",
+    "retry": "Reintentar",
+    "conflict": "Cambiado fuera de Canopi"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "No se pudieron guardar los cambios",
+    "flushFailedMessage": "Canopi no pudo escribir tus últimos cambios. Vuelve a intentarlo o descártalos para continuar.",
+    "flushFailedCloseMessage": "Canopi no pudo escribir tus últimos cambios. Vuelve a intentarlo o cierra sin guardarlos.",
+    "conflictPendingMessage": "Este archivo cambió fuera de Canopi, así que tus últimos cambios no se escribieron. Descártalos para continuar, o cancela y resuelve primero el cambio.",
+    "retry": "Reintentar",
+    "discard": "Descartar cambios",
+    "closeWithoutSaving": "Cerrar sin guardar",
+    "conflictTitle": "Cambiado fuera de Canopi",
+    "conflictMessage": "Otro programa cambió este archivo desde la última vez que Canopi lo guardó. Elige qué versión conservar.",
+    "fileGoneTitle": "Archivo movido o eliminado",
+    "fileGoneMessage": "El archivo de este diseño se movió o se eliminó. Vuelve a guardar tu versión o guárdala en otro lugar.",
+    "keepMine": "Conservar mi versión",
+    "useFile": "Usar la versión del archivo",
+    "saveCopy": "Guardar la mía como copia…",
+    "saveElsewhere": "Guardar como…",
+    "revertTitle": "¿Volver a la versión al abrir?",
+    "revertMessage": "Se reemplazarán todos los cambios realizados desde que se abrió este diseño.",
+    "revertConfirm": "Volver"
+  },
+  "drafts": {
+    "title": "Borradores",
+    "delete": "Eliminar borrador: {{name}}",
+    "confirmDelete": "¿Eliminar este borrador?",
+    "confirmDeleteAction": "Eliminar"
   }
 }

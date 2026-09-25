@@ -10,9 +10,13 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Print Area**: A temporary rectangle selected over a Design's spatial layout to define a Canvas PDF detail page. A Print Area belongs to the export setup, remains independent of Zones, and does not create or modify the Design's spatial features. Export never adds Print Areas for annotations; notes that cannot fit on the overview and lie outside chosen detail coverage are omitted. _Avoid:_ Zone, Zone Draft
 
-**Design Session**: The active runtime context for a Design in the app. A design session includes the current Design state, dirty baselines, save/autosave behavior, queued Design loads, lifecycle workflows, and an optional attached canvas runtime. _Avoid:_ Document session, file session, canvas session
+**Design Session**: The active runtime context for a Design in the app. A design session includes the current Design state, its Home, dirty baselines, Continuous Save, queued Design loads, lifecycle workflows, and an optional attached canvas runtime. _Avoid:_ Document session, file session, canvas session
 
-**Web Edition**: A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo. _Avoid:_ Web sketch, catalog site, demo app _Note:_ Web Edition omits the Recent Design list and keeps browser-local autosave state behind the app surface.
+**Home**: Where a Design Session writes: the `.canopi` file it was opened from or saved as (Desktop), or a Design Draft. Every Design Session has exactly one home; Save As moves it to a file, and a Web download never changes it. _Avoid:_ Save location, current path, target
+
+**Continuous Save**: Canopi's always-on saving: a Design Session writes its committed changes to its Home shortly after each change, when the window or page is left, before another Design replaces it and on close. "Unsaved" means "not yet written to the Home"; the user is asked only when a write fails or the file changed outside Canopi. _Avoid:_ Autosave, recovery, save prompt
+
+**Web Edition**: A browser-accessible Canopi experience that creates, opens, edits, and exports real Designs. A web edition may omit desktop-only or planning-heavy surfaces, but it is not a separate sketch format, static catalog, or website-only demo. _Avoid:_ Web sketch, catalog site, demo app _Note:_ Web Edition omits the Recent Design list; its Designs live in browser Design Drafts.
 
 **Browser App Shell**: The Web Edition workspace chrome for starting, opening, resuming, downloading, and navigating Designs in a browser. A browser app shell presents web-appropriate commands around the shared Canopi app core rather than reproducing desktop window or native file-management chrome. _Avoid:_ Desktop title bar, website navigation, embedded widget
 
@@ -28,7 +32,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Species Focus**: A temporary viewing state that keeps one Species prominent while dimming other Plants. It survives switching side panels, is visibly clearable on the Canvas, and resets for a different Design. Focus changes neither Plant selection nor saved content.
 
-**Browser Draft**: A Web Edition Design snapshot saved in the current browser profile to preserve active work for autosave and recovery. A browser draft is internal convenience state, not a visible workspace, portable `.canopi` file, Design Notebook entry, saved path reference, or cloud-synced library item. _Avoid:_ Notebook entry, recent file, autosave backup
+**Design Draft**: A Design that has a Home but no `.canopi` file yet: every new, template-imported or (on Web) opened Design starts as one. Desktop keeps drafts in app data until Save As; Web keeps them in the current browser profile, where they are the only Home. Both welcome screens list drafts to open or delete. A design draft is not a portable `.canopi` file, a Design Notebook entry, a Recent Design or a cloud-synced library item. _Avoid:_ Browser Draft, autosave backup, untitled file
 
 **Notebook Section**: A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content. _Avoid:_ Folder, tag, category
 

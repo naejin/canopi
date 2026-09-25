@@ -7,7 +7,6 @@ import {
 import type { CanvasRuntimeSurfaces } from '../canvas/runtime/runtime'
 import {
   abortFailedAttachedDesignSessionStart,
-  autosaveDesignSession,
   consumeQueuedDocumentLoad,
   startAttachedDesignSession,
   teardownAttachedDesignSession,
@@ -21,7 +20,6 @@ import type {
 
 vi.mock('../app/document-session/transition', () => ({
   abortFailedAttachedDesignSessionStart: vi.fn(),
-  autosaveDesignSession: vi.fn(async () => undefined),
   consumeQueuedDocumentLoad: vi.fn(() => () => {}),
   startAttachedDesignSession: vi.fn(async () => null),
   teardownAttachedDesignSession: vi.fn(),
@@ -101,7 +99,6 @@ describe('document session lifecycle', () => {
           createRuntimeComposition,
           publishSurfaces,
           createResizeObserver,
-          readInitialAutosaveInterval: () => 1000,
           logError,
         },
       )
@@ -152,7 +149,6 @@ describe('document session lifecycle', () => {
         createRuntimeComposition: () => composition(surfaces, async () => 'cancelled'),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -173,39 +169,6 @@ describe('document session lifecycle', () => {
     await lifecycle.dispose()
   })
 
-  it('reports a fire-and-forget autosave rejection through its lifecycle logger', async () => {
-    vi.useFakeTimers()
-    const autosaveError = new Error('stale Canvas lease')
-    vi.mocked(autosaveDesignSession).mockRejectedValueOnce(autosaveError)
-    const surfaces = createTestCanvasRuntimeSurfaces()
-    const logError = vi.fn<(message?: unknown, ...optionalParams: unknown[]) => void>()
-    const lifecycle = createDesignSessionLifecycle(
-      { canvasArea, container, rulerOverlay },
-      {
-        createRuntimeComposition: () => composition(surfaces),
-        publishSurfaces: vi.fn(),
-        createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 100,
-        logError,
-      },
-    )
-
-    try {
-      lifecycle.start()
-      await Promise.resolve()
-      await Promise.resolve()
-      await flushLifecycle()
-      vi.advanceTimersByTime(100)
-      await Promise.resolve()
-      await Promise.resolve()
-
-      expect(logError).toHaveBeenCalledWith('Autosave failed:', autosaveError)
-    } finally {
-      lifecycle.dispose()
-      vi.useRealTimers()
-    }
-  })
-
   it('hands off synchronously, then awaits settings and composition teardown before unpublishing', async () => {
     const settingsFlush = deferred<void>()
     const compositionDispose = deferred<void>()
@@ -222,7 +185,6 @@ describe('document session lifecycle', () => {
         createRuntimeComposition: () => composition(surfaces, undefined, dispose),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError: vi.fn(),
       },
     )
@@ -265,7 +227,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
       },
     )
@@ -300,7 +261,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -343,7 +303,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces,
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure,
       },
@@ -388,7 +347,6 @@ describe('document session lifecycle', () => {
         }),
         publishSurfaces: vi.fn(),
         createResizeObserver: () => null,
-        readInitialAutosaveInterval: () => 1000,
         logError,
         onInitializationFailure: () => {
           throw cleanupError

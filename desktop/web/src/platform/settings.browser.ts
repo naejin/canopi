@@ -36,10 +36,6 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
     theme: readEnum(value.theme, SETTINGS_THEMES, DEFAULT_SETTINGS.theme),
     snap_to_grid: readBoolean(value.snap_to_grid, DEFAULT_SETTINGS.snap_to_grid),
     snap_to_guides: readBoolean(value.snap_to_guides, DEFAULT_SETTINGS.snap_to_guides),
-    auto_save_interval_s: readU32(
-      value.auto_save_interval_s,
-      DEFAULT_SETTINGS.auto_save_interval_s,
-    ),
     side_panel_width: readNullableU32(value.side_panel_width, DEFAULT_SETTINGS.side_panel_width),
     saved_stamps_frame_height: readNullableU32(
       value.saved_stamps_frame_height,

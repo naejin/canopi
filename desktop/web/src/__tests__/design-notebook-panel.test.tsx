@@ -343,7 +343,7 @@ describe('DesignNotebookPanel', () => {
     const workbench = createDesignNotebookWorkbench({
       activePath: signal('/designs/current.canopi'), currentDesign: signal(testDesign()),
       loadNotebook: vi.fn().mockResolvedValue({ entries: [], sections: [{ id: 'garden', name: 'Garden', sort_order: 0, created_at: '', updated_at: '' }] }),
-      saveCurrent: async () => ({ status: 'applied', path: '/designs/current.canopi', content: testDesign() }),
+      saveCurrent: async () => true,
       addDesignReference, moveEntryToSection,
     })
     await act(async () => { render(<DesignNotebookPanel workbench={workbench} />, container); await flushEffects() })

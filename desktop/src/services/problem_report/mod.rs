@@ -350,6 +350,7 @@ mod tests {
                     "Secret Orchard of Alice",
                     "2026-07-02T00:00:00Z",
                 ),
+                None,
             )
             .unwrap();
         });

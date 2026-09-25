@@ -5,7 +5,6 @@ import {
 } from "../../canvas/runtime/runtime";
 import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import * as designIpc from "../../ipc/design";
-import { t } from "../../i18n";
 import type { CanopiFile } from "../../types/design";
 import {
   designSessionStore,
@@ -13,11 +12,21 @@ import {
 } from "./store";
 import {
   createDesignSessionPersistence,
-  DesignPersistenceSettlementError,
   type DesignReplacementGuard,
   type DesignSaveSettlement,
   type DesignSessionPersistence,
 } from "./persistence";
+import {
+  createContinuousSave,
+  DesignHomeConflictError,
+  type ContinuousSave,
+  type DesignHome,
+  type DesignSessionHomeInput,
+  type HomeWriteOutcome,
+} from "./continuous-save";
+import {
+  requestSaveProblemDecision,
+} from "./save-problem";
 import {
   createDesignSessionReplacement,
   type DesignSessionPendingCanvasReplacementIdentity,
@@ -36,14 +45,26 @@ export type DocumentTransitionSource =
   | "template"
   | "queued-path"
   | "queued-template"
+  | "open-draft"
+  | "revert"
   | "mount-existing";
 
-export type DirtyGuardMode = "confirm" | "skip";
+/**
+ * `flush` writes the current Design to its home before replacing it and asks
+ * the user only when that write fails; `skip` replaces without writing.
+ */
+export type DirtyGuardMode = "flush" | "skip";
 
 export interface DocumentTransitionLoadResult {
   file: CanopiFile;
   path: string | null;
   name: string;
+  /** Draft home of a pathless Design. */
+  draftId?: string | null;
+  /** Fingerprint of the loaded file at `path`. */
+  fingerprint?: string | null;
+  /** The home does not hold this content yet. */
+  writePending?: boolean;
 }
 
 export interface DocumentTransitionRequest {
@@ -78,7 +99,6 @@ export type DesignSessionStateStatus =
   | "attached-ready"
   | "loading"
   | "saving"
-  | "autosaving"
   | "tearing-down"
   | "failed";
 
@@ -86,14 +106,8 @@ export interface DesignSessionState {
   readonly status: DesignSessionStateStatus;
   readonly attached: boolean;
   readonly documentLoaded: boolean;
-  readonly operation: DocumentTransitionSource | "save" | "save-as" | "autosave" | "teardown" | null;
+  readonly operation: DocumentTransitionSource | "save" | "save-as" | "teardown" | null;
   readonly error?: unknown;
-}
-
-export interface AutosaveDesignSessionOptions {
-  readonly session: CanvasDocumentSurface;
-  readonly runtimeInitialized: boolean;
-  readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void;
 }
 
 export interface TeardownDesignSessionOptions {
@@ -107,10 +121,12 @@ export interface DesignSessionStateMachineDeps {
   readonly getCurrentSession: () => CanvasDocumentSurface | null;
   readonly selectDesignSavePath: typeof designIpc.selectDesignSavePath;
   readonly prepareDesignWrite: typeof designIpc.prepareDesignWrite;
-  readonly prepareRecoveryWrite: typeof designIpc.prepareRecoveryWrite;
+  readonly prepareDraftWrite: typeof designIpc.prepareDraftWrite;
+  readonly deleteDesignDraft: typeof designIpc.deleteDesignDraft;
   readonly loadDesign: typeof designIpc.loadDesign;
+  readonly createDraftId: () => string;
   readonly showMessage: typeof message;
-  readonly translate: typeof t;
+  readonly requestSaveDecision: typeof requestSaveProblemDecision;
   readonly persistence: DesignSessionPersistence;
   readonly workflowRunner: DesignSessionWorkflowRunner;
 }
@@ -135,11 +151,14 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
   store: designSessionStore,
   getCurrentSession: getCurrentCanvasDocumentSurface,
   selectDesignSavePath: (hint) => designIpc.selectDesignSavePath(hint),
-  prepareDesignWrite: (path) => designIpc.prepareDesignWrite(path),
-  prepareRecoveryWrite: (path) => designIpc.prepareRecoveryWrite(path),
+  prepareDesignWrite: (path, expectedFingerprint, onWritten) =>
+    designIpc.prepareDesignWrite(path, expectedFingerprint, onWritten),
+  prepareDraftWrite: (id) => designIpc.prepareDraftWrite(id),
+  deleteDesignDraft: (id) => designIpc.deleteDesignDraft(id),
   loadDesign: (path) => designIpc.loadDesign(path),
+  createDraftId: () => globalThis.crypto.randomUUID(),
   showMessage: (text, options) => message(text, options),
-  translate: t,
+  requestSaveDecision: requestSaveProblemDecision,
   workflowRunner: createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
 };
 
@@ -151,11 +170,16 @@ export class DesignSessionStateMachine {
   private presentedOperationIntent: number | null = null;
   private transitionIntent = 0;
   private readonly replacement: DesignSessionReplacement;
+  readonly continuousSave: ContinuousSave;
 
   constructor(private readonly deps: DesignSessionStateMachineDeps) {
     this.replacement = createDesignSessionReplacement({
       store: deps.store,
       workflowRunner: deps.workflowRunner,
+    });
+    this.continuousSave = createContinuousSave({
+      store: deps.store,
+      writeHome: (home) => this.writeHome(home),
     });
   }
 
@@ -240,49 +264,22 @@ export class DesignSessionStateMachine {
     this.replacement.attach(session);
   }
 
+  /** Save: write a file home now; a draft home has no file yet, so Save As. */
   async saveCurrentDesign(
     options: SaveCurrentDesignOptions = {},
-  ): Promise<DesignSaveSettlement | null> {
-    return this.saveCurrentDesignForIntent(
-      options,
-      this.claimOperationIntent(),
-      true,
-    );
-  }
-
-  private async saveCurrentDesignForIntent(
-    options: SaveCurrentDesignOptions,
-    operationIntent: number,
-    finishIntent: boolean,
-  ): Promise<DesignSaveSettlement | null> {
-    const session = this.sessionForOption(options.session);
-    let stateStarted = false;
-    try {
-      if (session) this.deps.persistence.attachCanvas(session);
-      this.publishOperationState(
-        operationIntent,
-        this.operationState("saving", "save", session),
-      );
-      stateStarted = true;
-      if (this.deps.store.readDesignPath()) {
-        const save = this.deps.persistence.beginSave();
-        return await save.execute(this.deps.prepareDesignWrite(save.destinationPath));
-      }
-      const saveAs = this.deps.persistence.beginSaveAs();
-      const savedPath = await this.deps.selectDesignSavePath(saveAs.destinationHint);
-      return await saveAs.execute(this.deps.prepareDesignWrite(savedPath));
-    } finally {
-      if (finishIntent) {
-        this.finishOperationState(
-          operationIntent,
-          stateStarted ? this.steadyStateFor(session) : null,
-        );
-      } else if (stateStarted) {
-        this.publishOperationState(operationIntent, this.steadyStateFor(session));
-      }
+  ): Promise<boolean> {
+    if (this.continuousSave.conflict.peek()) {
+      await this.resolveSaveConflict(options);
+      return !this.continuousSave.hasPendingChanges();
     }
+    if (this.continuousSave.readHome()?.kind === "file") {
+      return this.continuousSave.flush();
+    }
+    const settlement = await this.saveAsCurrentDesign(options);
+    return settlement?.status === "applied";
   }
 
+  /** Save As writes a new file unconditionally and makes it the home. */
   async saveAsCurrentDesign(
     options: SaveCurrentDesignOptions = {},
   ): Promise<DesignSaveSettlement | null> {
@@ -297,6 +294,8 @@ export class DesignSessionStateMachine {
       );
       stateStarted = true;
       const saveAs = this.deps.persistence.beginSaveAs();
+      const token = this.continuousSave.sessionToken();
+      const previousHome = this.continuousSave.readHome();
       let path: string;
       try {
         path = await this.deps.selectDesignSavePath(saveAs.destinationHint);
@@ -304,7 +303,144 @@ export class DesignSessionStateMachine {
         if (isCancelled(error)) return null;
         throw error;
       }
-      return await saveAs.execute(this.deps.prepareDesignWrite(path));
+      const settlement = await saveAs.execute(this.deps.prepareDesignWrite(
+        path,
+        null,
+        (fingerprint) => this.continuousSave.recordFileFingerprint(token, path, fingerprint),
+      ));
+      if (settlement.status === "applied") {
+        await this.adoptSavedFileHome(token, previousHome);
+      }
+      return settlement;
+    } finally {
+      this.finishOperationState(
+        operationIntent,
+        stateStarted ? this.steadyStateFor(session) : null,
+      );
+    }
+  }
+
+  /** Ask how to resolve a file that changed outside Canopi, then act on it. */
+  async resolveSaveConflict(
+    options: SaveCurrentDesignOptions = {},
+  ): Promise<DocumentTransitionResult | null> {
+    const conflict = this.continuousSave.conflict.peek();
+    if (!conflict) return null;
+    const choice = await this.deps.requestSaveDecision({
+      kind: "conflict",
+      fileGone: conflict.fileGone,
+    });
+    if (choice === "keep-mine") {
+      await this.continuousSave.overwriteHome();
+      return null;
+    }
+    if (choice === "save-copy") {
+      await this.saveAsCurrentDesign(options);
+      return null;
+    }
+    const path = this.deps.store.readDesignPath();
+    if (choice !== "use-file" || conflict.fileGone || !path) return null;
+    return this.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "skip",
+      session: options.session,
+      load: async () => {
+        const loaded = await this.deps.loadDesign(path);
+        return {
+          file: loaded.file,
+          path,
+          name: loaded.file.name,
+          fingerprint: loaded.fingerprint,
+        };
+      },
+    });
+  }
+
+  /** Replace the Design with the version it had when this session began. */
+  revertToOpenedVersion(
+    options: SaveCurrentDesignOptions = {},
+  ): Promise<DocumentTransitionResult> {
+    const snapshot = this.continuousSave.readSnapshot();
+    const home = this.continuousSave.readHome();
+    const session = this.sessionForOption(options.session);
+    if (!snapshot || !home) return Promise.resolve(cancelledResult(session));
+    return this.deps.requestSaveDecision({ kind: "revert" }).then((choice) => {
+      if (choice !== "revert") return cancelledResult(session);
+      return this.revertTo(snapshot, home, options);
+    });
+  }
+
+  private revertTo(
+    snapshot: CanopiFile,
+    home: DesignHome,
+    options: SaveCurrentDesignOptions,
+  ): Promise<DocumentTransitionResult> {
+    return this.transitionDocument({
+      source: "revert",
+      dirtyGuard: "skip",
+      session: options.session,
+      load: async () => ({
+        file: snapshot,
+        path: home.kind === "file" ? home.path : null,
+        name: snapshot.name,
+        draftId: home.kind === "draft" ? home.id : null,
+        fingerprint: home.kind === "file" ? home.fingerprint : null,
+        writePending: true,
+      }),
+    });
+  }
+
+  private async adoptSavedFileHome(
+    token: object | null,
+    previousHome: DesignHome | null,
+  ): Promise<void> {
+    this.continuousSave.rehome(token, { draftId: null });
+    if (previousHome?.kind !== "draft") return;
+    // A draft write already in flight must land before its draft is deleted.
+    await this.continuousSave.idle();
+    try {
+      await this.deps.deleteDesignDraft(previousHome.id);
+    } catch (error) {
+      console.error("Failed to delete a Design Draft after Save As:", error);
+    }
+  }
+
+  private async writeHome(home: DesignHome): Promise<HomeWriteOutcome> {
+    const operationIntent = this.claimOperationIntent();
+    // Continuous writes go through whichever Canvas holds the persistence lease.
+    const session = this.deps.persistence.attachedCanvas();
+    let stateStarted = false;
+    try {
+      this.publishOperationState(
+        operationIntent,
+        this.operationState("saving", "save", session),
+      );
+      stateStarted = true;
+      if (home.kind === "file") {
+        const token = this.continuousSave.sessionToken();
+        const save = this.deps.persistence.beginSave();
+        if (save.destinationPath !== home.path) {
+          throw new Error("Design file home does not match the saved path");
+        }
+        await save.execute(this.deps.prepareDesignWrite(
+          home.path,
+          home.fingerprint,
+          (fingerprint) => this.continuousSave.recordFileFingerprint(
+            token,
+            home.path,
+            fingerprint,
+          ),
+        ));
+      } else {
+        const save = this.deps.persistence.beginSnapshotSave();
+        await save.execute(this.deps.prepareDraftWrite(home.id));
+      }
+      return { kind: "written" };
+    } catch (error) {
+      if (error instanceof DesignHomeConflictError) {
+        return { kind: "conflict", fileGone: error.fileGone };
+      }
+      throw error;
     } finally {
       this.finishOperationState(
         operationIntent,
@@ -403,15 +539,13 @@ export class DesignSessionStateMachine {
       }
 
       if (
-        request.dirtyGuard === "confirm"
+        request.dirtyGuard === "flush"
         && (!retainedReplacementRetry || !retainedReplacementWasAuthorized)
       ) {
-        const decision = await this.confirmReplacement(
-          session,
+        const decision = await this.flushBeforeReplacement(
           retainedReplacementRetry
             ? () => transitionIsCurrent() && designBaselineIsCurrent()
             : replacementIsCurrent,
-          operationIntent,
         );
         if (decision === "cancel") {
           publishCompletionIfOwned(this.steadyStateFor(session));
@@ -432,11 +566,18 @@ export class DesignSessionStateMachine {
         }
         assertReplacementAttemptCurrent();
 
+        const home: DesignSessionHomeInput = {
+          draftId: loaded.path ? null : loaded.draftId ?? null,
+          fingerprint: loaded.path ? loaded.fingerprint ?? null : null,
+          writePending: loaded.writePending ?? false,
+        };
         const replacementInput = {
           file: loaded.file,
           kind: request.source === "new" ? "new" as const : "loaded" as const,
           path: loaded.path,
           name: loaded.name,
+          finalizationIdentity: `home:${JSON.stringify(home)}`,
+          onDesignFinalized: () => this.continuousSave.beginSession(home),
         };
         if (
           retainedReplacementRetry
@@ -526,6 +667,8 @@ export class DesignSessionStateMachine {
           file: cloneDocument(queuedTemplate.file),
           path: null,
           name: queuedTemplate.name,
+          draftId: this.deps.createDraftId(),
+          writePending: true,
         }),
         isStillPending: () =>
           this.deps.store.readPendingTemplateImport()?.identity === queuedTemplate.identity,
@@ -546,11 +689,12 @@ export class DesignSessionStateMachine {
       source: "queued-path",
       label: nameFromPath(queuedPath),
       load: async () => {
-        const file = await this.deps.loadDesign(queuedPath);
+        const loaded = await this.deps.loadDesign(queuedPath);
         return {
-          file,
+          file: loaded.file,
           path: queuedPath,
-          name: file.name,
+          name: loaded.file.name,
+          fingerprint: loaded.fingerprint,
         };
       },
       isStillPending: () => this.deps.store.readPendingDesignPath() === queuedPath,
@@ -560,45 +704,6 @@ export class DesignSessionStateMachine {
         }
       },
     });
-  }
-
-  async autosaveDesignSession({
-    session,
-    runtimeInitialized,
-    logError,
-  }: AutosaveDesignSessionOptions): Promise<boolean> {
-    if (!this.deps.store.isDesignDirty()) return false;
-    if (!runtimeInitialized) return false;
-
-    const operationIntent = this.claimOperationIntent();
-    let stateStarted = false;
-    try {
-      this.deps.persistence.attachCanvas(session);
-      this.publishOperationState(
-        operationIntent,
-        this.operationState("autosaving", "autosave", session),
-      );
-      stateStarted = true;
-      try {
-        const operation = this.deps.persistence.beginRecovery();
-        return await operation.execute(
-          this.deps.prepareRecoveryWrite(operation.destinationHint),
-        );
-      } catch (error) {
-        logError(
-          error instanceof DesignPersistenceSettlementError
-            ? "Autosave settlement failed:"
-            : "Autosave failed:",
-          error,
-        );
-        return false;
-      }
-    } finally {
-      this.finishOperationState(
-        operationIntent,
-        stateStarted ? this.steadyStateFor(session) : null,
-      );
-    }
   }
 
   teardownAttachedDesignSession({
@@ -705,47 +810,22 @@ export class DesignSessionStateMachine {
     };
   }
 
-  private async confirmReplacement(
-    session: CanvasDocumentSurface | null,
+  private async flushBeforeReplacement(
     replacementIsCurrent: () => boolean,
-    operationIntent: number,
   ): Promise<ReplacementDecision> {
     if (!this.deps.store.hasCurrentDesign()) return "proceed";
-    if (!this.deps.store.isDesignDirty()) return "proceed";
-
-    const saveLabel = this.deps.translate("canvas.file.save");
-    const discardLabel = this.deps.translate("canvas.file.dontSave");
-    const cancelLabel = this.deps.translate("canvas.file.cancel");
-
-    const result = await this.deps.showMessage(this.deps.translate("canvas.file.unsavedChanges"), {
-      title: this.deps.translate("canvas.file.unsavedChanges"),
-      kind: "warning",
-      buttons: {
-        yes: saveLabel,
-        no: discardLabel,
-        cancel: cancelLabel,
-      },
-    });
-
-    if (!replacementIsCurrent()) return "cancel";
-    if (result === cancelLabel) return "cancel";
-    if (result === saveLabel) {
-      try {
-        const settlement = await this.saveCurrentDesignForIntent(
-          { session },
-          operationIntent,
-          false,
-        );
-        if (settlement?.status !== "applied" || this.deps.store.isDesignDirty()) {
-          return "cancel";
-        }
-      } catch (error) {
-        if (isCancelled(error)) return "cancel";
-        throw error;
-      }
+    for (;;) {
+      if (await this.continuousSave.flush()) return "proceed";
+      if (!replacementIsCurrent()) return "cancel";
+      const choice = await this.deps.requestSaveDecision({
+        kind: "flush-failed",
+        purpose: "replace",
+        conflict: this.continuousSave.conflict.peek() !== null,
+      });
+      if (!replacementIsCurrent()) return "cancel";
+      if (choice === "discard") return "proceed";
+      if (choice === "cancel") return "cancel";
     }
-
-    return "proceed";
   }
 
   private sessionForTransition(request: DocumentTransitionRequest): CanvasDocumentSurface | null {

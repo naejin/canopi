@@ -1239,7 +1239,7 @@ const FORBIDDEN_EXPORT_POLICIES = [
     kind: 'forbid-exports',
     name: 'Design IPC does not expose retired write orchestration',
     from: ['src/ipc/design.ts'],
-    names: ['saveDesignAs', 'saveDesign', 'autosaveDesign'],
+    names: ['saveDesignAs', 'saveDesign', 'saveDesignDraft', 'autosaveDesign', 'prepareRecoveryWrite'],
   },
 ] satisfies readonly ArchitecturePolicy[]
 

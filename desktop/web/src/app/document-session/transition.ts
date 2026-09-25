@@ -4,7 +4,6 @@ import type { DesignTemplateEnvelope } from "../design-template-import/types";
 import * as designIpc from "../../ipc/design";
 import {
   createDesignSessionStateMachine,
-  type AutosaveDesignSessionOptions,
   type DocumentTransitionResult,
   type QueuedDocumentLoadOptions,
   type SaveCurrentDesignOptions,
@@ -20,7 +19,6 @@ export {
   createDesignSessionStateMachine,
   isCancelled,
   nameFromPath,
-  type AutosaveDesignSessionOptions,
   type DesignSessionState,
   type DesignSessionStateMachineDeps,
   type DesignSessionStateStatus,
@@ -73,10 +71,26 @@ export function consumeQueuedDocumentLoad(
   return designSessionStateMachine.consumeQueuedDocumentLoad(session, options);
 }
 
+/** The continuous-save core of the Desktop Design Session. */
+export const designContinuousSave = designSessionStateMachine.continuousSave;
+
+/** Install continuous save for the Desktop application lifetime. */
+export function installDesignContinuousSave(): () => void {
+  return designContinuousSave.install();
+}
+
 export function saveCurrentDesign(
   options: SaveCurrentDesignOptions = {},
-): Promise<DesignSaveSettlement | null> {
+): Promise<boolean> {
   return designSessionStateMachine.saveCurrentDesign(options);
+}
+
+export function resolveDesignSaveConflict(): Promise<DocumentTransitionResult | null> {
+  return designSessionStateMachine.resolveSaveConflict();
+}
+
+export function revertDesignSessionToOpenedVersion(): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.revertToOpenedVersion();
 }
 
 export function saveAsCurrentDesign(
@@ -88,10 +102,10 @@ export function saveAsCurrentDesign(
 export function openDesignSessionFromDialog(): Promise<DocumentTransitionResult> {
   return designSessionStateMachine.transitionDocument({
     source: "open-dialog",
-    dirtyGuard: "confirm",
+    dirtyGuard: "flush",
     load: async () => {
-      const { file, path } = await designIpc.openDesignDialog();
-      return { file, path, name: file.name };
+      const { file, path, fingerprint } = await designIpc.openDesignDialog();
+      return { file, path, name: file.name, fingerprint };
     },
   });
 }
@@ -102,11 +116,11 @@ export function openDesignSessionFromPath(
 ): Promise<DocumentTransitionResult> {
   return designSessionStateMachine.transitionDocument({
     source: "open-path",
-    dirtyGuard: "confirm",
+    dirtyGuard: "flush",
     session: options.session,
     load: async () => {
-      const file = await designIpc.loadDesign(path);
-      return { file, path, name: file.name };
+      const { file, fingerprint } = await designIpc.loadDesign(path);
+      return { file, path, name: file.name, fingerprint };
     },
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
@@ -124,14 +138,17 @@ export function openTemplateDesignSession(
     file: cloneDocument(template.file),
     name: template.name,
   };
+  const draftId = createDraftId();
   return designSessionStateMachine.transitionDocument({
     source: "template",
-    dirtyGuard: "confirm",
+    dirtyGuard: "flush",
     session: options.session,
     load: async () => ({
       file: cloneDocument(envelope.file),
       path: null,
       name: envelope.name,
+      draftId,
+      writePending: true,
     }),
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
@@ -141,21 +158,28 @@ export function openTemplateDesignSession(
 }
 
 export function createNewDesignSession(): Promise<DocumentTransitionResult> {
+  const draftId = createDraftId();
   return designSessionStateMachine.transitionDocument({
     source: "new",
-    dirtyGuard: "confirm",
+    dirtyGuard: "flush",
     load: async () => ({
       file: await designIpc.newDesign(),
       path: null,
       name: "Untitled",
+      draftId,
     }),
   });
 }
 
-export function autosaveDesignSession(
-  options: AutosaveDesignSessionOptions,
-): Promise<boolean> {
-  return designSessionStateMachine.autosaveDesignSession(options);
+export function openDesignDraftSession(id: string): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.transitionDocument({
+    source: "open-draft",
+    dirtyGuard: "flush",
+    load: async () => {
+      const file = await designIpc.loadDesignDraft(id);
+      return { file, path: null, name: file.name, draftId: id };
+    },
+  });
 }
 
 export function teardownAttachedDesignSession(options: TeardownDesignSessionOptions): void {
@@ -164,4 +188,14 @@ export function teardownAttachedDesignSession(options: TeardownDesignSessionOpti
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile;
+}
+
+function createDraftId(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    designContinuousSave.dispose();
+  });
 }

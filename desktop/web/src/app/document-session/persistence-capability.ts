@@ -11,7 +11,6 @@ export interface DesignSessionPersistenceCapture {
     readonly canvasDetached?: boolean
   }): 'applied' | 'stale'
   updatePath(path: string): boolean
-  setAutosaveFailed(failed: boolean): boolean
 }
 
 const persistenceCaptures = new WeakMap<

@@ -227,11 +227,8 @@
       "open": "설계 열기",
       "save": "저장",
       "saveAs": "다른 이름으로 저장",
-      "unsavedChanges": "저장되지 않은 변경 사항",
-      "saveBeforeClose": "닫기 전에 저장하시겠습니까?",
-      "saveBeforeCloseMessage": "저장되지 않은 변경 사항이 있습니다. 닫기 전에 저장하시겠습니까?",
-      "dontSave": "저장 안 함",
-      "cancel": "취소"
+      "cancel": "취소",
+      "revert": "열었을 때 버전으로 되돌리기"
     },
     "layers": {
       "layerPanel": "레이어",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Canopi 정보"
   },
   "titleBar": {
-    "unsavedChanges": "저장되지 않은 변경사항",
     "untitledDesign": "제목 없는 디자인",
     "renameDesignName": "디자인 이름 바꾸기",
     "designNameInput": "디자인 이름"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "피처 {{feature}}의 지오메트리가 올바르지 않습니다.",
       "invalid_coordinates": "피처 {{feature}}의 좌표가 WGS84 경도/위도 범위를 벗어났습니다."
     }
+  },
+  "saveStatus": {
+    "saving": "저장 중…",
+    "saved": "저장됨",
+    "error": "저장하지 못함",
+    "retry": "다시 시도",
+    "conflict": "Canopi 외부에서 변경됨"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "변경 사항을 저장하지 못했습니다",
+    "flushFailedMessage": "Canopi가 최근 변경 사항을 기록하지 못했습니다. 다시 시도하거나 변경 사항을 버리고 계속하세요.",
+    "flushFailedCloseMessage": "Canopi가 최근 변경 사항을 기록하지 못했습니다. 다시 시도하거나 저장하지 않고 닫으세요.",
+    "conflictPendingMessage": "이 파일이 Canopi 외부에서 변경되어 최근 변경 사항이 기록되지 않았습니다. 변경 사항을 버리고 계속하거나, 취소하고 먼저 변경을 해결하세요.",
+    "retry": "다시 시도",
+    "discard": "변경 사항 버리기",
+    "closeWithoutSaving": "저장하지 않고 닫기",
+    "conflictTitle": "Canopi 외부에서 변경됨",
+    "conflictMessage": "Canopi가 마지막으로 저장한 뒤 다른 프로그램이 이 파일을 변경했습니다. 유지할 버전을 선택하세요.",
+    "fileGoneTitle": "파일이 이동되거나 삭제됨",
+    "fileGoneMessage": "이 디자인이 저장된 파일이 이동되거나 삭제되었습니다. 내 버전을 다시 저장하거나 다른 위치에 저장하세요.",
+    "keepMine": "내 버전 유지",
+    "useFile": "파일 버전 사용",
+    "saveCopy": "내 버전을 사본으로 저장…",
+    "saveElsewhere": "다른 이름으로 저장…",
+    "revertTitle": "열었을 때 버전으로 되돌릴까요?",
+    "revertMessage": "이 디자인을 연 이후의 모든 변경 사항이 대체됩니다.",
+    "revertConfirm": "되돌리기"
+  },
+  "drafts": {
+    "title": "초안",
+    "delete": "초안 삭제: {{name}}",
+    "confirmDelete": "이 초안을 삭제할까요?",
+    "confirmDeleteAction": "삭제"
   }
 }

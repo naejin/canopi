@@ -67,7 +67,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     theme: 'light',
     snap_to_grid: true,
     snap_to_guides: true,
-    auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: null,
     basemap_style: 'liberty',
@@ -97,12 +96,14 @@ function shellCommandProjection({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled,
+    revertAvailable: false,
     geoJsonEnabled: downloadCanopiEnabled,
     templatesEnabled,
     capabilities: {
       newDesign: () => undefined,
       openCanopi: () => undefined,
       downloadCanopi: () => undefined,
+      revertDesign: () => undefined,
       importGeoJson: () => undefined,
       exportGeoJson: () => undefined,
       navigate: navigateTo,
@@ -148,6 +149,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.revert',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
       'file.importGeoJson',
@@ -203,6 +205,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.revert',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
       'file.importGeoJson',
@@ -221,6 +224,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
+      'file.revert',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
       'file.importGeoJson',
@@ -431,6 +435,7 @@ describe('Web Edition Browser App Shell', () => {
       newDesign: vi.fn(),
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
+      revertDesign: vi.fn(),
       importGeoJson: vi.fn(),
       exportGeoJson: vi.fn(),
       navigate: vi.fn(),
@@ -440,6 +445,7 @@ describe('Web Edition Browser App Shell', () => {
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
+      revertAvailable: false,
       geoJsonEnabled: true,
       templatesEnabled: false,
       capabilities,
@@ -555,6 +561,9 @@ describe('Web Edition Browser App Shell', () => {
     expect(store.readDesignName()).toBe('Terrace Garden')
     expect(store.readCurrentDesign()?.name).toBe('Terrace Garden')
     expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Terrace Garden')
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
     expect(appDataStore.listDrafts()[0]?.name).toBe('Terrace Garden')
   })
 
@@ -574,7 +583,7 @@ describe('Web Edition Browser App Shell', () => {
       ...design,
       description: 'Recovered after reload',
     }))
-    seedController.saveCurrentDraft()
+    await seedController.continuousSave.flush()
 
     const store = createMemoryDesignSessionStore()
     const controller = createBrowserDesignSessionController({
@@ -637,7 +646,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(fileAdapter.downloadCanopiFile).toHaveBeenCalledOnce()
   })
 
-  it('shows the active Browser Design identity and dirty state in the top bar', async () => {
+  it('shows the active Browser Design identity and continuous-save status in the top bar', async () => {
     const store = createMemoryDesignSessionStore()
     const storage = memoryStorage()
     const appDataStore = createBrowserAppDataStore({ storage })
@@ -660,19 +669,36 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Canopi')
+    expect(container.querySelector('[data-save-status]')).toBeNull()
 
     await clickShellCommand(container, 'file.new')
 
     expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')
-    expect(container.querySelector('[data-web-design-dirty]')).toBeNull()
+    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saved')
 
     storage.failWrites = true
     await act(async () => {
       editDesignSessionForTest(store, (design) => ({ ...design, description: 'Browser edit' }))
     })
+    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saving…')
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')
-    expect(container.querySelector('[data-web-design-dirty]')).not.toBeNull()
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
+    const status = container.querySelector('[data-save-status]')
+    expect(status?.getAttribute('data-save-status')).toBe('error')
+    expect(status?.textContent).toContain("Couldn't save")
+
+    storage.failWrites = false
+    await act(async () => {
+      status?.querySelector('button')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await controller.continuousSave.flush()
+    })
+    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saved')
+    expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
   })
 })
 

@@ -10,12 +10,14 @@ describe('Web Edition shell projection', () => {
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: false,
+      revertAvailable: false,
       geoJsonEnabled: false,
       templatesEnabled: false,
       capabilities: {
         newDesign: () => undefined,
         openCanopi: () => undefined,
         downloadCanopi: () => undefined,
+        revertDesign: () => undefined,
         importGeoJson: () => undefined,
         exportGeoJson: () => undefined,
         navigate: () => undefined,
@@ -32,6 +34,7 @@ describe('Web Edition shell projection', () => {
         commandIds: [
           'file.new',
           'file.openCanopi',
+          'file.revert',
           'file.downloadCanopi',
           'file.exportCanvasPdf',
           'file.importGeoJson',
@@ -48,8 +51,34 @@ describe('Web Edition shell projection', () => {
     ])
 
     expect(projection.menus[0]?.items.find((item) => item.id === 'file.downloadCanopi')?.disabled).toBe(true)
+    expect(projection.menus[0]?.items.find((item) => item.id === 'file.revert')?.disabled).toBe(true)
     expect(projection.menus[0]?.items.find((item) => item.id === 'file.importGeoJson')?.disabled).toBe(true)
     expect(projection.menus[0]?.items.find((item) => item.id === 'file.exportGeoJson')?.disabled).toBe(true)
+  })
+
+  it('enables Revert only after the open Design changed and routes it to the controller', () => {
+    const revertDesign = vi.fn(async () => true)
+    const capabilities = createBrowserShellCapabilities({
+      newDesign: vi.fn(async () => undefined),
+      openCanopi: vi.fn(async () => true),
+      downloadCanopi: vi.fn(async () => undefined),
+      revertDesign,
+    }, vi.fn(), { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
+    const project = (revertAvailable: boolean) => createBrowserShellCommandProjection({
+      currentPanel: 'canvas',
+      currentSidePanel: null,
+      downloadCanopiEnabled: true,
+      revertAvailable,
+      geoJsonEnabled: true,
+      templatesEnabled: false,
+      capabilities: { ...capabilities, navigate: () => undefined, toggleTheme: () => undefined },
+    })
+
+    expect(project(false).commands.get('file.revert')?.disabled).toBe(true)
+    const changed = project(true).commands.get('file.revert')
+    expect(changed?.disabled).toBe(false)
+    changed?.action()
+    expect(revertDesign).toHaveBeenCalledOnce()
   })
 
   it('routes GeoJSON commands to the shared GeoJSON workflow', async () => {
@@ -61,11 +90,13 @@ describe('Web Edition shell projection', () => {
       newDesign: vi.fn(async () => undefined),
       openCanopi: vi.fn(async () => true),
       downloadCanopi: vi.fn(async () => undefined),
+      revertDesign: vi.fn(async () => true),
     }, vi.fn(), geoJson)
     const projection = createBrowserShellCommandProjection({
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
+      revertAvailable: false,
       geoJsonEnabled: true,
       templatesEnabled: false,
       capabilities: { ...capabilities, navigate: () => undefined, toggleTheme: () => undefined },
@@ -85,6 +116,7 @@ describe('Web Edition shell projection', () => {
       newDesign: vi.fn(async () => undefined),
       openCanopi: vi.fn(async () => { throw failure }),
       downloadCanopi: vi.fn(async () => undefined),
+      revertDesign: vi.fn(async () => true),
     }, onError, { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
 
     capabilities.openCanopi()

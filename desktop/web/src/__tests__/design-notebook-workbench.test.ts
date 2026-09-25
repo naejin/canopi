@@ -607,7 +607,7 @@ describe('design notebook workbench', () => {
     const admittedDesign = testDesign()
     const currentDesign = signal<CanopiFile | null>(admittedDesign)
     const pendingRemoval = deferred<void>()
-    const saveCurrent = vi.fn().mockResolvedValue(null)
+    const saveCurrent = vi.fn().mockResolvedValue(false)
     const saveAsCurrent = vi.fn().mockResolvedValue(null)
     const workbench = createDesignNotebookWorkbench({
       activePath,
@@ -669,9 +669,7 @@ describe('design notebook workbench', () => {
       currentDesign,
       loadNotebook,
       openDesign: vi.fn(),
-      saveCurrent: vi.fn().mockResolvedValue(
-        appliedSave(savedDesign, '/designs/current.canopi'),
-      ),
+      saveCurrent: vi.fn().mockResolvedValue(true),
       saveAsCurrent: vi.fn(),
       addDesignReference,
       deleteSection,

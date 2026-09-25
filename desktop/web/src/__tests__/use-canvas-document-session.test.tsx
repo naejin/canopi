@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanopiFile } from "../types/design";
 
 const mocks = vi.hoisted(() => ({
-  autosaveDesignSession: vi.fn(async () => true),
   beginEmptyDocumentSession: vi.fn((session: any) => {
     session.hideCanvasChrome();
   }),
@@ -83,7 +82,6 @@ vi.mock("../app/document-session/transition", async (importOriginal) => {
   return {
     ...actual,
     beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
-    autosaveDesignSession: mocks.autosaveDesignSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
     startAttachedDesignSession: mocks.startAttachedDesignSession,
     teardownAttachedDesignSession: mocks.teardownAttachedDesignSession,
@@ -105,10 +103,8 @@ import {
 } from "../canvas/session";
 import { createTestCanvasRuntimeSurfaces } from "./support/canvas-runtime-surfaces";
 import { createCanvasDocumentReplacementToken } from "../canvas/runtime/runtime";
-import { autoSaveIntervalMs } from "../app/settings/state";
 import {
   designSessionFixture,
-  autosaveFailed,
   currentDesign,
   resetDirtyBaselines,
 } from "./support/design-session-state";
@@ -171,7 +167,6 @@ describe("useCanvasDocumentSession", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    mocks.autosaveDesignSession.mockClear();
     mocks.beginEmptyDocumentSession.mockClear();
     mocks.cancelQueuedLoad.mockReset();
     mocks.cancelQueuedLoad.mockImplementation(() => {});
@@ -212,9 +207,7 @@ describe("useCanvasDocumentSession", () => {
     designSessionFixture.file = null;
     designSessionFixture.name = "Demo";
     designSessionFixture.path = "/designs/demo.canopi";
-    autoSaveIntervalMs.value = 100;
     resetDirtyBaselines();
-    designSessionFixture.autosaveFailed = false;
   });
 
   afterEach(() => {
@@ -352,12 +345,6 @@ describe("useCanvasDocumentSession", () => {
     expect(mocks.cancelQueuedLoad).not.toHaveBeenCalled();
     expect(mocks.flushSettingsProjection).not.toHaveBeenCalled();
 
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledOnce();
-
     await mountHarness(container);
 
     expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(2);
@@ -456,19 +443,6 @@ describe("useCanvasDocumentSession", () => {
     expect(currentCanvasSession.value).toBe(null);
 
     await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
-
-    await act(async () => {
-      autoSaveIntervalMs.value = 250;
-      vi.advanceTimersByTime(250);
-      await flushMicrotasks();
-    });
-    expect(mocks.autosaveDesignSession).not.toHaveBeenCalled();
-
-    await act(async () => {
       render(null, container);
     });
     await mountHarness(container);
@@ -528,40 +502,6 @@ describe("useCanvasDocumentSession", () => {
 
     expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
-  });
-
-  it("recreates autosave on interval changes", async () => {
-    designSessionFixture.file = makeDesign();
-    designSessionFixture.detachedCanvasDirty = true;
-
-    await mountHarness(container);
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      autoSaveIntervalMs.value = 250;
-      await flushMicrotasks();
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(150);
-      await flushMicrotasks();
-    });
-
-    expect(mocks.autosaveDesignSession).toHaveBeenCalledTimes(2);
-    expect(autosaveFailed.value).toBe(false);
   });
 
 });

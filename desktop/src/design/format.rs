@@ -73,37 +73,55 @@ impl fmt::Display for DesignLoadError {
 
 impl std::error::Error for DesignLoadError {}
 
-/// Save a `CanopiFile` to disk durably.
-///
-/// Steps:
-/// 1. If the target file already exists, copy it to `{path}.prev` as a backup.
-/// 2. Durably replace `{path}` through an operation-owned temporary
-///    ([`super::write_file_durably`]).
-pub fn save_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(content)
-        .map_err(|e| format!("Failed to serialize design: {e}"))?;
-    let backup = path.with_extension("canopi.prev");
-    super::with_write_admissions(&[path, backup.as_path()], || {
-        save_to_file_admitted(path, &backup, &json)
-    })
+/// Encode a Design as `.canopi` wire bytes: the one encoder for saves and drafts.
+pub(crate) fn encode_design(content: &CanopiFile) -> Result<Vec<u8>, String> {
+    serde_json::to_vec_pretty(content).map_err(|e| format!("Failed to serialize design: {e}"))
 }
 
-fn save_to_file_admitted(path: &Path, backup: &Path, json: &str) -> Result<(), String> {
-    // Backup the existing file, ignoring errors (e.g. first save).
-    if path.exists()
-        && let Err(e) = std::fs::copy(path, backup)
-    {
-        tracing::warn!("Could not create the previous-version backup of a Design: {e}");
-    }
+/// Result of [`save_to_file`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SaveResult {
+    /// Written; the fingerprint of the bytes now on disk.
+    Saved { fingerprint: String },
+    /// The file no longer has the expected fingerprint; nothing was written.
+    Conflict { current_fingerprint: Option<String> },
+}
 
-    super::write_file_durably(path, json.as_bytes(), "tmp")
-        .map_err(|e| format!("Failed to save {}: {e}", path.display()))
+/// Durably save a `CanopiFile` to `path`.
+///
+/// With `expected_fingerprint`, the write happens only while the file on disk
+/// still has that fingerprint (a missing file has none); otherwise nothing is
+/// written and the current fingerprint is returned. `None` overwrites
+/// unconditionally (Save As, or keeping this copy over an outside change). The
+/// check and the write run under one write admission for the target.
+pub(crate) fn save_to_file(
+    path: &Path,
+    content: &CanopiFile,
+    expected_fingerprint: Option<&str>,
+) -> Result<SaveResult, String> {
+    let bytes = encode_design(content)?;
+    super::with_write_admission(path, || {
+        if let Some(expected) = expected_fingerprint {
+            let current = super::fingerprint_file(path)
+                .map_err(|e| format!("Failed to check {} before saving: {e}", path.display()))?;
+            if current.as_deref() != Some(expected) {
+                return Ok(SaveResult::Conflict {
+                    current_fingerprint: current,
+                });
+            }
+        }
+        super::write_file_durably(path, &bytes, "tmp")
+            .map_err(|e| format!("Failed to save {}: {e}", path.display()))?;
+        Ok(SaveResult::Saved {
+            fingerprint: super::fingerprint(&bytes),
+        })
+    })
 }
 
 /// Write a standalone `.canopi` export (a Saved Object Stamp file).
 ///
-/// An export is derived output: it never gets a `.canopi.prev` backup and is
-/// not a Design save.
+/// An export is derived output, not a Design save: it has no fingerprint check
+/// and is not recorded as a Recent Design.
 pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
     let json = serde_json::to_string_pretty(content)
         .map_err(|e| format!("Failed to serialize design: {e}"))?;
@@ -117,6 +135,11 @@ pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
 /// strict version and root-key admission, then deserializes `CanopiFile`.
 /// Unknown root fields are preserved in `CanopiFile::extra`.
 pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError> {
+    load_with_fingerprint(path).map(|(file, _)| file)
+}
+
+/// [`load_from_file`] plus the [`super::fingerprint`] of the exact bytes read.
+pub(crate) fn load_with_fingerprint(path: &Path) -> Result<(CanopiFile, String), DesignLoadError> {
     use std::io::Read;
     let display = || path.display().to_string();
     let file = std::fs::File::open(path).map_err(|source| DesignLoadError::Read {
@@ -133,11 +156,11 @@ pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError>
     if length > MAX_CANOPI_FILE_BYTES {
         return Err(DesignLoadError::TooLarge { path: display() });
     }
-    let mut content = String::new();
+    let mut content = Vec::new();
     // Read one byte past the limit so a file that grows while it is read is
     // still refused without buffering it whole.
     file.take(MAX_CANOPI_FILE_BYTES + 1)
-        .read_to_string(&mut content)
+        .read_to_end(&mut content)
         .map_err(|source| DesignLoadError::Read {
             path: display(),
             source,
@@ -145,17 +168,19 @@ pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError>
     if content.len() as u64 > MAX_CANOPI_FILE_BYTES {
         return Err(DesignLoadError::TooLarge { path: display() });
     }
+    let fingerprint = super::fingerprint(&content);
 
     let value: serde_json::Value =
-        serde_json::from_str(&content).map_err(|source| DesignLoadError::InvalidJson {
+        serde_json::from_slice(&content).map_err(|source| DesignLoadError::InvalidJson {
             path: display(),
             source,
         })?;
 
-    decode_design_value(value).map_err(|source| DesignLoadError::Ingestion {
+    let file = decode_design_value(value).map_err(|source| DesignLoadError::Ingestion {
         path: display(),
         source,
-    })
+    })?;
+    Ok((file, fingerprint))
 }
 
 #[expect(
@@ -432,7 +457,7 @@ mod tests {
         let path: PathBuf = dir.join("canopi_test_round_trip.canopi");
 
         let original = create_default();
-        save_to_file(&path, &original).expect("save should succeed");
+        save_to_file(&path, &original, None).expect("save should succeed");
         assert!(path.exists());
 
         let loaded = load_from_file(&path).expect("load should succeed");
@@ -442,7 +467,6 @@ mod tests {
 
         // Clean up
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
@@ -472,7 +496,7 @@ mod tests {
             let writer = std::thread::spawn(move || {
                 started_tx.send(()).unwrap();
                 finished_tx
-                    .send(save_to_file(&writer_path, &replacement))
+                    .send(save_to_file(&writer_path, &replacement, None))
                     .unwrap();
             });
             started_rx.recv().unwrap();
@@ -496,59 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn primary_save_waits_for_admitted_stable_backup_target() {
-        use std::sync::mpsc;
-        use std::time::Duration;
-
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_save_family_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let primary_path = dir.join("garden.canopi");
-        let backup_path = primary_path.with_extension("canopi.prev");
-        let mut design = create_default();
-        design.name = "Overlapping backup target".to_owned();
-        let writer_path = primary_path.clone();
-        let (started_tx, started_rx) = mpsc::channel();
-        let (finished_tx, finished_rx) = mpsc::channel();
-
-        let writer = crate::design::with_write_admission(&backup_path, || {
-            let writer = std::thread::spawn(move || {
-                started_tx.send(()).unwrap();
-                finished_tx
-                    .send(save_to_file(&writer_path, &design))
-                    .unwrap();
-            });
-            started_rx.recv().unwrap();
-            assert!(
-                finished_rx
-                    .recv_timeout(Duration::from_millis(250))
-                    .is_err(),
-                "a primary save entered while its stable backup target was admitted"
-            );
-            writer
-        });
-
-        finished_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("primary save should continue after backup admission releases")
-            .expect("primary save should succeed");
-        writer.join().unwrap();
-        assert_eq!(
-            load_from_file(&primary_path).unwrap().name,
-            "Overlapping backup target"
-        );
-
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn concurrent_saves_preserve_final_and_previous_designs() {
+    fn concurrent_saves_leave_one_complete_design() {
         use std::sync::{Arc, Barrier};
 
         let dir = std::env::temp_dir().join(format!(
@@ -563,7 +535,7 @@ mod tests {
         let path = dir.join("garden.canopi");
         let mut initial = create_default();
         initial.name = "Initial".to_owned();
-        save_to_file(&path, &initial).unwrap();
+        save_to_file(&path, &initial, None).unwrap();
 
         let writer_count = 8;
         let barrier = Arc::new(Barrier::new(writer_count + 1));
@@ -578,7 +550,7 @@ mod tests {
             let writer_barrier = Arc::clone(&barrier);
             writers.push(std::thread::spawn(move || {
                 writer_barrier.wait();
-                save_to_file(&writer_path, &design)
+                save_to_file(&writer_path, &design, None)
             }));
         }
         barrier.wait();
@@ -587,10 +559,7 @@ mod tests {
         }
 
         let final_design = load_from_file(&path).unwrap();
-        let previous_design = load_from_file(&path.with_extension("canopi.prev")).unwrap();
         assert!(expected_names.contains(&final_design.name));
-        assert!(expected_names.contains(&previous_design.name));
-        assert_ne!(final_design.name, previous_design.name);
         assert!(
             owned_sidecars(&dir, "tmp").is_empty(),
             "concurrent saves must not leak owned temporary sidecars"
@@ -617,7 +586,7 @@ mod tests {
         let path: PathBuf = dir.join("garden.canopi");
 
         let design = create_default();
-        save_to_file(&path, &design).expect("save should succeed");
+        save_to_file(&path, &design, None).expect("save should succeed");
 
         assert!(path.exists(), "final file should exist");
         assert!(
@@ -647,7 +616,7 @@ mod tests {
         let legacy_tmp = path.with_extension("canopi.tmp");
         std::fs::write(&legacy_tmp, "another operation owns this").unwrap();
 
-        save_to_file(&path, &create_default()).expect("save should succeed");
+        save_to_file(&path, &create_default(), None).expect("save should succeed");
 
         assert_eq!(
             std::fs::read_to_string(&legacy_tmp).unwrap(),
@@ -656,31 +625,6 @@ mod tests {
         assert!(load_from_file(&path).is_ok());
 
         let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_backup_created_on_overwrite() {
-        let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_backup.canopi");
-        let prev_path = path.with_extension("canopi.prev");
-
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&prev_path);
-
-        let design = create_default();
-        // First save — no backup yet.
-        save_to_file(&path, &design).expect("first save");
-        assert!(
-            !prev_path.exists(),
-            ".prev should not exist after first save"
-        );
-
-        // Second save — should create .prev.
-        save_to_file(&path, &design).expect("second save");
-        assert!(prev_path.exists(), ".prev should exist after second save");
-
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&prev_path);
     }
 
     #[test]
@@ -696,7 +640,7 @@ mod tests {
             .extra
             .insert("future_field".into(), json!("from_future"));
 
-        save_to_file(&path, &design).expect("save");
+        save_to_file(&path, &design, None).expect("save");
         let loaded = load_from_file(&path).expect("load");
 
         assert_eq!(
@@ -706,7 +650,6 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
@@ -776,7 +719,7 @@ mod tests {
         std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
             .expect("write v7 file");
         let loaded = load_from_file(&path).expect("v7 file should load");
-        save_to_file(&path, &loaded).expect("v7 file should save");
+        save_to_file(&path, &loaded, None).expect("v7 file should save");
         let reloaded = load_from_file(&path).expect("saved v7 file should reload");
 
         assert_eq!(reloaded.version, CURRENT_CANOPI_FILE_VERSION);
@@ -821,7 +764,6 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
     }
 
     #[test]
@@ -887,7 +829,7 @@ mod tests {
     }
 
     #[test]
-    fn export_writes_a_loadable_design_without_a_previous_version_backup() {
+    fn export_writes_a_loadable_design_without_leaving_a_temporary() {
         let dir = unique_dir("export");
         let path = dir.join("stamp.canopi");
         std::fs::write(&path, "an earlier export").unwrap();
@@ -895,11 +837,138 @@ mod tests {
         export_to_file(&path, &create_default()).expect("export should succeed");
 
         assert_eq!(load_from_file(&path).unwrap().name, "Untitled");
-        assert!(
-            !path.with_extension("canopi.prev").exists(),
-            "an export must not leave a .canopi.prev next to the exported file"
-        );
         assert!(owned_sidecars(&dir, "export").is_empty());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn named(name: &str) -> CanopiFile {
+        let mut design = create_default();
+        design.name = name.to_owned();
+        design
+    }
+
+    fn saved_fingerprint(result: SaveResult) -> String {
+        match result {
+            SaveResult::Saved { fingerprint } => fingerprint,
+            SaveResult::Conflict { .. } => panic!("expected the save to be written"),
+        }
+    }
+
+    #[test]
+    fn saved_and_loaded_fingerprints_are_the_sha256_of_the_file_bytes() {
+        let dir = unique_dir("fingerprint");
+        let path = dir.join("garden.canopi");
+
+        let saved = saved_fingerprint(save_to_file(&path, &named("Garden"), None).unwrap());
+        let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(saved, crate::design::fingerprint(&bytes));
+        assert_eq!(loaded_fingerprint, saved);
+        assert_eq!(saved.len(), 64);
+        assert!(
+            saved
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+        );
+        assert_eq!(loaded.name, "Garden");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_save_expecting_the_current_fingerprint_writes_and_returns_the_next_one() {
+        let dir = unique_dir("fingerprint_match");
+        let path = dir.join("garden.canopi");
+        let first = saved_fingerprint(save_to_file(&path, &named("First"), None).unwrap());
+
+        let second =
+            saved_fingerprint(save_to_file(&path, &named("Second"), Some(&first)).unwrap());
+
+        assert_ne!(second, first);
+        assert_eq!(load_from_file(&path).unwrap().name, "Second");
+        let third = saved_fingerprint(save_to_file(&path, &named("Third"), Some(&second)).unwrap());
+        assert_eq!(load_with_fingerprint(&path).unwrap().1, third);
+        let entries = std::fs::read_dir(&dir).unwrap().count();
+        assert_eq!(entries, 1, "a save leaves only the Design file, no backup");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_save_after_an_outside_change_is_a_conflict_and_writes_nothing() {
+        let dir = unique_dir("fingerprint_conflict");
+        let path = dir.join("garden.canopi");
+        let opened = saved_fingerprint(save_to_file(&path, &named("Mine"), None).unwrap());
+        std::fs::write(&path, "changed by another program").unwrap();
+
+        let result = save_to_file(&path, &named("Mine, edited"), Some(&opened)).unwrap();
+
+        assert_eq!(
+            result,
+            SaveResult::Conflict {
+                current_fingerprint: Some(crate::design::fingerprint(
+                    b"changed by another program"
+                )),
+            }
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "changed by another program"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_save_expecting_a_deleted_file_is_a_conflict_and_does_not_recreate_it() {
+        let dir = unique_dir("fingerprint_deleted");
+        let path = dir.join("garden.canopi");
+        let opened = saved_fingerprint(save_to_file(&path, &named("Mine"), None).unwrap());
+        std::fs::remove_file(&path).unwrap();
+
+        let result = save_to_file(&path, &named("Mine"), Some(&opened)).unwrap();
+
+        assert_eq!(
+            result,
+            SaveResult::Conflict {
+                current_fingerprint: None
+            }
+        );
+        assert!(!path.exists());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_save_without_an_expected_fingerprint_overwrites_an_outside_change() {
+        let dir = unique_dir("fingerprint_overwrite");
+        let path = dir.join("garden.canopi");
+        std::fs::write(&path, "changed by another program").unwrap();
+
+        let fingerprint =
+            saved_fingerprint(save_to_file(&path, &named("Keep mine"), None).unwrap());
+
+        let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
+        assert_eq!(loaded.name, "Keep mine");
+        assert_eq!(loaded_fingerprint, fingerprint);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_save_that_cannot_check_the_target_fails_without_writing() {
+        let dir = unique_dir("fingerprint_unreadable");
+        // A directory at the target cannot be read as a file.
+        let path = dir.join("garden.canopi");
+        std::fs::create_dir(&path).unwrap();
+
+        let result = save_to_file(&path, &named("Mine"), Some("0"));
+
+        assert!(result.is_err(), "{result:?}");
+        assert!(path.is_dir());
+        assert!(owned_sidecars(&dir, "tmp").is_empty());
 
         let _ = std::fs::remove_dir_all(dir);
     }

@@ -227,11 +227,8 @@
       "open": "Abrir design",
       "save": "Salvar",
       "saveAs": "Salvar como",
-      "unsavedChanges": "Alterações não salvas",
-      "saveBeforeClose": "Salvar antes de fechar?",
-      "saveBeforeCloseMessage": "Você tem alterações não salvas. Salvar antes de fechar?",
-      "dontSave": "Não salvar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "revert": "Reverter para a versão aberta"
     },
     "layers": {
       "layerPanel": "Camadas",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Sobre o Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Alterações não salvas",
     "untitledDesign": "Design sem título",
     "renameDesignName": "Renomear design",
     "designNameInput": "Nome do design"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "O elemento {{feature}} tem geometria inválida.",
       "invalid_coordinates": "O elemento {{feature}} tem coordenadas fora do intervalo de longitude/latitude WGS84."
     }
+  },
+  "saveStatus": {
+    "saving": "Salvando…",
+    "saved": "Salvo",
+    "error": "Não foi possível salvar",
+    "retry": "Tentar novamente",
+    "conflict": "Alterado fora do Canopi"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Não foi possível salvar suas alterações",
+    "flushFailedMessage": "O Canopi não conseguiu gravar suas últimas alterações. Tente novamente ou descarte-as para continuar.",
+    "flushFailedCloseMessage": "O Canopi não conseguiu gravar suas últimas alterações. Tente novamente ou feche sem salvá-las.",
+    "conflictPendingMessage": "Este arquivo foi alterado fora do Canopi, então suas últimas alterações não foram gravadas. Descarte-as para continuar ou cancele e resolva a alteração primeiro.",
+    "retry": "Tentar novamente",
+    "discard": "Descartar alterações",
+    "closeWithoutSaving": "Fechar sem salvar",
+    "conflictTitle": "Alterado fora do Canopi",
+    "conflictMessage": "Outro programa alterou este arquivo desde que o Canopi o salvou pela última vez. Escolha qual versão manter.",
+    "fileGoneTitle": "Arquivo movido ou excluído",
+    "fileGoneMessage": "O arquivo deste design foi movido ou excluído. Salve sua versão novamente ou salve-a em outro lugar.",
+    "keepMine": "Manter minha versão",
+    "useFile": "Usar a versão do arquivo",
+    "saveCopy": "Salvar a minha como cópia…",
+    "saveElsewhere": "Salvar como…",
+    "revertTitle": "Reverter para a versão de abertura?",
+    "revertMessage": "Todas as alterações feitas desde que este design foi aberto serão substituídas.",
+    "revertConfirm": "Reverter"
+  },
+  "drafts": {
+    "title": "Rascunhos",
+    "delete": "Excluir rascunho: {{name}}",
+    "confirmDelete": "Excluir este rascunho?",
+    "confirmDeleteAction": "Excluir"
   }
 }

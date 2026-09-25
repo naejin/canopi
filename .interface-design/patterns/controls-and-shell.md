@@ -4,11 +4,11 @@ Read the [design system](../system.md) first.
 
 ## Title bar
 
-36px tall on `--color-bg` so it blends with the workspace. Left: 16px logo and menus. Centre drag region: Design name and dirty indicator. Right: locale picker (custom dropdown, three-column grid), light/dark theme toggle (sun/moon icon button) and window controls.
+36px tall on `--color-bg` so it blends with the workspace. Left: 16px logo and menus. Centre drag region: Design name and the quiet save status (`SaveStatusLabel`: muted "Saving…"/"Saved", danger-ink "Couldn't save" with a Retry text button, or a danger-outlined "Changed outside Canopi" button). The Web shell shows the same label. Right: locale picker (custom dropdown, three-column grid), light/dark theme toggle (sun/moon icon button) and window controls.
 
 ## Welcome screen
 
-96px logo, no text headings, vertically centred. Two actions: primary (ochre) and secondary (surface with border). Desktop lists Recent Designs below with a document icon, name and relative date; Web omits it.
+96px logo, no text headings, vertically centred. Two actions: primary (ochre) and secondary (surface with border). Both editions list Design Drafts below (`DraftList`: dashed document icon, name, relative date, an icon-only delete that confirms inline). Desktop also lists Recent Designs with a document icon, name and relative date; Web omits them.
 
 ## Panel bar
 

@@ -32,8 +32,9 @@ export interface DesignSessionStore {
   readonly designName: ReadonlySignal<string>
   readonly designDirty: ReadonlySignal<boolean>
   readonly canvasDirty: ReadonlySignal<boolean>
-  readonly autosaveFailed: ReadonlySignal<boolean>
   readonly committedDesignRevision: ReadonlySignal<number>
+  /** Counts Scene history reports; a committed canvas change advances it. */
+  readonly canvasChangeRevision: ReadonlySignal<number>
 
   readIdentity(): DesignSessionIdentity
   readCurrentDesign(): CanopiFile | null
@@ -50,7 +51,6 @@ export interface DesignSessionStore {
   resetDirtyBaselines(): void
   markCanvasDetachedDirty(dirty: boolean): void
   setCanvasClean(clean: boolean): void
-  setAutosaveFailed(failed: boolean): void
 
   readPendingDesignPath(): string | null
   setPendingDesignPath(path: string | null): void
@@ -71,7 +71,6 @@ interface DesignSessionStoreSignals {
   readonly nonCanvasRevision: Signal<number>
   readonly nonCanvasSavedRevision: Signal<number>
   readonly persistenceDiverged: Signal<boolean>
-  readonly autosaveFailed: Signal<boolean>
   readonly canvasClean: Signal<boolean>
   readonly detachedCanvasDirty: Signal<boolean>
   readonly pendingDesignPath: Signal<string | null>
@@ -84,7 +83,6 @@ export interface DesignSessionStoreTestState extends Partial<DesignSessionIdenti
   readonly nonCanvasRevision?: number
   readonly nonCanvasSavedRevision?: number
   readonly persistenceDiverged?: boolean
-  readonly autosaveFailed?: boolean
   readonly canvasClean?: boolean
   readonly detachedCanvasDirty?: boolean
   readonly pendingDesignPath?: string | null
@@ -115,7 +113,7 @@ function createDesignSessionStore(
   const nonCanvasRevision = signal(0)
   const nonCanvasSavedRevision = signal(0)
   const persistenceDiverged = signal(false)
-  const autosaveFailed = signal(false)
+  const canvasChangeRevision = signal(0)
   const canvasClean = signal(true)
   const detachedCanvasDirty = signal(false)
   const pendingDesignPath = signal<string | null>(null)
@@ -133,7 +131,6 @@ function createDesignSessionStore(
     nonCanvasRevision,
     nonCanvasSavedRevision,
     persistenceDiverged,
-    autosaveFailed,
     canvasClean,
     detachedCanvasDirty,
     pendingDesignPath,
@@ -281,8 +278,8 @@ function createDesignSessionStore(
     designName: signals.designName,
     designDirty: signals.designDirty,
     canvasDirty: signals.canvasDirty,
-    autosaveFailed: signals.autosaveFailed,
     committedDesignRevision,
+    canvasChangeRevision,
 
     readIdentity() {
       return {
@@ -369,7 +366,6 @@ function createDesignSessionStore(
         signals.nonCanvasRevision.value = 0
         signals.nonCanvasSavedRevision.value = 0
         signals.persistenceDiverged.value = false
-        signals.autosaveFailed.value = false
       })
     },
 
@@ -378,11 +374,10 @@ function createDesignSessionStore(
     },
 
     setCanvasClean(clean) {
-      signals.canvasClean.value = clean
-    },
-
-    setAutosaveFailed(failed) {
-      signals.autosaveFailed.value = failed
+      batch(() => {
+        signals.canvasClean.value = clean
+        canvasChangeRevision.value += 1
+      })
     },
 
     readPendingDesignPath() {
@@ -458,7 +453,6 @@ function createDesignSessionStore(
           if (options.canvasDetached) signals.canvasClean.value = true
           signals.nonCanvasSavedRevision.value = nonCanvasRevision
           signals.persistenceDiverged.value = contentRevision !== committedContentRevision
-          signals.autosaveFailed.value = false
         })
         if (
           acknowledgement === acknowledgementGeneration
@@ -478,15 +472,6 @@ function createDesignSessionStore(
           || canvasRevision !== detachedCanvasRevision
         ) return false
         signals.designPath.value = path
-        return true
-      },
-      setAutosaveFailed(failed) {
-        if (
-          capturedLifetime !== lifetime
-          || generation !== sessionGeneration
-          || canvasRevision !== detachedCanvasRevision
-        ) return false
-        signals.autosaveFailed.value = failed
         return true
       },
     }
@@ -519,7 +504,6 @@ function createDesignSessionStore(
         signals.nonCanvasRevision.value = state.nonCanvasRevision ?? 0
         signals.nonCanvasSavedRevision.value = state.nonCanvasSavedRevision ?? 0
         signals.persistenceDiverged.value = state.persistenceDiverged ?? false
-        signals.autosaveFailed.value = state.autosaveFailed ?? false
         signals.canvasClean.value = state.canvasClean ?? true
         signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
         signals.pendingDesignPath.value = state.pendingDesignPath ?? null
@@ -555,9 +539,6 @@ function createDesignSessionStore(
         if (has('persistenceDiverged')) {
           signals.persistenceDiverged.value = state.persistenceDiverged ?? false
         }
-        if (has('autosaveFailed')) {
-          signals.autosaveFailed.value = state.autosaveFailed ?? false
-        }
         if (has('canvasClean')) signals.canvasClean.value = state.canvasClean ?? true
         if (has('detachedCanvasDirty')) {
           signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
@@ -577,7 +558,6 @@ function createDesignSessionStore(
         signals.canvasClean.value = true
         signals.nonCanvasSavedRevision.value = signals.nonCanvasRevision.value
         signals.persistenceDiverged.value = false
-        signals.autosaveFailed.value = false
       })
     },
   } satisfies DesignSessionStoreTestFixture)
@@ -607,7 +587,6 @@ export const designPath = designSessionStore.designPath
 export const designName = designSessionStore.designName
 export const designDirty = designSessionStore.designDirty
 export const canvasDirty = designSessionStore.canvasDirty
-export const autosaveFailed = designSessionStore.autosaveFailed
 
 export const readCurrentDesign = () => designSessionStore.readCurrentDesign()
 export const readDesignPath = () => designSessionStore.readDesignPath()
@@ -623,8 +602,6 @@ export const resetDirtyBaselines = () => designSessionStore.resetDirtyBaselines(
 export const markCanvasDetachedDirty = (dirty: boolean) =>
   designSessionStore.markCanvasDetachedDirty(dirty)
 export const setCanvasClean = (clean: boolean) => designSessionStore.setCanvasClean(clean)
-export const setAutosaveFailed = (failed: boolean) =>
-  designSessionStore.setAutosaveFailed(failed)
 export const setPendingDesignPath = (path: string | null) =>
   designSessionStore.setPendingDesignPath(path)
 export const setPendingTemplateImport = (template: PendingTemplateImport | null) =>

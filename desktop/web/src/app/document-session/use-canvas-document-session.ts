@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
 import { acquireCanvasRuntimeLifecycle } from "../../canvas/runtime/lifecycle-owner";
-import { autoSaveIntervalMs } from "../settings/state";
 import { createDesignSessionLifecycle, type DesignSessionLifecycle } from "./lifecycle";
 import type { WorkspaceRuntimeMountOptions } from '../canvas-map-surface/workspace-runtime-composition'
 
@@ -96,9 +95,4 @@ export function useCanvasDocumentSession({
       release();
     };
   }, []);
-
-  const intervalMs = autoSaveIntervalMs.value;
-  useEffect(() => {
-    lifecycleRef.current?.updateAutosaveInterval(intervalMs);
-  }, [intervalMs]);
 }

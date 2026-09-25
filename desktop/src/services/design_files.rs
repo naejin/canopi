@@ -1,8 +1,8 @@
-use common_types::design::{AutosaveEntry, CanopiFile, DesignSummary};
+use common_types::design::{CanopiFile, DesignSaveOutcome, DesignSummary, LoadedDesign};
 use std::path::Path;
 
 use crate::db::UserDb;
-use crate::design::{autosave, format};
+use crate::design::format;
 
 const RECENT_DESIGNS_LIMIT: usize = 20;
 
@@ -18,13 +18,31 @@ fn now_iso8601() -> String {
     crate::design::unix_to_iso8601(seconds)
 }
 
-pub fn save_design(user_db: &UserDb, path: String, content: CanopiFile) -> Result<String, String> {
+/// Save a Design to its file. With `expected_fingerprint`, a file changed
+/// outside Canopi since then is left alone and reported as a conflict.
+pub fn save_design(
+    user_db: &UserDb,
+    path: String,
+    content: CanopiFile,
+    expected_fingerprint: Option<String>,
+) -> Result<DesignSaveOutcome, String> {
     let dest = std::path::PathBuf::from(&path);
-    format::save_to_file(&dest, &content)?;
-    try_record_recent(user_db, &path, &content.name);
-    // Design names and paths are user content; logs reach Diagnostic Bundles.
-    tracing::info!("Design saved");
-    Ok(path)
+    match format::save_to_file(&dest, &content, expected_fingerprint.as_deref())? {
+        format::SaveResult::Saved { fingerprint } => {
+            try_record_recent(user_db, &path, &content.name);
+            // Design names and paths are user content; logs reach Diagnostic Bundles.
+            tracing::info!("Design saved");
+            Ok(DesignSaveOutcome::Saved { path, fingerprint })
+        }
+        format::SaveResult::Conflict {
+            current_fingerprint,
+        } => {
+            tracing::info!("Design save stopped: the file changed outside Canopi");
+            Ok(DesignSaveOutcome::Conflict {
+                current_fingerprint,
+            })
+        }
+    }
 }
 
 pub fn export_design_file(path: String, content: CanopiFile) -> Result<String, String> {
@@ -34,12 +52,13 @@ pub fn export_design_file(path: String, content: CanopiFile) -> Result<String, S
     Ok(path)
 }
 
-pub fn load_design(user_db: &UserDb, path: String) -> Result<CanopiFile, String> {
+pub fn load_design(user_db: &UserDb, path: String) -> Result<LoadedDesign, String> {
     let dest = std::path::PathBuf::from(&path);
-    let design = format::load_from_file(&dest).map_err(|error| error.to_string())?;
-    try_record_recent(user_db, &path, &design.name);
+    let (file, fingerprint) =
+        format::load_with_fingerprint(&dest).map_err(|error| error.to_string())?;
+    try_record_recent(user_db, &path, &file.name);
     tracing::info!("Design loaded");
-    Ok(design)
+    Ok(LoadedDesign { file, fingerprint })
 }
 
 pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
@@ -69,25 +88,6 @@ pub fn get_recent_files(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> 
         }
     }
     Ok(filtered.visible)
-}
-
-pub fn autosave_design(
-    app: &tauri::AppHandle,
-    content: CanopiFile,
-    path: Option<String>,
-) -> Result<(), String> {
-    autosave::autosave(app, &content, path.as_deref())
-}
-
-pub fn list_autosaves(app: &tauri::AppHandle) -> Result<Vec<AutosaveEntry>, String> {
-    autosave::list_autosaves(app)
-}
-
-pub fn recover_autosave(
-    app: &tauri::AppHandle,
-    autosave_path: String,
-) -> Result<CanopiFile, String> {
-    autosave::recover_autosave(app, &autosave_path)
 }
 
 fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
@@ -223,7 +223,7 @@ mod tests {
         load_design, load_design_file, partition_by_availability, save_design,
     };
     use crate::db::UserDb;
-    use common_types::design::{CanopiFile, DesignSummary};
+    use common_types::design::{CanopiFile, DesignSaveOutcome, DesignSummary};
     use rusqlite::Connection;
     use std::path::PathBuf;
 
@@ -264,16 +264,25 @@ mod tests {
         let design = test_design("Service Demo");
         let path = temp_design_path("round_trip");
 
-        let saved_path = save_design(
+        let outcome = save_design(
             &user_db,
             path.to_string_lossy().into_owned(),
             design.clone(),
+            None,
         )
         .unwrap();
+        let DesignSaveOutcome::Saved {
+            path: saved_path,
+            fingerprint,
+        } = outcome
+        else {
+            panic!("an unconditional save is written");
+        };
         let loaded = load_design(&user_db, saved_path.clone()).unwrap();
         let recent = get_recent_files(&user_db).unwrap();
 
-        assert_eq!(loaded.name, "Service Demo");
+        assert_eq!(loaded.file.name, "Service Demo");
+        assert_eq!(loaded.fingerprint, fingerprint);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].path, saved_path);
         assert_eq!(recent[0].name, "Service Demo");
@@ -287,13 +296,14 @@ mod tests {
         let design = test_design("Notebook Demo");
         let path = temp_design_path("notebook_round_trip");
 
-        let saved_path = save_design(
+        save_design(
             &user_db,
             path.to_string_lossy().into_owned(),
             design.clone(),
+            None,
         )
         .unwrap();
-        let _ = load_design(&user_db, saved_path.clone()).unwrap();
+        let _ = load_design(&user_db, path.to_string_lossy().into_owned()).unwrap();
         let notebook_entries = {
             let conn = user_db.acquire();
             crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn).unwrap()
@@ -361,6 +371,7 @@ mod tests {
             &user_db,
             existing_path.to_string_lossy().into_owned(),
             test_design("Existing Design"),
+            None,
         )
         .unwrap();
         {
@@ -475,13 +486,30 @@ mod tests {
         let user_db = test_user_db();
         let path = temp_design_path("private_log");
         let (_, logs) = super::capture_logs(|| {
-            save_design(
+            let loaded = match save_design(
                 &user_db,
                 path.to_string_lossy().into_owned(),
                 test_design("Secret Orchard"),
+                None,
             )
-            .unwrap();
-            load_design(&user_db, path.to_string_lossy().into_owned()).unwrap();
+            .unwrap()
+            {
+                DesignSaveOutcome::Saved { .. } => {
+                    load_design(&user_db, path.to_string_lossy().into_owned()).unwrap()
+                }
+                DesignSaveOutcome::Conflict { .. } => panic!("an unconditional save is written"),
+            };
+            std::fs::write(&path, "changed by another program").unwrap();
+            assert!(matches!(
+                save_design(
+                    &user_db,
+                    path.to_string_lossy().into_owned(),
+                    test_design("Secret Orchard"),
+                    Some(loaded.fingerprint),
+                )
+                .unwrap(),
+                DesignSaveOutcome::Conflict { .. }
+            ));
             export_design_file(
                 path.to_string_lossy().into_owned(),
                 test_design("Secret Orchard"),
@@ -495,6 +523,38 @@ mod tests {
         assert!(!logs.contains(&*path.to_string_lossy()), "{logs}");
 
         let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(path.with_extension("canopi.prev"));
+    }
+
+    #[test]
+    fn a_conflicting_save_leaves_the_file_and_recent_designs_alone() {
+        let user_db = test_user_db();
+        let path = temp_design_path("conflict");
+        let path_text = path.to_string_lossy().into_owned();
+        std::fs::write(&path, "changed by another program").unwrap();
+
+        let outcome = save_design(
+            &user_db,
+            path_text.clone(),
+            test_design("Mine"),
+            Some("0".repeat(64)),
+        )
+        .unwrap();
+
+        match outcome {
+            DesignSaveOutcome::Conflict {
+                current_fingerprint,
+            } => assert_eq!(
+                current_fingerprint.as_deref(),
+                Some(crate::design::fingerprint(b"changed by another program").as_str())
+            ),
+            DesignSaveOutcome::Saved { .. } => panic!("an outside change must not be overwritten"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "changed by another program"
+        );
+        assert!(get_recent_files(&user_db).unwrap().is_empty());
+
+        let _ = std::fs::remove_file(&path);
     }
 }

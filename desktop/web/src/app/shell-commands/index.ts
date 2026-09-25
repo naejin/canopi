@@ -6,6 +6,7 @@ export type ShellCommandIdByCapability = {
   readonly openCanopi: 'file.openCanopi'
   readonly saveDesign: 'file.save'
   readonly saveDesignAs: 'file.saveAs'
+  readonly revertDesign: 'file.revert'
   readonly downloadCanopi: 'file.downloadCanopi'
   readonly exportCanvasPdf: 'file.exportCanvasPdf'
   readonly importGeoJson: 'file.importGeoJson'
@@ -45,7 +46,8 @@ const SHELL_PANEL_SHORTCUTS = {
 
 export interface ShellCommandState {
   readonly hasDesign: boolean
-  readonly designDirty: boolean
+  /** The current Design changed since it was opened or created. */
+  readonly revertAvailable: boolean
   readonly activePanel: Panel
   readonly sidePanel: SidePanel | null
 }
@@ -190,6 +192,15 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
     labelKey: 'canvas.file.saveAs',
     chromeLabelKey: 'canvas.file.saveAs',
     shortcut: SHELL_FILE_SHORTCUTS.saveDesignAs,
+    palette: true,
+    menu: { id: 'file', section: 1 },
+  },
+  {
+    capabilityId: 'revertDesign',
+    id: 'file.revert',
+    family: 'file',
+    labelKey: 'canvas.file.revert',
+    chromeLabelKey: 'canvas.file.revert',
     palette: true,
     menu: { id: 'file', section: 1 },
   },

@@ -9,12 +9,14 @@ import {
   type ShellCommandIdForCapability,
 } from '../app/shell-commands'
 import { t } from '../i18n'
+import type { DesignSaveStatus } from '../app/document-session/continuous-save'
 import type { GeoJsonWorkflow } from '../app/geojson/workflow'
 
 type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
   | 'downloadCanopi'
+  | 'revertDesign'
   | 'exportCanvasPdf'
   | 'importGeoJson'
   | 'exportGeoJson'
@@ -39,13 +41,14 @@ export interface BrowserShellChromeProjection extends ShellChromeProjection<Brow
 
 export interface BrowserShellDesignIdentity {
   readonly name: string
-  readonly dirty: boolean
+  readonly saveStatus: DesignSaveStatus
 }
 
 export interface BrowserShellCapabilities {
   newDesign(): void
   openCanopi(): void
   downloadCanopi(): void
+  revertDesign(): void
   importGeoJson(): void
   exportGeoJson(): void
   navigate(panel: Panel): void
@@ -56,6 +59,7 @@ export interface BrowserDesignShellCommands {
   newDesign(): Promise<void>
   openCanopi(): Promise<boolean>
   downloadCanopi(): Promise<void>
+  revertDesign(): Promise<unknown>
 }
 
 export function createBrowserShellCapabilities(
@@ -67,6 +71,7 @@ export function createBrowserShellCapabilities(
     newDesign: () => runBrowserDesignCommand(() => commands.newDesign(), onError),
     openCanopi: () => runBrowserDesignCommand(() => commands.openCanopi(), onError),
     downloadCanopi: () => runBrowserDesignCommand(() => commands.downloadCanopi(), onError),
+    revertDesign: () => runBrowserDesignCommand(() => commands.revertDesign(), onError),
     importGeoJson: () => runBrowserDesignCommand(() => geoJson.importGeoJson(), onError),
     exportGeoJson: () => runBrowserDesignCommand(() => geoJson.exportGeoJson(), onError),
     navigate: navigateTo,
@@ -82,6 +87,8 @@ export interface BrowserShellProjectionInput {
   readonly currentPanel: Panel
   readonly currentSidePanel: SidePanel | null
   readonly downloadCanopiEnabled: boolean
+  /** The current Design changed since it was opened or created. */
+  readonly revertAvailable: boolean
   /** A Design is open in a mounted canvas runtime. */
   readonly geoJsonEnabled: boolean
   readonly templatesEnabled: boolean
@@ -92,6 +99,7 @@ export function createBrowserShellCommandProjection({
   currentPanel,
   currentSidePanel,
   downloadCanopiEnabled,
+  revertAvailable,
   geoJsonEnabled,
   templatesEnabled,
   capabilities,
@@ -104,6 +112,10 @@ export function createBrowserShellCommandProjection({
       execute: () => capabilities.downloadCanopi(),
       isExecutionDisabled: () => !downloadCanopiEnabled,
       isProjectionDisabled: () => !downloadCanopiEnabled,
+    },
+    revertDesign: {
+      execute: () => capabilities.revertDesign(),
+      isExecutionDisabled: () => !downloadCanopiEnabled || !revertAvailable,
     },
     importGeoJson: {
       execute: () => capabilities.importGeoJson(),
@@ -132,7 +144,7 @@ export function createBrowserShellCommandProjection({
     catalog,
     {
       hasDesign: downloadCanopiEnabled,
-      designDirty: false,
+      revertAvailable,
       activePanel: currentPanel,
       sidePanel: currentSidePanel,
     },

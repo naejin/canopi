@@ -227,11 +227,8 @@
       "open": "Open Design",
       "save": "Save",
       "saveAs": "Save As",
-      "unsavedChanges": "Unsaved changes",
-      "saveBeforeClose": "Save before closing?",
-      "saveBeforeCloseMessage": "You have unsaved changes. Save before closing?",
-      "dontSave": "Don't Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "revert": "Revert to version when opened"
     },
     "layers": {
       "layerPanel": "Layers",
@@ -916,7 +913,6 @@
     "help.aboutCanopi": "About Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Unsaved changes",
     "untitledDesign": "Untitled Design",
     "renameDesignName": "Rename design name",
     "designNameInput": "Design name"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "Feature {{feature}} has invalid geometry.",
       "invalid_coordinates": "Feature {{feature}} has coordinates outside the WGS84 longitude/latitude range."
     }
+  },
+  "saveStatus": {
+    "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Couldn't save",
+    "retry": "Retry",
+    "conflict": "Changed outside Canopi"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Couldn't save your changes",
+    "flushFailedMessage": "Canopi couldn't write your latest changes. Try again, or discard them to continue.",
+    "flushFailedCloseMessage": "Canopi couldn't write your latest changes. Try again, or close without saving them.",
+    "conflictPendingMessage": "This file changed outside Canopi, so your latest changes were not written. Discard them to continue, or cancel and resolve the change first.",
+    "retry": "Retry",
+    "discard": "Discard changes",
+    "closeWithoutSaving": "Close without saving",
+    "conflictTitle": "Changed outside Canopi",
+    "conflictMessage": "Another program changed this file since Canopi last saved it. Choose which version to keep.",
+    "fileGoneTitle": "File moved or deleted",
+    "fileGoneMessage": "The file this Design is saved in was moved or deleted. Save your version again, or save it somewhere else.",
+    "keepMine": "Keep my version",
+    "useFile": "Use the file's version",
+    "saveCopy": "Save mine as a copy…",
+    "saveElsewhere": "Save As…",
+    "revertTitle": "Revert to version when opened?",
+    "revertMessage": "Every change made since this Design was opened will be replaced.",
+    "revertConfirm": "Revert"
+  },
+  "drafts": {
+    "title": "Drafts",
+    "delete": "Delete draft: {{name}}",
+    "confirmDelete": "Delete this draft?",
+    "confirmDeleteAction": "Delete"
   }
 }

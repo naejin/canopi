@@ -227,11 +227,8 @@
       "open": "打开设计",
       "save": "保存",
       "saveAs": "另存为",
-      "unsavedChanges": "有未保存的更改",
-      "saveBeforeClose": "关闭前是否保存？",
-      "saveBeforeCloseMessage": "您有未保存的更改，关闭前是否保存？",
-      "dontSave": "不保存",
-      "cancel": "取消"
+      "cancel": "取消",
+      "revert": "恢复到打开时的版本"
     },
     "layers": {
       "layerPanel": "图层",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "关于 Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "未保存的更改",
     "untitledDesign": "未命名设计",
     "renameDesignName": "重命名设计",
     "designNameInput": "设计名称"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "要素 {{feature}} 的几何无效。",
       "invalid_coordinates": "要素 {{feature}} 的坐标超出 WGS84 经纬度范围。"
     }
+  },
+  "saveStatus": {
+    "saving": "正在保存…",
+    "saved": "已保存",
+    "error": "无法保存",
+    "retry": "重试",
+    "conflict": "已在 Canopi 外部更改"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "无法保存您的更改",
+    "flushFailedMessage": "Canopi 无法写入您最近的更改。请重试，或放弃这些更改以继续。",
+    "flushFailedCloseMessage": "Canopi 无法写入您最近的更改。请重试，或不保存直接关闭。",
+    "conflictPendingMessage": "此文件已在 Canopi 外部更改，因此您最近的更改未写入。放弃这些更改以继续，或取消并先处理该更改。",
+    "retry": "重试",
+    "discard": "放弃更改",
+    "closeWithoutSaving": "不保存并关闭",
+    "conflictTitle": "已在 Canopi 外部更改",
+    "conflictMessage": "自 Canopi 上次保存以来，另一个程序更改了此文件。请选择要保留的版本。",
+    "fileGoneTitle": "文件已移动或删除",
+    "fileGoneMessage": "此设计所在的文件已被移动或删除。请重新保存您的版本，或将其保存到其他位置。",
+    "keepMine": "保留我的版本",
+    "useFile": "使用文件中的版本",
+    "saveCopy": "将我的版本另存为副本…",
+    "saveElsewhere": "另存为…",
+    "revertTitle": "恢复到打开时的版本？",
+    "revertMessage": "自打开此设计以来所做的所有更改都将被替换。",
+    "revertConfirm": "恢复"
+  },
+  "drafts": {
+    "title": "草稿",
+    "delete": "删除草稿：{{name}}",
+    "confirmDelete": "删除此草稿？",
+    "confirmDeleteAction": "删除"
   }
 }

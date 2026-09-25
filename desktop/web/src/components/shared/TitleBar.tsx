@@ -1,13 +1,19 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { setDesignName } from '../../app/design-edit'
-import { currentDesign, designName, designDirty } from '../../app/document-session/store'
+import { currentDesign, designName } from '../../app/document-session/store'
+import {
+  designSaveStatus,
+  resolveDesignConflict,
+  retryDesignSave,
+} from '../../app/document-session/actions'
 import { activePanel } from '../../app/shell/state'
 import { locale, theme } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import { t } from '../../i18n'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { MenuBar } from './MenuBar'
+import { SaveStatusLabel } from './SaveStatusLabel'
 import styles from './TitleBar.module.css'
 
 const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
@@ -48,7 +54,7 @@ export function TitleBar() {
   const hasActiveDesign = currentDesign.value !== null
   const showsDocumentName = hasActiveDesign && activePanel.value === 'canvas'
   const name = designName.value
-  const dirty = designDirty.value
+  const saveStatus = designSaveStatus.value
   const visibleName = visibleDesignName(name)
   const [isEditingName, setIsEditingName] = useState(false)
   const [draftName, setDraftName] = useState(visibleName)
@@ -149,19 +155,25 @@ export function TitleBar() {
               }}
             />
           ) : (
-            <button
-              type="button"
-              className={styles.fileNameButton}
-              aria-label={t('titleBar.renameDesignName')}
-              onDblClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                beginDesignNameEdit()
-              }}
-            >
-              <span className={styles.fileNameText}>{visibleName}</span>
-              {dirty && <span className={styles.dirtyDot} aria-label={t('titleBar.unsavedChanges')} />}
-            </button>
+            <>
+              <button
+                type="button"
+                className={styles.fileNameButton}
+                aria-label={t('titleBar.renameDesignName')}
+                onDblClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  beginDesignNameEdit()
+                }}
+              >
+                <span className={styles.fileNameText}>{visibleName}</span>
+              </button>
+              <SaveStatusLabel
+                status={saveStatus}
+                onRetry={() => { void retryDesignSave() }}
+                onResolveConflict={() => { void resolveDesignConflict().catch(logSaveCommandError) }}
+              />
+            </>
           )
         )}
       </div>
@@ -224,6 +236,10 @@ export function TitleBar() {
       </div>
     </div>
   )
+}
+
+function logSaveCommandError(error: unknown): void {
+  console.error('Design save command failed:', error)
 }
 
 function visibleDesignName(name: string): string {

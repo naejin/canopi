@@ -10,12 +10,6 @@ export type Annotation = {
 	rotation: number | null,
 };
 
-export type AutosaveEntry = {
-	path: string,
-	name: string,
-	saved_at: string,
-};
-
 // OpenFreeMap vector styles; Liberty is the default.
 export type BasemapStyle = "liberty" | "positron" | "bright" | "dark";
 
@@ -62,6 +56,16 @@ export type Consortium = {
 	end_phase: number,
 };
 
+/**
+ *  A Design draft: an unsaved (Untitled) Design kept in app data until the
+ *  user saves it as a file or deletes it.
+ */
+export type DesignDraftSummary = {
+	id: string,
+	name: string,
+	updated_at: string,
+};
+
 export type DesignNotebookEntry = {
 	path: string,
 	name: string,
@@ -83,6 +87,16 @@ export type DesignNotebookSnapshot = {
 	entries: DesignNotebookEntry[],
 	sections: DesignNotebookSection[],
 };
+
+// The result of writing a Design to its file.
+export type DesignSaveOutcome =
+// Written; `fingerprint` is what the next save must expect.
+{ kind: "saved"; path: string; fingerprint: string } |
+/**
+ *  The file changed outside Canopi since `expected_fingerprint`; nothing
+ *  was written. `current_fingerprint` is `None` when the file is gone.
+ */
+{ kind: "conflict"; current_fingerprint: string | null };
 
 export type DesignSummary = {
 	path: string,
@@ -535,6 +549,15 @@ export type LidarSampleUnavailableReason =
 
 export type LidarSlopeUnit = "Degrees" | "Percent";
 
+/**
+ *  A Design read from a file, with the fingerprint (SHA-256 of the file's
+ *  bytes) its next continuous save must still find on disk.
+ */
+export type LoadedDesign = {
+	file: CanopiFile,
+	fingerprint: string,
+};
+
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
 
 export type MeasurementGuide = {
@@ -610,7 +633,6 @@ export type Settings = {
 	theme: Theme,
 	snap_to_grid: boolean,
 	snap_to_guides: boolean,
-	auto_save_interval_s: number,
 	side_panel_width: number | null,
 	saved_stamps_frame_height: number | null,
 	// OpenFreeMap vector style of the Basemap row.

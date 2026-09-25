@@ -33,7 +33,6 @@ describe('Design Edit authority', () => {
       persistenceDiverged: true,
       canvasClean: false,
       detachedCanvasDirty: true,
-      autosaveFailed: true,
       pendingDesignPath: '/queued.canopi',
       pendingTemplateImport: {
         identity: Object.freeze({}),
@@ -57,7 +56,6 @@ describe('Design Edit authority', () => {
       name: 'Successor',
     })
     expect(store.isDesignDirty()).toBe(false)
-    expect(store.autosaveFailed.value).toBe(false)
     expect(store.committedDesignRevision.value).toBe(0)
     expect(store.readPendingDesignPath()).toBe(null)
     expect(store.readPendingTemplateImport()).toBe(null)

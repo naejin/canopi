@@ -227,11 +227,8 @@
       "open": "Ontwerp openen",
       "save": "Opslaan",
       "saveAs": "Opslaan als",
-      "unsavedChanges": "Niet-opgeslagen wijzigingen",
-      "saveBeforeClose": "Opslaan voor sluiten?",
-      "saveBeforeCloseMessage": "Je hebt niet-opgeslagen wijzigingen. Opslaan voor sluiten?",
-      "dontSave": "Niet opslaan",
-      "cancel": "Annuleren"
+      "cancel": "Annuleren",
+      "revert": "Terug naar de geopende versie"
     },
     "layers": {
       "layerPanel": "Lagen",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Over Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Niet-opgeslagen wijzigingen",
     "untitledDesign": "Naamloos ontwerp",
     "renameDesignName": "Ontwerpnaam wijzigen",
     "designNameInput": "Ontwerpnaam"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "Object {{feature}} heeft een ongeldige geometrie.",
       "invalid_coordinates": "Object {{feature}} heeft coördinaten buiten het WGS84-lengte-/breedtebereik."
     }
+  },
+  "saveStatus": {
+    "saving": "Opslaan…",
+    "saved": "Opgeslagen",
+    "error": "Opslaan mislukt",
+    "retry": "Opnieuw proberen",
+    "conflict": "Buiten Canopi gewijzigd"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Je wijzigingen konden niet worden opgeslagen",
+    "flushFailedMessage": "Canopi kon je laatste wijzigingen niet wegschrijven. Probeer het opnieuw of verwerp ze om door te gaan.",
+    "flushFailedCloseMessage": "Canopi kon je laatste wijzigingen niet wegschrijven. Probeer het opnieuw of sluit zonder ze op te slaan.",
+    "conflictPendingMessage": "Dit bestand is buiten Canopi gewijzigd, dus je laatste wijzigingen zijn niet weggeschreven. Verwerp ze om door te gaan, of annuleer en los de wijziging eerst op.",
+    "retry": "Opnieuw proberen",
+    "discard": "Wijzigingen verwerpen",
+    "closeWithoutSaving": "Sluiten zonder opslaan",
+    "conflictTitle": "Buiten Canopi gewijzigd",
+    "conflictMessage": "Een ander programma heeft dit bestand gewijzigd sinds Canopi het laatst opsloeg. Kies welke versie je wilt behouden.",
+    "fileGoneTitle": "Bestand verplaatst of verwijderd",
+    "fileGoneMessage": "Het bestand van dit ontwerp is verplaatst of verwijderd. Sla je versie opnieuw op, of sla haar ergens anders op.",
+    "keepMine": "Mijn versie behouden",
+    "useFile": "Versie van het bestand gebruiken",
+    "saveCopy": "Mijn versie als kopie opslaan…",
+    "saveElsewhere": "Opslaan als…",
+    "revertTitle": "Terug naar de versie bij openen?",
+    "revertMessage": "Alle wijzigingen sinds het openen van dit ontwerp worden vervangen.",
+    "revertConfirm": "Terugzetten"
+  },
+  "drafts": {
+    "title": "Concepten",
+    "delete": "Concept verwijderen: {{name}}",
+    "confirmDelete": "Dit concept verwijderen?",
+    "confirmDeleteAction": "Verwijderen"
   }
 }

@@ -227,11 +227,8 @@
       "open": "Entwurf öffnen",
       "save": "Speichern",
       "saveAs": "Speichern unter",
-      "unsavedChanges": "Nicht gespeicherte Änderungen",
-      "saveBeforeClose": "Vor dem Schließen speichern?",
-      "saveBeforeCloseMessage": "Sie haben nicht gespeicherte Änderungen. Vor dem Schließen speichern?",
-      "dontSave": "Nicht speichern",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "revert": "Auf die geöffnete Version zurücksetzen"
     },
     "layers": {
       "layerPanel": "Ebenen",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Über Canopi"
   },
   "titleBar": {
-    "unsavedChanges": "Ungespeicherte Änderungen",
     "untitledDesign": "Unbenannter Entwurf",
     "renameDesignName": "Entwurf umbenennen",
     "designNameInput": "Entwurfsname"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "Objekt {{feature}} hat eine ungültige Geometrie.",
       "invalid_coordinates": "Objekt {{feature}} hat Koordinaten außerhalb des WGS84-Längen-/Breitenbereichs."
     }
+  },
+  "saveStatus": {
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert",
+    "error": "Speichern fehlgeschlagen",
+    "retry": "Erneut versuchen",
+    "conflict": "Außerhalb von Canopi geändert"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "Änderungen konnten nicht gespeichert werden",
+    "flushFailedMessage": "Canopi konnte deine letzten Änderungen nicht schreiben. Versuche es erneut oder verwirf sie, um fortzufahren.",
+    "flushFailedCloseMessage": "Canopi konnte deine letzten Änderungen nicht schreiben. Versuche es erneut oder schließe, ohne sie zu speichern.",
+    "conflictPendingMessage": "Diese Datei wurde außerhalb von Canopi geändert, daher wurden deine letzten Änderungen nicht geschrieben. Verwirf sie, um fortzufahren, oder brich ab und kläre zuerst die Änderung.",
+    "retry": "Erneut versuchen",
+    "discard": "Änderungen verwerfen",
+    "closeWithoutSaving": "Ohne Speichern schließen",
+    "conflictTitle": "Außerhalb von Canopi geändert",
+    "conflictMessage": "Ein anderes Programm hat diese Datei geändert, seit Canopi sie zuletzt gespeichert hat. Wähle, welche Version du behalten möchtest.",
+    "fileGoneTitle": "Datei verschoben oder gelöscht",
+    "fileGoneMessage": "Die Datei dieses Designs wurde verschoben oder gelöscht. Speichere deine Version erneut oder speichere sie an einem anderen Ort.",
+    "keepMine": "Meine Version behalten",
+    "useFile": "Version der Datei verwenden",
+    "saveCopy": "Meine als Kopie speichern…",
+    "saveElsewhere": "Speichern unter…",
+    "revertTitle": "Zur Version beim Öffnen zurückkehren?",
+    "revertMessage": "Alle Änderungen seit dem Öffnen dieses Designs werden ersetzt.",
+    "revertConfirm": "Zurücksetzen"
+  },
+  "drafts": {
+    "title": "Entwürfe",
+    "delete": "Entwurf löschen: {{name}}",
+    "confirmDelete": "Diesen Entwurf löschen?",
+    "confirmDeleteAction": "Löschen"
   }
 }

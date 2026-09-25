@@ -227,11 +227,8 @@
       "open": "デザインを開く",
       "save": "保存",
       "saveAs": "名前を付けて保存",
-      "unsavedChanges": "未保存の変更があります",
-      "saveBeforeClose": "閉じる前に保存しますか？",
-      "saveBeforeCloseMessage": "未保存の変更があります。閉じる前に保存しますか？",
-      "dontSave": "保存しない",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "revert": "開いたときのバージョンに戻す"
     },
     "layers": {
       "layerPanel": "レイヤー",
@@ -784,7 +781,6 @@
     "help.aboutCanopi": "Canopi について"
   },
   "titleBar": {
-    "unsavedChanges": "未保存の変更",
     "untitledDesign": "無題のデザイン",
     "renameDesignName": "デザイン名を変更",
     "designNameInput": "デザイン名"
@@ -1108,5 +1104,38 @@
       "invalid_geometry": "フィーチャ {{feature}} のジオメトリが無効です。",
       "invalid_coordinates": "フィーチャ {{feature}} の座標が WGS84 の経度・緯度の範囲外です。"
     }
+  },
+  "saveStatus": {
+    "saving": "保存中…",
+    "saved": "保存済み",
+    "error": "保存できませんでした",
+    "retry": "再試行",
+    "conflict": "Canopi の外部で変更されました"
+  },
+  "saveProblem": {
+    "flushFailedTitle": "変更を保存できませんでした",
+    "flushFailedMessage": "Canopi は最新の変更を書き込めませんでした。再試行するか、変更を破棄して続行してください。",
+    "flushFailedCloseMessage": "Canopi は最新の変更を書き込めませんでした。再試行するか、保存せずに閉じてください。",
+    "conflictPendingMessage": "このファイルは Canopi の外部で変更されたため、最新の変更は書き込まれていません。変更を破棄して続行するか、キャンセルして先に変更を解決してください。",
+    "retry": "再試行",
+    "discard": "変更を破棄",
+    "closeWithoutSaving": "保存せずに閉じる",
+    "conflictTitle": "Canopi の外部で変更されました",
+    "conflictMessage": "Canopi が最後に保存してから、別のプログラムがこのファイルを変更しました。残すバージョンを選んでください。",
+    "fileGoneTitle": "ファイルが移動または削除されました",
+    "fileGoneMessage": "このデザインを保存したファイルが移動または削除されました。自分のバージョンを保存し直すか、別の場所に保存してください。",
+    "keepMine": "自分のバージョンを残す",
+    "useFile": "ファイルのバージョンを使う",
+    "saveCopy": "自分のバージョンをコピーとして保存…",
+    "saveElsewhere": "名前を付けて保存…",
+    "revertTitle": "開いたときのバージョンに戻しますか？",
+    "revertMessage": "このデザインを開いてから行ったすべての変更が置き換えられます。",
+    "revertConfirm": "元に戻す"
+  },
+  "drafts": {
+    "title": "下書き",
+    "delete": "下書きを削除: {{name}}",
+    "confirmDelete": "この下書きを削除しますか？",
+    "confirmDeleteAction": "削除"
   }
 }

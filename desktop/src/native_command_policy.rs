@@ -97,25 +97,6 @@ const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
     },
 ];
 
-/// Registered commands the frontend does not invoke yet. Every other command must have an
-/// `invoke('<name>'...)` call site in production frontend source; a dead command is deleted.
-#[derive(Clone, Copy)]
-struct UninvokedCommandAllowance {
-    name: &'static str,
-    reason: &'static str,
-}
-
-const UNINVOKED_COMMAND_ALLOWLIST: &[UninvokedCommandAllowance] = &[
-    UninvokedCommandAllowance {
-        name: "list_autosaves",
-        reason: "pending user decision on autosave recovery",
-    },
-    UninvokedCommandAllowance {
-        name: "recover_autosave",
-        reason: "pending user decision on autosave recovery",
-    },
-];
-
 #[derive(Debug)]
 struct CommandFact {
     path: String,
@@ -830,10 +811,12 @@ impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
     }
 }
 
+/// Every registered command must have an `invoke('<name>'...)` call site in
+/// production frontend source. There are no exemptions: a command nothing
+/// invokes is deleted.
 fn audit_frontend_invocations(
     registry_source: &str,
     frontend_sources: &[(&str, &str)],
-    uninvoked_allowlist: &[UninvokedCommandAllowance],
 ) -> Vec<String> {
     let mut violations = Vec::new();
     let registered = match parse_command_registry(registry_source) {
@@ -848,34 +831,8 @@ fn audit_frontend_invocations(
         .flat_map(|(_, source)| invoked_command_names(source))
         .collect::<BTreeSet<_>>();
 
-    let mut allowed = BTreeSet::new();
-    for allowance in uninvoked_allowlist {
-        if allowance.reason.trim().is_empty() {
-            violations.push(format!(
-                "uninvoked command allowance has no reason: {}",
-                allowance.name
-            ));
-        }
-        if !allowed.insert(allowance.name) {
-            violations.push(format!(
-                "duplicate uninvoked command allowance: {}",
-                allowance.name
-            ));
-        }
-        if !registered.contains(allowance.name) {
-            violations.push(format!(
-                "uninvoked command allowance names no registered command: {}",
-                allowance.name
-            ));
-        } else if invoked.contains(allowance.name) {
-            violations.push(format!(
-                "uninvoked command allowance names an invoked command: {}",
-                allowance.name
-            ));
-        }
-    }
     for name in &registered {
-        if !invoked.contains(name) && !allowed.contains(name.as_str()) {
+        if !invoked.contains(name) {
             violations.push(format!(
                 "registered native command is never invoked by the frontend: {name}"
             ));
@@ -1040,7 +997,6 @@ fn audit_repository() -> Vec<String> {
     violations.extend(audit_frontend_invocations(
         &registry_source,
         &frontend_sources,
-        UNINVOKED_COMMAND_ALLOWLIST,
     ));
     if source_root.join("blocking.rs").exists() {
         violations.push("obsolete unbounded blocking helper still exists: src/blocking.rs".into());
@@ -1109,9 +1065,9 @@ fn duplicates(values: &[String]) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        StateAccessAllowance, SyncCommandAllowance, UninvokedCommandAllowance,
-        audit_blocking_pool_sources, audit_command_policy, audit_frontend_invocations,
-        audit_repository, invoked_command_names, is_production_frontend_source,
+        StateAccessAllowance, SyncCommandAllowance, audit_blocking_pool_sources,
+        audit_command_policy, audit_frontend_invocations, audit_repository, invoked_command_names,
+        is_production_frontend_source,
     };
     use std::path::Path;
 
@@ -1523,35 +1479,18 @@ mod tests {
 
     #[test]
     fn registered_commands_must_be_invoked_by_production_frontend_source() {
-        let registry =
-            "tauri::generate_handler![commands::a::used, commands::a::dead, commands::a::pending];";
-        let allowance = [
-            UninvokedCommandAllowance {
-                name: "pending",
-                reason: "pending fixture decision",
-            },
-            UninvokedCommandAllowance {
-                name: "used",
-                reason: "stale: now invoked",
-            },
-            UninvokedCommandAllowance {
-                name: "gone",
-                reason: "stale: deleted command",
-            },
-        ];
+        let registry = "tauri::generate_handler![commands::a::used, commands::b::dead];";
         let violations = audit_frontend_invocations(
             registry,
-            &[("ipc/a.ts", "export const a = () => invoke('used')")],
-            &allowance,
+            &[
+                ("ipc/a.ts", "export const a = () => invoke('used')"),
+                ("ipc/b.ts", "export const b = () => reinvoke('dead')"),
+            ],
         );
 
         assert_eq!(
             violations,
-            [
-                "registered native command is never invoked by the frontend: dead",
-                "uninvoked command allowance names an invoked command: used",
-                "uninvoked command allowance names no registered command: gone",
-            ]
+            ["registered native command is never invoked by the frontend: dead"]
         );
         assert!(is_production_frontend_source(Path::new("ipc/species.ts")));
         assert!(is_production_frontend_source(Path::new("components/A.tsx")));
