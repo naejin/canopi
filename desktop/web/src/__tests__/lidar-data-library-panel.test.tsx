@@ -275,4 +275,14 @@ describe('Data Library panel', () => {
     await click(button(/^Cancel$/))
     expect(actions.cancelAnalysisJob).toHaveBeenCalledWith('s')
   })
+
+  it('labels a cancelled calculation as cancelled, not failed', () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [
+      slope('c', 'a', { generation_id: null, state: 'Failed', detail: 'cancelled', name: 'Stopped' }),
+    ])
+    mount()
+    const row = button('Stopped').closest('li')!
+    expect(row.textContent).toContain('Cancelled')
+    expect(row.textContent).not.toContain('Calculation failed')
+  })
 })

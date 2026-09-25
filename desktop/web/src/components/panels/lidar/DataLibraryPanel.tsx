@@ -367,7 +367,10 @@ function statusLabel(row: LibraryItem): string {
     const phase = row.importJob?.progress?.phase
     return phase ? t(`canvas.lidar.progressPhase.${phase}`) : t('canvas.lidar.library.preparing')
   }
-  if (row.importJob?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
+  // A calculation reports cancellation through its detail, an import through its job.
+  if (row.importJob?.state === 'Cancelled' || (row.kind === 'Analysis' && row.message === 'cancelled')) {
+    return t('canvas.lidar.library.cancelled')
+  }
   return row.kind === 'Analysis' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
 }
 
