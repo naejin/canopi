@@ -23,7 +23,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 | Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, layers | Runtime transactions |
 | Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, extra | Design Edit commands |
 | Map layer store (`app/map-layers/`) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
-| Settings | Last view, basemap style, satellite provider, Google key (device-local credential), locale, theme | Settings actions |
+| Settings | Last view, basemap style, Google key (device-local credential), locale, theme | Settings actions |
 
 - Undo covers scene runtime edits only. Design Edit commands, map layers and settings are not undoable.
 - Neither document authority duplicates the other's data. Save composition goes through the document-session seam, which asks each authority for its part.
@@ -54,7 +54,7 @@ interaction overlays
 ```
 
 - **Basemap.** OpenFreeMap vector styles (Liberty by default; Positron, Bright, Dark) with the attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap". The style is added as a vector source, style layers, glyphs and sprite without `setStyle()`, so the map lifetime, camera and edits survive a style change. Row opacity scales each style layer's paint opacity. Labels follow the app locale (`name:<locale>`, falling back to `name`).
-- **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Providers: Google (default) and EOX Sentinel-2 cloudless 2017 (keyless, CC BY 4.0, ~10 m/pixel; Esri World Imagery was rejected on its licence terms). Without a key, Google serves its public `mt1.google.com` tiles, as GeoLibre's basemap control does; with the user's device key it uses the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary (see [ADR 0001](adr/0001-geolocated-map-canvas.md)). The key never enters a Design, export, snapshot, diagnostic bundle or log.
+- **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Google is the only imagery (Esri World Imagery was rejected on its licence terms). Without a key, Google serves its public `mt1.google.com` tiles, as GeoLibre's basemap control does; with the user's device key it uses the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary (see [ADR 0001](adr/0001-geolocated-map-canvas.md)). The key never enters a Design, export, snapshot, diagnostic bundle or log.
 - **Site references** group in Layers: Basemap, Satellite, LiDAR items, Contours, Hillshade.
 - **Place search.** A pin button under the inspection lens (loupe) button opens a search field for a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
 - **Failure.** If WebGL2 or MapLibre cannot start, or the map fails later, the workspace shows an explicit "map unavailable" state: the map surface publishes its error status, no renderer or editing session is mounted, and the Design stays loaded so it can still be saved. There is no fallback renderer.

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   SatelliteImageryProvider,
   readViewportMetadata,
-  type SatelliteProviderHttp,
-  type SatelliteProviderResponse,
-  type SatelliteProviderState,
+  type SatelliteHttp,
+  type SatelliteHttpResponse,
+  type SatelliteState,
   type SatelliteViewport,
 } from '../maplibre/satellite-provider-session'
 import {
@@ -33,17 +33,17 @@ function viewportBody(maxZoom = 18, copyright = 'Imagery &copy; Google'): unknow
   }
 }
 
-function ok(json: unknown): SatelliteProviderResponse {
+function ok(json: unknown): SatelliteHttpResponse {
   return { ok: true, status: 200, json }
 }
 
-function failure(status: number): SatelliteProviderResponse {
+function failure(status: number): SatelliteHttpResponse {
   return { ok: false, status, json: null, retryAfterSeconds: null }
 }
 
 function scriptedHttp(
-  answers: Array<SatelliteProviderResponse | (() => Promise<SatelliteProviderResponse>)>,
-): { http: SatelliteProviderHttp; calls: Array<{ url: string; method?: string }> } {
+  answers: Array<SatelliteHttpResponse | (() => Promise<SatelliteHttpResponse>)>,
+): { http: SatelliteHttp; calls: Array<{ url: string; method?: string }> } {
   const calls: Array<{ url: string; method?: string }> = []
   let index = 0
   return {
@@ -59,8 +59,8 @@ function scriptedHttp(
   }
 }
 
-function recorder(provider: SatelliteImageryProvider): SatelliteProviderState[] {
-  const seen: SatelliteProviderState[] = []
+function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
+  const seen: SatelliteState[] = []
   provider.subscribe((state) => seen.push(state))
   return seen
 }
@@ -106,7 +106,6 @@ function recordingTarget() {
 
 function descriptor(overrides: Partial<SatelliteDescriptor> = {}): SatelliteDescriptor {
   return {
-    provider: 'google',
     tiles: [GOOGLE_SESSION_TILES],
     tileSize: 256,
     maxzoom: 22,
@@ -130,7 +129,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       provider.subscribe((state) => {
         if (state.state === 'ready') resolve()
       })
-      provider.update({ provider: 'google' }, VIEWPORT_A)
+      provider.update(VIEWPORT_A)
     })
 
     key = 'key-b'
@@ -138,7 +137,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       provider.subscribe((state) => {
         if (state.state === 'ready') resolve()
       })
-      provider.update({ provider: 'google' }, VIEWPORT_A)
+      provider.update(VIEWPORT_A)
     })
 
     const sessionCalls = calls.filter((call) => call.url.includes('createSession'))
@@ -153,13 +152,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { http, calls } = scriptedHttp([
       ok(sessionBody()),
       () =>
-        new Promise<SatelliteProviderResponse>((resolve) => {
+        new Promise<SatelliteHttpResponse>((resolve) => {
           gate.release = () => resolve(ok(viewportBody(15, 'old')))
         }),
       ok(viewportBody(20, 'new')),
     ])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
-    provider.update({ provider: 'google' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (calls.length < 2) throw new Error('session not settled')
     })
@@ -182,13 +181,13 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const { http, calls } = scriptedHttp([
       ok(sessionBody()),
       () =>
-        new Promise<SatelliteProviderResponse>((resolve) => {
+        new Promise<SatelliteHttpResponse>((resolve) => {
           gate.release = () => resolve(ok(viewportBody()))
         }),
     ])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
     const seen = recorder(provider)
-    provider.update({ provider: 'google' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (!gate.release) throw new Error('viewport request not started')
     })
@@ -225,7 +224,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       () => 0,
       async () => {},
     )
-    provider.update({ provider: 'google' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not failed')
     })
@@ -249,7 +248,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
       ok(viewportBody(12)),
     ])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'key' })
-    provider.update({ provider: 'google' }, VIEWPORT_A)
+    provider.update(VIEWPORT_A)
     await vi.waitFor(() => {
       const last = provider.snapshot()
       if (last.state !== 'ready' || last.descriptor.maxzoom !== 15) throw new Error('want 15')
@@ -373,7 +372,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     )
     const layer = layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } } | undefined
     expect(layer?.layout?.visibility).toBe('visible')
-    reconcileSatelliteContribution(target, { state: 'loading', provider: 'google' })
+    reconcileSatelliteContribution(target, { state: 'loading' })
     expect((layers.get(MAPLIBRE_SATELLITE_LAYER_ID) as { layout?: { visibility?: string } })?.layout?.visibility)
       .toBe('none')
   })
@@ -551,11 +550,10 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const teardown = mountSatelliteLifecycle({
       map,
       tileAuth: null,
-      readProvider: () => 'eox' as const,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
       readVisible: () => true,
     })
-    // No movement, settings or style-ready event: the keyless EOX provider
+    // No movement, settings or style-ready event: keyless Google imagery
     // must already be applied from current configuration.
     expect(sources.size).toBe(1)
     expect(layers.get(MAPLIBRE_SATELLITE_LAYER_ID)?.layout).toEqual({ visibility: 'visible' })
@@ -584,12 +582,11 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const mount = mountSatelliteLifecycle({
       map,
       tileAuth: null,
-      readProvider: () => 'eox' as const,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
       replaceSatelliteAttribution: (credit: string) => credits.push(credit),
     })
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
-    expect(credits.at(-1)).toContain('EOX')
+    expect(credits.at(-1)).toBe('&copy; Google')
     mount.dispose()
     expect(map.sources.size).toBe(0)
     expect(credits.at(-1)).toBe('')
@@ -647,7 +644,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const mount = mountSatelliteLifecycle({
       map,
       tileAuth: null,
-      readProvider: () => 'eox' as const,
       readViewport: () => {
         readCount += 1
         return viewport
@@ -697,7 +693,6 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     const mount = mountSatelliteLifecycle({
       map,
       tileAuth: null,
-      readProvider: () => 'eox' as const,
       readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
       readVisible: () => true,
       attributionControls: controls,
@@ -705,7 +700,7 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     expect(controls.create).toHaveBeenCalledTimes(1)
     const first = controls.create.mock.results[0]?.value
     // Identical credit must not recreate the control.
-    mount.update({ provider: 'eox' }, { west: -10, south: -10, east: 10, north: 10, zoom: 2 })
+    mount.update({ west: -10, south: -10, east: 10, north: 10, zoom: 2 })
     await Promise.resolve()
     expect(controls.create).toHaveBeenCalledTimes(1)
     expect(controls.remove).not.toHaveBeenCalled()

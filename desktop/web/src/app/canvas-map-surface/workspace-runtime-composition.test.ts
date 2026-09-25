@@ -190,7 +190,7 @@ describe('createWorkspaceRuntimeComposition', () => {
   it('projects live background settings without recreating resources and stops after disposal', async () => {
     const presentation = signal<MapBackgroundPresentation>({
       basemap: { style: 'liberty', visible: true, opacity: 1 },
-      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      satellite: { visible: false, opacity: 1 },
       locale: 'en',
     })
     const fixture = compositionFixture({
@@ -202,7 +202,7 @@ describe('createWorkspaceRuntimeComposition', () => {
 
     presentation.value = {
       basemap: { style: 'dark', visible: true, opacity: 0.25 },
-      satellite: { provider: 'google', visible: true, opacity: 0.8 },
+      satellite: { visible: true, opacity: 0.8 },
       locale: 'fr',
     }
 
@@ -215,7 +215,7 @@ describe('createWorkspaceRuntimeComposition', () => {
     await fixture.composition.dispose()
     presentation.value = {
       basemap: { style: 'liberty', visible: true, opacity: 0.5 },
-      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      satellite: { visible: false, opacity: 1 },
       locale: 'en',
     }
     await Promise.resolve()
@@ -480,7 +480,7 @@ function workspaceSnapshot({ latitude = 48.86 } = {}): WorkspaceActivationSnapsh
       initialCenter: { lat: latitude, lon: 2.35 },
       background: {
         basemap: { style: 'liberty', visible: true, opacity: 1 },
-        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        satellite: { visible: false, opacity: 1 },
         locale: 'en',
       },
     },

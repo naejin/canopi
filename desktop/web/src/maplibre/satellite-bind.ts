@@ -1,10 +1,9 @@
 import { effect } from '@preact/signals'
-import type { SatelliteImageryProvider, SatelliteProviderState, SatelliteViewport } from './satellite-provider-session'
+import type { SatelliteImageryProvider, SatelliteState, SatelliteViewport } from './satellite-provider-session'
 import { SatelliteImageryProvider as Provider } from './satellite-provider-session'
 import { createBrowserSatelliteHttp } from './satellite-http.browser'
 import { BasemapTileAuth } from './basemap-tile-auth'
 import { googleMapsApiKey, locale } from '../app/settings/state'
-import type { SatelliteProvider } from '../generated/contracts'
 import {
   reconcileSatelliteContribution,
   setSatelliteContributionVisibility,
@@ -19,7 +18,7 @@ import {
  * place they meet, and it deliberately does exactly two things: apply the
  * provider's published state to the basemap source and layer once the style can
  * accept it, and apply visibility. It never calls `setStyle()` and never
- * recreates the map, which is what lets a provider switch, a key change or a
+ * recreates the map, which is what lets a key change or a
  * re-issued session happen mid-edit without disturbing the camera, the scene
  * runtime, or placement.
  *
@@ -48,7 +47,7 @@ export interface SatelliteBindingDeps {
   /** Relative cost of one zoom level at this map's projection; a raster
    * contribution is a single source, so this is constant. */
   readonly maxzoomFallback?: number
-  /** Visibility of the basemap layer, independent of which provider is live. */
+  /** User visibility of the satellite layer, independent of provider readiness. */
   readonly visible?: () => boolean
   /**
    * The map's credential owner, when the map was created with a request
@@ -89,18 +88,18 @@ export interface SatelliteBindingDeps {
 
 /** Effective basemap visibility: user visibility AND provider renderability. */
 function effectiveBasemapVisibility(
-  state: SatelliteProviderState,
+  state: SatelliteState,
   userVisible: boolean,
 ): boolean {
   return userVisible && state.state === 'ready'
 }
 
 /** Install the binding and return its disposer. */
-export function bindSatelliteProvider(deps: SatelliteBindingDeps): () => void {
+export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
   const { provider, map, tileAuth } = deps
   const visible = deps.visible ?? (() => true)
   let disposed = false
-  let pending: SatelliteProviderState | null = null
+  let pending: SatelliteState | null = null
   let ownedAttribution: unknown = null
   let ownedCredit: string | null = null
 
@@ -141,7 +140,7 @@ export function bindSatelliteProvider(deps: SatelliteBindingDeps): () => void {
     }
   }
 
-  const apply = (state: SatelliteProviderState): void => {
+  const apply = (state: SatelliteState): void => {
     // The latest state always wins: a state that arrives while the style is
     // still loading is what gets applied when it finishes, not the one that
     // happened to arrive first.
@@ -271,7 +270,7 @@ export function createAttributionControls(
  * serving a live map: `update()` re-reads it, and no caller has to capture the
  * key at map-creation time and go stale.
  */
-export function createSatelliteProvider(
+export function createSatelliteImagery(
   tileAuth: BasemapTileAuth | null = null,
 ): SatelliteImageryProvider {
   return new Provider(
@@ -287,7 +286,7 @@ export function createSatelliteProvider(
 }
 
 /**
- * Observe style, effective key and application locale for one map lifetime.
+ * Observe the effective key and application locale for one map lifetime.
  *
  * A getter without an observer is insufficient: an already mounted provider
  * must be updated when any of these change, so the configuration identity is
@@ -295,7 +294,6 @@ export function createSatelliteProvider(
  */
 export function installSatelliteConfigObserver(
   provider: SatelliteImageryProvider,
-  readPresentation: () => { readonly provider: SatelliteProvider },
   readViewport: () => SatelliteViewport,
 ): () => void {
   let mounted = false
@@ -303,16 +301,14 @@ export function installSatelliteConfigObserver(
     // Subscribe to every configuration identity input.
     void googleMapsApiKey.value
     void locale.value
-    const presentation = readPresentation()
-    void presentation.provider
-    // The caller already applied the initial presentation; only later
+    // The caller already applied the initial configuration; only later
     // configuration identity changes update the already mounted provider.
     if (!mounted) {
       mounted = true
       return
     }
     try {
-      provider.update(presentation, readViewport())
+      provider.update(readViewport())
     } catch {
       // A map that rejects the new contribution reports through its own
       // failure watcher; a settings change must not become an unhandled throw.
@@ -364,7 +360,6 @@ export function mapStyleReadiness(
 export interface SatelliteMountOptions {
   readonly map: SatelliteReconcileTarget
   readonly tileAuth?: BasemapTileAuth | null
-  readonly readProvider: () => SatelliteProvider
   readonly readViewport: () => SatelliteViewport
   readonly readVisible?: () => boolean
   readonly styleReady?: MapStyleReadiness
@@ -389,14 +384,14 @@ export interface SatelliteMountOptions {
 }
 
 export interface SatelliteMountHandle {
-  update(presentation: { readonly provider: SatelliteProvider }, viewport: SatelliteViewport): void
+  update(viewport: SatelliteViewport): void
   updateViewport(viewport: SatelliteViewport): void
   dispose(): void
 }
 
 export function mountSatelliteLifecycle(options: SatelliteMountOptions): SatelliteMountHandle {
   const tileAuth = options.tileAuth ?? null
-  const provider = createSatelliteProvider(tileAuth)
+  const provider = createSatelliteImagery(tileAuth)
   const attributionControls =
     options.attributionControls ??
     (options.maplibre && options.mapControls
@@ -418,7 +413,7 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
         replaceSatelliteAttribution,
       }
     : map
-  const unbind = bindSatelliteProvider({
+  const unbind = bindSatelliteImagery({
     provider,
     map: mapTarget,
     ...(tileAuth ? { tileAuth } : {}),
@@ -430,18 +425,14 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
   })
   // Initialize from current configuration immediately: no movement, settings
   // or style-ready event is required before the first provider generation.
-  provider.update({ provider: options.readProvider() }, options.readViewport())
-  const disposeObserver = installSatelliteConfigObserver(
-    provider,
-    () => ({ provider: options.readProvider() }),
-    options.readViewport,
-  )
+  provider.update(options.readViewport())
+  const disposeObserver = installSatelliteConfigObserver(provider, options.readViewport)
   // The mount owns viewport-event subscription as well as configuration
   // observation. Read the current map viewport when the event fires.
   const onMoveEnd = () => provider.updateViewport(options.readViewport())
   options.events?.on('moveend', onMoveEnd)
   return {
-    update: (presentation, viewport) => provider.update(presentation, viewport),
+    update: (viewport: SatelliteViewport) => provider.update(viewport),
     updateViewport: (viewport: SatelliteViewport) => provider.updateViewport(viewport),
     dispose: () => {
       options.events?.off?.('moveend', onMoveEnd)

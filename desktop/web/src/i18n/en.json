@@ -567,12 +567,6 @@
       "sampleCentre": "Sample at view centre"
     },
     "satellite": {
-      "provider": "Imagery",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Sentinel-2 cloudless imagery, about 10 m per pixel.",
       "googleKeyOptional": "Without a key, Canopi uses Google's public satellite tiles. Add your Google Maps API key to use the official Map Tiles API."
     }
   },

@@ -3,7 +3,6 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_BASEMAP_STYLES,
   SETTINGS_LOCALES,
-  SETTINGS_SATELLITE_PROVIDERS,
   SETTINGS_THEMES,
 } from '../generated/settings'
 import type { Settings } from '../types/settings'
@@ -57,7 +56,6 @@ describe('settings platform adapters', () => {
       basemap_style: 'dark',
       basemap_visible: false,
       basemap_opacity: 0.4,
-      satellite_provider: 'google',
       satellite_visible: true,
       satellite_opacity: 0.7,
       contour_visible: true,
@@ -99,14 +97,17 @@ describe('settings platform adapters', () => {
       })
       expect((await adapter.load()).basemap_style).toBe(basemapStyle)
     }
+  })
 
-    for (const satelliteProvider of SETTINGS_SATELLITE_PROVIDERS) {
-      const adapter = createBrowserSettingsPlatformAdapter({
-        loadSettings: () => settings({ satellite_provider: satelliteProvider }),
-        saveSettings: vi.fn(),
-      })
-      expect((await adapter.load()).satellite_provider).toBe(satelliteProvider)
-    }
+  it('loads browser settings that still carry the retired satellite provider without re-emitting it', async () => {
+    const adapter = createBrowserSettingsPlatformAdapter({
+      loadSettings: () => ({ satellite_provider: 'eox', satellite_visible: true, satellite_opacity: 0.4 }),
+      saveSettings: vi.fn(),
+    })
+
+    const loaded = await adapter.load()
+    expect(loaded).toEqual(settings({ satellite_visible: true, satellite_opacity: 0.4 }))
+    expect(loaded).not.toHaveProperty('satellite_provider')
   })
 
   it('merges legacy locale and theme browser settings with complete defaults', async () => {
@@ -136,7 +137,6 @@ describe('settings platform adapters', () => {
         basemap_style: 'street',
         basemap_visible: 'false',
         basemap_opacity: '0.4',
-        satellite_provider: 'maptiler',
         satellite_visible: 1,
         satellite_opacity: Number.NaN,
         contour_visible: 1,

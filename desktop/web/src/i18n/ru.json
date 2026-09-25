@@ -567,12 +567,6 @@
       "sampleCentre": "Измерить в центре вида"
     },
     "satellite": {
-      "provider": "Снимки",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Безоблачные снимки Sentinel-2, около 10 м на пиксель.",
       "googleKeyOptional": "Без ключа Canopi использует общедоступные спутниковые тайлы Google. Добавьте свой ключ API Google Maps, чтобы использовать официальный Map Tiles API."
     }
   },

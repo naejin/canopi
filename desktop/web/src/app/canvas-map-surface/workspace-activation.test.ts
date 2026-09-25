@@ -25,7 +25,7 @@ function background(
 ): MapBackgroundPresentation {
   return {
     basemap: { style: 'liberty', visible: true, opacity: 1, ...basemap },
-    satellite: { provider: 'eox', visible: false, opacity: 1, ...satellite },
+    satellite: { visible: false, opacity: 1, ...satellite },
     locale: 'en',
   }
 }
@@ -342,12 +342,12 @@ describe('WorkspaceActivationCoordinator', () => {
 
     coordinator.updateBackgroundPresentation(background(
       { visible: true, opacity: 1.5 },
-      { provider: 'google', visible: true, opacity: -0.5 },
+      { visible: true, opacity: -0.5 },
     ))
 
     expect(updateBackgroundPresentation).toHaveBeenCalledWith(background(
       { visible: true, opacity: 1 },
-      { provider: 'google', visible: true, opacity: 0 },
+      { visible: true, opacity: 0 },
     ))
     expect(map.addLayer).toHaveBeenCalledTimes(addLayerCount)
     expect(runtime.init).toHaveBeenCalledOnce()

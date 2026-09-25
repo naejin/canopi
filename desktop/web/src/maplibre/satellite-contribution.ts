@@ -2,7 +2,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from './config'
-import type { SatelliteProviderState } from './satellite-provider-session'
+import type { SatelliteState } from './satellite-provider-session'
 import { hasUnresolvedSession } from './basemap-tile-auth'
 
 /**
@@ -55,12 +55,12 @@ export interface SatelliteRasterLayer {
  * basemap source and layer.
  *
  * This is the map side of the provider boundary, and it deliberately never
- * calls `setStyle()` and never recreates the map. A provider switch, a key
- * change or a new session therefore cannot disturb the camera, the scene
+ * calls `setStyle()` and never recreates the map. A key change or a new
+ * session therefore cannot disturb the camera, the scene
  * runtime or any other layer — which is the property the product contract
- * requires and the reason provider changes are safe mid-edit.
+ * requires and the reason key changes are safe mid-edit.
  *
- * Tile configuration (provider/template, tile size, zoom limits) is compared
+ * Tile configuration (template, tile size, zoom limits) is compared
  * separately from attribution and visibility. Identical publications are
  * no-ops; copyright-only changes update attribution without removing the tile
  * source; a source is rebuilt only when its actual tile configuration requires
@@ -108,7 +108,7 @@ function sameTileConfig(
 
 export function reconcileSatelliteContribution(
   target: SatelliteReconcileTarget,
-  state: SatelliteProviderState,
+  state: SatelliteState,
   options: SatelliteContributionOptions = {},
 ): void {
   const descriptor = state.state === 'ready' ? state.descriptor : null
@@ -128,9 +128,9 @@ export function reconcileSatelliteContribution(
   }
 
   // An idle or unavailable provider has no imagery to show, so the existing
-  // contribution is withdrawn. A provider that cannot serve must not leave the
-  // previous provider's tiles on screen: that would present one provider's
-  // imagery under another's name.
+  // contribution is withdrawn. A generation that cannot serve must not leave
+  // the previous generation's tiles on screen: that would present keyless
+  // imagery as if the configured key were serving it.
   if (tiles.length === 0) {
     removeContribution(target)
     return

@@ -8,7 +8,7 @@ import { WorldMapSurface } from '../components/world-map/WorldMapSurface'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import type { MapBackgroundHandle, MapBackgroundOptions } from '../maplibre/map-background'
-import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
+import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 import type { TemplateMeta } from '../types/community'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -336,7 +336,7 @@ describe('WorldMapSurface', () => {
         ] } }
     })
     googleMapsApiKey.value = 'synthetic-test-key'
-    setMapLayers({ satellite: { provider: 'google', visible: true } })
+    setMapLayers({ satellite: { visible: true } })
     try {
       await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
       await vi.waitFor(() => expect(maps).toHaveLength(1))
@@ -442,25 +442,17 @@ describe('WorldMapSurface', () => {
     map.zoom = 6
 
     act(() => {
-      setMapLayers({ satellite: { provider: 'eox', visible: true } })
+      setMapLayers({ satellite: { visible: true } })
     })
 
-    // Satellite on hides the Basemap and shows keyless EOX imagery. The
-    // product contract forbids `setStyle()` and map recreation on a layer or
-    // provider change, so the map, camera and markers stay exactly as they were.
+    // Satellite on hides the Basemap and shows keyless Google imagery. The
+    // product contract forbids `setStyle()` and map recreation on a layer
+    // change, so the map, camera and markers stay exactly as they were.
     await vi.waitFor(() => expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true))
     expect((map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
-      .toEqual([EOX_SATELLITE_TILES])
+      .toEqual([GOOGLE_KEYLESS_TILES])
     expect(map.sources.has('ofm-openmaptiles')).toBe(false)
     expect(map.layers.has('ofm:water')).toBe(false)
-
-    // Google without a device key switches to its keyless tiles on the same
-    // map; EOX tiles never stay on screen under Google's name.
-    act(() => {
-      setMapLayers({ satellite: { provider: 'google' } })
-    })
-    await vi.waitFor(() => expect((map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] } | undefined)?.tiles)
-      .toEqual([GOOGLE_KEYLESS_TILES]))
 
     // Satellite off restores the Basemap.
     act(() => {

@@ -567,12 +567,6 @@
       "sampleCentre": "Am Ansichtszentrum messen"
     },
     "satellite": {
-      "provider": "Bilddaten",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Wolkenfreie Sentinel-2-Bilder, etwa 10 m pro Pixel.",
       "googleKeyOptional": "Ohne Schlüssel nutzt Canopi die öffentlichen Satellitenkacheln von Google. Fügen Sie Ihren Google-Maps-API-Schlüssel hinzu, um die offizielle Map Tiles API zu verwenden."
     }
   },

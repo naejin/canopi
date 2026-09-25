@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BasemapStyle, SatelliteProvider } from '../generated/contracts'
+import type { BasemapStyle } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
 import {
@@ -39,7 +39,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     basemap_style: 'liberty',
     basemap_visible: true,
     basemap_opacity: 1,
-    satellite_provider: 'eox',
     satellite_visible: false,
     satellite_opacity: 1,
     contour_visible: false,
@@ -137,7 +136,6 @@ describe('settings projection', () => {
       basemap_style: 'bright',
       basemap_visible: false,
       basemap_opacity: 0.35,
-      satellite_provider: 'google',
       satellite_visible: true,
       satellite_opacity: 0.7,
       contour_visible: true,
@@ -157,7 +155,7 @@ describe('settings projection', () => {
     expect(savedStampsFrameHeight.value).toBe(280)
     expect(mapLayers.value).toEqual({
       basemap: { style: 'bright', visible: false, opacity: 0.35 },
-      satellite: { provider: 'google', visible: true, opacity: 0.7 },
+      satellite: { visible: true, opacity: 0.7 },
       contours: { visible: true, opacity: 0.45, intervalMeters: 12 },
       hillshade: { visible: true, opacity: 0.2 },
     })
@@ -178,7 +176,7 @@ describe('settings projection', () => {
       settings.savedStamps.frameHeight = 260
       settings.mapLayers = {
         basemap: { style: 'dark', visible: false, opacity: 0.6 },
-        satellite: { provider: 'google', visible: true, opacity: 0.8 },
+        satellite: { visible: true, opacity: 0.8 },
         contours: { visible: true, opacity: 0.3, intervalMeters: 18 },
         hillshade: { visible: true, opacity: 0.25 },
       }
@@ -196,7 +194,6 @@ describe('settings projection', () => {
       basemap_style: 'dark',
       basemap_visible: false,
       basemap_opacity: 0.6,
-      satellite_provider: 'google',
       satellite_visible: true,
       satellite_opacity: 0.8,
       contour_visible: true,
@@ -239,11 +236,11 @@ describe('settings projection', () => {
     hydrateSettingsProjection(baseSettings({ google_maps_api_key: 'device-key' }))
     // The key is device-local configuration. It travels with Settings, which is
     // never written into a Design, and no layer identity depends on it: the
-    // provider module decides whether Google is available from the key alone.
+    // satellite module chooses keyless or official tiles from the key alone.
     const snapshot = snapshotSettingsProjection()
     expect(Object.keys(snapshot)).toContain('google_maps_api_key')
     expect(snapshot.basemap_style).toBe('liberty')
-    expect(snapshot.satellite_provider).toBe('eox')
+    expect(snapshot).not.toHaveProperty('satellite_provider')
     expect(JSON.stringify(mapLayers.value)).not.toContain('device-key')
   })
 
@@ -252,7 +249,6 @@ describe('settings projection', () => {
       theme: 'neon' as Theme,
       basemap_style: 'street' as BasemapStyle,
       basemap_opacity: 2,
-      satellite_provider: 'maptiler' as SatelliteProvider,
       satellite_opacity: Number.NaN,
       contour_opacity: -1,
       contour_interval: 12.7,
@@ -265,7 +261,6 @@ describe('settings projection', () => {
     expect(theme.value).toBe('light')
     expect(mapLayers.value.basemap.style).toBe('liberty')
     expect(mapLayers.value.basemap.opacity).toBe(1)
-    expect(mapLayers.value.satellite.provider).toBe('google')
     expect(mapLayers.value.satellite.opacity).toBe(1)
     expect(mapLayers.value.contours.opacity).toBe(0)
     expect(mapLayers.value.contours.intervalMeters).toBe(13)
@@ -290,7 +285,6 @@ describe('settings projection', () => {
       theme: 'light',
       basemap_style: 'liberty',
       basemap_opacity: 0,
-      satellite_provider: 'google',
       satellite_opacity: 1,
       contour_opacity: 1,
       contour_interval: 8,
@@ -579,7 +573,6 @@ describe('settings projection', () => {
   it('uses the normalized hydrated snapshot as the durable no-op baseline', () => {
     hydrateSettingsProjection(baseSettings({
       basemap_opacity: 4,
-      satellite_provider: 'maptiler' as SatelliteProvider,
       contour_interval: 12.7,
       saved_stamps_frame_height: 80,
     }))

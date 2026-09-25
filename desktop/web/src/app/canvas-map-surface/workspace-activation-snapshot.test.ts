@@ -46,7 +46,7 @@ describe('readWorkspaceActivationSnapshot', () => {
         initialCenter: { lat: 48.86, lon: 2.35 },
         background: {
           basemap: { style: 'positron', visible: true, opacity: 0 },
-          satellite: { provider: 'google', visible: false, opacity: 1 },
+          satellite: { visible: false, opacity: 1 },
           locale: 'fr',
         },
       }),
@@ -78,22 +78,22 @@ describe('readWorkspaceActivationSnapshot', () => {
     expect(readWorkspaceBackgroundPresentation({
       readMapLayers: () => layers({
         basemap: { style: 'dark', visible: false, opacity: 2 },
-        satellite: { provider: 'google', visible: true, opacity: -1 },
+        satellite: { visible: true, opacity: -1 },
       }),
       readLocale: () => 'de',
     })).toEqual({
       basemap: { style: 'dark', visible: false, opacity: 1 },
-      satellite: { provider: 'google', visible: true, opacity: 0 },
+      satellite: { visible: true, opacity: 0 },
       locale: 'de',
     })
   })
 
   it('never carries the Google key into the background presentation', () => {
     const presentation = readWorkspaceBackgroundPresentation({
-      readMapLayers: () => layers({ satellite: { provider: 'google', visible: true } }),
+      readMapLayers: () => layers({ satellite: { visible: true } }),
       readLocale: () => 'en',
     })
-    expect(Object.keys(presentation.satellite).sort()).toEqual(['opacity', 'provider', 'visible'])
+    expect(Object.keys(presentation.satellite).sort()).toEqual(['opacity', 'visible'])
   })
 
   it('tracks the map layer store and locale through the default readers', () => {
@@ -109,8 +109,8 @@ describe('readWorkspaceActivationSnapshot', () => {
       expect(seen).toHaveLength(2)
       expect(seen.at(-1)?.basemap).toEqual({ style: 'bright', visible: false, opacity: 0.37 })
 
-      mapLayers.value = layers({ satellite: { provider: 'google', visible: true, opacity: 0.5 } })
-      expect(seen.at(-1)?.satellite).toEqual({ provider: 'google', visible: true, opacity: 0.5 })
+      mapLayers.value = layers({ satellite: { visible: true, opacity: 0.5 } })
+      expect(seen.at(-1)?.satellite).toEqual({ visible: true, opacity: 0.5 })
 
       locale.value = previousLocale === 'fr' ? 'de' : 'fr'
       expect(seen).toHaveLength(4)

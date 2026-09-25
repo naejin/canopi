@@ -567,12 +567,6 @@
       "sampleCentre": "在视图中心取样"
     },
     "satellite": {
-      "provider": "影像",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Sentinel-2 无云影像，约每像素 10 米。",
       "googleKeyOptional": "没有密钥时，Canopi 使用 Google 的公开卫星瓦片。添加您的 Google Maps API 密钥即可使用官方 Map Tiles API。"
     }
   },

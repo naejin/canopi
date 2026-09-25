@@ -604,13 +604,6 @@ export type ProblemReportSensitiveAttachments = {
 	current_design?: string | null,
 };
 
-/**
- *  Satellite imagery providers: Google (keyless public tiles, or the
- *  official Map Tiles API with a device key) or EOX Sentinel-2 cloudless
- *  (keyless, CC BY 4.0, about 10 m per pixel).
- */
-export type SatelliteProvider = "google" | "eox";
-
 export type SavedObjectStamp = {
 	id: string,
 	name: string,
@@ -632,8 +625,7 @@ export type Settings = {
 	basemap_style: BasemapStyle,
 	basemap_visible: boolean,
 	basemap_opacity: number,
-	// Imagery provider of the Satellite row; the row hides the Basemap when on.
-	satellite_provider: SatelliteProvider,
+	// Whether the Google satellite row is on; it hides the Basemap when on.
 	satellite_visible: boolean,
 	satellite_opacity: number,
 	/**
@@ -641,7 +633,7 @@ export type Settings = {
 	 *
 	 *  Device-local browser credential: it is stored with the rest of the
 	 *  device settings, never in a Design, export, diagnostic bundle, error
-	 *  text or log. Without a key the Google satellite provider uses keyless tiles.
+	 *  text or log. Without a key the Satellite row uses Google's keyless tiles.
 	 */
 	google_maps_api_key?: string | null,
 	contour_visible: boolean,

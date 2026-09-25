@@ -4,7 +4,7 @@ import { googleMapsApiKey } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
-import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
+import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 
 const STYLE: VectorStyleDocument = {
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
@@ -63,11 +63,10 @@ function createMap() {
 function presentation(overrides: Partial<{
   basemapVisible: boolean
   satelliteVisible: boolean
-  provider: 'eox' | 'google'
 }> = {}): MapBackgroundPresentation {
   return {
     basemap: { style: 'liberty', visible: overrides.basemapVisible ?? true, opacity: 1 },
-    satellite: { provider: overrides.provider ?? 'eox', visible: overrides.satelliteVisible ?? false, opacity: 0.7 },
+    satellite: { visible: overrides.satelliteVisible ?? false, opacity: 0.7 },
     locale: 'en',
   }
 }
@@ -114,7 +113,7 @@ describe('map background band', () => {
     background.update(presentation({ satelliteVisible: true }))
     await settle()
     expect(ids(map)).toEqual(['basemap-background', MAPLIBRE_SATELLITE_LAYER_ID, 'canopi-scene'])
-    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([EOX_SATELLITE_TILES])
+    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect((map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID) as { paint: Record<string, unknown> }).paint['raster-opacity']).toBe(0.7)
     background.update(presentation())
     await settle()
@@ -124,11 +123,27 @@ describe('map background band', () => {
 
   it('serves Google keyless tiles with Google credit when no device key is set', async () => {
     const { map, background } = mount()
-    background.update(presentation({ satelliteVisible: true, provider: 'google' }))
+    background.update(presentation({ satelliteVisible: true }))
     await settle()
     expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(ids(map)).toEqual(['basemap-background', MAPLIBRE_SATELLITE_LAYER_ID, 'canopi-scene'])
     expect(String(map.controls[0]!.options.customAttribution ?? '')).toContain('Google')
+  })
+
+  it('withdraws keyless tiles when a device key is saved while Satellite is on', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })))
+    const { map, background } = mount()
+    background.update(presentation({ satelliteVisible: true }))
+    await settle()
+    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+
+    // The key reaches the live mount through its settings observer, with no
+    // presentation change and no map recreation.
+    googleMapsApiKey.value = 'SECRET-KEY'
+    await settle()
+    expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
+    expect(map.setStyle).not.toHaveBeenCalled()
+    background.dispose()
   })
 
   it('adds no remote source when every background row is hidden', async () => {
@@ -138,12 +153,12 @@ describe('map background band', () => {
     expect(map.sources.size).toBe(0)
   })
 
-  it('credits the satellite provider through the single attribution control', async () => {
+  it('credits Google through the single attribution control', async () => {
     const { map, background } = mount()
     background.update(presentation({ satelliteVisible: true }))
     await settle()
     expect(map.controls).toHaveLength(1)
-    expect(String(map.controls[0]!.options.customAttribution ?? '')).toContain('EOxCloudless')
+    expect(map.controls[0]!.options.customAttribution).toBe('&copy; Google')
     background.update(presentation())
     await settle()
     expect(map.controls).toHaveLength(1)
@@ -156,7 +171,7 @@ describe('map background band', () => {
     vi.stubGlobal('fetch', fetchStub)
     const { map, background } = mount()
     const seen = signal('')
-    background.update(presentation({ satelliteVisible: true, provider: 'google' }))
+    background.update(presentation({ satelliteVisible: true }))
     await settle()
     seen.value = JSON.stringify([...map.sources.entries(), map.layers, map.controls.map((control) => control.options)])
     expect(seen.value).not.toContain('SECRET-KEY')

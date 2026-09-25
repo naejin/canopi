@@ -15,7 +15,7 @@ import {
 } from '../../maplibre/config'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import { OPENFREEMAP_BASEMAPS } from '../../maplibre/openfreemap-basemap'
-import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
+import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
 
@@ -142,12 +142,12 @@ function background(
 ): MapBackgroundPresentation {
   return {
     basemap: { style: 'liberty', visible: false, opacity: 0.4, ...basemap },
-    satellite: { provider: 'eox', visible: false, opacity: 0.4, ...satellite },
+    satellite: { visible: false, opacity: 0.4, ...satellite },
     locale,
   }
 }
 
-/** EOX imagery is ready synchronously, so the band lands at admission. */
+/** Keyless Google imagery is ready synchronously, so the band lands at admission. */
 function satelliteOn(opacity = 0.4): MapBackgroundPresentation {
   return background({}, { visible: true, opacity })
 }
@@ -287,13 +287,13 @@ describe('WorkspaceMapControls', () => {
         return control as FakeAttributionControl
       }
       expect(attribution().options?.compact).toBe(true)
-      expect(attribution().options?.customAttribution).toContain('EOX')
+      expect(attribution().options?.customAttribution).toBe('&copy; Google')
       expect(map.addControl).toHaveBeenLastCalledWith(attribution(), 'bottom-right')
 
       controls.updateBackgroundPresentation(hidden())
       expect(attribution().options?.customAttribution).toBeUndefined()
       controls.updateBackgroundPresentation(satelliteOn())
-      expect(attribution().options?.customAttribution).toContain('EOX')
+      expect(attribution().options?.customAttribution).toBe('&copy; Google')
     } finally { controls.releaseMap(admitted) }
     expect(map.controls.size).toBe(0)
   })
@@ -541,7 +541,7 @@ describe('WorkspaceMapControls', () => {
     expect(styleFetch).not.toHaveBeenCalled()
     expect(map.setStyle).not.toHaveBeenCalled()
     expect(JSON.stringify(map.options.style)).not.toContain('openfreemap')
-    expect(JSON.stringify(map.options.style)).not.toContain('eox.at')
+    expect(JSON.stringify(map.options.style)).not.toContain('google.com')
   })
 
   it('adds the visible contribution at style admission without waiting for tile events', async () => {
@@ -554,7 +554,7 @@ describe('WorkspaceMapControls', () => {
 
     expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_SATELLITE_SOURCE_ID, expect.objectContaining({
       type: 'raster',
-      tiles: [EOX_SATELLITE_TILES],
+      tiles: [GOOGLE_KEYLESS_TILES],
     }))
     // Nothing Canopi-owned is above it yet, so it is appended without an anchor.
     expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({
@@ -632,7 +632,7 @@ describe('WorkspaceMapControls', () => {
     controls.updateBackgroundPresentation(satelliteOn(2))
     expect(map.addSource).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
     )
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
@@ -808,7 +808,6 @@ describe('WorkspaceMapControls', () => {
 
     ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
     ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
-    ;(snapshot.background.satellite as { provider: string }).provider = 'google'
     ;(snapshot.background.satellite as { visible: boolean }).visible = false
     ;(snapshot.background.satellite as { opacity: number }).opacity = 0.95
     ;(snapshot.background.basemap as { visible: boolean }).visible = true
@@ -821,7 +820,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.options.bearing).toBe(0)
     expect(map.addSource).toHaveBeenCalledWith(
       MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
     )
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
@@ -835,7 +834,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.addSource).toHaveBeenCalledTimes(2)
     expect(map.addSource).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
     )
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
@@ -988,7 +987,7 @@ describe('WorkspaceMapControls', () => {
 
     expect(map.addSource).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
     )
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_LAYER_ID,
@@ -1030,7 +1029,7 @@ describe('WorkspaceMapControls', () => {
     expect(sourceMutationDepths.every((depth) => depth === 0)).toBe(true)
     expect(map.addSource).toHaveBeenLastCalledWith(
       MAPLIBRE_SATELLITE_SOURCE_ID,
-      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+      expect.objectContaining({ tiles: [GOOGLE_KEYLESS_TILES] }),
     )
     expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(
@@ -1511,7 +1510,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
     controls.updateBackgroundPresentation(background({ visible: true }, { visible: true, opacity: 0.7 }))
 
     expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
-    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [EOX_SATELLITE_TILES] })
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
     expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
     expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.7)
 
@@ -1581,7 +1580,7 @@ describe('WorkspaceMapControls OpenFreeMap basemap', () => {
   })
 })
 
-describe('WorkspaceMapControls Satellite provider', () => {
+describe('WorkspaceMapControls Google satellite', () => {
   /**
    * The canvas previously built a static imagery contribution, which cannot
    * serve the official Google path: that path needs a session acquired per
@@ -1612,7 +1611,7 @@ describe('WorkspaceMapControls Satellite provider', () => {
       const { controls, maps } = createControls()
       const acquisition = controls.createMap(new AbortController().signal, {
         initialCenter: { lat: 48.86, lon: 2.35 },
-        background: background({ visible: true }, { provider: 'google', visible: true, opacity: 0.8 }),
+        background: background({ visible: true }, { visible: true, opacity: 0.8 }),
       })
       const map = await waitForMap(maps)
       map.emit('style.load')
@@ -1663,7 +1662,7 @@ describe('WorkspaceMapControls Satellite provider', () => {
     const { googleMapsApiKey } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
     const { controls, maps } = createControls({
-      background: background({}, { provider: 'google', visible: true }),
+      background: background({}, { visible: true }),
     })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -1677,19 +1676,40 @@ describe('WorkspaceMapControls Satellite provider', () => {
     expect(map.remove).not.toHaveBeenCalled()
   })
 
-  it('replaces EOX imagery with Google keyless tiles when the provider switches without a key', async () => {
+  it('replaces keyless tiles with official session tiles when a key is saved on a live map', async () => {
+    vi.stubGlobal('fetch', (async (url: string) => {
+      if (String(url).includes('createSession')) {
+        return new Response(JSON.stringify({
+          session: 'fake-session-token',
+          expiry: '4000000000',
+          tileWidth: 256,
+          tileHeight: 256,
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        copyright: 'Imagery ©2026 Google',
+        maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch)
     const { googleMapsApiKey } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
-    const { controls, maps } = createControls()
-    const acquisition = controls.createMap(new AbortController().signal)
-    const map = await waitForMap(maps)
-    map.emit('style.load')
-    await acquisition
-    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [EOX_SATELLITE_TILES] })
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
 
-    controls.updateBackgroundPresentation(background({}, { provider: 'google', visible: true }))
+      googleMapsApiKey.value = 'fake-canvas-google-key'
 
-    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
-    expect(styleFetch).not.toHaveBeenCalled()
+      await vi.waitFor(() => expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID))
+        .toMatchObject({ tiles: [GOOGLE_SESSION_TILES] }))
+      expect(JSON.stringify([...map.sources.entries()])).not.toContain('fake-canvas-google-key')
+      expect(map.setStyle).not.toHaveBeenCalled()
+      expect(map.remove).not.toHaveBeenCalled()
+    } finally {
+      googleMapsApiKey.value = null
+    }
   })
 })

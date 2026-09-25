@@ -1,15 +1,14 @@
-import type { SatelliteProvider } from '../generated/contracts'
 import {
-  resolveSatelliteAvailability,
+  resolveSatelliteDescriptor,
   type SatelliteDescriptor,
-  type SatelliteProviderConfig,
+  type SatelliteConfig,
 } from './satellite-provider'
 import type { BasemapTileAuth } from './basemap-tile-auth'
 
 /**
- * One active basemap provider generation.
+ * One active Google satellite imagery generation.
  *
- * The module above decides *what* a provider maps to; this owns the lifecycle of
+ * `satellite-provider.ts` decides *what* a configuration maps to; this owns the lifecycle of
  * getting there. It is deliberately separate from any map: a provider
  * generation is bound to the map surface that admitted it, owns its own
  * requests and timers, and is fenced so a superseded generation cannot publish
@@ -17,12 +16,12 @@ import type { BasemapTileAuth } from './basemap-tile-auth'
  * one.
  *
  * It performs no map mutation at all. A caller reacts to published state through
- * the existing contribution reconciliation, which is what keeps a provider or
- * key change from needing `setStyle()` or a new map.
+ * the existing contribution reconciliation, which is what keeps a key or
+ * locale change from needing `setStyle()` or a new map.
  */
 
 /** The bounded HTTP capability the provider is given, injected per edition. */
-export interface SatelliteProviderHttp {
+export interface SatelliteHttp {
   /**
    * Perform one request. `signal` must abort the underlying work. The provider
    * always supplies a finite timeout, so an implementation that ignores the
@@ -35,10 +34,10 @@ export interface SatelliteProviderHttp {
     readonly method?: 'GET' | 'POST'
     /** JSON body for a POST; the adapter serialises it. */
     readonly body?: unknown
-  }): Promise<SatelliteProviderResponse>
+  }): Promise<SatelliteHttpResponse>
 }
 
-export interface SatelliteProviderResponse {
+export interface SatelliteHttpResponse {
   readonly ok: boolean
   readonly status: number
   /** Parsed JSON body, or `null` when the body is absent or not JSON. */
@@ -56,9 +55,9 @@ export interface SatelliteViewport {
   readonly zoom: number
 }
 
-export type SatelliteProviderState =
+export type SatelliteState =
   | { readonly state: 'idle' }
-  | { readonly state: 'loading'; readonly provider: SatelliteProvider }
+  | { readonly state: 'loading' }
   | {
       readonly state: 'ready'
       readonly descriptor: SatelliteDescriptor
@@ -70,7 +69,7 @@ export type SatelliteProviderState =
        * logged as part of a provider state.
        */
     }
-  | { readonly state: 'unavailable'; readonly provider: SatelliteProvider; readonly reason: string }
+  | { readonly state: 'unavailable'; readonly reason: string }
 
 /** The fixed retry/timeout policy the product contract settles. */
 export const PROVIDER_REQUEST_TIMEOUT_MS = 15_000
@@ -112,8 +111,8 @@ export function sanitizeProviderReason(text: string, secret: string | null): str
 export class SatelliteImageryProvider {
   private generation = 0
   private disposed = false
-  private state: SatelliteProviderState = { state: 'idle' }
-  private listeners = new Set<(state: SatelliteProviderState) => void>()
+  private state: SatelliteState = { state: 'idle' }
+  private listeners = new Set<(state: SatelliteState) => void>()
   private controller: AbortController | null = null
   private session: GoogleSession | null = null
   private lastViewport: SatelliteViewport | null = null
@@ -147,7 +146,7 @@ export class SatelliteImageryProvider {
   private renewalTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
-    private readonly http: SatelliteProviderHttp,
+    private readonly http: SatelliteHttp,
     /**
      * The configuration, or a getter for it.
      *
@@ -155,7 +154,7 @@ export class SatelliteImageryProvider {
      * that is already serving a live map: `update()` re-reads it, so no caller
      * has to capture the key at map-creation time and go stale.
      */
-    private readonly config: SatelliteProviderConfig | (() => SatelliteProviderConfig),
+    private readonly config: SatelliteConfig | (() => SatelliteConfig),
     private readonly now: () => number = () => Date.now(),
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise((resolve) => setTimeout(resolve, ms)),
@@ -167,17 +166,17 @@ export class SatelliteImageryProvider {
   ) {}
 
   /** The configuration in force for this call. */
-  private currentConfig(): SatelliteProviderConfig {
+  private currentConfig(): SatelliteConfig {
     return typeof this.config === 'function' ? this.config() : this.config
   }
 
   /** The current published state. */
-  snapshot(): SatelliteProviderState {
+  snapshot(): SatelliteState {
     return this.state
   }
 
   /** Subscribe to state changes; the returned function removes the listener. */
-  subscribe(listener: (state: SatelliteProviderState) => void): () => void {
+  subscribe(listener: (state: SatelliteState) => void): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
@@ -185,15 +184,15 @@ export class SatelliteImageryProvider {
   }
 
   /**
-   * Adopt a presentation and viewport.
+   * Adopt the current configuration and a viewport.
    *
    * Every call begins a new generation. Anything the previous generation had in
    * flight is aborted and can no longer publish, which is what makes a key
-   * change, a provider switch or a fast sequence of viewport moves safe.
+   * change, a locale change or a fast sequence of viewport moves safe.
    * A configuration identity change also drops incompatible session, viewport
    * facts, credentials and renewal before the new session is acquired.
    */
-  update(presentation: { readonly provider: SatelliteProvider }, viewport: SatelliteViewport): void {
+  update(viewport: SatelliteViewport): void {
     if (this.disposed) return
     this.generation += 1
     const generation = this.generation
@@ -214,12 +213,12 @@ export class SatelliteImageryProvider {
     }
     this.configIdentity = nextIdentity
 
-    const resolved = resolveSatelliteAvailability(presentation.provider, config)
+    const descriptor = resolveSatelliteDescriptor(config)
 
-    this.baseDescriptor = resolved.descriptor
+    this.baseDescriptor = descriptor
 
-    if (!resolved.descriptor.official) {
-      // Keyless tiles (EOX, public Google) need no session and no viewport
+    if (!descriptor.official) {
+      // Keyless public Google tiles need no session and no viewport
       // metadata, so there is no loading state to show and no request. A
       // cleared key drops the previous session with it.
       this.session = null
@@ -227,7 +226,7 @@ export class SatelliteImageryProvider {
       this.viewportMetadata = null
       this.publish({
         state: 'ready',
-        descriptor: resolved.descriptor,
+        descriptor,
         copyright: null,
       })
       return
@@ -238,13 +237,13 @@ export class SatelliteImageryProvider {
     // configuration may be reused; otherwise it is re-acquired.
     const existing = this.session
     if (existing && existing.expiresAtMs - this.now() > PROVIDER_SESSION_RENEWAL_WINDOW_MS) {
-      this.publish({ state: 'loading', provider: presentation.provider })
+      this.publish({ state: 'loading' })
       void this.refreshViewport(generation, viewport)
       return
     }
 
-    this.publish({ state: 'loading', provider: presentation.provider })
-    void this.acquireSession(generation, resolved.descriptor)
+    this.publish({ state: 'loading' })
+    void this.acquireSession(generation, descriptor)
   }
 
   /**
@@ -294,7 +293,7 @@ export class SatelliteImageryProvider {
   }
 
   /** Stable identity for the credential/session-relevant configuration. */
-  private configIdentityOf(config: SatelliteProviderConfig): string {
+  private configIdentityOf(config: SatelliteConfig): string {
     return JSON.stringify({
       key: config.googleMapsApiKey?.trim() ?? '',
       locale: config.locale ?? '',
@@ -304,7 +303,7 @@ export class SatelliteImageryProvider {
   /** The viewport last published as current metadata, when one was published. */
   private lastPublishedViewport: SatelliteViewport | null = null
 
-  private publish(state: SatelliteProviderState): void {
+  private publish(state: SatelliteState): void {
     this.state = state
     for (const listener of this.listeners) listener(state)
   }
@@ -335,7 +334,6 @@ export class SatelliteImageryProvider {
       this.viewportMetadata = null
       this.publish({
         state: 'unavailable',
-        provider: descriptor.provider,
         reason: sanitizeProviderReason(
           'Google Maps rejected the configured API key. Edit or clear the key to continue.',
           key,
@@ -429,7 +427,7 @@ export class SatelliteImageryProvider {
       }
       this.session = null
       this.credentials?.clear()
-      this.publish({ state: 'loading', provider: descriptor.provider })
+      this.publish({ state: 'loading' })
       void this.acquireSession(generation, descriptor)
     }, delay)
   }
@@ -494,7 +492,7 @@ export class SatelliteImageryProvider {
       `&key=${encodeURIComponent(key)}` +
       `&zoom=${viewport.zoom}&north=${viewport.north}&south=${viewport.south}` +
       `&east=${viewport.east}&west=${viewport.west}`
-    let response: SatelliteProviderResponse | null = null
+    let response: SatelliteHttpResponse | null = null
     try {
       response = await this.requestWithRetry(generation, url, { method: 'GET' })
     } catch {
@@ -539,7 +537,7 @@ export class SatelliteImageryProvider {
   private failViewportMetadata(
     generation: number,
     key: string,
-    response: SatelliteProviderResponse | null,
+    response: SatelliteHttpResponse | null,
   ): void {
     if (!this.isCurrent(generation)) return
     this.credentials?.clear()
@@ -547,7 +545,6 @@ export class SatelliteImageryProvider {
     this.clearRenewal()
     this.publish({
       state: 'unavailable',
-      provider: providerOf(this.state),
       reason: sanitizeProviderReason(
         response && response.status !== 0
           ? `Google Maps could not confirm the viewport for this layer (HTTP ${response.status}). Try again or choose another basemap.`
@@ -570,7 +567,7 @@ export class SatelliteImageryProvider {
     generation: number,
     url: string,
     options: { readonly method: 'GET' | 'POST'; readonly body?: unknown },
-  ): Promise<SatelliteProviderResponse | null> {
+  ): Promise<SatelliteHttpResponse | null> {
     for (let attempt = 0; attempt <= PROVIDER_MAX_RETRIES; attempt += 1) {
       if (!this.isCurrent(generation)) return null
       const controller = this.controller
@@ -579,7 +576,7 @@ export class SatelliteImageryProvider {
       const onAbort = () => timeout.abort()
       controller.signal.addEventListener('abort', onAbort)
       const timer = setTimeout(() => timeout.abort(), PROVIDER_REQUEST_TIMEOUT_MS)
-      let response: SatelliteProviderResponse
+      let response: SatelliteHttpResponse
       try {
         response = await this.http.request(
           options.method === 'POST'
@@ -653,13 +650,6 @@ export function readSessionExpiryMs(expiry: unknown, nowMs: number): number {
   // relative lifetime in seconds so a shortened response is still honoured.
   const seconds = raw > 1_000_000_000 ? raw : raw
   return seconds * 1000
-}
-
-/** The provider a published state belongs to, whichever shape it has. */
-function providerOf(state: SatelliteProviderState): SatelliteProvider {
-  if (state.state === 'ready') return state.descriptor.provider
-  if (state.state === 'idle') return 'eox'
-  return state.provider
 }
 
 /** The attribution and zoom availability one viewport answer supplies. */

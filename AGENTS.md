@@ -74,7 +74,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 
 ## Architecture rules
 
-- **Authorities.** The scene runtime (`SceneStore` via `SceneCanvasRuntime`) owns design objects and mutates through runtime transactions. Design Edit (`app/design-edit/`) owns budget, currency, timeline, consortiums, description and extra. The map layer store owns map layers. Settings own last view, basemap, satellite provider, device key, locale and theme. Neither document authority duplicates the other; panels read canvas entities through read-only runtime queries.
+- **Authorities.** The scene runtime (`SceneStore` via `SceneCanvasRuntime`) owns design objects and mutates through runtime transactions. Design Edit (`app/design-edit/`) owns budget, currency, timeline, consortiums, description and extra. The map layer store owns map layers. Settings own last view, basemap, device key, locale and theme. Neither document authority duplicates the other; panels read canvas entities through read-only runtime queries.
 - **Coordinates.** Persisted positions are lon/lat. Runtime geometry uses metres in the session plane. Camera moves never move objects.
 - **Action layer.** Import direction is components → actions/controllers/workbenches → Design Edit or state. `app/*/controller.ts` modules are leaves and never import each other; cross-concern orchestration lives in workflow modules that own their `effect()` disposers (`installX()` / `disposeX()`).
 - **Resource ownership.** Every resource (runtime, renderer, MapLibre instance, timer, listener, cancellation token, DOM overlay) has one lifecycle owner for setup, update and teardown. Module-level `effect()` and listeners store disposers and clean up under `import.meta.hot.dispose()`.

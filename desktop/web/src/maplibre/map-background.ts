@@ -1,4 +1,4 @@
-import type { BasemapStyle, SatelliteProvider } from '../generated/contracts'
+import type { BasemapStyle } from '../generated/contracts'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
   MAPLIBRE_SATELLITE_LAYER_ID,
@@ -26,7 +26,6 @@ export interface MapBackgroundPresentation {
     readonly opacity: number
   }
   readonly satellite: {
-    readonly provider: SatelliteProvider
     readonly visible: boolean
     readonly opacity: number
   }
@@ -51,7 +50,6 @@ export function mapBackgroundPresentationsEqual(
     && left.basemap.style === right.basemap.style
     && left.basemap.visible === right.basemap.visible
     && left.basemap.opacity === right.basemap.opacity
-    && left.satellite.provider === right.satellite.provider
     && left.satellite.visible === right.satellite.visible
     && left.satellite.opacity === right.satellite.opacity
 }
@@ -111,7 +109,6 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
   })
   let presentation: MapBackgroundPresentation | null = null
   let satellite: SatelliteMountHandle | null = null
-  let satelliteProvider: SatelliteProvider | null = null
   let disposed = false
 
   const applySatelliteOpacity = () => {
@@ -122,7 +119,6 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
   const releaseSatellite = () => {
     satellite?.dispose()
     satellite = null
-    satelliteProvider = null
     attribution.setSatelliteCredit('')
   }
 
@@ -140,11 +136,9 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
       return
     }
     if (!satellite) {
-      satelliteProvider = current.satellite.provider
       satellite = mountSatelliteLifecycle({
         map,
         tileAuth: options.tileAuth,
-        readProvider: () => presentation?.satellite.provider ?? current.satellite.provider,
         readViewport: () => readViewport(map),
         styleReady: readiness,
         beforeLayerId,
@@ -152,11 +146,6 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
         replaceSatelliteAttribution: (credit) => attribution.setSatelliteCredit(credit),
         events: options.lifetime as SatelliteMountOptions['events'],
       })
-      return
-    }
-    if (satelliteProvider !== current.satellite.provider) {
-      satelliteProvider = current.satellite.provider
-      satellite.update({ provider: current.satellite.provider }, readViewport(map))
       return
     }
     applySatelliteOpacity()
@@ -185,7 +174,7 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     restore() {
       if (disposed) return
       vector.restore()
-      if (satellite && presentation) satellite.update({ provider: presentation.satellite.provider }, readViewport(map))
+      if (satellite) satellite.update(readViewport(map))
     },
     dispose() {
       if (disposed) return
@@ -206,8 +195,8 @@ function readViewport(map: MapBackgroundMap): SatelliteViewport {
 
 /**
  * One compact attribution control per map. It lists every visible source's
- * attribution (the OpenFreeMap TileJSON credit, EOX's source credit) and the
- * Google viewport copyright as custom attribution.
+ * attribution (the OpenFreeMap TileJSON credit) and the Google satellite
+ * copyright as custom attribution.
  */
 function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   type AttributionControlClass = new (options?: { compact?: boolean; customAttribution?: string | string[] }) => unknown

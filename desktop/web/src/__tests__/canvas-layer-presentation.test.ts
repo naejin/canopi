@@ -56,7 +56,6 @@ describe('Canvas Layer Presentation', () => {
       basemap_style: 'positron',
       basemap_visible: false,
       basemap_opacity: 0.65,
-      satellite_provider: 'eox',
       satellite_visible: false,
       satellite_opacity: 0.9,
       google_maps_api_key: null,
@@ -202,8 +201,6 @@ describe('Canvas Layer Presentation', () => {
         canLock: false,
         detail: {
           type: 'satellite',
-          provider: 'eox',
-          providers: ['google', 'eox'],
           hasGoogleKey: false,
         },
       },
@@ -241,7 +238,7 @@ describe('Canvas Layer Presentation', () => {
     mapLayers.value = {
       ...mapLayers.value,
       basemap: { ...mapLayers.value.basemap, visible: true },
-      satellite: { ...mapLayers.value.satellite, provider: 'google', visible: true },
+      satellite: { ...mapLayers.value.satellite, visible: true },
     }
 
     const presentation = readCanvasLayerPresentation()
@@ -250,11 +247,7 @@ describe('Canvas Layer Presentation', () => {
 
     expect(basemap?.visible).toBe(true)
     expect(basemap?.detail).toEqual(expect.objectContaining({ type: 'basemap', hiddenBySatellite: true }))
-    expect(satellite?.detail).toEqual(expect.objectContaining({
-      type: 'satellite',
-      provider: 'google',
-      hasGoogleKey: true,
-    }))
+    expect(satellite?.detail).toEqual({ type: 'satellite', hasGoogleKey: true })
     expect(JSON.stringify(presentation)).not.toContain('secret-google-key')
     googleMapsApiKey.value = null
   })

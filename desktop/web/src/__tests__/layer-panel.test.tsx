@@ -41,7 +41,6 @@ function baseSettings(): Settings {
     basemap_style: 'liberty',
     basemap_visible: true,
     basemap_opacity: 1,
-    satellite_provider: 'eox',
     satellite_visible: false,
     satellite_opacity: 1,
     google_maps_api_key: null,
@@ -201,27 +200,25 @@ describe('LayerPanel', () => {
     expect(container.textContent).not.toContain('Hidden while Satellite is on.')
   })
 
-  it('asks for a Google key when Google is chosen and saves it trimmed without echoing it', async () => {
+  it('shows the optional Google key field without any imagery choice', async () => {
     await act(async () => {
       activeLayerName.value = 'satellite'
       render(<LayerPanel />, container)
     })
 
-    expect(container.textContent).toContain('Sentinel-2 cloudless imagery')
-    expect(container.querySelector('input[type="password"]')).toBeNull()
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Imagery"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await act(async () => {
-      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
-        .find((option) => option.textContent === 'Google')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mapLayers.value.satellite.provider).toBe('google')
+    expect(container.querySelector('button[aria-label="Imagery"]')).toBeNull()
+    expect(container.querySelector('[role="listbox"], [role="option"]')).toBeNull()
+    expect(container.querySelector('input[type="password"]')).toBeTruthy()
+    expect(container.textContent).toContain('Google Maps API key')
     expect(container.textContent).toContain("Without a key, Canopi uses Google's public satellite tiles.")
+    expect(container.querySelector('input[aria-label="Opacity: Satellite"]')).toBeTruthy()
+  })
+
+  it('saves the Google key trimmed without echoing it and clears it', async () => {
+    await act(async () => {
+      activeLayerName.value = 'satellite'
+      render(<LayerPanel />, container)
+    })
 
     const keyInput = container.querySelector<HTMLInputElement>('input[type="password"]')
     expect(keyInput).toBeTruthy()
@@ -241,9 +238,9 @@ describe('LayerPanel', () => {
     expect(container.textContent).toContain('Key saved on this device.')
     await Promise.resolve()
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({
-      satellite_provider: 'google',
       google_maps_api_key: 'device-key',
     }))
+    expect(saveSettings.mock.lastCall?.[0]).not.toHaveProperty('satellite_provider')
 
     await act(async () => {
       Array.from(container.querySelectorAll<HTMLButtonElement>('button'))

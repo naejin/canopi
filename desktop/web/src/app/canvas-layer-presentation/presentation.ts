@@ -7,8 +7,8 @@ import {
   setContourIntervalMeters,
   type MapLayerId,
 } from '../map-layers/actions'
-import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
-import { SETTINGS_BASEMAP_STYLES, SETTINGS_SATELLITE_PROVIDERS } from '../../generated/settings'
+import type { BasemapStyle } from '../../generated/contracts'
+import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
 
@@ -28,8 +28,6 @@ export type CanvasLayerPresentationDetail =
     }
   | {
       readonly type: 'satellite'
-      readonly provider: SatelliteProvider
-      readonly providers: readonly SatelliteProvider[]
       readonly hasGoogleKey: boolean
     }
   | {
@@ -107,8 +105,6 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     }),
     mapRow('satellite', t('canvas.layers.satellite'), layers.satellite, {
       type: 'satellite',
-      provider: layers.satellite.provider,
-      providers: SETTINGS_SATELLITE_PROVIDERS,
       hasGoogleKey: Boolean(googleMapsApiKey.value?.trim()),
     }),
     mapRow('contours', t('canvas.terrain.contours'), layers.contours, {

@@ -1,10 +1,6 @@
 import { computed, signal } from '@preact/signals'
-import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
-import {
-  DEFAULT_SETTINGS,
-  SETTINGS_BASEMAP_STYLES,
-  SETTINGS_SATELLITE_PROVIDERS,
-} from '../../generated/settings'
+import type { BasemapStyle } from '../../generated/contracts'
+import { DEFAULT_SETTINGS, SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 
 /**
  * The map layer store: the single authority for the map layers under the
@@ -18,7 +14,6 @@ export interface MapLayersState {
     readonly opacity: number
   }
   readonly satellite: {
-    readonly provider: SatelliteProvider
     readonly visible: boolean
     readonly opacity: number
   }
@@ -41,7 +36,6 @@ export function createDefaultMapLayers(): MapLayersState {
       opacity: DEFAULT_SETTINGS.basemap_opacity,
     },
     satellite: {
-      provider: DEFAULT_SETTINGS.satellite_provider,
       visible: DEFAULT_SETTINGS.satellite_visible,
       opacity: DEFAULT_SETTINGS.satellite_opacity,
     },
@@ -83,9 +77,6 @@ export function normalizeMapLayers(state: MapLayersState): MapLayersState {
       opacity: unitInterval(state.basemap.opacity, 1),
     }),
     satellite: Object.freeze({
-      provider: SETTINGS_SATELLITE_PROVIDERS.includes(state.satellite.provider)
-        ? state.satellite.provider
-        : DEFAULT_SETTINGS.satellite_provider,
       visible: state.satellite.visible === true,
       opacity: unitInterval(state.satellite.opacity, 1),
     }),
@@ -108,7 +99,6 @@ export function mapLayersEqual(left: MapLayersState, right: MapLayersState): boo
   return left.basemap.style === right.basemap.style
     && left.basemap.visible === right.basemap.visible
     && left.basemap.opacity === right.basemap.opacity
-    && left.satellite.provider === right.satellite.provider
     && left.satellite.visible === right.satellite.visible
     && left.satellite.opacity === right.satellite.opacity
     && left.contours.visible === right.contours.visible

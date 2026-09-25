@@ -197,7 +197,6 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     basemap_style: draft.mapLayers.basemap.style,
     basemap_visible: draft.mapLayers.basemap.visible,
     basemap_opacity: draft.mapLayers.basemap.opacity,
-    satellite_provider: draft.mapLayers.satellite.provider,
     satellite_visible: draft.mapLayers.satellite.visible,
     satellite_opacity: draft.mapLayers.satellite.opacity,
     google_maps_api_key: trimmedKey(draft.googleMapsApiKey),
@@ -261,7 +260,6 @@ function projectSettingsToSignals(settings: Settings): Settings {
         opacity: settings.basemap_opacity,
       },
       satellite: {
-        provider: settings.satellite_provider,
         visible: settings.satellite_visible,
         opacity: settings.satellite_opacity,
       },

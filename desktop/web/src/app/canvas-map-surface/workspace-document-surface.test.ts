@@ -146,7 +146,7 @@ describe('createWorkspaceDocumentSurface', () => {
         initialCenter: { lat: 0, lon: 0 },
         background: {
           basemap: { style: 'liberty', visible: true, opacity: 1 },
-          satellite: { provider: 'eox', visible: false, opacity: 1 },
+          satellite: { visible: false, opacity: 1 },
           locale: 'en',
         },
       },
@@ -226,7 +226,7 @@ function mapSnapshot(): WorkspaceMapSnapshot {
     initialCenter: { lat: 0, lon: 0 },
     background: {
       basemap: { style: 'liberty', visible: true, opacity: 1 },
-      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      satellite: { visible: false, opacity: 1 },
       locale: 'en',
     },
   }

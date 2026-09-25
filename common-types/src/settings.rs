@@ -40,16 +40,14 @@ pub struct Settings {
     pub basemap_style: BasemapStyle,
     pub basemap_visible: bool,
     pub basemap_opacity: f32,
-    /// Imagery provider of the Satellite row; the row hides the Basemap when on.
-    #[serde(deserialize_with = "deserialize_satellite_provider")]
-    pub satellite_provider: SatelliteProvider,
+    /// Whether the Google satellite row is on; it hides the Basemap when on.
     pub satellite_visible: bool,
     pub satellite_opacity: f32,
     /// Optional Google Maps API key for the official Map Tiles API.
     ///
     /// Device-local browser credential: it is stored with the rest of the
     /// device settings, never in a Design, export, diagnostic bundle, error
-    /// text or log. Without a key the Google satellite provider uses keyless tiles.
+    /// text or log. Without a key the Satellite row uses Google's keyless tiles.
     #[serde(default)]
     pub google_maps_api_key: Option<String>,
     pub contour_visible: bool,
@@ -84,7 +82,6 @@ impl Default for Settings {
             basemap_style: BasemapStyle::Liberty,
             basemap_visible: true,
             basemap_opacity: 1.0,
-            satellite_provider: SatelliteProvider::Google,
             satellite_visible: false,
             satellite_opacity: 1.0,
             google_maps_api_key: None,
@@ -116,19 +113,6 @@ settings_enum! {
     }
 }
 
-settings_enum! {
-    /// Satellite imagery providers: Google (keyless public tiles, or the
-    /// official Map Tiles API with a device key) or EOX Sentinel-2 cloudless
-    /// (keyless, CC BY 4.0, about 10 m per pixel).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
-    #[serde(rename_all = "lowercase")]
-    pub enum SatelliteProvider {
-        #[default]
-        Google,
-        Eox,
-    }
-}
-
 fn deserialize_basemap_style<'de, D>(deserializer: D) -> Result<BasemapStyle, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -136,16 +120,6 @@ where
     match serde_json::Value::deserialize(deserializer) {
         Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
         Err(_) => Ok(BasemapStyle::default()),
-    }
-}
-
-fn deserialize_satellite_provider<'de, D>(deserializer: D) -> Result<SatelliteProvider, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match serde_json::Value::deserialize(deserializer) {
-        Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
-        Err(_) => Ok(SatelliteProvider::default()),
     }
 }
 
@@ -178,7 +152,7 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, Locale, SatelliteProvider, Settings, Theme};
+    use super::{BasemapStyle, LastView, Locale, Settings, Theme};
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -212,14 +186,6 @@ mod tests {
 
             assert_eq!(settings.basemap_style, *style);
         }
-        for provider in SatelliteProvider::ALL {
-            let settings: Settings = serde_json::from_value(serde_json::json!({
-                "satellite_provider": provider,
-            }))
-            .expect("declared satellite provider should remain loadable");
-
-            assert_eq!(settings.satellite_provider, *provider);
-        }
     }
 
     #[test]
@@ -227,15 +193,27 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
         assert!(settings.basemap_visible);
-        assert_eq!(settings.satellite_provider, SatelliteProvider::Google);
         assert!(!settings.satellite_visible);
         let unknown: Settings = serde_json::from_value(serde_json::json!({
-            "basemap_style": "street",
-            "satellite_provider": "maptiler"
+            "basemap_style": "street"
         }))
         .expect("unknown map choices fall back to defaults");
         assert_eq!(unknown.basemap_style, BasemapStyle::Liberty);
-        assert_eq!(unknown.satellite_provider, SatelliteProvider::Google);
+    }
+
+    #[test]
+    fn retired_satellite_provider_key_loads_and_is_not_emitted() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "satellite_provider": "eox",
+            "satellite_visible": true,
+            "satellite_opacity": 0.4
+        }))
+        .expect("settings with the retired satellite provider key should load");
+
+        assert!(settings.satellite_visible);
+        assert_eq!(settings.satellite_opacity, 0.4);
+        let serialized = serde_json::to_value(settings).expect("settings should serialize");
+        assert!(serialized.get("satellite_provider").is_none());
     }
 
     #[test]

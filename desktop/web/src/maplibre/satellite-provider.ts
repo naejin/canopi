@@ -1,21 +1,18 @@
-import type { SatelliteProvider } from '../generated/contracts'
-
 /**
- * The Satellite row's provider boundary, shared by Desktop and Web.
+ * The Satellite row's imagery boundary, shared by Desktop and Web.
  *
- * Pure with respect to its configuration, so both editions and the tests agree
- * and no surface invents its own fallback:
+ * Google is the only satellite imagery. Pure with respect to its
+ * configuration, so both editions and the tests agree and no surface invents
+ * its own fallback:
  *
- * - `eox` is EOX Sentinel-2 cloudless 2017 (CC BY 4.0), keyless, about 10 m
- *   per pixel. Esri World Imagery was not adopted: its Master License Agreement
- *   does not clearly allow keyless display in a free third-party app.
- * - `google` (the default) serves Google's public `mt1.google.com` tiles
+ * - Without a device key it serves Google's public `mt1.google.com` tiles
  *   keylessly, as GeoLibre's basemap control does. That endpoint is not a
- *   published API and Google's terms do not cover using it directly; the
- *   user chose it for its resolution. With the user's device key it switches
- *   to the official Map Tiles API session tiles.
+ *   published API and Google's terms do not cover using it directly; the user
+ *   chose it for its resolution (ADR 0001).
+ * - With the user's device key it switches to the official Map Tiles API
+ *   session tiles.
  */
-export interface SatelliteProviderConfig {
+export interface SatelliteConfig {
   /** Device-local Google Maps API key. */
   readonly googleMapsApiKey?: string | null | undefined
   /** IETF-ish locale used for Google session requests. */
@@ -23,24 +20,15 @@ export interface SatelliteProviderConfig {
 }
 
 export interface SatelliteDescriptor {
-  readonly provider: SatelliteProvider
   /** Remote raster tiles in `{z}/{x}/{y}` form. */
   readonly tiles: readonly string[]
   readonly tileSize: number
   readonly maxzoom: number
   readonly attribution: string
-  /** Google: tiles need a live session through the map's tile transport. */
+  /** Official Map Tiles API: tiles need a live session through the map's tile transport. */
   readonly official: boolean
 }
 
-export type SatelliteAvailability = { readonly state: 'ready'; readonly descriptor: SatelliteDescriptor }
-
-export const EOX_SATELLITE_TILES =
-  'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2017_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg'
-export const EOX_SATELLITE_ATTRIBUTION =
-  '<a href="https://cloudless.eox.at" target="_blank">EOxCloudless</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2017), CC BY 4.0'
-/** Sentinel-2 is ~10 m per pixel; deeper tiles are upsampled by the service. */
-const EOX_MAX_ZOOM = 17
 /**
  * The official Map Tiles API 2D tile path. This is the published,
  * **non-secret** template: the live session and the key are supplied per
@@ -55,46 +43,25 @@ const GOOGLE_ATTRIBUTION = '&copy; Google'
 const GOOGLE_MAX_ZOOM = 22
 const GOOGLE_KEYLESS_MAX_ZOOM = 20
 
-export function resolveSatelliteAvailability(
-  provider: SatelliteProvider,
-  config: SatelliteProviderConfig = {},
-): SatelliteAvailability {
-  if (provider === 'google') {
-    if (!config.googleMapsApiKey?.trim()) {
-      return {
-        state: 'ready',
-        descriptor: {
-          provider,
-          tiles: [GOOGLE_KEYLESS_TILES],
-          tileSize: 256,
-          maxzoom: GOOGLE_KEYLESS_MAX_ZOOM,
-          attribution: GOOGLE_ATTRIBUTION,
-          official: false,
-        },
-      }
-    }
+/** Keyless public tiles without a key; official session tiles with one. */
+export function resolveSatelliteDescriptor(
+  config: SatelliteConfig = {},
+): SatelliteDescriptor {
+  if (!config.googleMapsApiKey?.trim()) {
     return {
-      state: 'ready',
-      descriptor: {
-        provider,
-        tiles: [GOOGLE_SESSION_TILES],
-        tileSize: 256,
-        maxzoom: GOOGLE_MAX_ZOOM,
-        // The session owner replaces this with the viewport copyright string.
-        attribution: GOOGLE_ATTRIBUTION,
-        official: true,
-      },
+      tiles: [GOOGLE_KEYLESS_TILES],
+      tileSize: 256,
+      maxzoom: GOOGLE_KEYLESS_MAX_ZOOM,
+      attribution: GOOGLE_ATTRIBUTION,
+      official: false,
     }
   }
   return {
-    state: 'ready',
-    descriptor: {
-      provider: 'eox',
-      tiles: [EOX_SATELLITE_TILES],
-      tileSize: 256,
-      maxzoom: EOX_MAX_ZOOM,
-      attribution: EOX_SATELLITE_ATTRIBUTION,
-      official: false,
-    },
+    tiles: [GOOGLE_SESSION_TILES],
+    tileSize: 256,
+    maxzoom: GOOGLE_MAX_ZOOM,
+    // The session owner replaces this with the viewport copyright string.
+    attribution: GOOGLE_ATTRIBUTION,
+    official: true,
   }
 }

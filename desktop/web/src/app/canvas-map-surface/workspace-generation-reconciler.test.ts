@@ -447,7 +447,7 @@ function snapshot({
       initialCenter: { lat: latitude, lon: 2.3522 },
       background: {
         basemap: { style: 'liberty', visible: true, opacity: 1 },
-        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        satellite: { visible: false, opacity: 1 },
         locale: 'en',
       },
     },

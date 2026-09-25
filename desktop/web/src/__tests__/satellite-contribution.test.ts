@@ -27,28 +27,27 @@ import {
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
 import {
-  EOX_SATELLITE_ATTRIBUTION,
-  EOX_SATELLITE_TILES,
+  GOOGLE_KEYLESS_TILES,
   GOOGLE_SESSION_TILES,
   type SatelliteDescriptor,
 } from '../maplibre/satellite-provider'
-import type { SatelliteProviderState } from '../maplibre/satellite-provider-session'
+import type { SatelliteState } from '../maplibre/satellite-provider-session'
 
+/** Google's keyless public tiles. */
 function descriptor(overrides: Partial<SatelliteDescriptor> = {}): SatelliteDescriptor {
   return {
-    provider: 'eox',
-    tiles: [EOX_SATELLITE_TILES],
+    tiles: [GOOGLE_KEYLESS_TILES],
     tileSize: 256,
-    maxzoom: 17,
-    attribution: EOX_SATELLITE_ATTRIBUTION,
+    maxzoom: 20,
+    attribution: '&copy; Google',
     official: false,
     ...overrides,
   }
 }
 
+/** The official Map Tiles API session template, used with a device key. */
 function googleDescriptor(overrides: Partial<SatelliteDescriptor> = {}): SatelliteDescriptor {
   return descriptor({
-    provider: 'google',
     tiles: [GOOGLE_SESSION_TILES],
     maxzoom: 22,
     attribution: '&copy; Google',
@@ -107,18 +106,18 @@ function recordingTarget() {
 }
 
 describe('satellite contribution reconciliation', () => {
-  it('adds a source and layer for a ready provider', () => {
+  it('adds a source and layer for ready imagery', () => {
     const { target, sources, layers } = recordingTarget()
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: descriptor(),
       copyright: null,
     })
-    expect(readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([EOX_SATELLITE_TILES])
+    expect(readSource(sources, MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(readLayer(layers, MAPLIBRE_SATELLITE_LAYER_ID)?.layout.visibility).toBe('visible')
   })
 
-  it('applies the provider tile size and zoom ceiling rather than a fixed 256/19', () => {
+  it('applies the session tile size and zoom ceiling rather than a fixed 256/19', () => {
     const { target, sources, readAttribution } = recordingTarget()
     reconcileSatelliteContribution(
       target,
@@ -137,7 +136,7 @@ describe('satellite contribution reconciliation', () => {
     expect(readAttribution()).toBe('&copy; Google')
   })
 
-  it('replaces one contribution instead of accumulating them on a provider switch', () => {
+  it('replaces one contribution instead of accumulating them when a key is added', () => {
     const { target, sources, order } = recordingTarget()
     reconcileSatelliteContribution(target, {
       state: 'ready',
@@ -167,10 +166,10 @@ describe('satellite contribution reconciliation', () => {
     ])
   })
 
-  it('withdraws the contribution for idle and unavailable providers', () => {
-    const states: SatelliteProviderState[] = [
+  it('withdraws the contribution for idle and unavailable states', () => {
+    const states: SatelliteState[] = [
       { state: 'idle' },
-      { state: 'unavailable', provider: 'google', reason: 'session-failed' },
+      { state: 'unavailable', reason: 'session-failed' },
     ]
     for (const state of states) {
       const { target, sources, layers } = recordingTarget()
@@ -180,8 +179,8 @@ describe('satellite contribution reconciliation', () => {
         copyright: null,
       })
       reconcileSatelliteContribution(target, state)
-      // Leaving the previous provider's tiles up would present one provider's
-      // imagery under another provider's name.
+      // Leaving the previous tiles up would present keyless imagery as if the
+      // configured key were serving it.
       expect(sources.size).toBe(0)
       expect(layers.size).toBe(0)
     }
@@ -197,7 +196,7 @@ describe('satellite contribution reconciliation', () => {
     expect(sources.size).toBe(1)
     // Loading with an already-installed source keeps the object and hides it,
     // so a pending metadata request cannot present falsely attributed imagery.
-    reconcileSatelliteContribution(target, { state: 'loading', provider: 'google' })
+    reconcileSatelliteContribution(target, { state: 'loading' })
     expect(sources.size).toBe(1)
     expect(layers.size).toBe(1)
   })
@@ -210,8 +209,8 @@ describe('satellite contribution reconciliation', () => {
       copyright: null,
     })
     // Without a transport to resolve `{session}` every tile would fail, so the
-    // honest outcome is no contribution rather than a broken Google source or
-    // the previous provider's imagery under Google's name.
+    // honest outcome is no contribution rather than a broken official source
+    // or the previous keyless imagery under the official copyright.
     reconcileSatelliteContribution(target, {
       state: 'ready',
       descriptor: googleDescriptor(),

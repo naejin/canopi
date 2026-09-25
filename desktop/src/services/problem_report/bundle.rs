@@ -122,7 +122,6 @@ fn settings_summary(context: &ProblemReportContext) -> serde_json::Value {
             "auto_save_interval_s": settings.auto_save_interval_s,
             "basemap_style": settings.basemap_style,
             "basemap_visible": settings.basemap_visible,
-            "satellite_provider": settings.satellite_provider,
             "satellite_visible": settings.satellite_visible,
             "contour_visible": settings.contour_visible,
             "hillshade_visible": settings.hillshade_visible,

@@ -5,7 +5,6 @@ import {
   setContourIntervalMeters,
   setMapLayerOpacity,
   setMapLayerVisible,
-  setSatelliteProvider,
 } from '../app/map-layers/actions'
 import {
   createDefaultMapLayers,
@@ -21,7 +20,7 @@ import {
   resetSettingsProjectionForTests,
   type SettingsProjectionInstallation,
 } from '../app/settings/projection'
-import type { BasemapStyle, SatelliteProvider } from '../generated/contracts'
+import type { BasemapStyle } from '../generated/contracts'
 import { DEFAULT_SETTINGS } from '../generated/settings'
 import type { Settings } from '../types/settings'
 
@@ -64,7 +63,7 @@ function layers(overrides: {
 describe('map layer store', () => {
   it('starts with a visible Liberty Basemap and hidden Google Satellite', () => {
     expect(mapLayers.value.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(mapLayers.value.satellite).toEqual({ provider: 'google', visible: false, opacity: 1 })
+    expect(mapLayers.value.satellite).toEqual({ visible: false, opacity: 1 })
     expect(mapLayers.value.contours.visible).toBe(false)
     expect(mapLayers.value.hillshade.visible).toBe(false)
     expect(mapBackground.value).toBe('basemap')
@@ -80,16 +79,12 @@ describe('map layer store', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ contour_visible: true }))
   })
 
-  it('persists style and provider choices immediately', async () => {
+  it('persists the basemap style choice immediately without a satellite provider', async () => {
     setBasemapStyle('dark')
     await Promise.resolve()
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ basemap_style: 'dark' }))
-
-    setSatelliteProvider('google')
-    await Promise.resolve()
-    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ satellite_provider: 'google' }))
+    expect(saveSettings.mock.lastCall?.[0]).not.toHaveProperty('satellite_provider')
     expect(mapLayers.value.basemap.style).toBe('dark')
-    expect(mapLayers.value.satellite.provider).toBe('google')
   })
 
   it('queues opacity persistence instead of writing per slider frame', async () => {
@@ -165,16 +160,16 @@ describe('map layer store', () => {
     expect(hasVisibleMapLayer(layers({ ...hidden, satellite: { visible: true } }))).toBe(true)
   })
 
-  it('normalizes out-of-range opacity and unknown style or provider', () => {
+  it('normalizes out-of-range opacity and unknown style', () => {
     const normalized = normalizeMapLayers(layers({
       basemap: { style: 'street' as BasemapStyle, opacity: 3 },
-      satellite: { provider: 'maptiler' as SatelliteProvider, opacity: -1 },
+      satellite: { opacity: -1 },
       contours: { opacity: Number.NaN },
       hillshade: { opacity: Number.POSITIVE_INFINITY },
     }))
 
     expect(normalized.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(normalized.satellite).toEqual({ provider: 'google', visible: false, opacity: 0 })
+    expect(normalized.satellite).toEqual({ visible: false, opacity: 0 })
     expect(normalized.contours.opacity).toBe(1)
     expect(normalized.hillshade.opacity).toBe(DEFAULT_SETTINGS.hillshade_opacity)
   })
@@ -182,23 +177,19 @@ describe('map layer store', () => {
   it('normalizes action input before it reaches the store and settings', async () => {
     setMapLayerOpacity('basemap', 0.5)
     setBasemapStyle('bright')
-    setSatelliteProvider('eox')
     vi.runAllTimers()
     await Promise.resolve()
     saveSettings.mockClear()
 
     setMapLayerOpacity('basemap', 7)
     setBasemapStyle('terrain' as BasemapStyle)
-    setSatelliteProvider('osm' as SatelliteProvider)
     vi.runAllTimers()
     await Promise.resolve()
 
     expect(mapLayers.value.basemap).toEqual({ style: 'liberty', visible: true, opacity: 1 })
-    expect(mapLayers.value.satellite.provider).toBe('google')
     expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({
       basemap_style: 'liberty',
       basemap_opacity: 1,
-      satellite_provider: 'google',
     }))
   })
 })

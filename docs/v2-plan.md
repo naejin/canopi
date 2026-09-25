@@ -30,7 +30,7 @@ Status: accepted by the user on 2026-09-25. This is the single execution handoff
 | D5 | Location tab and the Canvas/Location primary navigation are removed. A **pin** button (icon only) under the **inspection lens** button (loupe icon only) opens a search field: place name or coordinates. Confirm moves the **view only**; objects never move. Users cut/paste objects to relocate them. |
 | D6 | Geocoding in **both** editions through one provider registry (copied from GeoLibre `packages/core/src/geocoding.ts`); Nominatim first, search on Enter only, never as-you-type, 1.1 s spacing, OSM attribution on results. |
 | D7 | Basemap: OpenFreeMap **Liberty** vector style by default, with the attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap"; style choice Liberty/Positron/Bright/Dark in the Basemap row. OSM raster tiles and MapTiler are removed. |
-| D8 | Satellite is its own row in **Site references**, listed under Basemap; turning Satellite on hides the Basemap. Providers: **Google** (default; keyless public tiles, or the official Map Tiles API with a device key; changed by the user on 2026-09-25) and **EOX Sentinel-2 cloudless** (Esri was rejected in §8.1). |
+| D8 | Satellite is its own row in **Site references**, listed under Basemap; turning Satellite on hides the Basemap. Imagery: **Google** only (keyless public tiles, or the official Map Tiles API with a device key; changed by the user on 2026-09-25). EOX Sentinel-2 cloudless was removed at the user's request on 2026-09-25; Esri was rejected in §8.1. |
 | D9 | One renderer: the PixiJS scene inside MapLibre (`maplibre-pixi`). Canvas2D fallback and any standalone (non-map) scene backend are deleted. |
 | D10 | GeoJSON (RFC 7946) import and export of design objects on Desktop and Web. |
 | D11 | Maps in PDF are **deferred** (not in v2.0). |
@@ -73,7 +73,7 @@ GeoLibre facts you will rely on (reference commit `e9df9e2`; clone it to `.rq-sc
 | Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | design objects: plants, zones, annotations, guides, groups, locks, species colours/symbols/codes, layers | runtime transactions |
 | Design Edit (`app/design-edit/`) | budget, currency, timeline, consortiums, description, extra | Design Edit commands |
 | Map layer store (new, replaces `layer-stack.ts` + per-surface binders) | map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | layer-store actions |
-| Settings | last view, basemap style, satellite provider, Google key (device-local credential), locale, theme | settings actions |
+| Settings | last view, basemap style, Google key (device-local credential), locale, theme | settings actions |
 
 One undo history covers scene runtime + Design Edit (as today). Map layers and settings are not undoable.
 
@@ -145,9 +145,9 @@ Each step lists scope, main files, acceptance (tests to write first) and step-sp
 ### V4 — Map layers, basemap, satellite (~3–4 days, parallel with V2)
 
 - New map layer store + sync (replaces `app/canvas-map-surface/layer-stack.ts` and per-surface basemap binders; keep the credential boundary `maplibre/basemap-tile-auth.ts`).
-- `maplibre/basemap-provider.ts`: OpenFreeMap styles (D7) with attribution; satellite providers (D8); delete OSM raster, MapTiler, keyless Google, `REMOTE_BASEMAP_TILE_URL_TEMPLATE`.
-- `BasemapStyle` setting becomes `basemap_style: liberty|positron|bright|dark` + `satellite_provider: esri|google`; the satellite row visibility is a layer-store state.
-- Layers panel (`presentation.ts`, `LayerPanel.tsx`): Site references group = Basemap (style choice, opacity), Satellite (provider choice, Google key field when Google, opacity; on ⇒ Basemap hidden), LiDAR items, Contours, Hillshade. Remove `BasemapSettings.tsx` after moving its key UI.
+- `maplibre/basemap-provider.ts`: OpenFreeMap styles (D7) with attribution; Google satellite (D8); delete OSM raster, MapTiler, keyless Google, `REMOTE_BASEMAP_TILE_URL_TEMPLATE`.
+- `BasemapStyle` setting becomes `basemap_style: liberty|positron|bright|dark`; the satellite row visibility is a layer-store state.
+- Layers panel (`presentation.ts`, `LayerPanel.tsx`): Site references group = Basemap (style choice, opacity), Satellite (optional Google key field, opacity; on ⇒ Basemap hidden), LiDAR items, Contours, Hillshade. Remove `BasemapSettings.tsx` after moving its key UI.
 - Tests: OpenFreeMap source/layers added without `setStyle`; attribution present; opacity scales all style layers; Satellite on hides Basemap and off restores it; Google without key is unavailable with the key prompt; key never appears in state snapshots, exports or logs (existing tests keep passing); locale switch updates labels.
 
 ### V5 — Navigation: pin search, loupe, Location removed (~2 days, after V2)
@@ -230,7 +230,7 @@ A gate that cannot run is reported with the exact command, reason and residual r
 
 ## 8. Verification items the implementer must resolve
 
-1. **Esri World Imagery terms** (V4): confirm the current Esri terms allow a free desktop/web app to display World Imagery tiles keylessly with attribution. If not clearly allowed, use EOX Sentinel-2 cloudless (check its licence year: 2016 is CC BY 4.0) and tell the user the resolution trade-off. Do not ship an unverified provider.
+1. **Esri World Imagery terms** (V4): confirm the current Esri terms allow a free desktop/web app to display World Imagery tiles keylessly with attribution. If not clearly allowed, do not ship it. Resolved: Esri was rejected; Google is the only satellite imagery (D8).
 2. **Nominatim from Desktop** (V5): confirm the Desktop transport sends an identifying User-Agent and that Web requests carry a Referer; if Nominatim blocks either, stop and report (alternatives in the registry: Pelias/Photon), do not add a proxy.
 3. **OpenFreeMap without `setStyle`** (V4): confirm glyphs and sprite can be added at runtime in the pinned MapLibre (`map.setGlyphs`, `map.addSprite`); if not, report before redesigning the map lifetime.
 4. **Performance** (V2/V3): record the 2,200-plant benchmark before and after; a regression >5 % blocks the step.

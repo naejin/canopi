@@ -567,12 +567,6 @@
       "sampleCentre": "Meten in het midden van de weergave"
     },
     "satellite": {
-      "provider": "Beelden",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Wolkenvrije Sentinel-2-beelden, ongeveer 10 m per pixel.",
       "googleKeyOptional": "Zonder sleutel gebruikt Canopi de openbare satelliettegels van Google. Voeg je Google Maps API-sleutel toe om de officiële Map Tiles API te gebruiken."
     }
   },

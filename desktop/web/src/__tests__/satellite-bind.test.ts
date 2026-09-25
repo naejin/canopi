@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SatelliteImageryProvider, type SatelliteProviderHttp } from '../maplibre/satellite-provider-session'
+import { SatelliteImageryProvider, type SatelliteHttp } from '../maplibre/satellite-provider-session'
 import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
-import { applySatelliteVisibility, bindSatelliteProvider } from '../maplibre/satellite-bind'
+import { applySatelliteVisibility, bindSatelliteImagery } from '../maplibre/satellite-bind'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
-import { EOX_SATELLITE_TILES, GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
+import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
 
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
@@ -51,14 +51,14 @@ function recordingMap() {
   return { target, sources, layers, layout, calls }
 }
 
-const inertHttp: SatelliteProviderHttp = {
+const inertHttp: SatelliteHttp = {
   async request() {
     return { ok: false, status: 500, json: null, retryAfterSeconds: null }
   },
 }
 
 /** A Google tier that grants a session and confirms every viewport. */
-const googleHttp: SatelliteProviderHttp = {
+const googleHttp: SatelliteHttp = {
   async request(input) {
     if (input.url.includes('createSession')) {
       return {
@@ -81,10 +81,10 @@ const googleHttp: SatelliteProviderHttp = {
 describe('satellite provider binding', () => {
   it('adopts the provider it is bound to without touching the map style', () => {
     const provider = new SatelliteImageryProvider(inertHttp, {})
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    provider.update(VIEWPORT)
     const map = recordingMap()
 
-    const dispose = bindSatelliteProvider({ provider, map: map.target })
+    const dispose = bindSatelliteImagery({ provider, map: map.target })
 
     // A map created after the provider resolved must still show imagery, which
     // is why the binding adopts the snapshot rather than waiting for a change.
@@ -92,33 +92,35 @@ describe('satellite provider binding', () => {
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
 
     // The whole point of the binding: nothing here recreates the map or resets
-    // its style, so a provider change cannot disturb the camera or the scene.
+    // its style, so a key change cannot disturb the camera or the scene.
     expect(map.calls.some((call) => call.includes('setStyle'))).toBe(false)
     dispose()
   })
 
-  it('reconciles on every published provider change and never accumulates sources', async () => {
+  it('reconciles on every published change and never accumulates sources', async () => {
     const tileAuth = new BasemapTileAuth()
+    const config: { googleMapsApiKey: string | null } = { googleMapsApiKey: null }
     const provider = new SatelliteImageryProvider(
       googleHttp,
-      { googleMapsApiKey: 'fake-key' },
+      () => config,
       () => Date.now(),
       (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       tileAuth,
     )
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    provider.update(VIEWPORT)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
-      .toEqual([EOX_SATELLITE_TILES])
+      .toEqual([GOOGLE_KEYLESS_TILES])
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    config.googleMapsApiKey = 'fake-key'
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
       .toEqual([GOOGLE_SESSION_TILES])
 
     // One contribution, not two: the previous source is removed before the new
-    // one is added so a provider switch cannot leave both on the map.
+    // one is added so adding a key cannot leave both on the map.
     expect(map.sources.size).toBe(1)
     expect(map.layers.size).toBe(1)
     const added = map.calls.filter((call) => call.startsWith('addSource:'))
@@ -127,15 +129,27 @@ describe('satellite provider binding', () => {
     dispose()
   })
 
-  it('replaces EOX imagery with Google keyless tiles when the provider changes without a key', () => {
-    const provider = new SatelliteImageryProvider(inertHttp, {})
-    provider.update({ provider: 'eox' }, VIEWPORT)
+  it('replaces official session tiles with keyless tiles when the key is cleared', async () => {
+    const tileAuth = new BasemapTileAuth()
+    const config: { googleMapsApiKey: string | null } = { googleMapsApiKey: 'fake-key' }
+    const provider = new SatelliteImageryProvider(
+      googleHttp,
+      () => config,
+      () => Date.now(),
+      (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      tileAuth,
+    )
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    provider.update(VIEWPORT)
+    await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
+    expect(tileAuth.installed).toBe(true)
 
-    // EOX imagery never stays on screen under Google's name.
-    provider.update({ provider: 'google' }, VIEWPORT)
+    config.googleMapsApiKey = null
+    provider.update(VIEWPORT)
 
+    // The cleared key drops the session credential with it.
+    expect(tileAuth.installed).toBe(false)
     expect(provider.snapshot().state).toBe('ready')
     expect((map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
@@ -144,9 +158,9 @@ describe('satellite provider binding', () => {
 
   it('applies visibility to the live contribution and stops when disposed', () => {
     const provider = new SatelliteImageryProvider(inertHttp, {})
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    provider.update(VIEWPORT)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({
+    const dispose = bindSatelliteImagery({
       provider,
       map: map.target,
       visible: () => false,
@@ -161,7 +175,7 @@ describe('satellite provider binding', () => {
 
     const afterDispose = map.calls.length
     dispose()
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     // A disposed binding must stop mutating the map, which is what keeps a
     // torn-down surface from being written to after its map is gone.
     expect(map.calls.length).toBe(afterDispose)
@@ -173,8 +187,8 @@ describe('satellite provider binding', () => {
     const listener = vi.fn()
     provider.subscribe(listener)
 
-    const dispose = bindSatelliteProvider({ provider, map: map.target })
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    const dispose = bindSatelliteImagery({ provider, map: map.target })
+    provider.update(VIEWPORT)
 
     // The binding is a provider subscriber, so a caller that only updates the
     // provider still gets a reconciled map without any extra plumbing.

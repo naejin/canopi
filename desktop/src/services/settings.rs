@@ -67,7 +67,7 @@ fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
 mod tests {
     use super::{get_settings_with_locale, set_settings};
     use crate::db::UserDb;
-    use common_types::settings::{BasemapStyle, Locale, SatelliteProvider, Settings, Theme};
+    use common_types::settings::{BasemapStyle, Locale, Settings, Theme};
     use rusqlite::Connection;
 
     fn test_user_db() -> UserDb {
@@ -114,7 +114,6 @@ mod tests {
             locale: Locale::De,
             theme: Theme::Dark,
             basemap_style: BasemapStyle::Dark,
-            satellite_provider: SatelliteProvider::Google,
             side_panel_width: Some(444),
             saved_stamps_frame_height: Some(260),
             ..Default::default()
@@ -126,7 +125,6 @@ mod tests {
         assert_eq!(stored.locale, Locale::De);
         assert_eq!(stored.theme, Theme::Dark);
         assert_eq!(stored.basemap_style, BasemapStyle::Dark);
-        assert_eq!(stored.satellite_provider, SatelliteProvider::Google);
         assert_eq!(stored.side_panel_width, Some(444));
         assert_eq!(stored.saved_stamps_frame_height, Some(260));
     }

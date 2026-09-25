@@ -567,12 +567,6 @@
       "sampleCentre": "Muestrear en el centro de la vista"
     },
     "satellite": {
-      "provider": "Imágenes",
-      "providers": {
-        "eox": "Sentinel-2 (EOX)",
-        "google": "Google"
-      },
-      "eoxResolution": "Imágenes Sentinel-2 sin nubes, unos 10 m por píxel.",
       "googleKeyOptional": "Sin clave, Canopi usa los mosaicos satelitales públicos de Google. Añade tu clave de API de Google Maps para usar la API oficial Map Tiles."
     }
   },

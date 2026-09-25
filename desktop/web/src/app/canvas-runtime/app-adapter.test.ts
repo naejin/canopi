@@ -194,7 +194,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     basemap_style: 'liberty',
     basemap_visible: true,
     basemap_opacity: 1,
-    satellite_provider: 'eox',
     satellite_visible: false,
     satellite_opacity: 1,
     contour_visible: false,

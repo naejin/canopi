@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   SatelliteImageryProvider,
-  type SatelliteProviderHttp,
-  type SatelliteProviderResponse,
+  type SatelliteHttp,
+  type SatelliteHttpResponse,
 } from '../maplibre/satellite-provider-session'
 import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
-import { bindSatelliteProvider } from '../maplibre/satellite-bind'
+import { bindSatelliteImagery } from '../maplibre/satellite-bind'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 
@@ -40,7 +40,7 @@ function recordingMap() {
 /** A scripted Google tier: one session answer, then one viewport answer. */
 function googleHttp(options: { sessionOk?: boolean; viewportOk?: boolean } = {}) {
   const calls: Array<{ url: string; method?: string }> = []
-  const http: SatelliteProviderHttp = {
+  const http: SatelliteHttp = {
     async request(input) {
       calls.push({ url: input.url, method: input.method })
       if (input.url.includes('createSession')) {
@@ -57,7 +57,7 @@ function googleHttp(options: { sessionOk?: boolean; viewportOk?: boolean } = {})
             tileWidth: 512,
             tileHeight: 512,
           },
-        } as SatelliteProviderResponse
+        } as SatelliteHttpResponse
       }
       if (options.viewportOk === false) {
         // A rejected credential is not retried, so the failure is observable
@@ -71,16 +71,20 @@ function googleHttp(options: { sessionOk?: boolean; viewportOk?: boolean } = {})
           copyright: COPYRIGHT,
           maxZoomRects: [{ north: 49, south: 48, east: 1, west: -1, maxZoom: 21 }],
         },
-      } as SatelliteProviderResponse
+      } as SatelliteHttpResponse
     },
   }
   return { http, calls }
 }
 
-function officialProvider(http: SatelliteProviderHttp, tileAuth: BasemapTileAuth) {
+function officialProvider(
+  http: SatelliteHttp,
+  tileAuth: BasemapTileAuth,
+  key: { value: string | null } = { value: API_KEY },
+) {
   return new SatelliteImageryProvider(
     http,
-    { googleMapsApiKey: API_KEY },
+    () => ({ googleMapsApiKey: key.value }),
     () => Date.now(),
     (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     tileAuth,
@@ -93,9 +97,9 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
     // The session request is authenticated with the key.
@@ -124,7 +128,7 @@ describe('Google official provider drives the live map', () => {
 
     expect(provider.snapshot()).toMatchObject({
       state: 'ready',
-      descriptor: { provider: 'google', official: true, tileSize: 512 },
+      descriptor: { official: true, tileSize: 512 },
     })
     expect(map.layers.has(MAPLIBRE_SATELLITE_LAYER_ID)).toBe(true)
     dispose()
@@ -135,9 +139,9 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
     expect(JSON.stringify(provider.snapshot())).not.toContain(SESSION_TOKEN)
@@ -159,9 +163,9 @@ describe('Google official provider drives the live map', () => {
     // No tileAuth: a map created without the request seam cannot resolve the
     // session template, so the binding must not install a source that would
     // request a literal `{session}`.
-    const dispose = bindSatelliteProvider({ provider, map: map.target })
+    const dispose = bindSatelliteImagery({ provider, map: map.target })
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
     dispose()
@@ -173,7 +177,7 @@ describe('Google official provider drives the live map', () => {
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
     let installedCredit: string | null = null
-    const unbind = bindSatelliteProvider({
+    const unbind = bindSatelliteImagery({
       provider,
       map: {
         ...map.target,
@@ -183,7 +187,7 @@ describe('Google official provider drives the live map', () => {
       },
       tileAuth,
     })
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
 
     await vi.waitFor(() => expect(installedCredit).toBe(COPYRIGHT))
     const viewportCall = calls.find((call) => call.url.includes('/viewport'))
@@ -207,8 +211,8 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const unbind = bindSatelliteProvider({ provider, map: map.target, tileAuth })
-    provider.update({ provider: 'google' }, VIEWPORT)
+    const unbind = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    provider.update(VIEWPORT)
 
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('unavailable'))
     // Imagery is not shown with attribution that cannot be established.
@@ -223,20 +227,22 @@ describe('Google official provider drives the live map', () => {
   it('withdraws the contribution and sanitizes the reason when the key is rejected', async () => {
     const { http } = googleHttp({ sessionOk: false })
     const tileAuth = new BasemapTileAuth()
-    const provider = officialProvider(http, tileAuth)
+    const key: { value: string | null } = { value: null }
+    const provider = officialProvider(http, tileAuth, key)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
 
-    // Keyless EOX imagery first, so withdrawal is observable rather than vacuous.
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    // Keyless imagery first, so withdrawal is observable rather than vacuous.
+    provider.update(VIEWPORT)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true)
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    key.value = API_KEY
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('unavailable'))
 
     const snapshot = provider.snapshot()
     if (snapshot.state !== 'unavailable') throw new Error('expected unavailable')
-    // A rejected key must not silently downgrade to another provider's imagery.
+    // A rejected key must not silently downgrade to keyless imagery.
     expect(snapshot.reason).not.toContain(API_KEY)
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
     dispose()
@@ -254,9 +260,9 @@ describe('Google official provider drives the live map', () => {
       tileAuth,
     )
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     const firstSource = map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)
     expect(firstSource).toBeDefined()
@@ -265,7 +271,7 @@ describe('Google official provider drives the live map', () => {
     // produces. The provider reads the configuration per call, so the new key
     // reaches the transport without recreating the map.
     key.value = 'fake-google-key-9876543210'
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
 
     expect(map.sources.size).toBe(1)
@@ -277,7 +283,8 @@ describe('Google official provider drives the live map', () => {
   it('waits for a mounted map style before mutating it, then applies the latest state', async () => {
     const { http } = googleHttp()
     const tileAuth = new BasemapTileAuth()
-    const provider = officialProvider(http, tileAuth)
+    const key: { value: string | null } = { value: null }
+    const provider = officialProvider(http, tileAuth, key)
     const map = recordingMap()
     let ready = false
     const readyListeners: Array<() => void> = []
@@ -289,7 +296,7 @@ describe('Google official provider drives the live map', () => {
         map.sources.set(id, source)
       },
     }
-    const dispose = bindSatelliteProvider({
+    const dispose = bindSatelliteImagery({
       provider,
       map: target,
       tileAuth,
@@ -299,15 +306,16 @@ describe('Google official provider drives the live map', () => {
       },
     })
 
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     // MapLibre loads even an inline style asynchronously, so `addSource` before
     // readiness throws; the binding must not have touched the map yet.
     expect(added).toEqual([])
 
-    // A provider switch while the style is still loading: the state applied at
+    // A key added while the style is still loading: the state applied at
     // readiness is the latest one, not whichever arrived first.
-    provider.update({ provider: 'google' }, VIEWPORT)
+    key.value = API_KEY
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(added).toEqual([])
 
@@ -323,8 +331,8 @@ describe('Google official provider drives the live map', () => {
     const tileAuth = new BasemapTileAuth()
     const provider = officialProvider(http, tileAuth)
     const map = recordingMap()
-    const dispose = bindSatelliteProvider({ provider, map: map.target, tileAuth })
-    provider.update({ provider: 'google' }, VIEWPORT)
+    const dispose = bindSatelliteImagery({ provider, map: map.target, tileAuth })
+    provider.update(VIEWPORT)
     await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
     expect(tileAuth.installed).toBe(true)
 

@@ -16,7 +16,7 @@ Read the [design system](../system.md) first. Workbench and dock ownership: [fro
 
 The scene stack (top to bottom) comes first, then Site references (basemap, satellite, the Design's LiDAR items, contours, hillshade) in map band order. Each row: visibility icon button, a neutral layer icon, the name as the activation target, a live object count where it applies, and a lock icon button when supported. Row icon buttons use `--control-size-sm` and name their row in `aria-label`.
 
-The active layer has an ochre edge; locked inactive layers do not get an active-looking fill; hidden, locked and active stay independent. Active-layer details sit below the complete stack so switching does not move rows: opacity, basemap style, satellite provider and Google key, contour interval, hillshade, and for LiDAR items units/legend, Fit, Inspect and Remove from Design. Sliders show their value and have accessible names.
+The active layer has an ochre edge; locked inactive layers do not get an active-looking fill; hidden, locked and active stay independent. Active-layer details sit below the complete stack so switching does not move rows: opacity, basemap style, the optional Google key, contour interval, hillshade, and for LiDAR items units/legend, Fit, Inspect and Remove from Design. Sliders show their value and have accessible names.
 
 ## Data Library
 

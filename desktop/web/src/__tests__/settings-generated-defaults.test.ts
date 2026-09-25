@@ -35,7 +35,6 @@ describe('generated settings defaults', () => {
         opacity: DEFAULT_SETTINGS.basemap_opacity,
       },
       satellite: {
-        provider: DEFAULT_SETTINGS.satellite_provider,
         visible: DEFAULT_SETTINGS.satellite_visible,
         opacity: DEFAULT_SETTINGS.satellite_opacity,
       },

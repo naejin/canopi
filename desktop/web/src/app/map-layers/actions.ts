@@ -1,4 +1,4 @@
-import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
+import type { BasemapStyle } from '../../generated/contracts'
 import { mutateSettingsProjection, type SettingsPersistMode } from '../settings/projection'
 import { normalizeMapLayers, type MapLayersState } from './state'
 
@@ -25,10 +25,6 @@ export function setMapLayerOpacity(id: MapLayerId, opacity: number): void {
 
 export function setBasemapStyle(style: BasemapStyle): void {
   updateMapLayers((state) => ({ ...state, basemap: { ...state.basemap, style } }), 'immediate')
-}
-
-export function setSatelliteProvider(provider: SatelliteProvider): void {
-  updateMapLayers((state) => ({ ...state, satellite: { ...state.satellite, provider } }), 'immediate')
 }
 
 export function setContourIntervalMeters(intervalMeters: number): void {

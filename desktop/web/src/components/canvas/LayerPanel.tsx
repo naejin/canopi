@@ -5,7 +5,7 @@ import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { Dropdown } from '../shared/Dropdown'
 import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
+import type { BasemapStyle } from '../../generated/contracts'
 import styles from './LayerPanel.module.css'
 
 function LayerIcon({ id }: { id: string }) {
@@ -65,7 +65,6 @@ export interface LayerPanelActions {
   opacity(id: string, opacity: number): void
   contourInterval?(meters: number): void
   basemapStyle?(style: BasemapStyle): void
-  satelliteProvider?(provider: SatelliteProvider): void
   saveGoogleKey?(key: string | null): void
 }
 
@@ -198,21 +197,7 @@ function SatelliteLayerDetail({ row, detail, actions }: {
 }) {
   return (
     <div className={styles.layerDetail}>
-      <div className={styles.controlRow}>
-        <span className={styles.controlLabel}>{t('canvas.satellite.provider')}</span>
-        <Dropdown
-          trigger={t(`canvas.satellite.providers.${detail.provider}`)}
-          items={detail.providers.map((provider) => ({ value: provider, label: t(`canvas.satellite.providers.${provider}`) }))}
-          value={detail.provider}
-          onChange={(provider) => actions.satelliteProvider?.(provider)}
-          ariaLabel={t('canvas.satellite.provider')}
-          floating
-        />
-      </div>
-      {detail.provider === 'eox' && <p className={styles.layerNote}>{t('canvas.satellite.eoxResolution')}</p>}
-      {detail.provider === 'google' && (
-        <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey?.(key)} />
-      )}
+      <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey?.(key)} />
       <OpacitySlider actions={actions} row={row} />
     </div>
   )

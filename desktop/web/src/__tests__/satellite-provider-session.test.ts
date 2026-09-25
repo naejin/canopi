@@ -4,9 +4,9 @@ import {
   PROVIDER_MAX_RETRIES,
   PROVIDER_REQUEST_TIMEOUT_MS,
   sanitizeProviderReason,
-  type SatelliteProviderHttp,
-  type SatelliteProviderResponse,
-  type SatelliteProviderState,
+  type SatelliteHttp,
+  type SatelliteHttpResponse,
+  type SatelliteState,
 } from '../maplibre/satellite-provider-session'
 import { GOOGLE_KEYLESS_TILES } from '../maplibre/satellite-provider'
 
@@ -37,8 +37,8 @@ function viewportBody(overrides: Record<string, unknown> = {}): unknown {
 
 /** A scripted HTTP capability that records every request it is given. */
 function scriptedHttp(
-  answers: Array<SatelliteProviderResponse | (() => Promise<SatelliteProviderResponse>)>,
-): { http: SatelliteProviderHttp; calls: Array<{ url: string; method?: string }> } {
+  answers: Array<SatelliteHttpResponse | (() => Promise<SatelliteHttpResponse>)>,
+): { http: SatelliteHttp; calls: Array<{ url: string; method?: string }> } {
   const calls: Array<{ url: string; method?: string }> = []
   let index = 0
   return {
@@ -54,49 +54,36 @@ function scriptedHttp(
   }
 }
 
-function ok(json: unknown): SatelliteProviderResponse {
+function ok(json: unknown): SatelliteHttpResponse {
   return { ok: true, status: 200, json }
 }
 
-function failure(status: number, retryAfterSeconds?: number): SatelliteProviderResponse {
+function failure(status: number, retryAfterSeconds?: number): SatelliteHttpResponse {
   return { ok: false, status, json: null, retryAfterSeconds: retryAfterSeconds ?? null }
 }
 
 /** Collects every published state so a test can assert the sequence. */
-function recorder(provider: SatelliteImageryProvider): SatelliteProviderState[] {
-  const seen: SatelliteProviderState[] = []
+function recorder(provider: SatelliteImageryProvider): SatelliteState[] {
+  const seen: SatelliteState[] = []
   provider.subscribe((state) => seen.push(state))
   return seen
 }
 
 describe('satellite provider session lifecycle', () => {
-  it('goes straight to ready for providers that need no session and issues no request', () => {
-    const { http, calls } = scriptedHttp([ok({})])
-    const provider = new SatelliteImageryProvider(http, {})
-    const seen = recorder(provider)
-
-    provider.update({ provider: 'eox' }, VIEWPORT)
-
-    expect(provider.snapshot().state).toBe('ready')
-    expect(seen.map((state) => state.state)).toEqual(['ready'])
-    // Nothing remote happens for a source that needs no session, so a hidden or
-    // provisional surface that never updates issues no work at all.
-    expect(calls).toEqual([])
-    provider.dispose()
-  })
-
   it('serves Google without a key from the keyless tiles without any session request', () => {
     const { http, calls } = scriptedHttp([ok({})])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: '  ' })
     const seen = recorder(provider)
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
 
     const last = provider.snapshot()
     if (last.state !== 'ready') throw new Error('expected ready')
     expect(last.descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     expect(last.descriptor.official).toBe(false)
     expect(seen.map((state) => state.state)).toEqual(['ready'])
+    // Nothing remote happens for keyless tiles, so a hidden or provisional
+    // surface that never updates issues no work at all.
     expect(calls).toEqual([])
     provider.dispose()
   })
@@ -112,7 +99,7 @@ describe('satellite provider session lifecycle', () => {
     })
     const seen = recorder(provider)
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     expect(provider.snapshot().state).toBe('loading')
 
     await vi.waitFor(() => {
@@ -141,7 +128,7 @@ describe('satellite provider session lifecycle', () => {
     const { http, calls } = scriptedHttp([failure(403)])
     const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-bad-key' })
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -164,7 +151,7 @@ describe('satellite provider session lifecycle', () => {
       async () => {},
     )
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -189,7 +176,7 @@ describe('satellite provider session lifecycle', () => {
       async () => {},
     )
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'ready') throw new Error('not ready')
     })
@@ -209,7 +196,7 @@ describe('satellite provider session lifecycle', () => {
       async () => {},
     )
 
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -219,33 +206,36 @@ describe('satellite provider session lifecycle', () => {
     provider.dispose()
   })
 
-  it('fences a superseded session so a late answer cannot replace the current provider', async () => {
+  it('fences a superseded session so a late answer cannot replace the current keyless state', async () => {
     // A holder object rather than a `let`: TypeScript narrows a closure-assigned
     // `let` to `never` at the call site, which the edition builds reject.
     const gate: { release: (() => void) | null } = { release: null }
     const { http } = scriptedHttp([
       () =>
-        new Promise<SatelliteProviderResponse>((resolve) => {
+        new Promise<SatelliteHttpResponse>((resolve) => {
           gate.release = () => resolve(ok(sessionBody()))
         }),
       ok({ copyright: 'second' }),
     ])
-    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-key' }, () => 0)
-    provider.update({ provider: 'google' }, VIEWPORT)
+    const config: { googleMapsApiKey: string | null } = { googleMapsApiKey: 'fake-key' }
+    const provider = new SatelliteImageryProvider(http, () => config, () => 0)
+    provider.update(VIEWPORT)
 
-    // The user switches provider while the first session is still in flight.
-    provider.update({ provider: 'eox' }, VIEWPORT)
+    // The user clears the key while the first session is still in flight.
+    config.googleMapsApiKey = null
+    provider.update(VIEWPORT)
     expect(provider.snapshot().state).toBe('ready')
 
     gate.release?.()
     await Promise.resolve()
     await Promise.resolve()
 
-    // The late official answer must not publish over the current EOX state.
+    // The late official answer must not publish over the current keyless state.
     const last = provider.snapshot()
     expect(last.state).toBe('ready')
     if (last.state !== 'ready') throw new Error('expected ready')
-    expect(last.descriptor.provider).toBe('eox')
+    expect(last.descriptor.official).toBe(false)
+    expect(last.descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
     provider.dispose()
   })
 
@@ -256,7 +246,7 @@ describe('satellite provider session lifecycle', () => {
     provider.dispose()
 
     const before = seen.length
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await Promise.resolve()
     expect(seen.length).toBe(before)
     expect(provider.snapshot().state).toBe('idle')
@@ -268,7 +258,7 @@ describe('satellite provider session lifecycle', () => {
       http,
       { googleMapsApiKey: 'fake-key', locale: 'not a locale' },
     )
-    provider.update({ provider: 'google' }, VIEWPORT)
+    provider.update(VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'ready') throw new Error('not ready')
     })

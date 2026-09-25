@@ -1,6 +1,6 @@
 import type {
-  SatelliteProviderHttp,
-  SatelliteProviderResponse,
+  SatelliteHttp,
+  SatelliteHttpResponse,
 } from '../maplibre/satellite-provider-session'
 
 /** Longest response body the provider will read, in bytes. */
@@ -18,9 +18,9 @@ export const BASEMAP_HTTP_MAX_BODY_BYTES = 256 * 1024
  */
 export function createBrowserSatelliteHttp(
   fetchImpl: typeof fetch = globalThis.fetch,
-): SatelliteProviderHttp {
+): SatelliteHttp {
   return {
-    async request(input): Promise<SatelliteProviderResponse> {
+    async request(input): Promise<SatelliteHttpResponse> {
       let response: Response
       try {
         response = await fetchImpl(input.url, {

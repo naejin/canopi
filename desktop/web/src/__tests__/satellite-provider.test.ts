@@ -1,63 +1,49 @@
 import { describe, expect, it } from 'vitest'
 import {
-  EOX_SATELLITE_ATTRIBUTION,
-  EOX_SATELLITE_TILES,
   GOOGLE_KEYLESS_TILES,
   GOOGLE_SESSION_TILES,
-  resolveSatelliteAvailability,
+  resolveSatelliteDescriptor,
 } from '../maplibre/satellite-provider'
 
-describe('shared satellite provider resolution', () => {
-  it('serves EOX Sentinel-2 cloudless keylessly with its attribution and zoom ceiling', () => {
-    for (const config of [{}, { googleMapsApiKey: null }, { googleMapsApiKey: 'fake-key' }]) {
-      const resolved = resolveSatelliteAvailability('eox', config)
-      if (resolved.state !== 'ready') throw new Error('eox must be ready without a key')
-      expect(resolved.descriptor.provider).toBe('eox')
-      expect(resolved.descriptor.tiles).toEqual([EOX_SATELLITE_TILES])
-      expect(resolved.descriptor.attribution).toBe(EOX_SATELLITE_ATTRIBUTION)
-      expect(resolved.descriptor.attribution).toContain('EOX')
-      expect(resolved.descriptor.maxzoom).toBe(17)
-      expect(resolved.descriptor.tileSize).toBe(256)
-      expect(resolved.descriptor.official).toBe(false)
-      // EOX never carries a Google key, even when one is configured.
-      expect(JSON.stringify(resolved.descriptor)).not.toContain('fake-key')
-    }
-  })
-
+describe('shared satellite descriptor resolution', () => {
   it('serves Google keylessly from its public tile endpoint until a key is configured', () => {
     for (const config of [
+      undefined,
       {},
       { googleMapsApiKey: undefined },
       { googleMapsApiKey: null },
       { googleMapsApiKey: '   ' },
     ]) {
-      const resolved = resolveSatelliteAvailability('google', config)
-      if (resolved.state !== 'ready') throw new Error('google must be ready without a key')
-      expect(resolved.descriptor.provider).toBe('google')
-      expect(resolved.descriptor.official).toBe(false)
-      expect(resolved.descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+      const descriptor = resolveSatelliteDescriptor(config)
+      expect(descriptor.official).toBe(false)
+      expect(descriptor.tiles).toEqual([GOOGLE_KEYLESS_TILES])
       expect(GOOGLE_KEYLESS_TILES).toBe('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}')
-      expect(resolved.descriptor.attribution).toContain('Google')
-      expect(resolved.descriptor.maxzoom).toBe(20)
+      expect(descriptor.attribution).toBe('&copy; Google')
+      expect(descriptor.maxzoom).toBe(20)
+      expect(descriptor.tileSize).toBe(256)
     }
   })
 
   it('keeps a configured Google key on the credential-free official session template', () => {
-    const resolved = resolveSatelliteAvailability('google', {
+    const descriptor = resolveSatelliteDescriptor({
       googleMapsApiKey: '  fake-recognizable-key  ',
     })
-    if (resolved.state !== 'ready') throw new Error('google with a key must be ready')
-    expect(resolved.descriptor.provider).toBe('google')
-    expect(resolved.descriptor.official).toBe(true)
+    expect(descriptor.official).toBe(true)
     // The published template is credential-free. Both the live session token
     // and the key are supplied per request by the map's tile transport, because
     // a descriptor carrying either could be persisted, exported or logged.
-    expect(resolved.descriptor.tiles).toEqual([GOOGLE_SESSION_TILES])
+    expect(descriptor.tiles).toEqual([GOOGLE_SESSION_TILES])
     expect(GOOGLE_SESSION_TILES).toBe(
       'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session={session}',
     )
-    expect(JSON.stringify(resolved.descriptor)).not.toContain('fake-recognizable-key')
-    expect(resolved.descriptor.tileSize).toBe(256)
-    expect(resolved.descriptor.maxzoom).toBe(22)
+    expect(JSON.stringify(descriptor)).not.toContain('fake-recognizable-key')
+    expect(descriptor.attribution).toContain('Google')
+    expect(descriptor.tileSize).toBe(256)
+    expect(descriptor.maxzoom).toBe(22)
+  })
+
+  it('names no imagery provider on the descriptor', () => {
+    expect(resolveSatelliteDescriptor()).not.toHaveProperty('provider')
+    expect(resolveSatelliteDescriptor({ googleMapsApiKey: 'key' })).not.toHaveProperty('provider')
   })
 })

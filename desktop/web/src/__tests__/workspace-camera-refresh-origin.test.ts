@@ -163,7 +163,7 @@ describe('workspace runtime composition origin effect', () => {
       readSnapshot,
       readBackgroundPresentation: () => ({
         basemap: { style: 'liberty', visible: true, opacity: 1 },
-        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        satellite: { visible: false, opacity: 1 },
         locale: 'en',
       }),
     }, {

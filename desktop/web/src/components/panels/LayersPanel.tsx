@@ -9,7 +9,7 @@ import {
   setCanvasLayerPresentationOpacity,
   setCanvasLayerPresentationContourIntervalMeters,
 } from '../../app/canvas-layer-presentation/presentation'
-import { saveGoogleMapsApiKey, setBasemapStyle, setSatelliteProvider } from '../../app/map-layers/actions'
+import { saveGoogleMapsApiKey, setBasemapStyle } from '../../app/map-layers/actions'
 import { installLidarLibraryObserver } from '../../app/lidar/library-store'
 
 /** Layer actions shared by both editions' Layers panels. */
@@ -20,7 +20,6 @@ export const LAYER_PANEL_ACTIONS: LayerPanelActions = {
   opacity: setCanvasLayerPresentationOpacity,
   contourInterval: setCanvasLayerPresentationContourIntervalMeters,
   basemapStyle: setBasemapStyle,
-  satelliteProvider: setSatelliteProvider,
   saveGoogleKey: saveGoogleMapsApiKey,
 }
 

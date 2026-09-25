@@ -14,7 +14,7 @@ function workspaceSnapshot(): WorkspaceActivationSnapshot {
       initialCenter: { lat: 48.86, lon: 2.35 },
       background: {
         basemap: { style: 'liberty', visible: true, opacity: 1 },
-        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        satellite: { visible: false, opacity: 1 },
         locale: 'en',
       },
     },
