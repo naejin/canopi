@@ -13,7 +13,7 @@ fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
         let old = catalogue::head_generation(&library.catalogue().unwrap(), &layer)
             .unwrap()
             .unwrap();
-        publish_source(&library, &layer, &root.join("plane.tif"), true);
+        publish_source(&library, &layer, &root.join("plane.tif"));
         let new = catalogue::head_generation(&library.catalogue().unwrap(), &layer)
             .unwrap()
             .unwrap();
@@ -101,7 +101,7 @@ fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
 }
 
 #[test]
-#[ignore = "requires GDAL on PATH; generated two-block plane, no private fixtures"]
+#[ignore = "requires GDAL on PATH and the pinned GeoLibre CLI; generated two-block plane, no private fixtures"]
 fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
     fn files(path: &Path, output: &mut Vec<(PathBuf, Vec<u8>)>) {
         for entry in std::fs::read_dir(path).unwrap() {
@@ -140,7 +140,7 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
             .catalogue()
             .unwrap()
             .execute(
-                "UPDATE lidar_analysis_jobs SET state = 'refreshing' WHERE id = ?1",
+                "UPDATE lidar_analysis_jobs SET state = 'preparing' WHERE id = ?1",
                 [&job],
             )
             .unwrap();
@@ -195,7 +195,6 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
                 .join(format!("scratch-slope-{job}"))
                 .exists()
         );
-        assert!(staging_roots(&library, &definition).is_empty());
         // Re-enter the actual worker without the fault; scheduler/IPC Retry is a separate contract.
         let retry = run_slope_job(
             &library,
@@ -217,7 +216,7 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
 }
 
 #[test]
-#[ignore = "requires GDAL on PATH; real published plane and Tauri-managed command state"]
+#[ignore = "requires GDAL on PATH and the pinned GeoLibre CLI; real published plane and Tauri-managed command state"]
 /// R50 under the fixed-item contract: Retry reruns only a failed operation, with
 /// its saved identity, against its pinned input, through the actual command.
 fn acceptance_retry_command_preserves_saved_identity_and_publication() {
@@ -289,7 +288,7 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
         ("South slope", LidarSlopeUnit::Percent),
     ] {
         let receipt = library
-            .create_horn_analysis(
+            .create_analysis_unchecked(
                 &layer,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -353,7 +352,7 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
         connection
             .execute(
                 "INSERT INTO lidar_analysis_definitions (id, layer_id, kind, version, parameters_json, created_at)
-                 VALUES (?1, ?2, 'slope', 1, ?3, '0')",
+                 VALUES (?1, ?2, 'slope', 2, ?3, '0')",
                 rusqlite::params![
                     definition,
                     layer,
@@ -399,7 +398,7 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
 
     // Advance the real source: an operation pinned to the old input is refused
     // before enqueue instead of being retargeted, and accepted bytes stay.
-    publish_source(&library, &layer, &root.join("plane.tif"), true);
+    publish_source(&library, &layer, &root.join("plane.tif"));
     assert_ne!(
         catalogue::head_generation(&library.catalogue().unwrap(), &layer)
             .unwrap()

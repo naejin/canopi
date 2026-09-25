@@ -65,7 +65,7 @@ export function hasActiveLibraryWork(snapshot: LidarLibrarySnapshot | null): boo
   return snapshot.layers.some((layer) =>
     layer.import_job?.state === 'Staging' || layer.import_job?.state === 'Applying')
     || snapshot.analyses.some((analysis) =>
-      analysis.state === 'Preparing' || analysis.state === 'Refreshing')
+      analysis.state === 'Preparing')
 }
 
 async function pollLidarState(): Promise<void> {

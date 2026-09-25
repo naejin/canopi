@@ -59,16 +59,8 @@ pub(crate) struct LidarLibraryInner {
     pub(crate) geolibre: geolibre::GeolibreEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
-    /// Prepared compatibility leases for preserved dense compositions.
-    ///
-    /// A dense mosaic is not in the controlled COG profile, so replaying it
-    /// needs one GDAL derivative per preserved generation. This cache is the
-    /// single lifecycle owner: the derivative is prepared on first use, reused
-    /// by every later read, and released when the layer is deleted or the
-    /// library closes.
-    compat_leases: Mutex<HashMap<String, Arc<Mutex<Option<generation::LegacyTiffLease>>>>>,
-    /// One exclusive heavy raster job at a time, library-wide. Staging, apply,
-    /// undo and analysis all hold it; awaiting review releases it.
+    /// One exclusive heavy raster job at a time, library-wide. Import and
+    /// analysis jobs hold it.
     heavy_job: Mutex<Option<String>>,
     /// Bounded display read admission, separate from the heavy lease.
     display: Mutex<DisplayAdmission>,
@@ -242,6 +234,7 @@ impl Drop for HeavyJobLease {
 
 impl LidarLibrary {
     pub fn open(app_data_dir: &std::path::Path) -> Result<Self, String> {
+        discard_unsupported_library(&paths::library_root(app_data_dir))?;
         let paths = LidarPaths::open(app_data_dir)?;
         let catalogue = catalogue::open(&paths.catalogue_path())?;
         let display_cache = open_display_cache(&paths.display_cache_path())?;
@@ -255,7 +248,6 @@ impl LidarLibrary {
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
-                compat_leases: Mutex::new(HashMap::new()),
                 display: Mutex::new(DisplayAdmission::default()),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
@@ -310,8 +302,8 @@ impl LidarLibrary {
         let settled: Vec<(String, String)> = {
             let mut statement = connection
                 .prepare(
-                    "SELECT id, state FROM lidar_import_jobs WHERE state != 'staging'
-                     AND state != 'awaiting_review' AND state != 'applying'",
+                    "SELECT id, state FROM lidar_import_jobs
+                     WHERE state != 'staging' AND state != 'applying'",
                 )
                 .map_err(|e| e.to_string())?;
             statement
@@ -363,15 +355,6 @@ impl LidarLibrary {
                 ));
             }
         }
-        // The retired PNG tile cache and pyramids are reproducible derivatives
-        // no reader uses any more: display COGs replaced them and a v19
-        // catalogue refuses the older binaries that drew them. Reclaim once.
-        let _ = std::fs::remove_dir_all(self.inner.paths.retired_tile_cache_dir());
-        let _ = std::fs::remove_dir_all(self.inner.paths.retired_pyramid_dir());
-        // Write jobs that crashed before publication left `staging-*` roots
-        // behind. Only staging roots are removed: published `gen-*` dirs,
-        // member assets and immutable originals are never candidates.
-        self.prune_staging_roots()?;
         // Display derivatives nobody registered, and interrupted writes, can go
         // now: no WebView reader exists before the library opens.
         display_cog::prune_display_derivatives(self)?;
@@ -383,43 +366,6 @@ impl LidarLibrary {
             let discarded = catalogue::discard_unpublished_chunks(&connection)?;
             if discarded > 0 {
                 tracing::info!(discarded, "discarded unpublished raster chunk rows");
-            }
-        }
-        Ok(())
-    }
-
-    /// Remove abandoned `staging-*` roots under the prepared pipeline dirs.
-    ///
-    /// Every staging root is unpublished scratch by construction, and no job
-    /// is running while startup pruning executes, so each one is stale. The
-    /// scan is one `read_dir` per pipeline directory.
-    fn prune_staging_roots(&self) -> Result<(), String> {
-        let prepared = self.inner.paths.prepared_dir();
-        for family in ["layers", "analysis"] {
-            let family_dir = prepared.join(family);
-            for entity in std::fs::read_dir(&family_dir)
-                .into_iter()
-                .flatten()
-                .flatten()
-            {
-                for entry in std::fs::read_dir(entity.path())
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    if !name.starts_with("staging-") {
-                        continue;
-                    }
-                    if let Err(error) = std::fs::remove_dir_all(entry.path()) {
-                        tracing::warn!(
-                            path = %entry.path().display(),
-                            error = %error,
-                            "failed to remove abandoned staging root"
-                        );
-                    }
-                }
             }
         }
         Ok(())
@@ -612,20 +558,6 @@ impl LidarLibrary {
         for definition_id in &definition_ids {
             delete_analysis_rows(&transaction, definition_id)?;
         }
-        transaction
-            .execute(
-                "DELETE FROM lidar_acceptance_regions WHERE generation_id IN
-                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        transaction
-            .execute(
-                "DELETE FROM lidar_generation_members WHERE generation_id IN
-                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
         // Ordered snapshots keep their own member rows, which reference the
         // generations deleted below.
         transaction
@@ -635,51 +567,6 @@ impl LidarLibrary {
                 [layer_id],
             )
             .map_err(|e| e.to_string())?;
-        // A snapshot may also be the predecessor of another snapshot; clear the
-        // lineage before the rows themselves so the self-reference never blocks
-        // the delete.
-        transaction
-            .execute(
-                "UPDATE lidar_layer_generations SET previous_generation_id = NULL
-                 WHERE layer_id = ?1",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        transaction
-            .execute(
-                "UPDATE lidar_layer_generations SET base_generation_id = NULL
-                 WHERE layer_id = ?1",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        let removed_generations: Vec<String> = {
-            let mut statement = transaction
-                .prepare("SELECT id FROM lidar_layer_generations WHERE layer_id = ?1")
-                .map_err(|e| e.to_string())?;
-            statement
-                .query_map([layer_id], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
-        };
-        let footprint_ids = {
-            let mut statement = transaction
-                .prepare("SELECT id FROM lidar_source_footprints WHERE layer_id = ?1")
-                .map_err(|e| e.to_string())?;
-            statement
-                .query_map([layer_id], |row| row.get::<_, i64>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
-        };
-        for footprint_id in footprint_ids {
-            transaction
-                .execute(
-                    "DELETE FROM lidar_footprint_rtree WHERE id = ?1",
-                    [footprint_id],
-                )
-                .map_err(|e| e.to_string())?;
-        }
         // Chunk rows carry no foreign key to their generation (they are
         // inserted before it commits), so they are revoked with it explicitly.
         transaction
@@ -690,7 +577,6 @@ impl LidarLibrary {
             )
             .map_err(|e| e.to_string())?;
         for sql in [
-            "DELETE FROM lidar_source_footprints WHERE layer_id = ?1",
             "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
             "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
             "DELETE FROM lidar_layer_generations WHERE layer_id = ?1",
@@ -701,17 +587,6 @@ impl LidarLibrary {
                 .map_err(|e| e.to_string())?;
         }
         transaction.commit().map_err(|e| e.to_string())?;
-        drop(connection);
-
-        for generation_id in removed_generations {
-            // The layer's preserved compositions stop being readable here, so
-            // this is the owner's release point for their prepared leases.
-            self.release_compat_lease(&generation_id);
-        }
-        let _ = std::fs::remove_dir_all(self.inner.paths.layer_pipeline_dir(layer_id));
-        for definition_id in definition_ids {
-            let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(&definition_id));
-        }
         Ok(())
     }
 
@@ -721,9 +596,7 @@ impl LidarLibrary {
     /// Membership and order are library data, so the Design is never dirtied by
     /// a reorder and every referencing Design sees the same list. A member page
     /// is bound to the immutable snapshot it was requested from: a late page of
-    /// a superseded head is refused by name rather than mixed into a newer
-    /// list, and the summary reports Undo explicitly so an exhausted walk is
-    /// distinguishable from one that targets the empty composition.
+    /// a different head is refused by name rather than mixed into its list.
     pub fn layer_collection(
         &self,
         layer_id: &str,
@@ -737,19 +610,8 @@ impl LidarLibrary {
             None => (None, None),
         };
         let connection = self.catalogue()?;
-        let head = catalogue::head_generation(&connection, layer_id)?;
-        let head_manifest = head
-            .as_ref()
-            .map(|row| import::read_generation_manifest(&row.manifest_json))
-            .transpose()?;
-        let head_ordered = head.as_ref().is_some_and(|row| {
-            head_manifest
-                .as_ref()
-                .is_some_and(|manifest| manifest.format.is_ordered_collection())
-                && !row.id.is_empty()
-        });
-        let head_id = head.as_ref().map(|row| row.id.clone());
-        let (member_rows, member_count) = match head_id.as_deref().filter(|_| head_ordered) {
+        let head_id = catalogue::head_generation(&connection, layer_id)?.map(|row| row.id);
+        let (member_rows, member_count) = match head_id.as_deref() {
             Some(head) => {
                 if let Some(cursor_head) = cursor_head.as_deref()
                     && cursor_head != head
@@ -768,62 +630,28 @@ impl LidarLibrary {
                 let count = catalogue::collection_member_count(&connection, head)?;
                 (rows, count)
             }
-            // A pre-transition head presents the one divisible member its next
-            // edit will produce, so the list agrees with the model the user is
-            // about to enter instead of appearing empty.
-            None => {
-                let rows = head_id
-                    .as_ref()
-                    .map(|head| {
-                        vec![catalogue::CollectionMemberRow {
-                            member_id: format!("prev-{head}"),
-                            position: 0,
-                            kind: collection::PREVIOUS_COMPOSITION_KIND.to_string(),
-                            interpretation_id: None,
-                            base_generation_id: Some(head.clone()),
-                            job_id: None,
-                        }]
-                    })
-                    .unwrap_or_default();
-                let count = rows.len() as i64;
-                (rows, count)
-            }
+            None => (Vec::new(), 0),
         };
         let last_position = member_rows.last().map(|row| row.position);
         let sources = member_rows
             .iter()
             .map(|member| {
-                let interpretation = member
-                    .interpretation_id
-                    .as_deref()
-                    .map(|id| catalogue::get_interpretation(&connection, id))
-                    .transpose()?
-                    .flatten();
+                let id = member.interpretation_id.as_str();
+                let interpretation = catalogue::get_interpretation(&connection, id)?
+                    .ok_or_else(|| format!("missing interpretation {id}"))?;
                 let (coverage_cells, min_value, max_value) =
-                    match member.interpretation_id.as_deref() {
-                        Some(id) => catalogue::interpretation_coverage(&connection, id)?,
-                        None => (0, None, None),
-                    };
-                let filename = match member.interpretation_id.as_deref() {
-                    Some(id) => catalogue::interpretation_filename(&connection, id)?,
-                    None => None,
-                };
-                let (width, height, pixel_size_m) = match &interpretation {
-                    Some(row) => (
-                        u32::try_from(row.width.max(0)).unwrap_or(u32::MAX),
-                        u32::try_from(row.height.max(0)).unwrap_or(u32::MAX),
-                        import::parse_geotransform(&row.geotransform)
-                            .map(|transform| transform[1].abs())
-                            .unwrap_or(0.0),
-                    ),
-                    None => (0, 0, 0.0),
-                };
+                    catalogue::interpretation_coverage(&connection, id)?;
+                let filename = catalogue::interpretation_filename(&connection, id)?
+                    .ok_or_else(|| format!("missing source of interpretation {id}"))?;
+                let width = u32::try_from(interpretation.width.max(0)).unwrap_or(u32::MAX);
+                let height = u32::try_from(interpretation.height.max(0)).unwrap_or(u32::MAX);
+                let pixel_size_m = import::parse_geotransform(&interpretation.geotransform)
+                    .map(|transform| transform[1].abs())
+                    .unwrap_or(0.0);
                 Ok(common_types::lidar::LidarLayerSource {
                     member_id: member.member_id.clone(),
-                    kind: member.kind.clone(),
                     filename,
                     interpretation_id: member.interpretation_id.clone(),
-                    base_generation_id: member.base_generation_id.clone(),
                     width,
                     height,
                     pixel_size_m,
@@ -937,86 +765,6 @@ impl LidarLibrary {
         }
     }
 
-    /// The one prepared compatibility lease for a preserved dense generation.
-    ///
-    /// The library is the lifecycle owner: the derivative is prepared once for
-    /// the generation and every later read of the same preserved composition
-    /// reuses it. Two readers can hold the lease's handle at once, but only one
-    /// conversion ever runs.
-    fn compat_lease(
-        &self,
-        generation_id: &str,
-        mosaic: &std::path::Path,
-        grid: &grid::RasterGrid,
-        nodata: Option<f32>,
-        mask: Option<PathBuf>,
-        cancel: &AtomicBool,
-    ) -> Result<Arc<Mutex<Option<generation::LegacyTiffLease>>>, String> {
-        if let Some(existing) = self
-            .inner
-            .compat_leases
-            .lock()
-            .map_err(|_| "compatibility lease cache poisoned".to_string())?
-            .get(generation_id)
-            .cloned()
-        {
-            return Ok(existing);
-        }
-        let scratch = self
-            .inner
-            .paths
-            .prepared_dir()
-            .join(format!("compat-{generation_id}"));
-        std::fs::create_dir_all(&scratch)
-            .map_err(|e| format!("Failed to create compatibility scratch dir: {e}"))?;
-        let lease = generation::LegacyTiffLease::open(
-            &self.inner.engine,
-            mosaic,
-            grid,
-            nodata,
-            mask,
-            &scratch,
-            cancel,
-        )?;
-        let handle = Arc::new(Mutex::new(Some(lease)));
-        let mut cache = self
-            .inner
-            .compat_leases
-            .lock()
-            .map_err(|_| "compatibility lease cache poisoned".to_string())?;
-        // Another reader may have prepared the same generation meanwhile: keep
-        // the first handle so exactly one derivative exists per generation.
-        let entry = cache
-            .entry(generation_id.to_string())
-            .or_insert_with(|| handle.clone())
-            .clone();
-        Ok(entry)
-    }
-
-    /// Release one preserved generation's compatibility lease and its scratch.
-    ///
-    /// Called when the generation stops being readable (its layer is deleted)
-    /// and at library close. Dropping the lease removes the derivative.
-    fn release_compat_lease(&self, generation_id: &str) {
-        let removed = self
-            .inner
-            .compat_leases
-            .lock()
-            .ok()
-            .and_then(|mut cache| cache.remove(generation_id));
-        if let Some(handle) = removed
-            && let Ok(mut slot) = handle.lock()
-        {
-            *slot = None;
-        }
-        let scratch = self
-            .inner
-            .paths
-            .prepared_dir()
-            .join(format!("compat-{generation_id}"));
-        let _ = std::fs::remove_dir_all(scratch);
-    }
-
     pub fn get_import_job(&self, job_id: &str) -> Result<Option<LidarImportJob>, String> {
         let connection = self.catalogue()?;
         import_job_summary(&connection, job_id)
@@ -1093,31 +841,19 @@ impl LidarLibrary {
         {
             flag.store(true, Ordering::Relaxed);
         }
-        let mut discard_review = false;
         if let Ok(connection) = self.catalogue() {
-            let import_state = connection
-                .query_row(
-                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
-                    [job_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .ok();
-            discard_review = import_state.as_deref() == Some("awaiting_review");
             let _ = connection.execute(
                 "UPDATE lidar_import_jobs
                  SET state = 'cancelled', message = 'import cancelled', updated_at = ?2
-                 WHERE id = ?1 AND state IN ('staging', 'awaiting_review', 'applying')",
+                 WHERE id = ?1 AND state IN ('staging', 'applying')",
                 rusqlite::params![job_id, now_iso()],
             );
             let _ = connection.execute(
                 "UPDATE lidar_analysis_jobs
                  SET state = 'cancelled', message = 'analysis cancelled', updated_at = ?2
-                 WHERE id = ?1 AND state IN ('preparing', 'refreshing')",
+                 WHERE id = ?1 AND state = 'preparing'",
                 rusqlite::params![job_id, now_iso()],
             );
-        }
-        if discard_review {
-            let _ = std::fs::remove_dir_all(self.inner.paths.job_dir(job_id));
         }
     }
 
@@ -1230,7 +966,7 @@ impl LidarLibrary {
             let running: bool = connection
                 .query_row(
                     "SELECT EXISTS(SELECT 1 FROM lidar_import_jobs WHERE layer_id = ?1
-                     AND state IN ('staging', 'awaiting_review', 'applying'))",
+                     AND state IN ('staging', 'applying'))",
                     [layer_id],
                     |row| row.get(0),
                 )
@@ -1352,17 +1088,11 @@ impl LidarLibrary {
         Ok(job_id)
     }
 
-    /// Spawn staging: probe, mask, classify and plan the review.
-    /// Prepare and publish a batch in one job, with no review in between.
+    /// Prepare and publish a new item's sources in one job.
     ///
-    /// This is the production import route: the user's commit intent is the
-    /// Import action, so each selected source is prepared and validated and the
-    /// batch is published atomically without a second decision screen. The
-    /// amendment's rules are enforced by the work below rather than by a
-    /// reviewer: preparation is per source and sequential under one heavy-job
-    /// lease, the target head is captured before any preparation starts and
-    /// rechecked inside the publication transaction, and a pre-commit failure
-    /// or cancellation publishes nothing.
+    /// Each selected source is prepared and validated in order under one
+    /// heavy-job lease, and the batch is published atomically as the item's
+    /// only generation. A pre-commit failure or cancellation publishes nothing.
     pub fn begin_import_sources(
         &self,
         job_id: &str,
@@ -1425,12 +1155,9 @@ impl LidarLibrary {
                             1,
                         );
                         library_for_work.prepare_staged_display(&staging, &flag)?;
-                        // Preparation marked the job publishing once the batch
-                        // validated. Publication rechecks the captured head in
-                        // its own
-                        // transaction, so a head that moved during preparation
-                        // is a conflict rather than a silently rebased import.
-                        import::apply_import(&library_for_work, &staging, true, false, &flag)
+                        // Publication refuses an item that already has a head:
+                        // items are fixed once published.
+                        import::apply_import(&library_for_work, &staging, &flag)
                             .map(|outcome| {
                                 tracing::info!(summary = outcome.summary(), message = ?outcome.message, "LiDAR import published");
                             })
@@ -1451,7 +1178,7 @@ impl LidarLibrary {
                     published = true;
                     let _ = connection.execute(
                         "UPDATE lidar_import_jobs
-                         SET state = 'complete', message = NULL, review_json = NULL,
+                         SET state = 'complete', message = NULL,
                              updated_at = ?2
                          WHERE id = ?1 AND state IN ('staging', 'applying')",
                         rusqlite::params![job_id, now_iso()],
@@ -1513,7 +1240,7 @@ impl LidarLibrary {
                                 [job_id],
                                 |row| row.get::<_, String>(0),
                             )
-                            .is_ok_and(|state| matches!(state.as_str(), "preparing" | "refreshing"))
+                            .is_ok_and(|state| state == "preparing")
                     });
                     if !queued {
                         return None;
@@ -1613,8 +1340,7 @@ impl LidarLibrary {
     /// Create a new slope result with the current method, the pinned GeoLibre
     /// projected slope (recipe 2), and run its first job.
     ///
-    /// A missing GeoLibre engine refuses creation by name; it never falls back
-    /// to the legacy Horn recipe.
+    /// A missing GeoLibre engine refuses creation by name.
     pub fn create_analysis(
         &self,
         layer_id: &str,
@@ -1623,42 +1349,21 @@ impl LidarLibrary {
         result_name: Option<String>,
     ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
         self.inner.geolibre.discover()?;
-        self.create_analysis_with_recipe(
-            layer_id,
-            kind,
-            parameters,
-            result_name,
-            analysis::SlopeRecipe::GeolibreProjected,
-        )
+        self.create_analysis_unchecked(layer_id, kind, parameters, result_name)
     }
 
-    /// Test support: create a legacy GDAL Horn definition, as existing
-    /// libraries hold, to exercise version-1 execution.
-    #[cfg(test)]
-    pub fn create_horn_analysis(
+    /// Record a definition and its first job without checking for the engine.
+    ///
+    /// Production goes through [`Self::create_analysis`]; tests that only need
+    /// the catalogue rows call this directly.
+    pub(crate) fn create_analysis_unchecked(
         &self,
         layer_id: &str,
         kind: LidarAnalysisKind,
         parameters: LidarAnalysisParameters,
         result_name: Option<String>,
     ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
-        self.create_analysis_with_recipe(
-            layer_id,
-            kind,
-            parameters,
-            result_name,
-            analysis::SlopeRecipe::GdalHorn,
-        )
-    }
-
-    fn create_analysis_with_recipe(
-        &self,
-        layer_id: &str,
-        kind: LidarAnalysisKind,
-        parameters: LidarAnalysisParameters,
-        result_name: Option<String>,
-        recipe: analysis::SlopeRecipe,
-    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+        let recipe = analysis::SlopeRecipe::GeolibreProjected;
         let connection = self.catalogue()?;
         let layer = catalogue::get_layer(&connection, layer_id)?
             .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
@@ -1766,7 +1471,7 @@ impl LidarLibrary {
                 .ok()
                 .flatten()
                 .as_deref(),
-            Some("preparing") | Some("refreshing")
+            Some("preparing")
         );
         if active {
             return Err("analysis is already running".to_string());
@@ -1832,7 +1537,6 @@ impl LidarLibrary {
         delete_analysis_rows(&transaction, definition_id)?;
         transaction.commit().map_err(|e| e.to_string())?;
         drop(connection);
-        let _ = std::fs::remove_dir_all(self.inner.paths.analysis_pipeline_dir(definition_id));
         Ok(())
     }
 }
@@ -1910,18 +1614,18 @@ mod tests {
             .execute(
                 "INSERT INTO lidar_analysis_definitions
              (id, layer_id, kind, version, parameters_json, created_at)
-             VALUES (?1, ?2, 'slope', 1, '{}', '0')",
+             VALUES (?1, ?2, 'slope', 2, '{}', '0')",
                 rusqlite::params![definition_id, layer_id],
             )
             .unwrap();
         connection
             .execute(
                 "INSERT INTO lidar_analysis_generations
-             (id, definition_id, source_generation_id, engine_version, state, result_path,
-              quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
-              bounds_3857, published_at)
-             VALUES ('agen-1', ?1, 'source-gen', 'test', 'complete', '', NULL, '{}',
-                     1, 0, 1, '[0,0,1,1]', '0')",
+             (id, definition_id, source_generation_id, engine_version, state,
+              manifest_json, coverage_cells, min_value, max_value,
+              bounds_3857, published_at, method_id, recipe_version)
+             VALUES ('agen-1', ?1, 'source-gen', 'test', 'ready', '{}',
+                     1, 0, 1, '[0,0,1,1]', '0', 'geolibre-projected-slope-v1', 2)",
                 [definition_id],
             )
             .unwrap();
@@ -2129,34 +1833,27 @@ mod tests {
                 .execute(
                     "INSERT INTO lidar_interpretations
                  (id, source_sha256, band_index, measurement_kind, units, scale, offset,
-                  crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
+                  crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
+                  valid_cells)
                  VALUES ('interp-delete', 'sha-delete', 1, 'ground-elevation', 'm', 1, 0,
-                         'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash-delete')",
+                         'test', 'unknown', -9999, '[0,1,0,1,0,-1]', 1, 1, 'hash-delete', 1)",
                     [],
                 )
                 .unwrap();
             connection
                 .execute(
                     "INSERT INTO lidar_layer_generations
-                 (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+                 (id, layer_id, created_at, manifest_json,
                   coverage_cells, min_value, max_value, bounds_3857)
-                 VALUES ('source-gen', ?1, '0', '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
+                 VALUES ('source-gen', ?1, '0', '{}', 1, 0, 1, '[0,0,1,1]')",
                     [&layer_id],
                 )
                 .unwrap();
             connection
                 .execute(
-                    "INSERT INTO lidar_generation_members
-                 (generation_id, interpretation_id, role, ordinal)
-                 VALUES ('source-gen', 'interp-delete', 'add', 0)",
-                    [],
-                )
-                .unwrap();
-            connection
-                .execute(
-                    "INSERT INTO lidar_acceptance_regions
-                 (id, generation_id, interpretation_id, decision, job_id)
-                 VALUES ('accept-delete', 'source-gen', 'interp-delete', 'add', 'import-delete')",
+                    "INSERT INTO lidar_collection_members
+                 (generation_id, member_id, position, interpretation_id, created_at)
+                 VALUES ('source-gen', 'member-delete', 0, 'interp-delete', '0')",
                     [],
                 )
                 .unwrap();
@@ -2175,13 +1872,6 @@ mod tests {
                     [&layer_id],
                 )
                 .unwrap();
-            catalogue::upsert_footprint(
-                &connection,
-                "interp-delete",
-                &layer_id,
-                [0.0, 0.0, 1.0, 1.0],
-            )
-            .unwrap();
             connection
                 .execute(
                     "INSERT INTO lidar_raster_assets
@@ -2215,10 +1905,8 @@ mod tests {
             "lidar_source_layers",
             "lidar_layer_heads",
             "lidar_layer_generations",
-            "lidar_generation_members",
-            "lidar_acceptance_regions",
+            "lidar_collection_members",
             "lidar_import_jobs",
-            "lidar_source_footprints",
             "lidar_analysis_heads",
             "lidar_analysis_jobs",
             "lidar_analysis_generations",
@@ -2357,7 +2045,7 @@ mod tests {
         );
         let staging = import::read_staged_import(&library, &job_id).expect("staged payload");
         import::ensure_whole_batch_compatible(&staging).expect("every source is compatible");
-        import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
+        import::apply_import(&library, &staging, &cancel).expect("apply publishes");
         library.finish_import_sources(&job_id, &layer_id, Ok(()));
 
         let job = library
@@ -2382,19 +2070,35 @@ mod tests {
         );
         drop(connection);
 
+        // A published item is fixed: a further import into it is refused.
+        let again = library.record_import_job(&layer_id).expect("job recorded");
+        let refused = import::stage_import(
+            &library,
+            &again,
+            &layer_id,
+            std::slice::from_ref(&east),
+            &cancel,
+        )
+        .expect_err("a published item accepts no further sources");
+        assert!(refused.contains("published"), "{refused}");
+
         // A batch whose second file cannot be used publishes nothing and names
-        // the file, leaving the accepted head exactly where it was.
+        // the file.
         let broken = root.join("broken.tif");
         std::fs::write(&broken, b"not a raster").expect("broken file");
-        let before = catalogue::head_generation(&library.catalogue().unwrap(), &layer_id)
-            .unwrap()
-            .expect("head")
-            .id;
-        let second_job = library.record_import_job(&layer_id).expect("job recorded");
+        let other = library
+            .create_layer(
+                "broken batch",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
+            )
+            .expect("layer created");
+        let second_job = library.record_import_job(&other).expect("job recorded");
         let failure = import::stage_import(
             &library,
             &second_job,
-            &layer_id,
+            &other,
             &[east.clone(), broken.clone()],
             &cancel,
         )
@@ -2403,11 +2107,12 @@ mod tests {
             failure.contains("broken.tif"),
             "the refusal names the file: {failure}"
         );
-        let after = catalogue::head_generation(&library.catalogue().unwrap(), &layer_id)
-            .unwrap()
-            .expect("head")
-            .id;
-        assert_eq!(after, before, "a refused batch leaves the head untouched");
+        assert!(
+            catalogue::head_generation(&library.catalogue().unwrap(), &other)
+                .unwrap()
+                .is_none(),
+            "a refused batch publishes nothing"
+        );
 
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
@@ -2527,45 +2232,61 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// The PNG tile cache and pyramids retired with the upstream renderer are
-    /// reclaimed when the library opens, and the retired pyramid registry is
-    /// dropped, while display derivatives keep their registry.
+    /// Canopi v2 does not read a v1 library: opening deletes it (catalogue,
+    /// originals, assets and derivatives) and starts an empty one.
     #[test]
-    fn startup_reclaims_the_retired_png_display_stores() {
-        let root = std::env::temp_dir().join(new_id("lidar-prune-test"));
-        std::fs::create_dir_all(&root).unwrap();
-        let library = LidarLibrary::open(&root).unwrap();
-        let pyramid = library
-            .inner
-            .paths
-            .retired_pyramid_dir()
-            .join("source/layer/gen/elevation");
-        let tiles = library.inner.paths.retired_tile_cache_dir();
-        std::fs::create_dir_all(&pyramid).unwrap();
-        std::fs::create_dir_all(&tiles).unwrap();
-        std::fs::write(pyramid.join("13_0_0.png"), b"png").unwrap();
-        std::fs::write(tiles.join("entry.png"), b"png").unwrap();
-        library
-            .display()
-            .unwrap()
-            .execute_batch("CREATE TABLE tilesets (key TEXT PRIMARY KEY)")
+    fn an_older_library_is_deleted_and_a_fresh_one_opens() {
+        let root = std::env::temp_dir().join(new_id("lidar-v1-library"));
+        let lidar = paths::library_root(&root);
+        std::fs::create_dir_all(lidar.join("sources/abc")).unwrap();
+        std::fs::write(lidar.join("sources/abc/original"), b"v1 original").unwrap();
+        {
+            let v1 = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
+            v1.execute_batch(
+                "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '19');
+                 CREATE TABLE lidar_source_layers (id TEXT PRIMARY KEY);",
+            )
             .unwrap();
-        drop(library);
+        }
 
-        let reopened = LidarLibrary::open(&root).unwrap();
-        assert!(!reopened.inner.paths.retired_pyramid_dir().exists());
-        assert!(!reopened.inner.paths.retired_tile_cache_dir().exists());
-        let display = reopened.display().unwrap();
-        let tables: Vec<String> = display
-            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-            .unwrap()
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap();
-        assert_eq!(tables, ["display_cogs"]);
-        drop(display);
-        drop(reopened);
+        let library = LidarLibrary::open(&root).unwrap();
+        assert!(
+            !lidar.join("sources/abc").exists(),
+            "v1 originals are deleted"
+        );
+        assert!(library.library_snapshot().unwrap().layers.is_empty());
+        assert_eq!(
+            catalogue::stored_version(&library.inner.paths.catalogue_path()).unwrap(),
+            Some(catalogue::CATALOGUE_VERSION)
+        );
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A newer catalogue belongs to a newer Canopi: it is refused, never deleted.
+    #[test]
+    fn a_newer_library_is_refused_and_kept() {
+        let root = std::env::temp_dir().join(new_id("lidar-newer-library"));
+        let lidar = paths::library_root(&root);
+        std::fs::create_dir_all(&lidar).unwrap();
+        {
+            let newer = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
+            newer
+                .execute_batch(
+                    "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                     INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '99');",
+                )
+                .unwrap();
+        }
+        let error = LidarLibrary::open(&root)
+            .err()
+            .expect("newer library refused");
+        assert!(error.contains("is not supported"), "{error}");
+        assert_eq!(
+            catalogue::stored_version(&lidar.join("lidar-library.sqlite")).unwrap(),
+            Some(99)
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 }
@@ -2580,13 +2301,38 @@ impl std::ops::Deref for CatalogueGuard<'_> {
     }
 }
 
+/// Delete a library written by an older Canopi.
+///
+/// Canopi v2 keeps no migration path for v1 LiDAR libraries: an older
+/// catalogue means the whole managed library directory is removed before a
+/// fresh one is created. A newer catalogue is left in place for
+/// `catalogue::open` to refuse.
+fn discard_unsupported_library(root: &std::path::Path) -> Result<(), String> {
+    let catalogue_path = root.join(paths::CATALOGUE_FILE);
+    match catalogue::stored_version(&catalogue_path)? {
+        Some(version) if version < catalogue::CATALOGUE_VERSION => {
+            std::fs::remove_dir_all(root).map_err(|e| {
+                format!(
+                    "Failed to remove the unsupported LiDAR library {} (schema v{version}): {e}",
+                    root.display()
+                )
+            })?;
+            tracing::warn!(
+                "removed LiDAR library {} written by an older Canopi (schema v{version})",
+                root.display()
+            );
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
         .map_err(|e| format!("Failed to open display cache {}: {e}", path.display()))?;
     connection
         .execute_batch(
-            "DROP TABLE IF EXISTS tilesets;
-            CREATE TABLE IF NOT EXISTS display_cogs (
+            "CREATE TABLE IF NOT EXISTS display_cogs (
                 key TEXT PRIMARY KEY,
                 file TEXT NOT NULL,
                 bytes INTEGER NOT NULL,
@@ -2655,7 +2401,6 @@ fn parse_import_request(json: &str) -> Result<Vec<PathBuf>, String> {
 
 fn parse_import_state(raw: &str) -> LidarImportJobState {
     match raw {
-        "awaiting_review" => LidarImportJobState::AwaitingReview,
         "applying" => LidarImportJobState::Applying,
         "complete" => LidarImportJobState::Complete,
         "cancelled" => LidarImportJobState::Cancelled,
@@ -2686,10 +2431,7 @@ fn parse_import_progress_phase(raw: &str) -> Option<LidarImportProgressPhase> {
 fn parse_result_state(raw: &str) -> LidarResultState {
     match raw {
         "ready" | "complete" => LidarResultState::Ready,
-        "refreshing" => LidarResultState::Refreshing,
-        "incomplete" => LidarResultState::Incomplete,
-        // A retired automatic refresh never replaced its saved result.
-        "failed" | "cancelled" | "retired" => LidarResultState::Failed,
+        "failed" | "cancelled" => LidarResultState::Failed,
         _ => LidarResultState::Preparing,
     }
 }

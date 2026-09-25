@@ -13,12 +13,10 @@
 //!
 //! - an ordered-collection source occurrence converts its own immutable COG,
 //!   keyed by content digest, so reuse across items and Designs is free;
-//! - resolved chunk generations (legacy sparse sources and every slope result)
-//!   and preserved previous compositions are read through their exact numeric
+//! - a slope result's resolved chunks are read through their exact numeric
 //!   reader in bounded windows, grouped into parts of at most
 //!   `PART_CHUNKS`² occupied chunks. Empty space between distant chunks is never
-//!   allocated, and an old masked composition is never reinterpreted as a new
-//!   priority list.
+//!   allocated.
 //!
 //! Files are written in a staging directory outside the WebView's asset scope
 //! and renamed into `display-cog/` only when complete, so the renderer can never
@@ -26,7 +24,6 @@
 //! and the profile, so a newer generation never reuses an older URL.
 
 use super::grid::RasterGrid;
-use super::import::GenerationStorageFormat;
 use super::{LidarLibrary, catalogue, collection, generation};
 use common_types::lidar::{
     LidarDisplayAsset, LidarDisplayDescriptor, LidarDisplayRequest, LidarDisplayState,
@@ -133,52 +130,23 @@ fn build_plan(
                 ));
             };
             let manifest = super::import::read_generation_manifest(&head.manifest_json)?;
-            let mut parts = Vec::new();
-            match manifest.format {
-                GenerationStorageFormat::OrderedMembersV1 => {
-                    let Some(members) = collection::snapshot_members(library, &head.id, cancel)?
-                    else {
-                        return Ok(Planned::Unavailable(
-                            Some(head.id),
-                            "a source file of this item is missing from the library".to_string(),
-                        ));
-                    };
-                    for member in members {
-                        match &member.resolved.source {
-                            generation::MemberSource::Cog(asset) => parts.push(PartSpec {
-                                key: format!(
-                                    "asset-{}-{}",
-                                    asset.sha256,
-                                    nodata_tag(member.resolved.nodata)
-                                ),
-                                source: PartSource::Asset {
-                                    path: asset.path.clone(),
-                                    nodata: member.resolved.nodata,
-                                },
-                            }),
-                            _ => {
-                                let base = member.base_generation_id.clone().ok_or_else(|| {
-                                    "a previous composition has no preserved generation".to_string()
-                                })?;
-                                parts.extend(generation_parts(
-                                    library,
-                                    &base,
-                                    &manifest.crs_wkt,
-                                    cancel,
-                                )?);
-                            }
-                        }
+            let parts = collection::snapshot_members(library, &head.id, cancel)?
+                .into_iter()
+                .map(|member| {
+                    let cog = &member.resolved.cog;
+                    PartSpec {
+                        key: format!(
+                            "asset-{}-{}",
+                            cog.sha256,
+                            nodata_tag(member.resolved.nodata)
+                        ),
+                        source: PartSource::Asset {
+                            path: cog.path.clone(),
+                            nodata: member.resolved.nodata,
+                        },
                     }
-                }
-                GenerationStorageFormat::CogChunksV1 | GenerationStorageFormat::LegacyDenseV1 => {
-                    parts.extend(generation_parts(
-                        library,
-                        &head.id,
-                        &manifest.crs_wkt,
-                        cancel,
-                    )?);
-                }
-            }
+                })
+                .collect();
             Ok(Planned::Plan(Arc::new(DisplayPlan {
                 kind,
                 entity_id: entity_id.to_string(),
@@ -201,37 +169,6 @@ fn build_plan(
             let manifest: super::analysis::ResultManifest =
                 serde_json::from_str(&result.manifest_json)
                     .map_err(|e| format!("Invalid analysis manifest: {e}"))?;
-            if manifest.format != GenerationStorageFormat::CogChunksV1 {
-                let path = {
-                    let connection = library.catalogue()?;
-                    connection
-                        .query_row(
-                            "SELECT result_path FROM lidar_analysis_generations WHERE id = ?1",
-                            [&result.id],
-                            |row| row.get::<_, Option<String>>(0),
-                        )
-                        .map_err(|e| format!("Failed to read the result file: {e}"))?
-                };
-                let Some(path) = path.filter(|path| !path.is_empty()) else {
-                    return Ok(Planned::Unavailable(
-                        Some(result.id),
-                        "this result has no stored raster".to_string(),
-                    ));
-                };
-                return Ok(Planned::Plan(Arc::new(DisplayPlan {
-                    kind,
-                    entity_id: entity_id.to_string(),
-                    generation_id: result.id.clone(),
-                    crs_wkt: manifest.crs_wkt,
-                    parts: vec![PartSpec {
-                        key: format!("result-{}", result.id),
-                        source: PartSource::Asset {
-                            path: library.inner.paths.root().join(path),
-                            nodata: manifest.nodata,
-                        },
-                    }],
-                })));
-            }
             let coordinates = {
                 let connection = library.catalogue()?;
                 catalogue::published_chunk_coordinates(
@@ -257,68 +194,6 @@ fn build_plan(
             })))
         }
     }
-}
-
-/// Parts of a preserved source generation read through its own reader.
-fn generation_parts(
-    library: &LidarLibrary,
-    generation_id: &str,
-    crs_wkt: &str,
-    cancel: &AtomicBool,
-) -> Result<Vec<PartSpec>, String> {
-    let row = {
-        let connection = library.catalogue()?;
-        catalogue::generation_row(&connection, generation_id)?
-            .ok_or_else(|| format!("preserved generation {generation_id} is missing"))?
-    };
-    let manifest = super::import::read_generation_manifest(&row.manifest_json)?;
-    let crs_wkt = if manifest.crs_wkt.is_empty() {
-        crs_wkt.to_string()
-    } else {
-        manifest.crs_wkt.clone()
-    };
-    if manifest.format == GenerationStorageFormat::CogChunksV1 {
-        let coordinates = {
-            let connection = library.catalogue()?;
-            catalogue::published_chunk_coordinates(
-                &connection,
-                generation_id,
-                generation::RESULT_ROLE,
-            )?
-        };
-        let reader = Arc::new(WindowReader {
-            reader: generation::GenerationReader::Chunks(generation::GenerationChunkReader::new(
-                generation_id,
-                generation::RESULT_ROLE,
-            )),
-            lattice: manifest.grid.clone(),
-            crs_wkt,
-        });
-        return Ok(grouped_parts(
-            &format!("gen-{generation_id}"),
-            &reader,
-            coordinates,
-        ));
-    }
-    // A preserved dense composition keeps its own mask authority through the
-    // library's compatibility reader.
-    let member = collection::preserved_member(library, generation_id, cancel)?;
-    let lattice = member.grid.clone();
-    let reader = generation::CollectionReader::new(
-        vec![(format!("display-{generation_id}"), member)],
-        lattice.clone(),
-    )?;
-    let coordinates = reader.occupied_chunks()?;
-    let reader = Arc::new(WindowReader {
-        reader: generation::GenerationReader::Collection(Box::new(reader)),
-        lattice,
-        crs_wkt,
-    });
-    Ok(grouped_parts(
-        &format!("gen-{generation_id}"),
-        &reader,
-        coordinates,
-    ))
 }
 
 /// Group occupied chunks into parts of at most `PART_CHUNKS`² chunks.
@@ -835,13 +710,11 @@ impl LidarLibrary {
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         for source in &staging.sources {
-            let Some(cog) = &source.source_cog else {
-                continue;
-            };
+            let cog = &source.source_cog;
             let part = PartSpec {
                 key: format!("asset-{}-{}", cog.sha256, nodata_tag(cog.nodata)),
                 source: PartSource::Asset {
-                    path: cog.resolve(&self.inner.paths, source.job_id.as_deref())?,
+                    path: cog.resolve(&self.inner.paths, &source.job_id)?,
                     nodata: cog.nodata,
                 },
             };
@@ -1119,7 +992,6 @@ mod gdal_tests {
             &job_id,
             &layer_id,
             &[west, east],
-            false,
             &cancel,
         )
         .unwrap();
@@ -1231,53 +1103,65 @@ mod gdal_tests {
 mod chunk_display_tests {
     use super::*;
 
-    /// A legacy sparse generation displays from one part per group of occupied
+    /// A published slope result whose chunks the caller then writes.
+    fn seed_chunk_result(library: &LidarLibrary, definition_id: &str, generation_id: &str) {
+        let manifest = serde_json::json!({
+            "definition_id": definition_id,
+            "kind": "slope",
+            "source_generation_id": "gen-source",
+            "parameters": { "slope_unit": "Degrees", "name": null },
+            "engine_version": "test",
+            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
+            "crs_wkt": "EPSG:3857",
+            "created_at": "0",
+        });
+        library
+            .catalogue()
+            .unwrap()
+            .execute_batch(&format!(
+                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
+                 VALUES ('lyr-{definition_id}', 'Source', 'ground-elevation', 'm', '0');
+                 INSERT INTO lidar_analysis_definitions
+                    (id, layer_id, kind, version, parameters_json, created_at)
+                 VALUES ('{definition_id}', 'lyr-{definition_id}', 'slope', 2, '{{}}', '0');
+                 INSERT INTO lidar_analysis_generations
+                    (id, definition_id, source_generation_id, engine_version, state, manifest_json,
+                     coverage_cells, min_value, max_value, bounds_3857, published_at,
+                     method_id, recipe_version)
+                 VALUES ('{generation_id}', '{definition_id}', 'gen-source', 'test', 'ready',
+                         '{manifest}', 32, 1, 2, '[0,0,1,1]', '0',
+                         'geolibre-projected-slope-v1', 2);
+                 INSERT INTO lidar_analysis_heads(definition_id, generation_id)
+                 VALUES ('{definition_id}', '{generation_id}');"
+            ))
+            .unwrap();
+    }
+
+    /// A chunked slope result displays from one part per group of occupied
     /// chunks: distant coverage produces two small parts, never one raster
     /// spanning the empty space between them.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn distant_legacy_chunks_display_as_separate_parts_without_the_gap() {
+    fn distant_result_chunks_display_as_separate_parts_without_the_gap() {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-chunks"));
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
-        let manifest = serde_json::json!({
-            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
-            "nodata": -9999.0,
-            "crs_wkt": "EPSG:3857",
-            "members": [],
-            "engine_version": "test",
-            "created_at": "0",
-            "format": "cog-chunks-v1",
-        });
-        {
-            let connection = library.catalogue().unwrap();
-            connection
-                .execute_batch(&format!(
-                    "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
-                     VALUES ('lyr-legacy', 'Legacy', 'ground-elevation', 'm', '0');
-                     INSERT INTO lidar_layer_generations
-                        (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
-                         coverage_cells, min_value, max_value, bounds_3857)
-                     VALUES ('gen-legacy', 'lyr-legacy', '0', NULL, NULL, '{manifest}', 32, 1, 2, '[0,0,1,1]');
-                     INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES ('lyr-legacy', 'gen-legacy');"
-                ))
-                .unwrap();
-        }
+        seed_chunk_result(&library, "adef-far", "agen-far");
         let near: Vec<f32> = (0..16)
             .map(|index| if index == 5 { f32::NAN } else { 1.0 })
             .collect();
         let far = vec![2.0f32; 16];
-        generation::publish_test_chunk(&library, "gen-legacy", 0, 0, 4, 4, &near);
-        generation::publish_test_chunk(&library, "gen-legacy", 300, 0, 4, 4, &far);
+        generation::publish_test_chunk(&library, "agen-far", 0, 0, 4, 4, &near);
+        generation::publish_test_chunk(&library, "agen-far", 300, 0, 4, 4, &far);
 
         library
-            .prepare_display_now(LidarSampleEntityKind::Source, "lyr-legacy")
+            .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-far")
             .unwrap();
         let descriptor = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Source,
-                entity_id: "lyr-legacy".to_string(),
-                expected_generation_id: Some("gen-legacy".to_string()),
+                kind: LidarSampleEntityKind::Analysis,
+                entity_id: "adef-far".to_string(),
+                expected_generation_id: Some("agen-far".to_string()),
                 retry: false,
             })
             .unwrap();
@@ -1338,30 +1222,13 @@ mod chunk_display_tests {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-capacity"));
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
-        let manifest = serde_json::json!({
-            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
-            "nodata": -9999.0, "crs_wkt": "EPSG:3857", "members": [], "engine_version": "test",
-            "created_at": "0", "format": "cog-chunks-v1",
-        });
-        library
-            .catalogue()
-            .unwrap()
-            .execute_batch(&format!(
-                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
-                 VALUES ('lyr-cap', 'Capacity', 'ground-elevation', 'm', '0');
-                 INSERT INTO lidar_layer_generations
-                    (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
-                     coverage_cells, min_value, max_value, bounds_3857)
-                 VALUES ('gen-cap', 'lyr-cap', '0', NULL, NULL, '{manifest}', 16, 1, 1, '[0,0,1,1]');
-                 INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES ('lyr-cap', 'gen-cap');"
-            ))
-            .unwrap();
-        generation::publish_test_chunk(&library, "gen-cap", 0, 0, 4, 4, &[1.0; 16]);
+        seed_chunk_result(&library, "adef-cap", "agen-cap");
+        generation::publish_test_chunk(&library, "agen-cap", 0, 0, 4, 4, &[1.0; 16]);
 
         {
             let _full = super::super::paths::capacity_probe::override_available(1024);
             let error = library
-                .prepare_display_now(LidarSampleEntityKind::Source, "lyr-cap")
+                .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-cap")
                 .unwrap_err();
             assert!(error.contains("needs at least"), "{error}");
         }
@@ -1380,12 +1247,12 @@ mod chunk_display_tests {
             "the failed write left no staging file"
         );
         library
-            .prepare_display_now(LidarSampleEntityKind::Source, "lyr-cap")
+            .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-cap")
             .unwrap();
         let ready = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Source,
-                entity_id: "lyr-cap".to_string(),
+                kind: LidarSampleEntityKind::Analysis,
+                entity_id: "adef-cap".to_string(),
                 expected_generation_id: None,
                 retry: false,
             })

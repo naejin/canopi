@@ -446,7 +446,6 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
 
 function methodLabel(method: LidarAnalysisMethod | null): string {
   if (method === 'GeolibreProjectedSlopeV1') return t('canvas.lidar.library.methodGeolibre')
-  if (method === 'GdalHornV1') return t('canvas.lidar.library.methodHorn')
   return t('canvas.lidar.library.methodUnknown')
 }
 
@@ -468,7 +467,7 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
     if (item.kind !== 'Source' || item.status !== 'ready') return
     let current = true
     void fetchItemSources(item.id)
-      .then((page) => { if (current) setFiles(page.sources.map((source) => source.filename ?? t('canvas.lidar.library.previousComposition'))) })
+      .then((page) => { if (current) setFiles(page.sources.map((source) => source.filename)) })
       .catch(() => { if (current) setFiles([]) })
     return () => { current = false }
   }, [item.id, item.status])

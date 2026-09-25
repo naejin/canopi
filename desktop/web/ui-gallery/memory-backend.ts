@@ -46,8 +46,8 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   bounds: lidarBounds,
   value_range: [0, 41.6],
   slope_unit: 'Degrees',
-  method: 'GdalHornV1',
-  engine_version: 'GDAL 3.8.4',
+  method: 'GeolibreProjectedSlopeV1',
+  engine_version: 'geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)',
 }]
 function galleryImport(layerId: string, name: string, kind: LidarLayerSummary['measurement_kind'], job: Partial<LidarImportJob>): LidarLayerSummary {
   return {
@@ -178,10 +178,10 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     }
     case 'lidar_layer_collection':
       result = {
-        layer_id: String(args.layerId), head_generation_id: null, member_count: 4, undo_available: false, undo_target: null,
+        layer_id: String(args.layerId), head_generation_id: 'lidar-ground-g1', member_count: 4,
         sources: ['LHD_FXX_0712_6250', 'LHD_FXX_0712_6251', 'LHD_FXX_0713_6250', 'LHD_FXX_0713_6251']
           .map((stem, index) => ({
-            member_id: `source-${index}`, kind: 'raster', filename: `${stem}.tif`, interpretation_id: null, base_generation_id: null,
+            member_id: `source-${index}`, filename: `${stem}.tif`, interpretation_id: `interp-${index}`,
             width: 2000, height: 2000, pixel_size_m: 0.5, coverage_cells: '1000000', value_range: [131.2, 287.8] as [number, number],
           })),
         next_member_cursor: null,

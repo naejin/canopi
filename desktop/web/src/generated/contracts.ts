@@ -180,8 +180,6 @@ export type LidarAnalysisKind =
 
 // A qualified analysis method, identified by its recipe.
 export type LidarAnalysisMethod =
-// Recipe 1: GDAL `gdaldem slope`, Horn 3×3 (existing results).
-"GdalHornV1" |
 // Recipe 2: the pinned GeoLibre projected slope, 5×5 Florinsky stencil.
 "GeolibreProjectedSlopeV1";
 
@@ -356,10 +354,9 @@ export type LidarImportJob = {
  *  Import job states.
  *
  *  `Staging` is preparation, `Applying` is publication, and the terminal states
- *  report the outcome. `AwaitingReview` is retained in the vocabulary for the
- *  superseded review route, which no production caller enters.
+ *  report the outcome.
  */
-export type LidarImportJobState = "Staging" | "AwaitingReview" | "Applying" | "Complete" | "Cancelled" | "Failed";
+export type LidarImportJobState = "Staging" | "Applying" | "Complete" | "Cancelled" | "Failed";
 
 export type LidarImportProgress = {
 	phase: LidarImportProgressPhase,
@@ -398,21 +395,14 @@ export type LidarLayerCollection = {
 };
 
 /**
- *  One occurrence in a Data Layer's priority list, topmost first.
- *
- *  `kind` is `source` for an ordinary independently prepared COG and
- *  `previous-composition` for the single indivisible member that exposes a
- *  preserved pre-transition head. A source member carries its own measured
- *  coverage; a previous-composition member reports the preserved generation's.
+ *  One source file in a Data Layer's priority list, topmost first, with its
+ *  own measured coverage.
  */
 export type LidarLayerSource = {
 	member_id: string,
-	kind: string,
-	// Display name of the source file, when this member has one.
-	filename: string | null,
-	interpretation_id: string | null,
-	// Preserved generation this member replays, for a previous composition.
-	base_generation_id: string | null,
+	// Original name of the imported source file.
+	filename: string,
+	interpretation_id: string,
 	width: number,
 	height: number,
 	pixel_size_m: number,
@@ -495,12 +485,8 @@ export type LidarPresentationSection = {
 	entries: LidarPresentationEntry[],
 };
 
-/**
- *  Result states defined by the product plan (§4). `refreshing` keeps the last
- *  complete result visible; `incomplete` distinguishes unknown areas from
- *  low/zero measured values.
- */
-export type LidarResultState = "Preparing" | "Ready" | "Refreshing" | "Incomplete" | "Failed";
+// State of a library item: its operation while it runs, then a fixed result.
+export type LidarResultState = "Preparing" | "Ready" | "Failed";
 
 export type LidarSampleEntityKind =
 // A source Data Layer.

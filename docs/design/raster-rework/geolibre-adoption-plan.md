@@ -267,6 +267,8 @@ Verification entry points: [model behavior tests](../../../desktop/web/src/__tes
 
 ## 7. Migration, compatibility and deletion
 
+> **Superseded for migration (2026-09-25).** The user chose a breaking Canopi v2: older LiDAR libraries are deleted on first open and v2 keeps no migration, historical reader or Horn recipe. See [ADR 0027](../../adr/0027-ordered-cog-data-layers.md#canopi-v2-compatibility-removal--accepted-2026-09-25). The cutover steps below that preserve old data are historical; the fixed-item, recovery and deletion rules still apply.
+
 ### Fixed items with existing storage
 
 Use the current source-layer and analysis-definition identities as library item identities. Present them through one read model; do not introduce a second catalogue, generic asset graph or new Design reference format. A published source item's content/interpretation is fixed; its name is editable metadata. A published result keeps the input generation, method, parameters and values that produced it. Add more data or recalculate by creating another item.

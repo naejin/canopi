@@ -256,7 +256,7 @@ describe('Data Library panel', () => {
 
   it('names each result by its method and engine', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [
-      slope('old', 'a', { name: 'Old', method: 'GdalHornV1', engine_version: 'GDAL 3.8.4' }),
+      slope('old', 'a', { name: 'Old', method: null, engine_version: null }),
       slope('new', 'a', { name: 'New', method: 'GeolibreProjectedSlopeV1', engine_version: 'geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)' }),
     ])
     mount()
@@ -264,7 +264,7 @@ describe('Data Library panel', () => {
     expect(container.textContent).toContain('GeoLibre projected slope (5×5)')
     expect(container.textContent).toContain('geolibre-cli 1.5.3')
     await act(async () => { libraryFocusRequest.value = 'old' })
-    expect(container.textContent).toContain('Horn (3×3)')
+    expect(container.textContent).toContain('Unknown method')
   })
 
   it('offers Cancel for a calculation this session started', async () => {

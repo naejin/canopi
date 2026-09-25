@@ -1,12 +1,11 @@
-//! Import staging, review planning and publication for source layers.
+//! Import staging and publication for source items.
 //!
-//! Validity, classification and mosaic composition run in Rust on exact
-//! Float32 buffers so invalid pixels can never bleed into accepted coverage.
-//! GDAL performs format conversion, georeferencing and display rendering
-//! only. Catalogue locks are held only for short reads and the publish
-//! transaction — never during raster computation. Publication is atomic:
-//! staging is renamed into the generation directory and the head advances in
-//! one transaction.
+//! Each selected source is probed, validated and prepared as a retained COG
+//! whose valid cells and range are measured once. GDAL performs format
+//! conversion and georeferencing only. Catalogue locks are held only for short
+//! reads and the publish transaction — never during raster computation.
+//! Publication is atomic: promoted assets, the ordered members and the item's
+//! only head commit in one transaction.
 
 use super::LidarLibrary;
 use super::admission;
@@ -14,7 +13,7 @@ use super::catalogue::{self, new_id, now_iso};
 use super::collection;
 use super::engine::{GdalEngine, GdalProgram};
 use super::generation::{self};
-use super::grid::{self, GeoTransform, RasterGrid, ValidMask, remap_mask_checked, union_grid};
+use super::grid::{self, GeoTransform, RasterGrid, union_grid};
 use super::paths::LidarPaths;
 use super::prepared_raster::PreparedRaster;
 #[cfg(test)]
@@ -28,95 +27,23 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
-pub(crate) use super::admission::MAX_DENSE_ENVELOPE_CELLS as MAX_DENSE_WORKING_CELLS;
+/// Most cells one whole-raster read into memory may hold (analysis blocks and
+/// test oracles). Item reads never materialize a whole raster.
+pub(crate) const MAX_RAW_EXTRACTION_CELLS: u64 = 25_000_000;
 
-/// Every occurrence the ordered proposal would read, and what each costs.
-///
-/// The budget the admission policy charges is the work the collection would
-/// propose, not the area it would span. Each accepted occurrence is visited the
-/// way the resolver visits it — a source member across its own native grid, a
-/// preserved `previous-composition` member across only the chunks it actually
-/// stores — and each incoming staged source is charged its full native grid.
-/// Overlap and NoData are charged again on every occurrence on purpose: a
-/// mostly-NoData source still costs decoding work, so the count is conservative
-/// work accounting rather than a coverage measurement.
-///
-/// Only `result` chunks count for a preserved member. A quality chunk describes
-/// cells the result chunk already accounts for, which is the result/quality
-/// role deduplication the policy requires.
+/// What reading an item's sources costs: each source across its full native
+/// grid. NoData is charged too, because a mostly-NoData source still costs
+/// decoding work; the count is work accounting, not a coverage measurement.
 fn ordered_processing_cost(
-    connection: &rusqlite::Connection,
-    head: Option<&catalogue::GenerationRow>,
     incoming: &[&StagedSource],
 ) -> Result<Vec<admission::ProcessingCost>, String> {
-    let mut proposed = Vec::new();
-    if let Some(head_row) = head {
-        let members = catalogue::collection_members(connection, &head_row.id)?;
-        if members.is_empty() {
-            // A head written before ordered collections existed replays through
-            // the legacy member table, or as one dense preserved lattice when
-            // even that is absent.
-            let legacy = catalogue::generation_members(connection, &head_row.id)?;
-            if legacy.is_empty() {
-                let manifest = read_generation_manifest(&head_row.manifest_json)?;
-                proposed.push(admission::ProcessingCost::Dense {
-                    width: manifest.grid.width,
-                    height: manifest.grid.height,
-                });
-            } else {
-                for (interpretation_id, _role, _job_id) in legacy {
-                    let interpretation =
-                        catalogue::get_interpretation(connection, &interpretation_id)?
-                            .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
-                    proposed.push(admission::ProcessingCost::Dense {
-                        width: interpretation.width as u32,
-                        height: interpretation.height as u32,
-                    });
-                }
-            }
-        } else {
-            for member in members {
-                match (
-                    member.interpretation_id.as_deref(),
-                    member.base_generation_id.as_deref(),
-                ) {
-                    (Some(interpretation_id), _) => {
-                        let interpretation =
-                            catalogue::get_interpretation(connection, interpretation_id)?
-                                .ok_or_else(|| {
-                                    format!("missing interpretation {interpretation_id}")
-                                })?;
-                        proposed.push(admission::ProcessingCost::Dense {
-                            width: interpretation.width as u32,
-                            height: interpretation.height as u32,
-                        });
-                    }
-                    (None, Some(base_generation_id)) => {
-                        proposed.push(admission::ProcessingCost::Sparse {
-                            footprint: catalogue::published_chunk_footprint(
-                                connection,
-                                base_generation_id,
-                                generation::RESULT_ROLE,
-                            )?,
-                        });
-                    }
-                    (None, None) => {
-                        return Err(format!(
-                            "collection member {} names no source or preserved generation",
-                            member.member_id
-                        ));
-                    }
-                }
-            }
-        }
-    }
-    for source in incoming {
-        proposed.push(admission::ProcessingCost::Dense {
+    Ok(incoming
+        .iter()
+        .map(|source| admission::ProcessingCost {
             width: source.width,
             height: source.height,
-        });
-    }
-    Ok(proposed)
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,30 +60,12 @@ pub struct StagedSource {
     pub value_range: [f64; 2],
     pub size_bytes: u64,
     /// The staged job that owns this source's prepared bytes.
-    ///
-    /// A job-local COG is resolved under this job's root; absent in a staged
-    /// job written before job-local retention.
-    #[serde(default)]
-    pub job_id: Option<String>,
+    pub job_id: String,
     /// The retained controlled source COG this interpretation reads from.
-    ///
-    /// Absent only in a staged job written before source retention existed:
-    /// such a job is still reviewable and publishable through its disposable
-    /// raw/mask scratch, which is why those paths stay optional.
-    #[serde(default)]
-    pub source_cog: Option<RetainedSourceCog>,
-    #[serde(default)]
-    pub valid_mask_path: PathBuf,
-    #[serde(default)]
-    pub raw_samples_path: PathBuf,
-    /// Valid cells the prepared source actually holds.
-    ///
-    /// Preparation already counts them; keeping the count is what lets the
-    /// batch refuse an all-NoData member by name instead of publishing an
-    /// occurrence that contributes no coverage. Absent in staging written
-    /// before this field existed, which reads as unknown rather than zero.
-    #[serde(default)]
-    pub valid_cells: Option<u64>,
+    pub source_cog: RetainedSourceCog,
+    /// Valid cells the prepared source actually holds, so the batch can refuse
+    /// an all-NoData member by name.
+    pub valid_cells: u64,
     pub compatible: bool,
     pub issues: Vec<String>,
 }
@@ -173,45 +82,17 @@ pub struct RetainedSourceCog {
     pub nodata: Option<f32>,
     pub value_range: [f64; 2],
     /// Location relative to the owning job's root while the job is unpublished.
-    ///
-    /// Absent in a staged job written before job-local retention: such a job
-    /// reads the global content-addressed asset of the same digest instead.
-    #[serde(default)]
-    pub relative_path: Option<String>,
+    pub relative_path: String,
 }
 
 impl RetainedSourceCog {
-    /// Resolve this retained COG's readable path.
-    ///
-    /// A job-relative location is resolved under the owning job root and must
-    /// stay there: the digest is identity, never proof that a global file
-    /// exists. Without one, the global content-addressed asset is used, which
-    /// this job only leases.
-    pub(super) fn resolve(
-        &self,
-        paths: &LidarPaths,
-        job_id: Option<&str>,
-    ) -> Result<PathBuf, String> {
-        let Some(relative) = self.relative_path.as_deref() else {
-            return Ok(paths.asset_cog(&self.sha256));
-        };
-        let job_id = job_id.ok_or_else(|| {
-            "staged source keeps its COG in a job but records no owning job".to_string()
-        })?;
-        let root = paths.job_dir(job_id);
-        resolve_under_root(&root, relative).map_err(|error| {
+    /// Resolve this retained COG's readable path under the owning job root;
+    /// the digest is identity, never proof that a global file exists.
+    pub(super) fn resolve(&self, paths: &LidarPaths, job_id: &str) -> Result<PathBuf, String> {
+        let relative = &self.relative_path;
+        resolve_under_root(&paths.job_dir(job_id), relative).map_err(|error| {
             format!("staged source COG location {relative} escapes its job root: {error}")
         })
-    }
-
-    /// Open this source's retained COG for bounded reads.
-    pub(super) fn open(
-        &self,
-        paths: &LidarPaths,
-        job_id: Option<&str>,
-        grid: &RasterGrid,
-    ) -> Result<PreparedRaster, String> {
-        PreparedRaster::open_committed(&self.resolve(paths, job_id)?, grid, self.nodata)
     }
 }
 
@@ -249,24 +130,10 @@ pub fn read_staged_import(library: &LidarLibrary, job_id: &str) -> Result<Staged
 pub struct StagedImport {
     pub job_id: String,
     pub layer_id: String,
-    /// Head generation captured before preparation began.
-    ///
-    /// Publication compares it with the head it is about to replace inside its
-    /// own transaction, so a head that moved during preparation is a conflict
-    /// rather than a silently rebased import.
-    #[serde(default)]
-    pub planned_against_head: Option<String>,
-    pub layer_grid: Option<RasterGrid>,
-    pub layer_crs_wkt: Option<String>,
     pub layer_nodata: f32,
     pub union_grid: RasterGrid,
     pub sources: Vec<StagedSource>,
     /// Processing cells this batch was admitted for.
-    ///
-    /// Recorded so the number the admission policy actually charged travels
-    /// with the job. Defaulted for staged payloads written before the ordered
-    /// path replaced the union-envelope bound.
-    #[serde(default)]
     pub processing_cells: u64,
     pub engine_version: String,
 }
@@ -286,29 +153,14 @@ pub fn stage_import(
     let paths = &library.inner.paths;
     validate_source_selection(source_paths)?;
 
-    // Short read: layer identity and current head snapshot.
-    let (layer, head) = {
+    let layer = {
         let connection = library.catalogue()?;
         let layer = catalogue::get_layer(&connection, layer_id)?
             .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
-        let head = catalogue::head_generation(&connection, layer_id)?;
-        (layer, head)
-    };
-    let head_manifest = match &head {
-        Some(head) => Some(read_generation_manifest(&head.manifest_json)?),
-        None => None,
-    };
-    let layer_grid: Option<RasterGrid> = head_manifest.as_ref().map(|m| m.grid.clone());
-    let layer_crs_wkt: Option<String> = head_manifest
-        .as_ref()
-        .map(|m| m.crs_wkt.clone())
-        .filter(|wkt| !wkt.is_empty());
-    // The layer's canonical nodata: adopted from the first accepted source
-    // when the layer is still empty, so managed rasters keep the source's
-    // declared sentinel semantics.
-    let layer_nodata: f32 = match &head_manifest {
-        Some(m) => m.nodata,
-        None => FALLBACK_NODATA,
+        if catalogue::head_generation(&connection, layer_id)?.is_some() {
+            return Err("this library item is already published and fixed".to_string());
+        }
+        layer
     };
 
     let job_dir = paths.job_dir(job_id);
@@ -328,11 +180,8 @@ pub fn stage_import(
             engine,
             paths,
             library,
-            layer_id,
             &layer.measurement_kind,
             &layer.units,
-            layer_grid.as_ref(),
-            layer_crs_wkt.as_deref(),
             source_path,
             job_id,
             &job_dir,
@@ -342,45 +191,29 @@ pub fn stage_import(
         staged.push(staged_source);
     }
 
-    // One common interpretation for the whole batch.
-    //
-    // When the layer already has an accepted head, `stage_source` compared each
-    // source against that head's CRS and grid. A layer's first batch has no head
-    // to compare against, so the first compatible selection becomes the anchor
-    // every other selected source must match: without this, an EPSG:3857 and an
-    // EPSG:4326 raster with equal coordinates were both admitted, and neither
-    // the lattice nor a later read could reconcile them.
+    // One common interpretation for the whole batch: the first compatible
+    // source is the anchor every other selected source must match, so an
+    // EPSG:3857 and an EPSG:4326 raster with equal coordinates are not both
+    // admitted into one item.
     {
-        let anchor_grid = layer_grid.clone().or_else(|| {
-            staged
-                .iter()
-                .find(|source| source.compatible)
-                .map(grid_for_source)
-        });
-        let anchor_crs = layer_crs_wkt.clone().or_else(|| {
-            staged
-                .iter()
-                .find(|source| source.compatible)
-                .map(|source| source.crs_wkt.clone())
-        });
-        for source in staged.iter_mut().filter(|source| source.compatible) {
-            if let Some(expected) = anchor_crs.as_deref()
-                && source.crs_wkt.trim() != expected.trim()
-            {
-                source.compatible = false;
-                source.issues.push(
-                    "horizontal CRS differs from the other selected sources; transforming foreign \
-                     grids arrives in a later slice"
-                        .to_string(),
-                );
-            }
-            if let Some(expected) = anchor_grid.as_ref()
-                && let Err(error) = grid_for_source(source).compatible(expected)
-            {
-                source.compatible = false;
-                source.issues.push(format!(
-                    "grid incompatible with the other selected sources: {error}"
-                ));
+        let anchor = staged
+            .iter()
+            .find(|source| source.compatible)
+            .map(|source| (grid_for_source(source), source.crs_wkt.clone()));
+        if let Some((anchor_grid, anchor_crs)) = anchor {
+            for source in staged.iter_mut().filter(|source| source.compatible) {
+                if source.crs_wkt.trim() != anchor_crs.trim() {
+                    source.compatible = false;
+                    source
+                        .issues
+                        .push("horizontal CRS differs from the other selected sources".to_string());
+                }
+                if let Err(error) = grid_for_source(source).compatible(&anchor_grid) {
+                    source.compatible = false;
+                    source.issues.push(format!(
+                        "grid incompatible with the other selected sources: {error}"
+                    ));
+                }
             }
         }
     }
@@ -398,60 +231,20 @@ pub fn stage_import(
         ));
     }
 
-    // Union grid across the layer grid and every compatible source. It is
-    // metadata: review work is bounded by blocks, never sized by its area.
-    let mut union = layer_grid
-        .clone()
-        .unwrap_or_else(|| grid_for_source(compatible[0]));
-    let mut layer_nodata = layer_nodata;
-    if head_manifest.is_none() {
-        layer_nodata = compatible[0].nodata.unwrap_or(FALLBACK_NODATA);
-    }
+    // Union grid across every compatible source. It is metadata: work is
+    // bounded by blocks, never sized by its area.
+    let mut union = grid_for_source(compatible[0]);
+    let layer_nodata = compatible[0].nodata.unwrap_or(FALLBACK_NODATA);
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
     }
-    validate_lattice(&union, "import review")?;
-    // Admission is one policy for both storage branches, and the branch that
-    // will run decides which bound applies. The ordered route never allocates
-    // by envelope, so it is charged the processing cells it proposes; a legacy
-    // dense head keeps the envelope guard.
-    let dense_route = head.as_ref().is_some_and(|row| {
-        read_generation_manifest(&row.manifest_json)
-            .is_ok_and(|manifest| manifest.format == GenerationStorageFormat::LegacyDenseV1)
-    });
-    // Zero on the legacy dense branch, which is governed by the envelope guard.
-    let mut admitted_processing_cells: u64 = 0;
-    if dense_route {
-        let composition_extent = composition_extent_grid(library, head.as_ref())?;
-        admission::check_dense_envelope(
-            admission::union_envelope_cells(union.width, union.height)?,
-            "import review",
-        )?;
-        if let Some(mut admitted) = composition_extent {
-            for source in &compatible {
-                admitted = union_grid(&admitted, &grid_for_source(source))?;
-            }
-            validate_lattice(&admitted, "import review envelope")?;
-            admission::check_dense_envelope(
-                admission::union_envelope_cells(admitted.width, admitted.height)?,
-                "import review envelope",
-            )?;
-        }
-    } else {
-        // Rechecked against the expected head at Apply; here it is decided
-        // before any review work depends on the proposal.
-        let proposed = {
-            let connection = library.catalogue()?;
-            ordered_processing_cost(&connection, head.as_ref(), &compatible)?
-        };
-        admitted_processing_cells = admission::check_processing_budget(proposed, "import review")?;
-    }
+    validate_lattice(&union, "import")?;
+    let admitted_processing_cells =
+        admission::check_processing_budget(ordered_processing_cost(&compatible)?, "import")?;
 
     // Every selected source is now prepared and validated independently, and
     // that is all publication needs: the composition is defined by its members,
-    // their order and their own stored facts. Nothing here reads the accepted
-    // composition, because the amendment removed the whole-composition scan and
-    // the review imagery that depended on it.
+    // their order and their own stored facts.
     check_cancel(cancel)?;
     let engine_version = engine_version(engine);
 
@@ -470,9 +263,6 @@ pub fn stage_import(
     let staging = StagedImport {
         job_id: job_id.to_string(),
         layer_id: layer_id.to_string(),
-        planned_against_head: head.as_ref().map(|h| h.id.clone()),
-        layer_grid,
-        layer_crs_wkt,
         layer_nodata,
         union_grid: union,
         sources: staged,
@@ -516,90 +306,6 @@ pub(super) fn ensure_whole_batch_compatible(staging: &StagedImport) -> Result<()
         "the selected batch contains sources that cannot be published, so none was: {}",
         rejected.join(" | ")
     ))
-}
-
-/// The lattice grid the current composition's coverage actually reaches.
-///
-/// The layer's manifest grid is its fixed coordinate anchor; its width and
-/// height describe where coordinates start, not how far the accepted coverage
-/// reaches. Admission is about the latter, so it is measured from the current
-/// membership: each source's own interpretation grid, and each preserved
-/// composition's signed extent. `Ok(None)` means the layer is still empty.
-fn composition_extent_grid(
-    library: &LidarLibrary,
-    head: Option<&catalogue::GenerationRow>,
-) -> Result<Option<RasterGrid>, String> {
-    let Some(head) = head else {
-        return Ok(None);
-    };
-    let connection = library.catalogue()?;
-    let manifest = read_generation_manifest(&head.manifest_json)?;
-    let mut extent: Option<RasterGrid> = None;
-    if manifest.format.is_ordered_collection() {
-        for member in catalogue::collection_members(&connection, &head.id)? {
-            match member.kind.as_str() {
-                collection::SOURCE_KIND => {
-                    let Some(id) = member.interpretation_id.as_deref() else {
-                        continue;
-                    };
-                    let Some(row) = catalogue::get_interpretation(&connection, id)? else {
-                        continue;
-                    };
-                    let grid = RasterGrid {
-                        width: u32::try_from(row.width.max(0)).unwrap_or(u32::MAX),
-                        height: u32::try_from(row.height.max(0)).unwrap_or(u32::MAX),
-                        geotransform: parse_geotransform(&row.geotransform)?,
-                    };
-                    extent = Some(match extent.take() {
-                        Some(current) => union_grid(&current, &grid)?,
-                        None => grid,
-                    });
-                }
-                _ => {
-                    let Some(base) = member.base_generation_id.as_deref() else {
-                        continue;
-                    };
-                    if let Some(grid) = preserved_extent(&connection, base)? {
-                        extent = Some(match extent.take() {
-                            Some(current) => union_grid(&current, &grid)?,
-                            None => grid,
-                        });
-                    }
-                }
-            }
-        }
-    } else if let Some(grid) = preserved_extent(&connection, &head.id)? {
-        extent = Some(grid);
-    }
-    Ok(extent)
-}
-
-/// The grid a preserved generation's coverage reaches.
-///
-/// A sparse generation with published records reaches across exactly the signed
-/// blocks they occupy; one without records, and every dense generation, is its
-/// own manifest rectangle.
-fn preserved_extent(
-    connection: &rusqlite::Connection,
-    generation_id: &str,
-) -> Result<Option<RasterGrid>, String> {
-    let Some(row) = catalogue::generation_row(connection, generation_id)? else {
-        return Ok(None);
-    };
-    let manifest = read_generation_manifest(&row.manifest_json)?;
-    if manifest.format == GenerationStorageFormat::CogChunksV1
-        && let Some((first_x, first_y, last_x, last_y)) =
-            catalogue::generation_chunk_extent(connection, generation_id, generation::RESULT_ROLE)?
-    {
-        return Ok(Some(collection::chunk_extent_grid(
-            &manifest.grid,
-            first_x,
-            first_y,
-            last_x,
-            last_y,
-        )?));
-    }
-    Ok(Some(manifest.grid))
 }
 
 /// The layer's fixed lattice, recorded from its first accepted source.
@@ -668,22 +374,12 @@ pub(crate) fn validate_working_grid(grid: &RasterGrid, operation: &str) -> Resul
     let cells = u64::from(grid.width)
         .checked_mul(u64::from(grid.height))
         .ok_or_else(|| format!("{operation} dimensions overflow"))?;
-    if cells > dense_working_limit() {
+    if cells > MAX_RAW_EXTRACTION_CELLS {
         return Err(format!(
-            "{operation} requires {cells} cells; the current dense raster engine limit is {MAX_DENSE_WORKING_CELLS}"
+            "{operation} requires {cells} cells; a whole-raster read is limited to {MAX_RAW_EXTRACTION_CELLS}"
         ));
     }
     Ok(())
-}
-
-/// The dense working-area ceiling in force for this call.
-///
-/// Production keeps the accepted limit. The representative large-fixture runs
-/// this batch is authorized to attempt raise it for their own thread through
-/// [`dense_working_probe`], so a 48M-cell batch or a million-pixel gap can be
-/// exercised without exposing unsupported large dense jobs to users.
-fn dense_working_limit() -> u64 {
-    admission::limits().dense_envelope_cells
 }
 
 fn stage_managed_original(
@@ -822,11 +518,8 @@ fn stage_source(
     engine: &GdalEngine,
     paths: &LidarPaths,
     library: &LidarLibrary,
-    layer_id: &str,
     measurement_kind: &str,
     units: &str,
-    layer_grid: Option<&RasterGrid>,
-    layer_crs_wkt: Option<&str>,
     source_path: &Path,
     job_id: &str,
     job_dir: &Path,
@@ -890,14 +583,6 @@ fn stage_source(
             "band unit '{unit}' does not match layer unit '{units}'"
         ));
     }
-    if let Some(expected_wkt) = layer_crs_wkt
-        && probe.crs_wkt.trim() != expected_wkt.trim()
-    {
-        issues.push(
-            "horizontal CRS differs from the layer; transforming foreign grids arrives in a later slice"
-                .to_string(),
-        );
-    }
 
     // One retained controlled source COG carries this interpretation's numbers
     // from here on; the managed original is never loaded whole and no durable
@@ -907,17 +592,11 @@ fn stage_source(
         height: probe.height,
         geotransform: probe.geotransform,
     };
-    // No dense working-area check here. This step never allocates the source's
-    // grid: `gdal_translate` streams it into the retained COG and the facts and
-    // regions are derived from that COG in bounded windows. The dense guard
-    // belongs on the steps that really do allocate a whole area (raw
-    // extraction, composition and legacy replay below), and the ordered path's
-    // own bound is the admission processing budget, already applied at review
-    // and rechecked at Apply. Applying a memory bound to a streamed conversion
-    // is what previously refused a large single file that fits its disk
-    // estimate comfortably — the exact case C1 exists to admit.
+    // No working-area check: `gdal_translate` streams the source into the
+    // retained COG and its facts are read from that COG in bounded windows.
+    // The item's bound is the admission processing budget.
     validate_lattice(&source_grid, "source raster")?;
-    let (source_cog, regions, valid_cells) = stage_source_samples(
+    let (source_cog, valid_cells) = stage_source_samples(
         engine,
         cancel,
         &managed_original,
@@ -934,12 +613,6 @@ fn stage_source(
         issues.push(
             "source holds no valid samples; every cell is NoData under its own rule".to_string(),
         );
-    }
-
-    if let Some(expected) = layer_grid
-        && let Err(error) = source_grid.compatible(expected)
-    {
-        issues.push(format!("grid incompatible with layer: {error}"));
     }
 
     // Interpretation identity: content plus interpretation facts, never names.
@@ -971,8 +644,9 @@ fn stage_source(
         .execute(
             "INSERT INTO lidar_interpretations(
                 id, source_sha256, band_index, measurement_kind, units, scale, offset,
-                crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash)
-             VALUES(?1, ?2, 1, ?3, ?4, 1, 0, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
+                valid_cells, min_value, max_value)
+             VALUES(?1, ?2, 1, ?3, ?4, 1, 0, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(interp_hash) DO NOTHING",
             rusqlite::params![
                 format!("interp-{interp_hash}"),
@@ -986,31 +660,12 @@ fn stage_source(
                 probe.width as i64,
                 probe.height as i64,
                 interp_hash,
+                valid_cells as i64,
+                (valid_cells > 0).then_some(value_range[0]),
+                (valid_cells > 0).then_some(value_range[1]),
             ],
         )
         .map_err(|e| format!("Failed to record interpretation: {e}"))?;
-    if !regions.is_empty() {
-        let rows: Vec<(i64, i64, i64, f64, f64, f64)> = regions
-            .iter()
-            .map(|region| {
-                (
-                    region.block_x,
-                    region.block_y,
-                    region.valid_cells,
-                    region.min_value,
-                    region.max_value,
-                    region.sum_value,
-                )
-            })
-            .collect();
-        catalogue::replace_interpretation_regions(
-            &connection,
-            &format!("interp-{interp_hash}"),
-            &rows,
-        )?;
-    }
-    let _ = layer_id;
-
     Ok(StagedSource {
         filename,
         sha256,
@@ -1023,11 +678,9 @@ fn stage_source(
         nodata: probe.nodata,
         value_range,
         size_bytes,
-        job_id: Some(job_id.to_string()),
-        source_cog: Some(source_cog),
-        valid_mask_path: PathBuf::new(),
-        raw_samples_path: PathBuf::new(),
-        valid_cells: Some(valid_cells),
+        job_id: job_id.to_string(),
+        source_cog,
+        valid_cells,
         compatible: issues.is_empty(),
         issues,
     })
@@ -1037,16 +690,9 @@ fn stage_source(
 // Streamed source extraction
 // ---------------------------------------------------------------------------
 
-/// Stream one source's raw samples, valid mask and value range.
-///
-/// The derivative belongs to the reader and is gone before this returns. A
-/// failed or cancelled attempt removes its partial outputs, so a failed
-/// staging attempt never leaves a half-written numeric asset behind.
-///
-/// Both staged outputs are written while the derivative is alive, so they are
-/// charged to the reader's combined working-set budget (four sample bytes and
-/// one validity byte per cell) rather than to a second, independent check that
-/// would see the same free bytes.
+/// Convert one source into its job-owned retained COG and read its range and
+/// valid-cell count from that COG in bounded windows. A failed or cancelled
+/// attempt removes its partial output.
 #[allow(clippy::too_many_arguments)]
 fn stage_source_samples(
     engine: &GdalEngine,
@@ -1057,7 +703,7 @@ fn stage_source_samples(
     nodata: Option<f32>,
     job_dir: &Path,
     sha256: &str,
-) -> Result<(RetainedSourceCog, Vec<generation::RegionAggregate>, u64), String> {
+) -> Result<(RetainedSourceCog, u64), String> {
     let stem = format!("source-cog-{}", &sha256[..sha256.len().min(16)]);
     // The conversion streams through GDAL and the admitted COG is the durable
     // output, so no additional numeric output is charged beside it. The
@@ -1071,11 +717,8 @@ fn stage_source_samples(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .ok_or_else(|| "staged source COG has no file name".to_string())?;
-    // Facts and occupied regions are derived from the retained COG itself, in
-    // bounded windows: no second durable payload is created to describe it.
     let mut reader = PreparedRaster::open_committed(&asset.path, grid, nodata)?;
     let (value_range, valid_cells) = scan_source_facts(&mut reader, cancel)?;
-    let regions = generation::member_regions(&mut reader, grid, grid, cancel)?;
     drop(reader);
     Ok((
         RetainedSourceCog {
@@ -1083,9 +726,8 @@ fn stage_source_samples(
             bytes: asset.bytes,
             nodata,
             value_range,
-            relative_path: Some(relative_path),
+            relative_path,
         },
-        regions,
         valid_cells,
     ))
 }
@@ -1148,284 +790,6 @@ fn validate_lattice(grid: &RasterGrid, operation: &str) -> Result<(), String> {
         return Err(format!("{operation} has a degenerate pixel size"));
     }
     Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Bounded review: block-wise composed coverage
-// ---------------------------------------------------------------------------
-
-/// Read a whole incoming source payload for the preserved dense composition.
-///
-/// That branch is source-sized by design; a retained COG is scanned in bounded
-/// windows into its buffer, while a pre-retention staged job reads its raw/mask
-/// scratch directly.
-fn read_source_payload(
-    source: &StagedSource,
-    paths: &LidarPaths,
-    cancel: &AtomicBool,
-) -> Result<(Vec<f32>, Vec<u8>), String> {
-    let grid = grid_for_source(source);
-    match source.source_cog.as_ref() {
-        Some(cog) => read_cog_payload(cog, paths, source.job_id.as_deref(), &grid, cancel),
-        None => {
-            let raw = std::fs::read(&source.raw_samples_path)
-                .map_err(|e| format!("Failed to read staged samples: {e}"))?;
-            validate_f32_raw(&raw, source.width, source.height)?;
-            let valid = ValidMask::read_from(&source.valid_mask_path, source.width, source.height)?;
-            Ok((f32_values(&raw), valid.bytes().to_vec()))
-        }
-    }
-}
-
-/// Read one whole retained COG payload in bounded windows.
-///
-/// The values are the source's own numbers with its effective NoData rule
-/// already applied to the returned validity, so no caller needs a second
-/// sentinel convention.
-fn read_cog_payload(
-    cog: &RetainedSourceCog,
-    paths: &LidarPaths,
-    job_id: Option<&str>,
-    grid: &RasterGrid,
-    cancel: &AtomicBool,
-) -> Result<(Vec<f32>, Vec<u8>), String> {
-    let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
-        .map_err(|_| "source raster is too large for this platform".to_string())?;
-    let mut values = vec![0f32; cells];
-    let mut valid = vec![0u8; cells];
-    let mut reader = cog.open(paths, job_id, grid)?;
-    reader.scan(cancel, |window, samples, window_valid| {
-        for row in 0..window.height {
-            let start = row as usize * window.width as usize;
-            let target = (window.y + row) as usize * grid.width as usize + window.x as usize;
-            let width = window.width as usize;
-            values[target..target + width].copy_from_slice(&samples[start..start + width]);
-            valid[target..target + width].copy_from_slice(&window_valid[start..start + width]);
-        }
-        Ok(())
-    })?;
-    Ok((values, valid))
-}
-
-// ---------------------------------------------------------------------------
-// BG6: occupied-region review traversal
-// ---------------------------------------------------------------------------
-
-/// Decode little-endian Float32 bytes.
-fn f32_values(raw: &[u8]) -> Vec<f32> {
-    raw.chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Composition (exact, pure Rust over Float32 buffers)
-// ---------------------------------------------------------------------------
-
-pub struct ComposedMosaic {
-    pub values: Vec<f32>,
-    pub valid: ValidMask,
-    pub min_value: f64,
-    pub max_value: f64,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn compose_values_cancellable(
-    layer_values_on_union: Option<&[f32]>,
-    layer_on_union: Option<&ValidMask>,
-    sources: &[&StagedSource],
-    paths: &LidarPaths,
-    union: &RasterGrid,
-    nodata: f32,
-    add_uncovered: bool,
-    replace_overlap: bool,
-    cancel: &AtomicBool,
-) -> Result<ComposedMosaic, String> {
-    validate_working_grid(union, "raster composition")?;
-    let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
-    let mut valid = ValidMask::empty(union.width, union.height);
-    if let Some(layer_mask) = layer_on_union {
-        for y in 0..union.height {
-            check_cancel(cancel)?;
-            for x in 0..union.width {
-                if layer_mask.get(x, y) {
-                    valid.set(x, y, true);
-                }
-            }
-        }
-    }
-    if let Some(layer_values) = layer_values_on_union {
-        values.copy_from_slice(layer_values);
-    }
-    let mut min_value = f64::INFINITY;
-    let mut max_value = f64::NEG_INFINITY;
-    {
-        for index in valid
-            .bytes()
-            .iter()
-            .enumerate()
-            .filter(|(_, b)| **b != 0)
-            .map(|(i, _)| i)
-        {
-            let value = values[index];
-            if value.is_finite() {
-                min_value = min_value.min(value as f64);
-                max_value = max_value.max(value as f64);
-            }
-        }
-    }
-    for source in sources {
-        // A retained source reads through its own COG; only a staged job
-        // written before retention still reads disposable raw/mask scratch.
-        let (source_values, source_valid) = read_source_payload(source, paths, cancel)?;
-        let offset_x = ((source.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
-            .round() as i64;
-        let offset_y = ((union.geotransform[3] - source.geotransform[3])
-            / union.geotransform[5].abs())
-        .round() as i64;
-        for y in 0..source.height {
-            check_cancel(cancel)?;
-            let ty = offset_y + y as i64;
-            if ty < 0 || ty >= union.height as i64 {
-                continue;
-            }
-            for x in 0..source.width {
-                let tx = offset_x + x as i64;
-                if tx < 0 || tx >= union.width as i64 {
-                    continue;
-                }
-                let index = (y * source.width + x) as usize;
-                if source_valid[index] == 0 {
-                    continue;
-                }
-                let covered = valid.get(tx as u32, ty as u32);
-                let paint = if covered {
-                    replace_overlap
-                } else {
-                    add_uncovered
-                };
-                if paint {
-                    let sample = source_values[index];
-                    values[ty as usize * union.width as usize + tx as usize] = sample;
-                    valid.set(tx as u32, ty as u32, true);
-                    if sample.is_finite() {
-                        min_value = min_value.min(sample as f64);
-                        max_value = max_value.max(sample as f64);
-                    }
-                }
-            }
-        }
-    }
-    if !min_value.is_finite() {
-        min_value = 0.0;
-        max_value = 0.0;
-    }
-    Ok(ComposedMosaic {
-        values,
-        valid,
-        min_value,
-        max_value,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Durable member assets and replay composition
-// ---------------------------------------------------------------------------
-
-/// One accepted member of the layer coverage with its durable prepared
-/// assets. Member rasters make history, undo and replacement exact: every
-/// publication replays the member sequence instead of editing a merged
-/// raster in place.
-#[derive(Debug, Clone)]
-pub struct MemberSource {
-    pub interpretation_id: String,
-    pub role: String,
-    pub job_id: Option<String>,
-    pub grid: RasterGrid,
-    pub payload: MemberPayload,
-}
-
-/// Durable payload one dense replay member's samples come from.
-///
-/// A member published with source retention reads its own content-addressed
-/// COG; only history written before retention still reads a raw/mask pair.
-#[derive(Debug, Clone)]
-pub enum MemberPayload {
-    Cog {
-        /// Readable path: a published member's global asset, or the owning
-        /// job's local file while the member is still unpublished.
-        path: PathBuf,
-        /// Effective NoData rule of this member's own samples.
-        nodata: Option<f32>,
-    },
-    LegacyDense {
-        raw_samples_path: PathBuf,
-        valid_mask_path: PathBuf,
-    },
-}
-
-/// The durable payload one staged source publishes.
-///
-/// A retained source COG is already the durable payload; a staged job written
-/// before retention carries its disposable raw/mask pair instead.
-fn member_payload_of(source: &StagedSource, paths: &LidarPaths) -> Result<MemberPayload, String> {
-    match source.source_cog.as_ref() {
-        // The job-local file is read where it lives until the publication
-        // commits its promoted reference.
-        Some(cog) => Ok(MemberPayload::Cog {
-            path: cog.resolve(paths, source.job_id.as_deref())?,
-            nodata: cog.nodata,
-        }),
-        None => Ok(MemberPayload::LegacyDense {
-            raw_samples_path: source.raw_samples_path.clone(),
-            valid_mask_path: source.valid_mask_path.clone(),
-        }),
-    }
-}
-
-impl MemberPayload {
-    /// Read this member's whole payload: the dense route is source-sized by
-    /// design, and a retained COG still reads in bounded windows.
-    fn read(&self, grid: &RasterGrid, cancel: &AtomicBool) -> Result<(Vec<f32>, Vec<u8>), String> {
-        match self {
-            Self::Cog { path, nodata } => {
-                let mut reader = PreparedRaster::open_committed(path, grid, *nodata)?;
-                let cells = usize::try_from(u64::from(grid.width) * u64::from(grid.height))
-                    .map_err(|_| "member raster is too large for this platform".to_string())?;
-                let mut values = vec![0f32; cells];
-                let mut valid = vec![0u8; cells];
-                reader.scan(cancel, |window, samples, window_valid| {
-                    for row in 0..window.height {
-                        let start = row as usize * window.width as usize;
-                        let target =
-                            (window.y + row) as usize * grid.width as usize + window.x as usize;
-                        let width = window.width as usize;
-                        values[target..target + width]
-                            .copy_from_slice(&samples[start..start + width]);
-                        valid[target..target + width]
-                            .copy_from_slice(&window_valid[start..start + width]);
-                    }
-                    Ok(())
-                })?;
-                Ok((values, valid))
-            }
-            Self::LegacyDense {
-                raw_samples_path,
-                valid_mask_path,
-            } => {
-                let raw = std::fs::read(raw_samples_path)
-                    .map_err(|e| format!("Failed to read member samples: {e}"))?;
-                validate_f32_raw(&raw, grid.width, grid.height)?;
-                let mask = ValidMask::read_from(valid_mask_path, grid.width, grid.height)?;
-                Ok((f32_values(&raw), mask.bytes().to_vec()))
-            }
-        }
-    }
-}
-
-/// Directory of the durable prepared assets for one interpretation.
-pub fn member_prepared_dir(paths: &LidarPaths, interp_hash: &str) -> PathBuf {
-    paths.prepared_dir().join("sources").join(interp_hash)
 }
 
 // ---------------------------------------------------------------------------
@@ -1801,9 +1165,7 @@ fn promote_source_cogs(
     let mut journal = read_promotion_journal(paths, &staging.job_id)?;
     for source in staging.sources.iter().filter(|source| source.compatible) {
         check_cancel(cancel)?;
-        let Some(cog) = source.source_cog.as_ref() else {
-            continue;
-        };
+        let cog = &source.source_cog;
         let interpretation_id = format!("interp-{}", source.interp_hash);
         let destination = paths.asset_cog(&cog.sha256);
         let destination_rel = destination
@@ -1820,11 +1182,8 @@ fn promote_source_cogs(
             // A job-local file being promoted is charged as a second copy: the
             // job keeps its own until publication succeeds.
             super::paths::require_free_space(parent, cog.bytes, "the promoted source COG")?;
-            let local = cog.resolve(paths, source.job_id.as_deref())?;
-            let witness = source
-                .source_cog
-                .as_ref()
-                .and_then(|cog| cog.relative_path.clone());
+            let local = cog.resolve(paths, &source.job_id)?;
+            let witness = Some(cog.relative_path.clone());
             journal.entries.push(PromotionEntry {
                 interpretation_id: interpretation_id.clone(),
                 sha256: cog.sha256.clone(),
@@ -2079,8 +1438,7 @@ pub fn settle_job_root(library: &LidarLibrary, job_id: &str) -> Result<(), Strin
 ///
 /// A committed reference wins: its asset stays even if the journal still lists
 /// it. An entry with no committed owner was created by that job and is removed.
-/// Intact review jobs keep their own local payloads; only journalled
-/// destinations are candidates. A journal whose cleanup fails is retained so
+/// Only journalled destinations are candidates. A journal whose cleanup fails is retained so
 /// the failure stays visible and retryable.
 pub fn reconcile_promotion_journals(
     library: &LidarLibrary,
@@ -2129,664 +1487,95 @@ pub fn reconcile_promotion_journals(
     }
 }
 
-/// Persist the durable per-interpretation assets for a staged source. The
-/// staged raw samples and valid mask move from the job dir into managed
-/// storage; GeoTIFF conversion is metadata-stable and idempotent.
-pub fn write_member_assets(
-    connection: &rusqlite::Connection,
-    engine: &GdalEngine,
-    paths: &LidarPaths,
-    cancel: &AtomicBool,
-    source: &StagedSource,
-) -> Result<PathBuf, String> {
-    // A retained COG is already this member's durable payload: promotion moved
-    // it into the immutable store, and the publication transaction writes the
-    // reference that makes it authoritative. A staged job written before
-    // retention still publishes the legacy raw/mask pair it carries.
-    if let Some(cog) = source.source_cog.as_ref() {
-        let _ = connection;
-        let promoted = paths.asset_cog(&cog.sha256);
-        if !promoted.exists() {
-            return Err(format!(
-                "staged source {} has no promoted asset at {}",
-                source.filename,
-                promoted.display()
-            ));
-        }
-        return Ok(promoted);
+/// The promoted, content-addressed COG of a staged source: the member's only
+/// durable payload. The publication transaction writes the reference that
+/// makes it authoritative.
+fn promoted_source_cog(paths: &LidarPaths, source: &StagedSource) -> Result<PathBuf, String> {
+    let promoted = paths.asset_cog(&source.source_cog.sha256);
+    if !promoted.exists() {
+        return Err(format!(
+            "staged source {} has no promoted asset at {}",
+            source.filename,
+            promoted.display()
+        ));
     }
-    let dir = member_prepared_dir(paths, &source.interp_hash);
-    if prepared_member_is_valid(&dir, source) {
-        return Ok(dir);
-    }
-    let parent = dir
-        .parent()
-        .ok_or_else(|| "prepared member path has no parent".to_string())?;
-    std::fs::create_dir_all(parent)
-        .map_err(|e| format!("Failed to create prepared source root: {e}"))?;
-    let staging = parent.join(format!("staging-{}", new_id("member")));
-    std::fs::create_dir(&staging)
-        .map_err(|e| format!("Failed to create prepared member staging: {e}"))?;
-    std::fs::copy(&source.raw_samples_path, staging.join("values.raw"))
-        .map_err(|e| format!("Failed to persist member samples: {e}"))?;
-    std::fs::copy(&source.valid_mask_path, staging.join("valid.bin"))
-        .map_err(|e| format!("Failed to persist member mask: {e}"))?;
-    let grid = grid_for_source(source);
-    raw_to_tif(
-        engine,
-        cancel,
-        &staging.join("values.raw"),
-        &staging.join("native.tif"),
-        &grid,
-        &source.crs_wkt,
-        source.nodata.unwrap_or(FALLBACK_NODATA),
-    )?;
-    let meta = serde_json::json!({
-        "interp_hash": source.interp_hash,
-        "geotransform": source.geotransform,
-        "width": source.width,
-        "height": source.height,
-        "nodata": source.nodata,
-        "crs_wkt": source.crs_wkt,
-    });
-    std::fs::write(staging.join("meta.json"), meta.to_string())
-        .map_err(|e| format!("Failed to persist member meta: {e}"))?;
-    if !prepared_member_is_valid(&staging, source) {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err("prepared member failed publication validation".to_string());
-    }
-    let backup = parent.join(format!("replaced-{}", new_id("member")));
-    let had_previous = dir.exists();
-    if had_previous {
-        std::fs::rename(&dir, &backup)
-            .map_err(|e| format!("Failed to isolate invalid prepared member: {e}"))?;
-    }
-    if let Err(error) = std::fs::rename(&staging, &dir) {
-        if had_previous {
-            let _ = std::fs::rename(&backup, &dir);
-        }
-        return Err(format!("Failed to publish prepared member: {error}"));
-    }
-    if had_previous {
-        let _ = std::fs::remove_dir_all(backup);
-    }
-    Ok(dir)
+    Ok(promoted)
 }
 
-fn prepared_member_is_valid(dir: &Path, source: &StagedSource) -> bool {
-    let cells = u64::from(source.width) * u64::from(source.height);
-    let raw_size = std::fs::metadata(dir.join("values.raw")).map(|m| m.len());
-    let mask_size = std::fs::metadata(dir.join("valid.bin")).map(|m| m.len());
-    let tif_size = std::fs::metadata(dir.join("native.tif")).map(|m| m.len());
-    let meta_hash = std::fs::read_to_string(dir.join("meta.json"))
-        .ok()
-        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
-        .and_then(|value| value.get("interp_hash")?.as_str().map(str::to_string));
-    raw_size.ok() == Some(cells * 4)
-        && mask_size.ok() == Some(cells)
-        && tif_size.is_ok_and(|size| size > 0)
-        && meta_hash.as_deref() == Some(source.interp_hash.as_str())
-}
-
-/// Replay accepted members in publication order. `add` members paint only
-/// cells the sequence has not accepted yet; `replace` members paint over.
-fn replay_members(
-    members: &[MemberSource],
-    union: &RasterGrid,
-    nodata: f32,
-    cancel: Option<&AtomicBool>,
-) -> Result<ComposedMosaic, String> {
-    validate_working_grid(union, "accepted-member replay")?;
-    let mut values = vec![nodata; (union.width as usize) * (union.height as usize)];
-    let mut valid = ValidMask::empty(union.width, union.height);
-    let mut min_value = f64::INFINITY;
-    let mut max_value = f64::NEG_INFINITY;
-    for member in members {
-        let (member_values, member_valid) = match cancel {
-            Some(cancel) => member.payload.read(&member.grid, cancel)?,
-            None => member.payload.read(&member.grid, &AtomicBool::new(false))?,
-        };
-        let offset_x = ((member.grid.geotransform[0] - union.geotransform[0])
-            / union.geotransform[1])
-            .round() as i64;
-        let offset_y = ((union.geotransform[3] - member.grid.geotransform[3])
-            / union.geotransform[5].abs())
-        .round() as i64;
-        let (add_uncovered, replace_overlap) = match member.role.as_str() {
-            "add" => (true, false),
-            "replace" => (true, true),
-            "replace-overlap" => (false, true),
-            role => return Err(format!("Unsupported stored acceptance role {role}")),
-        };
-        for y in 0..member.grid.height {
-            check_optional_cancel(cancel, y)?;
-            let ty = offset_y + y as i64;
-            if ty < 0 || ty >= union.height as i64 {
-                continue;
-            }
-            for x in 0..member.grid.width {
-                let tx = offset_x + x as i64;
-                if tx < 0 || tx >= union.width as i64 {
-                    continue;
-                }
-                let index = (y * member.grid.width + x) as usize;
-                if member_valid[index] == 0 {
-                    continue;
-                }
-                let covered = valid.get(tx as u32, ty as u32);
-                if (covered && !replace_overlap) || (!covered && !add_uncovered) {
-                    continue;
-                }
-                let sample = member_values[index];
-                values[ty as usize * union.width as usize + tx as usize] = sample;
-                valid.set(tx as u32, ty as u32, true);
-                if sample.is_finite() {
-                    min_value = min_value.min(sample as f64);
-                    max_value = max_value.max(sample as f64);
-                }
-            }
-        }
-    }
-    if !min_value.is_finite() {
-        min_value = 0.0;
-        max_value = 0.0;
-    }
-    Ok(ComposedMosaic {
-        values,
-        valid,
-        min_value,
-        max_value,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Apply / publish
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
+/// What publishing a new item produced.
+#[derive(Debug)]
 pub struct ApplyOutcome {
     pub generation_id: String,
-    /// Exact published cells, or `None` when the publication did not need to
-    /// count them. An unknown count is reported as unknown rather than as zero.
+    /// Exact published cells, or `None` when the composition's count is not
+    /// derivable from member facts. An unknown count is never reported as zero.
     pub published_cells: Option<u64>,
-    pub changed: bool,
+    /// A diagnostic from after the commit point (journal cleanup), if any.
     pub message: Option<String>,
 }
 
 impl ApplyOutcome {
-    /// Summary used in structured logs so the immutable generation identity
-    /// is recorded with the publication.
+    /// Summary used in structured logs so the generation identity is recorded.
     pub fn summary(&self) -> String {
         format!(
-            "generation {} published with {} (changed: {})",
+            "generation {} published with {}",
             self.generation_id,
             match self.published_cells {
                 Some(cells) => format!("{cells} cells"),
                 None => "unknown coverage".to_string(),
-            },
-            self.changed
+            }
         )
     }
 }
 
+/// Publish a new fixed item once: its sources, in the listed order, as one
+/// ordered collection.
+///
+/// A published item is fixed, so there is no head to extend or replace: a
+/// second publication of the same item is refused. Nothing is materialized;
+/// the publication costs member metadata and one bounded measuring pass.
 pub fn apply_import(
     library: &LidarLibrary,
     staging: &StagedImport,
-    add_uncovered: bool,
-    replace_overlap: bool,
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
-    let engine = &library.inner.engine;
     let paths = &library.inner.paths;
     let layer_id = staging.layer_id.clone();
     library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 2);
-
-    // Short read: head snapshot, member sequence and interpretation rows;
-    // the catalogue is released before any raster computation.
-    struct HeadBase {
-        manifest: Option<GenerationManifest>,
-        members: Vec<MemberSource>,
-        legacy_grid: Option<RasterGrid>,
-    }
-    let (head, head_base) = {
+    {
         let connection = library.catalogue()?;
-        let head = catalogue::head_generation(&connection, &layer_id)?;
-        let base = match &head {
-            Some(head_row) => {
-                let manifest = read_generation_manifest(&head_row.manifest_json)?;
-                let members = catalogue::generation_members(&connection, &head_row.id)?;
-                let mut resolved = Vec::new();
-                for (interpretation_id, role, job_id) in members.iter() {
-                    let (interpretation_id, role, job_id) =
-                        (interpretation_id.clone(), role.clone(), job_id.clone());
-                    let interp = catalogue::get_interpretation(&connection, &interpretation_id)?
-                        .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
-                    let interp_nodata = interp.nodata.map(|value| value as f32);
-                    let payload =
-                        match generation::retained_cog(&connection, paths, &interpretation_id)? {
-                            // A retained COG is this member's durable payload; its
-                            // own effective NoData rule wins over the row.
-                            Some((asset, cog_nodata)) => MemberPayload::Cog {
-                                path: asset.path,
-                                nodata: cog_nodata.or(interp_nodata),
-                            },
-                            None => {
-                                let dir = member_prepared_dir(paths, &interp.interp_hash);
-                                let raw = dir.join("values.raw");
-                                let mask = dir.join("valid.bin");
-                                if !raw.exists() || !mask.exists() {
-                                    // History written before durable member assets
-                                    // existed: fall back to the legacy head-snapshot
-                                    // composition.
-                                    resolved.clear();
-                                    break;
-                                }
-                                MemberPayload::LegacyDense {
-                                    raw_samples_path: raw,
-                                    valid_mask_path: mask,
-                                }
-                            }
-                        };
-                    let gt = parse_geotransform(&interp.geotransform)?;
-                    resolved.push(MemberSource {
-                        interpretation_id,
-                        role,
-                        job_id,
-                        grid: RasterGrid {
-                            width: interp.width as u32,
-                            height: interp.height as u32,
-                            geotransform: gt,
-                        },
-                        payload,
-                    });
-                }
-                // An accepted head with no replayable member assets still
-                // contributes its own lattice to the review union. That covers
-                // a preserved dense head and, just as importantly, an ordered
-                // collection whose ordered membership lives in
-                // `lidar_collection_members` rather than in the legacy member
-                // table: without it the union would be the incoming source
-                // alone and every accepted cell would read as uncovered.
-                let legacy = resolved.is_empty();
-                HeadBase {
-                    manifest: Some(manifest),
-                    members: resolved,
-                    legacy_grid: legacy
-                        .then(|| read_generation_manifest(&head_row.manifest_json).ok())
-                        .flatten()
-                        .map(|m| m.grid.clone()),
-                }
-            }
-            None => HeadBase {
-                manifest: None,
-                members: Vec::new(),
-                legacy_grid: None,
-            },
-        };
-        (head, base)
-    };
-    let planned_head = head.as_ref().map(|row| row.id.as_str());
-    if planned_head != staging.planned_against_head.as_deref() {
-        return Err("import review is stale; review the current coverage again".to_string());
+        if catalogue::head_generation(&connection, &layer_id)?.is_some() {
+            return Err("this library item is already published and fixed".to_string());
+        }
     }
-    let head_manifest = head_base.manifest.clone();
-    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::ComposingLayer, 6);
-
     ensure_whole_batch_compatible(staging)?;
-    // Union grid: layer member grids plus every compatible staged source.
     let compatible: Vec<&StagedSource> = staging.sources.iter().filter(|s| s.compatible).collect();
     if compatible.is_empty() {
         return Err("import has no compatible sources to publish".to_string());
     }
-    // The ordered route has exactly one decision — add the selection above the
-    // accepted sources — so its incoming occurrences always carry topmost-valid
-    // semantics. The legacy flags are read only by the preserved dense route
-    // below, which is a test-forced path, never production publication.
-    let ordered_publication = generation::chunked_publication_enabled();
-    let incoming_role = match (add_uncovered, replace_overlap) {
-        (true, true) => "replace",
-        (true, false) => "add",
-        (false, true) => "replace-overlap",
-        // The ordered route adds the selection as a new contiguous group on top
-        // of the accepted members, which is a membership change even when every
-        // incoming sample agrees with the composed value; the superseded
-        // pixel-only no-change rule must not discard it.
-        (false, false) if ordered_publication => "add",
-        (false, false) => {
-            return Ok(ApplyOutcome {
-                generation_id: head.as_ref().map(|row| row.id.clone()).unwrap_or_default(),
-                published_cells: head
-                    .as_ref()
-                    .and_then(|row| row.coverage_cells)
-                    .map(|cells| cells.max(0) as u64),
-                changed: false,
-                message: Some("no coverage changes selected; existing generation kept".to_string()),
-            });
-        }
-    };
-    let mut union = head_base
-        .members
-        .first()
-        .map(|m| m.grid.clone())
-        .or_else(|| head_base.legacy_grid.clone())
-        .or_else(|| staging.layer_grid.clone())
-        .unwrap_or_else(|| grid_for_source(compatible[0]));
+    let mut union = grid_for_source(compatible[0]);
     validate_lattice(&union, "import publication")?;
-    for member in &head_base.members {
-        union = union_grid(&union, &member.grid)?;
-        validate_lattice(&union, "import publication union")?;
-    }
     for source in &compatible {
         union = union_grid(&union, &grid_for_source(source))?;
         validate_lattice(&union, "import publication union")?;
     }
-    // Recheck at Apply against the selected sources and the expected head:
-    // admission is decided again immediately before anything is materialized
-    // or published, on whichever branch will run. This is the concurrent-change
-    // fence — a reorder, undo or second import that moved the head between
-    // review and Apply is admitted or refused against the head that will
-    // actually be replaced, not the one review saw.
-    if let Some(manifest) = head_base.manifest.as_ref()
-        && manifest.format == GenerationStorageFormat::LegacyDenseV1
-    {
-        admission::check_dense_envelope(
-            admission::union_envelope_cells(union.width, union.height)?,
-            "import publication",
-        )?;
-        if let Some(mut admitted) = composition_extent_grid(library, head.as_ref())? {
-            for source in &compatible {
-                admitted = union_grid(&admitted, &grid_for_source(source))?;
-            }
-            validate_lattice(&admitted, "import publication envelope")?;
-            admission::check_dense_envelope(
-                admission::union_envelope_cells(admitted.width, admitted.height)?,
-                "import publication envelope",
-            )?;
-        }
-    } else {
-        let proposed = {
-            let connection = library.catalogue()?;
-            ordered_processing_cost(&connection, head.as_ref(), &compatible)?
-        };
-        admission::check_processing_budget(proposed, "import publication")?;
-    }
-    let _ = head_manifest;
-    library.record_import_progress(
-        &staging.job_id,
-        LidarImportProgressPhase::ComposingLayer,
-        10,
-    );
-
-    // A new source generation is an immutable snapshot of the layer's ordered
-    // collection. Nothing about the composition is materialized: the
-    // publication costs member metadata and one bounded measuring pass, and
-    // every reader resolves the same priority list on demand.
-    if generation::chunked_publication_enabled() {
-        // Promote the job's own source COGs into the immutable store first: the
-        // snapshot references global assets, and the references that make them
-        // authoritative are written inside the publication transaction.
-        library.record_import_progress(
-            &staging.job_id,
-            LidarImportProgressPhase::PreparingRaster,
-            42,
-        );
-        let mut promotions = PromotionGuard::begin(library, staging);
-        promotions.promote(cancel)?;
-        for (index, source) in compatible.iter().enumerate() {
-            check_cancel(cancel)?;
-            {
-                let connection = library.catalogue()?;
-                write_member_assets(&connection, engine, paths, cancel, source)?;
-            }
-            let completed = u64::try_from(index + 1).unwrap_or(u64::MAX);
-            let total = u64::try_from(compatible.len()).unwrap_or(u64::MAX).max(1);
-            let percent = 42 + u8::try_from(completed.saturating_mul(8) / total).unwrap_or(8);
-            library.record_import_progress(
-                &staging.job_id,
-                LidarImportProgressPhase::PreparingRaster,
-                percent.min(50),
-            );
-        }
-        let crs_wkt = staging.layer_crs_wkt.clone().unwrap_or_else(|| {
-            compatible
-                .first()
-                .map(|s| s.crs_wkt.clone())
-                .unwrap_or_default()
-        });
-        // The generation lattice is the layer's fixed anchor, never the
-        // re-anchored union: extending the layer must not shift the
-        // coordinates of members that did not change.
-        let anchor = staging
-            .layer_grid
-            .clone()
-            .unwrap_or_else(|| grid_for_source(compatible[0]));
-        let lattice = {
-            let connection = library.catalogue()?;
-            layer_lattice_grid(&connection, &layer_id, &anchor, &crs_wkt)?
-        };
-        // New selections are inserted as one contiguous group ABOVE the
-        // existing members, in the deterministic order the confirmation list
-        // showed: the first displayed source becomes topmost.
-        let mut members: Vec<collection::SnapshotMember> =
-            Vec::with_capacity(compatible.len() + head_base.members.len() + 1);
-        let mut manifest_members = Vec::with_capacity(compatible.len());
-        let incoming = incoming_occurrences(paths, &compatible, "add", 0)?;
-        for (source, resolved) in compatible.iter().zip(incoming) {
-            manifest_members.push(source.interp_hash.clone());
-            members.push(collection::SnapshotMember {
-                member_id: new_id("mem"),
-                kind: collection::SOURCE_KIND,
-                interpretation_id: Some(format!("interp-{}", source.interp_hash)),
-                base_generation_id: None,
-                job_id: Some(staging.job_id.clone()),
-                resolved,
-            });
-        }
-        match head.as_ref() {
-            None => {}
-            Some(head_row) => {
-                let head_manifest_row = head_manifest
-                    .as_ref()
-                    .ok_or_else(|| "accepted head has no manifest".to_string())?;
-                if head_manifest_row.format.is_ordered_collection() {
-                    // A snapshot copies its predecessor's member references; it
-                    // never wraps the previous head in another collection.
-                    let prior = collection::snapshot_members(library, &head_row.id, cancel)?
-                        .ok_or_else(|| {
-                            "accepted collection is missing a source payload; the layer cannot \
-                             be extended without inventing coverage"
-                                .to_string()
-                        })?;
-                    for member in &prior {
-                        if let Some(interpretation_id) = member.interpretation_id.as_deref() {
-                            manifest_members
-                                .push(interpretation_id.trim_start_matches("interp-").to_string());
-                        }
-                    }
-                    members.extend(prior);
-                } else {
-                    // A pre-transition head becomes one indivisible bottom
-                    // member labelled "Previous composition": its masked
-                    // replacement history cannot be reinterpreted as an
-                    // arbitrary priority stack, so it is never split into
-                    // reorderable historical sources.
-                    //
-                    // The member wraps the **actual accepted head**, not the
-                    // base ancestor that head may overlay: replaying the
-                    // ancestor would silently replace the values the user
-                    // accepted with an older composition.
-                    members.push(collection::previous_composition_member(
-                        library,
-                        &head_row.id,
-                        cancel,
-                    )?);
-                }
-            }
-        }
-        let plan = collection::SnapshotPlan {
-            members,
-            lattice,
-            crs_wkt,
-            nodata: staging.layer_nodata,
-            manifest_members,
-        };
-        library.record_import_progress(
-            &staging.job_id,
-            LidarImportProgressPhase::ComposingLayer,
-            60,
-        );
-        tracing::info!(
-            layer_id,
-            format = GenerationStorageFormat::OrderedMembersV1.as_str(),
-            members = plan.members.len(),
-            "publishing an ordered source collection"
-        );
-        let measurement = collection::measure(library, &plan, cancel)?;
-        // Member facts prove an empty composition exactly, so this refusal is
-        // still sound: with no member holding a valid cell the union holds none.
-        if measurement.published_cells == Some(0) {
-            let named = compatible
-                .iter()
-                .map(|source| source.filename.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            return Ok(ApplyOutcome {
-                generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-                published_cells: Some(0),
-                changed: false,
-                message: Some(format!(
-                    "selection contains no valid pixels; nothing published ({named})"
-                )),
-            });
-        }
-        let (manifest_json, _) = collection::manifest_for(library, &plan)?;
-        let generation_id = new_id("gen");
-        publish_applied_snapshot(
-            library,
-            staging,
-            &generation_id,
-            &plan,
-            &measurement,
-            &manifest_json,
-            planned_head,
-            compatible.as_slice(),
-            "add",
-            promotions.promoted(),
-        )?;
-        // The head transaction is the commit point: from here the publication
-        // is authoritative even if journal cleanup fails.
-        let diagnostic = promotions.commit();
-        library.record_import_progress(&staging.job_id, LidarImportProgressPhase::Finalizing, 98);
-        return Ok(ApplyOutcome {
-            generation_id,
-            published_cells: measurement.published_cells,
-            changed: true,
-            message: diagnostic,
-        });
-    }
-
-    // Compose the new coverage: replay the member sequence, then paint the
-    // incoming sources with the user's decisions. Invalid pixels never erase
-    // accepted coverage; overlap is replaced only when explicitly approved.
-    let composed = match (head_base.legacy_grid.as_ref(), head_base.members.is_empty()) {
-        (Some(_), true) => {
-            // Legacy head without member assets: seed from the merged
-            // snapshot, then paint the incoming sources.
-            let head_manifest_for_seed = head
-                .as_ref()
-                .map(|h| read_generation_manifest(&h.manifest_json))
-                .transpose()?;
-            let (layer_values, layer_mask) = {
-                let numeric = head_numeric_read(
-                    library,
-                    head.as_ref(),
-                    head_manifest_for_seed.as_ref(),
-                    cancel,
-                )?;
-                head_values_on_union(
-                    library,
-                    head.as_ref(),
-                    head_manifest_for_seed.as_ref(),
-                    &numeric,
-                    &union,
-                    staging.layer_nodata,
-                    cancel,
-                )?
-            };
-            compose_values_cancellable(
-                layer_values.as_deref(),
-                layer_mask.as_ref(),
-                &compatible,
-                paths,
-                &union,
-                staging.layer_nodata,
-                add_uncovered,
-                replace_overlap,
-                cancel,
-            )?
-        }
-        _ => {
-            let mut sequence = head_base.members.clone();
-            for source in &compatible {
-                sequence.push(MemberSource {
-                    interpretation_id: format!("interp-{}", source.interp_hash),
-                    role: incoming_role.to_string(),
-                    job_id: Some(staging.job_id.clone()),
-                    grid: grid_for_source(source),
-                    payload: member_payload_of(source, paths)?,
-                });
-            }
-            replay_members(&sequence, &union, staging.layer_nodata, Some(cancel))?
-        }
-    };
-    let published_cells = composed.valid.count_valid();
-    library.record_import_progress(
-        &staging.job_id,
-        LidarImportProgressPhase::ComposingLayer,
-        40,
-    );
-    // An unknown previous count is not zero: it means the comparison below
-    // cannot prove the selection added nothing, so publication proceeds.
-    let previous_cells = head
-        .as_ref()
-        .and_then(|h| h.coverage_cells)
-        .map(|cells| cells.max(0) as u64);
-
-    if published_cells == 0 {
-        return Ok(ApplyOutcome {
-            generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-            published_cells: Some(0),
-            changed: false,
-            message: Some("selection contains no valid pixels; nothing published".to_string()),
-        });
-    }
-    if previous_cells == Some(published_cells) && !replace_overlap {
-        return Ok(ApplyOutcome {
-            generation_id: head.as_ref().map(|h| h.id.clone()).unwrap_or_default(),
-            published_cells: Some(published_cells),
-            changed: false,
-            message: Some(
-                "selection added no accepted coverage; existing generation kept".to_string(),
-            ),
-        });
-    }
-
-    // Durable per-interpretation assets for the incoming sources: the job's own
-    // COGs are promoted now, and the references that make them authoritative
-    // are written inside the publication transaction below.
+    admission::check_processing_budget(
+        ordered_processing_cost(&compatible)?,
+        "import publication",
+    )?;
     library.record_import_progress(
         &staging.job_id,
         LidarImportProgressPhase::PreparingRaster,
         42,
     );
+
+    // Promote the job's own source COGs into the immutable store first: the
+    // generation references global assets, and the references that make them
+    // authoritative are written inside the publication transaction.
     let mut promotions = PromotionGuard::begin(library, staging);
     promotions.promote(cancel)?;
     for (index, source) in compatible.iter().enumerate() {
         check_cancel(cancel)?;
-        {
-            let connection = library.catalogue()?;
-            write_member_assets(&connection, engine, paths, cancel, source)?;
-        }
+        promoted_source_cog(paths, source)?;
         let completed = u64::try_from(index + 1).unwrap_or(u64::MAX);
         let total = u64::try_from(compatible.len()).unwrap_or(u64::MAX).max(1);
         let percent = 42 + u8::try_from(completed.saturating_mul(8) / total).unwrap_or(8);
@@ -2796,812 +1585,121 @@ pub fn apply_import(
             percent.min(50),
         );
     }
-
-    // Write the prepared mosaic + coverage mask into staging.
-    let generation_id = new_id("gen");
-    let pipeline_dir = paths.layer_pipeline_dir(&layer_id);
-    let staging_dir = pipeline_dir.join(format!("staging-{generation_id}"));
-    std::fs::create_dir_all(&staging_dir)
-        .map_err(|e| format!("Failed to create staging dir: {e}"))?;
-    let raw_path = staging_dir.join("mosaic.raw");
-    write_f32_raw(&raw_path, &composed.values)?;
+    let crs_wkt = compatible[0].crs_wkt.clone();
+    let lattice = {
+        let connection = library.catalogue()?;
+        layer_lattice_grid(
+            &connection,
+            &layer_id,
+            &grid_for_source(compatible[0]),
+            &crs_wkt,
+        )?
+    };
+    // The first listed source is topmost.
+    let mut members = Vec::with_capacity(compatible.len());
+    let mut manifest_members = Vec::with_capacity(compatible.len());
+    for (source, resolved) in compatible
+        .iter()
+        .zip(incoming_occurrences(paths, &compatible)?)
+    {
+        manifest_members.push(source.interp_hash.clone());
+        members.push(collection::SnapshotMember {
+            member_id: new_id("mem"),
+            interpretation_id: format!("interp-{}", source.interp_hash),
+            resolved,
+        });
+    }
+    let plan = collection::SnapshotPlan {
+        members,
+        lattice,
+        crs_wkt,
+        nodata: staging.layer_nodata,
+        manifest_members,
+    };
     library.record_import_progress(
         &staging.job_id,
-        LidarImportProgressPhase::PreparingRaster,
-        53,
-    );
-    let mosaic_path = staging_dir.join("mosaic.tif");
-    let crs_wkt = staging.layer_crs_wkt.clone().unwrap_or_else(|| {
-        compatible
-            .first()
-            .map(|s| s.crs_wkt.clone())
-            .unwrap_or_default()
-    });
-    raw_to_tif(
-        engine,
-        cancel,
-        &raw_path,
-        &mosaic_path,
-        &union,
-        &crs_wkt,
-        staging.layer_nodata,
-    )?;
-    library.record_import_progress(
-        &staging.job_id,
-        LidarImportProgressPhase::PreparingRaster,
+        LidarImportProgressPhase::ComposingLayer,
         60,
     );
-    let coverage_path = staging_dir.join("coverage.bin");
-    composed.valid.write_to(&coverage_path)?;
-    let _ = std::fs::remove_file(&raw_path);
-
-    let manifest = GenerationManifest {
-        grid: union.clone(),
-        nodata: staging.layer_nodata,
-        crs_wkt: crs_wkt.clone(),
-        members: compatible.iter().map(|s| s.interp_hash.clone()).collect(),
-        engine_version: staging.engine_version.clone(),
-        created_at: now_iso(),
-        format: GenerationStorageFormat::LegacyDenseV1,
-    };
-    let manifest_json = serde_json::to_string(&manifest).map_err(|e| e.to_string())?;
-    std::fs::write(staging_dir.join("manifest.json"), &manifest_json)
-        .map_err(|e| format!("Failed to write manifest: {e}"))?;
-
-    let bounds_3857 = raster_bounds_3857(engine, cancel, &union, &crs_wkt)?;
-    library.record_import_progress(
-        &staging.job_id,
-        LidarImportProgressPhase::PreparingRaster,
-        64,
-    );
-
-    // Atomic publish: rename staging into place, then advance the head in
-    // one short transaction.
-    check_cancel(cancel)?;
-    let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
-    std::fs::rename(&staging_dir, &generation_dir)
-        .map_err(|e| format!("Failed to publish generation dir: {e}"))?;
-    let final_mosaic = generation_dir.join("mosaic.tif");
-    let final_coverage = generation_dir.join("coverage.bin");
-    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::Finalizing, 98);
-    {
-        let connection = match library.catalogue() {
-            Ok(connection) => connection,
-            Err(error) => {
-                let _ = std::fs::remove_dir_all(&generation_dir);
-                return Err(error);
-            }
-        };
-        promotion_probe::check(promotion_probe::FaultPoint::BeforeTransaction)?;
-        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
-            let _ = std::fs::remove_dir_all(&generation_dir);
-            return Err(error.to_string());
-        }
-        let publish = (|| -> Result<(), String> {
-            let job_state = connection
-                .query_row(
-                    "SELECT state FROM lidar_import_jobs WHERE id = ?1",
-                    [&staging.job_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .map_err(|e| e.to_string())?;
-            if job_state != "applying" {
-                return Err(if job_state == "cancelled" {
-                    "cancelled".to_string()
-                } else {
-                    format!("import job cannot publish from state {job_state}")
-                });
-            }
-            insert_promoted_references(&connection, paths, promotions.promoted())?;
-            let current_head = catalogue::head_generation(&connection, &layer_id)?;
-            if current_head.as_ref().map(|row| row.id.as_str()) != planned_head {
-                return Err("import review is stale; review the current coverage again".to_string());
-            }
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_generations(id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857)
-                     VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                    rusqlite::params![
-                        generation_id,
-                        layer_id,
-                        now_iso(),
-                        final_mosaic.display().to_string(),
-                        final_coverage.display().to_string(),
-                        manifest_json,
-                        published_cells as i64,
-                        composed.min_value,
-                        composed.max_value,
-                        serde_json::to_string(&bounds_3857).map_err(|e| e.to_string())?,
-                    ],
-                )
-                .map_err(|e| e.to_string())?;
-            // Preserve prior operations first, then append this accepted
-            // operation. Duplicate interpretation ids are valid re-imports;
-            // ordinal owns identity within a generation.
-            for (ordinal, member) in head_base.members.iter().enumerate() {
-                connection
-                    .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal, job_id)
-                         VALUES(?1, ?2, ?3, ?4, ?5)",
-                        rusqlite::params![generation_id, member.interpretation_id, member.role, ordinal as i64, member.job_id],
-                    )
-                    .map_err(|e| e.to_string())?;
-            }
-            let prior_member_count = head_base.members.len();
-            for (incoming_ordinal, source) in compatible.iter().enumerate() {
-                let interpretation_id = format!("interp-{}", source.interp_hash);
-                let ordinal = prior_member_count + incoming_ordinal;
-                connection
-                    .execute(
-                        "INSERT INTO lidar_generation_members(generation_id, interpretation_id, role, ordinal, job_id)
-                         VALUES(?1, ?2, ?3, ?4, ?5)",
-                        rusqlite::params![generation_id, interpretation_id, incoming_role, ordinal as i64, staging.job_id],
-                    )
-                    .map_err(|e| e.to_string())?;
-                connection
-                    .execute(
-                        "INSERT INTO lidar_acceptance_regions(id, generation_id, interpretation_id, decision, job_id)
-                         VALUES(?1, ?2, ?3, ?4, ?5)",
-                        rusqlite::params![new_id("acc"), generation_id, interpretation_id, incoming_role, staging.job_id],
-                    )
-                    .map_err(|e| e.to_string())?;
-                catalogue::upsert_footprint(
-                    &connection,
-                    &interpretation_id,
-                    &layer_id,
-                    grid_for_source(source).bounds(),
-                )?;
-            }
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)
-                     ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
-                    rusqlite::params![layer_id, generation_id],
-                )
-                .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "UPDATE lidar_import_jobs
-                     SET state = 'complete', progress_phase = 'finalizing',
-                         progress_percent = 100, updated_at = ?2 WHERE id = ?1",
-                    rusqlite::params![staging.job_id, now_iso()],
-                )
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        })();
-        match publish {
-            Ok(()) => {
-                if let Err(error) = connection.execute_batch("COMMIT") {
-                    let _ = connection.execute_batch("ROLLBACK");
-                    let _ = std::fs::remove_dir_all(&generation_dir);
-                    return Err(error.to_string());
-                }
-            }
-            Err(error) => {
-                let _ = connection.execute_batch("ROLLBACK");
-                let _ = std::fs::remove_dir_all(&generation_dir);
-                return Err(error);
-            }
-        }
+    let measurement = collection::measure(library, &plan, cancel)?;
+    // Member facts prove an empty composition exactly.
+    if measurement.published_cells == Some(0) {
+        let named = compatible
+            .iter()
+            .map(|source| source.filename.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "selection contains no valid pixels; nothing published ({named})"
+        ));
     }
-
-    // The head transaction committed above: report the publication as success
-    // and carry any retained promotion evidence as a diagnostic.
+    let (manifest_json, _) = collection::manifest_for(library, &plan)?;
+    let generation_id = new_id("gen");
+    publish_applied_snapshot(
+        library,
+        staging,
+        &generation_id,
+        &plan,
+        &measurement,
+        &manifest_json,
+        promotions.promoted(),
+    )?;
+    // The head transaction is the commit point: from here the publication is
+    // authoritative even if journal cleanup fails.
     let diagnostic = promotions.commit();
+    library.record_import_progress(&staging.job_id, LidarImportProgressPhase::Finalizing, 98);
     Ok(ApplyOutcome {
         generation_id,
-        published_cells: Some(published_cells),
-        changed: true,
+        published_cells: measurement.published_cells,
         message: diagnostic,
     })
 }
 
 /// Stage, validate and publish one batch the way the one-step route does.
 ///
-/// Test fixtures used to drive staging, then a review, then an Apply. There is
-/// no review to drive, so this is the same sequence production runs: prepare
-/// every source, refuse an incompatible batch, then publish atomically.
+/// The same sequence production runs: prepare every source, refuse an
+/// incompatible batch, then publish atomically.
 #[cfg(test)]
 pub(crate) fn stage_and_publish(
     library: &LidarLibrary,
     job_id: &str,
     layer_id: &str,
     source_paths: &[PathBuf],
-    replace_overlap: bool,
     cancel: &AtomicBool,
 ) -> Result<ApplyOutcome, String> {
     stage_import(library, job_id, layer_id, source_paths, cancel)?;
     let staging = read_staged_import(library, job_id)?;
-    ensure_whole_batch_compatible(&staging)?;
-    apply_import(library, &staging, true, replace_overlap, cancel)
+    apply_import(library, &staging, cancel)
 }
 
-/// Undo one accepted import: republish the layer coverage without the
-/// interpretation that import introduced. Immutable history stays on disk.
-/// Everything a member-list edit needs from the accepted head.
-// Published sources are fixed items (GeoLibre adoption, catalogue v19): the
-// product no longer reorders, removes, undoes or restores source membership.
-// These builders remain for tests only, to construct the historical
-// compositions older builds published so compatibility readers stay covered.
-#[cfg(test)]
-struct SnapshotBase {
-    manifest: GenerationManifest,
-    generation_id: String,
-    /// Whether Undo is offered from this head at all.
-    undo_available: bool,
-    /// Composition Undo restores; absent means the empty composition.
-    undo_target: Option<String>,
-}
-
-/// The Undo state a newly published snapshot records.
-///
-/// Availability and target are independent on purpose: an available Undo with
-/// no target restores the empty initial composition, while an unavailable one
-/// means the walk is exhausted. Conflating them would make Undo either loop on
-/// the empty composition or stop one step early.
-#[cfg(test)]
-struct UndoState {
-    target: Option<String>,
-    available: bool,
-}
-
-#[cfg(test)]
-impl UndoState {
-    /// The state an ordinary user change records: it points at the head it
-    /// replaced, which is always reachable.
-    fn after_change(head: Option<&str>) -> Self {
-        Self {
-            target: head.map(str::to_string),
-            available: true,
-        }
-    }
-}
-
-/// Read the accepted head's manifest, identity and Undo state.
-#[cfg(test)]
-fn snapshot_base(library: &LidarLibrary, layer_id: &str) -> Result<SnapshotBase, String> {
-    let connection = library.catalogue()?;
-    let head = catalogue::head_generation(&connection, layer_id)?
-        .ok_or_else(|| "layer has no accepted coverage".to_string())?;
-    let manifest = read_generation_manifest(&head.manifest_json)?;
-    Ok(SnapshotBase {
-        manifest,
-        generation_id: head.id,
-        undo_available: head.undo_available,
-        undo_target: head.previous_generation_id,
-    })
-}
-
-/// The manifest member list of a snapshot, keeping the accepted convention.
-#[cfg(test)]
-fn snapshot_manifest_members(members: &[collection::SnapshotMember]) -> Vec<String> {
-    members
-        .iter()
-        .filter_map(|member| member.interpretation_id.as_deref())
-        .map(|interpretation_id| interpretation_id.trim_start_matches("interp-").to_string())
-        .collect()
-}
-
-/// The ordered occurrence identities of one member list.
-///
-/// Restore compares these rather than generation IDs: an identical ordered
-/// composition is a no-op even when it was published as a different snapshot,
-/// and two occurrences of the same bytes stay distinct because their member
-/// identities are distinct.
-#[cfg(test)]
-fn occurrence_identities(
-    members: &[collection::SnapshotMember],
-) -> Vec<(String, String, Option<String>, Option<String>)> {
-    members
-        .iter()
-        .map(|member| {
-            (
-                member.member_id.clone(),
-                member.kind.to_string(),
-                member.interpretation_id.clone(),
-                member.base_generation_id.clone(),
-            )
-        })
-        .collect()
-}
-
-/// Publish one member list as a new immutable snapshot and advance the head.
-///
-/// Every ordered edit funnels through here, so reorder, remove, undo and
-/// restore share one publication path: measure the composition, write the
-/// generation with its member rows, its recorded operation and its Undo state,
-/// and advance the head in one short transaction — or leave the previous head
-/// authoritative.
-#[allow(clippy::too_many_arguments)]
-#[cfg(test)]
-fn publish_snapshot_members(
-    library: &LidarLibrary,
-    layer_id: &str,
-    members: Vec<collection::SnapshotMember>,
-    base: &SnapshotBase,
-    expected_head: &str,
-    undo: UndoState,
-    operation: &str,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let mut plan = collection::SnapshotPlan {
-        members,
-        lattice: base.manifest.grid.clone(),
-        crs_wkt: base.manifest.crs_wkt.clone(),
-        nodata: base.manifest.nodata,
-        manifest_members: Vec::new(),
-    };
-    plan.manifest_members = snapshot_manifest_members(&plan.members);
-    let measurement = collection::measure(library, &plan, cancel)?;
-    let (manifest_json, _) = collection::manifest_for(library, &plan)?;
-    let generation_id = new_id("gen");
-    let connection = library.catalogue()?;
-    connection
-        .execute_batch("BEGIN IMMEDIATE")
-        .map_err(|e| e.to_string())?;
-    let publish = (|| -> Result<(), String> {
-        let current = catalogue::head_generation(&connection, layer_id)?;
-        if current.as_ref().map(|row| row.id.as_str()) != Some(expected_head) {
-            return Err(
-                "the layer changed since this edit was prepared; refresh and try again".to_string(),
-            );
-        }
-        collection::insert_snapshot(
-            &connection,
-            layer_id,
-            &generation_id,
-            &plan,
-            &measurement,
-            &manifest_json,
-            &collection::SnapshotLineage {
-                previous_generation_id: undo.target.as_deref(),
-                undo_available: undo.available,
-                operation,
-            },
-        )?;
-        advance_layer_head(&connection, layer_id, &generation_id)?;
-        Ok(())
-    })();
-    match publish {
-        Ok(()) => connection
-            .execute_batch("COMMIT")
-            .map_err(|e| e.to_string())?,
-        Err(error) => {
-            let _ = connection.execute_batch("ROLLBACK");
-            return Err(error);
-        }
-    }
-    Ok(ApplyOutcome {
-        generation_id,
-        published_cells: measurement.published_cells,
-        changed: true,
-        message: None,
-    })
-}
-
-/// The accepted member list of a layer, top-first.
-#[cfg(test)]
-fn accepted_members(
-    library: &LidarLibrary,
-    base: &SnapshotBase,
-    cancel: &AtomicBool,
-) -> Result<Vec<collection::SnapshotMember>, String> {
-    if base.manifest.format.is_ordered_collection() {
-        collection::snapshot_members(library, &base.generation_id, cancel)?.ok_or_else(|| {
-            "accepted collection is missing a source payload; the layer cannot be read \
-             without inventing coverage"
-                .to_string()
-        })
-    } else {
-        Ok(vec![collection::previous_composition_member(
-            library,
-            &base.generation_id,
-            cancel,
-        )?])
-    }
-}
-
-/// The member list one recorded version replays.
-#[cfg(test)]
-fn version_members(
-    library: &LidarLibrary,
-    version_id: &str,
-    manifest: &GenerationManifest,
-    cancel: &AtomicBool,
-) -> Result<Vec<collection::SnapshotMember>, String> {
-    if manifest.format.is_ordered_collection() {
-        collection::snapshot_members(library, version_id, cancel)?.ok_or_else(|| {
-            "that version is missing a source payload; restoring it would invent coverage"
-                .to_string()
-        })
-    } else {
-        Ok(vec![collection::previous_composition_member(
-            library, version_id, cancel,
-        )?])
-    }
-}
-
-/// Check the caller's expected head against the accepted one.
-#[cfg(test)]
-fn ensure_expected_head(base: &SnapshotBase, expected_head: Option<&str>) -> Result<(), String> {
-    if let Some(expected) = expected_head
-        && expected != base.generation_id
-    {
-        return Err(
-            "the layer changed since this edit was prepared; refresh and try again".to_string(),
-        );
-    }
-    Ok(())
-}
-
-/// Undo the last user change: publish the composition that preceded it.
-///
-/// The head records both its target and whether Undo is available, so a walk
-/// backwards stops exactly where the user's history begins: the first change
-/// undoes to the empty initial composition, and the Undo after that is refused
-/// rather than republishing the same state. The new snapshot inherits the
-/// target's own next-Undo state, which is what makes repeated Undo continue
-/// backwards instead of toggling. Restoring publishes a new generation; no
-/// accepted history is deleted.
-#[cfg(test)]
-pub fn undo_last_change(
-    library: &LidarLibrary,
-    layer_id: &str,
-    expected_head: Option<&str>,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let base = snapshot_base(library, layer_id)?;
-    ensure_expected_head(&base, expected_head)?;
-    if !base.undo_available {
-        return Ok(ApplyOutcome {
-            generation_id: base.generation_id.clone(),
-            published_cells: Some(0),
-            changed: false,
-            message: Some("there is no earlier version to undo".to_string()),
-        });
-    }
-    let (members, undo) = match base.undo_target.as_deref() {
-        // The target is the empty initial composition, which has nothing before
-        // it, so the new snapshot is where the walk stops.
-        None => (
-            Vec::new(),
-            UndoState {
-                target: None,
-                available: false,
-            },
-        ),
-        Some(target) => {
-            let restored = {
-                let connection = library.catalogue()?;
-                catalogue::generation_row(&connection, target)?
-                    .ok_or_else(|| format!("previous version {target} is missing"))?
-            };
-            let manifest = read_generation_manifest(&restored.manifest_json)?;
-            let members = version_members(library, target, &manifest, cancel)?;
-            (
-                members,
-                UndoState {
-                    target: restored.previous_generation_id.clone(),
-                    available: restored.undo_available,
-                },
-            )
-        }
-    };
-    publish_snapshot_members(
-        library,
-        layer_id,
-        members,
-        &base,
-        &base.generation_id,
-        undo,
-        "undo",
-        cancel,
-    )
-}
-
-/// Publish one older version as the new head without deleting the versions in
-/// between.
-///
-/// An explicit restore is an ordinary new change, so it records the head it
-/// replaced and can itself be undone. Restoring a version whose ordered
-/// occurrence identities already match the current composition publishes
-/// nothing.
-#[cfg(test)]
-pub fn restore_version(
-    library: &LidarLibrary,
-    layer_id: &str,
-    version_id: &str,
-    expected_head: Option<&str>,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let base = snapshot_base(library, layer_id)?;
-    ensure_expected_head(&base, expected_head)?;
-    let version = {
-        let connection = library.catalogue()?;
-        catalogue::generation_row(&connection, version_id)?
-            .ok_or_else(|| format!("version {version_id} is missing"))?
-    };
-    let manifest = read_generation_manifest(&version.manifest_json)?;
-    let members = version_members(library, version_id, &manifest, cancel)?;
-    let current = accepted_members(library, &base, cancel)?;
-    if occurrence_identities(&members) == occurrence_identities(&current) {
-        return Ok(ApplyOutcome {
-            generation_id: base.generation_id.clone(),
-            published_cells: Some(0),
-            changed: false,
-            message: Some("that version is already the current composition".to_string()),
-        });
-    }
-    publish_snapshot_members(
-        library,
-        layer_id,
-        members,
-        &base,
-        &base.generation_id,
-        UndoState::after_change(Some(&base.generation_id)),
-        "restore",
-        cancel,
-    )
-}
-
-/// Move one source one position towards the top or the bottom of the list.
-///
-/// An edge move is a no-op rather than an error, and an idempotent request
-/// publishes nothing: no meaningless history and no analysis refresh.
-#[cfg(test)]
-pub fn move_member(
-    library: &LidarLibrary,
-    layer_id: &str,
-    member_id: &str,
-    towards_top: bool,
-    expected_head: Option<&str>,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let base = snapshot_base(library, layer_id)?;
-    ensure_expected_head(&base, expected_head)?;
-    let mut members = accepted_members(library, &base, cancel)?;
-    let Some(index) = members
-        .iter()
-        .position(|member| member.member_id == member_id)
-    else {
-        return Err(format!("no source {member_id} in this layer"));
-    };
-    let target = if towards_top {
-        index.checked_sub(1)
-    } else if index + 1 < members.len() {
-        Some(index + 1)
-    } else {
-        None
-    };
-    let Some(target) = target else {
-        return Ok(ApplyOutcome {
-            generation_id: base.generation_id.clone(),
-            published_cells: Some(0),
-            changed: false,
-            message: Some("that source is already at the edge of the list".to_string()),
-        });
-    };
-    members.swap(index, target);
-    publish_snapshot_members(
-        library,
-        layer_id,
-        members,
-        &base,
-        &base.generation_id,
-        UndoState::after_change(Some(&base.generation_id)),
-        "reorder",
-        cancel,
-    )
-}
-
-/// Detach one occurrence from the current composition.
-///
-/// The occurrence's asset and every accepted version stay in the library: a
-/// removal changes the current composition, never the retained data.
-#[cfg(test)]
-pub fn remove_member(
-    library: &LidarLibrary,
-    layer_id: &str,
-    member_id: &str,
-    expected_head: Option<&str>,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let base = snapshot_base(library, layer_id)?;
-    ensure_expected_head(&base, expected_head)?;
-    let mut members = accepted_members(library, &base, cancel)?;
-    let before = members.len();
-    members.retain(|member| member.member_id != member_id);
-    if members.len() == before {
-        return Err(format!("no source {member_id} in this layer"));
-    }
-    publish_snapshot_members(
-        library,
-        layer_id,
-        members,
-        &base,
-        &base.generation_id,
-        UndoState::after_change(Some(&base.generation_id)),
-        "remove",
-        cancel,
-    )
-}
-
-/// Undo the last change of the layer an accepted import job published.
-///
-/// Retained as a caller-level convenience for tests that name a job rather than
-/// a layer. The shipped action is `lidar_undo_layer_change`, which names the
-/// layer and its expected head, so a stale request fails by name instead of
-/// undoing whatever the newest change happened to be.
-#[cfg(test)]
-pub fn undo_import(
-    library: &LidarLibrary,
-    job_id: &str,
-    cancel: &AtomicBool,
-) -> Result<ApplyOutcome, String> {
-    let layer_id: String = {
-        let connection = library.catalogue()?;
-        connection
-            .query_row(
-                "SELECT g.layer_id
-                 FROM lidar_acceptance_regions a
-                 JOIN lidar_layer_generations g ON g.id = a.generation_id
-                 WHERE a.job_id = ?1
-                 ORDER BY g.created_at DESC LIMIT 1",
-                [job_id],
-                |row| row.get(0),
-            )
-            .map_err(|_| "import has no accepted publication to undo".to_string())?
-    };
-    undo_last_change(library, &layer_id, None, cancel)
-}
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-/// Existing accepted values and coverage remapped onto the union grid.
-#[allow(clippy::type_complexity)]
-/// Ordered occurrence sequence of a published generation, as the resolver
-/// needs it.
-///
-/// `Ok(None)` means the generation's history cannot be reconstructed from
-/// durable payloads: either a member's samples are gone or the generation is a
-/// legacy snapshot whose members were never recorded. A caller must then keep
-/// the accepted dense route instead of fabricating occurrences it cannot
-/// prove.
-pub(super) fn resolved_occurrences(
-    connection: &rusqlite::Connection,
-    paths: &LidarPaths,
-    head: &catalogue::GenerationRow,
-) -> Result<Option<Vec<generation::ResolvedMember>>, String> {
-    let members = catalogue::generation_members(connection, &head.id)?;
-    if members.is_empty() {
-        // A dense generation without member rows carries coverage that no
-        // ordered replay can reproduce.
-        return Ok(if head.mosaic_path.is_some() {
-            None
-        } else {
-            Some(Vec::new())
-        });
-    }
-    occurrences_for_members(connection, paths, &members)
-}
-
-/// Resolve selected member rows into ordered occurrences.
-///
-/// `Ok(None)` means at least one row's durable samples are gone, so the
-/// sequence cannot be replayed without inventing coverage.
-pub(super) fn occurrences_for_members(
-    connection: &rusqlite::Connection,
-    paths: &LidarPaths,
-    members: &[(String, String, Option<String>)],
-) -> Result<Option<Vec<generation::ResolvedMember>>, String> {
-    let mut resolved = Vec::with_capacity(members.len());
-    for (ordinal, (interpretation_id, role, _job_id)) in members.iter().enumerate() {
-        let interp = catalogue::get_interpretation(connection, interpretation_id)?
-            .ok_or_else(|| format!("missing interpretation {interpretation_id}"))?;
-        let grid = RasterGrid {
-            width: interp.width as u32,
-            height: interp.height as u32,
-            geotransform: parse_geotransform(&interp.geotransform)?,
-        };
-        let mut nodata = interp.nodata.map(|value| value as f32);
-        let source = match generation::retained_cog(connection, paths, interpretation_id)? {
-            Some((asset, cog_nodata)) => {
-                // The retained COG's own effective rule wins over the
-                // interpretation row; neither may borrow another member's
-                // sentinel.
-                nodata = cog_nodata.or(nodata);
-                generation::MemberSource::Cog(asset)
-            }
-            None => {
-                let dir = member_prepared_dir(paths, &interp.interp_hash);
-                let values = dir.join("values.raw");
-                let mask = dir.join("valid.bin");
-                if !values.exists() || !mask.exists() {
-                    return Ok(None);
-                }
-                generation::MemberSource::LegacyDense { values, mask }
-            }
-        };
-        resolved.push(generation::ResolvedMember {
-            ordinal: i64::try_from(ordinal).unwrap_or(i64::MAX),
-            role: generation::MemberRole::parse(role)?,
-            grid,
-            nodata,
-            source,
-        });
-    }
-    Ok(Some(resolved))
-}
-
-/// Incoming staged sources as ordered occurrences, read from the durable
-/// member assets this apply is about to persist.
+/// Staged sources as ordered occurrences over their retained source COGs,
+/// in the listed order.
 fn incoming_occurrences(
     paths: &LidarPaths,
     sources: &[&StagedSource],
-    role: &str,
-    first_ordinal: i64,
 ) -> Result<Vec<generation::ResolvedMember>, String> {
-    let role = generation::MemberRole::parse(role)?;
-    let mut occurrences = Vec::with_capacity(sources.len());
-    for (index, source) in sources.iter().enumerate() {
-        let grid = grid_for_source(source);
-        let (payload, nodata) = match source.source_cog.as_ref() {
-            // The retained COG is the incoming occurrence's own payload; its
-            // effective NoData rule is the one it was admitted with.
-            Some(cog) => (
-                generation::MemberSource::Cog(super::raster_assets::CogAsset {
+    sources
+        .iter()
+        .enumerate()
+        .map(|(index, source)| {
+            let cog = &source.source_cog;
+            let grid = grid_for_source(source);
+            Ok(generation::ResolvedMember {
+                ordinal: i64::try_from(index).unwrap_or(i64::MAX),
+                grid: grid.clone(),
+                nodata: cog.nodata.or(source.nodata),
+                cog: super::raster_assets::CogAsset {
                     sha256: cog.sha256.clone(),
                     path: paths.asset_cog(&cog.sha256),
                     bytes: cog.bytes,
-                    grid: grid.clone(),
+                    grid,
                     nodata: cog.nodata,
-                }),
-                cog.nodata.or(source.nodata),
-            ),
-            None => {
-                let dir = member_prepared_dir(paths, &source.interp_hash);
-                let values = dir.join("values.raw");
-                let mask = dir.join("valid.bin");
-                if !values.exists() || !mask.exists() {
-                    return Err(format!(
-                        "staged source {} has no durable member assets",
-                        source.filename
-                    ));
-                }
-                (
-                    generation::MemberSource::LegacyDense { values, mask },
-                    source.nodata,
-                )
-            }
-        };
-        // The occurrence sequence continues after the accepted history: a
-        // replay rejects an ordinal that goes backwards, so a third import into
-        // one layer must not restart at zero.
-        let ordinal = first_ordinal.saturating_add(i64::try_from(index).unwrap_or(i64::MAX));
-        occurrences.push(generation::ResolvedMember {
-            ordinal,
-            role,
-            grid,
-            nodata,
-            source: payload,
-        });
-    }
-    Ok(occurrences)
+                },
+            })
+        })
+        .collect()
 }
 
-/// One chunked generation to materialize and index.
-/// A materialized, indexed generation whose index is not yet readable.
-/// What materializing a chunked generation produced.
-/// Materialize every occupied chunk and index it unpublished.
-///
-/// Returns without publishing anything when the sequence changes nothing, and
-/// leaves a `Ready` materialization whose chunk rows are still unreadable: the
-/// caller's short transaction is what makes them selectable.
-/// Drop the unpublished index of a materialization that is not being published.
-/// Insert the generation row of a chunked publication.
-/// Insert the ordered member occurrences of a generation.
 /// Point the layer head at a generation.
 fn advance_layer_head(
     connection: &rusqlite::Connection,
@@ -3618,13 +1716,12 @@ fn advance_layer_head(
     Ok(())
 }
 
-/// Publish one ordered collection snapshot and advance the head.
+/// Publish an item's ordered collection and make it the item's generation.
 ///
-/// The whole commit is one short transaction: the job must still be applying,
-/// the head must still be the one the review planned against, and the member
-/// rows the readers select by become visible with the generation that owns
-/// them. A failure publishes nothing and leaves the previous head
-/// authoritative.
+/// The whole commit is one short transaction: the job must still be applying
+/// and the item must still be unpublished, and the member rows readers select
+/// by become visible with the generation that owns them. A failure publishes
+/// nothing.
 #[allow(clippy::too_many_arguments)]
 fn publish_applied_snapshot(
     library: &LidarLibrary,
@@ -3633,9 +1730,6 @@ fn publish_applied_snapshot(
     plan: &collection::SnapshotPlan,
     measurement: &collection::SnapshotMeasurement,
     manifest_json: &str,
-    planned_head: Option<&str>,
-    incoming: &[&StagedSource],
-    incoming_role: &str,
     promoted: &[PromotedSourceCog],
 ) -> Result<(), String> {
     promotion_probe::check(promotion_probe::FaultPoint::BeforeTransaction)?;
@@ -3658,9 +1752,8 @@ fn publish_applied_snapshot(
                 format!("import job cannot publish from state {job_state}")
             });
         }
-        let current_head = catalogue::head_generation(&connection, &staging.layer_id)?;
-        if current_head.as_ref().map(|row| row.id.as_str()) != planned_head {
-            return Err("import review is stale; review the current coverage again".to_string());
+        if catalogue::head_generation(&connection, &staging.layer_id)?.is_some() {
+            return Err("this library item is already published and fixed".to_string());
         }
         insert_promoted_references(&connection, &library.inner.paths, promoted)?;
         collection::insert_snapshot(
@@ -3670,28 +1763,7 @@ fn publish_applied_snapshot(
             plan,
             measurement,
             manifest_json,
-            &collection::SnapshotLineage {
-                previous_generation_id: planned_head,
-                undo_available: true,
-                operation: "import",
-            },
         )?;
-        for source in incoming {
-            let interpretation_id = format!("interp-{}", source.interp_hash);
-            connection
-                .execute(
-                    "INSERT INTO lidar_acceptance_regions(id, generation_id, interpretation_id, decision, job_id)
-                     VALUES(?1, ?2, ?3, ?4, ?5)",
-                    rusqlite::params![new_id("acc"), generation_id, interpretation_id, incoming_role, staging.job_id],
-                )
-                .map_err(|e| e.to_string())?;
-            catalogue::upsert_footprint(
-                &connection,
-                &interpretation_id,
-                &staging.layer_id,
-                grid_for_source(source).bounds(),
-            )?;
-        }
         advance_layer_head(&connection, &staging.layer_id, generation_id)?;
         connection
             .execute(
@@ -3714,226 +1786,8 @@ fn publish_applied_snapshot(
     }
 }
 
-/// Publish the materialized chunks of an import apply and advance the head.
-///
-/// The whole commit is one short transaction: the job must still be applying,
-/// the head must still be the one the review planned against, and the chunk
-/// index becomes readable only here.
-#[allow(clippy::too_many_arguments)]
-/// Publish the materialized chunks of an undo and advance the head.
-///
-/// Undo republishes a shorter ordered sequence; the footprints of the removed
-/// interpretations are dropped in the same transaction so the spatial index
-/// never advertises coverage the head no longer has.
-/// Whether undo removes one stored occurrence of the target import job.
-///
-/// Members recorded with job identity are matched by that identity. Older
-/// members have none, so the accepted interpretations of the job are matched
-/// from the end of the sequence, which is the order they were appended in.
-/// How the current head generation's numbers are read.
-enum HeadNumeric {
-    /// No accepted generation yet.
-    None,
-    /// Dense mosaic plus coverage mask of a preserved legacy generation.
-    Dense,
-    /// A generation-owned numeric store, read through its own resolver.
-    Reader(generation::GenerationReader),
-}
-
-/// Select the read path of the accepted head from its manifest format.
-///
-/// The selection is explicit so a chunked generation can never fall back to a
-/// dense file it does not own, and a legacy generation keeps its accepted
-/// dense read.
-fn head_numeric_read(
-    library: &LidarLibrary,
-    head: Option<&catalogue::GenerationRow>,
-    manifest: Option<&GenerationManifest>,
-    cancel: &AtomicBool,
-) -> Result<HeadNumeric, String> {
-    let (Some(head), Some(manifest)) = (head, manifest) else {
-        return Ok(HeadNumeric::None);
-    };
-    match manifest.format {
-        GenerationStorageFormat::LegacyDenseV1 => Ok(HeadNumeric::Dense),
-        // The bound reader holds identity only: its pages are fetched as the
-        // read needs them, so no caller materializes the generation's records.
-        GenerationStorageFormat::CogChunksV1 => {
-            Ok(HeadNumeric::Reader(generation::GenerationReader::Chunks(
-                generation::GenerationChunkReader::new(&head.id, generation::RESULT_ROLE),
-            )))
-        }
-        GenerationStorageFormat::OrderedMembersV1 => {
-            let collection = collection::load_reader(library, &head.id, manifest, cancel)?
-                .ok_or_else(|| {
-                    "accepted collection is missing a source payload; the layer cannot be read \
-                     without inventing coverage"
-                        .to_string()
-                })?;
-            Ok(HeadNumeric::Reader(
-                generation::GenerationReader::Collection(Box::new(collection)),
-            ))
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn head_values_on_union(
-    library: &LidarLibrary,
-    head: Option<&catalogue::GenerationRow>,
-    manifest: Option<&GenerationManifest>,
-    numeric: &HeadNumeric,
-    union: &RasterGrid,
-    nodata: f32,
-    cancel: &AtomicBool,
-) -> Result<(Option<Vec<f32>>, Option<ValidMask>), String> {
-    let (Some(head), Some(manifest)) = (head, manifest) else {
-        return Ok((None, None));
-    };
-    validate_working_grid(union, "accepted layer union")?;
-    let engine = &library.inner.engine;
-    if let HeadNumeric::Reader(owner) = numeric {
-        // A chunked head has no dense file: read the union one bounded window
-        // at a time from the published chunk rows. The head's lattice is its
-        // own fixed layer anchor, which may differ from this union's origin,
-        // so each union block is read at its lattice position. Absent chunks
-        // stay invalid and no absent coordinate is visited.
-        validate_working_grid(&manifest.grid, "accepted layer lattice")?;
-        let cells = usize::try_from(u64::from(union.width) * u64::from(union.height))
-            .map_err(|_| "accepted layer union is too large for this platform".to_string())?;
-        let mut expanded = vec![nodata; cells];
-        let mut valid = ValidMask::empty(union.width, union.height);
-        let offset_x = ((manifest.grid.geotransform[0] - union.geotransform[0])
-            / union.geotransform[1])
-            .round() as i64;
-        let offset_y = ((union.geotransform[3] - manifest.grid.geotransform[3])
-            / union.geotransform[5].abs())
-        .round() as i64;
-        let side = generation::CHUNK_SIDE as u32;
-        let mut y = 0u32;
-        while y < union.height {
-            let height = side.min(union.height - y);
-            let mut x = 0u32;
-            while x < union.width {
-                check_cancel(cancel)?;
-                let width = side.min(union.width - x);
-                let resolved = owner.read_window(
-                    library,
-                    &manifest.grid,
-                    generation::LatticeWindow {
-                        x: i64::from(x) - offset_x,
-                        y: i64::from(y) - offset_y,
-                        width,
-                        height,
-                    },
-                    cancel,
-                )?;
-                for row in 0..height as usize {
-                    for column in 0..width as usize {
-                        let index = row * width as usize + column;
-                        if resolved.valid[index] == 0 {
-                            continue;
-                        }
-                        let target =
-                            (y as usize + row) * union.width as usize + x as usize + column;
-                        expanded[target] = resolved.samples[index];
-                        valid.set(x + column as u32, y + row as u32, true);
-                    }
-                }
-                x += width;
-            }
-            y += height;
-        }
-        return Ok((Some(expanded), Some(valid)));
-    }
-    // Dense legacy head: the accepted mosaic and coverage mask.
-    validate_working_grid(&manifest.grid, "accepted layer raster")?;
-    let (Some(mosaic_path), Some(mask_path)) = (
-        head.mosaic_path.as_deref(),
-        head.coverage_mask_path.as_deref(),
-    ) else {
-        return Err("accepted generation has no dense raster".to_string());
-    };
-    let raw = raw_f32_bytes(
-        engine,
-        Path::new(mosaic_path),
-        manifest.grid.width,
-        manifest.grid.height,
-        cancel,
-    )?;
-    validate_f32_raw(&raw, manifest.grid.width, manifest.grid.height)?;
-    let layer_mask = ValidMask::read_from(
-        Path::new(mask_path),
-        manifest.grid.width,
-        manifest.grid.height,
-    )?;
-    let mut expanded = vec![nodata; (union.width as usize) * (union.height as usize)];
-    let offset_x = ((manifest.grid.geotransform[0] - union.geotransform[0]) / union.geotransform[1])
-        .round() as i64;
-    let offset_y = ((union.geotransform[3] - manifest.grid.geotransform[3])
-        / union.geotransform[5].abs())
-    .round() as i64;
-    for y in 0..manifest.grid.height {
-        if y % 256 == 0 {
-            check_cancel(cancel)?;
-        }
-        let ty = offset_y + y as i64;
-        if ty < 0 || ty >= union.height as i64 {
-            continue;
-        }
-        for x in 0..manifest.grid.width {
-            let tx = offset_x + x as i64;
-            if tx < 0 || tx >= union.width as i64 {
-                continue;
-            }
-            if layer_mask.get(x, y) {
-                expanded[ty as usize * union.width as usize + tx as usize] =
-                    f32_sample(&raw, (y * manifest.grid.width + x) as usize);
-            }
-        }
-    }
-    let remapped =
-        remap_mask_checked(&layer_mask, &manifest.grid, union, |_| check_cancel(cancel))?;
-    Ok((Some(expanded), Some(remapped)))
-}
-
-/// Storage format of one published generation.
-///
-/// The manifest is the single authority for how a generation's numbers are
-/// read: a catalogued generation either owns one dense mosaic plus a coverage
-/// mask, owns sparse resolved COG chunks, or is an ordered collection of
-/// independent source COGs whose composed value is resolved on demand. Readers
-/// must never guess from the presence of a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum GenerationStorageFormat {
-    /// Accepted format: one dense Float32 mosaic and a coverage mask.
-    #[default]
-    #[serde(rename = "legacy-dense-v1")]
-    LegacyDenseV1,
-    /// Sparse 1024×1024 resolved standard COG chunks indexed per generation.
-    #[serde(rename = "cog-chunks-v1")]
-    CogChunksV1,
-    /// Ordered independent source COGs composed by priority at read time.
-    #[serde(rename = "ordered-members-v1")]
-    OrderedMembersV1,
-}
-
-impl GenerationStorageFormat {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::LegacyDenseV1 => "legacy-dense-v1",
-            Self::CogChunksV1 => "cog-chunks-v1",
-            Self::OrderedMembersV1 => "ordered-members-v1",
-        }
-    }
-
-    /// Whether this format resolves its value from an ordered member list
-    /// rather than from stored resolved numbers.
-    pub fn is_ordered_collection(self) -> bool {
-        matches!(self, Self::OrderedMembersV1)
-    }
-}
-
+/// The immutable description of one item generation: an ordered collection of
+/// source COGs on a fixed lattice, top-first by interpretation hash.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationManifest {
     pub grid: RasterGrid,
@@ -3942,10 +1796,6 @@ pub struct GenerationManifest {
     pub members: Vec<String>,
     pub engine_version: String,
     pub created_at: String,
-    /// Absent in manifests written before the sparse format existed, which are
-    /// dense by definition.
-    #[serde(default)]
-    pub format: GenerationStorageFormat,
 }
 
 pub fn read_generation_manifest(json: &str) -> Result<GenerationManifest, String> {
@@ -4000,18 +1850,6 @@ pub fn raw_f32_bytes(
     Ok(bytes)
 }
 
-fn validate_f32_raw(raw: &[u8], width: u32, height: u32) -> Result<(), String> {
-    let expected = usize::try_from(u64::from(width) * u64::from(height) * 4)
-        .map_err(|_| "raw buffer dimensions exceed this platform".to_string())?;
-    if raw.len() != expected {
-        return Err(format!(
-            "raw buffer has {} bytes, expected {expected}",
-            raw.len()
-        ));
-    }
-    Ok(())
-}
-
 pub(crate) fn f32_sample(raw: &[u8], index: usize) -> f32 {
     let offset = index * 4;
     f32::from_le_bytes([
@@ -4020,15 +1858,6 @@ pub(crate) fn f32_sample(raw: &[u8], index: usize) -> f32 {
         raw[offset + 2],
         raw[offset + 3],
     ])
-}
-
-fn check_optional_cancel(cancel: Option<&AtomicBool>, row: u32) -> Result<(), String> {
-    if row.is_multiple_of(256)
-        && let Some(cancel) = cancel
-    {
-        check_cancel(cancel)?;
-    }
-    Ok(())
 }
 
 pub fn write_f32_raw(path: &Path, values: &[f32]) -> Result<(), String> {
@@ -4187,14 +2016,8 @@ pub(crate) fn format_geotransform(gt: GeoTransform) -> String {
 }
 
 pub(crate) fn parse_geotransform(raw: &str) -> Result<GeoTransform, String> {
-    let values = match serde_json::from_str::<Vec<f64>>(raw) {
-        Ok(values) => values,
-        Err(json_error) => raw
-            .split(',')
-            .map(|value| value.trim().parse::<f64>())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| format!("Invalid stored geotransform: {json_error}"))?,
-    };
+    let values = serde_json::from_str::<Vec<f64>>(raw)
+        .map_err(|error| format!("Invalid stored geotransform: {error}"))?;
     let transform: GeoTransform = values.try_into().map_err(|values: Vec<f64>| {
         format!(
             "Invalid stored geotransform: expected 6 values, found {}",
@@ -4223,7 +2046,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dense_grid_limit_rejects_extent_explosion_before_allocation() {
+    fn raw_extraction_limit_rejects_extent_explosion_before_allocation() {
         let allowed = RasterGrid {
             width: 5_000,
             height: 5_000,
@@ -4235,7 +2058,7 @@ mod tests {
             ..allowed
         };
         let error = validate_working_grid(&oversized, "test").unwrap_err();
-        assert!(error.contains("current dense raster engine limit"));
+        assert!(error.contains("whole-raster read is limited"));
     }
 
     #[test]
@@ -4295,14 +2118,10 @@ mod tests {
     }
 
     #[test]
-    fn geotransform_storage_round_trips_and_reads_legacy_rows() {
+    fn geotransform_storage_round_trips() {
         let transform = [445999.75, 0.5, 0.0, 6807000.25, 0.0, -0.5];
         assert_eq!(
             parse_geotransform(&format_geotransform(transform)).unwrap(),
-            transform
-        );
-        assert_eq!(
-            parse_geotransform("445999.75,0.5,0,6807000.25,0,-0.5").unwrap(),
             transform
         );
     }
@@ -4310,153 +2129,10 @@ mod tests {
     #[test]
     fn geotransform_storage_rejects_missing_or_non_finite_values() {
         assert!(parse_geotransform("[1,2,3]").is_err());
-        assert!(parse_geotransform("0,1,0,1,0,NaN").is_err());
-    }
-
-    fn member_fixture(
-        dir: &std::path::Path,
-        name: &str,
-        grid: &RasterGrid,
-        role: &str,
-        values: &[f32],
-    ) -> MemberSource {
-        std::fs::create_dir_all(dir).unwrap();
-        let raw = dir.join(format!("{name}.raw"));
-        let mut bytes = Vec::new();
-        for value in values {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-        std::fs::write(&raw, &bytes).unwrap();
-        let mask_values: Vec<u8> = values
-            .iter()
-            .map(|v| if v.is_finite() && *v != -9999.0 { 1 } else { 0 })
-            .collect();
-        let mask = dir.join(format!("{name}.bin"));
-        std::fs::write(&mask, &mask_values).unwrap();
-        MemberSource {
-            interpretation_id: format!("interp-{name}"),
-            role: role.to_string(),
-            job_id: None,
-            grid: grid.clone(),
-            payload: MemberPayload::LegacyDense {
-                raw_samples_path: raw,
-                valid_mask_path: mask,
-            },
-        }
-    }
-
-    fn sample(mosaic: &ComposedMosaic, grid: &RasterGrid, x: u32, y: u32) -> f32 {
-        mosaic.values[y as usize * grid.width as usize + x as usize]
-    }
-
-    #[test]
-    fn replay_adds_then_replaces_in_publication_order() {
-        let grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let dir = std::env::temp_dir().join("canopi-replay-test");
-        // First member: add covers both cells (1.0, 2.0).
-        let first = member_fixture(&dir, "m1", &grid, "add", &[1.0, 2.0]);
-        let mosaic = replay_members(std::slice::from_ref(&first), &grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
-        assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
-
-        // Second member: add only paints where the first left invalid.
-        let second = member_fixture(&dir, "m2", &grid, "add", &[9.0, 3.0]);
-        let mosaic = replay_members(&[first.clone(), second], &grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&mosaic, &grid, 0, 0), 1.0);
-        assert_eq!(sample(&mosaic, &grid, 1, 0), 2.0);
-
-        // Replace member paints over accepted coverage.
-        let third = member_fixture(&dir, "m3", &grid, "replace", &[7.0, 8.0]);
-        let mosaic = replay_members(&[first, third], &grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&mosaic, &grid, 0, 0), 7.0);
-        assert_eq!(sample(&mosaic, &grid, 1, 0), 8.0);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn replay_undoes_a_member_by_dropping_it_from_the_sequence() {
-        let grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let dir = std::env::temp_dir().join("canopi-replay-undo");
-        // First import covers only the left cell.
-        let first = member_fixture(&dir, "a", &grid, "add", &[1.0, -9999.0]);
-        // Second import would cover both; accepted as uncovered-additions only.
-        let second = member_fixture(&dir, "b", &grid, "add", &[9.0, 3.0]);
-        let with_both =
-            replay_members(&[first.clone(), second.clone()], &grid, -99999.0, None).unwrap();
-        assert_eq!(
-            sample(&with_both, &grid, 0, 0),
-            1.0,
-            "existing value wins the overlap"
+        assert!(
+            parse_geotransform("0,1,0,1,0,1").is_err(),
+            "only the stored JSON form"
         );
-        assert_eq!(
-            sample(&with_both, &grid, 1, 0),
-            3.0,
-            "uncovered cell is filled"
-        );
-        assert_eq!(with_both.valid.count_valid(), 2);
-
-        // Undo the second import: replay only the first member.
-        let after_undo = replay_members(&[first], &grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&after_undo, &grid, 0, 0), 1.0);
-        assert_eq!(
-            after_undo.valid.count_valid(),
-            1,
-            "the undone coverage disappears"
-        );
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn replay_invalid_member_cells_never_erase_accepted_coverage() {
-        let grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let dir = std::env::temp_dir().join("canopi-replay-invalid");
-        let first = member_fixture(&dir, "base", &grid, "add", &[5.0, 6.0]);
-        // Replace member whose second cell is nodata: cell 1 must keep 6.0.
-        let replacer = member_fixture(&dir, "repl", &grid, "replace", &[4.0, -9999.0]);
-        let mosaic = replay_members(&[first, replacer], &grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&mosaic, &grid, 0, 0), 4.0);
-        assert_eq!(sample(&mosaic, &grid, 1, 0), 6.0);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn replay_can_replace_overlap_without_accepting_uncovered_cells() {
-        let base_grid = RasterGrid {
-            width: 1,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let incoming_grid = RasterGrid {
-            width: 2,
-            height: 1,
-            geotransform: [0.0, 1.0, 0.0, 1.0, 0.0, -1.0],
-        };
-        let dir = std::env::temp_dir().join(new_id("canopi-replace-overlap-test"));
-        let base = member_fixture(&dir, "base", &base_grid, "add", &[1.0]);
-        let incoming = member_fixture(
-            &dir,
-            "incoming",
-            &incoming_grid,
-            "replace-overlap",
-            &[7.0, 8.0],
-        );
-        let mosaic = replay_members(&[base, incoming], &incoming_grid, -99999.0, None).unwrap();
-        assert_eq!(sample(&mosaic, &incoming_grid, 0, 0), 7.0);
-        assert_eq!(mosaic.valid.count_valid(), 1);
-        assert!(!mosaic.valid.get(1, 0));
-        std::fs::remove_dir_all(dir).unwrap();
     }
 
     // -----------------------------------------------------------------
@@ -4610,14 +2286,15 @@ mod tests {
                 |_| Ok(()),
             )
             .expect("oracle mask");
-            let cog = source
-                .source_cog
-                .as_ref()
-                .expect("staging retains one controlled source COG");
+            let cog = &source.source_cog;
             let grid = grid_for_source(source);
-            let mut reader = cog
-                .open(&library.inner.paths, source.job_id.as_deref(), &grid)
-                .expect("the retained COG opens through the production reader");
+            let mut reader = PreparedRaster::open_committed(
+                &cog.resolve(&library.inner.paths, &source.job_id)
+                    .expect("the retained COG resolves"),
+                &grid,
+                cog.nodata,
+            )
+            .expect("the retained COG opens through the production reader");
             assert_eq!(reader.grid(), &grid);
             let read = reader
                 .read_window(
@@ -4650,6 +2327,7 @@ mod tests {
                 oracle_range(&oracle, Some(-9999.0)),
                 "the range covers the source's own values and nothing it declares as no data"
             );
+            assert_eq!(source.valid_cells, oracle_mask.count_valid());
         }
 
         // Nothing durable beside the retained COG: no prepared derivative, no
@@ -4666,13 +2344,6 @@ mod tests {
             leftovers.is_empty(),
             "durable raw/mask or derivative left behind: {leftovers:?}"
         );
-        for source in &staging.sources {
-            assert!(
-                source.raw_samples_path.as_os_str().is_empty()
-                    && source.valid_mask_path.as_os_str().is_empty(),
-                "a retained source records no raw/mask payload"
-            );
-        }
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -4850,7 +2521,7 @@ mod tests {
         .unwrap();
         {
             let _guard = capacity_probe::override_available(required);
-            let (cog, regions, valid_cells) = stage_source_samples(
+            let (cog, valid_cells) = stage_source_samples(
                 &engine,
                 &cancel,
                 &source,
@@ -4876,7 +2547,7 @@ mod tests {
                 valid_cells, expected_valid,
                 "the prepared source reports the valid cells it actually holds"
             );
-            let staged_path = cog.resolve(&paths, Some("boundary-job")).unwrap();
+            let staged_path = cog.resolve(&paths, "boundary-job").unwrap();
             assert!(
                 staged_path.exists(),
                 "the COG is the job's own durable output at {}",
@@ -4887,7 +2558,6 @@ mod tests {
                 !paths.asset_cog(&cog.sha256).exists(),
                 "nothing is admitted globally before publication"
             );
-            assert!(!regions.is_empty(), "occupied regions are derived from it");
         }
         {
             let _guard = capacity_probe::override_available(required - 1);
@@ -5096,138 +2766,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// The CRS this engine reports for a raster, as a source probe would.
-    fn declared_wkt(engine: &GdalEngine, raster: &Path) -> String {
-        let info =
-            super::super::raster_info::gdalinfo_json(engine, &AtomicBool::new(false), raster)
-                .expect("gdalinfo reads the fixture");
-        info.get("coordinateSystem")
-            .and_then(|system| system.get("wkt"))
-            .and_then(|wkt| wkt.as_str())
-            .unwrap_or("")
-            .to_string()
-    }
-
-    /// Publish a generation in the shape the superseded route wrote.
-    ///
-    /// A pre-repair library owns `cog-chunks-v1` generations whose manifest grid
-    /// is only the lattice anchor while their published chunks may reach well
-    /// beyond it. The delivery has to keep reading that shape exactly, so the
-    /// tests build it directly instead of reviving the retired publication path.
-    fn publish_legacy_chunked_head(
-        library: &LidarLibrary,
-        layer_id: &str,
-        lattice: &RasterGrid,
-        clusters: &[(i64, i64, f32)],
-        base_generation_id: Option<&str>,
-    ) -> String {
-        let engine = &library.inner.engine;
-        let paths = &library.inner.paths;
-        let cancel = AtomicBool::new(false);
-        let scratch = paths.prepared_dir().join("legacy-fixture");
-        std::fs::create_dir_all(&scratch).unwrap();
-        let generation_id = new_id("gen");
-        let mut rows = Vec::new();
-        // The manifest must declare exactly the CRS this engine reports for the
-        // written raster, or a later source would be refused as foreign.
-        let mut crs_wkt = String::new();
-        for (chunk_x, chunk_y, value) in clusters {
-            let grid = generation::chunk_grid(lattice, *chunk_x, *chunk_y);
-            let values = vec![*value; (grid.width * grid.height) as usize];
-            let asset = super::super::raster_assets::write_cog_asset(
-                engine,
-                &cancel,
-                paths,
-                &scratch,
-                &format!("legacy-{chunk_x}-{chunk_y}"),
-                &grid,
-                "EPSG:3857",
-                Some(-9999.0),
-                &values,
-            )
-            .expect("legacy chunk asset writes");
-            if crs_wkt.is_empty() {
-                crs_wkt = declared_wkt(engine, &asset.path);
-            }
-            let connection = library.catalogue().unwrap();
-            catalogue::insert_raster_asset(
-                &connection,
-                &generation::asset_row(paths, &asset, &crs_wkt).unwrap(),
-            )
-            .unwrap();
-            rows.push(catalogue::GenerationChunkRow {
-                role: generation::RESULT_ROLE.to_string(),
-                chunk_x: *chunk_x,
-                chunk_y: *chunk_y,
-                asset_sha256: asset.sha256.clone(),
-                valid_cells: i64::from(grid.width) * i64::from(grid.height),
-                min_value: f64::from(*value),
-                max_value: f64::from(*value),
-                sum_value: f64::from(*value) * f64::from(grid.width) * f64::from(grid.height),
-            });
-        }
-        let mut min_value = f64::INFINITY;
-        let mut max_value = f64::NEG_INFINITY;
-        let mut coverage = 0i64;
-        for row in &rows {
-            coverage += row.valid_cells;
-            min_value = min_value.min(row.min_value);
-            max_value = max_value.max(row.max_value);
-        }
-        if !min_value.is_finite() {
-            min_value = 0.0;
-            max_value = 0.0;
-        }
-        let manifest = serde_json::json!({
-            "grid": {
-                "width": lattice.width,
-                "height": lattice.height,
-                "geotransform": lattice.geotransform,
-            },
-            "nodata": -9999.0,
-            "crs_wkt": crs_wkt.clone(),
-            "members": [],
-            "engine_version": "fixture",
-            "created_at": "0",
-            "format": "cog-chunks-v1",
-        })
-        .to_string();
-        let bounds = raster_bounds_3857(engine, &cancel, lattice, &crs_wkt).unwrap();
-        {
-            let connection = library.catalogue().unwrap();
-            catalogue::insert_unpublished_chunks(&connection, &generation_id, &rows).unwrap();
-            catalogue::publish_generation_chunks(&connection, &generation_id).unwrap();
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_generations(
-                         id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
-                         coverage_cells, min_value, max_value, bounds_3857, base_generation_id,
-                         undo_available, operation)
-                     VALUES(?1, ?2, '0', NULL, NULL, ?3, ?4, ?5, ?6, ?7, ?8, 0, NULL)",
-                    rusqlite::params![
-                        generation_id,
-                        layer_id,
-                        manifest,
-                        coverage,
-                        min_value,
-                        max_value,
-                        serde_json::to_string(&bounds).unwrap(),
-                        base_generation_id,
-                    ],
-                )
-                .unwrap();
-            connection
-                .execute(
-                    "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES(?1, ?2)
-                     ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
-                    rusqlite::params![layer_id, generation_id],
-                )
-                .unwrap();
-        }
-        let _ = std::fs::remove_dir_all(&scratch);
-        generation_id
-    }
-
     /// The same fixture placed with an explicit CRS declaration.
     #[allow(clippy::too_many_arguments)]
     fn write_crs_fixture(
@@ -5264,18 +2802,34 @@ mod tests {
         tif
     }
 
-    /// Drive the real caller flow up to a staged review.
     /// Prepare one batch the way the one-step route does, ready to publish.
     ///
-    /// The retired review route handed back a review payload and waited for a
-    /// decision; this returns the validated batch itself, which is what
-    /// publication reads.
+    /// Items are fixed once published, so a batch aimed at a published item is
+    /// staged into a new item of the same kind, as a user's next import would
+    /// be. Callers read the target from `StagedImport::layer_id`.
     fn stage_review(
         library: &LidarLibrary,
         layer_id: &str,
         sources: &[PathBuf],
         cancel: &AtomicBool,
     ) -> (String, StagedImport) {
+        let published = catalogue::head_generation(&library.catalogue().unwrap(), layer_id)
+            .unwrap()
+            .is_some();
+        let next_layer;
+        let layer_id = if published {
+            next_layer = library
+                .create_layer(
+                    "next import",
+                    common_types::lidar::LidarMeasurementKind::GroundElevation,
+                    None,
+                    false,
+                )
+                .expect("next item created");
+            next_layer.as_str()
+        } else {
+            layer_id
+        };
         let job_id = library.record_import_job(layer_id).expect("job recorded");
         stage_import(library, &job_id, layer_id, sources, cancel)
             .unwrap_or_else(|error| panic!("fixtures must be admitted: {error}"));
@@ -5291,10 +2845,8 @@ mod tests {
             .expect("layer has a head")
     }
 
-    /// Published resolved-chunk rows of a generation.
-    ///
-    /// An ordered collection materializes none; a preserved generation keeps
-    /// whatever the superseded route published for it.
+    /// Published resolved-chunk rows of a generation: an ordered collection
+    /// materializes none.
     fn published_chunk_count(library: &LidarLibrary, generation_id: &str) -> usize {
         let connection = library.catalogue().unwrap();
         catalogue::generation_chunk_assets(&connection, generation_id, "result")
@@ -5316,7 +2868,6 @@ mod tests {
             &manifest,
             &AtomicBool::new(false),
         )
-        .unwrap()
         .expect("every member still resolves");
         reader.occupied_chunks().unwrap()
     }
@@ -5338,280 +2889,13 @@ mod tests {
     ) -> (Vec<f32>, Vec<u8>) {
         let head = head_of(library, layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        let numeric = head_numeric_read(
-            library,
-            Some(&head),
-            Some(&manifest),
-            &AtomicBool::new(false),
-        )
-        .unwrap();
-        // Read exactly the requested window: the layer lattice's origin is
-        // fixed, so window coordinates are lattice coordinates and a synthetic
-        // union equal to the window keeps the indexing trivial.
-        let union = RasterGrid {
-            width: window.width,
-            height: window.height,
-            geotransform: [
-                manifest.grid.geotransform[0] + window.x as f64 * manifest.grid.geotransform[1],
-                manifest.grid.geotransform[1],
-                0.0,
-                manifest.grid.geotransform[3] + window.y as f64 * manifest.grid.geotransform[5],
-                0.0,
-                manifest.grid.geotransform[5],
-            ],
-        };
-        let (values, valid) = head_values_on_union(
-            library,
-            Some(&head),
-            Some(&manifest),
-            &numeric,
-            &union,
-            manifest.nodata,
-            &AtomicBool::new(false),
-        )
-        .unwrap();
-        let values = values.expect("head has numeric values");
-        let valid = valid.expect("head has coverage");
-        let mut samples = Vec::new();
-        let mut mask = Vec::new();
-        for row in 0..window.height {
-            for column in 0..window.width {
-                let index = row as usize * window.width as usize + column as usize;
-                samples.push(values[index]);
-                mask.push(u8::from(valid.get(column, row)));
-            }
-        }
-        (samples, mask)
-    }
-
-    #[test]
-    fn manifest_format_defaults_to_dense_and_reads_the_chunked_name() {
-        let dense = r#"{"grid":{"width":2,"height":2,"geotransform":[0.0,1.0,0.0,2.0,0.0,-1.0]},
-            "nodata":-9999.0,"crs_wkt":"EPSG:3857","members":["a"],"engine_version":"3.8",
-            "created_at":"0"}"#;
-        let manifest = read_generation_manifest(dense).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::LegacyDenseV1);
-        let chunked = dense.replace(
-            "\"created_at\"",
-            "\"format\":\"cog-chunks-v1\",\"created_at\"",
-        );
-        let manifest = read_generation_manifest(&chunked).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::CogChunksV1);
-    }
-
-    #[test]
-    fn sparse_publication_is_the_production_default_and_can_be_forced_dense() {
-        assert!(
-            generation::chunked_publication_enabled(),
-            "every reader and the display transport consume the sparse format"
-        );
-        {
-            let _dense = generation::chunked_publication::without_sparse();
-            assert!(!generation::chunked_publication_enabled());
-        }
-        assert!(generation::chunked_publication_enabled());
-    }
-
-    /// The first production vertical slice on the sparse format: stage,
-    /// review, Apply, reopen the library, review again, undo.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn ordered_stage_review_apply_reorder_remove_undo_and_restore_keep_exact_values() {
-        let engine = GdalEngine::new();
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-ordered-slice"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        // The decisive example: the bottom source covers columns 0..60 with the
-        // value 5; the later source covers 20..80 with 9, so it overlaps 40
-        // columns and adds 20.
-        let bottom =
-            write_placed_fixture(&engine, &root, "bottom", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
-        let top = write_placed_fixture(&engine, &root, "top", 20.0, 1000.0, 60, 45, -9999.0, 9.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "ordered slice",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[bottom], &cancel);
-        let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-
-        // The published head is an ordered collection: member metadata only.
-        let head = head_of(&library, &layer_id);
-        assert_eq!(head.id, applied.generation_id);
-        assert!(head.mosaic_path.is_none() && head.coverage_mask_path.is_none());
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        // A one-member composition *is* its member, so its exact facts carry
-        // over without reading the composed pixels.
-        assert_eq!(head.coverage_cells, Some(60 * 45));
-        assert_eq!(head.min_value, Some(5.0));
-        assert_eq!(head.max_value, Some(5.0));
-        assert_eq!(head.display_min_value, Some(5.0));
-        assert_eq!(head.display_max_value, Some(5.0));
-        assert_eq!(head.display_basis.as_deref(), Some("exact"));
-        assert_eq!(published_chunk_count(&library, &head.id), 0);
-        assert_eq!(head_member_count(&library, &layer_id), 1);
-        let first_member_id = {
-            let connection = library.catalogue().unwrap();
-            catalogue::collection_members(&connection, &head.id).unwrap()[0]
-                .member_id
-                .clone()
-        };
-
-        // Reopen the library: the accepted head must read back exactly.
-        drop(library);
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        let full = generation::LatticeWindow {
-            x: 0,
-            y: 0,
-            width: 80,
-            height: 45,
-        };
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            if x < 60 {
-                assert_eq!(valid[index], 1, "cell {index}");
-                assert_eq!(*value, 5.0, "cell {index}");
-            } else {
-                assert_eq!(valid[index], 0, "cell {index} is outside the composition");
-            }
-        }
-
-        // Add a second source: it is inserted ABOVE the accepted member, so the
-        // first displayed source is topmost.
-        let (_job_two, staging_two) = stage_review(&reopened, &layer_id, &[top], &cancel);
-        let stacked =
-            apply_import(&reopened, &staging_two, true, false, &cancel).expect("second applies");
-        assert!(stacked.changed);
-        let stacked_head = head_of(&reopened, &layer_id);
-        // Two members cannot be composed from metadata alone, so the exact
-        // count and range are unknown rather than guessed: summing member cells
-        // would count the overlap twice, and the union of their ranges is an
-        // envelope rather than the composed extremum.
-        assert_eq!(
-            stacked_head.coverage_cells, None,
-            "a multi-member composition does not claim an exact count"
-        );
-        assert_eq!(stacked_head.min_value, None);
-        assert_eq!(stacked_head.max_value, None);
-        // What is available is the display range, labelled by its basis.
-        assert_eq!(stacked_head.display_min_value, Some(5.0));
-        assert_eq!(stacked_head.display_max_value, Some(9.0));
-        assert_eq!(
-            stacked_head.display_basis.as_deref(),
-            Some("source-envelope"),
-            "a union of member ranges is an envelope, never an exact statistic"
-        );
-        assert_eq!(published_chunk_count(&reopened, &stacked_head.id), 0);
-        let members = {
-            let connection = reopened.catalogue().unwrap();
-            catalogue::collection_members(&connection, &stacked_head.id).unwrap()
-        };
-        assert_eq!(members.len(), 2);
-        assert_eq!(members[0].position, 0, "the new source is topmost");
-        let top_member_id = members[0].member_id.clone();
-        assert_eq!(members[1].member_id, first_member_id);
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            assert_eq!(valid[index], 1, "cell {index}");
-            assert_eq!(*value, if x < 20 { 5.0 } else { 9.0 }, "cell {index}");
-        }
-
-        // Move the top source below the bottom one: the composition changes and
-        // neither source COG is re-encoded.
-        let moved = move_member(
-            &reopened,
-            &layer_id,
-            &top_member_id,
-            false,
-            Some(&stacked_head.id),
-            &cancel,
-        )
-        .expect("move publishes");
-        assert!(moved.changed);
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            assert_eq!(valid[index], 1, "cell {index} is still covered");
-            assert_eq!(*value, if x < 60 { 5.0 } else { 9.0 }, "cell {index}");
-        }
-
-        // Undo the move: the recorded predecessor restores the stacked order.
-        let undone = undo_last_change(&reopened, &layer_id, None, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let (values, _) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            assert_eq!(*value, if x < 20 { 5.0 } else { 9.0 }, "cell {index}");
-        }
-
-        // Repeated Undo walks further back through user changes instead of
-        // toggling between the two newest heads.
-        let undone_again =
-            undo_last_change(&reopened, &layer_id, None, &cancel).expect("second undo publishes");
-        assert!(undone_again.changed);
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            if x < 60 {
-                assert_eq!(valid[index], 1, "cell {index}");
-                assert_eq!(*value, 5.0, "cell {index}");
-            } else {
-                assert_eq!(valid[index], 0, "cell {index}");
-            }
-        }
-
-        // Restore the moved version explicitly: it publishes a new head and
-        // deletes nothing in between.
-        let restored = restore_version(&reopened, &layer_id, &moved.generation_id, None, &cancel)
-            .expect("restore publishes");
-        assert!(restored.changed);
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            assert_eq!(valid[index], 1, "cell {index}");
-            assert_eq!(*value, if x < 60 { 5.0 } else { 9.0 }, "cell {index}");
-        }
-
-        // Remove one occurrence: its asset and every version stay in the library.
-        let removed = remove_member(&reopened, &layer_id, &top_member_id, None, &cancel)
-            .expect("remove publishes");
-        assert!(removed.changed);
-        assert_eq!(head_member_count(&reopened, &layer_id), 1);
-        let (values, valid) = head_window(&reopened, &layer_id, full);
-        for (index, value) in values.iter().enumerate() {
-            let x = index % 80;
-            if x < 60 {
-                assert_eq!(valid[index], 1, "cell {index}");
-                assert_eq!(*value, 5.0, "cell {index}");
-            } else {
-                assert_eq!(valid[index], 0, "cell {index}");
-            }
-        }
-        // A stale edit is refused by name instead of applying to a newer order.
-        let stale = move_member(
-            &reopened,
-            &layer_id,
-            &top_member_id,
-            true,
-            Some(&stacked_head.id),
-            &cancel,
-        )
-        .expect_err("a stale edit is refused");
-        assert!(stale.contains("changed since this edit"), "{stale}");
-
-        let _ = std::fs::remove_dir_all(&root);
+        let reader = super::super::collection::load_reader(library, &head.id, &manifest, &cancel)
+            .expect("every member still resolves");
+        let resolved = reader
+            .read_window(window, &cancel)
+            .expect("window resolves");
+        (resolved.samples, resolved.valid)
     }
 
     /// P1-4: one common interpretation for a layer's first batch.
@@ -5735,11 +3019,9 @@ mod tests {
                 false,
             )
             .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[five], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first applies");
-
-        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[nine], &cancel);
-        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("second");
+        // One item of two overlapping sources, topmost first.
+        let (_job, staging) = stage_review(&library, &layer_id, &[nine, five], &cancel);
+        let applied = apply_import(&library, &staging, &cancel).expect("the pair applies");
         let head = head_of(&library, &layer_id);
         assert_eq!(head.id, applied.generation_id);
         // Two members cannot be composed from metadata, so the exact count and
@@ -5768,343 +3050,6 @@ mod tests {
         assert!(
             values.iter().all(|value| *value == 9.0),
             "the reopened composition is the one the statistics describe: {values:?}"
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-5: a sparse preserved composition keeps its signed extent.
-    ///
-    /// Its manifest rectangle describes the lattice its chunks are addressed
-    /// in, not how far they reach. A published chunk beyond that rectangle must
-    /// stay readable through the transition, or accepted coverage silently
-    /// disappears.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_sparse_previous_composition_keeps_its_signed_extent() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-sparse-extent"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "sparse extent",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        // The anchor lattice is a 4x4 rectangle; the published chunks reach a
-        // third block far to the east, exactly as a pre-repair library does.
-        let lattice = RasterGrid {
-            width: 4,
-            height: 4,
-            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
-        };
-        publish_legacy_chunked_head(
-            &library,
-            &layer_id,
-            &lattice,
-            &[(0, 0, 5.0), (2, 0, 7.0)],
-            None,
-        );
-        let manifest =
-            read_generation_manifest(&head_of(&library, &layer_id).manifest_json).unwrap();
-        assert_eq!(
-            manifest.grid.width, 4,
-            "the anchor rectangle is only the coordinate frame"
-        );
-
-        // A new source above it wraps the accepted head as one member.
-        let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
-        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[top], &cancel);
-        apply_import(&library, &staging_two, true, false, &cancel).expect("wraps");
-
-        let sample = |x: i64, y: i64| -> (f32, u8) {
-            let (samples, valid) = head_window(
-                &library,
-                &layer_id,
-                generation::LatticeWindow {
-                    x,
-                    y,
-                    width: 1,
-                    height: 1,
-                },
-            );
-            (samples[0], valid[0])
-        };
-        assert_eq!(sample(2048, 0).1, 1, "the far chunk is still valid");
-        assert_eq!(sample(2048, 0).0, 7.0, "with its own value");
-        assert_eq!(sample(0, 0), (6.0, 1), "the new source is on top");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-5: the previous composition wraps the accepted head, not the base
-    /// ancestor it may overlay.
-    ///
-    /// Following `base_generation_id` silently replaced accepted values with an
-    /// older composition: a historical overlay valued 7 became the base's 5.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn the_previous_composition_wraps_the_actual_accepted_head() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-wrap-head"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let top = write_placed_fixture(&engine, &root, "top", 20.0, 4.0, 4, 4, -9999.0, 3.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "wrap head",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        // The accepted head is a historical overlay: a sparse generation that
-        // records the dense base it replaced, valued 7 over the base's 5.
-        let lattice = RasterGrid {
-            width: 4,
-            height: 4,
-            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
-        };
-        let base = publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 5.0)], None);
-        let accepted =
-            publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 7.0)], Some(&base));
-        let accepted_row = head_of(&library, &layer_id);
-        assert_eq!(accepted_row.id, accepted);
-        assert_eq!(accepted_row.min_value, Some(7.0));
-        assert_eq!(
-            accepted_row.base_generation_id.as_deref(),
-            Some(base.as_str()),
-            "the accepted head records the base it overlays"
-        );
-
-        // A third source wraps whatever the layer accepted, so the overlay
-        // stays visible underneath it.
-        let (_job_three, staging_three) = stage_review(&library, &layer_id, &[top], &cancel);
-        apply_import(&library, &staging_three, true, false, &cancel).expect("wraps");
-        let head = head_of(&library, &layer_id);
-        let members = {
-            let connection = library.catalogue().unwrap();
-            catalogue::collection_members(&connection, &head.id).unwrap()
-        };
-        assert_eq!(members.len(), 2);
-        assert_eq!(
-            members[1].base_generation_id.as_deref(),
-            Some(accepted.as_str()),
-            "the wrapped member is the accepted head itself, not its base ancestor"
-        );
-        let (samples, valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 2,
-                height: 2,
-            },
-        );
-        assert!(valid.iter().all(|byte| *byte == 1));
-        assert!(
-            samples.iter().all(|value| *value == 7.0),
-            "the accepted overlay value survives the transition: {samples:?}"
-        );
-        // The transitioned head is the preserved overlay plus the newly staged
-        // source, so it cannot claim an exact composed count or range. Its
-        // display range is the union of what its members supply: the overlay's
-        // 7 and the new source's values, labelled as an envelope.
-        assert_eq!(head.coverage_cells, None);
-        assert_eq!(head.min_value, None, "no exact composed range is claimed");
-        assert_eq!(head.max_value, None);
-        // The overlay's own preserved range and the new source's.
-        assert_eq!(head.display_min_value, Some(3.0));
-        assert_eq!(head.display_max_value, Some(7.0));
-        assert_eq!(head.display_basis.as_deref(), Some("source-envelope"));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-6: a Previous-composition-only layer is a valid slope input.
-    ///
-    /// After an Undo the layer's composition can be one preserved member with
-    /// no source COG of its own. Eligibility has to come from the shared
-    /// generation reader, not from a source path that no longer exists.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn slope_accepts_a_previous_composition_only_layer() {
-        use super::super::analysis;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-legacy-slope"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "legacy slope",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let lattice = RasterGrid {
-            width: 4,
-            height: 4,
-            geotransform: [0.0, 1.0, 0.0, 4.0, 0.0, -1.0],
-        };
-        publish_legacy_chunked_head(&library, &layer_id, &lattice, &[(0, 0, 5.0)], None);
-
-        // The layer is a valid analysis input while it is still a preserved
-        // generation.
-        let receipt = library
-            .create_horn_analysis(
-                &layer_id,
-                common_types::lidar::LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("analysis definition is created");
-
-        // A new source above it, then Undo: the head is now one ordered
-        // snapshot whose only member is the preserved composition.
-        let top = write_placed_fixture(&engine, &root, "top", 0.0, 4.0, 4, 4, -9999.0, 6.0);
-        let (_job, staging) = stage_review(&library, &layer_id, &[top], &cancel);
-        apply_import(&library, &staging, true, false, &cancel).expect("top publishes");
-        let undone = undo_last_change(&library, &layer_id, None, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let head = head_of(&library, &layer_id);
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        let members = {
-            let connection = library.catalogue().unwrap();
-            catalogue::collection_members(&connection, &head.id).unwrap()
-        };
-        assert_eq!(members.len(), 1);
-        assert_eq!(members[0].kind, "previous-composition");
-        assert!(
-            head.mosaic_path.is_none(),
-            "the composition owns no source raster of its own"
-        );
-
-        // Slope must still run: eligibility comes from the composition.
-        let parameters = {
-            let connection = library.catalogue().unwrap();
-            let json: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            analysis::parse_parameters(&json).unwrap()
-        };
-        let outcome = analysis::run_slope_job(
-            &library,
-            &receipt.job_id,
-            &receipt.definition_id,
-            &parameters,
-            &head.id,
-            &cancel,
-        )
-        .expect("a preserved composition is a valid slope input");
-        assert!(
-            outcome.published && !outcome.stale,
-            "the slope result is published: {}",
-            outcome.summary()
-        );
-        let result = library
-            .library_snapshot()
-            .unwrap()
-            .analyses
-            .into_iter()
-            .find(|analysis| analysis.id == receipt.definition_id)
-            .expect("the analysis is listed");
-        assert_eq!(result.state, common_types::lidar::LidarResultState::Ready);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// P1-6: a superseded job settles as the scheduler's stale outcome.
-    ///
-    /// Reporting it as a plain failure ended the refresh chain, so the newest
-    /// composition could be left without a current result.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_superseded_sparse_slope_job_settles_as_stale() {
-        use super::super::analysis;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-superseded-slope"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "superseded slope",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
-        let superseded = head_of(&library, &layer_id).id;
-
-        let receipt = library
-            .create_horn_analysis(
-                &layer_id,
-                common_types::lidar::LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("analysis definition is created");
-        let parameters = {
-            let connection = library.catalogue().unwrap();
-            let json: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            analysis::parse_parameters(&json).unwrap()
-        };
-
-        // The layer moves on while the captured job is still queued.
-        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
-        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
-        assert_ne!(head_of(&library, &layer_id).id, superseded);
-
-        let outcome = analysis::run_slope_job(
-            &library,
-            &receipt.job_id,
-            &receipt.definition_id,
-            &parameters,
-            &superseded,
-            &cancel,
-        )
-        .expect("a superseded job coalesces instead of failing");
-        assert!(
-            outcome.stale && !outcome.published,
-            "the superseded job is stale, not failed: {}",
-            outcome.summary()
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -6141,7 +3086,7 @@ mod tests {
             )
             .unwrap();
         let (_job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
-        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
+        apply_import(&library, &staging, &cancel).expect("publishes");
 
         let summary = library.layer_collection(&layer_id, None).unwrap();
         let listed = &summary.sources[0];
@@ -6180,12 +3125,11 @@ mod tests {
             )
             .unwrap();
         let (_job, staging) = stage_review(&library, &layer_id, &[near, far], &cancel);
-        apply_import(&library, &staging, true, false, &cancel).expect("publishes");
+        apply_import(&library, &staging, &cancel).expect("publishes");
         let head = head_of(&library, &layer_id);
         let manifest = read_generation_manifest(&head.manifest_json).unwrap();
 
         let whole = super::super::collection::load_reader(&library, &head.id, &manifest, &cancel)
-            .unwrap()
             .expect("the composition resolves");
         assert_eq!(whole.resolved().len(), 2, "both occurrences are members");
 
@@ -6201,7 +3145,6 @@ mod tests {
             }),
             &cancel,
         )
-        .unwrap()
         .expect("the bounded composition resolves");
         assert_eq!(
             windowed.resolved().len(),
@@ -6229,223 +3172,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// P2-11: the caller's cancellation reaches a cold compatibility lease.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_cancelled_read_does_not_prepare_a_compatibility_lease() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-compat-cancel"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let source = write_placed_fixture(&engine, &root, "legacy", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "compat cancel",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job, staging) = stage_review(&library, &layer_id, &[source], &cancel);
-        {
-            let _dense = generation::chunked_publication::without_sparse();
-            apply_import(&library, &staging, true, false, &cancel).expect("dense publishes");
-        }
-        let head = head_of(&library, &layer_id);
-        assert_eq!(
-            read_generation_manifest(&head.manifest_json)
-                .unwrap()
-                .format,
-            GenerationStorageFormat::LegacyDenseV1,
-            "the preserved generation needs the compatibility lease"
-        );
-
-        let cancelled = AtomicBool::new(false);
-        cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
-        let refused =
-            super::super::collection::previous_composition_member(&library, &head.id, &cancelled)
-                .err()
-                .expect("a cancelled read does not prepare a legacy derivative");
-        assert_eq!(refused, "cancelled", "{refused}");
-
-        // Healthy control: the same read with a live token prepares the lease
-        // and resolves.
-        let member =
-            super::super::collection::previous_composition_member(&library, &head.id, &cancel)
-                .expect("a live read prepares the lease");
-        let resolved = generation::resolve_window(
-            std::slice::from_ref(&member.resolved),
-            &read_generation_manifest(&head.manifest_json).unwrap().grid,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 4,
-                height: 4,
-            },
-            &cancel,
-        )
-        .unwrap();
-        assert!(resolved.valid.iter().all(|byte| *byte == 1));
-        assert!(resolved.samples.iter().all(|value| *value == 5.0));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A preserved legacy generation keeps its dense files and can be extended
-    /// by a sparse publication without rewriting its history.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn chunked_publication_extends_a_legacy_generation_without_rewriting_it() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-chunked-legacy"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let first =
-            write_placed_fixture(&engine, &root, "first", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
-        let apart =
-            write_placed_fixture(&engine, &root, "apart", 500.0, 1000.0, 40, 30, -9999.0, 7.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "legacy base",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        // First import through the accepted dense route, forced for this step
-        // only: the rest of the test exercises the sparse extension.
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        {
-            let _dense = generation::chunked_publication::without_sparse();
-            apply_import(&library, &staging_one, true, false, &cancel).expect("dense apply");
-        }
-        let legacy = head_of(&library, &layer_id);
-        let legacy_manifest = read_generation_manifest(&legacy.manifest_json).unwrap();
-        assert_eq!(
-            legacy_manifest.format,
-            GenerationStorageFormat::LegacyDenseV1,
-            "the gate is off, so the accepted dense route publishes"
-        );
-        let legacy_mosaic = legacy.mosaic_path.clone().expect("dense mosaic");
-        assert!(
-            Path::new(&legacy_mosaic).exists(),
-            "the legacy mosaic is a real file"
-        );
-        assert_eq!(published_chunk_count(&library, &legacy.id), 0);
-
-        // Extend it with a separated source through the sparse route.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[apart], &cancel);
-        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-
-        let head = head_of(&library, &layer_id);
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        assert_eq!(
-            head.coverage_cells, None,
-            "a preserved base plus an appended source is not derivable metadata"
-        );
-        assert_eq!(head.min_value, None);
-        assert_eq!(head.max_value, None);
-        assert_eq!(
-            published_chunk_count(&library, &head.id),
-            0,
-            "the composition stores member metadata only"
-        );
-
-        // The preserved generation is untouched: same row, same files, and it
-        // is exposed as one indivisible bottom member rather than split into
-        // reorderable historical sources.
-        {
-            let connection = library.catalogue().unwrap();
-            let stored: Option<String> = connection
-                .query_row(
-                    "SELECT mosaic_path FROM lidar_layer_generations WHERE id = ?1",
-                    [&legacy.id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(stored.as_deref(), Some(legacy_mosaic.as_str()));
-            assert!(Path::new(&legacy_mosaic).exists());
-            let members = catalogue::collection_members(&connection, &head.id).unwrap();
-            assert_eq!(members.len(), 2, "previous composition plus the new source");
-            assert_eq!(
-                members[0].job_id.as_deref(),
-                Some(job_two.as_str()),
-                "the new source is topmost and carries its job"
-            );
-            assert_eq!(members[1].kind, "previous-composition");
-            assert_eq!(
-                members[1].base_generation_id.as_deref(),
-                Some(legacy.id.as_str()),
-                "the preserved generation is referenced directly"
-            );
-        }
-
-        // Both members read back through the sparse head.
-        let (values, valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 540,
-                height: 45,
-            },
-        );
-        let width = 540usize;
-        for row in 0..45usize {
-            for column in 0..width {
-                let index = row * width + column;
-                let expected = match column {
-                    // The legacy member occupies the left 60 columns for the
-                    // full height of its own 60x45 grid.
-                    0..=59 => Some(5.0),
-                    // The new member is 40 wide and 30 tall at x=500.
-                    500..=539 if row < 30 => Some(7.0),
-                    _ => None,
-                };
-                match expected {
-                    Some(value) => {
-                        assert_eq!(valid[index], 1, "cell {column},{row} is covered");
-                        assert_eq!(values[index], value, "cell {column},{row}");
-                    }
-                    None => {
-                        // The 440-column gap between the members is exactly
-                        // invalid: sparse storage never reads it as data.
-                        assert_eq!(valid[index], 0, "gap cell {column},{row} is invalid");
-                    }
-                }
-            }
-        }
-
-        // Undo the sparse extension: the legacy member is republished alone.
-        let undone = undo_import(&library, &job_two, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let undone_head = head_of(&library, &layer_id);
-        assert_eq!(undone_head.coverage_cells, Some(60 * 45));
-        let (values, _) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 60,
-                height: 45,
-            },
-        );
-        assert!(values.iter().all(|value| *value == 5.0));
-        assert!(Path::new(&legacy_mosaic).exists());
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
     // -----------------------------------------------------------------------
     // B5: representative sparse-gap run
     // -----------------------------------------------------------------------
@@ -6501,8 +3227,7 @@ mod tests {
             "the union spans the gap: {}",
             staging.union_grid.width
         );
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
+        apply_import(&library, &staging, &cancel).expect("apply");
 
         let head = head_of(&library, &layer_id);
         assert_eq!(head.coverage_cells, None);
@@ -6596,95 +3321,6 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&root);
     }
-    /// The layer anchor is fixed: extending the layer left does not move the
-    /// lattice, so an unchanged member keeps its chunk coordinates and the new
-    /// member lands in negative lattice cells.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_lattice_anchor_never_moves_when_the_layer_extends_left() {
-        let root = std::env::temp_dir().join(new_id("canopi-anchor"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let library = LidarLibrary::open(&root).expect("library opens");
-
-        let anchor =
-            write_placed_fixture(&engine, &root, "anchor", 0.0, 1000.0, 60, 45, -9999.0, 5.0);
-        let left = write_placed_fixture(
-            &engine, &root, "left", -1200.0, 1000.0, 40, 30, -9999.0, 3.0,
-        );
-
-        let layer_id = library
-            .create_layer(
-                "anchor",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[anchor], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first apply");
-        let first_head = head_of(&library, &layer_id);
-        let first_manifest = read_generation_manifest(&first_head.manifest_json).unwrap();
-        assert_eq!(
-            head_occupied_chunks(&library, &layer_id),
-            vec![(0, 0)],
-            "the first member occupies chunk 0 of the fixed anchor"
-        );
-
-        // Extending left must keep the anchor and put the new member before it.
-        let (_job_two, staging_two) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
-        assert!(
-            staging_two.union_grid.geotransform[0] < first_manifest.grid.geotransform[0],
-            "the union does extend left"
-        );
-        apply_import(&library, &staging_two, true, false, &cancel).expect("second apply");
-        let head = head_of(&library, &layer_id);
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(
-            manifest.grid.geotransform[0], first_manifest.grid.geotransform[0],
-            "the layer anchor never moves"
-        );
-        assert_eq!(
-            head_occupied_chunks(&library, &layer_id),
-            vec![(-2, 0), (0, 0)],
-            "the unchanged member keeps chunk 0 and the extension lands before the anchor"
-        );
-        assert_eq!(
-            published_chunk_count(&library, &head.id),
-            0,
-            "the composition stores member metadata only"
-        );
-        // Both members read back at their own lattice positions.
-        let sample = |x: i64, y: i64| -> (f32, u8) {
-            let (samples, valid) = head_window(
-                &library,
-                &layer_id,
-                generation::LatticeWindow {
-                    x,
-                    y,
-                    width: 1,
-                    height: 1,
-                },
-            );
-            (samples[0], valid[0])
-        };
-        assert_eq!(sample(0, 0), (5.0, 1));
-        assert_eq!(sample(-1200, 0), (3.0, 1));
-        assert_eq!(sample(-1000, 0).1, 0, "the gap between them stays invalid");
-
-        // A further source prepares against the sparse head and publishes
-        // above it; the signed lattice it maps onto is what this test covers.
-        let (job_three, staging_three) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&left), &cancel);
-        apply_import(&library, &staging_three, true, false, &cancel).expect("the source adds");
-        let _ = job_three;
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
     /// The authorized 24-tile authored run: more tiles than the production
     /// file-count ceiling allows, spread across a million-cell gap, imported
     /// as one batch and stored as occupied chunks only.
@@ -6736,8 +3372,7 @@ mod tests {
             )
             .unwrap();
         let (_job_id, staging) = stage_review(&library, &layer_id, &sources, &cancel);
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
+        apply_import(&library, &staging, &cancel).expect("apply");
 
         let head = head_of(&library, &layer_id);
         // Twenty-four occurrences cannot be composed from metadata alone, so the
@@ -6782,7 +3417,7 @@ mod tests {
         // the concrete case the retired envelope bound refused by geometry the
         // batch never decodes.
         let proposed: Vec<admission::ProcessingCost> = (0..head_member_count(&library, &layer_id))
-            .map(|_| admission::ProcessingCost::Dense {
+            .map(|_| admission::ProcessingCost {
                 width: 32,
                 height: 24,
             })
@@ -6796,11 +3431,7 @@ mod tests {
         );
         assert!(
             union_cells > 25_000_000,
-            "the arranged union still exceeds the old dense envelope ceiling"
-        );
-        assert!(
-            admission::check_dense_envelope(union_cells, "sparse 24-tile batch").is_err(),
-            "the retained dense envelope guard would still refuse this geometry"
+            "the arranged union spans far more cells than it holds"
         );
         assert_eq!(proposed_cells, 24 * 32 * 24);
         assert!(
@@ -6821,178 +3452,16 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&root);
     }
-    /// A snapshot-only legacy head (no member rows) is overlaid sparsely: the
-    /// new generation points at the original base, replays it, and an undo
-    /// restores that base without chaining to the intermediate generation.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_publication_overlays_an_opaque_legacy_base() {
-        let root = std::env::temp_dir().join(new_id("canopi-base"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let library = LidarLibrary::open(&root).expect("library opens");
-
-        let legacy =
-            write_placed_fixture(&engine, &root, "legacy", 0.0, 1000.0, 60, 45, -9999.0, 4.0);
-        let extension = write_placed_fixture(
-            &engine,
-            &root,
-            "extension",
-            500.0,
-            1000.0,
-            40,
-            30,
-            -9999.0,
-            6.0,
-        );
-
-        // First publish dense, then strip its member history: that is exactly
-        // the preserved legacy head this overlay exists for.
-        let layer_id = library
-            .create_layer(
-                "legacy base",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job, staging) = stage_review(&library, &layer_id, &[legacy], &cancel);
-        {
-            // The legacy head this test overlays must have been published
-            // dense, so the preserved route is forced for this step only.
-            let _dense = generation::chunked_publication::without_sparse();
-            apply_import(&library, &staging, true, false, &cancel).expect("dense apply");
-        }
-        let base = head_of(&library, &layer_id);
-        let base_manifest = read_generation_manifest(&base.manifest_json).unwrap();
-        assert_eq!(
-            base_manifest.format,
-            GenerationStorageFormat::LegacyDenseV1,
-            "the first publication is the accepted dense route"
-        );
-        {
-            let connection = library.catalogue().unwrap();
-            connection
-                .execute(
-                    "DELETE FROM lidar_generation_members WHERE generation_id = ?1",
-                    [&base.id],
-                )
-                .unwrap();
-        }
-        {
-            let connection = library.catalogue().unwrap();
-            assert!(
-                resolved_occurrences(&connection, &library.inner.paths, &base)
-                    .unwrap()
-                    .is_none(),
-                "without member rows the head is not reconstructible"
-            );
-        }
-
-        // A sparse publication now overlays it instead of rewriting it.
-        let (job_two, staging_two) = stage_review(&library, &layer_id, &[extension], &cancel);
-        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("overlay");
-        assert!(applied.changed);
-        let head = head_of(&library, &layer_id);
-        assert_ne!(head.id, base.id);
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
-        let members = {
-            let connection = library.catalogue().unwrap();
-            catalogue::collection_members(&connection, &head.id).unwrap()
-        };
-        assert_eq!(members.len(), 2);
-        assert_eq!(members[0].kind, "source");
-        assert_eq!(members[1].kind, "previous-composition");
-        assert_eq!(
-            members[1].base_generation_id.as_deref(),
-            Some(base.id.as_str()),
-            "the previous composition points at the original opaque base"
-        );
-        // A preserved base plus an appended source: the exact composed facts
-        // are not derivable from metadata, so the generation reports the display
-        // range its members supply and claims no exact statistic.
-        assert_eq!(head.coverage_cells, None);
-        assert_eq!(head.min_value, None);
-        assert_eq!(head.max_value, None);
-        assert_eq!(head.display_min_value, Some(4.0));
-        assert_eq!(head.display_max_value, Some(6.0));
-        // The preserved base is untouched.
-        {
-            let connection = library.catalogue().unwrap();
-            let preserved = catalogue::generation_row(&connection, &base.id)
-                .unwrap()
-                .expect("base row survives");
-            assert_eq!(preserved.mosaic_path, base.mosaic_path);
-            assert!(preserved.base_generation_id.is_none());
-        }
-
-        // Both the preserved coverage and the extension read back through the
-        // resolver; nothing is materialized.
-        assert_eq!(published_chunk_count(&library, &head.id), 0);
-        let sample = |x: i64, y: i64| -> (f32, u8) {
-            let (samples, valid) = head_window(
-                &library,
-                &layer_id,
-                generation::LatticeWindow {
-                    x,
-                    y,
-                    width: 1,
-                    height: 1,
-                },
-            );
-            (samples[0], valid[0])
-        };
-        assert_eq!(sample(0, 0), (4.0, 1), "the base coverage is replayed");
-        assert_eq!(sample(59, 44), (4.0, 1));
-        assert_eq!(sample(500, 0), (6.0, 1), "the extension is painted over it");
-        assert_eq!(sample(400, 0).1, 0, "the space between them stays invalid");
-
-        // Undo restores the base alone, still pointing at the original base.
-        let undone = undo_import(&library, &job_two, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let after = head_of(&library, &layer_id);
-        assert_eq!(after.coverage_cells, Some(60 * 45));
-        let after_members = {
-            let connection = library.catalogue().unwrap();
-            catalogue::collection_members(&connection, &after.id).unwrap()
-        };
-        assert_eq!(after_members.len(), 1);
-        assert_eq!(
-            after_members[0].base_generation_id.as_deref(),
-            Some(base.id.as_str()),
-            "a preserved composition never chains to an intermediate generation"
-        );
-        assert_eq!(published_chunk_count(&library, &after.id), 0);
-        let (samples, valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 0,
-                y: 0,
-                width: 60,
-                height: 45,
-            },
-        );
-        assert!(valid.iter().all(|byte| *byte == 1));
-        assert!(samples.iter().all(|value| *value == 4.0));
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
     // -----------------------------------------------------------------------
     // BG5: admission is one policy, decided before review and rechecked at Apply
     // -----------------------------------------------------------------------
 
-    /// The same two small sources, one lattice column further apart. Their
-    /// union envelope is now *over* the retired 25M bound, and the ordered path
-    /// admits them anyway: the governing bound is the processing cells the
-    /// collection proposes, and two 4x4 sources propose 32.
+    /// Two small sources far apart: their union envelope spans 25M cells, but
+    /// the governing bound is the processing cells the collection proposes,
+    /// and two 4x4 sources propose 32.
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn admission_admits_a_separated_pair_whose_union_exceeds_the_retired_envelope() {
+    fn admission_admits_a_separated_pair_by_its_own_cells() {
         let root = std::env::temp_dir().join(new_id("canopi-admit-over"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
@@ -7017,23 +3486,11 @@ mod tests {
         );
         let (_job_id, staging) =
             stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
-        let envelope =
-            admission::union_envelope_cells(staging.union_grid.width, staging.union_grid.height)
-                .unwrap();
-        assert!(
-            envelope > admission::MAX_DENSE_ENVELOPE_CELLS,
-            "the arrangement must exceed the retired envelope bound, got {envelope}"
-        );
-        assert!(
-            admission::check_dense_envelope(envelope, "separated pair").is_err(),
-            "the retained dense guard would refuse this geometry"
-        );
+        let envelope = u64::from(staging.union_grid.width) * u64::from(staging.union_grid.height);
+        assert!(envelope > 25_000_000, "the arrangement is wide: {envelope}");
         assert_eq!(staging.processing_cells, 32);
-        let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-        assert!(
-            applied.changed,
-            "the processing budget admits the pair, charging the sources and not the gap"
-        );
+        apply_import(&library, &staging, &cancel)
+            .expect("the processing budget admits the pair, charging the sources and not the gap");
         let head = head_of(&library, &layer_id);
         assert_eq!(head.coverage_cells, None);
         assert_eq!(
@@ -7075,7 +3532,6 @@ mod tests {
             source_bytes: 2 * 1024 * 1024 * 1024,
             import_bytes: 2 * 1024 * 1024 * 1024,
             processing_cells: 16,
-            dense_envelope_cells: admission::MAX_DENSE_ENVELOPE_CELLS,
         });
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
         let error = stage_import(
@@ -7108,95 +3564,6 @@ mod tests {
             );
         }
         drop(connection);
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A generation admitted under a representative-run override stays fully
-    /// readable, displayable and undoable once the override is gone.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn grandfathered_large_generations_stay_readable_after_the_override_expires() {
-        let root = std::env::temp_dir().join(new_id("canopi-grandfathered"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
-        let north_east =
-            write_placed_fixture(&engine, &root, "ne", 9000.0, 10_000.0, 4, 4, -9999.0, 7.0);
-        let layer_id = library
-            .create_layer(
-                "grandfathered",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-
-        // Admitted only because a representative run raised the envelope for
-        // both staging and the Apply recheck, which is how that run proceeds.
-        let (job_id, _staging, applied) = {
-            let _raised = admission::limits_probe::raise(128 * 1024 * 1024, 16, 1024 * 1024 * 1024);
-            let (job_id, staging) =
-                stage_review(&library, &layer_id, &[south_west, north_east], &cancel);
-            assert!(
-                admission::union_envelope_cells(
-                    staging.union_grid.width,
-                    staging.union_grid.height
-                )
-                .unwrap()
-                    > admission::MAX_DENSE_ENVELOPE_CELLS
-            );
-            let applied = apply_import(&library, &staging, true, false, &cancel).expect("apply");
-            (job_id, staging, applied)
-        };
-        assert!(applied.changed);
-        assert_eq!(
-            admission::limits(),
-            admission::AdmissionLimits::production(),
-            "the override is gone before the reads below"
-        );
-
-        // Reads: the accepted window is exactly what was published.
-        // Reads: a grandfathered oversized layer is still readable after the
-        // override expires, through the same resolver every other read uses.
-        let (samples, valid) = head_window(
-            &library,
-            &layer_id,
-            generation::LatticeWindow {
-                x: 9000,
-                // The far member lies above the anchor lattice: its own grid
-                // origin is y=10000 while the layer anchor is y=4.
-                y: -9996,
-                width: 4,
-                height: 4,
-            },
-        );
-        assert!(valid.iter().all(|byte| *byte == 1));
-        assert!(samples.iter().all(|value| *value == 7.0));
-
-        // Display: the layer's derivatives still prepare for its head.
-        library
-            .prepare_display_now(
-                common_types::lidar::LidarSampleEntityKind::Source,
-                &layer_id,
-            )
-            .expect("a grandfathered layer stays displayable");
-
-        // Undo restores accepted history without re-admitting anything.
-        let undone = undo_import(&library, &job_id, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let after = head_of(&library, &layer_id);
-        assert_eq!(
-            after.coverage_cells,
-            Some(0),
-            "undoing the only import leaves no coverage"
-        );
-
-        // Deletion still removes the whole graph.
-        library.delete_layer(&layer_id).expect("layer deletes");
         drop(library);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -7236,7 +3603,6 @@ mod tests {
                 source_bytes: (bytes / 2).max(1),
                 import_bytes: 4096,
                 processing_cells: 1_000_000,
-                dense_envelope_cells: 1_000_000,
             });
             let job_id = library.record_import_job(&layer_id).expect("job recorded");
             let error = stage_import(
@@ -7333,6 +3699,15 @@ mod tests {
 
     /// A grid whose Float32 values are exactly representable, with two declared
     /// sentinel cells so validity is exercised beside the values.
+    /// Samples at valid cells only; an invalid cell's stored value is not data.
+    fn valid_values(values: &[f32], valid: &[u8]) -> Vec<Option<f32>> {
+        values
+            .iter()
+            .zip(valid)
+            .map(|(value, valid)| (*valid == 1).then_some(*value))
+            .collect()
+    }
+
     fn oracle_grid(width: u32, height: u32) -> (Vec<f32>, Vec<u8>) {
         let mut values: Vec<f32> = (0..(width * height))
             .map(|index| index as f32 * 0.25 - 3.5)
@@ -7409,16 +3784,11 @@ mod tests {
 
         // Staging retained exactly one COG and no disposable second payload.
         let staged = &staging_one.sources[0];
-        let retained = staged
-            .source_cog
-            .as_ref()
-            .expect("staging retains a source COG");
-        assert!(staged.raw_samples_path.as_os_str().is_empty());
-        assert!(staged.valid_mask_path.as_os_str().is_empty());
+        let retained = staged.source_cog.clone();
         // Ownership: the COG is the job's own file until publication, and no
         // global asset exists yet.
         let job_cog = retained
-            .resolve(&library.inner.paths, staged.job_id.as_deref())
+            .resolve(&library.inner.paths, &staged.job_id)
             .expect("the staged COG resolves under its job");
         assert!(job_cog.starts_with(library.inner.paths.job_dir(&job_one)));
         assert!(job_cog.exists(), "the job owns its prepared COG");
@@ -7442,13 +3812,9 @@ mod tests {
             1,
             "the job holds exactly its own prepared COG: {staged_files:?}"
         );
-        // The review read the source through its own effective rule.
+        apply_import(&library, &staging_one, &cancel).expect("apply");
 
-        let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
-
-        // The interpretation references the shared digest, and no per-member
-        // durable raw/mask/native.tif copy exists anywhere.
+        // The interpretation references the shared digest.
         let interpretation_id = format!("interp-{}", staged.interp_hash);
         {
             let connection = library.catalogue().unwrap();
@@ -7458,8 +3824,6 @@ mod tests {
             assert_eq!(row.sha256, retained.sha256);
             assert_eq!(nodata, Some(-9999.0));
         }
-        let member_dir = member_prepared_dir(&library.inner.paths, &staged.interp_hash);
-        assert!(!member_dir.exists(), "no legacy member payload is written");
         assert_eq!(std::fs::metadata(&asset).unwrap().len(), retained.bytes);
 
         // Restart: the accepted head reads back exactly through the committed
@@ -7475,11 +3839,14 @@ mod tests {
             height,
         };
         let head = head_of(&reopened, &layer_id);
-        let manifest = read_generation_manifest(&head.manifest_json).unwrap();
-        assert_eq!(manifest.format, GenerationStorageFormat::OrderedMembersV1);
+        let _ = head;
         let (values, valid) = head_window(&reopened, &layer_id, window);
         assert_eq!(valid, first_valid, "validity is the source's own rule");
-        assert_eq!(values, first_values, "Float32 values round-trip exactly");
+        assert_eq!(
+            valid_values(&values, &valid),
+            valid_values(&first_values, &first_valid),
+            "Float32 values round-trip exactly"
+        );
         assert!(
             observability::tiles_decoded() > 0,
             "the committed reader decoded the retained source COG"
@@ -7490,267 +3857,47 @@ mod tests {
             "reading a published generation prepares nothing"
         );
 
-        // A replacement publishes from its own retained source; the first
-        // source's shared asset stays byte-identical.
+        // A second item publishes from its own retained source; the first
+        // source's shared asset stays byte-identical and its item unchanged.
         let shared_before =
             crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
                 .unwrap();
-        let (job_two, staging_two) =
-            stage_review(&reopened, &layer_id, std::slice::from_ref(&second), &cancel);
-        let replacement = staging_two.sources[0]
-            .source_cog
-            .as_ref()
-            .expect("the replacement retains its own COG");
-        assert_ne!(
-            replacement.sha256, retained.sha256,
-            "different content is a different asset"
-        );
-        let replaced =
-            apply_import(&reopened, &staging_two, false, true, &cancel).expect("replace applies");
-        assert!(replaced.changed);
-        let (values, valid) = head_window(&reopened, &layer_id, window);
-        assert_eq!(valid, first_valid);
-        assert_eq!(values, second_values);
-        assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
-                .unwrap(),
-            shared_before,
-            "a retained asset is immutable"
-        );
-
-        // Undo removes the replacement and restores the first source exactly,
-        // still from its own retained COG.
-        let undone = undo_import(&reopened, &job_two, &cancel).expect("undo publishes");
-        assert!(undone.changed);
-        let (values, valid) = head_window(&reopened, &layer_id, window);
-        assert_eq!(valid, first_valid);
-        assert_eq!(values, first_values, "undo restores the retained source");
-        {
-            let connection = reopened.catalogue().unwrap();
-            let (row, _) = catalogue::interpretation_cog(&connection, &interpretation_id)
-                .unwrap()
-                .expect("the first reference survives undo");
-            assert_eq!(row.sha256, retained.sha256);
-        }
-        drop(reopened);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A member published before source retention keeps its raw/mask payload and
-    /// replays beside a retained COG member: mixed history stays exact, and undo
-    /// removes only the occurrence it names.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn legacy_and_retained_members_replay_together_and_undo_exactly() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-mixed-history"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let (width, height) = (6u32, 5u32);
-        let (first_values, first_valid) = oracle_grid(width, height);
-        let first = write_oracle_fixture(
-            &engine,
-            &root,
-            "legacy",
-            0.0,
-            100.0,
-            width,
-            height,
-            -9999.0,
-            &first_values,
-        );
-        let overlap_width = 3u32;
-        let overlap_values: Vec<f32> = (0..(overlap_width * height))
-            .map(|index| 40.0 + index as f32)
-            .collect();
-        let overlap = write_oracle_fixture(
-            &engine,
-            &root,
-            "retained-overlap",
-            0.0,
-            100.0,
-            overlap_width,
-            height,
-            -9999.0,
-            &overlap_values,
-        );
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
+        let second_layer = reopened
             .create_layer(
-                "mixed history",
+                "second payload",
                 common_types::lidar::LidarMeasurementKind::GroundElevation,
                 None,
                 false,
             )
             .unwrap();
-
-        // Stage the first source, then rewrite its job into the shape a
-        // pre-retention import had: no retained COG, an explicit raw/mask pair.
-        let (job_one, mut staging_one) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&first), &cancel);
-        let job_dir = library.inner.paths.job_dir(&job_one);
-        let raw = job_dir.join("values.raw");
-        write_f32_raw(&raw, &first_values).expect("legacy samples write");
-        let mask = job_dir.join("valid.bin");
-        let mut legacy_mask = ValidMask::empty(width, height);
-        for (index, valid) in first_valid.iter().enumerate() {
-            if *valid == 1 {
-                legacy_mask.set(index as u32 % width, index as u32 / width, true);
-            }
-        }
-        legacy_mask.write_to(&mask).expect("legacy mask writes");
-        {
-            let source = &mut staging_one.sources[0];
-            source.source_cog = None;
-            source.raw_samples_path = raw;
-            source.valid_mask_path = mask;
-        }
-        std::fs::write(
-            job_dir.join("staging.json"),
-            serde_json::to_string(&staging_one).unwrap(),
-        )
-        .unwrap();
-        let staging_one: StagedImport =
-            serde_json::from_str(&std::fs::read_to_string(job_dir.join("staging.json")).unwrap())
-                .unwrap();
-
-        // The preserved dense route records this member the old way.
-        {
-            let _dense = generation::chunked_publication::without_sparse();
-            let applied = apply_import(&library, &staging_one, true, false, &cancel)
-                .expect("the legacy member publishes");
-            assert!(applied.changed);
-        }
-        let legacy_interp = format!("interp-{}", staging_one.sources[0].interp_hash);
-        let legacy_dir =
-            member_prepared_dir(&library.inner.paths, &staging_one.sources[0].interp_hash);
-        {
-            let connection = library.catalogue().unwrap();
-            assert!(
-                catalogue::interpretation_cog(&connection, &legacy_interp)
-                    .unwrap()
-                    .is_none(),
-                "the first member predates retention"
-            );
-        }
-        for name in ["values.raw", "valid.bin", "native.tif"] {
-            assert!(
-                legacy_dir.join(name).exists(),
-                "the old member keeps {name}"
-            );
-        }
-        let legacy_digest = crate::services::lidar::raster_assets::hash_file(
-            &legacy_dir.join("values.raw"),
-            &AtomicBool::new(false),
-        )
-        .unwrap();
-
-        // Publish the retained source over it: the head's history is now a
-        // legacy payload and a retained COG at once.
-        let (job_two, staging_two) =
-            stage_review(&library, &layer_id, std::slice::from_ref(&overlap), &cancel);
-        assert!(
-            staging_two.sources[0].source_cog.is_some(),
-            "the new member retains its COG"
+        let (_job_two, staging_two) = stage_review(
+            &reopened,
+            &second_layer,
+            std::slice::from_ref(&second),
+            &cancel,
         );
-        let applied =
-            apply_import(&library, &staging_two, false, true, &cancel).expect("sparse apply");
-        assert!(applied.changed);
-        let head = head_of(&library, &layer_id);
+        assert_ne!(
+            staging_two.sources[0].source_cog.sha256, retained.sha256,
+            "different content is a different asset"
+        );
+        apply_import(&reopened, &staging_two, &cancel).expect("second item applies");
+        let (second_read, second_valid) = head_window(&reopened, &second_layer, window);
         assert_eq!(
-            read_generation_manifest(&head.manifest_json)
-                .unwrap()
-                .format,
-            GenerationStorageFormat::OrderedMembersV1,
-            "a mixed history publishes an ordered composition"
+            valid_values(&second_read, &second_valid),
+            valid_values(&second_values, &first_valid)
         );
-        let retained_interp = format!("interp-{}", staging_two.sources[0].interp_hash);
-        {
-            let connection = library.catalogue().unwrap();
-            let members = catalogue::collection_members(&connection, &head.id).unwrap();
-            assert_eq!(members.len(), 2, "both occurrences are recorded");
-            assert_eq!(members[0].kind, "source");
-            assert_eq!(
-                members[0].interpretation_id.as_deref(),
-                Some(retained_interp.as_str()),
-                "the new source is topmost"
-            );
-            assert_eq!(members[1].kind, "previous-composition");
-            assert!(
-                members[1].base_generation_id.is_some(),
-                "the pre-transition head is one indivisible bottom member"
-            );
-            assert!(
-                catalogue::interpretation_cog(&connection, &retained_interp)
-                    .unwrap()
-                    .is_some(),
-                "the new member references its retained COG"
-            );
-            assert!(
-                catalogue::interpretation_cog(&connection, &legacy_interp)
-                    .unwrap()
-                    .is_some()
-                    || catalogue::get_interpretation(&connection, &legacy_interp)
-                        .unwrap()
-                        .is_some(),
-                "the preserved composition keeps its own interpretation"
-            );
-        }
-
-        // A restart replays the legacy member from raw/mask and the retained
-        // member from its COG, with no cell invented and no value shifted.
-        drop(library);
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        let window = generation::LatticeWindow {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        };
-        let (values, valid) = head_window(&reopened, &layer_id, window);
-        for index in 0..(width * height) as usize {
-            let column = index as u32 % width;
-            let row = index as u32 / width;
-            if column < overlap_width {
-                // The topmost valid sample wins: the new source covers these
-                // columns even where the preserved composition had no sample,
-                // which is exactly what the superseded overlap-only rule could
-                // not do.
-                assert_eq!(valid[index], 1, "cell {index} is covered by the top source");
-                assert_eq!(
-                    values[index],
-                    overlap_values[(row * overlap_width + column) as usize],
-                    "cell ({column},{row})"
-                );
-                continue;
-            }
-            if first_valid[index] == 0 {
-                assert_eq!(valid[index], 0, "cell {index} stays uncovered");
-                continue;
-            }
-            assert_eq!(valid[index], 1, "cell {index} stays covered");
-            assert_eq!(values[index], first_values[index], "cell ({column},{row})");
-        }
-
-        // Undo removes the retained occurrence and restores the legacy member
-        // untouched, still from its own raw/mask payload.
-        let undone = undo_import(&reopened, &job_two, &cancel).expect("undo publishes");
-        assert!(undone.changed);
         let (values, valid) = head_window(&reopened, &layer_id, window);
         assert_eq!(valid, first_valid);
-        assert_eq!(values, first_values, "undo restores the legacy member");
-        assert!(legacy_dir.join("values.raw").exists());
         assert_eq!(
-            crate::services::lidar::raster_assets::hash_file(
-                &legacy_dir.join("values.raw"),
-                &AtomicBool::new(false)
-            )
-            .unwrap(),
-            legacy_digest,
-            "undo never rewrites a legacy payload"
+            valid_values(&values, &valid),
+            valid_values(&first_values, &first_valid),
+            "the first item is unchanged"
+        );
+        assert_eq!(
+            crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
+                .unwrap(),
+            shared_before,
+            "a retained asset is immutable"
         );
         drop(reopened);
         let _ = std::fs::remove_dir_all(&root);
@@ -7782,12 +3929,8 @@ mod tests {
         let small = write_placed_fixture(&engine, &root, "small", 0.0, 4.0, 4, 4, -9999.0, 3.0);
         let (_job_one, staging_one) =
             stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
-        let retained = staging_one.sources[0]
-            .source_cog
-            .clone()
-            .expect("the published source retains its COG");
-        let applied = apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
+        let retained = staging_one.sources[0].source_cog.clone();
+        apply_import(&library, &staging_one, &cancel).expect("apply");
         let asset = library.inner.paths.asset_cog(&retained.sha256);
         let shared_digest =
             crate::services::lidar::raster_assets::hash_file(&asset, &AtomicBool::new(false))
@@ -7799,16 +3942,11 @@ mod tests {
         let (_job_two, staging_two) =
             stage_review(&library, &layer_id, std::slice::from_ref(&small), &cancel);
         assert_eq!(
-            staging_two.sources[0]
-                .source_cog
-                .as_ref()
-                .expect("the same content retains the same digest")
-                .sha256,
-            retained.sha256,
+            staging_two.sources[0].source_cog.sha256, retained.sha256,
             "content addressing reuses the admitted asset"
         );
         cancel.store(true, Ordering::Relaxed);
-        let cancelled = apply_import(&library, &staging_two, true, false, &cancel)
+        let cancelled = apply_import(&library, &staging_two, &cancel)
             .expect_err("a cancelled Apply publishes nothing");
         assert!(cancelled.contains("cancelled"), "{cancelled}");
         cancel.store(false, Ordering::Relaxed);
@@ -7827,14 +3965,7 @@ mod tests {
         let far = write_placed_fixture(&engine, &root, "far", 5004.0, 5004.0, 4, 4, -9999.0, 7.0);
         let (_job_three, staging_three) =
             stage_review(&library, &layer_id, &[small.clone(), far], &cancel);
-        assert_eq!(
-            staging_three.sources[0]
-                .source_cog
-                .as_ref()
-                .expect("the reused source keeps its digest")
-                .sha256,
-            retained.sha256
-        );
+        assert_eq!(staging_three.sources[0].source_cog.sha256, retained.sha256);
         let far_interp = format!("interp-{}", staging_three.sources[1].interp_hash);
         {
             let connection = library.catalogue().unwrap();
@@ -7849,7 +3980,7 @@ mod tests {
         // A publication interrupted after promotion leaves nothing behind and
         // never disturbs the asset the accepted head already references.
         promotion_probe::fail_at(promotion_probe::FaultPoint::BeforeTransaction);
-        let error = apply_import(&library, &staging_three, true, false, &cancel)
+        let error = apply_import(&library, &staging_three, &cancel)
             .expect_err("the injected failure refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("injected failure"), "{error}");
@@ -7942,7 +4073,7 @@ mod tests {
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        apply_import(&library, &staging_one, &cancel).expect("apply");
         let accepted_hash = staging_one.sources[0].interp_hash.clone();
         let accepted_asset = committed_asset(&library, &accepted_hash).expect("committed");
         let head_before = head_of(&library, &layer_id);
@@ -7954,13 +4085,10 @@ mod tests {
         let (job_two, staging_two) =
             stage_review(&library, &layer_id, std::slice::from_ref(&fresh), &cancel);
         let fresh_hash = staging_two.sources[0].interp_hash.clone();
-        let fresh_cog = staging_two.sources[0]
-            .source_cog
-            .clone()
-            .expect("retained COG");
+        let fresh_cog = staging_two.sources[0].source_cog.clone();
         let fresh_asset = paths.asset_cog(&fresh_cog.sha256);
         promotion_probe::fail_at(FaultPoint::BeforeTransaction);
-        let error = apply_import(&library, &staging_two, true, false, &cancel)
+        let error = apply_import(&library, &staging_two, &cancel)
             .expect_err("the injected failure refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("injected failure"), "{error}");
@@ -7975,7 +4103,7 @@ mod tests {
         );
         assert!(
             fresh_cog
-                .resolve(&paths, staging_two.sources[0].job_id.as_deref())
+                .resolve(&paths, &staging_two.sources[0].job_id)
                 .unwrap()
                 .exists(),
             "the job keeps its own COG for a retry"
@@ -7992,8 +4120,7 @@ mod tests {
 
         // 3. The same job succeeds once the fault is gone, and the reused
         // accepted asset is untouched by the retry.
-        let applied = apply_import(&library, &staging_two, true, false, &cancel).expect("apply");
-        assert!(applied.changed);
+        apply_import(&library, &staging_two, &cancel).expect("apply");
         assert_eq!(
             committed_asset(&library, &fresh_hash),
             Some(fresh_cog.sha256.clone())
@@ -8015,15 +4142,9 @@ mod tests {
         let (_job_reuse, staging_reuse) =
             stage_review(&library, &layer_id, &[accepted.clone(), reuse_new], &cancel);
         let reuse_new_hash = staging_reuse.sources[1].interp_hash.clone();
-        let reuse_new_asset = paths.asset_cog(
-            &staging_reuse.sources[1]
-                .source_cog
-                .as_ref()
-                .expect("retained COG")
-                .sha256,
-        );
+        let reuse_new_asset = paths.asset_cog(&staging_reuse.sources[1].source_cog.sha256);
         promotion_probe::fail_at(FaultPoint::BeforeTransaction);
-        let _ = apply_import(&library, &staging_reuse, true, false, &cancel)
+        let _ = apply_import(&library, &staging_reuse, &cancel)
             .expect_err("the injected failure refuses the mixed publication");
         promotion_probe::clear();
         assert!(
@@ -8047,15 +4168,11 @@ mod tests {
         let (job_three, staging_three) =
             stage_review(&library, &layer_id, std::slice::from_ref(&third), &cancel);
         let third_hash = staging_three.sources[0].interp_hash.clone();
-        let third_cog = staging_three.sources[0]
-            .source_cog
-            .clone()
-            .expect("retained COG");
+        let third_cog = staging_three.sources[0].source_cog.clone();
         promotion_probe::fail_at(FaultPoint::AfterCommitBeforeCleanup);
-        let committed = apply_import(&library, &staging_three, true, false, &cancel)
+        let committed = apply_import(&library, &staging_three, &cancel)
             .expect("a committed publication is success even when cleanup fails");
         promotion_probe::clear();
-        assert!(committed.changed);
         assert!(
             committed
                 .message
@@ -8084,9 +4201,9 @@ mod tests {
         assert!(journal_of(&reopened, &job_three).is_none());
         let (values, valid) = head_window(
             &reopened,
-            &layer_id,
+            &staging_three.layer_id,
             generation::LatticeWindow {
-                x: 32,
+                x: 0,
                 y: 0,
                 width: 4,
                 height: 4,
@@ -8129,7 +4246,7 @@ mod tests {
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        apply_import(&library, &staging_one, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
         let head_before = head_of(&library, &layer_id);
@@ -8150,12 +4267,10 @@ mod tests {
         let assets: Vec<_> = staging_two
             .sources
             .iter()
-            .map(|source| {
-                paths.asset_cog(&source.source_cog.as_ref().expect("retained COG").sha256)
-            })
+            .map(|source| paths.asset_cog(&source.source_cog.sha256))
             .collect();
         promotion_probe::fail_at(FaultPoint::AfterPromotion);
-        let error = apply_import(&library, &staging_two, true, false, &cancel)
+        let error = apply_import(&library, &staging_two, &cancel)
             .expect_err("the injected failure refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("injected failure"), "{error}");
@@ -8176,16 +4291,12 @@ mod tests {
         for source in &staging_two.sources {
             let local = source
                 .source_cog
-                .as_ref()
-                .expect("retained COG")
-                .resolve(&paths, source.job_id.as_deref())
+                .resolve(&paths, &source.job_id)
                 .expect("job-local COG");
             assert!(local.exists(), "the job keeps its own COG for retry");
         }
 
-        let applied =
-            apply_import(&library, &staging_two, true, false, &cancel).expect("retry applies");
-        assert!(applied.changed);
+        let _applied = apply_import(&library, &staging_two, &cancel).expect("retry applies");
         for (asset, hash) in assets.iter().zip(&hashes) {
             assert!(asset.exists());
             assert!(committed_asset(&library, hash).is_some());
@@ -8227,7 +4338,7 @@ mod tests {
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        apply_import(&library, &staging_one, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
         let head_before = head_of(&library, &layer_id);
@@ -8242,18 +4353,14 @@ mod tests {
             .map(|source| {
                 source
                     .source_cog
-                    .as_ref()
-                    .expect("retained COG")
-                    .resolve(&paths, source.job_id.as_deref())
+                    .resolve(&paths, &source.job_id)
                     .expect("job-local COG")
             })
             .collect();
         let destinations: Vec<PathBuf> = staging_two
             .sources
             .iter()
-            .map(|source| {
-                paths.asset_cog(&source.source_cog.as_ref().expect("retained COG").sha256)
-            })
+            .map(|source| paths.asset_cog(&source.source_cog.sha256))
             .collect();
         // Create the competing file between the destination check and the link
         // of the second source: identical content, a different file.
@@ -8267,7 +4374,7 @@ mod tests {
                 std::fs::copy(&rival_local, &rival_destination).expect("rival asset is created");
             }
         });
-        let error = apply_import(&library, &staging_two, true, false, &cancel)
+        let error = apply_import(&library, &staging_two, &cancel)
             .expect_err("the collision refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("refusing to adopt"), "{error}");
@@ -8277,11 +4384,7 @@ mod tests {
         );
 
         // The competing file is byte-for-byte intact and never referenced.
-        let declared = staging_two.sources[1]
-            .source_cog
-            .as_ref()
-            .expect("retained COG")
-            .clone();
+        let declared = staging_two.sources[1].source_cog.clone();
         assert!(
             destinations[1].exists(),
             "a file this job did not create is preserved"
@@ -8361,9 +4464,7 @@ mod tests {
             stage_review(&library, &layer_id, std::slice::from_ref(&waiting), &cancel);
         let wait_local = staging_wait.sources[0]
             .source_cog
-            .as_ref()
-            .expect("retained COG")
-            .resolve(&paths, staging_wait.sources[0].job_id.as_deref())
+            .resolve(&paths, &staging_wait.sources[0].job_id)
             .expect("job-local COG");
 
         let other = write_placed_fixture(&engine, &root, "other", 16.0, 8.0, 4, 4, -9999.0, 7.0);
@@ -8413,137 +4514,21 @@ mod tests {
         );
         assert!(!wait_local.exists(), "and its job-local COG is removed");
         // Recovery leaves the library usable: a fresh batch publishes normally.
-        let fresh = {
+        let _fresh = {
             let job_id = reopened.record_import_job(&layer_id).expect("job recorded");
             stage_and_publish(
                 &reopened,
                 &job_id,
                 &layer_id,
                 std::slice::from_ref(&other),
-                false,
                 &cancel,
             )
             .expect("a fresh batch publishes after recovery")
         };
-        assert!(fresh.changed);
         drop(reopened);
         let twice = LidarLibrary::open(&root).expect("the second reopen is clean");
         drop(twice);
 
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A saved result is a fixed library item (GeoLibre adoption): it keeps
-    /// describing the input generation it was calculated from. When a legacy
-    /// catalogue's source head moved on, the result stays Ready, names its
-    /// input, and nothing is enqueued — also after a restart.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn an_earlier_result_stays_a_ready_fixed_item_after_a_legacy_head_change() {
-        use super::super::analysis;
-
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-stale-ready"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        let first = write_placed_fixture(&engine, &root, "first", 0.0, 4.0, 4, 4, -9999.0, 5.0);
-        let second = write_placed_fixture(&engine, &root, "second", 20.0, 4.0, 4, 4, -9999.0, 9.0);
-
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = library
-            .create_layer(
-                "stale ready",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
-            .unwrap();
-        let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
-        apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
-        let receipt = library
-            .create_horn_analysis(
-                &layer_id,
-                common_types::lidar::LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("analysis definition is created");
-        let parameters = {
-            let connection = library.catalogue().unwrap();
-            let json: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            analysis::parse_parameters(&json).unwrap()
-        };
-        let head = head_of(&library, &layer_id).id;
-        let outcome = analysis::run_slope_job(
-            &library,
-            &receipt.job_id,
-            &receipt.definition_id,
-            &parameters,
-            &head,
-            &cancel,
-        )
-        .expect("the slope job runs");
-        assert!(outcome.published);
-        let state_of = |library: &LidarLibrary| {
-            library
-                .library_snapshot()
-                .unwrap()
-                .analyses
-                .into_iter()
-                .find(|analysis| analysis.id == receipt.definition_id)
-                .expect("the analysis is listed")
-        };
-        let ready = state_of(&library);
-        assert_eq!(ready.state, common_types::lidar::LidarResultState::Ready);
-        assert_eq!(ready.input_generation_id.as_deref(), Some(head.as_str()));
-
-        // A head change the product no longer offers, as an older build made it.
-        let (_job_two, staging_two) = stage_review(&library, &layer_id, &[second], &cancel);
-        apply_import(&library, &staging_two, true, false, &cancel).expect("second publishes");
-        let jobs = |library: &LidarLibrary| -> i64 {
-            library
-                .catalogue()
-                .unwrap()
-                .query_row(
-                    "SELECT COUNT(*) FROM lidar_analysis_jobs WHERE definition_id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        let jobs_before = jobs(&library);
-        let kept = state_of(&library);
-        assert_eq!(
-            kept.state,
-            common_types::lidar::LidarResultState::Ready,
-            "{kept:?}"
-        );
-        assert_eq!(kept.input_generation_id.as_deref(), Some(head.as_str()));
-        assert_eq!(
-            kept.generation_id, ready.generation_id,
-            "the result itself is unchanged"
-        );
-
-        drop(library);
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        let restarted = state_of(&reopened);
-        assert_eq!(
-            restarted.state,
-            common_types::lidar::LidarResultState::Ready
-        );
-        assert_eq!(restarted.generation_id, ready.generation_id);
-        assert_eq!(jobs(&reopened), jobs_before, "no refresh is enqueued");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -8578,7 +4563,7 @@ mod tests {
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        apply_import(&library, &staging_one, &cancel).expect("apply");
 
         let incoming =
             write_placed_fixture(&engine, &root, "incoming", 16.0, 8.0, 4, 4, -9999.0, 7.0);
@@ -8589,19 +4574,12 @@ mod tests {
             &cancel,
         );
         let hash = staging_two.sources[0].interp_hash.clone();
-        let asset = paths.asset_cog(
-            &staging_two.sources[0]
-                .source_cog
-                .as_ref()
-                .expect("retained COG")
-                .sha256,
-        );
+        let asset = paths.asset_cog(&staging_two.sources[0].source_cog.sha256);
 
         promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
-        let applied = apply_import(&library, &staging_two, true, false, &cancel)
+        let applied = apply_import(&library, &staging_two, &cancel)
             .expect("a committed publication reports success");
         promotion_probe::clear();
-        assert!(applied.changed, "the generation is published");
         let diagnostic = applied
             .message
             .as_deref()
@@ -8610,7 +4588,7 @@ mod tests {
             diagnostic.contains("promotion evidence retained"),
             "{diagnostic}"
         );
-        let head = head_of(&library, &layer_id);
+        let head = head_of(&library, &staging_two.layer_id);
         assert_eq!(head.id, applied.generation_id);
         assert!(asset.exists(), "the promoted asset is published");
         assert!(committed_asset(&library, &hash).is_some());
@@ -8658,9 +4636,9 @@ mod tests {
         assert_eq!(generation_count(&reopened, &layer_id), generations_before);
         let (values, valid) = head_window(
             &reopened,
-            &layer_id,
+            &staging_two.layer_id,
             generation::LatticeWindow {
-                x: 16,
+                x: 0,
                 y: 0,
                 width: 4,
                 height: 4,
@@ -8703,7 +4681,7 @@ mod tests {
             std::slice::from_ref(&accepted),
             &cancel,
         );
-        apply_import(&library, &staging_one, true, false, &cancel).expect("apply");
+        apply_import(&library, &staging_one, &cancel).expect("apply");
         let accepted_asset =
             committed_asset(&library, &staging_one.sources[0].interp_hash).expect("committed");
 
@@ -8715,19 +4693,13 @@ mod tests {
             std::slice::from_ref(&incoming),
             &cancel,
         );
-        let asset = paths.asset_cog(
-            &staging_two.sources[0]
-                .source_cog
-                .as_ref()
-                .expect("retained COG")
-                .sha256,
-        );
+        let asset = paths.asset_cog(&staging_two.sources[0].source_cog.sha256);
 
         // The publication fails before the commit and the rollback cannot clear
         // its journal: the evidence must survive rather than report clean.
         promotion_probe::fail_at(FaultPoint::BeforeTransaction);
         promotion_probe::fail_at(FaultPoint::BeforeJournalClear);
-        let error = apply_import(&library, &staging_two, true, false, &cancel)
+        let error = apply_import(&library, &staging_two, &cancel)
             .expect_err("the injected failure refuses the publication");
         promotion_probe::clear();
         assert!(error.contains("injected failure"), "{error}");

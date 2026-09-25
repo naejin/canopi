@@ -61,29 +61,23 @@ pub enum LidarSlopeUnit {
     Percent,
 }
 
-/// Result states defined by the product plan (§4). `refreshing` keeps the last
-/// complete result visible; `incomplete` distinguishes unknown areas from
-/// low/zero measured values.
+/// State of a library item: its operation while it runs, then a fixed result.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarResultState {
     Preparing,
     Ready,
-    Refreshing,
-    Incomplete,
     Failed,
 }
 
 /// Import job states.
 ///
 /// `Staging` is preparation, `Applying` is publication, and the terminal states
-/// report the outcome. `AwaitingReview` is retained in the vocabulary for the
-/// superseded review route, which no production caller enters.
+/// report the outcome.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarImportJobState {
     Staging,
-    AwaitingReview,
     Applying,
     Complete,
     Cancelled,
@@ -244,8 +238,6 @@ pub struct LidarAnalysisSummary {
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarAnalysisMethod {
-    /// Recipe 1: GDAL `gdaldem slope`, Horn 3×3 (existing results).
-    GdalHornV1,
     /// Recipe 2: the pinned GeoLibre projected slope, 5×5 Florinsky stencil.
     GeolibreProjectedSlopeV1,
 }
@@ -262,22 +254,15 @@ pub struct LidarLibrarySnapshot {
     pub slope_engine: LidarEngineStatus,
 }
 
-/// One occurrence in a Data Layer's priority list, topmost first.
-///
-/// `kind` is `source` for an ordinary independently prepared COG and
-/// `previous-composition` for the single indivisible member that exposes a
-/// preserved pre-transition head. A source member carries its own measured
-/// coverage; a previous-composition member reports the preserved generation's.
+/// One source file in a Data Layer's priority list, topmost first, with its
+/// own measured coverage.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarLayerSource {
     pub member_id: String,
-    pub kind: String,
-    /// Display name of the source file, when this member has one.
-    pub filename: Option<String>,
-    pub interpretation_id: Option<String>,
-    /// Preserved generation this member replays, for a previous composition.
-    pub base_generation_id: Option<String>,
+    /// Original name of the imported source file.
+    pub filename: String,
+    pub interpretation_id: String,
     pub width: u32,
     pub height: u32,
     pub pixel_size_m: f64,

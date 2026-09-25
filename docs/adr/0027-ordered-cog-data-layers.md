@@ -17,7 +17,11 @@ The [GeoLibre adoption plan](../design/raster-rework/geolibre-adoption-plan.md#1
 
 Keep current IDs, originals, last committed source composition and saved results through a versioned catalogue migration. Historical rows/readers may remain for exact compatibility without retaining a user-facing history product. Canvas and Design undo/redo remain. The user also accepted one fixed library item per import: a compatible batch references separate source TIFF assets without creating a full-area merged raster. Later imports create new items. The plan owns the [grouping, overlap and batch-failure contract](../design/raster-rework/geolibre-adoption-plan.md#import-grouping-decision) and deletion behavior. These accepted target changes do not claim that production has migrated or authorize implementation.
 
-Implementation status (branch `feature/geolibre-adoption`, not integrated): the display amendment, fixed items, catalogue v19 migration, Data Library/Layers surfaces and versioned slope (recipe 1 GDAL Horn for existing definitions, recipe 2 pinned GeoLibre projected slope for new ones) are implemented with the evidence in the [adoption receipt](../design/raster-rework/geolibre-adoption-receipt.md). The retired PNG tile route and history/edit contracts are removed from the application; historical numeric readers remain.
+Implementation status (branch `feature/geolibre-adoption`, not integrated): the display amendment, fixed items, Data Library/Layers surfaces and GeoLibre slope are implemented with the evidence in the [adoption receipt](../design/raster-rework/geolibre-adoption-receipt.md). The retired PNG tile route and history/edit contracts are removed from the application.
+
+## Canopi v2 compatibility removal — accepted 2026-09-25
+
+The user decided that Canopi v2 does not keep LiDAR library backward compatibility. This supersedes the migration and preservation clauses in this record and the adoption plan: there is no catalogue migration, no preserved dense/sparse historical composition, no previous-composition member and no Horn recipe. A v2 build creates catalogue version 20 and deletes a library written by an older Canopi on first open, then starts empty; a newer catalogue is refused rather than deleted. New source composition remains the ordered topmost-valid collection above, and new slope results use the GeoLibre recipe only.
 
 ## Original rationale and retained compatibility
 

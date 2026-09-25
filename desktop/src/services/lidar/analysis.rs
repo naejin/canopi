@@ -1,18 +1,16 @@
 //! Analysis definitions, jobs and publication.
 //!
-//! Analyses operate on the source layer's complete accepted coverage at the
-//! persisted recipe resolution — never on the viewport. Jobs resolve an
-//! immutable input generation, compute without catalogue locks, stage
-//! outputs, and publish atomically only when the expected source generation
-//! still matches. `refreshing` keeps the last complete result visible until
-//! the atomic replacement.
+//! Analyses operate on a source item's complete coverage at its native
+//! resolution — never on the viewport. A job resolves the item's immutable
+//! generation, computes without catalogue locks, stages sparse result chunks,
+//! and publishes a new result atomically only when that generation is still
+//! the item's current one.
 
 use super::LidarLibrary;
 use super::catalogue::{self, new_id, now_iso};
 use super::generation;
 use super::grid::RasterGrid;
-use super::import::{GenerationManifest, read_generation_manifest, validate_working_grid};
-use super::prepared_raster::PreparedRaster;
+use super::import::{GenerationManifest, read_generation_manifest};
 use common_types::lidar::{LidarAnalysisKind, LidarSlopeUnit};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -22,8 +20,7 @@ use std::sync::atomic::AtomicBool;
 pub struct AnalysisParameters {
     #[serde(default)]
     pub slope_unit: Option<LidarSlopeUnit>,
-    /// Published with the result; `#[serde(default)]` keeps a parameters blob
-    /// written before names existed readable.
+    /// Published with the result.
     #[serde(default)]
     pub name: Option<String>,
 }
@@ -42,12 +39,10 @@ impl AnalysisParameters {
 /// How a slope definition is computed, selected by its stored recipe version.
 ///
 /// The version column is the execution authority: a retry runs the version
-/// its definition stored, never the current default, and an unknown version
-/// fails instead of being coerced. A changed method needs a new version.
+/// its definition stored, and an unknown version fails instead of being
+/// coerced. A changed method needs a new version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlopeRecipe {
-    /// Version 1: GDAL `gdaldem slope` (Horn 3×3), for existing definitions.
-    GdalHorn,
     /// Version 2: the pinned GeoLibre projected slope (5×5 Florinsky stencil).
     GeolibreProjected,
 }
@@ -55,21 +50,18 @@ pub enum SlopeRecipe {
 impl SlopeRecipe {
     pub const fn version(self) -> i64 {
         match self {
-            Self::GdalHorn => 1,
             Self::GeolibreProjected => 2,
         }
     }
 
     pub const fn method_id(self) -> &'static str {
         match self {
-            Self::GdalHorn => "gdal-horn-v1",
             Self::GeolibreProjected => "geolibre-projected-slope-v1",
         }
     }
 
     pub fn from_version(version: i64) -> Result<Self, String> {
         match version {
-            1 => Ok(Self::GdalHorn),
             2 => Ok(Self::GeolibreProjected),
             other => Err(format!(
                 "slope recipe version {other} is not supported by this version of Canopi"
@@ -80,7 +72,6 @@ impl SlopeRecipe {
     /// Input cells beyond each side of a core window the stencil reads.
     const fn halo(self) -> i64 {
         match self {
-            Self::GdalHorn => 1,
             Self::GeolibreProjected => 2,
         }
     }
@@ -99,20 +90,10 @@ pub struct ResultManifest {
     pub parameters: AnalysisParameters,
     pub engine_version: String,
     pub grid: super::grid::RasterGrid,
-    /// CRS of the result lattice, so a sparse result can be sampled on demand
-    /// without re-reading its input generation. Absent in manifests written
-    /// before on-demand rendering existed.
-    #[serde(default)]
+    /// CRS of the result lattice, so a result can be sampled without
+    /// re-reading its input generation.
     pub crs_wkt: String,
-    /// Dense-result NoData marker. Absent for a sparse result, whose validity
-    /// is carried by its resolved chunk assets.
-    #[serde(default)]
-    pub nodata: Option<f32>,
     pub created_at: String,
-    /// Absent in manifests written before sparse results existed, which are
-    /// dense by definition.
-    #[serde(default)]
-    pub format: super::import::GenerationStorageFormat,
 }
 
 #[derive(Debug)]
@@ -135,110 +116,35 @@ impl AnalysisOutcome {
     }
 }
 
-/// The accepted head's ordered occurrences, whichever representation records
-/// them.
-///
-/// A collection snapshot reads its source COG members; a preserved generation
-/// reads its accepted role-ordered members. `Ok(None)` means the generation
-/// predates durable member history and has no ordered representation at all.
+/// The item's ordered source occurrences, resolved for bounded reads.
 fn head_occurrences(
     library: &LidarLibrary,
     head: &catalogue::GenerationRow,
     manifest: &GenerationManifest,
     cancel: &AtomicBool,
-) -> Result<Option<Vec<generation::ResolvedMember>>, String> {
-    if manifest.format.is_ordered_collection() {
-        return Ok(
-            super::collection::load_reader(library, &head.id, manifest, cancel)?
-                .map(|reader| reader.resolved().to_vec()),
-        );
-    }
-    let connection = library.catalogue()?;
-    super::import::resolved_occurrences(&connection, &library.inner.paths, head)
+) -> Result<Vec<generation::ResolvedMember>, String> {
+    super::collection::load_reader(library, &head.id, manifest, cancel)
+        .map(|reader| reader.resolved().to_vec())
 }
 
-/// A stored raster that carries the generation's CRS.
-///
-/// A generation with no dense mosaic has no stored raster of its own, so one
-/// member's controlled COG is the representative raster; the CRS check only
-/// needs one, and every admitted member shares the layer's horizontal CRS.
-fn sparse_input_raster(
+/// One source COG of the item, whose CRS the eligibility check reads; every
+/// admitted source shares the item's horizontal CRS.
+fn representative_source(
     library: &LidarLibrary,
     head: &catalogue::GenerationRow,
-    manifest: &GenerationManifest,
     cancel: &AtomicBool,
 ) -> Result<PathBuf, String> {
-    if let Some(mosaic) = head.mosaic_path.as_deref() {
-        return Ok(PathBuf::from(mosaic));
-    }
-    let representative = |generation_id: &str| -> Result<PathBuf, String> {
-        // Only the first published record is needed, and the paged reader loads
-        // one bounded page rather than the generation's whole record set.
-        generation::GenerationChunkReader::new(generation_id, generation::RESULT_ROLE)
-            .first(library)?
-            .map(|chunk| chunk.asset.path)
-            .ok_or_else(|| "generation has no stored raster to inspect".to_string())
-    };
-    if !manifest.format.is_ordered_collection() {
-        return representative(&head.id);
-    }
-    // An ordered composition answers eligibility from its own members, so a
-    // layer whose only member is a preserved composition is still a valid slope
-    // input: the source COG when there is one, otherwise the preserved
-    // generation's own representative raster.
-    let members = super::collection::snapshot_members(library, &head.id, cancel)?
-        .ok_or_else(|| "the accepted composition is missing a source payload".to_string())?;
-    let mut preserved: Option<String> = None;
-    for member in &members {
-        match &member.resolved.source {
-            generation::MemberSource::Cog(cog) => return Ok(cog.path.clone()),
-            generation::MemberSource::Preserved(_) => {
-                let base = member
-                    .base_generation_id
-                    .as_deref()
-                    .ok_or_else(|| "a preserved composition has no generation".to_string())?;
-                preserved.get_or_insert_with(|| base.to_string());
-            }
-            generation::MemberSource::LegacyHead(_) => {
-                // A preserved dense composition is inspected through its own
-                // mosaic, which is the raster the compatibility lease converts.
-                let mosaic = member
-                    .base_generation_id
-                    .as_deref()
-                    .and_then(|base| {
-                        library
-                            .catalogue()
-                            .ok()
-                            .and_then(|connection| {
-                                catalogue::generation_row(&connection, base).ok()
-                            })
-                            .flatten()
-                    })
-                    .and_then(|row| row.mosaic_path);
-                if let Some(mosaic) = mosaic {
-                    return Ok(PathBuf::from(mosaic));
-                }
-            }
-            generation::MemberSource::LegacyDense { .. } => {
-                return Err(
-                    "this composition stores raw member samples that no projection authority \
-                     can inspect"
-                        .to_string(),
-                );
-            }
-        }
-    }
-    match preserved {
-        Some(base) => representative(&base),
-        None => Err("the accepted composition has no stored raster to inspect".to_string()),
-    }
+    super::collection::snapshot_members(library, &head.id, cancel)?
+        .first()
+        .map(|member| member.resolved.cog.path.clone())
+        .ok_or_else(|| "the item has no source to analyse".to_string())
 }
 
-/// Why a layer's grid cannot carry a Horn slope result.
+/// Why an item's grid cannot carry a projected slope result.
 ///
-/// Slope with `-s 1` is only meaningful on a projected grid whose horizontal
-/// and vertical units are metres: a geographic grid would silently treat
-/// degrees as metres. GDAL remains the projection authority, so the CRS is
+/// Projected slope with `z_factor=1` is only meaningful on a grid whose
+/// horizontal and vertical units are metres: a geographic grid would silently
+/// treat degrees as metres. GDAL remains the projection authority, so the CRS is
 /// read from a stored raster instead of being parsed or reprojected here.
 fn slope_eligibility(
     engine: &super::engine::GdalEngine,
@@ -292,10 +198,8 @@ struct SlopeChunk {
 /// Compute one slope block through the bounded resolver.
 ///
 /// The core is the generation's 1024×1024 chunk and the resolver supplies the
-/// recipe's halo on every side: one cell for GDAL's Horn 3×3, which produces
-/// NoData wherever that neighbourhood is incomplete, and two for GeoLibre's
-/// 5×5 stencil, which substitutes the valid centre for missing neighbours.
-/// Horn staging uses NaN NoData; GeoLibre staging uses a finite sentinel no
+/// stencil's two-cell halo on every side; the GeoLibre 5×5 stencil substitutes
+/// the valid centre for missing neighbours. Staging uses a finite sentinel no
 /// valid sample of the window may equal. Only the core is kept.
 #[allow(clippy::too_many_arguments)]
 fn compute_slope_block(
@@ -323,16 +227,12 @@ fn compute_slope_block(
     let resolved = generation::resolve_window(occurrences, lattice, halo_window, cancel)?;
     let halo_grid = generation::window_grid(lattice, halo_window)?;
     let halo_side = halo_window.width as usize;
-    let staging_nodata = match recipe {
-        SlopeRecipe::GdalHorn => f32::NAN,
-        SlopeRecipe::GeolibreProjected => GEOLIBRE_STAGING_NODATA,
-    };
-    if staging_nodata.is_finite()
-        && resolved
-            .samples
-            .iter()
-            .zip(resolved.valid.iter())
-            .any(|(value, valid)| *valid != 0 && *value == staging_nodata)
+    let staging_nodata = GEOLIBRE_STAGING_NODATA;
+    if resolved
+        .samples
+        .iter()
+        .zip(resolved.valid.iter())
+        .any(|(value, valid)| *valid != 0 && *value == staging_nodata)
     {
         return Err(format!(
             "slope block {chunk_x},{chunk_y} holds a valid sample equal to the staging NoData marker"
@@ -361,34 +261,15 @@ fn compute_slope_block(
     written?;
 
     let block_path = scratch.join(format!("slope-{chunk_x}-{chunk_y}-block.tif"));
-    let computed = match recipe {
-        SlopeRecipe::GdalHorn => {
-            let mut args = vec![
-                "slope".to_string(),
-                "-s".to_string(),
-                "1".to_string(),
-                "-q".to_string(),
-                halo_path.display().to_string(),
-                block_path.display().to_string(),
-            ];
-            if percent {
-                args.insert(1, "-p".to_string());
-            }
-            engine
-                .run(super::engine::GdalProgram::Dem, &args, Some(cancel))
-                .map(|_| ())
-        }
-        SlopeRecipe::GeolibreProjected => geolibre.slope(&halo_path, &block_path, percent, cancel),
-    };
+    let computed = geolibre.slope(&halo_path, &block_path, percent, cancel);
     let _ = std::fs::remove_file(&halo_path);
     if let Err(error) = computed {
         let _ = std::fs::remove_file(&block_path);
         return Err(error);
     }
 
-    // GDAL marks uncomputed cells of the block with its own NoData marker
-    // (a NaN *input* marker does not survive `gdaldem`), so read it back and
-    // treat it as invalid before anything is persisted. A slope value can
+    // The engine marks uncomputed cells of the block with its own NoData
+    // marker, so read it back and treat it as invalid before anything is persisted. A slope value can
     // never be negative, so a negative marker is unambiguous; a non-negative
     // one could collide with a real flat/sloped cell and is refused by name.
     let info = super::raster_info::gdalinfo_json(engine, cancel, &block_path)?;
@@ -494,8 +375,8 @@ fn compute_slope_block(
     })
 }
 
-/// Whether the recipe's full input neighbourhood (3×3 for Horn, 5×5 for
-/// GeoLibre) of one halo cell was originally valid.
+/// Whether the recipe's full input neighbourhood (5×5 for GeoLibre) of one
+/// halo cell was originally valid.
 fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize, reach: usize) -> bool {
     for row in y.saturating_sub(reach)..=(y + reach).min(side - 1) {
         for column in x.saturating_sub(reach)..=(x + reach).min(side - 1) {
@@ -573,6 +454,7 @@ fn publish_sparse_slope(
     parameters: &AnalysisParameters,
     head: &catalogue::GenerationRow,
     manifest: &GenerationManifest,
+    occurrences: &[generation::ResolvedMember],
     expected: &str,
     cancel: &AtomicBool,
 ) -> Result<AnalysisOutcome, String> {
@@ -581,21 +463,14 @@ fn publish_sparse_slope(
     // What actually runs is recorded with the result; resolving it first also
     // makes a missing engine fail before any work or output.
     let engine_version = match recipe {
-        SlopeRecipe::GdalHorn => engine.discover()?.version,
         SlopeRecipe::GeolibreProjected => library.inner.geolibre.discover()?.provenance(),
-    };
-    let Some(occurrences) = head_occurrences(library, head, manifest, cancel)? else {
-        return Err(
-            "slope requires reconstructible member history; this generation predates it"
-                .to_string(),
-        );
     };
     let percent = parameters.slope_unit == Some(LidarSlopeUnit::Percent);
     let scratch = paths.prepared_dir().join(format!("scratch-slope-{job_id}"));
     std::fs::create_dir_all(&scratch)
         .map_err(|e| format!("Failed to create slope scratch: {e}"))?;
     let outcome = (|| -> Result<AnalysisOutcome, String> {
-        let blocks = generation::occupied_chunks(&occurrences, &manifest.grid)?;
+        let blocks = generation::occupied_chunks(occurrences, &manifest.grid)?;
         // Sparse admission covers the actual occupied work: core blocks plus
         // halos, bounded working buffers, staged result/quality bytes and the
         // shared reserve. Checked arithmetic; no first-member lattice envelope.
@@ -615,7 +490,7 @@ fn publish_sparse_slope(
                 cancel,
                 paths,
                 &scratch,
-                &occurrences,
+                occurrences,
                 &manifest.grid,
                 &manifest.crs_wkt,
                 percent,
@@ -692,9 +567,7 @@ fn publish_sparse_slope(
             engine_version,
             grid: manifest.grid.clone(),
             crs_wkt: manifest.crs_wkt.clone(),
-            nodata: None,
             created_at: now_iso(),
-            format: super::import::GenerationStorageFormat::CogChunksV1,
         };
         let manifest_json = serde_json::to_string(&result_manifest).map_err(|e| e.to_string())?;
 
@@ -711,7 +584,7 @@ fn publish_sparse_slope(
                         |row| row.get::<_, String>(0),
                     )
                     .map_err(|e| e.to_string())?;
-                if !matches!(job_state.as_str(), "preparing" | "refreshing") {
+                if job_state != "preparing" {
                     return Err(if job_state == "cancelled" {
                         "cancelled".to_string()
                     } else {
@@ -735,8 +608,8 @@ fn publish_sparse_slope(
                 require_definition_recipe(&connection, definition_id, recipe)?;
                 connection
                     .execute(
-                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name, method_id, recipe_version)
-                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name, method_id, recipe_version)
+                         VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                         rusqlite::params![
                             generation_id,
                             definition_id,
@@ -824,43 +697,6 @@ fn publish_sparse_slope(
     outcome
 }
 
-/// Owns one analysis job's staging root.
-///
-/// The guard exists so no early return, propagated `?`, cancellation or panic
-/// can leave an abandoned `staging-*` directory behind: the directory is
-/// removed on drop unless publication renamed it into a generation directory
-/// and disarmed the guard.
-struct StagingGuard {
-    dir: PathBuf,
-    kept: bool,
-}
-
-impl StagingGuard {
-    fn create(pipeline_dir: &Path, job_dir_id: &str) -> Result<Self, String> {
-        let dir = pipeline_dir.join(format!("staging-{job_dir_id}"));
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Failed to create analysis staging: {e}"))?;
-        Ok(Self { dir, kept: false })
-    }
-
-    fn dir(&self) -> &Path {
-        &self.dir
-    }
-
-    /// The staging contents became the published generation.
-    fn keep(mut self) {
-        self.kept = true;
-    }
-}
-
-impl Drop for StagingGuard {
-    fn drop(&mut self) {
-        if !self.kept {
-            let _ = std::fs::remove_dir_all(&self.dir);
-        }
-    }
-}
-
 /// Run one slope analysis job. `job_id` is the catalogue job row this run
 /// settles. The input snapshot is resolved up front; the publish transaction
 /// verifies it is still the layer head, discarding stale artifacts.
@@ -873,7 +709,6 @@ pub fn run_slope_job(
     cancel: &AtomicBool,
 ) -> Result<AnalysisOutcome, String> {
     let engine = &library.inner.engine;
-    let paths = &library.inner.paths;
     let expected = source_generation_id.to_string();
 
     // Short read: definition + immutable input generation.
@@ -889,329 +724,34 @@ pub fn run_slope_job(
         let manifest = read_generation_manifest(&head.manifest_json)?;
         (definition, recipe, head, manifest)
     };
-    // Sparse slope is admitted by its own occupied work, not the lattice
-    // envelope. The dense guard applies only to the dense fallback below.
-
-    // Bounded slope: when the sparse publication path is enabled, resolve the
-    // input generation once and compute one core+halo block per occupied chunk
-    // instead of handing a whole dense raster to GDAL. The path needs a
-    // reconstructible member sequence and an eligible grid.
-    let sparse_input = if super::generation::chunked_publication_enabled() {
-        match head_occurrences(library, &head, &manifest, cancel)? {
-            Some(_) => Some(sparse_input_raster(library, &head, &manifest, cancel)?),
-            None => None,
-        }
-    } else {
-        None
-    };
-    if let Some(raster) = sparse_input {
-        let layer_units: String = {
-            let connection = library.catalogue()?;
-            connection
-                .query_row(
-                    "SELECT units FROM lidar_source_layers WHERE id = ?1",
-                    [&definition.layer_id],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?
-        };
-        slope_eligibility(engine, cancel, &raster, &layer_units)?;
-        return publish_sparse_slope(
-            library,
-            job_id,
-            definition_id,
-            &definition.layer_id,
-            recipe,
-            parameters,
-            &head,
-            &manifest,
-            &expected,
-            cancel,
-        );
-    }
-    if recipe != SlopeRecipe::GdalHorn {
-        return Err(
-            "the GeoLibre slope needs an input with reconstructible sources; this legacy item has only a dense mosaic"
-                .to_string(),
-        );
-    }
-
-    // Dense fallback: a generation whose member history cannot be replayed
-    // still has its accepted mosaic, and the accepted whole-raster slope stays
-    // the route for it. Dense work allocates the lattice, so the dense guard
-    // applies here rather than before the sparse path is chosen.
-    validate_working_grid(&manifest.grid, "slope analysis")?;
-    let (Some(source_mosaic), Some(source_coverage)) = (
-        head.mosaic_path.as_deref(),
-        head.coverage_mask_path.as_deref(),
-    ) else {
-        return Err(
-            "slope analysis needs either reconstructible member history or a dense source mosaic"
-                .to_string(),
-        );
-    };
-
-    let job_dir_id = new_id("anl");
-    let pipeline_dir = paths.analysis_pipeline_dir(definition_id);
-    // The job owns its staging root: a failure or cancellation anywhere below
-    // drops the guard and removes every unpublished artifact, so a partially
-    // written result can never be mistaken for a published one.
-    let staging = StagingGuard::create(&pipeline_dir, &job_dir_id)?;
-    let staging_dir = staging.dir().to_path_buf();
-
-    // Numeric analysis via the pinned engine. Slope is terrain geometry in
-    // layer units; scale 1 (vertical metres, horizontal metres), or percent.
-    let result_path = staging_dir.join("result.tif");
-    let mut args = vec![
-        "slope".to_string(),
-        "-s".to_string(),
-        "1".to_string(),
-        "-q".to_string(),
-        Path::new(source_mosaic).display().to_string(),
-        result_path.display().to_string(),
-    ];
-    if parameters.slope_unit == Some(LidarSlopeUnit::Percent) {
-        // `-p` is a mode flag for `slope`; it must precede `-s <scale>`, not
-        // be spliced into the scale option's argument pair.
-        args.insert(1, "-p".to_string());
-    }
-    engine.run(super::engine::GdalProgram::Dem, &args, Some(cancel))?;
-
-    // Neighborhood quality mask: cells whose full 3×3 accepted neighborhood
-    // is not valid are flagged so unknown areas never masquerade as data. The
-    // persisted coverage mask is streamed rather than loaded whole.
-    let quality_path = staging_dir.join("quality.bin");
-    super::paths::require_free_space(
-        &staging_dir,
-        u64::from(manifest.grid.width)
-            .checked_mul(u64::from(manifest.grid.height))
-            .and_then(|bytes| bytes.checked_add(super::prepared_raster::FREE_SPACE_FLOOR_BYTES))
-            .ok_or_else(|| "slope quality mask size overflows".to_string())?,
-        "the slope quality mask",
-    )?;
-    super::grid::erode_mask_file(
-        Path::new(source_coverage),
-        &quality_path,
-        manifest.grid.width,
-        manifest.grid.height,
-        |_| super::import::check_cancel(cancel),
-    )?;
-
-    // The analysis engine chooses the output nodata marker; read it back so
-    // statistics and display treat unknown cells as unknown.
-    let result_info = super::raster_info::gdalinfo_json(engine, cancel, &result_path)?;
-    let result_nodata = super::raster_info::band_nodata(&result_info).or(Some(manifest.nodata));
-
-    // Exact result statistics, streamed in bounded windows from the slope
-    // output's controlled derivative.
-    let (min_value, max_value, result_cells) = result_statistics(
-        engine,
-        &result_path,
-        &manifest.grid,
-        result_nodata,
-        &staging_dir,
-        cancel,
-    )?;
-
-    let engine_version = engine.discover().map(|t| t.version).unwrap_or_default();
-    let result_manifest = ResultManifest {
-        definition_id: definition_id.to_string(),
-        kind: definition.kind.clone(),
-        source_generation_id: expected.clone(),
-        parameters: parameters.clone(),
-        engine_version: engine_version.clone(),
-        grid: manifest.grid.clone(),
-        crs_wkt: manifest.crs_wkt.clone(),
-        nodata: Some(manifest.nodata),
-        created_at: now_iso(),
-        format: super::import::GenerationStorageFormat::LegacyDenseV1,
-    };
-    let manifest_json = serde_json::to_string(&result_manifest).map_err(|e| e.to_string())?;
-    std::fs::write(staging_dir.join("manifest.json"), &manifest_json)
-        .map_err(|e| format!("Failed to write result manifest: {e}"))?;
-
-    // Publish guard: the input snapshot must still be the layer head.
-    let current_head = {
+    // Every source item is an ordered collection: resolve it once and compute
+    // one core+halo block per occupied chunk, never a whole-raster pass.
+    let occurrences = head_occurrences(library, &head, &manifest, cancel)?;
+    let raster = representative_source(library, &head, cancel)?;
+    let layer_units: String = {
         let connection = library.catalogue()?;
         connection
             .query_row(
-                "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
+                "SELECT units FROM lidar_source_layers WHERE id = ?1",
                 [&definition.layer_id],
-                |row| row.get::<_, String>(0),
+                |row| row.get(0),
             )
-            .map(Some)
-            .or_else(|err| match err {
-                rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                other => Err(other.to_string()),
-            })?
+            .map_err(|e| e.to_string())?
     };
-    if current_head.as_deref() != Some(expected.as_str()) {
-        // Stale completion: never replace a newer result; the guard drops the
-        // staging root on return.
-        return Ok(AnalysisOutcome {
-            published: false,
-            stale: true,
-            message: Some("source layer changed during analysis; result discarded".to_string()),
-        });
-    }
-
-    let generation_id = new_id("agen");
-    super::import::check_cancel(cancel)?;
-    let generation_dir = pipeline_dir.join(format!("gen-{generation_id}"));
-    std::fs::rename(&staging_dir, &generation_dir)
-        .map_err(|e| format!("Failed to publish analysis dir: {e}"))?;
-    // Ownership moves to the published generation directory, which has its own
-    // removal on every later failure path.
-    staging.keep();
-    let final_result = generation_dir.join("result.tif");
-    let final_quality = generation_dir.join("quality.bin");
-    {
-        let connection = match library.catalogue() {
-            Ok(connection) => connection,
-            Err(error) => {
-                let _ = std::fs::remove_dir_all(&generation_dir);
-                return Err(error);
-            }
-        };
-        if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
-            let _ = std::fs::remove_dir_all(&generation_dir);
-            return Err(error.to_string());
-        }
-        let publish = (|| -> Result<(), String> {
-            let job_state = connection
-                .query_row(
-                    "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
-                    [job_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .map_err(|e| e.to_string())?;
-            if !matches!(job_state.as_str(), "preparing" | "refreshing") {
-                return Err(if job_state == "cancelled" {
-                    "cancelled".to_string()
-                } else {
-                    format!("analysis job cannot publish from state {job_state}")
-                });
-            }
-            let current_head = connection
-                .query_row(
-                    "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
-                    [&definition.layer_id],
-                    |row| row.get::<_, String>(0),
-                )
-                .map(Some)
-                .or_else(|error| match error {
-                    rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                    other => Err(other.to_string()),
-                })?;
-            if current_head.as_deref() != Some(expected.as_str()) {
-                return Err("source layer changed during analysis publication".to_string());
-            }
-            require_definition_recipe(&connection, definition_id, SlopeRecipe::GdalHorn)?;
-            connection
-                .execute(
-                    "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name, method_id, recipe_version)
-                     VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-                    rusqlite::params![
-                        generation_id,
-                        definition_id,
-                        expected,
-                        engine_version,
-                        final_result.display().to_string(),
-                        final_quality.display().to_string(),
-                        manifest_json,
-                        result_cells as i64,
-                        min_value,
-                        max_value,
-                        head.bounds_3857,
-                        now_iso(),
-                        parameters.published_name(),
-                        SlopeRecipe::GdalHorn.method_id(),
-                        SlopeRecipe::GdalHorn.version(),
-                    ],
-                )
-                .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "INSERT INTO lidar_analysis_heads(definition_id, generation_id) VALUES(?1, ?2)
-                     ON CONFLICT(definition_id) DO UPDATE SET generation_id = excluded.generation_id",
-                    rusqlite::params![definition_id, generation_id],
-                )
-                .map_err(|e| e.to_string())?;
-            connection
-                .execute(
-                    "UPDATE lidar_analysis_jobs SET state = 'complete', updated_at = ?2 WHERE id = ?1",
-                    rusqlite::params![job_id, now_iso()],
-                )
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        })();
-        match publish {
-            Ok(()) => {
-                if let Err(error) = connection.execute_batch("COMMIT") {
-                    let _ = connection.execute_batch("ROLLBACK");
-                    let _ = std::fs::remove_dir_all(&generation_dir);
-                    return Err(error.to_string());
-                }
-            }
-            Err(error) if error == "source layer changed during analysis publication" => {
-                let _ = connection.execute_batch("ROLLBACK");
-                let _ = std::fs::remove_dir_all(&generation_dir);
-                return Ok(AnalysisOutcome {
-                    published: false,
-                    stale: true,
-                    message: Some(
-                        "source layer changed during analysis; result discarded".to_string(),
-                    ),
-                });
-            }
-            Err(error) => {
-                let _ = connection.execute_batch("ROLLBACK");
-                let _ = std::fs::remove_dir_all(&generation_dir);
-                return Err(error);
-            }
-        }
-    }
-
-    Ok(AnalysisOutcome {
-        published: true,
-        stale: false,
-        message: None,
-    })
-}
-
-/// Exact result statistics from one bounded scan of the slope output.
-///
-/// Validity is the existing finite-and-not-NoData rule, using the NoData the
-/// analysis engine declared for this result. The reader owns its derivative
-/// and removes it before this returns, so the analysis staging directory can
-/// be renamed into its published generation without carrying a temporary file.
-fn result_statistics(
-    engine: &super::engine::GdalEngine,
-    result: &Path,
-    grid: &RasterGrid,
-    nodata: Option<f32>,
-    scratch: &Path,
-    cancel: &AtomicBool,
-) -> Result<(f64, f64, u64), String> {
-    // The slope result and the quality mask already exist on disk here, so the
-    // measured free space already reflects them: no additional output bytes.
-    let mut reader = PreparedRaster::open(engine, result, grid, nodata, 0, scratch, cancel)?;
-    let (mut min_value, mut max_value, mut result_cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
-    reader.scan(cancel, |_window, samples, valid| {
-        for (value, valid) in samples.iter().zip(valid.iter()) {
-            if *valid != 0 {
-                result_cells += 1;
-                min_value = min_value.min(*value as f64);
-                max_value = max_value.max(*value as f64);
-            }
-        }
-        Ok(())
-    })?;
-    if !min_value.is_finite() {
-        min_value = 0.0;
-        max_value = 0.0;
-    }
-    Ok((min_value, max_value, result_cells))
+    slope_eligibility(engine, cancel, &raster, &layer_units)?;
+    publish_sparse_slope(
+        library,
+        job_id,
+        definition_id,
+        &definition.layer_id,
+        recipe,
+        parameters,
+        &head,
+        &manifest,
+        &occurrences,
+        &expected,
+        cancel,
+    )
 }
 
 pub fn definition_row(
@@ -1289,13 +829,9 @@ pub fn capability(kind: LidarAnalysisKind, measurement_kind: &str) -> Result<(),
 /// Startup recovery: jobs interrupted by a restart fail explicitly so the UI
 /// never reports ghost activity; published results are unaffected.
 pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(), String> {
-    // An import job awaiting review is not interrupted work: its staging is
-    // complete and its prepared payload is owned by the job directory, so a
-    // restart leaves it reviewable and appliable as it was. Only work that was
-    // actually running is failed.
     for (table, transient) in [
         ("lidar_import_jobs", vec!["staging", "applying"]),
-        ("lidar_analysis_jobs", vec!["preparing", "refreshing"]),
+        ("lidar_analysis_jobs", vec!["preparing"]),
     ] {
         for state in transient {
             connection
@@ -1316,17 +852,6 @@ pub fn recover_interrupted_jobs(connection: &rusqlite::Connection) -> Result<(),
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicBool;
-
-    /// GDAL-backed workflow expectations: a plane rising one metre per metre
-    /// eastward is 45 degrees, or 100 percent, everywhere it has neighbours.
-    #[derive(Debug)]
-    struct PublishedSlope {
-        result_path: PathBuf,
-        quality_path: PathBuf,
-        coverage_cells: u64,
-        min_value: f64,
-        max_value: f64,
-    }
 
     fn scratch_root(label: &str) -> PathBuf {
         let root =
@@ -1378,31 +903,35 @@ mod tests {
                 false,
             )
             .expect("layer created");
-        publish_source(library, &layer_id, &source, false);
+        publish_source(library, &layer_id, &source);
         layer_id
     }
 
-    /// Publish one source through the real review and apply path. An identical
-    /// reimport keeps the existing generation unless the caller replaces
-    /// overlap, which is how the layer head is advanced here.
-    fn publish_source(
-        library: &LidarLibrary,
-        layer_id: &str,
-        source: &Path,
-        replace_overlap: bool,
-    ) {
+    /// Publish one source into `layer_id` through the real stage and apply path.
+    ///
+    /// A published item is fixed, so production never gives an item a second
+    /// generation. Currency guards (a result pinned to an input that is no
+    /// longer the head) are still exercised by first withdrawing the head,
+    /// which leaves the old generation's rows in place for the guard to see.
+    fn publish_source(library: &LidarLibrary, layer_id: &str, source: &Path) {
+        library
+            .catalogue()
+            .expect("catalogue")
+            .execute(
+                "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
+                [layer_id],
+            )
+            .expect("head withdrawn");
         let cancel = AtomicBool::new(false);
         let job_id = library.record_import_job(layer_id).expect("job recorded");
-        let outcome = super::super::import::stage_and_publish(
+        super::super::import::stage_and_publish(
             library,
             &job_id,
             layer_id,
             std::slice::from_ref(&source.to_path_buf()),
-            replace_overlap,
             &cancel,
         )
         .expect("the batch publishes");
-        assert!(outcome.changed, "{}", outcome.summary());
     }
 
     /// Create the analysis, run its first job as the orchestrator would.
@@ -1412,7 +941,7 @@ mod tests {
         unit: LidarSlopeUnit,
     ) -> (String, String) {
         let receipt = library
-            .create_horn_analysis(
+            .create_analysis_unchecked(
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -1468,7 +997,7 @@ mod tests {
     /// percent wherever it has neighbours. Both reads must agree with that and
     /// with each other.
     #[test]
-    #[ignore = "requires system GDAL and the slope-plane fixture"]
+    #[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
     fn inspection_reads_a_published_slope_result_in_both_units() {
         let root = scratch_root("inspection");
         let library = LidarLibrary::open(&root).expect("library opens");
@@ -1537,227 +1066,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
-    fn published_slope(library: &LidarLibrary, definition_id: &str) -> PublishedSlope {
-        let connection = library.catalogue().expect("catalogue");
-        let generation_id: String = connection
-            .query_row(
-                "SELECT generation_id FROM lidar_analysis_heads WHERE definition_id = ?1",
-                [definition_id],
-                |row| row.get(0),
-            )
-            .expect("analysis head");
-        connection
-            .query_row(
-                "SELECT result_path, quality_mask_path, coverage_cells, min_value, max_value
-                 FROM lidar_analysis_generations WHERE id = ?1",
-                [&generation_id],
-                |row| {
-                    Ok(PublishedSlope {
-                        result_path: PathBuf::from(row.get::<_, String>(0)?),
-                        quality_path: PathBuf::from(row.get::<_, String>(1)?),
-                        coverage_cells: row.get::<_, i64>(2)? as u64,
-                        min_value: row.get(3)?,
-                        max_value: row.get(4)?,
-                    })
-                },
-            )
-            .expect("published generation")
-    }
-
-    /// Independently recompute the statistics from the published result with
-    /// the retained dense conversion.
-    fn oracle_statistics(
-        engine: &super::super::engine::GdalEngine,
-        published: &PublishedSlope,
-        grid: &RasterGrid,
-    ) -> (f64, f64, u64) {
-        let cancel = AtomicBool::new(false);
-        let raw = super::super::import::raw_f32_bytes(
-            engine,
-            &published.result_path,
-            grid.width,
-            grid.height,
-            &cancel,
-        )
-        .expect("result converts");
-        let info =
-            super::super::raster_info::gdalinfo_json(engine, &cancel, &published.result_path)
-                .expect("result info");
-        let nodata = super::super::raster_info::band_nodata(&info);
-        let (mut min, mut max, mut cells) = (f64::INFINITY, f64::NEG_INFINITY, 0u64);
-        for chunk in raw.chunks_exact(4) {
-            let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-            if value.is_finite() && Some(value) != nodata {
-                cells += 1;
-                min = min.min(value as f64);
-                max = max.max(value as f64);
-            }
-        }
-        if !min.is_finite() {
-            min = 0.0;
-            max = 0.0;
-        }
-        (min, max, cells)
-    }
-
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn slope_jobs_publish_streamed_statistics_and_quality_masks() {
-        // This test pins the preserved dense result route.
-        let _dense = generation::chunked_publication::without_sparse();
-        let engine = super::super::engine::GdalEngine::new();
-        let root = scratch_root("streamed");
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let (width, height) = (24u32, 18u32);
-        let layer_id = plane_layer(&library, &root, width, height);
-        let manifest = {
-            let connection = library.catalogue().expect("catalogue");
-            let head = catalogue::head_generation(&connection, &layer_id)
-                .expect("head read")
-                .expect("layer published");
-            read_generation_manifest(&head.manifest_json).expect("manifest")
-        };
-
-        super::super::prepared_raster::observability::reset();
-        let (_job_id, degrees_definition) =
-            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Degrees);
-        let degrees = published_slope(&library, &degrees_definition);
-        assert!(
-            super::super::prepared_raster::observability::tiles_decoded() > 0,
-            "slope statistics must decode through the native tiled reader"
-        );
-
-        // Statistics and coverage match the retained dense conversion.
-        let (min, max, cells) = oracle_statistics(&engine, &degrees, &manifest.grid);
-        assert_eq!(degrees.min_value, min);
-        assert_eq!(degrees.max_value, max);
-        assert_eq!(degrees.coverage_cells, cells);
-        assert!(
-            (44.0..=46.0).contains(&degrees.max_value),
-            "a one-metre-per-metre plane is 45 degrees, got {}",
-            degrees.max_value
-        );
-
-        // The streamed quality mask is byte-identical to the dense erosion of
-        // the accepted coverage, including the hole and the outer edges.
-        let coverage_path = {
-            let connection = library.catalogue().expect("catalogue");
-            let head = catalogue::head_generation(&connection, &layer_id)
-                .expect("head read")
-                .expect("layer published");
-            PathBuf::from(
-                head.coverage_mask_path
-                    .as_deref()
-                    .expect("dense generation has a coverage mask"),
-            )
-        };
-        let coverage = super::super::grid::ValidMask::read_from(&coverage_path, width, height)
-            .expect("coverage reads");
-        let oracle_quality = coverage.eroded_checked(|_| Ok(())).expect("dense erosion");
-        assert_eq!(
-            std::fs::read(&degrees.quality_path).expect("quality mask"),
-            oracle_quality.bytes().to_vec(),
-            "published quality mask must match the dense oracle"
-        );
-
-        // Percent reports the same plane as 100 percent.
-        let (_job_id, percent_definition) =
-            run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent);
-        let percent = published_slope(&library, &percent_definition);
-        let (percent_min, percent_max, percent_cells) =
-            oracle_statistics(&engine, &percent, &manifest.grid);
-        assert_eq!(percent.min_value, percent_min);
-        assert_eq!(percent.max_value, percent_max);
-        assert_eq!(percent.coverage_cells, percent_cells);
-        assert!(
-            (99.0..=101.0).contains(&percent.max_value),
-            "the same plane is 100 percent, got {}",
-            percent.max_value
-        );
-
-        // A job whose input generation is no longer the layer head publishes
-        // nothing and leaves the previous result in place.
-        let receipt = library
-            .create_horn_analysis(
-                &layer_id,
-                LidarAnalysisKind::Slope,
-                common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(LidarSlopeUnit::Degrees),
-                    name: None,
-                },
-                None,
-            )
-            .expect("stale analysis created");
-        // An identical reimport publishes only when it replaces overlap; that
-        // changed head is what makes the pending job stale.
-        publish_source(&library, &layer_id, &root.join("plane.tif"), true);
-        let (stale_parameters, stale_source_generation) = {
-            let connection = library.catalogue().expect("catalogue");
-            let parameters: String = connection
-                .query_row(
-                    "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                    [&receipt.definition_id],
-                    |row| row.get(0),
-                )
-                .expect("parameters");
-            let generation: String = connection
-                .query_row(
-                    "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
-                    [&receipt.job_id],
-                    |row| row.get(0),
-                )
-                .expect("source generation");
-            (parameters, generation)
-        };
-        let stale = run_slope_job(
-            &library,
-            &receipt.job_id,
-            &receipt.definition_id,
-            &parse_parameters(&stale_parameters).expect("parameters parse"),
-            &stale_source_generation,
-            &AtomicBool::new(false),
-        )
-        .expect("stale job settles");
-        assert!(stale.stale && !stale.published, "{}", stale.summary());
-        let unchanged = published_slope(&library, &degrees_definition);
-        assert_eq!(unchanged.min_value, min);
-        assert_eq!(unchanged.max_value, max);
-
-        // The derivative never reaches a published generation: it is removed
-        // before the staging directory is renamed.
-        let published_dir = unchanged
-            .result_path
-            .parent()
-            .expect("published generation directory");
-        let leftovers: Vec<_> = std::fs::read_dir(published_dir)
-            .expect("generation directory reads")
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("prepared-"))
-            .collect();
-        assert!(
-            leftovers.is_empty(),
-            "published generation carries a derivative: {leftovers:?}"
-        );
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
-    /// Names of the staging roots a definition currently owns.
-    fn staging_roots(library: &LidarLibrary, definition_id: &str) -> Vec<String> {
-        let dir = library.inner.paths.analysis_pipeline_dir(definition_id);
-        std::fs::read_dir(&dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("staging-"))
-            .collect()
-    }
-
     /// Build one definition and its queued job without running it.
     fn queued_slope_job(library: &LidarLibrary, layer_id: &str) -> (String, String, String) {
         let receipt = library
-            .create_horn_analysis(
+            .create_analysis_unchecked(
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -1792,125 +1104,6 @@ mod tests {
         )
     }
 
-    /// A mid-pipeline failure must not leave the job's staging root behind,
-    /// and must leave the accepted head untouched.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn failed_slope_job_removes_its_staging_root_and_keeps_the_accepted_head() {
-        // The injected failure is a dense-route step (the quality-mask budget).
-        let _dense = generation::chunked_publication::without_sparse();
-        let root = scratch_root("staging-failure");
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = plane_layer(&library, &root, 24, 18);
-        let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
-        let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
-        let parameters = parse_parameters(parameters).expect("parameters parse");
-        let head_before: String = {
-            let connection = library.catalogue().expect("catalogue");
-            connection
-                .query_row(
-                    "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
-                    [&layer_id],
-                    |row| row.get(0),
-                )
-                .expect("head")
-        };
-
-        // Fail after the staging root exists: the quality-mask free-space
-        // check cannot pass with no measurable capacity.
-        let error = {
-            let _guard = super::super::paths::capacity_probe::override_available(0);
-            run_slope_job(
-                &library,
-                &job_id,
-                &definition_id,
-                &parameters,
-                source_generation,
-                &AtomicBool::new(false),
-            )
-            .expect_err("a job without free space must fail")
-        };
-        assert!(
-            error.contains("slope quality mask"),
-            "the failure must happen after the slope step wrote its staged result: {error}"
-        );
-        assert!(
-            staging_roots(&library, &definition_id).is_empty(),
-            "failed job left {:?}",
-            staging_roots(&library, &definition_id)
-        );
-        let connection = library.catalogue().expect("catalogue");
-        let head_after: String = connection
-            .query_row(
-                "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1",
-                [&layer_id],
-                |row| row.get(0),
-            )
-            .expect("head");
-        assert_eq!(head_after, head_before);
-        drop(connection);
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A cancelled job must not leave its staging root behind either.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn cancelled_slope_job_removes_its_staging_root() {
-        let root = scratch_root("staging-cancel");
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let layer_id = plane_layer(&library, &root, 24, 18);
-        let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
-        let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
-        let parameters = parse_parameters(parameters).expect("parameters parse");
-
-        let error = run_slope_job(
-            &library,
-            &job_id,
-            &definition_id,
-            &parameters,
-            source_generation,
-            &AtomicBool::new(true),
-        )
-        .expect_err("a cancelled job must not publish");
-        assert_eq!(error, "cancelled");
-        assert!(
-            staging_roots(&library, &definition_id).is_empty(),
-            "cancelled job left {:?}",
-            staging_roots(&library, &definition_id)
-        );
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// A staging root left by a crashed process is removed at startup, while
-    /// published generations and member assets are not candidates.
-    #[test]
-    fn startup_pruning_removes_abandoned_staging_roots_only() {
-        let root = scratch_root("staging-prune");
-        let definition_id = "definition-prune";
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let pipeline = library.inner.paths.analysis_pipeline_dir(definition_id);
-        let abandoned = pipeline.join("staging-anl-abandoned");
-        let published = pipeline.join("gen-agen-published");
-        std::fs::create_dir_all(&abandoned).expect("abandoned staging");
-        std::fs::create_dir_all(&published).expect("published dir");
-        std::fs::write(abandoned.join("result.tif"), b"partial").expect("partial result");
-        std::fs::write(published.join("result.tif"), b"accepted").expect("accepted result");
-        drop(library);
-
-        let reopened = LidarLibrary::open(&root).expect("library reopens");
-        assert!(
-            !abandoned.exists(),
-            "an abandoned staging root must not survive startup"
-        );
-        assert!(
-            published.join("result.tif").exists(),
-            "a published generation directory is never pruned"
-        );
-        drop(reopened);
-        let _ = std::fs::remove_dir_all(&root);
-    }
     // -----------------------------------------------------------------------
     // B3: bounded slope through the resolver
     // -----------------------------------------------------------------------
@@ -1960,19 +1153,12 @@ mod tests {
         source
     }
 
-    /// Import sources through the real caller path and publish them dense.
-    fn dense_layer(library: &LidarLibrary, sources: &[PathBuf]) -> String {
-        let _dense = generation::chunked_publication::without_sparse();
-        import_layer(library, sources, "dense slope")
-    }
-
-    /// Import sources through the real caller path and publish them sparse.
-    fn sparse_layer(library: &LidarLibrary, sources: &[PathBuf]) -> String {
+    /// Import sources through the real caller path.
+    fn published_layer(library: &LidarLibrary, sources: &[PathBuf]) -> String {
         import_layer(library, sources, "bounded slope")
     }
 
-    /// Import one layer through the real staging, review and apply callers,
-    /// publishing in whichever format the gate currently selects.
+    /// Import one layer through the real staging and apply callers.
     fn import_layer(library: &LidarLibrary, sources: &[PathBuf], name: &str) -> String {
         let cancel = AtomicBool::new(false);
         let layer_id = library
@@ -1984,11 +1170,8 @@ mod tests {
             )
             .expect("layer created");
         let job_id = library.record_import_job(&layer_id).expect("job recorded");
-        let applied = super::super::import::stage_and_publish(
-            library, &job_id, &layer_id, sources, false, &cancel,
-        )
-        .expect("the batch publishes");
-        assert!(applied.changed);
+        super::super::import::stage_and_publish(library, &job_id, &layer_id, sources, &cancel)
+            .expect("the batch publishes");
         layer_id
     }
 
@@ -2009,10 +1192,6 @@ mod tests {
             )
             .expect("analysis head");
         let manifest: ResultManifest = serde_json::from_str(&manifest_json).expect("manifest");
-        assert_eq!(
-            manifest.format,
-            super::super::import::GenerationStorageFormat::CogChunksV1
-        );
         let paths = &library.inner.paths;
         let result_chunks = generation::persisted_chunks(
             &connection,
@@ -2147,7 +1326,7 @@ mod tests {
         let library = LidarLibrary::open(&root).expect("library opens");
         let (width, height) = (1040u32, 12u32);
         // Hole columns 600..603 on rows 0..3 (the helper offsets rows by 600).
-        let layer_id = sparse_layer(&library, &[curved_member(&root, width, height, 600..603)]);
+        let layer_id = published_layer(&library, &[curved_member(&root, width, height, 600..603)]);
         let degrees = run_created_job(&library, &layer_id, LidarSlopeUnit::Degrees, "Steepness");
         // Read in two halves: one window stays within the resolver's cap.
         let read = |definition: &str| {
@@ -2312,7 +1491,7 @@ mod tests {
             .discover()
             .expect("GeoLibre CLI")
             .path;
-        let layer_id = sparse_layer(&library, &[curved_member(&root, 1024, 1024, 0..0)]);
+        let layer_id = published_layer(&library, &[curved_member(&root, 1024, 1024, 0..0)]);
         let receipt = library
             .create_analysis(
                 &layer_id,
@@ -2412,137 +1591,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// The bounded slope must reproduce the accepted whole-raster GDAL result
-    /// on the cells whose 3×3 input neighborhood is complete, in both units.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn sparse_slope_matches_the_dense_oracle_in_both_units() {
-        let root = scratch_root("sparse-equivalence");
-        let library = LidarLibrary::open(&root).expect("library opens");
-        let left = plane_member(&root, "left", 0.0, 24, 18, &[22, 23]);
-        // The hole spans the member seam: local columns 22..23 of the left
-        // member and local column 0 of the right one share union column 24.
-        let right = plane_member(&root, "right", 24.0, 24, 18, &[0]);
-
-        // The same data through both storage formats: a dense layer for the
-        // accepted whole-raster oracle, and a sparse layer for the bounded
-        // path. Both lattices share an origin, so cells are comparable.
-        let dense_layer = dense_layer(&library, &[left.clone(), right.clone()]);
-        let layer_id = { sparse_layer(&library, &[left, right]) };
-
-        // Sparse result for the bounded path.
-        let sparse = {
-            let (_job, definition) =
-                run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Degrees);
-            definition
-        };
-        // Dense result for the accepted path, on its own dense generation; the
-        // preserved result route is forced for this run because the sparse
-        // route is the production default.
-        let dense = {
-            let _dense = generation::chunked_publication::without_sparse();
-            run_first_slope_job(&library, &dense_layer, LidarSlopeUnit::Degrees).1
-        };
-        let dense_publication = published_slope(&library, &dense);
-        assert!(
-            dense_publication.result_path.exists(),
-            "the dense oracle is a real raster"
-        );
-
-        // Both results must cover the same cells with the same values where the
-        // neighborhood is complete: a plane rising 1 m/m is 45 degrees.
-        let window = generation::LatticeWindow {
-            x: 0,
-            y: 0,
-            width: 48,
-            height: 18,
-        };
-        let (values, valid, quality) = sparse_result_window(&library, &sparse, window);
-        let dense_grid = {
-            let connection = library.catalogue().expect("catalogue");
-            read_generation_manifest(
-                &connection
-                    .query_row(
-                        "SELECT g.manifest_json FROM lidar_layer_heads h
-                         JOIN lidar_layer_generations g ON g.id = h.generation_id
-                         WHERE h.layer_id = ?1",
-                        [&dense_layer],
-                        |row| row.get::<_, String>(0),
-                    )
-                    .expect("head manifest"),
-            )
-            .expect("manifest")
-            .grid
-        };
-        let dense_raw = super::super::import::raw_f32_bytes(
-            &library.inner.engine,
-            &dense_publication.result_path,
-            dense_grid.width,
-            dense_grid.height,
-            &AtomicBool::new(false),
-        )
-        .expect("dense result bytes");
-
-        let mut covered = 0usize;
-        for row in 0..18usize {
-            for column in 0..48usize {
-                let index = row * 48 + column;
-                // GDAL's Horn slope needs the full 3×3 input neighborhood, so
-                // the generation's own outer boundary is incomplete as well,
-                // and the hole columns 22..24 remove 21..25.
-                let inside_boundary = (1..=16).contains(&row) && (1..=46).contains(&column);
-                let expected_quality = inside_boundary && !(21..=25).contains(&column);
-                assert_eq!(
-                    quality[index],
-                    u8::from(expected_quality),
-                    "quality at {column},{row}"
-                );
-                assert_eq!(
-                    valid[index],
-                    u8::from(expected_quality),
-                    "result validity at {column},{row}"
-                );
-                if quality[index] == 0 {
-                    continue;
-                }
-                covered += 1;
-                assert!(
-                    (values[index] - 45.0).abs() < 0.001,
-                    "sparse slope at {column},{row} is {}",
-                    values[index]
-                );
-                let dense_value = super::super::import::f32_sample(&dense_raw, row * 48 + column);
-                assert!(
-                    (dense_value - values[index]).abs() < 1e-4,
-                    "sparse {} and dense {} disagree at {column},{row}",
-                    values[index],
-                    dense_value
-                );
-            }
-        }
-        assert_eq!(covered, 16 * 41, "the complete-neighborhood interior only");
-
-        // Percent is the same plane reported in the other unit.
-        let percent = { run_first_slope_job(&library, &layer_id, LidarSlopeUnit::Percent).1 };
-        let (percent_values, percent_valid, _) = sparse_result_window(&library, &percent, window);
-        for row in 0..18usize {
-            for column in 0..48usize {
-                let index = row * 48 + column;
-                if percent_valid[index] == 0 {
-                    continue;
-                }
-                assert!(
-                    (percent_values[index] - 100.0).abs() < 0.01,
-                    "percent slope at {column},{row} is {}",
-                    percent_values[index]
-                );
-            }
-        }
-
-        drop(library);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// A cancelled bounded slope publishes nothing and leaves no scratch root
     /// or unpublished index rows behind.
     #[test]
@@ -2551,7 +1599,7 @@ mod tests {
         let root = scratch_root("sparse-cancel");
         let library = LidarLibrary::open(&root).expect("library opens");
         let source = plane_member(&root, "cancel", 0.0, 16, 12, &[]);
-        let layer_id = { sparse_layer(&library, &[source]) };
+        let layer_id = { published_layer(&library, &[source]) };
         let (job_id, definition_id, encoded) = queued_slope_job(&library, &layer_id);
         let (parameters, source_generation) = encoded.split_once('|').expect("encoded pair");
         let parameters = parse_parameters(parameters).expect("parameters parse");

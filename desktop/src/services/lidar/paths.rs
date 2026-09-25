@@ -11,6 +11,14 @@
 
 use std::path::{Path, PathBuf};
 
+/// Catalogue file name inside the library root.
+pub const CATALOGUE_FILE: &str = "lidar-library.sqlite";
+
+/// Managed library root under the app data directory.
+pub fn library_root(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join("lidar")
+}
+
 #[derive(Debug, Clone)]
 pub struct LidarPaths {
     root: PathBuf,
@@ -18,13 +26,11 @@ pub struct LidarPaths {
 
 impl LidarPaths {
     pub fn open(app_data_dir: &Path) -> Result<Self, String> {
-        let root = app_data_dir.join("lidar");
+        let root = library_root(app_data_dir);
         for dir in [
             root.clone(),
             self_sources_dir(&root),
             self_prepared_dir(&root),
-            self_display_dir(&root),
-            root.join("display-tiles"),
             root.join("display-cog"),
             root.join("display-cog-staging"),
             root.join("assets"),
@@ -37,7 +43,7 @@ impl LidarPaths {
     }
 
     pub fn catalogue_path(&self) -> PathBuf {
-        self.root.join("lidar-library.sqlite")
+        self.root.join(CATALOGUE_FILE)
     }
 
     /// Library root. Catalogue asset references stay relative to it, so a
@@ -48,11 +54,6 @@ impl LidarPaths {
 
     pub fn display_cache_path(&self) -> PathBuf {
         self.root.join("lidar-display-cache.sqlite")
-    }
-
-    /// The retired on-demand PNG tile cache, reclaimed when the library opens.
-    pub fn retired_tile_cache_dir(&self) -> PathBuf {
-        self.root.join("display-tiles")
     }
 
     /// Content-addressed immutable resolved/quality COG assets.
@@ -83,23 +84,8 @@ impl LidarPaths {
         self.source_dir(sha256).join("manifest.json")
     }
 
-    /// Prepared per-layer generation mosaics, staging dirs and coverage masks.
-    pub fn layer_pipeline_dir(&self, layer_id: &str) -> PathBuf {
-        self.prepared_dir().join("layers").join(layer_id)
-    }
-
-    /// Prepared analysis outputs, staging dirs and quality masks.
-    pub fn analysis_pipeline_dir(&self, definition_id: &str) -> PathBuf {
-        self.prepared_dir().join("analysis").join(definition_id)
-    }
-
     pub fn prepared_dir(&self) -> PathBuf {
         self.root.join("prepared")
-    }
-
-    /// The retired PNG display pyramids, reclaimed when the library opens.
-    pub fn retired_pyramid_dir(&self) -> PathBuf {
-        self.root.join("display")
     }
 
     /// Published display derivatives: immutable, content-keyed tiled COGs the
@@ -225,10 +211,6 @@ fn self_sources_dir(root: &Path) -> PathBuf {
 
 fn self_prepared_dir(root: &Path) -> PathBuf {
     root.join("prepared")
-}
-
-fn self_display_dir(root: &Path) -> PathBuf {
-    root.join("display")
 }
 
 /// Test-only seam for the capacity observation.

@@ -16,6 +16,7 @@
 //! arbitrary input, and the reader rejects any derivative that does not match
 //! that format instead of guessing.
 
+#[cfg(test)]
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
 use super::paths;
@@ -147,6 +148,7 @@ impl PreparedRaster {
     /// derivative, its metadata allowance and the shared reserve, because all
     /// of them coexist. Output that already exists on disk is already
     /// reflected in the measured free space and must not be charged again.
+    #[cfg(test)]
     pub(super) fn open(
         engine: &GdalEngine,
         input: &Path,
@@ -200,6 +202,7 @@ impl PreparedRaster {
     }
 
     /// Grid this reader was validated against.
+    #[cfg(test)]
     pub(super) fn grid(&self) -> &RasterGrid {
         &self.grid
     }
@@ -514,6 +517,7 @@ fn prepare_arguments(input: &Path, output: &Path) -> Vec<String> {
     args
 }
 
+#[cfg(test)]
 fn derivative_path(job_scratch: &Path, input: &Path) -> PathBuf {
     let token = super::grid::sha256_hex(
         format!(

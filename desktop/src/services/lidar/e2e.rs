@@ -130,51 +130,6 @@ fn assert_displays(
         .expect("a ready descriptor names its generation")
 }
 
-fn assert_known_slope(engine: &engine::GdalEngine, root: &std::path::Path, cancel: &AtomicBool) {
-    let raw_path = root.join("known-slope.raw");
-    let source_path = root.join("known-slope.tif");
-    let result_path = root.join("known-slope-result.tif");
-    let values = (0..5)
-        .flat_map(|_| (0..5).map(|x| x as f32))
-        .collect::<Vec<_>>();
-    import::write_f32_raw(&raw_path, &values).expect("known plane raw writes");
-    import::raw_to_tif(
-        engine,
-        cancel,
-        &raw_path,
-        &source_path,
-        &grid::RasterGrid {
-            width: 5,
-            height: 5,
-            geotransform: [0.0, 1.0, 0.0, 5.0, 0.0, -1.0],
-        },
-        "EPSG:3857",
-        -9999.0,
-    )
-    .expect("known plane converts to GeoTIFF");
-    engine
-        .run(
-            engine::GdalProgram::Dem,
-            &[
-                "slope".to_string(),
-                "-s".to_string(),
-                "1".to_string(),
-                "-q".to_string(),
-                source_path.display().to_string(),
-                result_path.display().to_string(),
-            ],
-            Some(cancel),
-        )
-        .expect("known slope computes");
-    let raw =
-        import::raw_f32_bytes(engine, &result_path, 5, 5, cancel).expect("known slope reads back");
-    let center = f32::from_le_bytes(raw[48..52].try_into().unwrap());
-    assert!(
-        (center - 45.0).abs() < 0.01,
-        "one metre rise per horizontal metre must produce 45°, got {center}"
-    );
-}
-
 /// Select the real ground-elevation fixture, explicitly rather than by discovery.
 ///
 /// `CANOPI_LIDAR_E2E_FIXTURE` names the file to use, which keeps this test
@@ -213,13 +168,12 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
-/// The full dense lifecycle on the real IGN MNT fixture: import, publish,
-/// display, slope, restart reuse and a same-file replacement, followed by the
-/// shipped ordered route over that grandfathered dense head and its undo. Run
-/// with:
+/// The item lifecycle on the real IGN MNT fixture: import, publish, display,
+/// GeoLibre slope, restart reuse, rename, a second import of the same file as a
+/// separate item, and delete. Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_import_publish --nocapture`
 #[test]
-#[ignore = "requires system GDAL and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
     let engine = engine::GdalEngine::new();
     let tools = engine.discover().expect("GDAL engine must be available");
@@ -232,9 +186,6 @@ fn e2e_import_publish_slope_restart_reuse() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let cancel = AtomicBool::new(false);
-    assert_known_slope(&engine, &work, &cancel);
-    // This lifecycle exercises the preserved dense route deliberately.
-    let dense_guard = generation::chunked_publication::without_sparse();
 
     // Open the library (slice 1: catalogue + assets under app data root).
     let library = LidarLibrary::open(&work).expect("library opens");
@@ -267,14 +218,12 @@ fn e2e_import_publish_slope_restart_reuse() {
     println!(
         "staged: {} source(s), {} valid cells",
         staging.sources.len(),
-        staging.sources[0].valid_cells.unwrap_or(0)
+        staging.sources[0].valid_cells
     );
 
-    // 3. Publish it: one generation plus display tiles.
-    let outcome =
-        import::apply_import(&library, &staging, true, false, &cancel).expect("apply publishes");
+    // 3. Publish it: one fixed generation.
+    let outcome = import::apply_import(&library, &staging, &cancel).expect("apply publishes");
     library.finish_import_sources(&job_id, &layer_id, Ok(()));
-    assert!(outcome.changed);
     let completed_job = library
         .get_import_job(&job_id)
         .unwrap()
@@ -308,7 +257,7 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     // 4. One persisted slope result via the analysis pipeline.
     let receipt = library
-        .create_horn_analysis(
+        .create_analysis_unchecked(
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
@@ -409,170 +358,59 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert_eq!(snapshot.layers[0].name, "IGN ground renamed");
     assert_eq!(snapshot.analyses[0].source_layer_id, layer_id);
 
-    // Reimport the identical source as a replacement of the same bytes. There
-    // is no decision preview to render: preparation validates the batch and
-    // publication replaces the head.
-    let replacement_job = reopened
-        .record_import_job(&layer_id)
-        .expect("replacement job");
-    let staged_replacement = {
-        import::stage_import(
-            &reopened,
-            &replacement_job,
-            &layer_id,
-            std::slice::from_ref(&fixture),
-            &cancel,
+    // Importing the same file again creates a separate item; the first item's
+    // head is untouched.
+    let first_head = catalogue::head_generation(&reopened.catalogue().unwrap(), &layer_id)
+        .unwrap()
+        .expect("first item published");
+    let second_layer = reopened
+        .create_layer(
+            "IGN ground again",
+            common_types::lidar::LidarMeasurementKind::GroundElevation,
+            None,
+            false,
         )
-        .expect("the replacement is admitted");
-        import::read_staged_import(&reopened, &replacement_job).expect("staged payload")
-    };
-    let replacement_outcome =
-        import::apply_import(&reopened, &staged_replacement, false, true, &cancel)
-            .expect("same-file replacement publishes");
-    reopened.finish_import_sources(&replacement_job, &layer_id, Ok(()));
-    assert!(replacement_outcome.changed);
-    let replacement_head = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::head_generation(&connection, &layer_id)
-            .unwrap()
-            .unwrap()
-    };
-    let members = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::generation_members(&connection, &replacement_head.id).unwrap()
-    };
-    assert_eq!(members.len(), 2);
-    assert_eq!(members[0].2.as_deref(), Some(job_id.as_str()));
-    assert_eq!(members[1].2.as_deref(), Some(replacement_job.as_str()));
-
-    // A dense publication composes straight from its own mosaic and records no
-    // snapshot lineage, so a dense head offers no composition Undo. That is the
-    // pre-rework behaviour of this preserved route and the reason production
-    // never publishes densely: the ordered publication below is what an
-    // accepted import actually runs. The request is answered, not failed, and
-    // the head it names stays authoritative.
-    let dense_undo = import::undo_import(&reopened, &replacement_job, &cancel)
-        .expect("an undo request against a dense head is answered");
-    assert!(!dense_undo.changed, "{}", dense_undo.summary());
-    assert_eq!(dense_undo.generation_id, replacement_head.id);
-    let after_dense_undo = reopened
+        .expect("second layer created");
+    let second_job = reopened
+        .record_import_job(&second_layer)
+        .expect("second job recorded");
+    import::stage_and_publish(
+        &reopened,
+        &second_job,
+        &second_layer,
+        std::slice::from_ref(&fixture),
+        &cancel,
+    )
+    .expect("the second item publishes");
+    reopened.finish_import_sources(&second_job, &second_layer, Ok(()));
+    let snapshot = reopened
         .library_snapshot()
-        .expect("snapshot after the refused undo");
-    assert!(
-        after_dense_undo.layers[0]
-            .coverage_cells
-            .expect("this fixture measured its coverage")
-            > 3_000_000
+        .expect("snapshot with two items");
+    assert_eq!(snapshot.layers.len(), 2);
+    assert_eq!(
+        catalogue::head_generation(&reopened.catalogue().unwrap(), &layer_id)
+            .unwrap()
+            .expect("first item still published")
+            .id,
+        first_head.id
     );
     assert_displays(
         &reopened,
         common_types::lidar::LidarSampleEntityKind::Source,
-        &layer_id,
+        &second_layer,
     );
-    let (unchanged_head, unchanged_members) = {
-        let connection = reopened.catalogue().unwrap();
-        (
-            catalogue::head_generation(&connection, &layer_id)
-                .unwrap()
-                .expect("the head survives a refused undo"),
-            catalogue::generation_members(&connection, &replacement_head.id).unwrap(),
-        )
-    };
-    assert_eq!(unchanged_head.id, replacement_head.id);
-    assert_eq!(unchanged_members.len(), 2, "a refused undo removes nothing");
+    reopened
+        .delete_layer(&second_layer)
+        .expect("the second item deletes");
 
-    // Re-enable the shipped publication route: an accepted import over the
-    // grandfathered dense head wraps that head as one historical member, which
-    // is what makes the composition undoable again.
-    drop(dense_guard);
-    let ordered_job = reopened
-        .record_import_job(&layer_id)
-        .expect("ordered job recorded");
-    let ordered = import::stage_and_publish(
-        &reopened,
-        &ordered_job,
-        &layer_id,
-        std::slice::from_ref(&fixture),
-        true,
-        &cancel,
-    )
-    .expect("the ordered publication is admitted");
-    reopened.finish_import_sources(&ordered_job, &layer_id, Ok(()));
-    assert!(ordered.changed, "{}", ordered.summary());
-    let ordered_head = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::head_generation(&connection, &layer_id)
-            .unwrap()
-            .expect("ordered head published")
-    };
-    assert_eq!(
-        import::read_generation_manifest(&ordered_head.manifest_json)
-            .unwrap()
-            .format,
-        import::GenerationStorageFormat::OrderedMembersV1
-    );
-    let ordered_members = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::collection_members_page(&connection, &ordered_head.id, None, 10).unwrap()
-    };
-    assert_eq!(ordered_members.len(), 2);
-    assert_eq!(ordered_members[0].kind, "source");
-    assert_eq!(
-        ordered_members[0].job_id.as_deref(),
-        Some(ordered_job.as_str())
-    );
-    assert_eq!(ordered_members[1].kind, "previous-composition");
-    assert_eq!(
-        ordered_members[1].base_generation_id.as_deref(),
-        Some(replacement_head.id.as_str())
-    );
-
-    // Undo removes the accepted occurrence and republishes the wrapped dense
-    // composition, whose measurement is the dense head's own.
-    let undo = import::undo_import(&reopened, &ordered_job, &cancel).expect("undo publishes");
-    assert!(undo.changed, "{}", undo.summary());
-    let after_undo = reopened.library_snapshot().expect("snapshot after undo");
-    assert_eq!(
-        after_undo.layers[0].coverage_cells,
-        replacement_head
-            .coverage_cells
-            .map(|cells| cells.max(0) as u64),
-        "undo restores the dense composition's own coverage"
-    );
-    let displayed_generation = assert_displays(
-        &reopened,
-        common_types::lidar::LidarSampleEntityKind::Source,
-        &layer_id,
-    );
-    assert_eq!(
-        displayed_generation, undo.generation_id,
-        "the restored head is what the map reads"
-    );
-    let undo_head = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::head_generation(&connection, &layer_id)
-            .unwrap()
-            .unwrap()
-    };
-    assert_eq!(undo_head.id, undo.generation_id);
-    let (remaining, ordered_history) = {
-        let connection = reopened.catalogue().unwrap();
-        (
-            catalogue::collection_members_page(&connection, &undo_head.id, None, 10).unwrap(),
-            catalogue::collection_member_count(&connection, &ordered_head.id).unwrap(),
-        )
-    };
-    assert_eq!(remaining.len(), 1);
-    assert_eq!(remaining[0].kind, "previous-composition");
-    assert_eq!(
-        remaining[0].base_generation_id.as_deref(),
-        Some(replacement_head.id.as_str())
-    );
-    assert_eq!(ordered_history, 2, "the undone snapshot stays in history");
-
+    // A source with a saved result is kept until the result is deleted.
+    assert!(reopened.delete_layer(&layer_id).is_err());
+    reopened
+        .delete_analysis(&receipt.definition_id)
+        .expect("the result deletes");
     reopened
         .delete_layer(&layer_id)
-        .expect("complete layer graph deletes");
+        .expect("the source deletes once nothing depends on it");
     let deleted = reopened.library_snapshot().expect("snapshot after delete");
     assert!(deleted.layers.is_empty());
     assert!(deleted.analyses.is_empty());
@@ -580,15 +418,13 @@ fn e2e_import_publish_slope_restart_reuse() {
     let _ = std::fs::remove_dir_all(&work);
 }
 
-/// Sparse-format vertical slice on the real IGN MNT fixture.
-///
-/// The same real workflow as the dense lifecycle above, but published through
-/// the sparse resolved-chunk format: multi-chunk import, native display tiles
-/// from the immutable lattice, slope over the chunked head with sparse result
-/// and quality chunks, restart reuse, and undo. Run with:
+/// Resource-measured vertical slice on the real IGN MNT fixture: import as an
+/// ordered collection, display derivatives, GeoLibre slope published as sparse
+/// result and quality chunks, and restart reuse, sampled for combined memory.
+/// Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_sparse --nocapture`
 #[test]
-#[ignore = "requires system GDAL and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_sparse_generation_lifecycle() {
     let engine = engine::GdalEngine::new();
     engine.discover().expect("GDAL engine must be available");
@@ -625,11 +461,10 @@ fn e2e_sparse_generation_lifecycle() {
         .expect("the fixture is admitted");
         import::read_staged_import(&library, &job_id).expect("staged payload")
     };
-    let staged_cells = staging.sources[0].valid_cells.unwrap_or(0);
+    let staged_cells = staging.sources[0].valid_cells;
     assert!(staged_cells > 3_000_000, "4M-cell tile: {staged_cells}");
-    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    import::apply_import(&library, &staging, &cancel).expect("apply");
     library.finish_import_sources(&job_id, &layer_id, Ok(()));
-    assert!(applied.changed);
 
     let head = {
         let connection = library.catalogue().unwrap();
@@ -637,13 +472,6 @@ fn e2e_sparse_generation_lifecycle() {
             .unwrap()
             .expect("head published")
     };
-    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
-    assert_eq!(
-        manifest.format,
-        import::GenerationStorageFormat::OrderedMembersV1,
-        "a source import publishes an ordered collection of source occurrences"
-    );
-    assert!(head.mosaic_path.is_none(), "an ordered head owns no mosaic");
     // A one-occurrence composition carries its member's exact facts without
     // reading the composed pixels.
     assert!(
@@ -677,7 +505,7 @@ fn e2e_sparse_generation_lifecycle() {
 
     // 3. Slope over the chunked head publishes sparse result and quality.
     let receipt = library
-        .create_horn_analysis(
+        .create_analysis_unchecked(
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
@@ -725,13 +553,6 @@ fn e2e_sparse_generation_lifecycle() {
             .unwrap()
             .expect("analysis head")
     };
-    let analysis_manifest: analysis::ResultManifest =
-        serde_json::from_str(&analysis_head.manifest_json).unwrap();
-    assert_eq!(
-        analysis_manifest.format,
-        import::GenerationStorageFormat::CogChunksV1,
-        "the bounded slope publishes sparse chunks"
-    );
     let (result_chunks, quality_chunks) = {
         let connection = library.catalogue().unwrap();
         (
@@ -772,62 +593,6 @@ fn e2e_sparse_generation_lifecycle() {
         ),
         generation_id,
         "the same immutable head is displayed after restart"
-    );
-
-    // 5. Undo republishes from the remaining occurrences.
-    let undone = import::undo_import(&reopened, &job_id, &cancel).expect("undo publishes");
-    assert!(undone.changed, "{}", undone.summary());
-    let after_undo = {
-        let connection = reopened.catalogue().unwrap();
-        catalogue::head_generation(&connection, &layer_id)
-            .unwrap()
-            .expect("head after undo")
-    };
-    assert_eq!(after_undo.id, undone.generation_id);
-    assert_eq!(
-        after_undo.coverage_cells,
-        Some(0),
-        "undoing the only import leaves no coverage"
-    );
-    // The replaced generation stays as immutable history: its ordered
-    // occurrence, the retained source payload that occurrence resolves and its
-    // measured facts all survive, and an ordered composition publishes no
-    // resolved chunks because its members stay authoritative.
-    let (history_row, history_members, history_chunks) = {
-        let connection = reopened.catalogue().unwrap();
-        (
-            catalogue::generation_row(&connection, &head.id)
-                .unwrap()
-                .expect("the replaced generation stays in history"),
-            catalogue::collection_member_count(&connection, &head.id).unwrap(),
-            catalogue::generation_chunk_assets(&connection, &head.id, "result").unwrap(),
-        )
-    };
-    assert_eq!(history_row.coverage_cells, head.coverage_cells);
-    assert_eq!(
-        import::read_generation_manifest(&history_row.manifest_json)
-            .unwrap()
-            .format,
-        import::GenerationStorageFormat::OrderedMembersV1,
-        "the replaced generation keeps the format it was published with"
-    );
-    assert_eq!(history_members, 1, "history keeps its ordered occurrence");
-    assert!(
-        history_chunks.is_empty(),
-        "an ordered composition materializes no resolved chunks"
-    );
-    let retained = {
-        let connection = reopened.catalogue().unwrap();
-        generation::retained_cog(
-            &connection,
-            &reopened.inner.paths,
-            &format!("interp-{}", staging.sources[0].interp_hash),
-        )
-        .unwrap()
-    };
-    assert!(
-        retained.is_some(),
-        "the occurrence's retained source payload survives the undo"
     );
 
     drop(reopened);
@@ -919,7 +684,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let staged_cells: u64 = staging
         .sources
         .iter()
-        .map(|source| source.valid_cells.unwrap_or(0))
+        .map(|source| source.valid_cells)
         .sum();
     println!(
         "staged: {staged_cells} valid cells across {} tiles",
@@ -933,9 +698,8 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         (staging.union_grid.width, staging.union_grid.height),
         (8000, 6000)
     );
-    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    import::apply_import(&library, &staging, &cancel).expect("apply");
     library.finish_import_sources(&job_id, &layer_id, Ok(()));
-    assert!(applied.changed);
 
     let head = {
         let connection = library.catalogue().unwrap();
@@ -943,16 +707,6 @@ fn e2e_mnh_batch_import_apply_display_restart() {
             .unwrap()
             .expect("head published")
     };
-    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
-    // The ordered route publishes the accepted sources as one ordered
-    // collection; it never materializes a resolved composition raster, so the
-    // batch costs source COGs plus member metadata rather than 48M composed
-    // cells.
-    assert_eq!(
-        manifest.format,
-        import::GenerationStorageFormat::OrderedMembersV1,
-        "the batch publishes as an ordered collection of source occurrences"
-    );
     // Twelve occurrences cannot be composed from metadata alone, so the
     // generation claims no exact count; the batch's own member facts are the
     // diagnostic, and its display range is a labelled source envelope.
@@ -966,10 +720,6 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         members.len(),
         files.len(),
         "every selected tile is its own occurrence"
-    );
-    assert!(
-        members.iter().all(|member| member.kind == "source"),
-        "a first batch is all source occurrences: {members:?}"
     );
     // The composition itself stores no resolved result chunks: the occurrences
     // are read from their own source COGs on demand.
@@ -989,12 +739,10 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         members
             .iter()
             .filter(|member| {
-                member.interpretation_id.as_deref().is_some_and(|id| {
-                    catalogue::interpretation_cog(&connection, id)
-                        .ok()
-                        .flatten()
-                        .is_some()
-                })
+                catalogue::interpretation_cog(&connection, &member.interpretation_id)
+                    .ok()
+                    .flatten()
+                    .is_some()
             })
             .count()
     };
@@ -1175,9 +923,8 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
         staging.processing_cells, 400_000_000,
         "the batch is admitted for exactly the plane's own grid"
     );
-    let applied = import::apply_import(&library, &staging, true, false, &cancel).expect("apply");
+    import::apply_import(&library, &staging, &cancel).expect("apply");
     library.finish_import_sources(&job_id, &layer_id, Ok(()));
-    assert!(applied.changed);
 
     let head = {
         let connection = library.catalogue().unwrap();
@@ -1185,11 +932,6 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
             .unwrap()
             .expect("head published")
     };
-    let manifest = import::read_generation_manifest(&head.manifest_json).unwrap();
-    assert_eq!(
-        manifest.format,
-        import::GenerationStorageFormat::OrderedMembersV1
-    );
     // A single-source batch carries its member's exact facts, so the published
     // coverage is the source's own valid-cell count.
     let published_cells =
@@ -1304,8 +1046,7 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
             Some(bounds_of(seam_window)),
             &cancel,
         )
-        .expect("the bounded resolver binds")
-        .expect("the plane reaches its own seam");
+        .expect("the bounded resolver binds");
         reader
             .read_window(seam_window, &cancel)
             .expect("a seam-straddling window resolves")
@@ -1350,8 +1091,7 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
                 Some(bounds_of(hole_window)),
                 &cancel,
             )
-            .expect("the bounded resolver binds")
-            .expect("the plane reaches its own hole");
+            .expect("the bounded resolver binds");
             reader
                 .read_window(hole_window, &cancel)
                 .expect("a hole window resolves")
@@ -1384,8 +1124,7 @@ fn e2e_capacity_plane_import_display_and_bounded_reads() {
                 Some(bounds_of(outside)),
                 &cancel,
             )
-            .expect("the bounded resolver binds")
-            .expect("the plane reaches west of its own hole");
+            .expect("the bounded resolver binds");
             reader
                 .read_window(outside, &cancel)
                 .expect("a window outside a hole resolves")

@@ -42,7 +42,6 @@ impl std::fmt::Debug for ArcDiscovery {
 pub struct DiscoveredTools {
     pub gdalinfo: PathBuf,
     pub gdal_translate: PathBuf,
-    pub gdaldem: PathBuf,
     pub gdaltransform: PathBuf,
     pub version: String,
 }
@@ -88,7 +87,6 @@ impl GdalEngine {
         let tools = DiscoveredTools {
             gdalinfo: gdalinfo.clone(),
             gdal_translate: find("gdal_translate")?,
-            gdaldem: find("gdaldem")?,
             gdaltransform: find("gdaltransform")?,
             version: String::new(),
         };
@@ -119,7 +117,6 @@ impl GdalEngine {
         let path = match program {
             GdalProgram::Info => tools.gdalinfo,
             GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Dem => tools.gdaldem,
             GdalProgram::Transform => tools.gdaltransform,
         };
         Self::run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
@@ -142,7 +139,6 @@ impl GdalEngine {
         let path = match program {
             GdalProgram::Info => tools.gdalinfo,
             GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Dem => tools.gdaldem,
             GdalProgram::Transform => tools.gdaltransform,
         };
         Self::run_once(&path, args, None, cancel, None)
@@ -165,7 +161,6 @@ impl GdalEngine {
         let path = match program {
             GdalProgram::Info => tools.gdalinfo,
             GdalProgram::Translate => tools.gdal_translate,
-            GdalProgram::Dem => tools.gdaldem,
             GdalProgram::Transform => tools.gdaltransform,
         };
         Self::run_once(
@@ -313,7 +308,6 @@ impl Default for GdalEngine {
 pub enum GdalProgram {
     Info,
     Translate,
-    Dem,
     Transform,
 }
 

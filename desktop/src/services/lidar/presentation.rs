@@ -57,8 +57,7 @@ pub fn library_snapshot(
             match import_job.as_ref().map(|job| job.state) {
                 Some(
                     common_types::lidar::LidarImportJobState::Staging
-                    | common_types::lidar::LidarImportJobState::Applying
-                    | common_types::lidar::LidarImportJobState::AwaitingReview,
+                    | common_types::lidar::LidarImportJobState::Applying,
                 ) => LidarResultState::Preparing,
                 _ => LidarResultState::Failed,
             }
@@ -90,7 +89,7 @@ pub fn library_snapshot(
         // its operation: preparing while the job runs, failed otherwise.
         let (state, detail) = match (&head_result, latest_job.as_deref()) {
             (Some(result), _) => (parse_result_state(&result.state), None),
-            (None, Some("preparing") | Some("refreshing")) => (LidarResultState::Preparing, None),
+            (None, Some("preparing")) => (LidarResultState::Preparing, None),
             (None, Some("cancelled")) => (LidarResultState::Failed, Some("cancelled".to_string())),
             (None, Some(_)) => (LidarResultState::Failed, Some(String::new())),
             (None, None) => (LidarResultState::Preparing, None),
@@ -138,7 +137,6 @@ pub fn library_snapshot(
         let method = super::analysis::SlopeRecipe::from_version(definition.version)
             .ok()
             .map(|recipe| match recipe {
-                super::analysis::SlopeRecipe::GdalHorn => LidarAnalysisMethod::GdalHornV1,
                 super::analysis::SlopeRecipe::GeolibreProjected => {
                     LidarAnalysisMethod::GeolibreProjectedSlopeV1
                 }
@@ -286,7 +284,6 @@ fn parse_analysis_kind(raw: &str) -> Result<LidarAnalysisKind, String> {
 
 fn parse_result_state(raw: &str) -> LidarResultState {
     match raw {
-        "incomplete" => LidarResultState::Incomplete,
         "failed" => LidarResultState::Failed,
         _ => LidarResultState::Ready,
     }

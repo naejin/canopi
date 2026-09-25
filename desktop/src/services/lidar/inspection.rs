@@ -48,12 +48,10 @@ fn analysis_definition_layer(
 
 /// Which reader serves a target's numbers.
 enum TargetRead {
-    /// Published resolved chunks: a sparse source generation or any result.
+    /// Published result chunks of an analysis result.
     Chunks,
     /// An ordered source collection, resolved on demand from its members.
     Collection(Box<import::GenerationManifest>),
-    /// A preserved dense mosaic, read through one compatibility lease.
-    PreservedDense,
 }
 
 /// The generation a request's entity currently resolves to, with everything a
@@ -88,13 +86,7 @@ fn resolve_target(
                 .map(|layer| layer.units)
                 .unwrap_or_default();
             let manifest = import::read_generation_manifest(&row.manifest_json)?;
-            let read = match manifest.format {
-                import::GenerationStorageFormat::CogChunksV1 => TargetRead::Chunks,
-                import::GenerationStorageFormat::OrderedMembersV1 => {
-                    TargetRead::Collection(Box::new(manifest.clone()))
-                }
-                import::GenerationStorageFormat::LegacyDenseV1 => TargetRead::PreservedDense,
-            };
+            let read = TargetRead::Collection(Box::new(manifest.clone()));
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
@@ -122,17 +114,12 @@ fn resolve_target(
                 Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
                 _ => DEGREES_UNIT.to_string(),
             };
-            let read = if manifest.format == import::GenerationStorageFormat::LegacyDenseV1 {
-                TargetRead::PreservedDense
-            } else {
-                TargetRead::Chunks
-            };
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
                 crs_wkt: manifest.crs_wkt.clone(),
                 units,
-                read,
+                read: TargetRead::Chunks,
             }))
         }
     }
@@ -221,11 +208,8 @@ fn containing_pixel(grid: &RasterGrid, x: f64, y: f64) -> Option<(i64, i64)> {
 
 /// Bind the reader that owns one target's numbers, limited to one cell.
 ///
-/// Each format keeps the reader it already publishes through: an ordered
-/// collection resolves only the occurrences that can reach the cell, a sparse
-/// source or a result reads its published chunks, and a preserved dense mosaic
-/// is read through the library's single compatibility lease. No format falls
-/// back to another format's bytes.
+/// A source item resolves only the ordered members that can reach the cell; a
+/// result reads its published chunks.
 fn read_one_cell(
     library: &LidarLibrary,
     target: &SampleTarget,
@@ -256,15 +240,6 @@ fn read_one_cell(
                 manifest,
                 Some(bounds),
                 cancel,
-            )?;
-            Ok(reader.map(|reader| generation::GenerationReader::Collection(Box::new(reader))))
-        }
-        TargetRead::PreservedDense => {
-            let member = collection::preserved_member(library, &target.generation_id, cancel)?;
-            let lattice = member.grid.clone();
-            let reader = generation::CollectionReader::new(
-                vec![(format!("inspection-{}", target.generation_id), member)],
-                lattice,
             )?;
             Ok(Some(generation::GenerationReader::Collection(Box::new(
                 reader,
@@ -311,8 +286,8 @@ pub(super) fn sample(
         });
     };
     // Currency is checked against the generation the read will actually use, not
-    // against a cached head: a reorder, undo or refresh between aim and answer
-    // makes the answer stale rather than wrong.
+    // against a cached head: a head that changed (or went away) between aim and
+    // answer makes the answer stale rather than wrong.
     if target.generation_id != request.expected_generation_id {
         return Ok(LidarSampleOutcome::Unavailable {
             reason: LidarSampleUnavailableReason::StaleGeneration,

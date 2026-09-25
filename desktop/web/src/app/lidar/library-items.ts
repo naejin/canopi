@@ -82,7 +82,7 @@ export function libraryItems(snapshot: LidarLibrarySnapshot | null, slopeLabel =
       type: 'Slope',
       status: analysis.generation_id
         ? 'ready'
-        : analysis.state === 'Preparing' || analysis.state === 'Refreshing' ? 'preparing' : 'failed',
+        : analysis.state === 'Preparing' ? 'preparing' : 'failed',
       generationId: analysis.generation_id ?? null,
       units: unit === 'Percent' ? '%' : '°',
       resolutionM: source?.resolution_m ?? null,

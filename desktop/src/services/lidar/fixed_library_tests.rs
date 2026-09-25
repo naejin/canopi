@@ -26,17 +26,18 @@ fn seed_result(
         .execute(
             "INSERT INTO lidar_analysis_definitions
              (id, layer_id, kind, version, parameters_json, created_at)
-             VALUES (?1, ?2, 'slope', 1, '{}', '0')",
+             VALUES (?1, ?2, 'slope', 2, '{}', '0')",
             rusqlite::params![definition_id, layer_id],
         )
         .unwrap();
     connection
         .execute(
             "INSERT INTO lidar_analysis_generations
-             (id, definition_id, source_generation_id, engine_version, state, result_path,
-              quality_mask_path, manifest_json, coverage_cells, min_value, max_value,
-              bounds_3857, published_at)
-             VALUES (?1, ?2, ?3, 'test', 'complete', '', NULL, '{}', 1, 0, 1, '[0,0,1,1]', '0')",
+             (id, definition_id, source_generation_id, engine_version, state,
+              manifest_json, coverage_cells, min_value, max_value,
+              bounds_3857, published_at, method_id, recipe_version)
+             VALUES (?1, ?2, ?3, 'test', 'ready', '{}', 1, 0, 1, '[0,0,1,1]', '0',
+                     'geolibre-projected-slope-v1', 2)",
             rusqlite::params![
                 format!("agen-{definition_id}"),
                 definition_id,
@@ -405,9 +406,9 @@ fn seed_head(connection: &Connection, layer_id: &str, generation_id: &str) {
     connection
         .execute(
             "INSERT INTO lidar_layer_generations
-             (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+             (id, layer_id, created_at, manifest_json,
               coverage_cells, min_value, max_value, bounds_3857)
-             VALUES (?1, ?2, '0', '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
+             VALUES (?1, ?2, '0', '{}', 1, 0, 1, '[0,0,1,1]')",
             rusqlite::params![generation_id, layer_id],
         )
         .unwrap();
@@ -552,7 +553,7 @@ fn retry_reruns_only_a_failed_operation_with_its_pinned_input() {
 }
 
 /// Without the GeoLibre engine new slope results are unavailable by name and
-/// nothing is created; there is no fallback to the legacy Horn recipe.
+/// nothing is created.
 #[test]
 fn creating_a_slope_without_the_geolibre_engine_is_refused_by_name() {
     let root = scratch("no-geolibre");
@@ -601,14 +602,14 @@ fn the_snapshot_reports_method_and_the_pinned_input_of_a_failed_operation() {
     {
         let connection = library.catalogue().unwrap();
         seed_head(&connection, &layer_id, "gen-1");
-        seed_result(&connection, &layer_id, "adef-horn", "gen-1");
+        seed_result(&connection, &layer_id, "adef-done", "gen-1");
         seed_failed(&connection, &layer_id, "adef-new", 2, Some("gen-1"));
     }
     let snapshot = library.library_snapshot().unwrap();
     let find = |id: &str| snapshot.analyses.iter().find(|a| a.id == id).unwrap();
     assert_eq!(
-        find("adef-horn").method,
-        Some(common_types::lidar::LidarAnalysisMethod::GdalHornV1)
+        find("adef-done").method,
+        Some(common_types::lidar::LidarAnalysisMethod::GeolibreProjectedSlopeV1)
     );
     let failed = find("adef-new");
     assert_eq!(

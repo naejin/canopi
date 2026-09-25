@@ -175,3 +175,13 @@ Gates at the delivered head: `tsc`; Vitest 287 files / 2815 tests; `check:ui`; `
   - map-unavailable failure injection.
 - **Readiness:** the candidate is ready for local user review. It is not platform-qualified, integrated or released.
 - **User work:** the primary checkout's `.beads/issues.jsonl`, `desktop/src/native_operation.rs` and `.beads.gate.lock` were not touched.
+
+## v2 compatibility removal (bead `canopi-8shm.10`)
+
+User decision (2026-09-25): Canopi v2 drops LiDAR backward compatibility; an existing older library is deleted on first open. Implemented on `feature/geolibre-adoption`:
+
+- Catalogue: one schema at version 20 with no migration ladder, `VACUUM INTO` backup or legacy tables (acceptance regions, generation members, footprints and R-tree, interpretation regions, dense mosaic/mask, lineage/undo and analysis result-path columns). Interpretations carry their own `valid_cells`/range facts. `LidarLibrary::open` removes an older library directory; any non-current version is refused by `catalogue::open`.
+- Native: generations are ordered source collections only; dense/previous-composition readers, compatibility leases, dense envelope admission, the Horn recipe, `gdaldem` and mask erosion/remap code are removed. The retired PNG directories and staging-root pruning went with the old layout.
+- Contracts: `LidarLayerSource` has no `kind`/`base_generation_id`; `LidarAnalysisMethod::GdalHornV1`, `LidarImportJobState::AwaitingReview` and `LidarResultState::{Refreshing, Incomplete}` are removed; the Horn and earlier-import labels left all 11 locales.
+- Tests: migration, replay/undo, previous-composition, grandfathered-dense and Horn-oracle tests were deleted; fixed-library, e2e and acceptance tests now use fixed items (a second import is a separate item) and the GeoLibre recipe. New tests cover fresh-catalogue creation, refusal of other versions, deletion of an older library and refusal-without-deletion of a newer one.
+- Evidence: fmt, clippy `-D warnings`, `cargo test --workspace` (340 passed), native-command policy, `tsc`, full Vitest (2815 passed; 2 pre-existing unhandled rejections from `bootstrap-shell.test.ts`, reproduced at `0f7e44f0`, tracked as `canopi-8dy9`), `check:types`, `check:ui`, `build`, `build:web`, docs check. Ignored GDAL+GeoLibre lanes: 46/46. Real fixtures: MNT lifecycle and MNT sparse lanes on `LHD_FXX_0445_6806_MNT`, and the 12-tile MNH batch, all pass; the 400M capacity plane was not available and was not run. The lanes caught a stale `review_json` write in import settlement, fixed before commit.
