@@ -1,7 +1,7 @@
 # Ordered COG collections instead of materialized source merges
 
 Status: accepted — user-selected ordered-source direction; implementation through `34e4ded4` has its named correction scope [independently accepted](../design/raster-rework/ordered-cog-review.md#accepted-correction-at-34e4ded4). Supersedes ADR 0026 for new source composition, not preserved historical assets or derived analysis storage. Integration/release are separate.
-Current guidance: [ordered COG receipt](../design/raster-rework/ordered-cog-receipt.md), [design](../design/raster-rework/ordered-cog-design.md), [independent review](../design/raster-rework/ordered-cog-review.md), [LiDAR](../agent/lidar.md).
+Current guidance: [GeoLibre adoption receipt](../design/raster-rework/geolibre-adoption-receipt.md), [ordered COG receipt](../design/raster-rework/ordered-cog-receipt.md), [design](../design/raster-rework/ordered-cog-design.md), [independent review](../design/raster-rework/ordered-cog-review.md), [LiDAR](../agent/lidar.md).
 
 The delivered ordered-source model below is retained for historical numeric compatibility. The accepted migration amendments that follow replace its editable collection/history product, not its exact saved data.
 
@@ -16,6 +16,8 @@ Separately, the user accepted [GeoLibre slope for new analysis definitions](../d
 The [GeoLibre adoption plan](../design/raster-rework/geolibre-adoption-plan.md#1-outcome-and-scope) now owns the migration target: Data Library manages reusable fixed items; Layers manages Design references and presentation. Deliver import/search/preview/reuse and fast display first, contextual analysis afterward. Remove dataset history, Restore, library Undo, published-source append/reorder/remove controls, separate primary Analysis navigation and automatic dependency-driven refresh. New calculations create separate reusable results; imported items and previous results do not update themselves.
 
 Keep current IDs, originals, last committed source composition and saved results through a versioned catalogue migration. Historical rows/readers may remain for exact compatibility without retaining a user-facing history product. Canvas and Design undo/redo remain. The user also accepted one fixed library item per import: a compatible batch references separate source TIFF assets without creating a full-area merged raster. Later imports create new items. The plan owns the [grouping, overlap and batch-failure contract](../design/raster-rework/geolibre-adoption-plan.md#import-grouping-decision) and deletion behavior. These accepted target changes do not claim that production has migrated or authorize implementation.
+
+Implementation status (branch `feature/geolibre-adoption`, not integrated): the display amendment, fixed items, catalogue v19 migration, Data Library/Layers surfaces and versioned slope (recipe 1 GDAL Horn for existing definitions, recipe 2 pinned GeoLibre projected slope for new ones) are implemented with the evidence in the [adoption receipt](../design/raster-rework/geolibre-adoption-receipt.md). The retired PNG tile route and history/edit contracts are removed from the application; historical numeric readers remain.
 
 ## Original rationale and retained compatibility
 

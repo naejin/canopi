@@ -42,7 +42,7 @@ Preserve direct row/section-title ordering, section creation/rename/removal, and
 
 ## Data Library and data layers
 
-The accepted [GeoLibre migration UX](../../docs/design/raster-rework/geolibre-adoption-plan.md#6-user-experience-across-the-application) replaced the earlier Data/Analysis/source-history flow. Production implements it in `DataLibraryPanel` and `LidarLayersSection`; contextual slope is still to land. Ownership and qualification are routed through the [LiDAR guide](../../docs/agent/lidar.md).
+The accepted [GeoLibre migration UX](../../docs/design/raster-rework/geolibre-adoption-plan.md#6-user-experience-across-the-application) replaced the earlier Data/Analysis/source-history flow. Production implements it in `DataLibraryPanel` and `LidarLayersSection`, including the contextual Calculate slope form. Ownership and qualification are routed through the [LiDAR guide](../../docs/agent/lidar.md).
 
 The [interactive gallery reference](http://127.0.0.1:1422/library-reference.html) demonstrates this target with shared header/search/menu components. Its [handoff contract](../../docs/design/raster-rework/geolibre-adoption-plan.md#interactive-reference-and-implementation-handoff) distinguishes the simulated map/files/jobs from production proof. Use it rather than the superseded static Data/Analysis/history mockups.
 

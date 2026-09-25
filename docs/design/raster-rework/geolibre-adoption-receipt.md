@@ -128,7 +128,7 @@ Driven Desktop proof (`adoption-bench/s4-journey.mjs`, `results-s4-journey.json`
 | --- | --- |
 | Calculate slope from Layers (form shows "From plane2000", suggested name, attach note) → result in this Design's Layers | 10.6 s |
 | Inspect the result at view centre | 24.0950° (error 0.0002°) |
-| Calculate from the library in percent, named | Ready in 10.7 s; stays in the library, not added to the Design |
+| Calculate from the library, named | Ready in 10.7 s; stays in the library, not added to the Design. **Correction (S5):** this run meant to choose Percent but its script set the name and the unit in one synchronous page call, and the stored unit was Degrees. The percent path was then proven on the S5 candidate with the unit chosen on its own: the centre sample of the plane read 44.72136 % against the analytic 44.7214 %. |
 | Result details | GeoLibre projected slope (5×5); engine `geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)`; input link |
 | Save, reopen | both references restored |
 | Same binary without the CLI | `slope_engine` unavailable with its reason; create refused by name; nothing created; both saved results Ready |

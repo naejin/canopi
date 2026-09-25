@@ -95,16 +95,25 @@ pub fn library_snapshot(
             (None, Some(_)) => (LidarResultState::Failed, Some(String::new())),
             (None, None) => (LidarResultState::Preparing, None),
         };
-        // The name belongs to the published result, so an unnamed or pre-v17
-        // generation reports none and the UI falls back to the kind.
-        let result_name = head_result.as_ref().and_then(|result| result.name.clone());
-        // The unit belongs to the definition's own parameters, so a percent
-        // slope is never labelled with the input layer's elevation unit.
-        let slope_unit = serde_json::from_str::<super::analysis::AnalysisParameters>(
+        let parameters = serde_json::from_str::<super::analysis::AnalysisParameters>(
             &definition.parameters_json,
         )
-        .ok()
-        .and_then(|parameters| parameters.slope_unit);
+        .ok();
+        // A published result carries its own name (none for an unnamed or
+        // pre-v17 generation, and the UI then shows the kind). An operation
+        // without a result shows the name its author gave the calculation.
+        let result_name = match &head_result {
+            Some(result) => result.name.clone(),
+            None => parameters
+                .as_ref()
+                .and_then(|parameters| parameters.name.as_deref())
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string),
+        };
+        // The unit belongs to the definition's own parameters, so a percent
+        // slope is never labelled with the input layer's elevation unit.
+        let slope_unit = parameters.and_then(|parameters| parameters.slope_unit);
         let (bounds, value_range) = match &head_result {
             Some(result) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)

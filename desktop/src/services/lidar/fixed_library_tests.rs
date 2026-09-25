@@ -622,5 +622,7 @@ fn the_snapshot_reports_method_and_the_pinned_input_of_a_failed_operation() {
         failed.slope_unit,
         Some(common_types::lidar::LidarSlopeUnit::Percent)
     );
+    // An operation without a result is shown under the name its author gave it.
+    assert_eq!(failed.name.as_deref(), Some("North"));
     let _ = std::fs::remove_dir_all(&root);
 }
