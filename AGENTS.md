@@ -151,13 +151,14 @@ cargo build --release
 2. Run `git status --short --branch` before making changes.
 3. For implementation work, inspect available work with `bd ready`, or inspect the requested bead with `bd show <id>`.
 4. Claim implementation work before coding with `bd update <id> --claim`.
-5. For implementation beads, start from `main`, run `git pull --rebase`, then create a scoped branch such as `refactor/document-session-transition`.
+5. For implementation beads, start from `main`, run `git pull --rebase`, then create a scoped branch such as `refactor/document-session-transition`. Canopi v2 beads instead continue on `feature/geolibre-adoption` (see Branch And Git Hygiene).
 6. Direct `main` work is acceptable only for explicitly requested mainline maintenance, small docs-only updates, or repository administration.
 7. Reviews, planning, diagnostics, and purely advisory work do not require a bead, branch, commit, or push unless files change.
 
 ## Branch And Git Hygiene
 
 - Use one branch per implementation bead unless the user explicitly requests otherwise.
+- Exception: all Canopi v2 work (the breaking release: GeoLibre adoption and backward-compatibility removal) shares one branch, `feature/geolibre-adoption`, so v2 has one linear history and one checkout to review with `cargo tauri dev`. Commit each v2 bead there instead of opening a new branch.
 - Preserve accepted fixes in the user's active development checkout across tasks. Use a separate worktree when a new bead starts from a baseline missing those fixes. Before reporting an integrated fix complete, verify that the delivered checkout contains every required fix commit and run the combined checks there; pushing separate branches does not establish integration.
 - Preserve accepted merge commits when updating a feature branch: use `git pull --rebase=merges` or `git rebase --rebase-merges`. A plain rebase can discard implementation recorded in a merge commit; verify the required commits and resulting tree before pushing.
 - Name branches by intent: `feature/...`, `fix/...`, `refactor/...`, `test/...`, or `docs/...`.
@@ -196,8 +197,7 @@ cargo build --release
 
 ## Subagent Rules
 
-- Use subagents only when the user explicitly asks for delegation or parallel agent work.
-- Use subagents for bounded exploration, independent verification, or disjoint implementation slices.
+- Use subagents when they help: bounded exploration, independent verification, or disjoint implementation slices. No explicit user request is needed.
 - Give each implementation subagent explicit file or module ownership.
 - Do not let two agents edit the same files in parallel.
 - Tell subagents they are not alone in the codebase and must not revert other agents' or user changes.

@@ -40,7 +40,7 @@ If code and an accepted contract disagree, identify the discrepancy and track it
 
 ## Courier and review boundary
 
-The user remains the courier between the main agent and implementation agent unless explicitly changing that arrangement. Forward a handoff path and revision; return a delivered revision and receipt. These artifacts must be understandable without recovering chat history. No direct agent-to-agent messaging, automatic spawning or unattended continuation is implied by this agreement; the repository's subagent rules still apply.
+The user remains the courier between the main agent and implementation agent unless explicitly changing that arrangement. Forward a handoff path and revision; return a delivered revision and receipt. These artifacts must be understandable without recovering chat history. No direct agent-to-agent messaging or unattended continuation is implied by this agreement; subagents follow the repository's subagent rules.
 
 The implementer completes authorized internal milestones and fixes in-scope findings before one consolidated delivery. A material conflict is escalated with the observed behavior, violated contract, alternatives, recommendation and the exact work blocked. Safe independent work may continue within scope. Optional cleanup goes to follow-up beads, not an expanded assignment.
 
