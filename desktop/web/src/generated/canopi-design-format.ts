@@ -170,7 +170,6 @@ export const CANOPI_FILE_SCHEMA = {
       "type": "object"
     },
     "LidarPresentationEntry": {
-      "additionalProperties": true,
       "properties": {
         "id": {
           "type": "string"
@@ -214,7 +213,6 @@ export const CANOPI_FILE_SCHEMA = {
       "type": "string"
     },
     "LidarPresentationSection": {
-      "additionalProperties": true,
       "properties": {
         "entries": {
           "items": {

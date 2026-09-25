@@ -8,11 +8,12 @@
 }
 
 .btn {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-size-sm);
-  height: var(--control-size-sm);
+  width: var(--control-size-md);
+  height: var(--control-size-md);
   border: none;
   background: transparent;
   border-radius: var(--radius-md);

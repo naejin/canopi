@@ -1,5 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
 import {
   endInspection,
   inspectionLocation,
@@ -56,7 +57,10 @@ export function InspectionStatus() {
           onClick={() => endInspection()}
           aria-label={t('canvas.rasterSample.stop')}
         >
-          ✕
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="m6 6 12 12M6 18 18 6" />
+          </svg>
+          <ButtonTooltip label={t('canvas.rasterSample.stop')} side="top" />
         </button>
       </div>
       <div className={styles.readout}>

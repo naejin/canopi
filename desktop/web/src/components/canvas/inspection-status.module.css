@@ -38,9 +38,13 @@
 }
 
 .dismiss {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -50,7 +54,7 @@
 }
 
 .dismiss:hover {
-  border-color: var(--color-border);
+  background: var(--color-control-hover);
   color: var(--color-text);
 }
 

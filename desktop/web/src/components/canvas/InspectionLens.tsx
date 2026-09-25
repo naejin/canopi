@@ -104,6 +104,7 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     }
   }, [documents, canvasRef])
   const state = handle.value?.state.value
+  const expandLabel = t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')
   const viewport = queries.viewport.value.viewport
   return <>
     {state && canvasRef.current && createPortal(<svg className={styles.source} aria-hidden="true" data-inspection-source>
@@ -115,8 +116,13 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
     <section ref={panel} id={id} className={styles.panel} data-expanded={expanded} aria-label={t('canvas.inspection.title')}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <SurfaceHeader title={t('canvas.inspection.title')} closeLabel={t('canvas.inspection.close')} onClose={onClose}
-      actions={<button type="button" className={styles.expandButton} aria-label={t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')}
-        aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? '↙' : '↗'}</button>} />
+      actions={<button type="button" className={styles.expandButton} aria-label={expandLabel}
+        aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+          <path d={expanded ? 'M14 2 9 7m0-4v4h4M2 14l5-5m0 4V9H3' : 'M9 7l5-5m-4 0h4v4M7 9l-5 5m0-4v4h4'} />
+        </svg>
+        <ButtonTooltip label={expandLabel} side="left" />
+      </button>} />
     <div className={styles.preview} data-inspection-frame role="group" tabIndex={0} aria-label={t('canvas.inspection.panHint')}
       onKeyDown={event => {
         if (event.target !== event.currentTarget || !state) return
@@ -150,12 +156,19 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
 
     <div className={styles.controls}>
       <span role="status">{t('canvas.inspection.namesCount', { shown: state?.plants.filter(plant => plant.label).length ?? 0, total: state?.plants.length ?? 0 })}</span>
-      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.recenter')} title={t('canvas.inspection.recenter')} onClick={() => handle.value?.centerOnCanvas()}>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.recenter')} onClick={() => handle.value?.centerOnCanvas()}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4" stroke="currentColor" /><path d="M8 1v4m0 6v4M1 8h4m6 0h4" stroke="currentColor" /></svg>
+        <ButtonTooltip label={t('canvas.inspection.recenter')} side="top" />
       </button>
-      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.widen')} onClick={() => handle.value?.zoomBy(1 / 1.25)}>−</button>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.widen')} onClick={() => handle.value?.zoomBy(1 / 1.25)}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+        <ButtonTooltip label={t('canvas.inspection.widen')} side="top" />
+      </button>
       {state && <span>{state.zoomPercent}%</span>}
-      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.magnify')} onClick={() => handle.value?.zoomBy(1.25)}>+</button>
+      <button type="button" disabled={!handle.value} aria-label={t('canvas.inspection.magnify')} onClick={() => handle.value?.zoomBy(1.25)}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+        <ButtonTooltip label={t('canvas.inspection.magnify')} side="top" />
+      </button>
     </div>
     {state?.plants.length === 0 && <p>{t('canvas.inspection.empty')}</p>}
     <p>{t('canvas.inspection.hint')}</p>

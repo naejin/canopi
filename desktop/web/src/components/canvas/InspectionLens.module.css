@@ -1,7 +1,13 @@
 .launcher, .panel { position: absolute; right: var(--space-3); z-index: 20; }
 .launcher { top: var(--space-7); display: flex; align-items: center; justify-content: center; width: var(--control-size-md); height: var(--control-size-md); }
 .controls button, .expandButton {
-  padding: var(--space-1) var(--space-2);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
+  padding: 0;
 }
 .launcher, .controls button, .expandButton {
   font: inherit;
@@ -50,4 +56,3 @@
 .preview { cursor: grab; touch-action: none; }
 .preview[data-dragging] { cursor: grabbing; user-select: none; }
 .plantName { cursor: pointer; }
-.controls button { display: inline-flex; align-items: center; justify-content: center; min-width: var(--control-size-sm); height: var(--control-size-sm); }

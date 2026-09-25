@@ -9,7 +9,7 @@ Rules for AI agents working in this repository. Optimize for long-term project h
 - Keep scope to the claimed bead; file follow-up beads for new work.
 - Prefer small, reversible changes. Never weaken tests, type checks, lint rules or guardrails to pass a gate; replace a wrong guardrail with an equal or stronger one and say why.
 - Add runtime dependencies only when the bead or commit explains why existing code and GeoLibre modules are insufficient.
-- The user decides product, priority, scope and consequential risk. The main agent owns architectural coherence and review; see [architecture ownership](docs/workflow/architecture-ownership.md).
+- The user decides product, priority, scope and consequential risk. The main agent owns architectural coherence and review; see [architecture ownership](docs/workflow.md#architecture-ownership).
 
 ## The five v2 principles
 
@@ -29,19 +29,16 @@ Rules for AI agents working in this repository. Optimize for long-term project h
 
 ## Guides
 
-- [Document lifecycle](docs/agent/document-lifecycle.md): document authority, save/load, dirty state, settings.
-- [Frontend](docs/agent/frontend-patterns.md): runtime, workbenches, browser state, chrome, localization, tests.
-- [Editions](docs/agent/edition-development.md): Desktop/Web/gallery setup, ports, fixtures, verification selection.
-- [Canvas runtime](docs/agent/canvas-runtime.md): scene ownership, rendering, interaction.
-- [Canvas PDF](docs/agent/canvas-pdf.md): print layout, fonts, preview, delivery.
-- [MapLibre](docs/agent/maplibre.md): map layers, basemap, camera.
-- [LiDAR](docs/agent/lidar.md): Data Library, import, analysis.
-- [Database](docs/agent/database.md): plant DB, query builder, FTS, translations.
-- [Build and release](docs/agent/build-release.md): all build/check commands, release, native rules.
-- [Problem reporting](docs/agent/problem-reporting.md): Diagnostic Bundle privacy boundary.
-- [Web publishing](docs/agent/web-edition-website-integration.md): Web artifact handoff to the website.
-- Workflow: [issue tracker](docs/workflow/issue-tracker.md), [triage](docs/workflow/triage-workflow.md), [domain docs](docs/workflow/domain.md), [delivery](docs/workflow/delivery.md).
-- UI/UX: start at [.interface-design/system.md](.interface-design/system.md), then one surface-family guide. Inspect real components with `cd desktop/web && npm run dev:ui`.
+- [Map workspace](docs/guides/map-workspace.md): map canvas, map layers, place search, scene runtime, renderer, interaction.
+- [Design document](docs/guides/design-document.md): `.canopi` format, lifecycle, dirty state, GeoJSON, Design Edit, settings.
+- [Data library](docs/guides/data-library.md): LiDAR import, display, slope, native lanes.
+- [Frontend](docs/guides/frontend.md): structure, action layer, commands, chrome, localization, tests.
+- [Editions](docs/guides/editions.md): Desktop/Web/gallery setup, ports, fixtures, Web publishing.
+- [Species catalog](docs/guides/species-catalog.md): plant DB, query builder, FTS, translations, Web catalog.
+- [PDF export](docs/guides/pdf-export.md): print layout, fonts, preview, delivery.
+- [Native and release](docs/guides/native-and-release.md): native rules, build/check commands, release, problem reports.
+- [Workflow](docs/workflow.md): bd, triage, branches, delivery, ownership.
+- UI/UX: start at [.interface-design/system.md](.interface-design/system.md), then one pattern file. Inspect real components with `cd desktop/web && npm run dev:ui`.
 
 Read the relevant guide before changing an area. Code shows current behaviour; accepted contracts show intended behaviour. Fix stale guidance; track a code violation of a contract in bd.
 
@@ -68,7 +65,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 | Frontend | `cd desktop/web && npx tsc --noEmit && npm test` (zero failures, zero unhandled errors); `npm run test:coverage` must stay above the ratchet in `vite.config.ts` (raise it, never lower it) |
 | Shared composition | `cd desktop/web && npm run check:ui && npm run build && npm run build:web` |
 | Species catalog contract | `python3 scripts/species_catalog_contract.py check` plus the focused Python tests |
-| LiDAR | GDAL + GeoLibre ignored lanes; see the [LiDAR guide](docs/agent/lidar.md) |
+| LiDAR | GDAL + GeoLibre ignored lanes; see the [data library guide](docs/guides/data-library.md) |
 | Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
 
 - Write the failing behavioural test first. Bug fixes need a focused regression test. Frontend tests live in `desktop/web/src/__tests__/` as `*.test.ts(x)`.
@@ -96,7 +93,7 @@ Follow the surrounding file. TypeScript/Preact: 2-space indent, `PascalCase` com
 
 ## Docs
 
-`AGENTS.md`, `docs/architecture.md`, `docs/agent/` and `docs/workflow/` are living docs: update them in the same change when code, commands, gates or boundaries move. Replace or delete stale text instead of adding exceptions. Record durable decisions as ADRs. No one-off bug notes here; use a test or a code comment.
+`AGENTS.md`, `docs/architecture.md`, `docs/guides/` and `docs/workflow.md` are living docs: update them in the same change when code, commands, gates or boundaries move. Replace or delete stale text instead of adding exceptions. Record durable decisions as ADRs. No one-off bug notes here; use a test or a code comment.
 
 ## Handoff checklist
 

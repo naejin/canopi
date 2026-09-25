@@ -1,5 +1,4 @@
 import { render } from 'preact'
-import { lazy, Suspense } from 'preact/compat'
 import { effect, signal } from '@preact/signals'
 import '../src/styles/global.css'
 import styles from './gallery.module.css'
@@ -50,9 +49,6 @@ import {
 
 if (!import.meta.env.DEV) throw new Error('Gallery cannot run in production.')
 const params = new URLSearchParams(location.search)
-const lidarPrototypeEnabled = import.meta.env.DEV && params.get('prototype') === 'lidar' && params.get('edition') !== 'web'
-const LidarCanvasPrototype = lazy(() => import('./lidar-prototype/LidarPrototype').then(module => ({ default: module.LidarCanvasPrototype })))
-const LidarPanelPrototype = lazy(() => import('./lidar-prototype/LidarPrototype').then(module => ({ default: module.LidarPanelPrototype })))
 const fixtureState = params.get('state') ?? 'populated'
 const requestedPanelWidth = Number(params.get('panelWidth'))
 const edition = params.get('edition') === 'web' ? 'web' : 'desktop'
@@ -112,7 +108,6 @@ function Gallery() {
       <button onClick={() => { theme.value = theme.value === 'light' ? 'dark' : 'light' }}>{theme.value === 'light' ? 'Dark' : 'Light'} theme</button>
     </header>
     <nav className={styles.review} aria-label="Review surfaces">
-      <a href="/library-reference.html">New Data Library reference ↗</a>
       {Object.entries(GALLERY_SURFACES)
         .filter(([key]) => edition === 'desktop' || key !== 'notebook')
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
@@ -134,7 +129,6 @@ function Gallery() {
 }
 
 function GalleryCanvasWorkspace() {
-  if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarCanvasPrototype /></Suspense>
   return (
     <GalleryCanvasSurface
       activeSurface={selectedSurface}
@@ -197,7 +191,6 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
 }
 
 function GalleryLayersSurface() {
-  if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarPanelPrototype /></Suspense>
   return <LayersPanel />
 }
 

@@ -23,6 +23,13 @@
   right: calc(100% + 8px);
 }
 
+.tooltipTop {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 8px);
+  transform: none;
+}
+
 button:hover .tooltip,
 button:focus-visible .tooltip {
   opacity: 1;

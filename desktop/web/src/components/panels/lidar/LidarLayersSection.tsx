@@ -14,6 +14,7 @@ import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera
 import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { t } from '../../../i18n'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
+import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import styles from './lidar-layers-section.module.css'
 
 /**
@@ -51,30 +52,38 @@ export function LidarLayersSection() {
         <ul className={styles.list}>
           {items.map((item, index) => {
             const label = item.state === 'unavailable' ? t('canvas.lidar.library.unavailableItem') : item.name
+            const visibilityLabel = item.visible
+              ? t('canvas.lidar.layers.hide', { name: label })
+              : t('canvas.lidar.layers.show', { name: label })
+            const moveUpLabel = t('canvas.lidar.layers.moveUp', { name: label })
+            const moveDownLabel = t('canvas.lidar.layers.moveDown', { name: label })
             return (
               <li key={`${item.kind}-${item.id}`} className={styles.layer} data-selected={selected?.id === item.id} data-hidden={!item.visible}>
                 <button
                   type="button"
                   className={styles.eye}
                   aria-pressed={item.visible}
-                  aria-label={item.visible
-                    ? t('canvas.lidar.layers.hide', { name: label })
-                    : t('canvas.lidar.layers.show', { name: label })}
+                  aria-label={visibilityLabel}
                   onClick={() => setLidarEntryVisibility(item.id, !item.visible)}
                 >
                   <LayerVisibilityIcon open={item.visible} />
+                  <ButtonTooltip label={visibilityLabel} side="left" />
                 </button>
                 <button type="button" className={styles.layerName} onClick={() => setSelectedId(item.id)}>
                   <strong>{label}</strong>
                   <small>{referenceStatus(item)}</small>
                 </button>
                 <div className={styles.order}>
-                  <button type="button" disabled={index === 0}
-                    aria-label={t('canvas.lidar.layers.moveUp', { name: label })}
-                    onClick={() => moveReference(item.id, 'front')}>↑</button>
-                  <button type="button" disabled={index === items.length - 1}
-                    aria-label={t('canvas.lidar.layers.moveDown', { name: label })}
-                    onClick={() => moveReference(item.id, 'back')}>↓</button>
+                  <button type="button" disabled={index === 0} aria-label={moveUpLabel}
+                    onClick={() => moveReference(item.id, 'front')}>
+                    <OrderArrow direction="up" />
+                    <ButtonTooltip label={moveUpLabel} side="left" />
+                  </button>
+                  <button type="button" disabled={index === items.length - 1} aria-label={moveDownLabel}
+                    onClick={() => moveReference(item.id, 'back')}>
+                    <OrderArrow direction="down" />
+                    <ButtonTooltip label={moveDownLabel} side="left" />
+                  </button>
                 </div>
               </li>
             )
@@ -180,5 +189,14 @@ function ReferenceSettings({ item, units, inspecting, focused, onFit, onReturn, 
         {t('canvas.lidar.layers.removeFromDesign')}
       </button>
     </div>
+  )
+}
+
+function OrderArrow({ direction }: { direction: 'up' | 'down' }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d={direction === 'up' ? 'M6 10V2M2.5 5.5 6 2l3.5 3.5' : 'M6 2v8M2.5 6.5 6 10l3.5-3.5'}
+        stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
   )
 }

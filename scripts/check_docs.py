@@ -1,4 +1,4 @@
-"""Offline checks for repository Markdown links and document lifecycle headers.
+"""Offline checks for repository Markdown links, ADR status, docs placement and line budgets.
 
 Checks inline links/images, reference definitions, and Markdown heading fragments.
 Fenced code, inline code, and external URLs are excluded. This is intentionally
@@ -12,10 +12,30 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DESIGN_STATES = {"proposed", "active", "partial", "completed", "retired", "evidence"}
 ADR_STATES = {"proposed", "accepted", "superseded", "rejected", "deprecated"}
 LINK = re.compile(r"\[[^\]\n]*\]\((<[^>\n]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 REFERENCE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(<[^>]+>|\S+)", re.MULTILINE)
+# The v2 documentation layout: anything else under docs/ is evidence or history
+# that belongs in bd or nowhere.
+DOCS_FILES = {"README.md", "architecture.md", "workflow.md", "v2-plan.md"}
+DOCS_DIRECTORIES = {"adr", "guides", "release-notes"}
+LINE_BUDGETS = {
+    "AGENTS.md": 120,
+    "README.md": 80,
+    "CONTEXT.md": 250,
+    "docs/README.md": 40,
+    "docs/architecture.md": 200,
+    "docs/workflow.md": 150,
+    "docs/guides/map-workspace.md": 350,
+    "docs/guides/design-document.md": 250,
+    "docs/guides/data-library.md": 250,
+    "docs/guides/frontend.md": 250,
+    "docs/guides/editions.md": 150,
+    "docs/guides/species-catalog.md": 200,
+    "docs/guides/pdf-export.md": 200,
+    "docs/guides/native-and-release.md": 250,
+}
+ADR_BUDGET = 60
 
 
 def prose(text):
@@ -70,15 +90,10 @@ def check_document(file, root):
         elif url.fragment and dest.suffix == ".md" and unquote(url.fragment) not in anchors(dest.read_text(encoding="utf-8")):
             errors.append(f"{relative}:{line}: missing heading {target}")
 
-    if relative.startswith("docs/design/"):
-        header = text.split("\n## ", 1)[0]
-        status = re.search(r"^Status:\s*(\w+)", header, re.MULTILINE)
-        if not status or status[1].lower() not in DESIGN_STATES:
-            errors.append(f"{relative}: missing/invalid design Status header")
-        if not re.search(r"^Tracking:.*`canopi-[\w.]+`", header, re.MULTILINE):
-            errors.append(f"{relative}: missing Tracking bead header")
-        if not re.search(r"^Current guidance:.*\]\(", header, re.MULTILINE):
-            errors.append(f"{relative}: missing Current guidance link header")
+    budget = LINE_BUDGETS.get(relative) or (ADR_BUDGET if relative.startswith("docs/adr/") else None)
+    lines = len(text.splitlines())
+    if budget is not None and lines > budget:
+        errors.append(f"{relative}: {lines} lines exceeds its {budget}-line budget")
     if relative.startswith("docs/adr/"):
         status = re.search(r"^(?:status|Status):\s*(\w+)", text, re.MULTILINE)
         if not status or status[1].lower() not in ADR_STATES:
@@ -90,11 +105,26 @@ def check_document(file, root):
     return errors
 
 
+def check_placement(root):
+    errors = []
+    docs = root / "docs"
+    for path in sorted(docs.rglob("*")) if docs.is_dir() else []:
+        if not path.is_file():
+            continue
+        parts = path.relative_to(docs).parts
+        allowed = parts[0] in DOCS_DIRECTORIES if len(parts) > 1 else parts[0] in DOCS_FILES
+        if not allowed:
+            errors.append(f"{path.relative_to(root).as_posix()}: outside the docs layout (see docs/README.md)")
+    return errors
+
+
 def check(root):
     files = [root / p for p in ("AGENTS.md", "CONTEXT.md", "README.md", "desktop/web/ui-gallery/README.md", ".beads/README.md")]
     for directory in ("docs", ".interface-design"):
         files.extend((root / directory).rglob("*.md"))
-    return [error for file in sorted(set(files)) if file.is_file() for error in check_document(file, root)]
+    return check_placement(root) + [
+        error for file in sorted(set(files)) if file.is_file() for error in check_document(file, root)
+    ]
 
 
 if __name__ == "__main__":

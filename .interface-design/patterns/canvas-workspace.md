@@ -1,111 +1,60 @@
 # Canvas workspace
 
-Read the [design contract](../system.md) first.
+Read the [design system](../system.md) first. Runtime ownership, gestures and rendering: [map workspace guide](../../docs/guides/map-workspace.md). Gallery: `?surface=workspace`, `?surface=lens`, `?surface=color`, `?surface=symbol`.
 
-## Canvas Workspace
-- Toolbar left (44px): command-graph tool and action groups separated by dividers
-- Bottom canvas bar: 34px (`--control-size-xl`) with Zoom Controls on the right. Calendar, Budget, and Consortium live in the right dock.
-- Scale bar bottom-left: uses `--color-text-muted` for subtlety
-- Zoom uses a fixed reference: 100% is 20 CSS pixels per design meter, independent of viewport size. Below 0.1 CSS px/m the control reads **Overview**, detailed Scene content and local chrome are suppressed, and a compact notice offers **Return to Design**. An on-screen Design origin (the session plane origin) is a single clickable marker using that same command; map-unavailable overview must not imply geographic scale. Initial framing and Fit to content select their own scale; implementation and input rules live in the [Canvas runtime guide](../../docs/agent/canvas-runtime.md#text-visibility-and-zoom).
-- Rulers: background `--canvas-ruler-bg` (close to canvas bg, no harsh L-frame)
+## Chrome
 
+- Toolbar rail on the left (`--canvas-toolbar-width`): command-graph tool groups separated by rules; the active tool has an ochre left edge and `--color-control-active`. Arrow keys move between tools (roving tabindex).
+- Floating launchers at the top right: loupe, then pin directly below it, each `--control-size-md` on `--color-surface` with a border. A launcher hides while its panel is open and regains focus when the panel closes.
+- Bottom canvas bar (`--control-size-xl` tall) with zoom out, level, zoom in and fit on the right. Zoom buttons show tooltips above (`side="top"`) with their View shortcuts.
+- 100 % zoom is 20 CSS px per metre, independent of viewport size. Below 0.1 px/m the level reads **Overview**, authored content and local chrome are suppressed, a top-centre notice offers **Return to Design**, and the on-screen Design origin is one clickable marker using the same command. Map-unavailable overview never implies geographic scale.
+- Scale bar bottom left in `--color-text-muted`; rulers use `--canvas-ruler-bg`, close to the canvas, with no harsh L-frame.
 
-## Canvas Notice Layout
-- Canvas notices must sit inside safe overlay slots, not at raw canvas edges.
-- Reserve ruler chrome before placing notices: horizontal ruler, vertical ruler, ruler corner, and scale bar.
-- Active Tool HUDs use the top-left safe slot. They provide current interaction guidance and controls, so they have priority over informational notices.
-- The map notice uses the bottom-left safe slot. It reports map/terrain readiness and stays visually attached to the canvas workspace, not the canvas bar.
-- The scale bar has priority over the map notice. The map notice prefers bottom-left above the scale bar, shifts to the right of the scale bar when vertical space is tight, then compacts before disappearing.
-- Map notice states (loading, ready, map/terrain error) move as one family and should not jump between canvas zones.
-- If layout pressure is severe, Tool HUDs keep their primary instruction visible. The map notice may shrink to a one-line status with ellipsis, but should keep the status dot and shortest useful label visible.
-- Notices use `--canvas-ruler-bg` or `--color-surface`, `1px solid --color-border`, `--radius-md`, and no dramatic shadow. They must be clearly readable above canvas content without using green UI chrome.
-- The overview notice uses the top-centre safe area and compacts to one line in narrow/short workspaces. It must not obscure the bottom-right zoom controls, steal focus on camera updates, or use green chrome.
-- Plant Spacing dense counts are warning-only. A physically valid Plant Spacing Interval must not be blocked by a confirmation step; the Tool HUD should emphasize generated counts above the dense threshold while leaving commit behavior direct.
-- After Plant Spacing samples a placed plant, the sampled plant name is the Tool HUD's primary line. Do not repeat the tool name or generic selected-state copy inside the HUD.
-- Plant Spacing Tool HUDs should not show a visible Cancel button. Use a muted keyboard hint instead: `Esc to exit` before a source is sampled, and `Esc to cancel` after a source is sampled. Keep the hint visible even when the Plant Spacing Interval input is focused.
-- Plant Spacing generated counts use normal text below the dense threshold and `--color-primary` with stronger weight above the threshold. Do not use danger/error colors for dense counts because dense Plant Spacing remains physically valid.
-- Plant Spacing should show generated-count feedback as one line, such as `128 generated`. Do not add a separate dense-warning sentence when the count crosses the threshold.
+## Place search
 
+The pin opens an inline search (place name or coordinates). Enter searches, never typing; choosing a result moves the view only, never design objects. An empty Design with no remembered view shows a quiet prompt next to the pin. Attribution for the geocoder stays visible under results. Escape closes and returns focus to the pin.
 
-## Pinned Plant Name Legend
-- Floating reference card above the scale-bar reservation, past the ruler gutter, at `z-index: 19`
-- Visible only when one or more pinned Plant-name entries exist
-- Entries show the effective Plant symbol and color, localized name, and a count when multiple Plants share an entry
-- Height is bounded by the canvas and scrolls when necessary; the entrance animation respects `prefers-reduced-motion`
+## Notices
 
+- Notices sit in safe overlay slots that reserve the rulers, ruler corner and scale bar, never at raw canvas edges.
+- Tool HUDs use the top-left slot and outrank informational notices; under pressure they keep their primary instruction.
+- The map notice (loading, ready, map or terrain error) uses the bottom-left slot as one family: above the scale bar, then right of it when height is tight, then compacted to one line with its status dot before disappearing.
+- Notices use `--canvas-ruler-bg` or `--color-surface`, a 1px `--color-border` border, `--radius-md`, and no dramatic shadow or green.
+- Plant Spacing HUD: the sampled plant name is the primary line; generated count is one line (`128 generated`), in `--color-primary` and semibold above the dense threshold, never a danger colour and never a confirmation step. No visible Cancel: a muted `Esc to exit` before sampling and `Esc to cancel` after, kept visible while the interval input has focus.
 
-## Plant Tooltip
-- Runtime-owned HTML `<div>` overlay in the canvas container, `pointer-events: none`, `z-index: 20`
-- `--color-surface` bg, `--color-border` border, `--radius-md`
-- Content: localized common name when available (`--text-sm`/600) and scientific name (`--text-xs`/italic/muted)
-- Positioned from pointer coordinates relative to the container, then clamped to the visible container bounds
-- Built with safe DOM methods (`createElement`, `textContent`) — no `innerHTML`
-- Appears on passive Plant hover and hides on pointer leave, non-Plant hover, drag, cancellation, or disposal
+## Canvas overlays
 
+- Pinned plant-name legend: a floating card above the scale-bar reservation, past the ruler gutter, shown only when pinned names exist. Entries show effective symbol and colour, localized name and a count when shared; it scrolls within the canvas and its entrance respects `prefers-reduced-motion`.
+- Plant hover tooltip: a runtime-owned, pointer-transparent `<div>` on `--color-surface` with a border and `--radius-md`; common name (`--text-sm`, 600) over the italic muted scientific name. Clamped to the container, built with `textContent`, hidden on leave, drag, cancel or disposal.
+- Species focus chip: top centre, ochre border, the focused species code, its count and a clear mark; activating it clears focus without touching selection.
+- Selection Action Toolbar stays inside the canvas with an 8px margin, flips near edges and stays attached to the selection; rotatable selections keep the Rotation Handle above and the toolbar below. Both hide during a drag and return afterwards.
+- Selection highlight states come from `canvas/runtime/scene-visuals.ts`: hover is lighter than selected, and locked-object and locked-layer strokes never look editable.
 
+## Tool expectations
 
-## Canvas Tool Behavior (Figma/Sketch standard)
+- Drawing tools: drag previews and release commits; the tool stays active. Leaving the canvas clamps the shape to the edge; release outside commits at the clamp. Shift constrains proportions and angles; Escape cancels the preview. Drawing tools never move existing objects.
+- Select: click selects, Shift+click toggles, drag on empty canvas draws a band, drag on a selection moves it as one edit, Delete removes.
+- Hand and Space+drag pan; releasing Space returns to the previous tool.
+- Text: click places a textarea; Enter or click elsewhere commits, Shift+Enter breaks a line, Escape restores the previous text, empty text is discarded.
+- Plant stamp: each click places a plant; Escape clears the species, not the tool.
 
-All canvas tools must follow these behaviors. They are not optional — they are what users expect from any design tool.
+## Inspection lens
 
-### Drawing tools (Rectangle, Ellipse, Line, future shapes)
-- Click+drag creates a live preview shape → mouseup commits the shape
-- **Mouse leaves canvas**: shape sticks to the canvas edge, continues tracking the cursor direction along the boundary. Origin, cursor, and edge contact point stay aligned
-- **Mouseup outside canvas**: commits shape at the edge-clamped position (does not cancel)
-- **Escape during draw**: cancels, removes preview
-- **Shift during draw**: constrains proportions (square, circle, 45° angles)
-- Cannot select or move existing objects — only the select tool admits object-move gestures
-- After committing a shape: tool stays active for the next draw (does not auto-switch to select)
-- Additional pointer-downs are ignored while the admitted pointer and Scene edit own the active gesture
+A view-only preview opened from the loupe. It starts at the canvas centre and follows pointer movement over artwork; moving onto the lens or other controls keeps the last location, and editing drags never redirect it. The panel has `SurfaceHeader` title, expand and close, the preview, and a control row with recentre, widen, magnification level and magnify, all icon buttons that follow the icon-only rules.
 
-### Select tool
-- Click empty canvas: deselects all, clears highlights
-- Click object: selects it, highlights it
-- Shift+click: toggles selection membership
-- Click+drag on empty canvas: shows a rubber-band preview and commits intersecting objects on release
-- Click+drag on selected object: moves it through a Scene edit transaction owned by the shared gesture controller
-- Mouse leaving canvas during rubber-band or move: sticks to edge (same as drawing tools)
-- Escape during rubber-band: cancels band
-- Delete key: removes selected objects
-- The contextual Selection Action Toolbar stays inside the visible canvas with an 8px margin, flips when close to an edge, and stays visually attached to the selected object. Single non-rotatable selections use a close above-selection placement. Rotatable selections keep the Rotation Handle above the object and place the toolbar close below by default.
-- Click+drag on a selected Design Object hides the Selection Action Toolbar and Rotation Handle while the drag is active, then restores them after release or cancel using the final selection geometry. Passive hover presentation, including the plant Hover Tooltip, clears when a drag starts and does not reappear until the next passive hover movement.
+- Labels stay attached to plant positions with collision-aware placement and connectors. Hover or focus identifies the plant in both preview and canvas; activating a name centres only the lens.
+- Drag the preview or use arrow keys to pan (Shift for larger steps). Name buttons never start a drag. Dragging stops on release, cancel, lost capture, blur and teardown.
+- The source area is outlined on the main canvas with a solid ochre rectangle that disappears on close and never becomes selection, focus or a Design object.
+- Escape closes and returns focus to the loupe. Unavailable-preview and no-plants states stay explicit. Inspection never dirties the Design, alters selection or moves the main camera.
 
-### Hand/Pan tool
-- Click+drag: the shared gesture controller pans the viewport through `CameraController.panBy`
-- Space+drag from any tool: temporary pan, returns to previous tool on key release
+The raster reading card (numeric LiDAR inspection) sits bottom left: title, layer name, dismiss icon button, readout, Sample centre action, coordinates and a muted Escape hint.
 
-### Text tool
-- Click to place text insertion point (HTML textarea overlay)
-- Type to enter text
-- Click elsewhere or Enter commits text
-- Shift+Enter inserts a line break
-- Escape cancels editing and restores the previous text when editing an existing Annotation
-- Empty text on commit: discarded
+## Plant Color and Plant Symbol editors
 
-### Plant stamp tool
-- Click to place plant at cursor position
-- Tool stays active for placing more plants
-- Escape clears the selected species (does not force-switch to another tool)
+Both are popovers anchored to their toolbar buttons and share `SurfaceHeader`, `AppearanceSelection` and `appearance.module.css`: title and close, one effective glyph with the species or selection band, scrolling choices and a fixed apply footer. Width 328px, clamped to the viewport; no large preview card.
 
-### Event routing rules
-- **Gesture ownership**: `SceneInteractionSession` records the active pointer and routes the gesture to the tool adapter, shared gesture controller, or active overlay control that admitted it
-- **Window-level drag tracking**: capture-phase window `pointermove`/`pointerup`/`pointercancel` listeners keep the admitted gesture alive outside the canvas and clamp tool coordinates to the canvas edge where required
-- **Move authority**: `interaction/shared-gestures.ts` owns pan, selection-band, and selected-object move state. Object moves mutate a Scene edit transaction and commit or abort it as one interaction
-- **Cancellation**: Escape, pointer cancellation, window blur, and disposal converge on the Scene Interaction cancellation path so transient edits and runtime-owned overlays are released together
-
-## Selection Highlights
-
-Visual feedback is renderer-neutral. `runtime/scene-visuals.ts` defines screen-pixel stroke styles; the Pixi scene applies them to plants, zones, annotations, and Measurement Guides, and the Inspection Lens preview to plants.
-
-| State | Visual | When |
-|-------|--------|------|
-| Hover | 2.5px hover stroke at 0.72 alpha | Pointer is over an interactive object |
-| Selected | 4.5px selection stroke | Object belongs to committed Scene selection |
-| Locked object | 2.75px locked-object stroke | Direct object lock blocks editing |
-| Locked layer | 2.75px locked-layer stroke | Owning Scene layer blocks editing |
-
-The rubber-band itself is a runtime-owned DOM preview. Selection is resolved and committed when the gesture finishes.
-
-### Theme coherence
-- Interaction colors resolve through `getCanvasColor()` from the current canvas theme tokens
-- Renderer snapshots contain semantic hover/selection/lock state; persisted Scene entities never contain presentation-only highlight attributes
+- Color: twelve swatches in six columns, a quiet selectable suggestion and a Custom colour disclosure (saturation/lightness square, hue strip, validated hex). Choices only preview; invalid hex disables both apply actions.
+- Symbol: twelve Botanical and four Abstract choices in one three-column keyboard listbox of 56px tiles; labels wrap at word boundaries; choices use neutral ink, selection uses ochre; arrow keys preview and only the active choice is a tab stop.
+- Footer actions distinguish the selected plants from all placed instances of one species; the species action is hidden for mixed selections. No reset actions below the footer.
+- `useAppearancePopover` owns synchronous positioning, focus on open and resize/scroll cleanup; Escape returns focus to the toolbar button. Custom drags release on cancel, blur, selection change, disclosure close and unmount. Mutations stay in the plant-presentation commands; open editors refresh names on locale change.
+- Glyph artwork lives in the shared plant-symbol recipes used by canvas, UI and PDF; pass the rendered size so small marks omit fine detail.

@@ -1,6 +1,7 @@
 import styles from './ButtonTooltip.module.css'
 
-export type ButtonTooltipSide = 'left' | 'right'
+/** `top` opens above the button, aligned to its end edge (for bottom-edge bars). */
+export type ButtonTooltipSide = 'left' | 'right' | 'top'
 
 interface ButtonTooltipProps {
   label: string
@@ -15,7 +16,7 @@ export function ButtonTooltip({
   shortcut,
   side = 'right',
 }: ButtonTooltipProps) {
-  const sideClass = side === 'left' ? styles.tooltipLeft : styles.tooltipRight
+  const sideClass = { left: styles.tooltipLeft, right: styles.tooltipRight, top: styles.tooltipTop }[side]
 
   return (
     <span className={`${styles.tooltip} ${sideClass}`} role="tooltip">

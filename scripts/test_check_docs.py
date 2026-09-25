@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from scripts.check_docs import anchors, check_document
+from scripts.check_docs import anchors, check_document, check_placement
 
 
 class DocumentationChecks(unittest.TestCase):
@@ -17,15 +17,26 @@ class DocumentationChecks(unittest.TestCase):
             self.assertIn("missing target missing.md", errors[0])
             self.assertIn("missing heading other.md#absent", errors[1])
 
-    def test_design_lifecycle_requires_tracking_and_current_guide(self):
+    def test_docs_outside_the_v2_layout_are_refused(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            page = root / "docs/design/plan.md"
-            page.parent.mkdir(parents=True)
-            page.write_text('# Plan\n\nStatus: completed.\n', encoding="utf-8")
-            self.assertEqual(len(check_document(page, root)), 2)
-            page.write_text('# Plan\n\nStatus: completed.\nTracking: `canopi-test`.\nCurrent guidance: [self](plan.md).\n', encoding="utf-8")
-            self.assertEqual(check_document(page, root), [])
+            for name in ("docs/README.md", "docs/guides/frontend.md", "docs/adr/0001-x.md", "docs/release-notes/v2.0.0.md", "docs/design/plan.md", "docs/evidence.md"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text("# Doc\n", encoding="utf-8")
+            errors = check_placement(root)
+            self.assertEqual(len(errors), 2)
+            self.assertIn("docs/design/plan.md", errors[0])
+            self.assertIn("docs/evidence.md", errors[1])
+
+    def test_line_budgets(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            guide = root / "docs/guides/editions.md"
+            guide.parent.mkdir(parents=True)
+            guide.write_text("# Editions\n" + "line\n" * 150, encoding="utf-8")
+            self.assertIn("docs/guides/editions.md: 151 lines exceeds its 150-line budget", check_document(guide, root))
+            guide.write_text("# Editions\n", encoding="utf-8")
+            self.assertEqual(check_document(guide, root), [])
 
     def test_superseded_adr_requires_existing_replacement(self):
         with TemporaryDirectory() as directory:

@@ -17,124 +17,58 @@
 
 ---
 
-Canopi combines a Species Catalog with an interactive canvas for designing agroecological systems. The desktop app runs on Linux, macOS, and Windows. The Web Edition shares the canvas, planning panels, and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, LiDAR Data Library, Design Notebook, and native file management. Every Design is drawn directly on the map.
+Canopi combines a Species Catalog with a design canvas that is the map itself: every Design is geolocated and drawn over a basemap, satellite imagery, LiDAR and terrain. The desktop app runs on Linux, macOS and Windows. The Web Edition shares the canvas, planning panels and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, the LiDAR Data Library, the Design Notebook and native file management.
 
 ## Features
 
-**Species Catalog** -- Ecological, morphological, and agronomic data with text search, structured filters, detail cards, favorites, and 11-language support. Web Edition offers a reduced set of filters and details.
-
-**Design canvas** -- PixiJS-based workspace with Zones, Annotations, Plant placement, Object Groups, undo/redo, grid, rulers, and Measurement Guides. Design-scoped Plant colors and symbols, Pinned Plant Names, and zoom-aware text keep the canvas readable.
-
-**Planning panels** -- Desktop and Web share the Timeline for scheduling work, Budget with per-species pricing and CSV export, and Consortium planning across Strata and Succession Phases with canvas hover sync.
-
-**Map canvas** -- Designs are drawn on a MapLibre map with basemap, satellite, LiDAR and terrain references, and place search in both editions.
-
-**File format** -- `.canopi` JSON documents with autosave and dirty tracking. Desktop saves files; Web Edition keeps browser drafts and downloads portable `.canopi` files. [Canvas PDF](docs/canvas-pdf.md) exports an overview and optional scaled detail sheets with complete plant legends on desktop and Web.
-
-**Field notebook aesthetic** -- Parchment, ink, and ochre palette. Light and dark themes.
+- **Species Catalog**: ecological, morphological and agronomic data with search, filters, detail cards and favourites in 11 languages.
+- **Map canvas**: Zones, Annotations, Plants, Object Groups, Measurement Guides, undo/redo, rulers and grid on a MapLibre map with OpenFreeMap basemaps, satellite imagery, contours, hillshade and place search.
+- **Planning**: Timeline, Budget (per-species pricing, CSV export) and Consortium planning across Strata and Succession Phases.
+- **Files**: `.canopi` Designs (WGS84 positions), GeoJSON import/export and Canvas PDF field sheets.
+- **Field-notebook look**: parchment, ink and ochre; light and dark themes.
 
 ## Tech stack
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Rust (Tauri v2 + rusqlite) |
-| Frontend | Preact + @preact/signals + TypeScript + Vite |
-| Canvas | PixiJS (primary) + Canvas2D (fallback) |
-| i18n | i18next -- en, fr, es, pt, it, zh, de, ja, ko, nl, ru |
-| Styling | CSS Modules with design tokens |
-| Maps | MapLibre GL JS + maplibre-contour |
+Rust (Tauri v2, rusqlite) · Preact, @preact/signals, TypeScript, Vite · MapLibre GL JS with a PixiJS custom layer · i18next · CSS Modules with design tokens.
 
 ## Getting started
 
-Install Rust through rustup, Node.js 22.x (at least 22.13), and Python 3. The repository pins the Rust toolchain in [rust-toolchain.toml](rust-toolchain.toml).
+Install Rust through rustup (pinned in [rust-toolchain.toml](rust-toolchain.toml)), Node.js 22.13+ and Python 3.
 
 ```bash
 # Linux system dependencies
 sudo apt-get install pkg-config libcairo2-dev libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev patchelf
 
-# From the repository root
 npm ci --prefix desktop/web
 cargo install tauri-cli --version '^2' --locked
-
-# Prepare the plant database from a local, pinned canopi-data export
-python3 scripts/prepare-db.py
-
-# Run the app
+python3 scripts/prepare-db.py   # plant DB from the pinned canopi-data export
 cargo tauri dev
 ```
 
-Database preparation requires the exact source export pinned by the repository; see the [database guide](docs/agent/database.md#canopi-data-export). Rebuild it when that contract or source pin changes. Platform dependencies and packaging are covered in the [build guide](docs/agent/build-release.md).
-
-For safe Desktop, Web Edition, and memory-gallery workflows, including isolated profiles and fixture selection, use the [edition development guide](docs/agent/edition-development.md).
-
-## Development
-
-Run each command independently from the repository root.
+Database preparation needs the exact pinned source export; see the [species catalog guide](docs/guides/species-catalog.md). Web Edition, UI gallery, ports and fixtures are in the [editions guide](docs/guides/editions.md); build, check and release commands are in the [native and release guide](docs/guides/native-and-release.md).
 
 ```bash
-# Frontend only (hot reload)
-cd desktop/web && npm run dev
-
-# Web Edition (http://localhost:1421/app/)
-cd desktop/web && npm run dev:web
-
-# Memory-only UI gallery (http://127.0.0.1:1422/)
-cd desktop/web && npm run dev:ui
-
-# Static Web Edition build (no release catalog required)
-cd desktop/web && npm run build:web
-
-# Typecheck the app and gallery, then build both edition frontends
-cd desktop/web && npm run check:editions
-
-# TypeScript check
-cd desktop/web && npx tsc --noEmit
-
-# Regenerate shared transport bindings
-cd desktop/web && npm run gen:types
-
-# Verify generated transport bindings are up to date
-cd desktop/web && npm run check:types
-
-# Tests
-cd desktop/web && npm test
-
-# Rust workspace check (without bundled DB)
-CANOPI_SKIP_BUNDLED_DB=1 cargo check --workspace
+cd desktop/web && npm run dev:web   # Web Edition, http://localhost:1421/app/
+cd desktop/web && npm run dev:ui    # memory-only UI gallery, http://127.0.0.1:1422/
+cd desktop/web && npx tsc --noEmit && npm test
 ```
-
-A pre-commit hook runs `tsc --noEmit` automatically via husky.
 
 ## Project structure
 
 ```
-canopi/
-├── desktop/            # Tauri v2 app
-│   ├── src/            # Rust backend (IPC, DB, platform)
-│   ├── web/            # Preact frontend
-│   └── tauri.conf.json
-├── common-types/       # Shared Rust <> TypeScript types
-├── bindings-gen/       # Shared contract and adapter generation
-├── lib-c/              # Linux native rendering
-├── lib-swift/          # macOS platform stub
-├── lib-cpp/            # Windows platform stub
-├── scripts/            # DB generation, release tooling
-├── docs/               # Architecture decisions, subsystem guides, releases
-├── .interface-design/  # Design system documentation
-└── AGENTS.md           # Agent operating contract
+desktop/src/        Rust backend (IPC, services, DB, platform)
+desktop/web/        Preact frontend
+common-types/       authored cross-language contracts
+bindings-gen/       TypeScript transport codegen
+lib-c/ lib-swift/ lib-cpp/   platform crates
+scripts/            DB preparation, docs check, release tooling
+docs/               architecture, ADRs, guides, release notes
+.interface-design/  design system
 ```
 
 ## Documentation
 
-- [`docs/README.md`](docs/README.md) — documentation map, authority, and placement rules
-- [`AGENTS.md`](AGENTS.md) — agent operating contract, architecture rules, and coding standards
-- [`CONTEXT.md`](CONTEXT.md) — domain vocabulary
-- [`docs/architecture.md`](docs/architecture.md) — v2 architecture: principles, authorities, geolocation, map stack
-- [`docs/adr/`](docs/adr/) — architectural decisions
-- [`docs/agent/`](docs/agent/) — current subsystem implementation guidance
-- [`docs/release.md`](docs/release.md) — release operations
-- [Web Edition integration](docs/agent/web-edition-website-integration.md) — static artifacts and website handoff
-- [`.interface-design/system.md`](.interface-design/system.md) — design system (field notebook aesthetic, tokens, component patterns)
+Start at the [documentation map](docs/README.md). Agents follow [AGENTS.md](AGENTS.md); domain vocabulary is in [CONTEXT.md](CONTEXT.md); the architecture is in [docs/architecture.md](docs/architecture.md).
 
 ## License
 

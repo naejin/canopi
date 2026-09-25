@@ -173,7 +173,7 @@ export function CanvasToolbar() {
         onClick={command.action}
       >
         <Icon className={styles.toolIcon} />
-        <ButtonTooltip label={command.label} shortcut={shortcutLabel} description={command.description} />
+        <ButtonTooltip label={command.label} shortcut={command.shortcut} description={command.description} />
       </button>
     )
   }
@@ -212,7 +212,7 @@ export function CanvasToolbar() {
         <Icon className={styles.toolIcon} />
         <ButtonTooltip
           label={label}
-          shortcut={options?.shortcut ? `(${options.shortcut})` : undefined}
+          shortcut={options?.shortcut}
           description={desc}
         />
       </button>

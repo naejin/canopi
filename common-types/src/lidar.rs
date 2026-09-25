@@ -7,7 +7,6 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
 
 /// Immutable measurement definition of a source layer.
 ///
@@ -497,10 +496,6 @@ pub struct LidarDisplayDescriptor {
 pub struct LidarPresentationSection {
     pub schema_version: u32,
     pub entries: Vec<LidarPresentationEntry>,
-    // Preserves unknown presentation fields for forward compatibility.
-    #[serde(flatten)]
-    #[specta(skip)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -521,10 +516,6 @@ pub struct LidarPresentationEntry {
     // User-defined order inside the LiDAR band; lower renders further back.
     pub order: u32,
     pub style: Option<String>,
-    // Preserves unknown entry fields so newer builds round-trip on Web.
-    #[serde(flatten)]
-    #[specta(skip)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
 pub const LIDAR_PRESENTATION_SCHEMA_VERSION: u32 = 1;
