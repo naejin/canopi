@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_BASEMAP_STYLES,
   SETTINGS_LOCALES,
+  SETTINGS_SATELLITE_PROVIDERS,
   SETTINGS_THEMES,
 } from '../generated/settings'
 import type { Settings } from '../types/settings'
@@ -53,9 +54,12 @@ describe('settings platform adapters', () => {
       auto_save_interval_s: 15,
       side_panel_width: 420,
       saved_stamps_frame_height: 260,
-      map_layer_visible: false,
-      map_style: 'satellite',
-      map_opacity: 0.4,
+      basemap_style: 'dark',
+      basemap_visible: false,
+      basemap_opacity: 0.4,
+      satellite_provider: 'google',
+      satellite_visible: true,
+      satellite_opacity: 0.7,
       contour_visible: true,
       contour_opacity: 0.6,
       contour_interval: 10,
@@ -88,12 +92,20 @@ describe('settings platform adapters', () => {
       expect((await adapter.load()).theme).toBe(theme)
     }
 
-    for (const mapStyle of SETTINGS_BASEMAP_STYLES) {
+    for (const basemapStyle of SETTINGS_BASEMAP_STYLES) {
       const adapter = createBrowserSettingsPlatformAdapter({
-        loadSettings: () => settings({ map_style: mapStyle }),
+        loadSettings: () => settings({ basemap_style: basemapStyle }),
         saveSettings: vi.fn(),
       })
-      expect((await adapter.load()).map_style).toBe(mapStyle)
+      expect((await adapter.load()).basemap_style).toBe(basemapStyle)
+    }
+
+    for (const satelliteProvider of SETTINGS_SATELLITE_PROVIDERS) {
+      const adapter = createBrowserSettingsPlatformAdapter({
+        loadSettings: () => settings({ satellite_provider: satelliteProvider }),
+        saveSettings: vi.fn(),
+      })
+      expect((await adapter.load()).satellite_provider).toBe(satelliteProvider)
     }
   })
 
@@ -121,9 +133,12 @@ describe('settings platform adapters', () => {
         bottom_panel_budget_height: -1,
         bottom_panel_consortium_height: Number.POSITIVE_INFINITY,
         bottom_panel_tab: 7,
-        map_layer_visible: 'false',
-        map_style: 'terrain',
-        map_opacity: '0.4',
+        basemap_style: 'street',
+        basemap_visible: 'false',
+        basemap_opacity: '0.4',
+        satellite_provider: 'maptiler',
+        satellite_visible: 1,
+        satellite_opacity: Number.NaN,
         contour_visible: 1,
         contour_opacity: null,
         contour_interval: 1.5,

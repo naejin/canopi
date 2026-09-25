@@ -1,7 +1,7 @@
 import type {
-  BasemapProviderHttp,
-  BasemapProviderResponse,
-} from '../maplibre/basemap-provider-session'
+  SatelliteProviderHttp,
+  SatelliteProviderResponse,
+} from '../maplibre/satellite-provider-session'
 
 /** Longest response body the provider will read, in bytes. */
 export const BASEMAP_HTTP_MAX_BODY_BYTES = 256 * 1024
@@ -16,11 +16,11 @@ export const BASEMAP_HTTP_MAX_BODY_BYTES = 256 * 1024
  * be able to echo a configured API key into a console, a diagnostic sink or the
  * UI, and the key travels in the URL.
  */
-export function createBrowserBasemapHttp(
+export function createBrowserSatelliteHttp(
   fetchImpl: typeof fetch = globalThis.fetch,
-): BasemapProviderHttp {
+): SatelliteProviderHttp {
   return {
-    async request(input): Promise<BasemapProviderResponse> {
+    async request(input): Promise<SatelliteProviderResponse> {
       let response: Response
       try {
         response = await fetchImpl(input.url, {

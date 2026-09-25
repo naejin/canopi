@@ -16,6 +16,7 @@ export default defineConfig(({ command }) => {
       '#platform': path('../src/platform/browser.ts'),
       '#canvas-pdf-platform': path('../src/app/canvas-pdf/platform.browser.ts'),
       '#budget-export-platform': path('./budget-export.ts'),
+      '#geocoding-transport': path('../src/app/geocoding/transport.browser.ts'),
     } },
     server: { host: '127.0.0.1', port: 1422, strictPort: true, fs: { allow: [path('..')] } },
   }

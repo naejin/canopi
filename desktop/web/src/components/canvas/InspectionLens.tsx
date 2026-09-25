@@ -7,6 +7,7 @@ import type { CanvasInspectionHandle } from '../../canvas/inspection'
 import type { CanvasDocumentSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
 import styles from './InspectionLens.module.css'
 
 export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElement> }) {
@@ -23,9 +24,9 @@ export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElem
   if (!documents || !queries) return null
   return <>
     <button ref={launcher} type="button" className={styles.launcher} hidden={open} aria-expanded={open} aria-controls={id}
-      onClick={() => setOpen(!open)}>
+      aria-label={t('canvas.inspection.title')} onClick={() => setOpen(!open)}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4" /><path d="m10 10 4 4" stroke="currentColor" strokeWidth="1.4" /></svg>
-      {t('canvas.inspection.title')}
+      <ButtonTooltip label={t('canvas.inspection.title')} side="left" />
     </button>
     {open && <InspectionPanel id={id} documents={documents} queries={queries} canvasRef={canvasRef} onClose={() => setOpen(false)} />}
   </>

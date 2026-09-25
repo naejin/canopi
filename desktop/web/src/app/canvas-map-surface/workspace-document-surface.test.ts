@@ -135,7 +135,7 @@ describe('createWorkspaceDocumentSurface', () => {
         releaseMap,
         getWebGL2Context: () => null,
         updateMapContributions: () => {},
-        updateBasemapPresentation: () => {},
+        updateBackgroundPresentation: () => {},
         installStyleRestorer: () => () => {},
       },
       layer: {},
@@ -145,9 +145,11 @@ describe('createWorkspaceDocumentSurface', () => {
       sessionIdentity: {},
       map: {
         initialCenter: { lat: 0, lon: 0 },
-        basemapStyle: 'street',
-        basemapVisible: true,
-        basemapOpacity: 1,
+        background: {
+          basemap: { style: 'liberty', visible: true, opacity: 1 },
+          satellite: { provider: 'eox', visible: false, opacity: 1 },
+          locale: 'en',
+        },
       },
     })
     await vi.waitFor(() => expect(signal).not.toBeNull())
@@ -223,8 +225,10 @@ function createReconciler(workspace: ReturnType<typeof createWorkspaceLifecycle>
 function mapSnapshot(): WorkspaceMapSnapshot {
   return {
     initialCenter: { lat: 0, lon: 0 },
-    basemapStyle: 'street',
-    basemapVisible: true,
-    basemapOpacity: 1,
+    background: {
+      basemap: { style: 'liberty', visible: true, opacity: 1 },
+      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      locale: 'en',
+    },
   }
 }

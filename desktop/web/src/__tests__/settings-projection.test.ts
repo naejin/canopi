@@ -1,24 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BasemapStyle } from '../generated/contracts'
+import type { BasemapStyle, SatelliteProvider } from '../generated/contracts'
 import type { Settings, Theme } from '../types/settings'
 import type { SettingsProjectionInstallation } from '../app/settings/projection'
 import {
-  contourIntervalMeters,
-  createDefaultLayerOpacity,
-  createDefaultLayerVisibility,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
   snapToGridEnabled,
   snapToGuidesEnabled,
 } from '../app/canvas-settings/signals'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { sidePanelWidth } from '../app/shell/state'
 import {
   autoSaveIntervalMs,
-  basemapStyle,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
@@ -43,9 +36,12 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     snap_to_guides: true,
     auto_save_interval_s: 60,
     side_panel_width: null,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_provider: 'eox',
+    satellite_visible: false,
+    satellite_opacity: 1,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,
@@ -62,16 +58,11 @@ function resetProjectionSignals(): void {
   lastView.value = null
   locale.value = 'en'
   theme.value = 'light'
-  basemapStyle.value = 'street'
   autoSaveIntervalMs.value = 60_000
   snapToGridEnabled.value = false
   snapToGuidesEnabled.value = true
   sidePanelWidth.value = null
-  layerVisibility.value = createDefaultLayerVisibility()
-  layerOpacity.value = createDefaultLayerOpacity()
-  contourIntervalMeters.value = 0
-  hillshadeVisible.value = false
-  hillshadeOpacity.value = 0.55
+  mapLayers.value = createDefaultMapLayers()
   plantSpacingIntervalM.value = 0.5
   savedStampsFrameHeight.value = 220
 }
@@ -96,14 +87,11 @@ async function flushMicrotasks(): Promise<void> {
   }
 }
 
-let originalMapTilerKey: string | undefined
 let installation: SettingsProjectionInstallation
 const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
 
 beforeEach(() => {
   vi.useFakeTimers()
-  originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
-  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = undefined
   saveSettings.mockReset().mockResolvedValue(undefined)
   resetSettingsProjectionForTests()
   resetProjectionSignals()
@@ -118,7 +106,6 @@ afterEach(() => {
   resetSettingsProjectionForTests()
   vi.clearAllTimers()
   vi.useRealTimers()
-  ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
 })
 
 describe('settings projection', () => {
@@ -147,8 +134,12 @@ describe('settings projection', () => {
       auto_save_interval_s: 45,
       side_panel_width: 460,
       saved_stamps_frame_height: 280,
-      map_layer_visible: false,
-      map_opacity: 0.35,
+      basemap_style: 'bright',
+      basemap_visible: false,
+      basemap_opacity: 0.35,
+      satellite_provider: 'google',
+      satellite_visible: true,
+      satellite_opacity: 0.7,
       contour_visible: true,
       contour_opacity: 0.45,
       contour_interval: 12,
@@ -164,14 +155,12 @@ describe('settings projection', () => {
     expect(snapToGuidesEnabled.value).toBe(false)
     expect(sidePanelWidth.value).toBe(460)
     expect(savedStampsFrameHeight.value).toBe(280)
-    expect(basemapStyle.value).toBe('street')
-    expect(layerVisibility.value.base).toBe(false)
-    expect(layerOpacity.value.base).toBe(0.35)
-    expect(layerVisibility.value.contours).toBe(true)
-    expect(layerOpacity.value.contours).toBe(0.45)
-    expect(contourIntervalMeters.value).toBe(12)
-    expect(hillshadeVisible.value).toBe(true)
-    expect(hillshadeOpacity.value).toBe(0.2)
+    expect(mapLayers.value).toEqual({
+      basemap: { style: 'bright', visible: false, opacity: 0.35 },
+      satellite: { provider: 'google', visible: true, opacity: 0.7 },
+      contours: { visible: true, opacity: 0.45, intervalMeters: 12 },
+      hillshade: { visible: true, opacity: 0.2 },
+    })
     expect(plantSpacingIntervalM.value).toBe(0.75)
     expect(saveSettings).not.toHaveBeenCalled()
   })
@@ -187,13 +176,12 @@ describe('settings projection', () => {
       settings.autoSaveIntervalMs = 15_000
       settings.sidePanel.width = 440
       settings.savedStamps.frameHeight = 260
-      settings.mapLayers.baseVisible = false
-      settings.mapLayers.baseOpacity = 0.6
-      settings.mapLayers.contoursVisible = true
-      settings.mapLayers.contoursOpacity = 0.3
-      settings.mapLayers.contourIntervalMeters = 18
-      settings.mapLayers.hillshadeVisible = true
-      settings.mapLayers.hillshadeOpacity = 0.25
+      settings.mapLayers = {
+        basemap: { style: 'dark', visible: false, opacity: 0.6 },
+        satellite: { provider: 'google', visible: true, opacity: 0.8 },
+        contours: { visible: true, opacity: 0.3, intervalMeters: 18 },
+        hillshade: { visible: true, opacity: 0.25 },
+      }
       settings.plantSpacingIntervalM = 0.25
     }, { persist: 'none' })
 
@@ -205,9 +193,12 @@ describe('settings projection', () => {
       auto_save_interval_s: 15,
       side_panel_width: 440,
       saved_stamps_frame_height: 260,
-      map_layer_visible: false,
-      map_style: 'street',
-      map_opacity: 0.6,
+      basemap_style: 'dark',
+      basemap_visible: false,
+      basemap_opacity: 0.6,
+      satellite_provider: 'google',
+      satellite_visible: true,
+      satellite_opacity: 0.8,
       contour_visible: true,
       contour_opacity: 0.3,
       contour_interval: 18,
@@ -247,18 +238,22 @@ describe('settings projection', () => {
   it('keeps the Google key out of the design-facing settings it does not belong to', () => {
     hydrateSettingsProjection(baseSettings({ google_maps_api_key: 'device-key' }))
     // The key is device-local configuration. It travels with Settings, which is
-    // never written into a Design, and no basemap identity depends on it: the
-    // provider module chooses the official or keyless path from the key alone.
+    // never written into a Design, and no layer identity depends on it: the
+    // provider module decides whether Google is available from the key alone.
     const snapshot = snapshotSettingsProjection()
     expect(Object.keys(snapshot)).toContain('google_maps_api_key')
-    expect(snapshot.map_style).toBe('street')
+    expect(snapshot.basemap_style).toBe('liberty')
+    expect(snapshot.satellite_provider).toBe('eox')
+    expect(JSON.stringify(mapLayers.value)).not.toContain('device-key')
   })
 
-  it('normalizes theme, map style, opacities, and contour interval at the seam', () => {
+  it('normalizes theme, map layer choices, opacities, and contour interval at the seam', () => {
     hydrateSettingsProjection(baseSettings({
       theme: 'neon' as Theme,
-      map_style: 'terrain' as BasemapStyle,
-      map_opacity: 2,
+      basemap_style: 'street' as BasemapStyle,
+      basemap_opacity: 2,
+      satellite_provider: 'maptiler' as SatelliteProvider,
+      satellite_opacity: Number.NaN,
       contour_opacity: -1,
       contour_interval: 12.7,
       hillshade_opacity: Number.NaN,
@@ -268,20 +263,24 @@ describe('settings projection', () => {
     }))
 
     expect(theme.value).toBe('light')
-    expect(basemapStyle.value).toBe('street')
-    expect(layerOpacity.value.base).toBe(1)
-    expect(layerOpacity.value.contours).toBe(0)
-    expect(contourIntervalMeters.value).toBe(13)
-    expect(hillshadeOpacity.value).toBe(0.55)
+    expect(mapLayers.value.basemap.style).toBe('liberty')
+    expect(mapLayers.value.basemap.opacity).toBe(1)
+    expect(mapLayers.value.satellite.provider).toBe('eox')
+    expect(mapLayers.value.satellite.opacity).toBe(1)
+    expect(mapLayers.value.contours.opacity).toBe(0)
+    expect(mapLayers.value.contours.intervalMeters).toBe(13)
+    expect(mapLayers.value.hillshade.opacity).toBe(0.55)
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(sidePanelWidth.value).toBe(null)
     expect(savedStampsFrameHeight.value).toBe(120)
 
     mutateSettingsProjection((settings) => {
-      settings.mapLayers.baseOpacity = -2
-      settings.mapLayers.contoursOpacity = Number.POSITIVE_INFINITY
-      settings.mapLayers.contourIntervalMeters = 7.6
-      settings.mapLayers.hillshadeOpacity = 3
+      settings.mapLayers = {
+        basemap: { ...settings.mapLayers.basemap, opacity: -2 },
+        satellite: { ...settings.mapLayers.satellite, opacity: 5 },
+        contours: { ...settings.mapLayers.contours, opacity: Number.POSITIVE_INFINITY, intervalMeters: 7.6 },
+        hillshade: { ...settings.mapLayers.hillshade, opacity: 3 },
+      }
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120
       settings.savedStamps.frameHeight = Number.POSITIVE_INFINITY
@@ -289,8 +288,10 @@ describe('settings projection', () => {
 
     expect(snapshotSettingsProjection()).toEqual(expect.objectContaining({
       theme: 'light',
-      map_style: 'street',
-      map_opacity: 0,
+      basemap_style: 'liberty',
+      basemap_opacity: 0,
+      satellite_provider: 'eox',
+      satellite_opacity: 1,
       contour_opacity: 1,
       contour_interval: 8,
       hillshade_opacity: 1,
@@ -324,7 +325,7 @@ describe('settings projection', () => {
     }, { persist: 'queued', delayMs: 250 })
     mutateSettingsProjection((settings) => {
       settings.theme = 'dark'
-      settings.mapLayers.baseOpacity = 0.4
+      settings.mapLayers = { ...settings.mapLayers, basemap: { ...settings.mapLayers.basemap, opacity: 0.4 } }
     }, { persist: 'queued', delayMs: 250 })
 
     vi.advanceTimersByTime(249)
@@ -337,7 +338,7 @@ describe('settings projection', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'fr',
       theme: 'dark',
-      map_opacity: 0.4,
+      basemap_opacity: 0.4,
     }))
   })
 
@@ -347,7 +348,7 @@ describe('settings projection', () => {
     hydrateSettingsProjection(baseSettings())
 
     mutateSettingsProjection((settings) => {
-      settings.mapLayers.contourIntervalMeters = 24
+      settings.mapLayers = { ...settings.mapLayers, contours: { ...settings.mapLayers.contours, intervalMeters: 24 } }
     }, { persist: 'queued', delayMs: 250 })
 
     let settled = false
@@ -577,7 +578,8 @@ describe('settings projection', () => {
 
   it('uses the normalized hydrated snapshot as the durable no-op baseline', () => {
     hydrateSettingsProjection(baseSettings({
-      map_opacity: 4,
+      basemap_opacity: 4,
+      satellite_provider: 'maptiler' as SatelliteProvider,
       contour_interval: 12.7,
       saved_stamps_frame_height: 80,
     }))
@@ -920,7 +922,7 @@ describe('settings projection', () => {
 
   it('keeps production settings-backed callers on the projection mutation seam', () => {
     const sources = [
-      '../app/canvas-layer-presentation/presentation.ts',
+      '../app/map-layers/actions.ts',
       '../app/canvas-runtime/app-adapter.ts',
       '../app/favorites/controller.ts',
       '../app/shell/controller.ts',
@@ -932,8 +934,14 @@ describe('settings projection', () => {
     for (const source of sources) {
       expect(source).toContain('settings/projection')
       expect(source).not.toContain('settings/persistence')
-      expect(source).not.toMatch(/\b(?:locale|theme|basemapStyle|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|contourIntervalMeters|hillshadeVisible|hillshadeOpacity)\.value\s*=(?!=)/)
+      expect(source).not.toMatch(/\b(?:locale|theme|mapLayers|snapToGridEnabled|snapToGuidesEnabled|autoSaveIntervalMs|sidePanelWidth|googleMapsApiKey)\.value\s*=(?!=)/)
     }
+
+    // The Layers presentation routes map rows through the map layer actions
+    // rather than writing the store or the projection itself.
+    const presentationSource = readSource('../app/canvas-layer-presentation/presentation.ts')
+    expect(presentationSource).toContain('map-layers/actions')
+    expect(presentationSource).not.toMatch(/\bmapLayers\.value\s*=(?!=)/)
 
     const runtimeSource = readSource('../canvas/runtime/scene-runtime.ts')
 

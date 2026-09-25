@@ -2,6 +2,7 @@ import type { SettingsPlatformAdapter } from '../app/settings/platform-adapter'
 import {
   DEFAULT_SETTINGS,
   SETTINGS_BASEMAP_STYLES,
+  SETTINGS_SATELLITE_PROVIDERS,
   SETTINGS_LOCALES,
   SETTINGS_THEMES,
 } from '../generated/settings'
@@ -45,19 +46,21 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       value.saved_stamps_frame_height,
       DEFAULT_SETTINGS.saved_stamps_frame_height,
     ),
-    map_layer_visible: readBoolean(value.map_layer_visible, DEFAULT_SETTINGS.map_layer_visible),
-    map_style: readEnum(
-      value.map_style,
-      SETTINGS_BASEMAP_STYLES,
-      DEFAULT_SETTINGS.map_style,
+    basemap_style: readEnum(value.basemap_style, SETTINGS_BASEMAP_STYLES, DEFAULT_SETTINGS.basemap_style),
+    basemap_visible: readBoolean(value.basemap_visible, DEFAULT_SETTINGS.basemap_visible),
+    basemap_opacity: readFiniteNumber(value.basemap_opacity, DEFAULT_SETTINGS.basemap_opacity),
+    satellite_provider: readEnum(
+      value.satellite_provider,
+      SETTINGS_SATELLITE_PROVIDERS,
+      DEFAULT_SETTINGS.satellite_provider,
     ),
-    // Absent, null or a non-string all mean "no key", which selects Google's
-    // keyless tile path rather than an error.
+    satellite_visible: readBoolean(value.satellite_visible, DEFAULT_SETTINGS.satellite_visible),
+    satellite_opacity: readFiniteNumber(value.satellite_opacity, DEFAULT_SETTINGS.satellite_opacity),
+    // Absent, null or a non-string all mean "no key": Google is unavailable.
     google_maps_api_key: readNullableString(
       value.google_maps_api_key,
       DEFAULT_SETTINGS.google_maps_api_key ?? null,
     ),
-    map_opacity: readFiniteNumber(value.map_opacity, DEFAULT_SETTINGS.map_opacity),
     contour_visible: readBoolean(value.contour_visible, DEFAULT_SETTINGS.contour_visible),
     contour_opacity: readFiniteNumber(value.contour_opacity, DEFAULT_SETTINGS.contour_opacity),
     contour_interval: readU32(value.contour_interval, DEFAULT_SETTINGS.contour_interval),

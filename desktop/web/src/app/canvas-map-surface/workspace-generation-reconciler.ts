@@ -1,3 +1,4 @@
+import { mapBackgroundPresentationsEqual } from '../../maplibre/map-background'
 import type {
   WorkspaceActivationOutcome,
   WorkspaceActivationSnapshot,
@@ -227,7 +228,5 @@ function snapshotsEqual(
 ): boolean {
   if (!left || left.sessionIdentity !== right.sessionIdentity) return false
   return left.maximumWorldExtentMeters === right.maximumWorldExtentMeters
-    && left.map.basemapStyle === right.map.basemapStyle
-    && left.map.basemapVisible === right.map.basemapVisible
-    && left.map.basemapOpacity === right.map.basemapOpacity
+    && mapBackgroundPresentationsEqual(left.map.background, right.map.background)
 }

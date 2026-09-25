@@ -15,32 +15,11 @@ import {
   type WorldMapLibreMap,
   type WorldMapMarker,
 } from '../../maplibre/world-map'
-import { basemapStyle } from '../../app/settings/state'
-import {
-  mapStyleReadiness,
-  mountBasemapLifecycle,
-} from '../../maplibre/basemap-bind'
+import { effect } from '@preact/signals'
+import { readWorkspaceBackgroundPresentation } from '../../app/canvas-map-surface/workspace-activation-snapshot'
+import { mountMapBackground, type MapBackgroundMap } from '../../maplibre/map-background'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
-import type {
-  BasemapViewport,
-} from '../../maplibre/basemap-provider-session'
 import styles from './WorldMapSurface.module.css'
-
-/** The provider viewport for a live map, or a whole-world fallback before one exists. */
-function readWorldMapViewport(map: WorldMapLibreMap | null): BasemapViewport {
-  const bounds = map?.getBounds?.()
-  const zoom = map?.getZoom?.()
-  if (!bounds || typeof zoom !== 'number') {
-    return { west: -180, south: -85, east: 180, north: 85, zoom: 0 }
-  }
-  return {
-    west: bounds.getWest(),
-    south: bounds.getSouth(),
-    east: bounds.getEast(),
-    north: bounds.getNorth(),
-    zoom,
-  }
-}
 
 export function WorldMapSurface({
   templates,
@@ -65,8 +44,6 @@ export function WorldMapSurface({
   const tileAuthRef = useRef<BasemapTileAuth | null>(null)
   if (!tileAuthRef.current) tileAuthRef.current = new BasemapTileAuth()
 
-  const preferredBasemapStyle = basemapStyle.value
-
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -86,7 +63,6 @@ export function WorldMapSurface({
         maplibre,
         target,
         {
-          basemapStyle: preferredBasemapStyle,
           center: preservedView?.center ?? [0, 14],
           zoom: preservedView?.zoom ?? 1.15,
           transformRequest: tileAuth.transformRequest,
@@ -94,21 +70,19 @@ export function WorldMapSurface({
       ),
       captureViewState: (context) => readWorldMapViewState(context.map),
       onCreate: (context) => {
-        // One basemap mount owns provider, observers, binding and credits.
-        // tileAuth already carries the request transform installed at map
-        // construction; the mount never installs a second transform.
-        const basemapMount = mountBasemapLifecycle({
-            map: context.map,
-            tileAuth,
-            readStyle: () => basemapStyle.value,
-            readViewport: () => readWorldMapViewport(surfaceRef.current?.map ?? null),
-            readVisible: () => true,
-            styleReady: mapStyleReadiness(context.map, context.lifetime),
-            maplibre: context.maplibre,
-            mapControls: context.map,
-            events: context.lifetime,
-          })
-        context.lifetime.addCleanup(() => basemapMount.dispose())
+        // The same background band owner as the workspace map: Basemap or
+        // Satellite from the map layer store, with their attribution.
+        const background = mountMapBackground({
+          map: context.map as unknown as MapBackgroundMap,
+          maplibre: context.maplibre,
+          tileAuth,
+          lifetime: context.lifetime,
+        })
+        const stopBackground = effect(() => background.update(readWorkspaceBackgroundPresentation()))
+        context.lifetime.addCleanup(() => {
+          stopBackground()
+          background.dispose()
+        })
         context.lifetime.addCleanup(clearMarkers)
         syncTemplateMarkers(context.map, context.maplibre)
         syncMarkerSelection()
@@ -119,8 +93,8 @@ export function WorldMapSurface({
     return () => {
       surface.destroy()
     }
-    // Only the surface's own structural key belongs here. The basemap style is
-    // applied through the provider observer installed above.
+    // Only the surface's own structural key belongs here. The background band
+    // follows the map layer store through the effect installed above.
   }, [])
 
   // Markers are rebuilt when the map is recreated, so the map itself is the

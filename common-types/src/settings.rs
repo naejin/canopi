@@ -35,18 +35,23 @@ pub struct Settings {
     pub auto_save_interval_s: u32,
     pub side_panel_width: Option<u32>,
     pub saved_stamps_frame_height: Option<u32>,
-    pub map_layer_visible: bool,
+    /// OpenFreeMap vector style of the Basemap row.
     #[serde(deserialize_with = "deserialize_basemap_style")]
-    pub map_style: BasemapStyle,
+    pub basemap_style: BasemapStyle,
+    pub basemap_visible: bool,
+    pub basemap_opacity: f32,
+    /// Imagery provider of the Satellite row; the row hides the Basemap when on.
+    #[serde(deserialize_with = "deserialize_satellite_provider")]
+    pub satellite_provider: SatelliteProvider,
+    pub satellite_visible: bool,
+    pub satellite_opacity: f32,
     /// Optional Google Maps API key for the official Map Tiles API.
     ///
     /// Device-local browser credential: it is stored with the rest of the
     /// device settings, never in a Design, export, diagnostic bundle, error
-    /// text or log. A null key selects Google's keyless tile endpoint instead
-    /// of the official session API.
+    /// text or log. Without a key the Google satellite provider is unavailable.
     #[serde(default)]
     pub google_maps_api_key: Option<String>,
-    pub map_opacity: f32,
     pub contour_visible: bool,
     pub contour_opacity: f32,
     pub contour_interval: u32,
@@ -76,10 +81,13 @@ impl Default for Settings {
             auto_save_interval_s: 60,
             side_panel_width: None,
             saved_stamps_frame_height: None,
-            map_layer_visible: true,
-            map_style: BasemapStyle::Street,
+            basemap_style: BasemapStyle::Liberty,
+            basemap_visible: true,
+            basemap_opacity: 1.0,
+            satellite_provider: SatelliteProvider::Eox,
+            satellite_visible: false,
+            satellite_opacity: 1.0,
             google_maps_api_key: None,
-            map_opacity: 1.0,
             contour_visible: false,
             contour_opacity: 1.0,
             contour_interval: 0,
@@ -96,23 +104,27 @@ fn default_plant_spacing_interval_m() -> f64 {
 }
 
 settings_enum! {
+    /// OpenFreeMap vector styles; Liberty is the default.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
     #[serde(rename_all = "lowercase")]
     pub enum BasemapStyle {
-        /// OpenStreetMap street tiles.
         #[default]
-        Street,
-        /// MapTiler satellite-v4, the historical `satellite` identity.
-        ///
-        /// Kept as its own style so a saved MapTiler choice is never rewritten
-        /// to another provider because the build-time key is absent: a missing
-        /// key makes this *unavailable*, not something else.
-        Satellite,
-        /// Google satellite, loaded through the official Map Tiles API when a
-        /// device-local key is configured and through Google's keyless tile
-        /// endpoint otherwise.
-        #[serde(rename = "google_satellite")]
-        GoogleSatellite,
+        Liberty,
+        Positron,
+        Bright,
+        Dark,
+    }
+}
+
+settings_enum! {
+    /// Satellite imagery providers: EOX Sentinel-2 cloudless (keyless, CC BY
+    /// 4.0) or Google Map Tiles with a device key.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+    #[serde(rename_all = "lowercase")]
+    pub enum SatelliteProvider {
+        #[default]
+        Eox,
+        Google,
     }
 }
 
@@ -123,6 +135,16 @@ where
     match serde_json::Value::deserialize(deserializer) {
         Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
         Err(_) => Ok(BasemapStyle::default()),
+    }
+}
+
+fn deserialize_satellite_provider<'de, D>(deserializer: D) -> Result<SatelliteProvider, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match serde_json::Value::deserialize(deserializer) {
+        Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
+        Err(_) => Ok(SatelliteProvider::default()),
     }
 }
 
@@ -155,7 +177,7 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, Locale, Settings, Theme};
+    use super::{BasemapStyle, LastView, Locale, SatelliteProvider, Settings, Theme};
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -183,12 +205,36 @@ mod tests {
     fn every_declared_basemap_style_deserializes_through_settings() {
         for style in BasemapStyle::ALL {
             let settings: Settings = serde_json::from_value(serde_json::json!({
-                "map_style": style,
+                "basemap_style": style,
             }))
             .expect("declared basemap style should remain loadable");
 
-            assert_eq!(settings.map_style, *style);
+            assert_eq!(settings.basemap_style, *style);
         }
+        for provider in SatelliteProvider::ALL {
+            let settings: Settings = serde_json::from_value(serde_json::json!({
+                "satellite_provider": provider,
+            }))
+            .expect("declared satellite provider should remain loadable");
+
+            assert_eq!(settings.satellite_provider, *provider);
+        }
+    }
+
+    #[test]
+    fn map_layer_defaults_show_liberty_and_hide_satellite() {
+        let settings = Settings::default();
+        assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
+        assert!(settings.basemap_visible);
+        assert_eq!(settings.satellite_provider, SatelliteProvider::Eox);
+        assert!(!settings.satellite_visible);
+        let unknown: Settings = serde_json::from_value(serde_json::json!({
+            "basemap_style": "street",
+            "satellite_provider": "maptiler"
+        }))
+        .expect("unknown map choices fall back to defaults");
+        assert_eq!(unknown.basemap_style, BasemapStyle::Liberty);
+        assert_eq!(unknown.satellite_provider, SatelliteProvider::Eox);
     }
 
     #[test]

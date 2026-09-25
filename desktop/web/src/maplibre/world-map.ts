@@ -1,5 +1,4 @@
-import type { BasemapStyle } from '../generated/contracts'
-import { createMapLibreBasemapStyle } from './config'
+import { createMapLibreEmptyStyle } from './config'
 import type {
   MapLibreApi,
   MapLibreHostViewState,
@@ -42,7 +41,6 @@ interface WorldMapLibreApi extends MapLibreApi {
 }
 
 export interface WorldMapLibreOptions {
-  readonly basemapStyle: BasemapStyle
   readonly center: [number, number]
   readonly zoom: number
   /** The request seam that authenticates official provider tiles. */
@@ -56,11 +54,10 @@ export function createWorldMapLibreMap(
 ): WorldMapLibreMap {
   const map = new maplibre.Map({
     container,
-    style: createMapLibreBasemapStyle(options.basemapStyle),
+    style: createMapLibreEmptyStyle(),
     center: options.center,
     zoom: options.zoom,
-    // Attribution is owned by the basemap mount's single control, not the
-    // map's automatic AttributionControl (E4).
+    // Attribution is owned by the map background's single control.
     attributionControl: false,
     interactive: true,
     pitchWithRotate: false,

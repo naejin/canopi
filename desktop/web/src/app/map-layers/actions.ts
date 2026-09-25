@@ -1,0 +1,52 @@
+import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
+import { mutateSettingsProjection, type SettingsPersistMode } from '../settings/projection'
+import { normalizeMapLayers, type MapLayersState } from './state'
+
+export type MapLayerId = 'basemap' | 'satellite' | 'contours' | 'hillshade'
+
+function updateMapLayers(
+  update: (state: MapLayersState) => MapLayersState,
+  persist: SettingsPersistMode,
+): void {
+  mutateSettingsProjection((settings) => {
+    settings.mapLayers = normalizeMapLayers(update(settings.mapLayers))
+  }, { persist })
+}
+
+export function setMapLayerVisible(id: MapLayerId, visible: boolean): void {
+  updateMapLayers((state) => ({ ...state, [id]: { ...state[id], visible } }), 'immediate')
+}
+
+/** Slider-driven, so persistence is queued rather than written per frame. */
+export function setMapLayerOpacity(id: MapLayerId, opacity: number): void {
+  if (!Number.isFinite(opacity)) return
+  updateMapLayers((state) => ({ ...state, [id]: { ...state[id], opacity } }), 'queued')
+}
+
+export function setBasemapStyle(style: BasemapStyle): void {
+  updateMapLayers((state) => ({ ...state, basemap: { ...state.basemap, style } }), 'immediate')
+}
+
+export function setSatelliteProvider(provider: SatelliteProvider): void {
+  updateMapLayers((state) => ({ ...state, satellite: { ...state.satellite, provider } }), 'immediate')
+}
+
+export function setContourIntervalMeters(intervalMeters: number): void {
+  if (!Number.isFinite(intervalMeters) || intervalMeters < 0) return
+  updateMapLayers((state) => ({
+    ...state,
+    contours: { ...state.contours, intervalMeters: Math.round(intervalMeters) },
+  }), 'queued')
+}
+
+/**
+ * Saves the device-local Google key, trimmed; an empty key clears it. The key
+ * is a credential: it lives in device settings only, never in a Design,
+ * export, diagnostic bundle or log.
+ */
+export function saveGoogleMapsApiKey(key: string | null): void {
+  const trimmed = key?.trim() ?? ''
+  mutateSettingsProjection((settings) => {
+    settings.googleMapsApiKey = trimmed || null
+  }, { persist: 'immediate' })
+}

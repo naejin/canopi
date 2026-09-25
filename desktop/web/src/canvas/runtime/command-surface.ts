@@ -1,3 +1,4 @@
+import { mapZoomToStageScale } from '../projection'
 import type { SpeciesFocusCommands } from './species-key'
 import { computed, type ReadonlySignal } from '@preact/signals'
 import { setCanvasTool } from '../session-state'
@@ -43,7 +44,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus'
+    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn'
   >
   readonly history: SceneHistoryCommands
   readonly commandAdmission: SceneCommandAdmission
@@ -145,6 +146,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
+      showPlace: (place, zoom) => this.showPlace(place, zoom),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
     }
     this.history = {
@@ -231,6 +233,14 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private zoomOut(): void {
     this.options.cameraNavigation.zoomOut()
     this.options.invalidate('viewport')
+  }
+
+  private showPlace(place: { readonly lon: number; readonly lat: number }, zoom: number): boolean {
+    if (![place.lon, place.lat, zoom].every(Number.isFinite)) return false
+    const point = this.options.sceneStore.sessionPlane.toPlane(place)
+    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, place.lat))
+    this.options.invalidate('viewport')
+    return true
   }
 
   private zoomToFit(): void {

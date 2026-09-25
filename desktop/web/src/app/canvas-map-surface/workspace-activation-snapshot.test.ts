@@ -1,10 +1,9 @@
-import { batch, effect } from '@preact/signals'
+import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
-import { layerOpacity, layerVisibility } from '../canvas-settings/signals'
-import { basemapStyle } from '../settings/state'
-import { normalizeBasemapStyle } from '../../maplibre/config'
+import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../map-layers/state'
+import { locale } from '../settings/state'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
-import { readWorkspaceActivationSnapshot, readWorkspaceBasemapPresentation } from './workspace-activation-snapshot'
+import { readWorkspaceActivationSnapshot, readWorkspaceBackgroundPresentation } from './workspace-activation-snapshot'
 
 const identity = {}
 
@@ -15,91 +14,111 @@ function store(hasDesign = true) {
   } as never
 }
 
+function layers(overrides: {
+  basemap?: Partial<MapLayersState['basemap']>
+  satellite?: Partial<MapLayersState['satellite']>
+} = {}): MapLayersState {
+  const defaults = createDefaultMapLayers()
+  return {
+    ...defaults,
+    basemap: { ...defaults.basemap, ...overrides.basemap },
+    satellite: { ...defaults.satellite, ...overrides.satellite },
+  }
+}
+
 describe('readWorkspaceActivationSnapshot', () => {
   it('returns null without a current Design', () => {
     expect(readWorkspaceActivationSnapshot({ store: store(false) })).toBeNull()
   })
 
-  it('copies the initial map centre and normalized basemap presentation', () => {
-    const presentation = {
-      layerVisibility: { base: true },
-      layerOpacity: { base: Number.NaN },
-    }
+  it('copies the initial map centre and normalized background presentation', () => {
+    const basemap = { style: 'positron' as const, visible: true, opacity: Number.NaN }
     const snapshot = readWorkspaceActivationSnapshot({
       store: store(),
       readInitialCenter: () => ({ lat: 48.86, lon: 2.35 }),
-      readBasemapStyle: () => 'street',
-      readMapLayerPresentation: () => presentation,
+      readMapLayers: () => ({ ...layers(), basemap }),
+      readLocale: () => 'fr',
     })
     expect(snapshot).toEqual(expect.objectContaining({
       sessionIdentity: identity,
       maximumWorldExtentMeters: undefined,
       map: expect.objectContaining({
-        initialCenter: { lat: 48.86, lon: 2.35 }, basemapOpacity: 0,
+        initialCenter: { lat: 48.86, lon: 2.35 },
+        background: {
+          basemap: { style: 'positron', visible: true, opacity: 0 },
+          satellite: { provider: 'eox', visible: false, opacity: 1 },
+          locale: 'fr',
+        },
       }),
     }))
     expect(snapshot?.map).not.toHaveProperty('anchor')
     expect(snapshot?.map).not.toHaveProperty('northBearingDeg')
     expect(snapshot?.map).not.toHaveProperty('placementStatus')
-    presentation.layerVisibility.base = false
-    expect(snapshot?.map.basemapVisible).toBe(true)
+    basemap.visible = false
+    expect(snapshot?.map.background.basemap.visible).toBe(true)
     expect(Object.isFrozen(snapshot?.map.initialCenter)).toBe(true)
+    expect(Object.isFrozen(snapshot?.map.background)).toBe(true)
+    expect(Object.isFrozen(snapshot?.map.background.basemap)).toBe(true)
   })
 
   it('centres a Design without a session plane origin on the new-Design default view', () => {
     const snapshot = readWorkspaceActivationSnapshot({
       store: store(),
-      readBasemapStyle: () => 'street',
-      readMapLayerPresentation: () => ({ layerVisibility: {}, layerOpacity: {} }),
+      readMapLayers: () => layers(),
+      readLocale: () => 'en',
     })
     expect(snapshot?.map.initialCenter).toEqual({
       lat: DEFAULT_NEW_DESIGN_VIEW.lat,
       lon: DEFAULT_NEW_DESIGN_VIEW.lon,
     })
-    expect(snapshot?.map.basemapVisible).toBe(true)
+    expect(snapshot?.map.background.basemap.visible).toBe(true)
   })
 
   it('shares normalized presentation with the live settings reader', () => {
-    expect(readWorkspaceBasemapPresentation({
-      readBasemapStyle: () => 'street',
-      readMapLayerPresentation: () => ({
-        layerVisibility: { base: false }, layerOpacity: { base: 2 },
+    expect(readWorkspaceBackgroundPresentation({
+      readMapLayers: () => layers({
+        basemap: { style: 'dark', visible: false, opacity: 2 },
+        satellite: { provider: 'google', visible: true, opacity: -1 },
       }),
-    })).toEqual({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 1 })
+      readLocale: () => 'de',
+    })).toEqual({
+      basemap: { style: 'dark', visible: false, opacity: 1 },
+      satellite: { provider: 'google', visible: true, opacity: 0 },
+      locale: 'de',
+    })
   })
 
-  it('tracks style, visibility, and opacity through the default settings projection', () => {
-    const previousStyle = basemapStyle.peek()
-    const previousVisibility = layerVisibility.peek()
-    const previousOpacity = layerOpacity.peek()
-    const seen: ReturnType<typeof readWorkspaceBasemapPresentation>[] = []
+  it('never carries the Google key into the background presentation', () => {
+    const presentation = readWorkspaceBackgroundPresentation({
+      readMapLayers: () => layers({ satellite: { provider: 'google', visible: true } }),
+      readLocale: () => 'en',
+    })
+    expect(Object.keys(presentation.satellite).sort()).toEqual(['opacity', 'provider', 'visible'])
+  })
+
+  it('tracks the map layer store and locale through the default readers', () => {
+    const previousLayers = mapLayers.peek()
+    const previousLocale = locale.peek()
+    const seen: ReturnType<typeof readWorkspaceBackgroundPresentation>[] = []
     const dispose = effect(() => {
-      seen.push(readWorkspaceBasemapPresentation())
+      seen.push(readWorkspaceBackgroundPresentation())
     })
 
     try {
-      const nextStyle = previousStyle === 'street' ? 'satellite' : 'street'
-      basemapStyle.value = nextStyle
+      mapLayers.value = layers({ basemap: { style: 'bright', visible: false, opacity: 0.37 } })
       expect(seen).toHaveLength(2)
-      expect(seen.at(-1)?.basemapStyle).toBe(normalizeBasemapStyle(nextStyle))
+      expect(seen.at(-1)?.basemap).toEqual({ style: 'bright', visible: false, opacity: 0.37 })
 
-      batch(() => {
-        layerVisibility.value = { ...previousVisibility, base: !(previousVisibility.base ?? true) }
-        layerOpacity.value = { ...previousOpacity, base: 0.37 }
-      })
+      mapLayers.value = layers({ satellite: { provider: 'google', visible: true, opacity: 0.5 } })
+      expect(seen.at(-1)?.satellite).toEqual({ provider: 'google', visible: true, opacity: 0.5 })
 
-      expect(seen.at(-1)).toEqual({
-        basemapStyle: normalizeBasemapStyle(nextStyle),
-        basemapVisible: !(previousVisibility.base ?? true),
-        basemapOpacity: 0.37,
-      })
+      locale.value = previousLocale === 'fr' ? 'de' : 'fr'
+      expect(seen).toHaveLength(4)
+      expect(seen.at(-1)?.locale).toBe(locale.peek())
     } finally {
       dispose()
-      batch(() => {
-        basemapStyle.value = previousStyle
-        layerVisibility.value = previousVisibility
-        layerOpacity.value = previousOpacity
-      })
+      mapLayers.value = previousLayers
+      locale.value = previousLocale
     }
   })
 })

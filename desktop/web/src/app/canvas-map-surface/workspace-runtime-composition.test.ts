@@ -11,7 +11,7 @@ import {
 } from '../../canvas/runtime/runtime'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
 import type { WorkspaceMapContributionSnapshot, WorkspaceMapContributionAdapter } from './workspace-map-contribution-adapter'
-import type { WorkspaceBasemapPresentation } from '../../maplibre/workspace-map'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import type { SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import {
   createTestCanvasDocumentSurface,
@@ -186,22 +186,26 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.documents.initializeViewport).toHaveBeenCalledOnce()
   })
 
-  it('projects live basemap settings without recreating resources and stops after disposal', async () => {
-    const presentation = signal<WorkspaceBasemapPresentation>({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+  it('projects live background settings without recreating resources and stops after disposal', async () => {
+    const presentation = signal<MapBackgroundPresentation>({
+      basemap: { style: 'liberty', visible: true, opacity: 1 },
+      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      locale: 'en',
     })
     const fixture = compositionFixture({
       readSnapshot: () => workspaceSnapshot(),
-      readBasemapPresentation: () => presentation.value,
+      readBackgroundPresentation: () => presentation.value,
     })
     await fixture.composition.start()
-    fixture.workspace.updateBasemapPresentation.mockClear()
+    fixture.workspace.updateBackgroundPresentation.mockClear()
 
     presentation.value = {
-      basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 0.25,
+      basemap: { style: 'dark', visible: true, opacity: 0.25 },
+      satellite: { provider: 'google', visible: true, opacity: 0.8 },
+      locale: 'fr',
     }
 
-    await vi.waitFor(() => expect(fixture.workspace.updateBasemapPresentation)
+    await vi.waitFor(() => expect(fixture.workspace.updateBackgroundPresentation)
       .toHaveBeenCalledExactlyOnceWith(presentation.value))
     expect(fixture.createRuntime).toHaveBeenCalledOnce()
     expect(fixture.createWorkspace).toHaveBeenCalledOnce()
@@ -209,10 +213,12 @@ describe('createWorkspaceRuntimeComposition', () => {
 
     await fixture.composition.dispose()
     presentation.value = {
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.5,
+      basemap: { style: 'liberty', visible: true, opacity: 0.5 },
+      satellite: { provider: 'eox', visible: false, opacity: 1 },
+      locale: 'en',
     }
     await Promise.resolve()
-    expect(fixture.workspace.updateBasemapPresentation).toHaveBeenCalledOnce()
+    expect(fixture.workspace.updateBackgroundPresentation).toHaveBeenCalledOnce()
   })
 
   it('forwards reactive contribution snapshots through the lifecycle and disposes the reader effect', async () => {
@@ -333,7 +339,7 @@ describe('createWorkspaceRuntimeComposition', () => {
 interface CompositionFixtureOptions {
   readonly mapContributions?: WorkspaceMapContributionAdapter
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
-  readonly readBasemapPresentation?: () => WorkspaceBasemapPresentation
+  readonly readBackgroundPresentation?: () => MapBackgroundPresentation
   readonly onFailure?: (error: unknown) => void
   readonly activate?: (snapshot: WorkspaceActivationSnapshot) => Promise<WorkspaceActivationOutcome>
   readonly teardown?: () => Promise<void>
@@ -382,7 +388,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     releaseMap: vi.fn(),
     getWebGL2Context: vi.fn(() => null),
     updateMapContributions: vi.fn(),
-    updateBasemapPresentation: vi.fn(),
+    updateBackgroundPresentation: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
   }
   const workspace = {
@@ -390,10 +396,10 @@ function compositionFixture(options: CompositionFixtureOptions) {
     activate: vi.fn(options.activate ?? (async () => 'shared-ready' as const)),
     teardown: vi.fn(options.teardown ?? (async () => {})),
     updateMapContributions: vi.fn(),
-    updateBasemapPresentation: vi.fn(),
+    updateBackgroundPresentation: vi.fn(),
   } satisfies WorkspaceGenerationLifecycle & {
     updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
-    updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
+    updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   }
   const createRuntime = vi.fn((_options: SceneCanvasRuntimeOptions) => runtime)
   const createWorkspace = vi.fn((_input: WorkspaceActivationOptions) => workspace)
@@ -412,7 +418,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     mapContributions: options.mapContributions ?? { read: () => null },
     onFailure: options.onFailure,
     readSnapshot: options.readSnapshot,
-    readBasemapPresentation: options.readBasemapPresentation,
+    readBackgroundPresentation: options.readBackgroundPresentation,
     onViewSettled: options.onViewSettled,
   }, dependencies)
 
@@ -447,9 +453,11 @@ function workspaceSnapshot({ latitude = 48.86 } = {}): WorkspaceActivationSnapsh
     sessionIdentity: {},
     map: {
       initialCenter: { lat: latitude, lon: 2.35 },
-      basemapStyle: 'street',
-      basemapVisible: true,
-      basemapOpacity: 1,
+      background: {
+        basemap: { style: 'liberty', visible: true, opacity: 1 },
+        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        locale: 'en',
+      },
     },
   }
 }

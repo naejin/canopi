@@ -212,11 +212,14 @@
       "abstract": "抽象図形",
       "applySelection": "選択した{{count}}個に適用"
     },
-    "location": {
-      "searchPlaceholder": "場所を検索...",
-      "searching": "検索中...",
-      "noResults": "結果なし",
-      "geocodeError": "ジオコーディング失敗"
+    "placeSearch": {
+      "open": "場所を検索",
+      "placeholder": "地名または緯度, 経度",
+      "searching": "検索中…",
+      "noResults": "場所が見つかりません",
+      "error": "場所の検索に失敗しました",
+      "results": "場所",
+      "emptyPrompt": "敷地を検索"
     },
     "file": {
       "new": "新規デザイン",
@@ -255,7 +258,8 @@
       "visible": "表示",
       "hidden": "非表示",
       "locked": "ロック中",
-      "unlocked": "ロック解除"
+      "unlocked": "ロック解除",
+      "satellite": "衛星写真"
     },
     "timeline": {
       "actionType": "アクションタイプ",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "ベースマップ",
-      "provider": "プロバイダー",
-      "street": "ストリート（OpenStreetMap）",
-      "satellite": "衛星（MapTiler）",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "このビルドでは利用できません",
       "googleKey": "Google Maps API キー（任意）",
       "saveKey": "キーを保存",
       "clearKey": "キーを消去",
       "keySaved": "このデバイスにキーを保存しました。",
       "keyLocalOnly": "このデバイスの設定にのみ保存されます。設計・エクスポート・ログ・レポートには書き込まれません。",
-      "googleKeyPrompt": "公式の Google タイルを読み込むには Google Maps API キーを入力してください。"
+      "style": "スタイル",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "明るい",
+        "dark": "ダーク"
+      },
+      "hiddenBySatellite": "衛星写真の表示中は非表示です。"
     },
     "rasterSample": {
       "title": "地点の値",
@@ -559,6 +564,15 @@
       "unavailable": "値を取得できません",
       "escapeHint": "Esc で終了",
       "sampleCentre": "ビュー中央で計測"
+    },
+    "satellite": {
+      "provider": "画像",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Sentinel-2 雲なし画像、1 ピクセルあたり約 10 m。",
+      "googleKeyRequired": "Google の画像を読み込むには Google Maps API キーを入力してください。"
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "拡大",
     "view.zoomOut": "縮小",
     "view.fitToContent": "コンテンツに合わせる",
+    "view.searchPlace": "場所を検索…",
     "help": "ヘルプ",
     "help.reportProblem": "問題を報告",
     "help.aboutCanopi": "Canopi について"

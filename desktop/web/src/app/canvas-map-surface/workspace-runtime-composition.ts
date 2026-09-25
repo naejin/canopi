@@ -18,14 +18,14 @@ import {
   type SharedMapSceneRendererComposition,
 } from '../../maplibre/shared-scene-renderer'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
-import type { WorkspaceBasemapPresentation } from '../../maplibre/workspace-map'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 import {
   WorkspaceActivationCoordinator,
   type WorkspaceActivationOptions,
   type WorkspaceActivationOutcome,
   type WorkspaceActivationRuntime,
 } from './workspace-activation'
-import { readWorkspaceActivationSnapshot, readWorkspaceBasemapPresentation } from './workspace-activation-snapshot'
+import { readWorkspaceActivationSnapshot, readWorkspaceBackgroundPresentation } from './workspace-activation-snapshot'
 import { createWorkspaceDocumentSurface } from './workspace-document-surface'
 import {
   WorkspaceGenerationReconciler,
@@ -77,7 +77,7 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly readSnapshot?: (
     readInitialCenter: () => { readonly lat: number; readonly lon: number },
   ) => WorkspaceActivationSnapshot | null
-  readonly readBasemapPresentation?: () => ReturnType<typeof readWorkspaceBasemapPresentation>
+  readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
   /** Called once the camera has been still for `WORKSPACE_VIEW_SETTLE_MS` on a Design. */
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
@@ -89,7 +89,7 @@ interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
 }
 
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
-  updateBasemapPresentation(presentation: WorkspaceBasemapPresentation): void
+  updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
 }
 
@@ -229,8 +229,8 @@ export function createWorkspaceRuntimeComposition(
         }
         disposePresentationEffect = dependencies.installEffect(() => {
           workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
-          workspace.updateBasemapPresentation(
-            (options.readBasemapPresentation ?? readWorkspaceBasemapPresentation)(),
+          workspace.updateBackgroundPresentation(
+            (options.readBackgroundPresentation ?? readWorkspaceBackgroundPresentation)(),
           )
         })
         void reconciler.reconcileInitialGeneration().then(

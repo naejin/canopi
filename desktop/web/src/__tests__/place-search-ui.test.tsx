@@ -1,0 +1,97 @@
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const transport = vi.hoisted(() => vi.fn(async () => [] as unknown))
+vi.mock('#geocoding-transport', () => ({ geocodingTransport: transport }))
+
+import { closePlaceSearch, placeSearchOpen, PLACE_SEARCH_ZOOM } from '../app/geocoding/place-search-ui'
+import { resetPlaceSearchPacingForTests } from '../app/geocoding/place-search'
+import { lastView } from '../app/settings/state'
+import { setCurrentCanvasSession } from '../canvas/session'
+import { PlaceSearch } from '../components/canvas/PlaceSearch'
+import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+
+describe('PlaceSearch', () => {
+  let container: HTMLDivElement
+  const showPlace = vi.fn(() => true)
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ viewport: { showPlace } }),
+    }))
+  })
+
+  afterEach(() => {
+    render(null, container)
+    container.remove()
+    setCurrentCanvasSession(null)
+    closePlaceSearch()
+    lastView.value = null
+    showPlace.mockClear()
+    transport.mockClear()
+    resetPlaceSearchPacingForTests()
+  })
+
+  const launcher = () => container.querySelector<HTMLButtonElement>('button[aria-expanded]')!
+  const input = () => container.querySelector<HTMLInputElement>('input[type="search"]')!
+
+  async function submit(text: string) {
+    await act(async () => {
+      input().value = text
+      input().dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  it('opens an icon-only pin, searches coordinates on Enter and moves only the view', async () => {
+    await act(async () => { render(<PlaceSearch />, container) })
+    expect([...launcher().childNodes].some((node) => node.nodeType === Node.TEXT_NODE)).toBe(false)
+    expect(launcher().getAttribute('aria-label')).toBe('Search for a place')
+    await act(async () => { launcher().click() })
+    expect(document.activeElement).toBe(input())
+    await submit('47.39, 0.69')
+    expect(transport).not.toHaveBeenCalled()
+    const result = container.querySelector<HTMLButtonElement>('ul button')!
+    await act(async () => { result.click() })
+    expect(showPlace).toHaveBeenCalledWith(expect.objectContaining({ lat: 47.39, lon: 0.69 }), PLACE_SEARCH_ZOOM)
+    expect(placeSearchOpen.value).toBe(false)
+  })
+
+  it('does not search while typing and credits the geocoder with results', async () => {
+    transport.mockImplementation(async () => [{ lat: '47.39', lon: '0.689', display_name: 'Tours, France' }])
+    await act(async () => { render(<PlaceSearch />, container) })
+    await act(async () => { launcher().click() })
+    await act(async () => {
+      input().value = 'Tours'
+      input().dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(transport).not.toHaveBeenCalled()
+    await submit('Tours')
+    expect(transport).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('Tours, France')
+    expect(container.textContent).toContain('OpenStreetMap')
+  })
+
+  it('closes on Escape and returns focus to the pin', async () => {
+    await act(async () => { render(<PlaceSearch />, container) })
+    await act(async () => { launcher().click() })
+    await act(async () => {
+      input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(placeSearchOpen.value).toBe(false)
+    expect(document.activeElement).toBe(launcher())
+  })
+
+  it('invites a site search only for an empty Design without a remembered view', async () => {
+    await act(async () => { render(<PlaceSearch />, container) })
+    expect(container.textContent).toContain('Search your site')
+    await act(async () => { lastView.value = { lon: 0.69, lat: 47.39, zoom: 16 } as typeof lastView.value })
+    expect(container.textContent).not.toContain('Search your site')
+  })
+})

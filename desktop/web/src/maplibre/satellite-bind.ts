@@ -1,15 +1,15 @@
 import { effect } from '@preact/signals'
-import type { BasemapProvider, BasemapProviderState, BasemapViewport } from './basemap-provider-session'
-import { BasemapProvider as Provider } from './basemap-provider-session'
-import { createBrowserBasemapHttp } from './basemap-http.browser'
+import type { SatelliteImageryProvider, SatelliteProviderState, SatelliteViewport } from './satellite-provider-session'
+import { SatelliteImageryProvider as Provider } from './satellite-provider-session'
+import { createBrowserSatelliteHttp } from './satellite-http.browser'
 import { BasemapTileAuth } from './basemap-tile-auth'
 import { googleMapsApiKey, locale } from '../app/settings/state'
-import type { BasemapStyle } from '../generated/contracts'
+import type { SatelliteProvider } from '../generated/contracts'
 import {
-  reconcileBasemapContribution,
-  setBasemapContributionVisibility,
-  type BasemapReconcileTarget,
-} from './basemap-contribution'
+  reconcileSatelliteContribution,
+  setSatelliteContributionVisibility,
+  type SatelliteReconcileTarget,
+} from './satellite-contribution'
 
 /**
  * Wire a live provider to a live map.
@@ -36,15 +36,15 @@ import {
  * provider would therefore break map initialization if the contribution were
  * applied straight from `onCreate`, so the binding waits for this.
  */
-export interface BasemapStyleReadiness {
+export interface MapStyleReadiness {
   isReady(): boolean
   /** Register a one-shot style-ready callback on the map's lifetime. */
   whenReady(listener: () => void): void
 }
 
-export interface BasemapBindingDeps {
-  readonly provider: BasemapProvider
-  readonly map: BasemapReconcileTarget
+export interface SatelliteBindingDeps {
+  readonly provider: SatelliteImageryProvider
+  readonly map: SatelliteReconcileTarget
   /** Relative cost of one zoom level at this map's projection; a raster
    * contribution is a single source, so this is constant. */
   readonly maxzoomFallback?: number
@@ -59,7 +59,7 @@ export interface BasemapBindingDeps {
   readonly tileAuth?: BasemapTileAuth
   /** When absent the contribution is applied immediately, which is correct for
    * a map stub with no asynchronous style load. */
-  readonly styleReady?: BasemapStyleReadiness
+  readonly styleReady?: MapStyleReadiness
   /** Where the raster layer belongs in the target's own stack. */
   readonly beforeLayerId?: () => string | null
   /**
@@ -89,22 +89,22 @@ export interface BasemapBindingDeps {
 
 /** Effective basemap visibility: user visibility AND provider renderability. */
 function effectiveBasemapVisibility(
-  state: BasemapProviderState,
+  state: SatelliteProviderState,
   userVisible: boolean,
 ): boolean {
   return userVisible && state.state === 'ready'
 }
 
 /** Install the binding and return its disposer. */
-export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
+export function bindSatelliteProvider(deps: SatelliteBindingDeps): () => void {
   const { provider, map, tileAuth } = deps
   const visible = deps.visible ?? (() => true)
   let disposed = false
-  let pending: BasemapProviderState | null = null
+  let pending: SatelliteProviderState | null = null
   let ownedAttribution: unknown = null
   let ownedCredit: string | null = null
 
-  const target: BasemapReconcileTarget = {
+  const target: SatelliteReconcileTarget = {
     getSource: (id) => map.getSource(id),
     getLayer: (id) => map.getLayer(id),
     removeLayer: (id) => map.removeLayer(id),
@@ -118,12 +118,12 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
   }
   // Only expose the attribution adapter when a real control seam exists, so
   // the contribution can fall back to source-carried credit.
-  if (map.replaceBasemapAttribution) {
-    target.replaceBasemapAttribution = (attribution: string) =>
-      map.replaceBasemapAttribution?.(attribution)
+  if (map.replaceSatelliteAttribution) {
+    target.replaceSatelliteAttribution = (attribution: string) =>
+      map.replaceSatelliteAttribution?.(attribution)
   } else if (deps.attributionControls) {
     const controls = deps.attributionControls
-    target.replaceBasemapAttribution = (attribution: string) => {
+    target.replaceSatelliteAttribution = (attribution: string) => {
       // Keep an existing control when its credit is unchanged.
       if (ownedAttribution && ownedCredit === attribution) return
       if (ownedAttribution) {
@@ -141,20 +141,20 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
     }
   }
 
-  const apply = (state: BasemapProviderState): void => {
+  const apply = (state: SatelliteProviderState): void => {
     // The latest state always wins: a state that arrives while the style is
     // still loading is what gets applied when it finishes, not the one that
     // happened to arrive first.
     pending = state
     if (deps.styleReady && !deps.styleReady.isReady()) return
     pending = null
-    reconcileBasemapContribution(target, state, {
+    reconcileSatelliteContribution(target, state, {
       officialTilesResolvable: tileAuth?.installed === true,
       ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
     })
     // Effective visibility is user visibility AND provider renderability:
     // Loading official metadata must not expose cached imagery.
-    setBasemapContributionVisibility(
+    setSatelliteContributionVisibility(
       target,
       effectiveBasemapVisibility(state, visible()),
     )
@@ -172,11 +172,11 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
       if (disposed) return
       const state = pending ?? provider.snapshot()
       pending = null
-      reconcileBasemapContribution(target, state, {
+      reconcileSatelliteContribution(target, state, {
         officialTilesResolvable: tileAuth?.installed === true,
         ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
       })
-      setBasemapContributionVisibility(
+      setSatelliteContributionVisibility(
         target,
         effectiveBasemapVisibility(state, visible()),
       )
@@ -205,11 +205,11 @@ export function bindBasemapProvider(deps: BasemapBindingDeps): () => void {
  * so this touches only the layer's layout property. The caller supplies
  * effective visibility (user visibility AND provider renderability).
  */
-export function applyBasemapVisibility(
-  map: BasemapReconcileTarget,
+export function applySatelliteVisibility(
+  map: SatelliteReconcileTarget,
   visible: boolean,
 ): void {
-  setBasemapContributionVisibility(map, visible)
+  setSatelliteContributionVisibility(map, visible)
 }
 
 /**
@@ -225,7 +225,7 @@ export function createAttributionControls(
     addControl?(control: unknown, position?: string): unknown
     removeControl?(control: unknown): unknown
   },
-): BasemapBindingDeps['attributionControls'] {
+): SatelliteBindingDeps['attributionControls'] {
   // Safe lookup: a partial maplibre stub or test mock may throw on a missing
   // export rather than returning undefined.
   let AttributionControl:
@@ -271,13 +271,12 @@ export function createAttributionControls(
  * serving a live map: `update()` re-reads it, and no caller has to capture the
  * key at map-creation time and go stale.
  */
-export function createBasemapProvider(
+export function createSatelliteProvider(
   tileAuth: BasemapTileAuth | null = null,
-): BasemapProvider {
+): SatelliteImageryProvider {
   return new Provider(
-    createBrowserBasemapHttp(),
+    createBrowserSatelliteHttp(),
     () => ({
-      mapTilerKey: import.meta.env.VITE_MAPTILER_KEY,
       googleMapsApiKey: googleMapsApiKey.value,
       locale: locale.value,
     }),
@@ -294,10 +293,10 @@ export function createBasemapProvider(
  * must be updated when any of these change, so the configuration identity is
  * re-evaluated and an incompatible session is replaced. Returns its disposer.
  */
-export function installBasemapConfigObserver(
-  provider: BasemapProvider,
-  readPresentation: () => { readonly style: BasemapStyle },
-  readViewport: () => BasemapViewport,
+export function installSatelliteConfigObserver(
+  provider: SatelliteImageryProvider,
+  readPresentation: () => { readonly provider: SatelliteProvider },
+  readViewport: () => SatelliteViewport,
 ): () => void {
   let mounted = false
   return effect(() => {
@@ -305,7 +304,7 @@ export function installBasemapConfigObserver(
     void googleMapsApiKey.value
     void locale.value
     const presentation = readPresentation()
-    void presentation.style
+    void presentation.provider
     // The caller already applied the initial presentation; only later
     // configuration identity changes update the already mounted provider.
     if (!mounted) {
@@ -331,7 +330,7 @@ export function installBasemapConfigObserver(
 export function mapStyleReadiness(
   map: { isStyleLoaded?(): boolean; loaded?(): boolean },
   lifetime: { on(type: string, listener: (event?: unknown) => void): void },
-): BasemapStyleReadiness {
+): MapStyleReadiness {
   const read = (): boolean | null => {
     for (const probe of [map.isStyleLoaded, map.loaded]) {
       if (typeof probe !== 'function') continue
@@ -362,16 +361,16 @@ export function mapStyleReadiness(
  * construction, the map host creates that credential capability and supplies
  * it; this mount never installs a second transform or recreates the map.
  */
-export interface BasemapMountOptions {
-  readonly map: BasemapReconcileTarget
+export interface SatelliteMountOptions {
+  readonly map: SatelliteReconcileTarget
   readonly tileAuth?: BasemapTileAuth | null
-  readonly readStyle: () => BasemapStyle
-  readonly readViewport: () => BasemapViewport
+  readonly readProvider: () => SatelliteProvider
+  readonly readViewport: () => SatelliteViewport
   readonly readVisible?: () => boolean
-  readonly styleReady?: BasemapStyleReadiness
+  readonly styleReady?: MapStyleReadiness
   readonly beforeLayerId?: () => string | null
   readonly afterApply?: () => void
-  readonly attributionControls?: BasemapBindingDeps['attributionControls']
+  readonly attributionControls?: SatelliteBindingDeps['attributionControls']
   readonly maplibre?: unknown
   readonly mapControls?: {
     addControl?(control: unknown, position?: string): unknown
@@ -386,27 +385,40 @@ export interface BasemapMountOptions {
     on(type: string, listener: () => void): void
     off?(type: string, listener: () => void): void
   }
-  readonly replaceBasemapAttribution?: (attribution: string) => void
+  readonly replaceSatelliteAttribution?: (attribution: string) => void
 }
 
-export interface BasemapMountHandle {
-  update(presentation: { readonly style: BasemapStyle }, viewport: BasemapViewport): void
-  updateViewport(viewport: BasemapViewport): void
+export interface SatelliteMountHandle {
+  update(presentation: { readonly provider: SatelliteProvider }, viewport: SatelliteViewport): void
+  updateViewport(viewport: SatelliteViewport): void
   dispose(): void
 }
 
-export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMountHandle {
+export function mountSatelliteLifecycle(options: SatelliteMountOptions): SatelliteMountHandle {
   const tileAuth = options.tileAuth ?? null
-  const provider = createBasemapProvider(tileAuth)
+  const provider = createSatelliteProvider(tileAuth)
   const attributionControls =
     options.attributionControls ??
     (options.maplibre && options.mapControls
       ? createAttributionControls(options.maplibre, options.mapControls)
       : undefined)
-  const mapTarget: BasemapReconcileTarget = options.replaceBasemapAttribution
-    ? { ...options.map, replaceBasemapAttribution: options.replaceBasemapAttribution }
-    : options.map
-  const unbind = bindBasemapProvider({
+  // Delegate explicitly: a live MapLibre map keeps its methods on the class
+  // prototype, so spreading it would drop them.
+  const map = options.map
+  const replaceSatelliteAttribution = options.replaceSatelliteAttribution
+  const mapTarget: SatelliteReconcileTarget = replaceSatelliteAttribution
+    ? {
+        getSource: (id) => map.getSource(id),
+        getLayer: (id) => map.getLayer(id),
+        removeLayer: (id) => map.removeLayer(id),
+        removeSource: (id) => map.removeSource(id),
+        addSource: (id, source) => map.addSource(id, source),
+        addLayer: (layer, beforeId) => map.addLayer(layer, beforeId),
+        setLayoutProperty: (id, name, value) => map.setLayoutProperty?.(id, name, value),
+        replaceSatelliteAttribution,
+      }
+    : map
+  const unbind = bindSatelliteProvider({
     provider,
     map: mapTarget,
     ...(tileAuth ? { tileAuth } : {}),
@@ -418,10 +430,10 @@ export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMoun
   })
   // Initialize from current configuration immediately: no movement, settings
   // or style-ready event is required before the first provider generation.
-  provider.update({ style: options.readStyle() }, options.readViewport())
-  const disposeObserver = installBasemapConfigObserver(
+  provider.update({ provider: options.readProvider() }, options.readViewport())
+  const disposeObserver = installSatelliteConfigObserver(
     provider,
-    () => ({ style: options.readStyle() }),
+    () => ({ provider: options.readProvider() }),
     options.readViewport,
   )
   // The mount owns viewport-event subscription as well as configuration
@@ -430,7 +442,7 @@ export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMoun
   options.events?.on('moveend', onMoveEnd)
   return {
     update: (presentation, viewport) => provider.update(presentation, viewport),
-    updateViewport: (viewport: BasemapViewport) => provider.updateViewport(viewport),
+    updateViewport: (viewport: SatelliteViewport) => provider.updateViewport(viewport),
     dispose: () => {
       options.events?.off?.('moveend', onMoveEnd)
       disposeObserver()
@@ -439,7 +451,7 @@ export function mountBasemapLifecycle(options: BasemapMountOptions): BasemapMoun
       // Withdraw the contribution so teardown leaves no source, layer or
       // basemap-owned credit on a map that outlives the mount.
       try {
-        reconcileBasemapContribution(mapTarget, { state: 'idle' })
+        reconcileSatelliteContribution(mapTarget, { state: 'idle' })
       } catch {
         // A map that rejects withdrawal still tears down its own resources.
       }

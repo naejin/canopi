@@ -212,11 +212,14 @@
       "abstract": "Abstract",
       "applySelection": "Toepassen op {{count}} geselecteerde"
     },
-    "location": {
-      "searchPlaceholder": "Locatie zoeken...",
-      "searching": "Zoeken...",
-      "noResults": "Geen resultaten",
-      "geocodeError": "Geocodering mislukt"
+    "placeSearch": {
+      "open": "Plaats zoeken",
+      "placeholder": "Plaatsnaam of lat, lon",
+      "searching": "Zoeken…",
+      "noResults": "Geen plaatsen gevonden",
+      "error": "Plaats zoeken mislukt",
+      "results": "Plaatsen",
+      "emptyPrompt": "Zoek je terrein"
     },
     "file": {
       "new": "Nieuw ontwerp",
@@ -255,7 +258,8 @@
       "visible": "Zichtbaar",
       "hidden": "Verborgen",
       "locked": "Vergrendeld",
-      "unlocked": "Ontgrendeld"
+      "unlocked": "Ontgrendeld",
+      "satellite": "Satelliet"
     },
     "timeline": {
       "actionType": "Actietype",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Basiskaart",
-      "provider": "Provider",
-      "street": "Straat (OpenStreetMap)",
-      "satellite": "Satelliet (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "niet beschikbaar in deze build",
       "googleKey": "Google Maps API-sleutel (optioneel)",
       "saveKey": "Sleutel opslaan",
       "clearKey": "Sleutel wissen",
       "keySaved": "Sleutel op dit apparaat opgeslagen.",
       "keyLocalOnly": "Alleen in de instellingen van dit apparaat. Wordt nooit in een ontwerp, export, logboek of rapport geschreven.",
-      "googleKeyPrompt": "Voer een Google Maps API-sleutel in om de officiële Google-tegels te laden."
+      "style": "Stijl",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Licht",
+        "dark": "Donker"
+      },
+      "hiddenBySatellite": "Verborgen zolang Satelliet aan staat."
     },
     "rasterSample": {
       "title": "Waarde op punt",
@@ -559,6 +564,15 @@
       "unavailable": "Waarde niet beschikbaar",
       "escapeHint": "Esc om te stoppen",
       "sampleCentre": "Meten in het midden van de weergave"
+    },
+    "satellite": {
+      "provider": "Beelden",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Wolkenvrije Sentinel-2-beelden, ongeveer 10 m per pixel.",
+      "googleKeyRequired": "Voer je Google Maps-API-sleutel in om Google-beelden te laden."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "Inzoomen",
     "view.zoomOut": "Uitzoomen",
     "view.fitToContent": "Aanpassen aan inhoud",
+    "view.searchPlace": "Plaats zoeken…",
     "help": "Help",
     "help.reportProblem": "Probleem melden",
     "help.aboutCanopi": "Over Canopi"

@@ -112,6 +112,9 @@ function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | 
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '0') {
     return { commandId: 'view.fitToContent', preventDefault: true }
   }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'f') {
+    return { commandId: 'view.searchPlace', preventDefault: true }
+  }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'c') {
     return { commandId: 'canvas.copy', preventDefault: true }
   }

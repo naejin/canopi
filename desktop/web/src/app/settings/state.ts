@@ -1,10 +1,9 @@
 import { signal } from '@preact/signals'
-import type { BasemapStyle, LastView, Locale, Theme } from '../../generated/contracts'
+import type { LastView, Locale, Theme } from '../../generated/contracts'
 import { DEFAULT_SETTINGS } from '../../generated/settings'
 
 export const locale = signal<Locale>(DEFAULT_SETTINGS.locale)
 export const theme = signal<Theme>(DEFAULT_SETTINGS.theme)
-export const basemapStyle = signal<BasemapStyle>(DEFAULT_SETTINGS.map_style)
 
 /**
  * Device-local Google Maps API key, or null for the keyless tile path.

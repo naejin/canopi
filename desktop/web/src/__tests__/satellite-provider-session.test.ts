@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  BasemapProvider,
+  SatelliteImageryProvider,
   PROVIDER_MAX_RETRIES,
   PROVIDER_REQUEST_TIMEOUT_MS,
   sanitizeProviderReason,
-  type BasemapProviderHttp,
-  type BasemapProviderResponse,
-  type BasemapProviderState,
-} from '../maplibre/basemap-provider-session'
+  type SatelliteProviderHttp,
+  type SatelliteProviderResponse,
+  type SatelliteProviderState,
+} from '../maplibre/satellite-provider-session'
+import { GOOGLE_KEY_REQUIRED_REASON } from '../maplibre/satellite-provider'
 
 const VIEWPORT = { west: -1, south: 48, east: 1, north: 49, zoom: 14 }
 
@@ -36,8 +37,8 @@ function viewportBody(overrides: Record<string, unknown> = {}): unknown {
 
 /** A scripted HTTP capability that records every request it is given. */
 function scriptedHttp(
-  answers: Array<BasemapProviderResponse | (() => Promise<BasemapProviderResponse>)>,
-): { http: BasemapProviderHttp; calls: Array<{ url: string; method?: string }> } {
+  answers: Array<SatelliteProviderResponse | (() => Promise<SatelliteProviderResponse>)>,
+): { http: SatelliteProviderHttp; calls: Array<{ url: string; method?: string }> } {
   const calls: Array<{ url: string; method?: string }> = []
   let index = 0
   return {
@@ -53,28 +54,28 @@ function scriptedHttp(
   }
 }
 
-function ok(json: unknown): BasemapProviderResponse {
+function ok(json: unknown): SatelliteProviderResponse {
   return { ok: true, status: 200, json }
 }
 
-function failure(status: number, retryAfterSeconds?: number): BasemapProviderResponse {
+function failure(status: number, retryAfterSeconds?: number): SatelliteProviderResponse {
   return { ok: false, status, json: null, retryAfterSeconds: retryAfterSeconds ?? null }
 }
 
 /** Collects every published state so a test can assert the sequence. */
-function recorder(provider: BasemapProvider): BasemapProviderState[] {
-  const seen: BasemapProviderState[] = []
+function recorder(provider: SatelliteImageryProvider): SatelliteProviderState[] {
+  const seen: SatelliteProviderState[] = []
   provider.subscribe((state) => seen.push(state))
   return seen
 }
 
-describe('basemap provider session lifecycle', () => {
+describe('satellite provider session lifecycle', () => {
   it('goes straight to ready for providers that need no session and issues no request', () => {
     const { http, calls } = scriptedHttp([ok({})])
-    const provider = new BasemapProvider(http, {})
+    const provider = new SatelliteImageryProvider(http, {})
     const seen = recorder(provider)
 
-    provider.update({ style: 'street' }, VIEWPORT)
+    provider.update({ provider: 'eox' }, VIEWPORT)
 
     expect(provider.snapshot().state).toBe('ready')
     expect(seen.map((state) => state.state)).toEqual(['ready'])
@@ -84,15 +85,19 @@ describe('basemap provider session lifecycle', () => {
     provider.dispose()
   })
 
-  it('reports an unavailable style without making any request', () => {
+  it('reports Google without a key as unavailable without making any request', () => {
     const { http, calls } = scriptedHttp([ok({})])
-    const provider = new BasemapProvider(http, { mapTilerKey: undefined })
+    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: '  ' })
     const seen = recorder(provider)
 
-    provider.update({ style: 'satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
 
     const last = provider.snapshot()
-    expect(last.state).toBe('unavailable')
+    expect(last).toEqual({
+      state: 'unavailable',
+      provider: 'google',
+      reason: GOOGLE_KEY_REQUIRED_REASON,
+    })
     expect(seen.map((state) => state.state)).toEqual(['unavailable'])
     expect(calls).toEqual([])
     provider.dispose()
@@ -103,13 +108,13 @@ describe('basemap provider session lifecycle', () => {
       ok(sessionBody()),
       ok(viewportBody({ copyright: 'Imagery &copy; Google' })),
     ])
-    const provider = new BasemapProvider(http, {
+    const provider = new SatelliteImageryProvider(http, {
       googleMapsApiKey: 'fake-key',
       locale: 'fr-FR',
     })
     const seen = recorder(provider)
 
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     expect(provider.snapshot().state).toBe('loading')
 
     await vi.waitFor(() => {
@@ -136,9 +141,9 @@ describe('basemap provider session lifecycle', () => {
   it('reports an authentication failure as actionable and never downgrades to keyless', async () => {
     // A 403 is not retryable: sending the same bad key again cannot help.
     const { http, calls } = scriptedHttp([failure(403)])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'fake-bad-key' })
+    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-bad-key' })
 
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -154,14 +159,14 @@ describe('basemap provider session lifecycle', () => {
 
   it('retries transient failures within the fixed budget and stops there', async () => {
     const { http, calls } = scriptedHttp([failure(500)])
-    const provider = new BasemapProvider(
+    const provider = new SatelliteImageryProvider(
       http,
       { googleMapsApiKey: 'fake-key' },
       () => 4_000_000_000_000,
       async () => {},
     )
 
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -179,14 +184,14 @@ describe('basemap provider session lifecycle', () => {
       ok(sessionBody()),
       ok(viewportBody({ copyright: 'Imagery' })),
     ])
-    const provider = new BasemapProvider(
+    const provider = new SatelliteImageryProvider(
       http,
       { googleMapsApiKey: 'fake-key' },
       () => 4_000_000_000_000,
       async () => {},
     )
 
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'ready') throw new Error('not ready')
     })
@@ -199,14 +204,14 @@ describe('basemap provider session lifecycle', () => {
 
   it('does not hold work for a Retry-After longer than the backoff', async () => {
     const { http, calls } = scriptedHttp([failure(429, 30)])
-    const provider = new BasemapProvider(
+    const provider = new SatelliteImageryProvider(
       http,
       { googleMapsApiKey: 'fake-key' },
       () => 4_000_000_000_000,
       async () => {},
     )
 
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'unavailable') throw new Error('not settled')
     })
@@ -222,38 +227,38 @@ describe('basemap provider session lifecycle', () => {
     const gate: { release: (() => void) | null } = { release: null }
     const { http } = scriptedHttp([
       () =>
-        new Promise<BasemapProviderResponse>((resolve) => {
+        new Promise<SatelliteProviderResponse>((resolve) => {
           gate.release = () => resolve(ok(sessionBody()))
         }),
       ok({ copyright: 'second' }),
     ])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'fake-key' }, () => 0)
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-key' }, () => 0)
+    provider.update({ provider: 'google' }, VIEWPORT)
 
     // The user switches provider while the first session is still in flight.
-    provider.update({ style: 'street' }, VIEWPORT)
+    provider.update({ provider: 'eox' }, VIEWPORT)
     expect(provider.snapshot().state).toBe('ready')
 
     gate.release?.()
     await Promise.resolve()
     await Promise.resolve()
 
-    // The late official answer must not publish over the current street state.
+    // The late official answer must not publish over the current EOX state.
     const last = provider.snapshot()
     expect(last.state).toBe('ready')
     if (last.state !== 'ready') throw new Error('expected ready')
-    expect(last.descriptor.provider).toBe('openstreetmap')
+    expect(last.descriptor.provider).toBe('eox')
     provider.dispose()
   })
 
   it('stops publishing once disposed', async () => {
     const { http } = scriptedHttp([ok(sessionBody())])
-    const provider = new BasemapProvider(http, { googleMapsApiKey: 'fake-key' })
+    const provider = new SatelliteImageryProvider(http, { googleMapsApiKey: 'fake-key' })
     const seen = recorder(provider)
     provider.dispose()
 
     const before = seen.length
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await Promise.resolve()
     expect(seen.length).toBe(before)
     expect(provider.snapshot().state).toBe('idle')
@@ -261,11 +266,11 @@ describe('basemap provider session lifecycle', () => {
 
   it('uses the locale for the session and falls back to en/US', async () => {
     const { http, calls } = scriptedHttp([ok(sessionBody()), ok(viewportBody())])
-    const provider = new BasemapProvider(
+    const provider = new SatelliteImageryProvider(
       http,
       { googleMapsApiKey: 'fake-key', locale: 'not a locale' },
     )
-    provider.update({ style: 'google_satellite' }, VIEWPORT)
+    provider.update({ provider: 'google' }, VIEWPORT)
     await vi.waitFor(() => {
       if (provider.snapshot().state !== 'ready') throw new Error('not ready')
     })

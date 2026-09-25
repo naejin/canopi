@@ -146,9 +146,10 @@ describe('Canvas Runtime app adapter composition', () => {
       { name: 'plants', visible: false, locked: true, opacity: 0.45 },
     ])
 
-    expect(layerVisibility.value.base).toBe(true)
-    expect(layerLockState.value.base).toBe(false)
-    expect(layerOpacity.value.base).toBe(1)
+    // App-owned map rows live in the map layer store, never in the scene projections.
+    expect(layerVisibility.value).not.toHaveProperty('base')
+    expect(layerLockState.value).not.toHaveProperty('base')
+    expect(layerOpacity.value).not.toHaveProperty('base')
     expect(layerVisibility.value.plants).toBe(false)
     expect(layerLockState.value.plants).toBe(true)
     expect(layerOpacity.value.plants).toBe(0.45)
@@ -196,9 +197,12 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: null,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_provider: 'eox',
+    satellite_visible: false,
+    satellite_opacity: 1,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,

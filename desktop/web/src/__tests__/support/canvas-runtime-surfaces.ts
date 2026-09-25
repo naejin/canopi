@@ -41,6 +41,7 @@ export function createTestCanvasCommandSurface(
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,
       returnFromTemporaryFocus: () => false,
+      showPlace: () => false,
     },
     history: {
       canUndo: signal(false),

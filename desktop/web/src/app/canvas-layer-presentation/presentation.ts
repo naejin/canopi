@@ -1,16 +1,37 @@
-import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
-import { mutateSettingsProjection } from '../settings/projection'
+import { activeLayerName, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
+import { googleMapsApiKey } from '../settings/state'
+import { hasVisibleMapLayer, mapLayers } from '../map-layers/state'
+import {
+  setMapLayerOpacity,
+  setMapLayerVisible,
+  setContourIntervalMeters,
+  type MapLayerId,
+} from '../map-layers/actions'
+import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
+import { SETTINGS_BASEMAP_STYLES, SETTINGS_SATELLITE_PROVIDERS } from '../../generated/settings'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
 
 const SCENE_LAYER_ROW_IDS = ['annotations', 'plants', 'measurement-guides', 'zones'] as const
-const MAP_LAYER_IDS = new Set(['base', 'contours'])
+const MAP_LAYER_ROW_IDS: ReadonlySet<string> = new Set<MapLayerId>(['basemap', 'satellite', 'contours', 'hillshade'])
 
-export type CanvasLayerPresentationAuthority = 'scene' | 'map-settings' | 'terrain-settings'
+export type CanvasLayerPresentationAuthority = 'scene' | 'map-layers'
 
 export type CanvasLayerPresentationDetail =
   | { readonly type: 'scene' }
-  | { readonly type: 'basemap' }
+  | {
+      readonly type: 'basemap'
+      readonly style: BasemapStyle
+      readonly styles: readonly BasemapStyle[]
+      /** Satellite is on, so the Basemap is not drawn whatever its toggle says. */
+      readonly hiddenBySatellite: boolean
+    }
+  | {
+      readonly type: 'satellite'
+      readonly provider: SatelliteProvider
+      readonly providers: readonly SatelliteProvider[]
+      readonly hasGoogleKey: boolean
+    }
   | {
       readonly type: 'contours'
       readonly contourIntervalMeters: number
@@ -30,22 +51,8 @@ export interface CanvasLayerPresentationRow {
   readonly detail: CanvasLayerPresentationDetail
 }
 
-export interface CanvasLayerPresentationMapSurface {
-  readonly hasVisibleMapLayer: boolean
-  readonly layerVisibility: Readonly<Record<string, boolean>>
-  readonly layerOpacity: Readonly<Record<string, number>>
-  readonly terrain: {
-    readonly contourIntervalMeters: number
-    readonly contoursVisible: boolean
-    readonly contoursOpacity: number
-    readonly hillshadeVisible: boolean
-    readonly hillshadeOpacity: number
-  }
-}
-
 export interface CanvasLayerPresentation {
   readonly rows: readonly CanvasLayerPresentationRow[]
-  readonly mapSurface: CanvasLayerPresentationMapSurface
   readonly hasVisibleMapLayer: boolean
 }
 
@@ -57,7 +64,24 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   const locks = layerLockState.value
   const opacities = layerOpacity.value
   const active = activeLayerName.value
-  const hillshadeOn = hillshadeVisible.value
+  const layers = mapLayers.value
+
+  const mapRow = (
+    id: MapLayerId,
+    label: string,
+    state: { readonly visible: boolean; readonly opacity: number },
+    detail: CanvasLayerPresentationDetail,
+  ): CanvasLayerPresentationRow => ({
+    id,
+    label,
+    authority: 'map-layers',
+    active: active === id,
+    visible: state.visible,
+    opacity: state.opacity,
+    locked: false,
+    canLock: false,
+    detail,
+  })
 
   const rows: CanvasLayerPresentationRow[] = [
     ...SCENE_LAYER_ROW_IDS.map((id) => {
@@ -75,53 +99,26 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
         detail: { type: 'scene' as const },
       }
     }),
-    {
-      id: 'base',
-      label: t('canvas.layers.basemap'),
-      authority: 'map-settings',
-      active: active === 'base',
-      visible: visibility.base ?? true,
-      opacity: opacities.base ?? 1,
-      locked: false,
-      canLock: false,
-      detail: {
-        type: 'basemap',
-      },
-    },
-    {
-      id: 'contours',
-      label: t('canvas.terrain.contours'),
-      authority: 'map-settings',
-      active: active === 'contours',
-      visible: visibility.contours ?? false,
-      opacity: opacities.contours ?? 1,
-      locked: false,
-      canLock: false,
-      detail: {
-        type: 'contours',
-        contourIntervalMeters: contourIntervalMeters.value,
-      },
-    },
-    {
-      id: 'hillshading',
-      label: t('canvas.terrain.hillshade'),
-      authority: 'terrain-settings',
-      active: active === 'hillshading',
-      visible: hillshadeOn,
-      opacity: hillshadeOpacity.value,
-      locked: false,
-      canLock: false,
-      detail: { type: 'hillshade' },
-    },
+    mapRow('basemap', t('canvas.layers.basemap'), layers.basemap, {
+      type: 'basemap',
+      style: layers.basemap.style,
+      styles: SETTINGS_BASEMAP_STYLES,
+      hiddenBySatellite: layers.satellite.visible,
+    }),
+    mapRow('satellite', t('canvas.layers.satellite'), layers.satellite, {
+      type: 'satellite',
+      provider: layers.satellite.provider,
+      providers: SETTINGS_SATELLITE_PROVIDERS,
+      hasGoogleKey: Boolean(googleMapsApiKey.value?.trim()),
+    }),
+    mapRow('contours', t('canvas.terrain.contours'), layers.contours, {
+      type: 'contours',
+      contourIntervalMeters: layers.contours.intervalMeters,
+    }),
+    mapRow('hillshade', t('canvas.terrain.hillshade'), layers.hillshade, { type: 'hillshade' }),
   ]
 
-  const mapSurface = readCanvasMapLayerPresentation()
-
-  return {
-    rows,
-    mapSurface,
-    hasVisibleMapLayer: mapSurface.hasVisibleMapLayer,
-  }
+  return { rows, hasVisibleMapLayer: hasVisibleMapLayer(layers) }
 }
 
 export function setCanvasLayerPresentationActiveLayer(id: string): void {
@@ -129,97 +126,30 @@ export function setCanvasLayerPresentationActiveLayer(id: string): void {
 }
 
 export function setCanvasLayerPresentationVisibility(id: string, visible: boolean): boolean {
-  if (id === 'base') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.baseVisible = visible
-    }, { persist: 'queued' })
+  if (MAP_LAYER_ROW_IDS.has(id)) {
+    setMapLayerVisible(id as MapLayerId, visible)
     return true
   }
-  if (id === 'contours') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.contoursVisible = visible
-    }, { persist: 'queued' })
-    return true
-  }
-  if (id === 'hillshading') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.hillshadeVisible = visible
-    }, { persist: 'queued' })
-    return true
-  }
-
   return getCurrentCanvasLayerCommandSurface()?.setSceneLayerVisibility(id, visible) ?? false
 }
 
 export function setCanvasLayerPresentationOpacity(id: string, opacity: number): boolean {
   if (!Number.isFinite(opacity)) return false
-  const next = clampUnitInterval(opacity)
-  if (id === 'base') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.baseOpacity = next
-    }, { persist: 'queued' })
+  const next = Math.min(1, Math.max(0, opacity))
+  if (MAP_LAYER_ROW_IDS.has(id)) {
+    setMapLayerOpacity(id as MapLayerId, next)
     return true
   }
-  if (id === 'contours') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.contoursOpacity = next
-    }, { persist: 'queued' })
-    return true
-  }
-  if (id === 'hillshading') {
-    mutateSettingsProjection((settings) => {
-      settings.mapLayers.hillshadeOpacity = next
-    }, { persist: 'queued' })
-    return true
-  }
-
   return getCurrentCanvasLayerCommandSurface()?.setSceneLayerOpacity(id, next) ?? false
 }
 
 export function setCanvasLayerPresentationLocked(id: string, locked: boolean): boolean {
-  if (MAP_LAYER_IDS.has(id) || id === 'hillshading') return false
+  if (MAP_LAYER_ROW_IDS.has(id)) return false
   return getCurrentCanvasLayerCommandSurface()?.setSceneLayerLocked(id, locked) ?? false
 }
 
 export function setCanvasLayerPresentationContourIntervalMeters(interval: number): boolean {
-  if (!Number.isFinite(interval)) return false
-  mutateSettingsProjection((settings) => {
-    settings.mapLayers.contourIntervalMeters = interval
-  }, { persist: 'queued' })
+  if (!Number.isFinite(interval) || interval < 0) return false
+  setContourIntervalMeters(interval)
   return true
-}
-
-function clampUnitInterval(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(1, Math.max(0, value))
-}
-
-export function readCanvasMapLayerPresentation(): CanvasLayerPresentationMapSurface {
-  const visibility = layerVisibility.value
-  const opacities = layerOpacity.value
-  const hillshadeOn = hillshadeVisible.value
-  const mapVisibility = {
-    ...visibility,
-    base: visibility.base ?? true,
-    contours: visibility.contours ?? false,
-  }
-  const mapOpacity = {
-    ...opacities,
-    base: opacities.base ?? 1,
-    contours: opacities.contours ?? 1,
-  }
-  const terrain = {
-    contourIntervalMeters: contourIntervalMeters.value,
-    contoursVisible: visibility.contours ?? false,
-    contoursOpacity: opacities.contours ?? 1,
-    hillshadeVisible: hillshadeOn,
-    hillshadeOpacity: hillshadeOpacity.value,
-  }
-
-  return {
-    hasVisibleMapLayer: mapVisibility.base || terrain.contoursVisible || terrain.hillshadeVisible,
-    layerVisibility: mapVisibility,
-    layerOpacity: mapOpacity,
-    terrain,
-  }
 }

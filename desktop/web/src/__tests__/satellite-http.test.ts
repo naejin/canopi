@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   BASEMAP_HTTP_MAX_BODY_BYTES,
-  createBrowserBasemapHttp,
-} from '../maplibre/basemap-http.browser'
+  createBrowserSatelliteHttp,
+} from '../maplibre/satellite-http.browser'
 
 const SECRET = 'fake-recognizable-key'
 const URL_WITH_SECRET = `https://tile.googleapis.com/v1/createSession?key=${SECRET}`
@@ -15,11 +15,11 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   })
 }
 
-describe('bounded browser basemap HTTP capability', () => {
+describe('bounded browser satellite HTTP capability', () => {
   it('never lets the request URL — and therefore the key — escape through a failure', async () => {
     // A transport failure whose message carries the whole URL is the realistic
     // worst case: a naive adapter re-throws it and the key reaches the console.
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () => {
         throw new Error(`request to ${URL_WITH_SECRET} failed`)
       }) as unknown as typeof fetch,
@@ -35,7 +35,7 @@ describe('bounded browser basemap HTTP capability', () => {
   })
 
   it('reads JSON only, so a misbehaving endpoint cannot inject a parsed body', async () => {
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         new Response('<html>maintenance</html>', {
           status: 200,
@@ -53,7 +53,7 @@ describe('bounded browser basemap HTTP capability', () => {
 
   it('refuses an oversized body rather than buffering it', async () => {
     const oversized = 'x'.repeat(BASEMAP_HTTP_MAX_BODY_BYTES + 1)
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         new Response(JSON.stringify({ padding: oversized }), {
           status: 200,
@@ -85,7 +85,7 @@ describe('bounded browser basemap HTTP capability', () => {
         cancelled = true
       },
     })
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         new Response(stream, {
           status: 200,
@@ -105,7 +105,7 @@ describe('bounded browser basemap HTTP capability', () => {
     // Each character below is three UTF-8 bytes, so a character-counted cap
     // would admit three times the intended body.
     const body = '€'.repeat(Math.ceil(BASEMAP_HTTP_MAX_BODY_BYTES / 3) + 1)
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         new Response(JSON.stringify({ padding: body }), {
           status: 200,
@@ -120,7 +120,7 @@ describe('bounded browser basemap HTTP capability', () => {
   })
 
   it('still parses a body that fits the cap', async () => {
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         jsonResponse({ session: 'ok', expiry: '4000000000' })) as unknown as typeof fetch,
     )
@@ -132,7 +132,7 @@ describe('bounded browser basemap HTTP capability', () => {
   })
 
   it('reports Retry-After in both its numeric and HTTP-date forms', async () => {
-    const numeric = createBrowserBasemapHttp(
+    const numeric = createBrowserSatelliteHttp(
       vi.fn(async () =>
         jsonResponse({}, { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '30' } })) as unknown as typeof fetch,
     )
@@ -145,7 +145,7 @@ describe('bounded browser basemap HTTP capability', () => {
     expect(first.retryAfterSeconds).toBe(30)
 
     const future = new Date(Date.now() + 45_000).toUTCString()
-    const dated = createBrowserBasemapHttp(
+    const dated = createBrowserSatelliteHttp(
       vi.fn(async () =>
         jsonResponse({}, { status: 503, headers: { 'content-type': 'application/json', 'retry-after': future } })) as unknown as typeof fetch,
     )
@@ -159,7 +159,7 @@ describe('bounded browser basemap HTTP capability', () => {
 
   it('sends no ambient credentials and posts a JSON body for a session', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ session: 'fake-token', expiry: 1 }))
-    const http = createBrowserBasemapHttp(fetchImpl as unknown as typeof fetch)
+    const http = createBrowserSatelliteHttp(fetchImpl as unknown as typeof fetch)
     await http.request({
       url: 'https://example.invalid/session',
       signal: new AbortController().signal,
@@ -173,7 +173,7 @@ describe('bounded browser basemap HTTP capability', () => {
   })
 
   it('parses a normal JSON answer', async () => {
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () => jsonResponse({ expiry: 1234, tileWidth: 512 })) as unknown as typeof fetch,
     )
     const response = await http.request({
@@ -186,7 +186,7 @@ describe('bounded browser basemap HTTP capability', () => {
 
   it('does not read a body on an error status', async () => {
     // An error body can echo the request, so it is never parsed.
-    const http = createBrowserBasemapHttp(
+    const http = createBrowserSatelliteHttp(
       vi.fn(async () =>
         new Response(JSON.stringify({ error: URL_WITH_SECRET }), {
           status: 403,

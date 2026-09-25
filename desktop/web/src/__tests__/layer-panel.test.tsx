@@ -5,14 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LayersPanel as LayerPanel } from '../components/panels/LayersPanel'
 import {
   activeLayerName,
-  contourIntervalMeters,
-  hillshadeOpacity,
-  hillshadeVisible,
   layerLockState,
   layerOpacity,
   layerVisibility,
 } from '../app/canvas-settings/signals'
-import { basemapStyle } from '../app/settings/state'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
+import { googleMapsApiKey } from '../app/settings/state'
 import type { Settings } from '../types/settings'
 import {
   designSessionFixture,
@@ -40,9 +38,13 @@ function baseSettings(): Settings {
     auto_save_interval_s: 60,
     side_panel_width: null,
     saved_stamps_frame_height: 220,
-    map_layer_visible: true,
-    map_style: 'street',
-    map_opacity: 1,
+    basemap_style: 'liberty',
+    basemap_visible: true,
+    basemap_opacity: 1,
+    satellite_provider: 'eox',
+    satellite_visible: false,
+    satellite_opacity: 1,
+    google_maps_api_key: null,
     contour_visible: false,
     contour_opacity: 1,
     contour_interval: 0,
@@ -83,14 +85,12 @@ describe('LayerPanel', () => {
       updated_at: '2026-04-12T00:00:00.000Z',
       extra: {},
     }
-    activeLayerName.value = 'base'
-    basemapStyle.value = 'street'
-    layerVisibility.value = { base: true, contours: false, plants: true, zones: true, annotations: true }
+    activeLayerName.value = 'basemap'
+    layerVisibility.value = { plants: true, zones: true, annotations: true }
     layerLockState.value = { plants: false, zones: false, annotations: false }
-    layerOpacity.value = { base: 1, contours: 1, plants: 1, zones: 1, annotations: 1 }
-    contourIntervalMeters.value = 0
-    hillshadeVisible.value = false
-    hillshadeOpacity.value = 0.55
+    layerOpacity.value = { plants: 1, zones: 1, annotations: 1 }
+    mapLayers.value = createDefaultMapLayers()
+    googleMapsApiKey.value = null
     activePanel.value = 'canvas'
     sidePanel.value = 'favorites'
     installSettingsProjection({
@@ -112,7 +112,7 @@ describe('LayerPanel', () => {
     resetSettingsProjectionForTests()
   })
 
-  it('treats the base row as basemap visibility', async () => {
+  it('toggles the Basemap row through the map layer store', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
@@ -129,7 +129,9 @@ describe('LayerPanel', () => {
       basemapToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(layerVisibility.value.base).toBe(false)
+    expect(mapLayers.value.basemap.visible).toBe(false)
+    await Promise.resolve()
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ basemap_visible: false }))
   })
 
   it('updates mounted Layer chrome when only the locale changes', async () => {
@@ -148,13 +150,108 @@ describe('LayerPanel', () => {
     expect(container.textContent).toContain('Fond de carte')
   })
 
-  it('does not expose basemap style selection in the base layer controls', async () => {
+  it('chooses the Basemap style from the Basemap row and persists it', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
 
-    expect(container.querySelector('select')).toBeNull()
-    expect(basemapStyle.value).toBe('street')
+    const styleTrigger = container.querySelector<HTMLButtonElement>('button[aria-label="Style"]')
+    expect(styleTrigger?.textContent).toContain('Liberty')
+    await act(async () => {
+      styleTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const options = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    expect(options.map((option) => option.textContent)).toEqual(['Liberty', 'Positron', 'Bright', 'Dark'])
+
+    await act(async () => {
+      options.find((option) => option.textContent === 'Positron')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mapLayers.value.basemap.style).toBe('positron')
+    await Promise.resolve()
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ basemap_style: 'positron' }))
+  })
+
+  it('hides the Basemap while Satellite is on and restores it when Satellite is off', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+
+    const satelliteToggle = () => container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Toggle visibility: Satellite"]',
+    )
+    expect(satelliteToggle()?.getAttribute('aria-pressed')).toBe('false')
+    expect(container.textContent).not.toContain('Hidden while Satellite is on.')
+
+    await act(async () => {
+      satelliteToggle()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mapLayers.value.satellite.visible).toBe(true)
+    expect(mapLayers.value.basemap.visible).toBe(true)
+    expect(container.textContent).toContain('Hidden while Satellite is on.')
+
+    await act(async () => {
+      satelliteToggle()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mapLayers.value.satellite.visible).toBe(false)
+    expect(mapLayers.value.basemap.visible).toBe(true)
+    expect(container.textContent).not.toContain('Hidden while Satellite is on.')
+  })
+
+  it('asks for a Google key when Google is chosen and saves it trimmed without echoing it', async () => {
+    await act(async () => {
+      activeLayerName.value = 'satellite'
+      render(<LayerPanel />, container)
+    })
+
+    expect(container.textContent).toContain('Sentinel-2 cloudless imagery')
+    expect(container.querySelector('input[type="password"]')).toBeNull()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Imagery"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+        .find((option) => option.textContent === 'Google')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mapLayers.value.satellite.provider).toBe('google')
+    expect(container.textContent).toContain('Enter your Google Maps API key to load Google imagery.')
+
+    const keyInput = container.querySelector<HTMLInputElement>('input[type="password"]')
+    expect(keyInput).toBeTruthy()
+    await act(async () => {
+      if (!keyInput) return
+      keyInput.value = '  device-key  '
+      keyInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+
+    expect(googleMapsApiKey.value).toBe('device-key')
+    expect(container.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe('')
+    expect(container.textContent).not.toContain('device-key')
+    expect(container.textContent).not.toContain('Enter your Google Maps API key to load Google imagery.')
+    expect(container.textContent).toContain('Key saved on this device.')
+    await Promise.resolve()
+    expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      satellite_provider: 'google',
+      google_maps_api_key: 'device-key',
+    }))
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent === 'Clear key')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(googleMapsApiKey.value).toBeNull()
+    expect(container.textContent).toContain('Enter your Google Maps API key to load Google imagery.')
   })
 
   it('shows map layer detail controls without a Design Location action', async () => {
@@ -176,7 +273,7 @@ describe('LayerPanel', () => {
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')).toBeTruthy()
 
     await act(async () => {
-      activeLayerName.value = 'hillshading'
+      activeLayerName.value = 'hillshade'
       await Promise.resolve()
     })
 
@@ -246,8 +343,8 @@ describe('LayerPanel', () => {
       contourToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(layerVisibility.value.contours).toBe(true)
-    expect(layerVisibility.value.base).toBe(true)
+    expect(mapLayers.value.contours.visible).toBe(true)
+    expect(mapLayers.value.basemap.visible).toBe(true)
 
     // Click the contours name to make it active and reveal controls
     const contourName = Array.from(container.querySelectorAll('button'))
@@ -264,7 +361,7 @@ describe('LayerPanel', () => {
       contourSlider.value = '25'
       contourSlider.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(contourIntervalMeters.value).toBe(25)
+    expect(mapLayers.value.contours.intervalMeters).toBe(25)
     vi.runAllTimers()
     await Promise.resolve()
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
@@ -279,7 +376,7 @@ describe('LayerPanel', () => {
     await act(async () => {
       hillshadeToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    expect(hillshadeVisible.value).toBe(true)
+    expect(mapLayers.value.hillshade.visible).toBe(true)
 
     // Click hillshading name to make it active and reveal controls
     const hillshadeName = Array.from(container.querySelectorAll('button'))
@@ -296,7 +393,7 @@ describe('LayerPanel', () => {
       hillshadeSlider.value = '30'
       hillshadeSlider.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(hillshadeOpacity.value).toBe(0.3)
+    expect(mapLayers.value.hillshade.opacity).toBe(0.3)
     vi.runAllTimers()
     await Promise.resolve()
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({

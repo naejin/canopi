@@ -1,24 +1,23 @@
 import { batch } from '@preact/signals'
-import type { BasemapStyle, LastView } from '../../generated/contracts'
+import type { LastView } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
-import { normalizeBasemapStyle } from '../../maplibre/config'
 import {
-  contourIntervalMeters,
+  mapLayers,
+  mapLayersEqual,
+  normalizeMapLayers,
+  type MapLayersState,
+} from '../map-layers/state'
+import {
   snapToGridEnabled,
   snapToGuidesEnabled,
-  hillshadeOpacity,
-  hillshadeVisible,
-  layerOpacity,
-  layerVisibility,
 } from '../canvas-settings/signals'
 import { sidePanelWidth } from '../shell/state'
 import {
   DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
   MIN_FAVORITES_FRAME_HEIGHT,
   autoSaveIntervalMs,
-  basemapStyle,
   googleMapsApiKey,
   lastView,
   locale,
@@ -33,7 +32,6 @@ export type SettingsPersistMode = 'immediate' | 'queued' | 'none'
 export interface SettingsProjectionDraft {
   locale: Locale
   theme: Theme
-  basemapStyle: BasemapStyle
   googleMapsApiKey: string | null
   snapToGrid: boolean
   snapToGuides: boolean
@@ -46,15 +44,7 @@ export interface SettingsProjectionDraft {
   savedStamps: {
     frameHeight: number
   }
-  mapLayers: {
-    baseVisible: boolean
-    baseOpacity: number
-    contoursVisible: boolean
-    contoursOpacity: number
-    contourIntervalMeters: number
-    hillshadeVisible: boolean
-    hillshadeOpacity: number
-  }
+  mapLayers: MapLayersState
 }
 
 interface MutateSettingsProjectionOptions {
@@ -102,16 +92,6 @@ let activeSettingsProjection: ActiveSettingsProjection | null = null
 let pendingSettingsRetirement: Promise<void> | null = null
 let pendingHydrationIntent: PendingHydrationIntent | null = null
 
-function clampUnitInterval(value: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback
-  return Math.min(1, Math.max(0, value))
-}
-
-function normalizeContourInterval(value: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback
-  return Math.max(0, Math.round(value))
-}
-
 function normalizePositiveMeters(value: number, fallback: number): number {
   if (!Number.isFinite(value) || value <= 0) return fallback
   return value
@@ -135,7 +115,6 @@ function createDraftFromProjection(): SettingsProjectionDraft {
   return {
     locale: locale.value,
     theme: theme.value,
-    basemapStyle: basemapStyle.value,
     googleMapsApiKey: googleMapsApiKey.value,
     snapToGrid: snapToGridEnabled.value,
     snapToGuides: snapToGuidesEnabled.value,
@@ -148,15 +127,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     savedStamps: {
       frameHeight: savedStampsFrameHeight.value,
     },
-    mapLayers: {
-      baseVisible: layerVisibility.value.base ?? true,
-      baseOpacity: layerOpacity.value.base ?? 1,
-      contoursVisible: layerVisibility.value.contours ?? false,
-      contoursOpacity: layerOpacity.value.contours ?? 1,
-      contourIntervalMeters: contourIntervalMeters.value,
-      hillshadeVisible: hillshadeVisible.value,
-      hillshadeOpacity: hillshadeOpacity.value,
-    },
+    mapLayers: mapLayers.value,
   }
 }
 
@@ -175,7 +146,6 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
   return {
     locale: draft.locale,
     theme: normalizeTheme(draft.theme),
-    basemapStyle: normalizeBasemapStyle(draft.basemapStyle),
     // The key is stored exactly as typed; the explicit save action is what
     // trims it, so partial editing never silently rewrites the credential.
     googleMapsApiKey: draft.googleMapsApiKey,
@@ -193,15 +163,7 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     savedStamps: {
       frameHeight: normalizeSavedStampsFrameHeight(draft.savedStamps.frameHeight),
     },
-    mapLayers: {
-      baseVisible: draft.mapLayers.baseVisible,
-      baseOpacity: clampUnitInterval(draft.mapLayers.baseOpacity, 1),
-      contoursVisible: draft.mapLayers.contoursVisible,
-      contoursOpacity: clampUnitInterval(draft.mapLayers.contoursOpacity, 1),
-      contourIntervalMeters: normalizeContourInterval(draft.mapLayers.contourIntervalMeters, 0),
-      hillshadeVisible: draft.mapLayers.hillshadeVisible,
-      hillshadeOpacity: clampUnitInterval(draft.mapLayers.hillshadeOpacity, 0.55),
-    },
+    mapLayers: normalizeMapLayers(draft.mapLayers),
   }
 }
 
@@ -209,7 +171,6 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
   batch(() => {
     locale.value = draft.locale
     theme.value = draft.theme
-    basemapStyle.value = draft.basemapStyle
     googleMapsApiKey.value = draft.googleMapsApiKey
     snapToGridEnabled.value = draft.snapToGrid
     snapToGuidesEnabled.value = draft.snapToGuides
@@ -218,19 +179,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     if (!sameLastView(lastView.value, draft.lastView)) lastView.value = draft.lastView
     sidePanelWidth.value = draft.sidePanel.width
     savedStampsFrameHeight.value = draft.savedStamps.frameHeight
-    layerVisibility.value = {
-      ...layerVisibility.value,
-      base: draft.mapLayers.baseVisible,
-      contours: draft.mapLayers.contoursVisible,
-    }
-    layerOpacity.value = {
-      ...layerOpacity.value,
-      base: draft.mapLayers.baseOpacity,
-      contours: draft.mapLayers.contoursOpacity,
-    }
-    contourIntervalMeters.value = draft.mapLayers.contourIntervalMeters
-    hillshadeVisible.value = draft.mapLayers.hillshadeVisible
-    hillshadeOpacity.value = draft.mapLayers.hillshadeOpacity
+    if (!mapLayersEqual(mapLayers.value, draft.mapLayers)) mapLayers.value = draft.mapLayers
   })
 }
 
@@ -245,15 +194,18 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
     saved_stamps_frame_height: draft.savedStamps.frameHeight,
-    map_layer_visible: draft.mapLayers.baseVisible,
-    map_style: draft.basemapStyle,
+    basemap_style: draft.mapLayers.basemap.style,
+    basemap_visible: draft.mapLayers.basemap.visible,
+    basemap_opacity: draft.mapLayers.basemap.opacity,
+    satellite_provider: draft.mapLayers.satellite.provider,
+    satellite_visible: draft.mapLayers.satellite.visible,
+    satellite_opacity: draft.mapLayers.satellite.opacity,
     google_maps_api_key: trimmedKey(draft.googleMapsApiKey),
-    map_opacity: draft.mapLayers.baseOpacity,
-    contour_visible: draft.mapLayers.contoursVisible,
-    contour_opacity: draft.mapLayers.contoursOpacity,
-    contour_interval: draft.mapLayers.contourIntervalMeters,
-    hillshade_visible: draft.mapLayers.hillshadeVisible,
-    hillshade_opacity: draft.mapLayers.hillshadeOpacity,
+    contour_visible: draft.mapLayers.contours.visible,
+    contour_opacity: draft.mapLayers.contours.opacity,
+    contour_interval: draft.mapLayers.contours.intervalMeters,
+    hillshade_visible: draft.mapLayers.hillshade.visible,
+    hillshade_opacity: draft.mapLayers.hillshade.opacity,
   }
 }
 
@@ -290,7 +242,6 @@ function projectSettingsToSignals(settings: Settings): Settings {
   const draft = normalizeDraft({
     locale: settings.locale,
     theme: settings.theme,
-    basemapStyle: normalizeBasemapStyle(settings.map_style),
     googleMapsApiKey: settings.google_maps_api_key ?? null,
     snapToGrid: settings.snap_to_grid,
     snapToGuides: settings.snap_to_guides,
@@ -304,13 +255,25 @@ function projectSettingsToSignals(settings: Settings): Settings {
       frameHeight: normalizeSavedStampsFrameHeight(settings.saved_stamps_frame_height),
     },
     mapLayers: {
-      baseVisible: settings.map_layer_visible,
-      baseOpacity: settings.map_opacity,
-      contoursVisible: settings.contour_visible,
-      contoursOpacity: settings.contour_opacity,
-      contourIntervalMeters: settings.contour_interval,
-      hillshadeVisible: settings.hillshade_visible,
-      hillshadeOpacity: settings.hillshade_opacity,
+      basemap: {
+        style: settings.basemap_style,
+        visible: settings.basemap_visible,
+        opacity: settings.basemap_opacity,
+      },
+      satellite: {
+        provider: settings.satellite_provider,
+        visible: settings.satellite_visible,
+        opacity: settings.satellite_opacity,
+      },
+      contours: {
+        visible: settings.contour_visible,
+        opacity: settings.contour_opacity,
+        intervalMeters: settings.contour_interval,
+      },
+      hillshade: {
+        visible: settings.hillshade_visible,
+        opacity: settings.hillshade_opacity,
+      },
     },
   })
   applyDraftToProjection(draft)

@@ -212,11 +212,14 @@
       "abstract": "抽象形状",
       "applySelection": "应用于所选的 {{count}} 个"
     },
-    "location": {
-      "searchPlaceholder": "搜索位置...",
-      "searching": "搜索中...",
-      "noResults": "没有结果",
-      "geocodeError": "地理编码失败"
+    "placeSearch": {
+      "open": "搜索地点",
+      "placeholder": "地名或纬度, 经度",
+      "searching": "正在搜索…",
+      "noResults": "未找到地点",
+      "error": "地点搜索失败",
+      "results": "地点",
+      "emptyPrompt": "搜索你的场地"
     },
     "file": {
       "new": "新建设计",
@@ -255,7 +258,8 @@
       "visible": "可见",
       "hidden": "隐藏",
       "locked": "已锁定",
-      "unlocked": "未锁定"
+      "unlocked": "未锁定",
+      "satellite": "卫星"
     },
     "timeline": {
       "actionType": "操作类型",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "底图",
-      "provider": "提供商",
-      "street": "街道（OpenStreetMap）",
-      "satellite": "卫星（MapTiler）",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "此版本中不可用",
       "googleKey": "Google Maps API 密钥（可选）",
       "saveKey": "保存密钥",
       "clearKey": "清除密钥",
       "keySaved": "密钥已保存在此设备上。",
       "keyLocalOnly": "仅保存在此设备的设置中。绝不会写入设计、导出、日志或报告。",
-      "googleKeyPrompt": "输入 Google Maps API 密钥以加载官方 Google 瓦片。"
+      "style": "样式",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "明亮",
+        "dark": "深色"
+      },
+      "hiddenBySatellite": "开启卫星图层时隐藏。"
     },
     "rasterSample": {
       "title": "点值",
@@ -559,6 +564,15 @@
       "unavailable": "数值不可用",
       "escapeHint": "按 Esc 停止",
       "sampleCentre": "在视图中心取样"
+    },
+    "satellite": {
+      "provider": "影像",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Sentinel-2 无云影像，约每像素 10 米。",
+      "googleKeyRequired": "输入您的 Google Maps API 密钥以加载 Google 影像。"
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "放大",
     "view.zoomOut": "缩小",
     "view.fitToContent": "适应内容",
+    "view.searchPlace": "搜索地点…",
     "help": "帮助",
     "help.reportProblem": "报告问题",
     "help.aboutCanopi": "关于 Canopi"

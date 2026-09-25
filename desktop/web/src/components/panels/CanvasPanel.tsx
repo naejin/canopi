@@ -5,6 +5,7 @@ import { useCanvasDocumentSession } from '../../app/document-session/use-canvas-
 import { CanvasToolbar } from '../canvas/CanvasToolbar'
 import { ZoomControls } from '../canvas/ZoomControls'
 import { InspectionLens } from '../canvas/InspectionLens'
+import { PlaceSearch } from '../canvas/PlaceSearch'
 import { InspectionStatus } from '../canvas/InspectionStatus'
 import { DisplayLegend } from '../canvas/DisplayLegend'
 import { CanvasOverview } from '../canvas/CanvasOverview'
@@ -114,6 +115,7 @@ export function CanvasPanel() {
               data-map-active={locationNotice.mapSurfaceVisible ? 'true' : 'false'}
             />
             <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
+            {hasDesign && <PlaceSearch />}
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
             {/* Read-only numeric inspection; nothing here is document state. */}
             {hasDesign && <InspectionStatus />}

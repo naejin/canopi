@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
         '#platform': platformAdapter,
         '#canvas-pdf-platform': fileURLToPath(new URL(isWebEdition ? './src/app/canvas-pdf/platform.browser.ts' : './src/app/canvas-pdf/platform.desktop.ts', import.meta.url)),
         '#budget-export-platform': fileURLToPath(new URL(isWebEdition ? './src/app/budget/platform.browser.ts' : './src/app/budget/platform.desktop.ts', import.meta.url)),
+        '#geocoding-transport': fileURLToPath(new URL(isWebEdition ? './src/app/geocoding/transport.browser.ts' : './src/app/geocoding/transport.desktop.ts', import.meta.url)),
         '#species-catalog-live': speciesCatalogLiveAdapter,
       },
     },

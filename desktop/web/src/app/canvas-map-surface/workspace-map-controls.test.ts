@@ -1,6 +1,6 @@
 import { createDefaultScenePersistedState } from '../../canvas/runtime/scene'
 import type { WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import type {
   MapLibreApi,
@@ -10,10 +10,12 @@ import type {
 import type { WorkspaceMapSnapshot } from '../../maplibre/workspace-map'
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-  MAPLIBRE_BASEMAP_SOURCE_ID,
-  REMOTE_BASEMAP_TILE_URL_TEMPLATE,
+  MAPLIBRE_SATELLITE_LAYER_ID,
+  MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../../maplibre/config'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
+import { OPENFREEMAP_BASEMAPS } from '../../maplibre/openfreemap-basemap'
+import { EOX_SATELLITE_TILES, GOOGLE_SESSION_TILES } from '../../maplibre/satellite-provider'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { WorkspaceMapControls } from './workspace-map-controls'
 
@@ -40,6 +42,13 @@ class FakeMap implements MapLibreMapInstance {
     else this.layerOrder.push(layer.id)
   })
   readonly setPaintProperty = vi.fn()
+  readonly setLayoutProperty = vi.fn()
+  readonly setGlyphs = vi.fn()
+  readonly setSprite = vi.fn()
+  readonly setStyle = vi.fn()
+  readonly controls = new Set<unknown>()
+  readonly addControl = vi.fn((control: unknown, _position?: string) => { this.controls.add(control) })
+  readonly removeControl = vi.fn((control: unknown) => { this.controls.delete(control) })
   readonly getLayer = vi.fn((id: string) => this.layers.get(id))
   readonly getLayersOrder = vi.fn(() => [...this.layerOrder])
   readonly moveLayer = vi.fn((id: string, beforeId?: string) => {
@@ -88,6 +97,10 @@ class FakeMap implements MapLibreMapInstance {
   }
 }
 
+class FakeAttributionControl {
+  constructor(readonly options?: { compact?: boolean; customAttribution?: string | string[] }) {}
+}
+
 function createApi(
   maps: FakeMap[],
   webgl2: WebGL2RenderingContext | null = {} as WebGL2RenderingContext,
@@ -98,12 +111,72 @@ function createApi(
       maps.push(this)
     }
   }
-  return { Map: TestMap, addProtocol: vi.fn() }
+  return { Map: TestMap, addProtocol: vi.fn(), AttributionControl: FakeAttributionControl } as unknown as MapLibreApi
+}
+
+/** A small OpenFreeMap-like style; the network is never reached. */
+const OPENFREEMAP_STYLE = {
+  version: 8,
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sprite: 'https://tiles.openfreemap.org/sprites/ofm_f384/ofm',
+  sources: {
+    openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+  },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': '#f8f4f0' } },
+    { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-color': '#9ec8e0', 'fill-opacity': 0.8 } },
+    { id: 'place-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place', layout: { 'text-field': ['get', 'name'] } },
+  ],
+}
+const OPENFREEMAP_LAYER_IDS = ['ofm:background', 'ofm:water', 'ofm:place-label']
+
+const styleFetch = vi.fn(async (_url: string | URL | Request) => new Response(
+  JSON.stringify(OPENFREEMAP_STYLE),
+  { status: 200, headers: { 'content-type': 'application/json' } },
+))
+
+function background(
+  basemap: Partial<MapBackgroundPresentation['basemap']> = {},
+  satellite: Partial<MapBackgroundPresentation['satellite']> = {},
+  locale = 'en',
+): MapBackgroundPresentation {
+  return {
+    basemap: { style: 'liberty', visible: false, opacity: 0.4, ...basemap },
+    satellite: { provider: 'eox', visible: false, opacity: 0.4, ...satellite },
+    locale,
+  }
+}
+
+/** EOX imagery is ready synchronously, so the band lands at admission. */
+function satelliteOn(opacity = 0.4): MapBackgroundPresentation {
+  return background({}, { visible: true, opacity })
+}
+
+function hidden(opacity = 0.4): MapBackgroundPresentation {
+  return background({ opacity }, { opacity })
+}
+
+function basemapOn(
+  basemap: Partial<MapBackgroundPresentation['basemap']> = {},
+  locale = 'en',
+): MapBackgroundPresentation {
+  return background({ visible: true, ...basemap }, {}, locale)
+}
+
+function hasOpenFreeMapBasemap(map: FakeMap): boolean {
+  return OPENFREEMAP_LAYER_IDS.every((id) => map.getLayer(id) !== undefined)
+    && map.getSource('ofm-openmaptiles') !== undefined
+}
+
+function hasAnyOpenFreeMapLayer(map: FakeMap): boolean {
+  return [...map.layers.keys()].some((id) => id.startsWith('ofm:'))
+    || [...map.sources.keys()].some((id) => id.startsWith('ofm-'))
 }
 
 function createControls(options: {
   contributions?: ConstructorParameters<typeof WorkspaceMapControls>[0]['contributions']
-  basemapVisible?: boolean
+  background?: MapBackgroundPresentation
+  logError?: (message?: unknown, ...optionalParams: unknown[]) => void
   load?: () => Promise<MapLibreApi>
   webgl2?: WebGL2RenderingContext | null
   canCreateWebGL2Context?: () => boolean
@@ -124,12 +197,13 @@ function createControls(options: {
   })
   const snapshot: WorkspaceMapSnapshot = {
     initialCenter: { lat: 48.86, lon: 2.35 },
-    basemapStyle: 'street', basemapVisible: options.basemapVisible ?? true, basemapOpacity: 0.4,
+    background: options.background ?? satelliteOn(),
   }
   const controls = new TestWorkspaceMapControls({
     container: document.createElement('div'),
     surface,
     contributions: options.contributions,
+    ...(options.logError ? { logError: options.logError } : {}),
     canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
   }, snapshot)
   return { controls, maps, observers }
@@ -165,42 +239,67 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
   }
 }
 
+beforeEach(() => {
+  styleFetch.mockClear()
+  vi.stubGlobal('fetch', styleFetch)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('WorkspaceMapControls', () => {
-  it('acceptance: repeated basemap hide/show releases mount-owned movement listeners', async () => {
+  it('acceptance: repeated Satellite hide/show releases mount-owned movement listeners', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
     try {
-      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+      expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
       const initial = map.listeners.get('moveend')?.size ?? 0
       expect(initial).toBeGreaterThan(0)
       for (let i = 0; i < 3; i++) {
-        controls.updateBasemapPresentation({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4 })
-        expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeUndefined()
-        controls.updateBasemapPresentation({ basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.4 })
-        expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+        controls.updateBackgroundPresentation(hidden())
+        expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
+        controls.updateBackgroundPresentation(satelliteOn())
+        expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
       }
       expect(map.listeners.get('moveend')?.size).toBe(initial)
     } finally { controls.releaseMap(admitted) }
     expect(map.listeners.get('moveend')?.size ?? 0).toBe(0)
   })
 
-  it('acceptance: workspace leaves attribution control ownership to the mount', async () => {
+  it('acceptance: workspace leaves attribution control ownership to the background mount', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
     try {
-      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toBeDefined()
+      expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
       expect(map.options.attributionControl).toBe(false)
+      // One compact control, owned by the background band, at any time.
+      const attribution = () => {
+        expect(map.controls.size).toBe(1)
+        const [control] = [...map.controls]
+        expect(control).toBeInstanceOf(FakeAttributionControl)
+        return control as FakeAttributionControl
+      }
+      expect(attribution().options?.compact).toBe(true)
+      expect(attribution().options?.customAttribution).toContain('EOX')
+      expect(map.addControl).toHaveBeenLastCalledWith(attribution(), 'bottom-right')
+
+      controls.updateBackgroundPresentation(hidden())
+      expect(attribution().options?.customAttribution).toBeUndefined()
+      controls.updateBackgroundPresentation(satelliteOn())
+      expect(attribution().options?.customAttribution).toContain('EOX')
     } finally { controls.releaseMap(admitted) }
+    expect(map.controls.size).toBe(0)
   })
 
   it('requests antialiasing before the shared workspace creates its WebGL context', async () => {
-    const { controls, maps } = createControls({ basemapVisible: false })
+    const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
@@ -214,7 +313,7 @@ describe('WorkspaceMapControls', () => {
   })
 
   it('configures the production map shell for zoom 27 and one world', async () => {
-    const { controls, maps } = createControls({ basemapVisible: false })
+    const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
@@ -415,8 +514,8 @@ describe('WorkspaceMapControls', () => {
     expect(maps).toHaveLength(1)
     map.clearStyle()
     map.emit('style.load')
-    expect(map.getLayersOrder()).toEqual([MAPLIBRE_BASEMAP_RASTER_LAYER_ID, MAPLIBRE_SHARED_SCENE_LAYER_ID])
-    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID, 'raster-opacity', 0.4)
+    expect(map.getLayersOrder()).toEqual([MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SHARED_SCENE_LAYER_ID])
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.4)
     map.remove.mockImplementation(() => {
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
       expect(bounds).toHaveBeenLastCalledWith(null)
@@ -429,16 +528,20 @@ describe('WorkspaceMapControls', () => {
     expect(observers[0]?.disconnect).toHaveBeenCalledOnce()
   })
 
-  it('does not add a remote source for hidden base presentation', async () => {
-    const { controls, maps } = createControls({ basemapVisible: false })
+  it('does not add a remote source for hidden background presentation', async () => {
+    const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
 
     map.emit('style.load')
     await expect(acquisition).resolves.toBe(map)
+    await Promise.resolve()
     expect(map.addSource).not.toHaveBeenCalled()
     expect(map.addLayer).not.toHaveBeenCalled()
-    expect(JSON.stringify(map.options.style)).not.toContain('tile.openstreetmap.org')
+    expect(styleFetch).not.toHaveBeenCalled()
+    expect(map.setStyle).not.toHaveBeenCalled()
+    expect(JSON.stringify(map.options.style)).not.toContain('openfreemap')
+    expect(JSON.stringify(map.options.style)).not.toContain('eox.at')
   })
 
   it('adds the visible contribution at style admission without waiting for tile events', async () => {
@@ -449,19 +552,24 @@ describe('WorkspaceMapControls', () => {
     map.emit('style.load')
     await expect(acquisition).resolves.toBe(map)
 
-    expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_BASEMAP_SOURCE_ID, expect.objectContaining({ type: 'raster' }))
-    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({
-      id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-      source: MAPLIBRE_BASEMAP_SOURCE_ID,
+    expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_SATELLITE_SOURCE_ID, expect.objectContaining({
+      type: 'raster',
+      tiles: [EOX_SATELLITE_TILES],
     }))
+    // Nothing Canopi-owned is above it yet, so it is appended without an anchor.
+    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({
+      id: MAPLIBRE_SATELLITE_LAYER_ID,
+      source: MAPLIBRE_SATELLITE_SOURCE_ID,
+    }), undefined)
+    expect(styleFetch).not.toHaveBeenCalled()
     expect(map.setPaintProperty).toHaveBeenCalledWith(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
       0.4,
     )
   })
 
-  it('applies opacity-only presentation updates without recreating the basemap contribution', async () => {
+  it('applies opacity-only presentation updates without recreating the Satellite contribution', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -473,12 +581,10 @@ describe('WorkspaceMapControls', () => {
     map.removeSource.mockClear()
     map.setPaintProperty.mockClear()
 
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.75,
-    })
+    controls.updateBackgroundPresentation(satelliteOn(0.75))
 
     expect(map.setPaintProperty).toHaveBeenCalledWith(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
       0.75,
     )
@@ -490,7 +596,7 @@ describe('WorkspaceMapControls', () => {
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'normalizes non-finite opacity %p to zero',
-    async (basemapOpacity) => {
+    async (opacity) => {
       const { controls, maps } = createControls()
       const acquisition = controls.createMap(new AbortController().signal)
       const map = await waitForMap(maps)
@@ -498,63 +604,48 @@ describe('WorkspaceMapControls', () => {
       await acquisition
       map.setPaintProperty.mockClear()
 
-      controls.updateBasemapPresentation({
-        basemapStyle: 'street', basemapVisible: true, basemapOpacity,
-      })
+      controls.updateBackgroundPresentation(satelliteOn(opacity))
 
       expect(map.setPaintProperty).toHaveBeenCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+        MAPLIBRE_SATELLITE_LAYER_ID,
         'raster-opacity',
         0,
       )
     },
   )
 
-  it('removes before source removal, retains hidden style, and restores the latest visible style', async () => {
-    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
-    try {
-      const { controls, maps } = createControls()
-      const acquisition = controls.createMap(new AbortController().signal)
-      const map = await waitForMap(maps)
-      map.emit('style.load')
-      await acquisition
+  it('removes before source removal, retains hidden presentation, and restores the latest visible one', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
 
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 1.2,
-      })
-      expect(map.removeLayer.mock.invocationCallOrder[0]).toBeLessThan(
-        map.removeSource.mock.invocationCallOrder[0]!,
-      )
-      const sourceCountWhileHidden = map.addSource.mock.calls.length
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 0.2,
-      })
-      expect(map.addSource).toHaveBeenCalledTimes(sourceCountWhileHidden)
+    controls.updateBackgroundPresentation(hidden(1.2))
+    expect(map.removeLayer.mock.invocationCallOrder[0]).toBeLessThan(
+      map.removeSource.mock.invocationCallOrder[0]!,
+    )
+    const sourceCountWhileHidden = map.addSource.mock.calls.length
+    controls.updateBackgroundPresentation(hidden(0.2))
+    expect(map.addSource).toHaveBeenCalledTimes(sourceCountWhileHidden)
 
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 2,
-      })
-      expect(map.addSource).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
-        expect.objectContaining({ tiles: [expect.stringContaining('maptiler.com')] }),
-      )
-      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        1,
-      )
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    controls.updateBackgroundPresentation(satelliteOn(2))
+    expect(map.addSource).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_SOURCE_ID,
+      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+    )
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'raster-opacity',
+      1,
+    )
   })
 
   it('retains the latest presentation during acquisition before style admission', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.1,
-    })
+    controls.updateBackgroundPresentation(hidden(0.1))
 
     map.emit('style.load')
     await acquisition
@@ -562,121 +653,107 @@ describe('WorkspaceMapControls', () => {
     expect(map.addLayer).not.toHaveBeenCalled()
   })
 
-  it('adds the basemap when a hidden attempt receives a visible presentation update', async () => {
-    const { controls, maps } = createControls({ basemapVisible: false })
+  it('adds Satellite imagery when a hidden attempt receives a visible presentation update', async () => {
+    const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     await acquisition
     expect(map.addSource).not.toHaveBeenCalled()
 
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.8,
-    })
+    controls.updateBackgroundPresentation(satelliteOn(0.8))
 
-    expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_BASEMAP_SOURCE_ID, expect.objectContaining({ type: 'raster' }))
-    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID }))
+    expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_SATELLITE_SOURCE_ID, expect.objectContaining({ type: 'raster' }))
+    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: MAPLIBRE_SATELLITE_LAYER_ID }), undefined)
   })
 
-  it('replaces and hides only the basemap while preserving local contribution identities and order', async () => {
-    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
-    try {
-      const { controls, maps } = createControls()
-      const acquisition = controls.createMap(new AbortController().signal)
-      const map = await waitForMap(maps)
-      map.emit('style.load')
-      await acquisition
-      const background = { id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID }
-      const lidarSource = { type: 'raster', tiles: ['lidar'] }
-      const referenceSource = { type: 'geojson' }
-      const lidar = { id: 'lidar-layer', source: 'lidar-source' }
-      const reference = { id: 'reference-layer', source: 'reference-source' }
-      const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID }
-      map.addLayer(background)
-      map.layerOrder.splice(0, map.layerOrder.length,
-        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-      )
-      map.addSource('lidar-source', lidarSource)
-      map.addSource('reference-source', referenceSource)
-      map.addLayer(lidar)
-      map.addLayer(reference)
-      map.addLayer(scene)
-      map.removeLayer.mockClear()
-      map.removeSource.mockClear()
-      map.addLayer.mockClear()
-      map.addSource.mockClear()
-
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.6,
-      })
-
-      expect(map.removeLayer).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
-      expect(map.removeSource).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_BASEMAP_SOURCE_ID)
+  it('hides and restores only the Satellite imagery while preserving local contribution identities and order', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const backgroundLayer = { id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID }
+    const lidarSource = { type: 'raster', tiles: ['lidar'] }
+    const referenceSource = { type: 'geojson' }
+    const lidar = { id: 'lidar-layer', source: 'lidar-source' }
+    const reference = { id: 'reference-layer', source: 'reference-source' }
+    const scene = { id: MAPLIBRE_SHARED_SCENE_LAYER_ID }
+    map.addLayer(backgroundLayer)
+    map.layerOrder.splice(0, map.layerOrder.length,
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
+    )
+    map.addSource('lidar-source', lidarSource)
+    map.addSource('reference-source', referenceSource)
+    map.addLayer(lidar)
+    map.addLayer(reference)
+    map.addLayer(scene)
+    map.removeLayer.mockClear()
+    map.removeSource.mockClear()
+    map.addLayer.mockClear()
+    map.addSource.mockClear()
+    const expectLocalContributions = () => {
       expect(map.getSource('lidar-source')).toBe(lidarSource)
       expect(map.getSource('reference-source')).toBe(referenceSource)
       expect(map.getLayer('lidar-layer')).toBe(lidar)
       expect(map.getLayer('reference-layer')).toBe(reference)
       expect(map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)).toBe(scene)
-      expect(map.layerOrder).toEqual([
-        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'lidar-layer',
-        'reference-layer',
-        MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      ])
-
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: false, basemapOpacity: 0.6,
-      })
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.6,
-      })
-
-      expect(map.getSource('lidar-source')).toBe(lidarSource)
-      expect(map.getSource('reference-source')).toBe(referenceSource)
-      expect(map.getLayer('lidar-layer')).toBe(lidar)
-      expect(map.getLayer('reference-layer')).toBe(reference)
-      expect(map.getLayer(MAPLIBRE_SHARED_SCENE_LAYER_ID)).toBe(scene)
-      expect(map.removeLayer.mock.calls).toEqual([
-        [MAPLIBRE_BASEMAP_RASTER_LAYER_ID],
-        [MAPLIBRE_BASEMAP_RASTER_LAYER_ID],
-      ])
-      expect(map.removeSource.mock.calls).toEqual([
-        [MAPLIBRE_BASEMAP_SOURCE_ID],
-        [MAPLIBRE_BASEMAP_SOURCE_ID],
-      ])
-      expect(map.layerOrder).toEqual([
-        MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'lidar-layer',
-        'reference-layer',
-        MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      ])
-    } finally {
-      vi.unstubAllEnvs()
     }
+
+    controls.updateBackgroundPresentation(hidden(0.6))
+
+    expect(map.removeLayer).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_SATELLITE_LAYER_ID)
+    expect(map.removeSource).toHaveBeenCalledExactlyOnceWith(MAPLIBRE_SATELLITE_SOURCE_ID)
+    expectLocalContributions()
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      'lidar-layer',
+      'reference-layer',
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    ])
+
+    controls.updateBackgroundPresentation(satelliteOn(0.6))
+
+    expectLocalContributions()
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'lidar-layer',
+      'reference-layer',
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    ])
+
+    controls.updateBackgroundPresentation(hidden(0.6))
+    controls.updateBackgroundPresentation(satelliteOn(0.6))
+
+    expectLocalContributions()
+    expect(map.removeLayer.mock.calls).toEqual([
+      [MAPLIBRE_SATELLITE_LAYER_ID],
+      [MAPLIBRE_SATELLITE_LAYER_ID],
+    ])
+    expect(map.removeSource.mock.calls).toEqual([
+      [MAPLIBRE_SATELLITE_SOURCE_ID],
+      [MAPLIBRE_SATELLITE_SOURCE_ID],
+    ])
+    expect(map.layerOrder).toEqual([
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'lidar-layer',
+      'reference-layer',
+      MAPLIBRE_SHARED_SCENE_LAYER_ID,
+    ])
   })
 
   it('binds map construction and later style restoration to each attempt snapshot', async () => {
-    // The second attempt selects `satellite`, which is only servable with a
-    // MapTiler key. Without one it is genuinely unavailable and contributes no
-    // basemap at all, so the per-attempt paint expectations below need a build
-    // that can serve it.
-    vi.stubEnv('VITE_MAPTILER_KEY', 'snapshot-attempt-key')
-    try {
     const { controls, maps } = createControls()
     const snapshotA: WorkspaceMapSnapshot = {
       initialCenter: { lat: 10, lon: 20 },
-      basemapStyle: 'street',
-      basemapVisible: true,
-      basemapOpacity: 0.2,
+      background: satelliteOn(0.2),
     }
     const snapshotB: WorkspaceMapSnapshot = {
       initialCenter: { lat: -40, lon: 70 },
-      basemapStyle: 'satellite',
-      basemapVisible: true,
-      basemapOpacity: 0.8,
+      background: satelliteOn(0.8),
     }
     const first = controls.createMap(new AbortController().signal, snapshotA)
     await vi.waitFor(() => expect(maps).toHaveLength(1))
@@ -691,6 +768,8 @@ describe('WorkspaceMapControls', () => {
     mapB.emit('style.load')
     await second
     controls.installStyleRestorer(mapB as never, vi.fn())
+    const mapAPaintBeforeReload = mapA.setPaintProperty.mock.calls.length
+    const mapBPaintBeforeReload = mapB.setPaintProperty.mock.calls.length
 
     mapA.clearStyle()
     mapA.emit('style.load')
@@ -699,77 +778,71 @@ describe('WorkspaceMapControls', () => {
 
     expect(mapA.options.center).toEqual([20, 10])
     expect(mapA.options.bearing).toBe(0)
-    expect(mapA.setPaintProperty).toHaveBeenCalledTimes(1)
+    // The released first attempt ignores its later style reload.
+    expect(mapA.setPaintProperty).toHaveBeenCalledTimes(mapAPaintBeforeReload)
     expect(mapA.setPaintProperty).toHaveBeenLastCalledWith(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
       0.2,
     )
+    expect(mapA.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
     expect(mapB.options.center).toEqual([70, -40])
     expect(mapB.options.bearing).toBe(0)
-    expect(mapB.setPaintProperty).toHaveBeenCalledTimes(2)
+    expect(mapB.setPaintProperty.mock.calls.length).toBeGreaterThan(mapBPaintBeforeReload)
     expect(mapB.setPaintProperty).toHaveBeenLastCalledWith(
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       'raster-opacity',
       0.8,
     )
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    expect(mapB.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
   })
 
   it('owns the call-time map snapshot through admission and later style reload', async () => {
-    vi.stubEnv('VITE_MAPTILER_KEY', 'snapshot-test-key')
-    try {
-      const { controls, maps } = createControls()
-      const snapshot: WorkspaceMapSnapshot = {
-        initialCenter: { lat: 11, lon: 22 },
-        basemapStyle: 'street',
-        basemapVisible: true,
-        basemapOpacity: 0.25,
-      }
-      const acquisition = controls.createMap(new AbortController().signal, snapshot)
-      const map = await waitForMap(maps)
-
-      ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
-      ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
-      ;(snapshot as { basemapStyle: 'street' | 'satellite' }).basemapStyle = 'satellite'
-      ;(snapshot as { basemapVisible: boolean }).basemapVisible = false
-      ;(snapshot as { basemapOpacity: number }).basemapOpacity = 0.95
-
-      map.emit('style.load')
-      await acquisition
-      controls.installStyleRestorer(map as never, vi.fn())
-
-      expect(map.options.center).toEqual([22, 11])
-      expect(map.options.bearing).toBe(0)
-      expect(map.addSource).toHaveBeenCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
-        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
-      )
-      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        0.25,
-      )
-
-      map.clearStyle()
-      map.emit('style.load')
-
-      expect(map.addSource).toHaveBeenCalledTimes(2)
-      expect(map.addSource).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
-        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
-      )
-      expect(map.setPaintProperty).toHaveBeenCalledTimes(2)
-      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        0.25,
-      )
-    } finally {
-      vi.unstubAllEnvs()
+    const { controls, maps } = createControls()
+    const snapshot: WorkspaceMapSnapshot = {
+      initialCenter: { lat: 11, lon: 22 },
+      background: satelliteOn(0.25),
     }
+    const acquisition = controls.createMap(new AbortController().signal, snapshot)
+    const map = await waitForMap(maps)
+
+    ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
+    ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
+    ;(snapshot.background.satellite as { provider: string }).provider = 'google'
+    ;(snapshot.background.satellite as { visible: boolean }).visible = false
+    ;(snapshot.background.satellite as { opacity: number }).opacity = 0.95
+    ;(snapshot.background.basemap as { visible: boolean }).visible = true
+
+    map.emit('style.load')
+    await acquisition
+    controls.installStyleRestorer(map as never, vi.fn())
+
+    expect(map.options.center).toEqual([22, 11])
+    expect(map.options.bearing).toBe(0)
+    expect(map.addSource).toHaveBeenCalledWith(
+      MAPLIBRE_SATELLITE_SOURCE_ID,
+      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+    )
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'raster-opacity',
+      0.25,
+    )
+
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(map.addSource).toHaveBeenCalledTimes(2)
+    expect(map.addSource).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_SOURCE_ID,
+      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+    )
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'raster-opacity',
+      0.25,
+    )
+    expect(styleFetch).not.toHaveBeenCalled()
   })
 
   it('orders a preserved shared scene through moveLayer without recreating it', async () => {
@@ -781,7 +854,7 @@ describe('WorkspaceMapControls', () => {
     map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
     map.layerOrder.splice(0, map.layerOrder.length,
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
     )
     map.addLayer.mockClear()
@@ -794,7 +867,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.moveLayer).toHaveBeenCalled()
     expect(map.layerOrder).toEqual([
       MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
     expect(map.addLayer).not.toHaveBeenCalled()
@@ -811,7 +884,7 @@ describe('WorkspaceMapControls', () => {
     map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
     map.layerOrder.splice(0, map.layerOrder.length,
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
     )
     const failure = new Error('semantic move rejected')
@@ -834,13 +907,16 @@ describe('WorkspaceMapControls', () => {
     controls.installStyleRestorer(map as never, restorer)
     expect(restorer).not.toHaveBeenCalled()
 
+    const paintBeforeReload = map.setPaintProperty.mock.calls.length
     map.clearStyle()
     map.emit('style.load')
 
     expect(map.addSource).toHaveBeenCalledTimes(2)
-    expect(map.setPaintProperty).toHaveBeenCalledTimes(2)
+    expect(map.setPaintProperty.mock.calls.length).toBeGreaterThan(paintBeforeReload)
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.4)
     expect(restorer).toHaveBeenCalledOnce()
     expect(map.addSource.mock.invocationCallOrder[1]).toBeLessThan(restorer.mock.invocationCallOrder[0]!)
+    expect(map.setPaintProperty.mock.invocationCallOrder.at(-1)).toBeLessThan(restorer.mock.invocationCallOrder[0]!)
   })
 
   it('inserts a restored basemap below a custom scene layer preserved by a diff reload', async () => {
@@ -853,16 +929,16 @@ describe('WorkspaceMapControls', () => {
     const restorer = vi.fn()
     controls.installStyleRestorer(map as never, restorer)
 
-    map.removeLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
-    map.removeSource(MAPLIBRE_BASEMAP_SOURCE_ID)
+    map.removeLayer(MAPLIBRE_SATELLITE_LAYER_ID)
+    map.removeSource(MAPLIBRE_SATELLITE_SOURCE_ID)
     map.emit('style.load')
 
     expect(map.layerOrder).toEqual([
-      MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+      MAPLIBRE_SATELLITE_LAYER_ID,
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
     expect(map.addLayer).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID }),
+      expect.objectContaining({ id: MAPLIBRE_SATELLITE_LAYER_ID }),
       MAPLIBRE_SHARED_SCENE_LAYER_ID,
     )
     expect(restorer).toHaveBeenCalledOnce()
@@ -890,97 +966,83 @@ describe('WorkspaceMapControls', () => {
     expect(restorer).toHaveBeenCalledTimes(2)
     expect(map.addSource).toHaveBeenCalledTimes(3)
     expect(map.addLayer).toHaveBeenCalledTimes(3)
-    expect(map.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)).toBeDefined()
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
   })
 
   it('replays the latest presentation requested reentrantly by a style restorer', async () => {
-    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
-    try {
-      const { controls, maps } = createControls()
-      const acquisition = controls.createMap(new AbortController().signal)
-      const map = await waitForMap(maps)
-      map.emit('style.load')
-      await acquisition
-      let updateDuringRestore = true
-      controls.installStyleRestorer(map as never, () => {
-        if (!updateDuringRestore) return
-        updateDuringRestore = false
-        controls.updateBasemapPresentation({
-          basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.9,
-        })
-      })
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    let updateDuringRestore = true
+    controls.installStyleRestorer(map as never, () => {
+      if (!updateDuringRestore) return
+      updateDuringRestore = false
+      controls.updateBackgroundPresentation(satelliteOn(0.9))
+    })
 
-      map.clearStyle()
-      map.emit('style.load')
-      await Promise.resolve()
+    map.clearStyle()
+    map.emit('style.load')
+    await Promise.resolve()
 
-      expect(map.addSource).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
-        expect.objectContaining({ tiles: [expect.stringContaining('maptiler.com')] }),
-      )
-      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        0.9,
-      )
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    expect(map.addSource).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_SOURCE_ID,
+      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+    )
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'raster-opacity',
+      0.9,
+    )
   })
 
-  it('serializes reentrant presentation and style signals from a live style replacement', async () => {
-    vi.stubEnv('VITE_MAPTILER_KEY', 'live-presentation-key')
-    try {
-      const { controls, maps } = createControls()
-      const acquisition = controls.createMap(new AbortController().signal)
-      const map = await waitForMap(maps)
+  it('serializes reentrant presentation and style signals from a live Satellite withdrawal', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const restorer = vi.fn()
+    controls.installStyleRestorer(map as never, restorer)
+    const sourceMutationDepths: number[] = []
+    let removalDepth = 0
+    let reentered = false
+    map.removeLayer.mockImplementation((id: string) => {
+      map.layers.delete(id)
+      const index = map.layerOrder.indexOf(id)
+      if (index >= 0) map.layerOrder.splice(index, 1)
+      if (id !== MAPLIBRE_SATELLITE_LAYER_ID || reentered) return
+      reentered = true
+      removalDepth += 1
+      controls.updateBackgroundPresentation(satelliteOn(0.9))
       map.emit('style.load')
-      await acquisition
-      const restorer = vi.fn()
-      controls.installStyleRestorer(map as never, restorer)
-      const sourceMutationDepths: number[] = []
-      let removalDepth = 0
-      let reentered = false
-      map.removeLayer.mockImplementation((id: string) => {
-        map.layers.delete(id)
-        const index = map.layerOrder.indexOf(id)
-        if (index >= 0) map.layerOrder.splice(index, 1)
-        if (id !== MAPLIBRE_BASEMAP_RASTER_LAYER_ID || reentered) return
-        reentered = true
-        removalDepth += 1
-        controls.updateBasemapPresentation({
-          basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.9,
-        })
-        map.emit('style.load')
-        removalDepth -= 1
-      })
-      map.addSource.mockImplementation((id: string, source: unknown) => {
-        sourceMutationDepths.push(removalDepth)
-        map.sources.set(id, source)
-      })
+      removalDepth -= 1
+    })
+    map.addSource.mockImplementation((id: string, source: unknown) => {
+      sourceMutationDepths.push(removalDepth)
+      map.sources.set(id, source)
+    })
 
-      controls.updateBasemapPresentation({
-        basemapStyle: 'satellite', basemapVisible: true, basemapOpacity: 0.3,
-      })
+    controls.updateBackgroundPresentation(hidden(0.3))
 
-      expect(sourceMutationDepths).toEqual([0, 0])
-      expect(map.addSource).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
-        expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
-      )
-      expect(map.setPaintProperty).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-        'raster-opacity',
-        0.9,
-      )
-      expect(restorer).toHaveBeenCalledOnce()
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    expect(sourceMutationDepths.length).toBeGreaterThan(0)
+    expect(sourceMutationDepths.every((depth) => depth === 0)).toBe(true)
+    expect(map.addSource).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_SOURCE_ID,
+      expect.objectContaining({ tiles: [EOX_SATELLITE_TILES] }),
+    )
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(
+      MAPLIBRE_SATELLITE_LAYER_ID,
+      'raster-opacity',
+      0.9,
+    )
+    expect(restorer).toHaveBeenCalledOnce()
   })
 
-  it('does not restore a remote basemap for hidden presentation', async () => {
-    const { controls, maps } = createControls({ basemapVisible: false })
+  it('does not restore a remote background for hidden presentation', async () => {
+    const { controls, maps } = createControls({ background: hidden() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
@@ -1076,12 +1138,8 @@ describe('WorkspaceMapControls', () => {
     map.setPaintProperty.mockImplementation(() => { throw failure })
     map.setPaintProperty.mockClear()
 
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.6,
-    })
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
-    })
+    controls.updateBackgroundPresentation(satelliteOn(0.6))
+    controls.updateBackgroundPresentation(satelliteOn(0.7))
     map.emit('style.load')
 
     expect(reportFailure).toHaveBeenCalledTimes(1)
@@ -1111,7 +1169,7 @@ describe('WorkspaceMapControls', () => {
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     const error = new Error('tile request failed immediately')
-    const event = { sourceId: MAPLIBRE_BASEMAP_SOURCE_ID, error }
+    const event = { sourceId: MAPLIBRE_SATELLITE_SOURCE_ID, error }
     map.addSource.mockImplementation(() => map.emit('error', event))
 
     map.emit('style.load')
@@ -1170,7 +1228,7 @@ describe('WorkspaceMapControls', () => {
     })
     await expect(controls.createMap(new AbortController().signal, {
       initialCenter: { lat: 0, lon: 0 },
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+      background: satelliteOn(1),
     }, {})).rejects.toBe(error)
   })
 
@@ -1200,7 +1258,7 @@ describe('WorkspaceMapControls', () => {
 
       await expect(controls.createMap(new AbortController().signal, {
         initialCenter: { lat: 0, lon: 0 },
-        basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
+        background: satelliteOn(1),
       }, {})).rejects.toThrow('WebGL2 is unavailable')
 
       expect(getContext).not.toHaveBeenCalled()
@@ -1288,13 +1346,31 @@ describe('WorkspaceMapControls', () => {
     await acquisition
 
     const event = {
-      sourceId: MAPLIBRE_BASEMAP_SOURCE_ID,
+      sourceId: MAPLIBRE_SATELLITE_SOURCE_ID,
       error: new Error('tile unavailable'),
     }
     map.emit('error', event)
     expect(map.remove).not.toHaveBeenCalled()
     expect(logError).toHaveBeenCalledWith('Passive MapLibre workspace basemap error:', event)
     logError.mockRestore()
+  })
+
+  it('ignores passive OpenFreeMap source errors after style admission', async () => {
+    const logError = vi.fn()
+    const { controls, maps } = createControls({ logError })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+
+    const event = { sourceId: 'ofm-openmaptiles', error: new Error('vector tile unavailable') }
+    map.emit('error', event)
+
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(reportFailure).not.toHaveBeenCalled()
+    expect(logError).toHaveBeenCalledWith('Passive MapLibre workspace basemap error:', event)
   })
 
   it('cancels module loading and style waiting without leaving a map alive', async () => {
@@ -1357,13 +1433,13 @@ describe('WorkspaceMapControls', () => {
     map.addLayer.mockClear()
     map.setPaintProperty.mockClear()
 
-    controls.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0,
-    })
+    controls.updateBackgroundPresentation(basemapOn({ opacity: 0 }))
+    await Promise.resolve()
 
     expect(map.addSource).not.toHaveBeenCalled()
     expect(map.addLayer).not.toHaveBeenCalled()
     expect(map.setPaintProperty).not.toHaveBeenCalled()
+    expect(styleFetch).not.toHaveBeenCalled()
   })
 
   it('reads WebGL2 only from the public map canvas', async () => {
@@ -1381,13 +1457,120 @@ describe('WorkspaceMapControls', () => {
   })
 })
 
-describe('WorkspaceMapControls shared basemap provider', () => {
+describe('WorkspaceMapControls OpenFreeMap basemap', () => {
+  it('installs the OpenFreeMap basemap without setStyle and below Canopi layers', async () => {
+    const { controls, maps } = createControls({ background: basemapOn({ style: 'bright', opacity: 0.5 }, 'fr') })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    map.addLayer({ id: MAPLIBRE_SHARED_SCENE_LAYER_ID })
+
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+
+    expect(map.setStyle).not.toHaveBeenCalled()
+    expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.bright.styleUrl)
+    expect(map.setGlyphs).toHaveBeenCalledWith(OPENFREEMAP_STYLE.glyphs)
+    expect(map.setSprite).toHaveBeenCalledWith(OPENFREEMAP_STYLE.sprite)
+    expect(map.getSource('ofm-openmaptiles')).toEqual(OPENFREEMAP_STYLE.sources.openmaptiles)
+    expect(map.getLayer('ofm:water')).toMatchObject({
+      source: 'ofm-openmaptiles',
+      paint: { 'fill-opacity': 0.4 },
+    })
+    expect(map.getLayer('ofm:place-label')).toMatchObject({
+      layout: { 'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']] },
+    })
+    expect(map.layerOrder).toEqual([...OPENFREEMAP_LAYER_IDS, MAPLIBRE_SHARED_SCENE_LAYER_ID])
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
+  })
+
+  it('installs Satellite imagery in place of the basemap and restores the basemap when Satellite is off', async () => {
+    const { controls, maps } = createControls({ background: basemapOn() })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+
+    controls.updateBackgroundPresentation(background({ visible: true }, { visible: true, opacity: 0.7 }))
+
+    expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [EOX_SATELLITE_TILES] })
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeDefined()
+    expect(map.setPaintProperty).toHaveBeenLastCalledWith(MAPLIBRE_SATELLITE_LAYER_ID, 'raster-opacity', 0.7)
+
+    controls.updateBackgroundPresentation(basemapOn())
+
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+    expect(map.setStyle).not.toHaveBeenCalled()
+  })
+
+  it('reinstalls the basemap after a same-map style reload', async () => {
+    const { controls, maps } = createControls({ background: basemapOn() })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+    const restorer = vi.fn()
+    controls.installStyleRestorer(admitted, restorer)
+
+    map.clearStyle()
+    map.emit('style.load')
+
+    expect(restorer).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(hasOpenFreeMapBasemap(map)).toBe(true))
+    expect(maps).toHaveLength(1)
+    expect(map.setStyle).not.toHaveBeenCalled()
+  })
+
+  it('logs a basemap style failure without failing the workspace map', async () => {
+    styleFetch.mockImplementationOnce(async () => new Response('unavailable', { status: 503 }))
+    const logError = vi.fn()
+    const { controls, maps } = createControls({ background: basemapOn({ style: 'dark' }), logError })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(admitted, reportFailure)
+
+    await vi.waitFor(() => expect(logError).toHaveBeenCalledWith(
+      'Map basemap style failed to load:',
+      expect.objectContaining({ message: expect.stringContaining('503') }),
+    ))
+    expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
+    expect(reportFailure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+  })
+
+  it('never installs a basemap that finishes loading after the map is released', async () => {
+    let resolveStyle!: (response: Response) => void
+    styleFetch.mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveStyle = resolve }))
+    const { controls, maps } = createControls({ background: basemapOn({ style: 'positron' }) })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    await vi.waitFor(() => expect(styleFetch).toHaveBeenCalledWith(OPENFREEMAP_BASEMAPS.positron.styleUrl))
+
+    controls.releaseMap(admitted)
+    resolveStyle(new Response(JSON.stringify(OPENFREEMAP_STYLE), { status: 200 }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(hasAnyOpenFreeMapLayer(map)).toBe(false)
+    expect(map.remove).toHaveBeenCalledOnce()
+  })
+})
+
+describe('WorkspaceMapControls Satellite provider', () => {
   /**
-   * The canvas previously built a static basemap contribution, which cannot
+   * The canvas previously built a static imagery contribution, which cannot
    * serve the official Google path: that path needs a session acquired per
    * generation and an authenticated tile request. The defect this pins is that
-   * a configured key was silently ignored on the main Canvas, so the keyless
-   * endpoint served imagery while the user believed the official one was in use.
+   * a configured key was silently ignored on the main Canvas.
    */
   it('follows the official Google session path when a device key is configured', async () => {
     const calls: Array<{ url: string; method?: string }> = []
@@ -1407,16 +1590,13 @@ describe('WorkspaceMapControls shared basemap provider', () => {
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     }) as unknown as typeof fetch)
     const { googleMapsApiKey } = await import('../../app/settings/state')
-    const { GOOGLE_SESSION_TILES } = await import('../../maplibre/basemap-provider')
     googleMapsApiKey.value = 'fake-canvas-google-key'
 
     try {
       const { controls, maps } = createControls()
       const acquisition = controls.createMap(new AbortController().signal, {
         initialCenter: { lat: 48.86, lon: 2.35 },
-        basemapStyle: 'google_satellite',
-        basemapVisible: true,
-        basemapOpacity: 0.8,
+        background: background({ visible: true }, { provider: 'google', visible: true, opacity: 0.8 }),
       })
       const map = await waitForMap(maps)
       map.emit('style.load')
@@ -1426,19 +1606,22 @@ describe('WorkspaceMapControls shared basemap provider', () => {
       // The published template is credential-free and unresolved: the transport
       // supplies the session for this fixed endpoint.
       expect(map.addSource).toHaveBeenLastCalledWith(
-        MAPLIBRE_BASEMAP_SOURCE_ID,
+        MAPLIBRE_SATELLITE_SOURCE_ID,
         expect.objectContaining({ tiles: [GOOGLE_SESSION_TILES] }),
       )
       // The keyless endpoint would mean the configured key was silently
-      // ignored, which is the defect this pins.
+      // ignored, and the key itself never enters map state.
       expect(JSON.stringify([...map.sources.entries()])).not.toContain('mt1.google.com')
       expect(JSON.stringify([...map.sources.entries()])).not.toContain('fake-canvas-google-key')
+      expect(JSON.stringify([...map.layers.entries()])).not.toContain('fake-canvas-google-key')
+      // Satellite on hides the Basemap, so no basemap style is requested.
+      expect(calls.some((call) => call.url.includes('openfreemap'))).toBe(false)
 
       // The request the map would make carries the live session and the key.
       const transform = map.options.transformRequest
       expect(transform, 'the canvas map must be created with the request seam').toBeTypeOf('function')
       const outgoing = transform!(
-        (map.sources.get(MAPLIBRE_BASEMAP_SOURCE_ID) as { tiles: string[] }).tiles[0]!
+        (map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles[0]!
           .split('{z}').join('14').split('{x}').join('8192').split('{y}').join('5461'),
       )
       expect(outgoing.url).toContain('session=fake-session-token')
@@ -1450,12 +1633,48 @@ describe('WorkspaceMapControls shared basemap provider', () => {
       expect(calls[0]?.url).toContain('createSession')
       expect(calls[0]?.url).toContain('fake-canvas-google-key')
       expect(calls.some((call) => call.url.includes('/viewport'))).toBe(true)
-      expect(map.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)).toMatchObject({
-        attribution: 'Imagery ©2026 Google',
-      })
+      // The viewport copyright is shown by the map's one attribution control.
+      const attributions = [...map.controls] as FakeAttributionControl[]
+      expect(attributions).toHaveLength(1)
+      expect(attributions[0]?.options?.customAttribution).toBe('Imagery ©2026 Google')
+      expect(JSON.stringify(attributions[0]?.options)).not.toContain('fake-canvas-google-key')
     } finally {
       googleMapsApiKey.value = null
-      vi.unstubAllGlobals()
     }
+  })
+
+  it('shows no imagery and makes no request for Google without a key', async () => {
+    const { googleMapsApiKey } = await import('../../app/settings/state')
+    googleMapsApiKey.value = null
+    const { controls, maps } = createControls({
+      background: background({}, { provider: 'google', visible: true }),
+    })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    await Promise.resolve()
+
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
+    expect(styleFetch).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+  })
+
+  it('withdraws EOX imagery when the provider switches to Google without a key', async () => {
+    const { googleMapsApiKey } = await import('../../app/settings/state')
+    googleMapsApiKey.value = null
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [EOX_SATELLITE_TILES] })
+
+    controls.updateBackgroundPresentation(background({}, { provider: 'google', visible: true }))
+
+    expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeUndefined()
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeUndefined()
+    expect(styleFetch).not.toHaveBeenCalled()
   })
 })

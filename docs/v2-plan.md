@@ -153,7 +153,7 @@ Each step lists scope, main files, acceptance (tests to write first) and step-sp
 ### V5 — Navigation: pin search, loupe, Location removed (~2 days, after V2)
 
 - Delete `components/canvas/LocationTab.tsx`, the Canvas/Location primary navigation in the panel bar, `maplibre/location-map.ts` if unused, `app/location/search-controller.ts` after moving search.
-- Copy GeoLibre `packages/core/src/geocoding.ts` into `desktop/web/src/app/geocoding/` (MIT header + `THIRD_PARTY_NOTICES` entry with path and commit). Desktop transport: reuse `desktop/src/services/geocoding.rs` as the Nominatim HTTP transport (identifying User-Agent) behind the registry; Web: browser `fetch`. Coordinates ("lat, lon") are parsed locally without a request.
+- Copy GeoLibre `packages/core/src/geocoding.ts` into `desktop/web/src/app/geocoding/` (MIT header + `THIRD_PARTY_NOTICES.md` entry with path and commit). Desktop transport: reuse `desktop/src/services/geocoding.rs` as the Nominatim HTTP transport (identifying User-Agent) behind the registry; Web: browser `fetch`. Coordinates ("lat, lon") are parsed locally without a request.
 - Canvas controls (`CanvasPanel.tsx`): loupe icon button (inspection lens, no visible label) and below it a pin icon button that opens an inline search field; Enter searches; results list; confirm flies the camera; Escape closes. Tooltips, `aria-label`, keyboard shortcut, all 11 locales.
 - Empty-Design onboarding: when the Design has no objects and there is no last view, show a one-line "Search your site" prompt that opens the pin search.
 - Tests: confirm moves the view only (scene snapshot identical before/after); Enter-only requests with ≥1.1 s spacing; coordinates skip the network; Web and Desktop both reach the registry; attribution shown with results.
@@ -168,7 +168,7 @@ Each step lists scope, main files, acceptance (tests to write first) and step-sp
 ### V7 — Remaining GeoLibre reuse (~1 week, after V4)
 
 - Replace remaining generic map infrastructure with GeoLibre-derived modules where it removes code: terrain/contours/hillshade wiring, raster display pool glue, map capture helpers (for future PDF maps), fill patterns for zones if they improve on the current ones.
-- Rule: a copy is justified only if Canopi code gets smaller or clearly better; record every copied file in `THIRD_PARTY_NOTICES`.
+- Rule: a copy is justified only if Canopi code gets smaller or clearly better; record every copied file in `THIRD_PARTY_NOTICES.md`.
 
 ### V8 — Cleanup, dependencies, bundle (~2–3 days, parallel)
 

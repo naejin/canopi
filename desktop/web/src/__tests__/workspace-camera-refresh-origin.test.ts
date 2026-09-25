@@ -146,10 +146,10 @@ describe('workspace runtime composition origin effect', () => {
       activate: vi.fn(async () => 'shared-ready' as const),
       teardown: vi.fn(async () => {}),
       updateMapContributions: vi.fn(),
-      updateBasemapPresentation: vi.fn(),
+      updateBackgroundPresentation: vi.fn(),
     } satisfies WorkspaceGenerationLifecycle & {
       updateMapContributions(snapshot: unknown): void
-      updateBasemapPresentation(presentation: unknown): void
+      updateBackgroundPresentation(presentation: unknown): void
     }
     const createWorkspace = vi.fn((_input: WorkspaceActivationOptions) => workspace)
     const readSnapshot = vi.fn(
@@ -161,7 +161,11 @@ describe('workspace runtime composition origin effect', () => {
       targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
       mapContributions: { read: () => null },
       readSnapshot,
-      readBasemapPresentation: () => ({ basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1 }),
+      readBackgroundPresentation: () => ({
+        basemap: { style: 'liberty', visible: true, opacity: 1 },
+        satellite: { provider: 'eox', visible: false, opacity: 1 },
+        locale: 'en',
+      }),
     }, {
       createRendererComposition: () => ({
         renderer: { id: MAPLIBRE_SCENE_RENDERER_ID, initialize: vi.fn() },
@@ -175,7 +179,7 @@ describe('workspace runtime composition origin effect', () => {
         releaseMap: vi.fn(),
         getWebGL2Context: vi.fn(() => null),
         updateMapContributions: vi.fn(),
-        updateBasemapPresentation: vi.fn(),
+        updateBackgroundPresentation: vi.fn(),
         installStyleRestorer: vi.fn(() => () => {}),
       }),
       createWorkspace,

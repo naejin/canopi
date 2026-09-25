@@ -1,6 +1,6 @@
 import {
   MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
-  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+  MAPLIBRE_SATELLITE_LAYER_ID,
 } from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 import { panelTargetMapOverlayIds } from '../../maplibre/panel-target-overlay-sync'
@@ -53,7 +53,7 @@ export function createMapLayerStackDescriptors(
 ): MapLayerStackDescriptor[] {
   return [
     { id: MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, band: 'basemap' },
-    { id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID, band: 'basemap' },
+    { id: MAPLIBRE_SATELLITE_LAYER_ID, band: 'basemap' },
     ...lidarLayerIds.map((id) => ({ id, band: 'lidar' as const })),
     ...GEOGRAPHIC_REFERENCE_LAYER_IDS.map((id) => ({ id, band: 'geographic-reference' as const })),
     { id: MAPLIBRE_SHARED_SCENE_LAYER_ID, band: 'shared-scene' },

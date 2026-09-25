@@ -2,15 +2,20 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { t } from '../../i18n'
 import type { CanvasLayerPresentationDetail, CanvasLayerPresentationRow } from '../../app/canvas-layer-presentation/presentation'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
+import { Dropdown } from '../shared/Dropdown'
+import { useState } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
+import type { BasemapStyle, SatelliteProvider } from '../../generated/contracts'
 import styles from './LayerPanel.module.css'
 
 function LayerIcon({ id }: { id: string }) {
   const path = {
     annotations: 'M4 3h8M8 3v10M5 13h6', plants: 'M8 13V7M8 10C2 10 2 4 2 4s6 0 6 6ZM8 7c0-5 6-5 6-5s0 5-6 5Z',
     'measurement-guides': 'm2 11 9-9 3 3-9 9ZM7 6l2 2M10 3l2 2M4 9l2 2', zones: 'M2 3l7-1 5 6-4 6-8-3Z',
-    base: 'm1 4 5-2 4 2 5-2v11l-5 2-4-2-5 2ZM6 2v11M10 4v11',
+    basemap: 'm1 4 5-2 4 2 5-2v11l-5 2-4-2-5 2ZM6 2v11M10 4v11',
+    satellite: 'M3 13 13 3M5 5l6 6M2 9l3 3-2 2-3-3ZM9 2l3 3-2 2-3-3ZM11 12a3 3 0 0 0 3-3M11 15a6 6 0 0 0 4-4',
     contours: 'M1 6c4-7 8 7 14-2M1 10c4-7 8 7 14-2M1 14c4-7 8 7 14-2',
-    hillshading: 'm1 13 5-9 3 5 2-3 4 7ZM6 4l3 9',
+    hillshade: 'm1 13 5-9 3 5 2-3 4 7ZM6 4l3 9',
   }[id]
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
 }
@@ -59,12 +64,19 @@ export interface LayerPanelActions {
   locked(id: string, locked: boolean): void
   opacity(id: string, opacity: number): void
   contourInterval?(meters: number): void
+  basemapStyle?(style: BasemapStyle): void
+  satelliteProvider?(provider: SatelliteProvider): void
+  saveGoogleKey?(key: string | null): void
 }
 
-export function LayerPanel({ rows, actions, trailingSection }: {
+/**
+ * `referenceItems` (the Design's LiDAR items) render inside Site references,
+ * between Satellite and Contours, matching the map's band order.
+ */
+export function LayerPanel({ rows, actions, referenceItems }: {
   readonly rows: readonly CanvasLayerPresentationRow[]
   readonly actions: LayerPanelActions
-  readonly trailingSection?: preact.ComponentChildren
+  readonly referenceItems?: ComponentChildren
 }) {
 
   const active = rows.find(row => row.active)
@@ -125,7 +137,7 @@ export function LayerPanel({ rows, actions, trailingSection }: {
                   <span className={styles.lockSlot} aria-hidden="true" />
                 )}
               </div>
-
+              {row.id === 'satellite' && referenceItems}
             </div>
           )
         })}
@@ -136,7 +148,6 @@ export function LayerPanel({ rows, actions, trailingSection }: {
           <span>{t(active.visible ? 'canvas.layers.visible' : 'canvas.layers.hidden')}{active.canLock && ` · ${t(active.locked ? 'canvas.layers.locked' : 'canvas.layers.unlocked')}`}</span></div>
         <LayerDetail row={active} actions={actions} />
       </section>}
-      {trailingSection}
     </aside>
   )
 }
@@ -144,7 +155,9 @@ export function LayerPanel({ rows, actions, trailingSection }: {
 function LayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions }) {
   switch (row.detail.type) {
     case 'basemap':
-      return <SceneLayerDetail row={row} actions={actions} />
+      return <BasemapLayerDetail row={row} detail={row.detail} actions={actions} />
+    case 'satellite':
+      return <SatelliteLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'contours':
       return <ContourLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'hillshade':
@@ -152,6 +165,113 @@ function LayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; action
     case 'scene':
       return <SceneLayerDetail row={row} actions={actions} />
   }
+}
+
+function BasemapLayerDetail({ row, detail, actions }: {
+  actions: LayerPanelActions
+  row: CanvasLayerPresentationRow
+  detail: Extract<CanvasLayerPresentationDetail, { type: 'basemap' }>
+}) {
+  return (
+    <div className={styles.layerDetail}>
+      <div className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.basemap.style')}</span>
+        <Dropdown
+          trigger={t(`canvas.basemap.styles.${detail.style}`)}
+          items={detail.styles.map((style) => ({ value: style, label: t(`canvas.basemap.styles.${style}`) }))}
+          value={detail.style}
+          onChange={(style) => actions.basemapStyle?.(style)}
+          ariaLabel={t('canvas.basemap.style')}
+          floating
+        />
+      </div>
+      {detail.hiddenBySatellite && <p className={styles.layerNote}>{t('canvas.basemap.hiddenBySatellite')}</p>}
+      <OpacitySlider actions={actions} row={row} />
+    </div>
+  )
+}
+
+function SatelliteLayerDetail({ row, detail, actions }: {
+  actions: LayerPanelActions
+  row: CanvasLayerPresentationRow
+  detail: Extract<CanvasLayerPresentationDetail, { type: 'satellite' }>
+}) {
+  return (
+    <div className={styles.layerDetail}>
+      <div className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.satellite.provider')}</span>
+        <Dropdown
+          trigger={t(`canvas.satellite.providers.${detail.provider}`)}
+          items={detail.providers.map((provider) => ({ value: provider, label: t(`canvas.satellite.providers.${provider}`) }))}
+          value={detail.provider}
+          onChange={(provider) => actions.satelliteProvider?.(provider)}
+          ariaLabel={t('canvas.satellite.provider')}
+          floating
+        />
+      </div>
+      {detail.provider === 'eox' && <p className={styles.layerNote}>{t('canvas.satellite.eoxResolution')}</p>}
+      {detail.provider === 'google' && (
+        <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey?.(key)} />
+      )}
+      <OpacitySlider actions={actions} row={row} />
+    </div>
+  )
+}
+
+/**
+ * The device-local Google key. The field never shows a stored key; saving
+ * trims it, and it never reaches a Design, export, diagnostic bundle or log.
+ */
+function GoogleKeyForm({ hasKey, onSave }: { hasKey: boolean; onSave(key: string | null): void }) {
+  const [draft, setDraft] = useState('')
+  const [saved, setSaved] = useState(false)
+  return (
+    <form
+      className={styles.keyForm}
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!draft.trim()) return
+        onSave(draft)
+        setDraft('')
+        setSaved(true)
+      }}
+    >
+      {!hasKey && <p className={styles.layerNote} role="status">{t('canvas.satellite.googleKeyRequired')}</p>}
+      <label className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.basemap.googleKey')}</span>
+        <input
+          type="password"
+          className={styles.keyInput}
+          autoComplete="off"
+          spellcheck={false}
+          value={draft}
+          placeholder={hasKey ? '••••••••' : ''}
+          onInput={(event) => {
+            setSaved(false)
+            setDraft(event.currentTarget.value)
+          }}
+        />
+      </label>
+      <div className={styles.keyActions}>
+        <button type="submit" className={styles.keyButton} disabled={!draft.trim()}>{t('canvas.basemap.saveKey')}</button>
+        {hasKey && (
+          <button
+            type="button"
+            className={styles.keyButton}
+            onClick={() => {
+              setDraft('')
+              setSaved(false)
+              onSave(null)
+            }}
+          >
+            {t('canvas.basemap.clearKey')}
+          </button>
+        )}
+      </div>
+      {saved && <p className={styles.layerNote} role="status">{t('canvas.basemap.keySaved')}</p>}
+      <p className={styles.layerNote}>{t('canvas.basemap.keyLocalOnly')}</p>
+    </form>
+  )
 }
 
 function ContourLayerDetail({ row, detail, actions }: {

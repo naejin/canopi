@@ -19,11 +19,23 @@ import {
 } from '../../maplibre/shared-scene-layer'
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
+import type { MapBackgroundPresentation } from '../../maplibre/map-background'
 
 const TEST_CAPABILITIES: RendererCapabilities = {
   domCanvas: true, canvas2d: true, offscreenCanvas: false, offscreenCanvas2d: false,
   webgl: true, webgl2: true, webgpu: false, imageBitmap: false, createImageBitmap: false,
   worker: false, devicePixelRatio: 2, prefersReducedMotion: false,
+}
+
+function background(
+  basemap: Partial<MapBackgroundPresentation['basemap']> = {},
+  satellite: Partial<MapBackgroundPresentation['satellite']> = {},
+): MapBackgroundPresentation {
+  return {
+    basemap: { style: 'liberty', visible: true, opacity: 1, ...basemap },
+    satellite: { provider: 'eox', visible: false, opacity: 1, ...satellite },
+    locale: 'en',
+  }
 }
 
 function createActivationSnapshot(
@@ -34,9 +46,7 @@ function createActivationSnapshot(
     sessionIdentity,
     map: {
       initialCenter: { lat: 0, lon: 0 },
-      basemapStyle: 'street',
-      basemapVisible: true,
-      basemapOpacity: 1,
+      background: background(),
       ...overrides,
     },
   }
@@ -194,7 +204,7 @@ function createCoordinator(input: {
     getWebGL2Context: input.getWebGL2Context
       ?? (() => input.context === undefined ? map.context : input.context),
     updateMapContributions: vi.fn(),
-    updateBasemapPresentation: vi.fn(),
+    updateBackgroundPresentation: vi.fn(),
     installStyleRestorer: input.installStyleRestorer ?? vi.fn(() => () => {}),
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
@@ -283,7 +293,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const snapshot: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
         initialCenter: { lat: 10, lon: 20 },
-        basemapOpacity: 0.3,
+        background: background({ opacity: 0.3 }),
       }),
       maximumWorldExtentMeters: 4000,
     }
@@ -293,11 +303,11 @@ describe('WorkspaceActivationCoordinator', () => {
     await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
     expect(capturedMapSnapshot).toEqual(expect.objectContaining({
       initialCenter: { lat: 10, lon: 20 },
-      basemapOpacity: 0.3,
+      background: background({ opacity: 0.3 }),
     }))
 
     ;(snapshot.map.initialCenter as { lat: number; lon: number }).lon = 91
-    ;(snapshot.map as { basemapOpacity: number }).basemapOpacity = 0.92
+    ;(snapshot.map.background.basemap as { opacity: number }).opacity = 0.92
     ;(snapshot as { maximumWorldExtentMeters?: number }).maximumWorldExtentMeters = 9300
     created.resolve(map as unknown as WorkspaceActivationMap)
 
@@ -332,46 +342,42 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.init).toHaveBeenCalledOnce()
   })
 
-  it('forwards only current-generation basemap presentation without recreating workspace resources', async () => {
+  it('forwards only current-generation background presentation without recreating workspace resources', async () => {
     const { coordinator, map, runtime, mapControls } = createCoordinator()
-    const updateBasemapPresentation = vi.fn()
-    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    mapControls.updateBackgroundPresentation = updateBackgroundPresentation
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     const addLayerCount = map.addLayer.mock.calls.length
 
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1.5,
-    })
+    coordinator.updateBackgroundPresentation(background(
+      { visible: true, opacity: 1.5 },
+      { provider: 'google', visible: true, opacity: -0.5 },
+    ))
 
-    expect(updateBasemapPresentation).toHaveBeenCalledWith({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
-    })
+    expect(updateBackgroundPresentation).toHaveBeenCalledWith(background(
+      { visible: true, opacity: 1 },
+      { provider: 'google', visible: true, opacity: 0 },
+    ))
     expect(map.addLayer).toHaveBeenCalledTimes(addLayerCount)
     expect(runtime.init).toHaveBeenCalledOnce()
     await coordinator.teardown()
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0,
-    })
-    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
+    coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0 }))
+    expect(updateBackgroundPresentation).toHaveBeenCalledOnce()
   })
 
   it('forwards a presentation posted immediately after initial activation once map acquisition starts', async () => {
     const created = deferred<WorkspaceActivationMap>()
     const createMap = vi.fn(() => created.promise)
     const { coordinator, map, mapControls } = createCoordinator({ createMap })
-    const updateBasemapPresentation = vi.fn()
-    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    mapControls.updateBackgroundPresentation = updateBackgroundPresentation
 
     const activation = coordinator.activate()
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4,
-    })
+    coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.4 }))
 
     await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
-    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
-    expect(updateBasemapPresentation).toHaveBeenCalledWith({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.4,
-    })
+    expect(updateBackgroundPresentation).toHaveBeenCalledOnce()
+    expect(updateBackgroundPresentation).toHaveBeenCalledWith(background({ visible: false, opacity: 0.4 }))
     created.resolve(map as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('shared-ready')
@@ -384,48 +390,42 @@ describe('WorkspaceActivationCoordinator', () => {
     const composition = createComposition({
       onAdd: () => {
         teardown = coordinator.teardown()
-        coordinator.updateBasemapPresentation({
-          basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
-        })
+        coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.2 }))
       },
     })
     const created = createCoordinator({ composition: composition.composition })
     coordinator = created.coordinator
-    const updateBasemapPresentation = vi.fn()
-    created.mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    created.mapControls.updateBackgroundPresentation = updateBackgroundPresentation
 
     await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('cancelled')
     await expect(teardown).resolves.toBeUndefined()
-    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    expect(updateBackgroundPresentation).not.toHaveBeenCalled()
   })
 
   it('drops a buffered presentation when synchronous disconnect cancels activation', async () => {
     const { coordinator, mapControls } = createCoordinator()
-    const updateBasemapPresentation = vi.fn()
-    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    mapControls.updateBackgroundPresentation = updateBackgroundPresentation
 
     const activation = coordinator.activate()
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
-    })
+    coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.2 }))
     await coordinator.requestGenerationDisconnect()
 
     await expect(activation).resolves.toBe('cancelled')
-    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    expect(updateBackgroundPresentation).not.toHaveBeenCalled()
   })
 
   it('fences presentation updates after shared-backend fallback becomes terminal', async () => {
     const { coordinator, mapControls } = createCoordinator()
-    const updateBasemapPresentation = vi.fn()
-    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    mapControls.updateBackgroundPresentation = updateBackgroundPresentation
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
     await expect(coordinator.reportFailure(new Error('shared layer failed'))).resolves.toBe('fallback-ready')
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.2,
-    })
+    coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.2 }))
 
-    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    expect(updateBackgroundPresentation).not.toHaveBeenCalled()
     await coordinator.teardown()
   })
 
@@ -446,29 +446,23 @@ describe('WorkspaceActivationCoordinator', () => {
       .mockResolvedValueOnce(firstMap as unknown as WorkspaceActivationMap)
       .mockResolvedValueOnce(secondMap as unknown as WorkspaceActivationMap)
     const { coordinator, mapControls } = createCoordinator({ createMap, composition })
-    const updateBasemapPresentation = vi.fn()
-    mapControls.updateBasemapPresentation = updateBasemapPresentation
+    const updateBackgroundPresentation = vi.fn()
+    mapControls.updateBackgroundPresentation = updateBackgroundPresentation
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
     const replacement = coordinator.activate()
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: false, basemapOpacity: 0.3,
-    })
-    coordinator.updateBasemapPresentation({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
-    })
+    coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.3 }))
+    coordinator.updateBackgroundPresentation(background({ visible: true, opacity: 0.7 }))
     await vi.waitFor(() => expect(first.dispose).toHaveBeenCalledOnce())
 
-    expect(updateBasemapPresentation).not.toHaveBeenCalled()
+    expect(updateBackgroundPresentation).not.toHaveBeenCalled()
     expect(createMap).toHaveBeenCalledOnce()
     firstDisposal.resolve()
 
     await expect(replacement).resolves.toBe('shared-ready')
     expect(createMap).toHaveBeenCalledTimes(2)
-    expect(updateBasemapPresentation).toHaveBeenCalledOnce()
-    expect(updateBasemapPresentation).toHaveBeenCalledWith({
-      basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.7,
-    })
+    expect(updateBackgroundPresentation).toHaveBeenCalledOnce()
+    expect(updateBackgroundPresentation).toHaveBeenCalledWith(background({ visible: true, opacity: 0.7 }))
 
     await coordinator.teardown()
   })
@@ -662,12 +656,12 @@ describe('WorkspaceActivationCoordinator', () => {
     const attach = vi.spyOn(camera.attachment, 'attach')
     const snapshotA = createActivationSnapshot({
       initialCenter: { lat: 1, lon: 2 },
-      basemapOpacity: 0.2,
+      background: background({ opacity: 0.2 }),
     })
     const snapshotB: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
         initialCenter: { lat: 40, lon: -70 },
-        basemapOpacity: 0.8,
+        background: background({ opacity: 0.8 }),
       }),
       maximumWorldExtentMeters: 4321,
     }
@@ -1054,10 +1048,10 @@ describe('WorkspaceActivationCoordinator', () => {
     const maps = [new FakeMap(), new FakeMap()]
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
     const { coordinator } = createCoordinator({ createMap, composition })
-    await coordinator.activate(createActivationSnapshot({ basemapOpacity: 0.1 }))
+    await coordinator.activate(createActivationSnapshot({ background: background({ opacity: 0.1 }) }))
 
     coordinator.requestGenerationDisconnect()
-    const activation = coordinator.activate(createActivationSnapshot({ basemapOpacity: 0.2 }))
+    const activation = coordinator.activate(createActivationSnapshot({ background: background({ opacity: 0.2 }) }))
     await Promise.resolve()
 
     expect(createMap).toHaveBeenCalledOnce()
@@ -1379,9 +1373,9 @@ describe('WorkspaceActivationCoordinator', () => {
       return maps[signals.length - 1] as unknown as WorkspaceActivationMap
     })
     const { coordinator, mapControls } = createCoordinator({ createMap, composition })
-    const snapshotA = createActivationSnapshot({ basemapOpacity: 0.1 })
-    const snapshotB = createActivationSnapshot({ basemapOpacity: 0.2 })
-    const snapshotC = createActivationSnapshot({ basemapOpacity: 0.3 })
+    const snapshotA = createActivationSnapshot({ background: background({ opacity: 0.1 }) })
+    const snapshotB = createActivationSnapshot({ background: background({ opacity: 0.2 }) })
+    const snapshotC = createActivationSnapshot({ background: background({ opacity: 0.3 }) })
     await expect(coordinator.activate(snapshotA)).resolves.toBe('shared-ready')
 
     const superseded = coordinator.activate(snapshotB)
@@ -1662,7 +1656,7 @@ describe('WorkspaceActivationCoordinator', () => {
         releaseMap: () => map.remove(),
         getWebGL2Context: () => map.context,
         updateMapContributions: () => {},
-        updateBasemapPresentation: () => {},
+        updateBackgroundPresentation: () => {},
         installStyleRestorer: () => () => {},
       },
       layer: {

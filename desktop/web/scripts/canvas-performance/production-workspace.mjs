@@ -578,7 +578,7 @@ async function runBrowserScenario({ browser, base, scenario, file, dpr, profileW
             sessionIdentity,
             map: Object.freeze({ initialCenter: readInitialCenter(), ...mapPresentation }),
           }),
-          readBasemapPresentation: () => ({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 1 }),
+          readBackgroundPresentation: () => ({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 1 }),
         })
         // Load through the public document surface before admission, as an edition does.
         composition.surfaces.documents.loadDocument(file)

@@ -1,5 +1,5 @@
 import { designSessionStore } from '../document-session/store'
-import { readCanvasMapLayerPresentation } from '../canvas-layer-presentation/presentation'
+import { mapLayers, mapTerrainStateOf } from '../map-layers/state'
 import { lidarLibrary, readCurrentLidarPresentation } from '../lidar/library-store'
 import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
 import { publishLidarMapViewBounds } from '../lidar/camera-request'
@@ -31,7 +31,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
           lidarDisplayDescriptors.value,
           (item) => lidarLibrary.value?.layers.find((layer) => layer.id === item.id)?.units ?? '',
         ),
-        terrain: { ...readCanvasMapLayerPresentation().terrain, isDark: theme.value === 'dark' },
+        terrain: { ...mapTerrainStateOf(mapLayers.value), isDark: theme.value === 'dark' },
         overlays: {
           runtime,
           location: anchor,

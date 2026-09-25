@@ -3,7 +3,11 @@ import {
   createMapLayerStackDescriptors,
   reconcileMapLayerStack,
   type MapLayerStackDescriptor,
-} from './layer-stack'
+} from './bands'
+import {
+  MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+  MAPLIBRE_SATELLITE_LAYER_ID,
+} from '../../maplibre/config'
 import { MAPLIBRE_SHARED_SCENE_LAYER_ID } from '../../maplibre/shared-scene-layer'
 
 class FakeOrderMap {
@@ -38,10 +42,10 @@ describe('Map layer stack reconciliation', () => {
       'unmanaged-a',
       'panel-target-hover-plants',
       'lidar-second',
-      'basemap-raster',
+      MAPLIBRE_SATELLITE_LAYER_ID,
       'unmanaged-b',
       'lidar-first',
-      'basemap-background',
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
     ])
     const expected = descriptors
       .filter((descriptor) => map.order.includes(descriptor.id))
@@ -59,7 +63,7 @@ describe('Map layer stack reconciliation', () => {
 
   it('handles late LiDAR, reordered LiDAR, and missing optional geographic layers', () => {
     const late = new FakeOrderMap([
-      'basemap-background', 'basemap-raster', 'contour-major', MAPLIBRE_SHARED_SCENE_LAYER_ID,
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, MAPLIBRE_SATELLITE_LAYER_ID, 'contour-major', MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
     const descriptors = createMapLayerStackDescriptors(['lidar-second', 'lidar-first'])
     late.order.splice(3, 0, 'lidar-first', 'lidar-second')
@@ -67,7 +71,7 @@ describe('Map layer stack reconciliation', () => {
     reconcileMapLayerStack(late, descriptors)
 
     expect(present(late.order, descriptors)).toEqual([
-      'basemap-background', 'basemap-raster', 'lidar-second', 'lidar-first',
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, MAPLIBRE_SATELLITE_LAYER_ID, 'lidar-second', 'lidar-first',
       'contour-major', MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
   })
@@ -75,7 +79,7 @@ describe('Map layer stack reconciliation', () => {
   it('is a no-op when the present semantic layers are already ordered', () => {
     const descriptors = createMapLayerStackDescriptors(['lidar-first'])
     const map = new FakeOrderMap([
-      'basemap-background', 'basemap-raster', 'lidar-first', 'unmanaged',
+      MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID, MAPLIBRE_SATELLITE_LAYER_ID, 'lidar-first', 'unmanaged',
       'contour-minor', MAPLIBRE_SHARED_SCENE_LAYER_ID,
     ])
 

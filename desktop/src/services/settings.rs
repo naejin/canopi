@@ -67,7 +67,7 @@ fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
 mod tests {
     use super::{get_settings_with_locale, set_settings};
     use crate::db::UserDb;
-    use common_types::settings::{BasemapStyle, Locale, Settings, Theme};
+    use common_types::settings::{BasemapStyle, Locale, SatelliteProvider, Settings, Theme};
     use rusqlite::Connection;
 
     fn test_user_db() -> UserDb {
@@ -76,22 +76,23 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_missing_map_style_to_street() {
+    fn normalizes_missing_basemap_style_to_liberty() {
         let settings = super::deserialize_settings(
-            r#"{"locale":"en","theme":"light","map_layer_visible":true}"#,
+            r#"{"locale":"en","theme":"light","basemap_visible":true}"#,
         )
         .unwrap();
 
-        assert_eq!(settings.map_style, BasemapStyle::Street);
+        assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
     }
 
     #[test]
-    fn normalizes_invalid_map_style_to_street() {
-        let settings =
-            super::deserialize_settings(r#"{"locale":"en","theme":"light","map_style":"ocean"}"#)
-                .unwrap();
+    fn normalizes_invalid_basemap_style_to_liberty() {
+        let settings = super::deserialize_settings(
+            r#"{"locale":"en","theme":"light","basemap_style":"ocean"}"#,
+        )
+        .unwrap();
 
-        assert_eq!(settings.map_style, BasemapStyle::Street);
+        assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
     }
 
     #[test]
@@ -112,7 +113,8 @@ mod tests {
         let settings = Settings {
             locale: Locale::De,
             theme: Theme::Dark,
-            map_style: BasemapStyle::Satellite,
+            basemap_style: BasemapStyle::Dark,
+            satellite_provider: SatelliteProvider::Google,
             side_panel_width: Some(444),
             saved_stamps_frame_height: Some(260),
             ..Default::default()
@@ -123,7 +125,8 @@ mod tests {
         let stored = get_settings_with_locale(&user_db, Some("en_US")).unwrap();
         assert_eq!(stored.locale, Locale::De);
         assert_eq!(stored.theme, Theme::Dark);
-        assert_eq!(stored.map_style, BasemapStyle::Satellite);
+        assert_eq!(stored.basemap_style, BasemapStyle::Dark);
+        assert_eq!(stored.satellite_provider, SatelliteProvider::Google);
         assert_eq!(stored.side_panel_width, Some(444));
         assert_eq!(stored.saved_stamps_frame_height, Some(260));
     }

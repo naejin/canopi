@@ -22,7 +22,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 |---|---|---|
 | Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, layers | Runtime transactions |
 | Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, extra | Design Edit commands |
-| Map layer store (replaces `app/canvas-map-surface/layer-stack.ts` and per-surface binders) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
+| Map layer store (`app/map-layers/`) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
 | Settings | Last view, basemap style, satellite provider, Google key (device-local credential), locale, theme | Settings actions |
 
 - Undo covers scene runtime edits only. Design Edit commands, map layers and settings are not undoable.
@@ -43,7 +43,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 
 ## Map stack
 
-- A map layer store (signals) plus one sync module apply layers to MapLibre, following GeoLibre's `layer-sync.ts` pattern. The sync module orders layers into bands, back to front:
+- The map layer store (`app/map-layers/state.ts`, signals persisted through settings) holds Basemap, Satellite, Contours and Hillshade. `maplibre/map-background.ts` applies the background band to every map (workspace and templates world map); `app/map-layers/bands.ts` orders Canopi layers into bands, back to front:
 
 ```text
 background: basemap or satellite
@@ -54,7 +54,7 @@ interaction overlays
 ```
 
 - **Basemap.** OpenFreeMap vector styles (Liberty by default; Positron, Bright, Dark) with the attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap". The style is added as a vector source, style layers, glyphs and sprite without `setStyle()`, so the map lifetime, camera and edits survive a style change. Row opacity scales each style layer's paint opacity. Labels follow the app locale (`name:<locale>`, falling back to `name`).
-- **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Providers: Esri World Imagery (keyless, subject to a terms check; fallback EOX Sentinel-2 cloudless) and Google only with a device key through the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary. The key never enters a Design, export, snapshot, diagnostic bundle or log.
+- **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Providers: EOX Sentinel-2 cloudless 2017 (keyless, CC BY 4.0, ~10 m/pixel; Esri World Imagery was rejected on its licence terms) and Google only with a device key through the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary. The key never enters a Design, export, snapshot, diagnostic bundle or log.
 - **Site references** group in Layers: Basemap, Satellite, LiDAR items, Contours, Hillshade.
 - **Place search.** A pin button under the inspection lens (loupe) button opens a search field for a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
 - **Failure.** If WebGL2 or MapLibre cannot start, the workspace shows an explicit "map unavailable" state. There is no fallback renderer.
@@ -73,7 +73,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 | Layer sync pattern | `packages/map/src/layer-sync.ts` | Copy ideas and parts, not wholesale |
 | Candidates | `packages/map/src/fill-patterns.ts`, `packages/map/src/map-capture.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | Copy only if Canopi code gets smaller or clearly better |
 
-Every copied file keeps an MIT header naming its source path and commit and gets an entry in `THIRD_PARTY_NOTICES`. `@geolibre/map` is not a dependency (it pulls Cesium and React); `@geolibre/core` may be used for types only if it adds no heavy runtime.
+Every copied file keeps an MIT header naming its source path and commit and gets an entry in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). `@geolibre/map` is not a dependency (it pulls Cesium and React); `@geolibre/core` may be used for types only if it adds no heavy runtime.
 
 ## Editions
 

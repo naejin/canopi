@@ -212,11 +212,14 @@
       "abstract": "Abstract",
       "applySelection": "Apply to {{count}} selected"
     },
-    "location": {
-      "searchPlaceholder": "Search for a location...",
-      "searching": "Searching...",
-      "noResults": "No results found",
-      "geocodeError": "Geocoding failed"
+    "placeSearch": {
+      "open": "Search for a place",
+      "placeholder": "Place name or lat, lon",
+      "searching": "Searching…",
+      "noResults": "No places found",
+      "error": "Place search failed",
+      "results": "Places",
+      "emptyPrompt": "Search your site"
     },
     "file": {
       "new": "New Design",
@@ -255,7 +258,8 @@
       "visible": "Visible",
       "hidden": "Hidden",
       "locked": "Locked",
-      "unlocked": "Unlocked"
+      "unlocked": "Unlocked",
+      "satellite": "Satellite"
     },
     "timeline": {
       "actionType": "Action type",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Basemap",
-      "provider": "Provider",
-      "street": "Street (OpenStreetMap)",
-      "satellite": "Satellite (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "unavailable in this build",
       "googleKey": "Google Maps API key (optional)",
       "saveKey": "Save key",
       "clearKey": "Clear key",
       "keySaved": "Key saved on this device.",
       "keyLocalOnly": "Stored in this device's settings only. It is never written to a Design, export, log or report.",
-      "googleKeyPrompt": "Enter a Google Maps API key to load the official Google tiles."
+      "style": "Style",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Bright",
+        "dark": "Dark"
+      },
+      "hiddenBySatellite": "Hidden while Satellite is on."
     },
     "rasterSample": {
       "title": "Value at point",
@@ -559,6 +564,15 @@
       "unavailable": "Value unavailable",
       "escapeHint": "Esc to stop",
       "sampleCentre": "Sample at view centre"
+    },
+    "satellite": {
+      "provider": "Imagery",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Sentinel-2 cloudless imagery, about 10 m per pixel.",
+      "googleKeyRequired": "Enter your Google Maps API key to load Google imagery."
     }
   },
   "worldMap": {
@@ -902,6 +916,7 @@
     "view.zoomIn": "Zoom In",
     "view.zoomOut": "Zoom Out",
     "view.fitToContent": "Fit to Content",
+    "view.searchPlace": "Search for a Place…",
     "help.reportProblem": "Report a Problem",
     "help.aboutCanopi": "About Canopi"
   },

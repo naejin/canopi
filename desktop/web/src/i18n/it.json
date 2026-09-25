@@ -212,11 +212,14 @@
       "abstract": "Astratti",
       "applySelection": "Applica a {{count}} selezionate"
     },
-    "location": {
-      "searchPlaceholder": "Cerca posizione...",
-      "searching": "Ricerca...",
-      "noResults": "Nessun risultato",
-      "geocodeError": "Geocodifica fallita"
+    "placeSearch": {
+      "open": "Cerca un luogo",
+      "placeholder": "Nome del luogo o lat, lon",
+      "searching": "Ricerca…",
+      "noResults": "Nessun luogo trovato",
+      "error": "Ricerca del luogo non riuscita",
+      "results": "Luoghi",
+      "emptyPrompt": "Cerca il tuo sito"
     },
     "file": {
       "new": "Nuovo design",
@@ -255,7 +258,8 @@
       "visible": "Visibile",
       "hidden": "Nascosto",
       "locked": "Bloccato",
-      "unlocked": "Sbloccato"
+      "unlocked": "Sbloccato",
+      "satellite": "Satellite"
     },
     "timeline": {
       "actionType": "Tipo di azione",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Mappa di base",
-      "provider": "Fornitore",
-      "street": "Strada (OpenStreetMap)",
-      "satellite": "Satellite (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "non disponibile in questa build",
       "googleKey": "Chiave API Google Maps (facoltativa)",
       "saveKey": "Salva chiave",
       "clearKey": "Cancella chiave",
       "keySaved": "Chiave salvata su questo dispositivo.",
       "keyLocalOnly": "Memorizzata solo nelle impostazioni di questo dispositivo. Non viene mai scritta in un progetto, esportazione, registro o report.",
-      "googleKeyPrompt": "Inserisci una chiave API Google Maps per caricare le tile Google ufficiali."
+      "style": "Stile",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Chiaro",
+        "dark": "Scuro"
+      },
+      "hiddenBySatellite": "Nascosta mentre Satellite è attivo."
     },
     "rasterSample": {
       "title": "Valore nel punto",
@@ -559,6 +564,15 @@
       "unavailable": "Valore non disponibile",
       "escapeHint": "Esc per interrompere",
       "sampleCentre": "Campiona al centro della vista"
+    },
+    "satellite": {
+      "provider": "Immagini",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Immagini Sentinel-2 senza nuvole, circa 10 m per pixel.",
+      "googleKeyRequired": "Inserisci la tua chiave API di Google Maps per caricare le immagini Google."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "Ingrandisci",
     "view.zoomOut": "Riduci",
     "view.fitToContent": "Adatta al contenuto",
+    "view.searchPlace": "Cerca un luogo…",
     "help": "Aiuto",
     "help.reportProblem": "Segnala un problema",
     "help.aboutCanopi": "Informazioni su Canopi"

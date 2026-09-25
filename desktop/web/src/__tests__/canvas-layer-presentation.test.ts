@@ -2,13 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   activeLayerName,
-  contourIntervalMeters,
-  hillshadeOpacity,
-  hillshadeVisible,
   layerLockState,
   layerOpacity,
   layerVisibility,
 } from '../app/canvas-settings/signals'
+import { mapLayers } from '../app/map-layers/state'
 import {
   readCanvasLayerPresentation,
   setCanvasLayerPresentationActiveLayer,
@@ -18,7 +16,7 @@ import {
   setCanvasLayerPresentationVisibility,
 } from '../app/canvas-layer-presentation/presentation'
 import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
-import { locale } from '../app/settings/state'
+import { googleMapsApiKey, locale } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -31,10 +29,8 @@ describe('Canvas Layer Presentation', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     locale.value = 'en'
-    activeLayerName.value = 'base'
+    activeLayerName.value = 'basemap'
     layerVisibility.value = {
-      base: false,
-      contours: true,
       plants: true,
       zones: false,
       annotations: true,
@@ -45,15 +41,10 @@ describe('Canvas Layer Presentation', () => {
       annotations: false,
     }
     layerOpacity.value = {
-      base: 0.65,
-      contours: 0.5,
       plants: 0.8,
       zones: 0.35,
       annotations: 1,
     }
-    contourIntervalMeters.value = 12
-    hillshadeVisible.value = true
-    hillshadeOpacity.value = 0.45
     hydrateSettingsProjection({
       locale: 'en',
       theme: 'light',
@@ -62,9 +53,13 @@ describe('Canvas Layer Presentation', () => {
       auto_save_interval_s: 60,
       side_panel_width: null,
       saved_stamps_frame_height: 220,
-      map_layer_visible: false,
-      map_style: 'street',
-      map_opacity: 0.65,
+      basemap_style: 'positron',
+      basemap_visible: false,
+      basemap_opacity: 0.65,
+      satellite_provider: 'eox',
+      satellite_visible: false,
+      satellite_opacity: 0.9,
+      google_maps_api_key: null,
       contour_visible: true,
       contour_opacity: 0.5,
       contour_interval: 12,
@@ -181,20 +176,41 @@ describe('Canvas Layer Presentation', () => {
         detail: { type: 'scene' },
       },
       {
-        id: 'base',
+        id: 'basemap',
         label: 'Basemap',
-        authority: 'map-settings',
+        authority: 'map-layers',
         active: true,
         visible: false,
         opacity: 0.65,
         locked: false,
         canLock: false,
-        detail: { type: 'basemap' },
+        detail: {
+          type: 'basemap',
+          style: 'positron',
+          styles: ['liberty', 'positron', 'bright', 'dark'],
+          hiddenBySatellite: false,
+        },
+      },
+      {
+        id: 'satellite',
+        label: 'Satellite',
+        authority: 'map-layers',
+        active: false,
+        visible: false,
+        opacity: 0.9,
+        locked: false,
+        canLock: false,
+        detail: {
+          type: 'satellite',
+          provider: 'eox',
+          providers: ['eox', 'google'],
+          hasGoogleKey: false,
+        },
       },
       {
         id: 'contours',
         label: 'Contour lines',
-        authority: 'map-settings',
+        authority: 'map-layers',
         active: false,
         visible: true,
         opacity: 0.5,
@@ -206,9 +222,9 @@ describe('Canvas Layer Presentation', () => {
         },
       },
       {
-        id: 'hillshading',
+        id: 'hillshade',
         label: 'Hillshading',
-        authority: 'terrain-settings',
+        authority: 'map-layers',
         active: false,
         visible: true,
         opacity: 0.45,
@@ -220,53 +236,76 @@ describe('Canvas Layer Presentation', () => {
     expect(presentation.hasVisibleMapLayer).toBe(true)
   })
 
+  it('reports Satellite hiding the Basemap and a saved Google key without exposing it', () => {
+    googleMapsApiKey.value = 'secret-google-key'
+    mapLayers.value = {
+      ...mapLayers.value,
+      basemap: { ...mapLayers.value.basemap, visible: true },
+      satellite: { ...mapLayers.value.satellite, provider: 'google', visible: true },
+    }
+
+    const presentation = readCanvasLayerPresentation()
+    const basemap = presentation.rows.find((row) => row.id === 'basemap')
+    const satellite = presentation.rows.find((row) => row.id === 'satellite')
+
+    expect(basemap?.visible).toBe(true)
+    expect(basemap?.detail).toEqual(expect.objectContaining({ type: 'basemap', hiddenBySatellite: true }))
+    expect(satellite?.detail).toEqual(expect.objectContaining({
+      type: 'satellite',
+      provider: 'google',
+      hasGoogleKey: true,
+    }))
+    expect(JSON.stringify(presentation)).not.toContain('secret-google-key')
+    googleMapsApiKey.value = null
+  })
+
   it('routes Layer commands to the authority that owns each row', () => {
-    const originalMapTilerKey = import.meta.env.VITE_MAPTILER_KEY
-    ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = 'test-maptiler-key'
     const layerCommands = {
       setSceneLayerVisibility: vi.fn(() => true),
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
     }
 
-    try {
-      setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
-        commands: createTestCanvasCommandSurface({ layers: layerCommands }),
-      }))
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ layers: layerCommands }),
+    }))
 
-      expect(setCanvasLayerPresentationVisibility('base', true)).toBe(true)
-      expect(setCanvasLayerPresentationOpacity('contours', 0.25)).toBe(true)
-      expect(setCanvasLayerPresentationVisibility('hillshading', false)).toBe(true)
-      expect(setCanvasLayerPresentationOpacity('hillshading', 0.2)).toBe(true)
-      expect(setCanvasLayerPresentationContourIntervalMeters(18)).toBe(true)
-      setCanvasLayerPresentationActiveLayer('plants')
+    expect(setCanvasLayerPresentationVisibility('basemap', true)).toBe(true)
+    expect(setCanvasLayerPresentationVisibility('satellite', true)).toBe(true)
+    expect(setCanvasLayerPresentationOpacity('satellite', 0.3)).toBe(true)
+    expect(setCanvasLayerPresentationOpacity('contours', 0.25)).toBe(true)
+    expect(setCanvasLayerPresentationVisibility('hillshade', false)).toBe(true)
+    expect(setCanvasLayerPresentationOpacity('hillshade', 0.2)).toBe(true)
+    expect(setCanvasLayerPresentationContourIntervalMeters(18)).toBe(true)
+    setCanvasLayerPresentationActiveLayer('plants')
 
-      expect(layerVisibility.value.base).toBe(true)
-      expect(layerOpacity.value.contours).toBe(0.25)
-      expect(hillshadeVisible.value).toBe(false)
-      expect(hillshadeOpacity.value).toBe(0.2)
-      expect(contourIntervalMeters.value).toBe(18)
-      expect(activeLayerName.value).toBe('plants')
+    expect(mapLayers.value.basemap.visible).toBe(true)
+    expect(mapLayers.value.satellite.visible).toBe(true)
+    expect(mapLayers.value.satellite.opacity).toBe(0.3)
+    expect(mapLayers.value.contours.opacity).toBe(0.25)
+    expect(mapLayers.value.hillshade.visible).toBe(false)
+    expect(mapLayers.value.hillshade.opacity).toBe(0.2)
+    expect(mapLayers.value.contours.intervalMeters).toBe(18)
+    expect(activeLayerName.value).toBe('plants')
 
-      expect(setCanvasLayerPresentationVisibility('plants', false)).toBe(true)
-      expect(setCanvasLayerPresentationOpacity('zones', 0.4)).toBe(true)
-      expect(setCanvasLayerPresentationLocked('annotations', true)).toBe(true)
-      expect(setCanvasLayerPresentationLocked('base', true)).toBe(false)
+    expect(setCanvasLayerPresentationVisibility('plants', false)).toBe(true)
+    expect(setCanvasLayerPresentationOpacity('zones', 0.4)).toBe(true)
+    expect(setCanvasLayerPresentationLocked('annotations', true)).toBe(true)
+    expect(setCanvasLayerPresentationLocked('basemap', true)).toBe(false)
+    expect(setCanvasLayerPresentationLocked('satellite', true)).toBe(false)
 
-      expect(layerCommands.setSceneLayerVisibility).toHaveBeenCalledWith('plants', false)
-      expect(layerCommands.setSceneLayerOpacity).toHaveBeenCalledWith('zones', 0.4)
-      expect(layerCommands.setSceneLayerLocked).toHaveBeenCalledWith('annotations', true)
-      expect(layerCommands.setSceneLayerLocked).not.toHaveBeenCalledWith('base', true)
-    } finally {
-      ;(import.meta.env as { VITE_MAPTILER_KEY?: string }).VITE_MAPTILER_KEY = originalMapTilerKey
-    }
+    expect(layerCommands.setSceneLayerVisibility).toHaveBeenCalledWith('plants', false)
+    expect(layerCommands.setSceneLayerOpacity).toHaveBeenCalledWith('zones', 0.4)
+    expect(layerCommands.setSceneLayerLocked).toHaveBeenCalledWith('annotations', true)
+    expect(layerCommands.setSceneLayerLocked).not.toHaveBeenCalledWith('basemap', true)
+    expect(layerCommands.setSceneLayerVisibility).not.toHaveBeenCalledWith('satellite', true)
   })
 
   it('rejects invalid numeric Layer inputs without mutating state', () => {
     expect(setCanvasLayerPresentationContourIntervalMeters(Number.NaN)).toBe(false)
-    expect(setCanvasLayerPresentationOpacity('base', Number.NaN)).toBe(false)
+    expect(setCanvasLayerPresentationOpacity('basemap', Number.NaN)).toBe(false)
 
-    expect(contourIntervalMeters.value).toBe(12)
-    expect(layerOpacity.value.base).toBe(0.65)
+    expect(mapLayers.value.contours.intervalMeters).toBe(12)
+    expect(mapLayers.value.basemap.opacity).toBe(0.65)
   })
 })

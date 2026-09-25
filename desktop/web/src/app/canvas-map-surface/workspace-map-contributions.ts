@@ -12,7 +12,7 @@ import { applyTerrainPaintUpdates, classifyTerrainSync, clearTerrain, rebuildTer
 import { TERRAIN_CONTOUR_SOURCE_ID, TERRAIN_DEM_SOURCE_ID, type TerrainLayerState } from '../../maplibre/terrain'
 import type { RasterDisplay, RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { clearCanvasMapSurfaceOverlays, syncCanvasMapSurfaceOverlays } from './overlays'
-import { createMapLayerStackDescriptors, reconcileMapLayerStack } from './layer-stack'
+import { createMapLayerStackDescriptors, reconcileMapLayerStack } from '../map-layers/bands'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionAdapter, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 
 export interface WorkspaceMapContributionsOptions {

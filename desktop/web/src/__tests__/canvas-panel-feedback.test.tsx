@@ -2,7 +2,8 @@ import { useEffect } from 'preact/hooks'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
+import { layerVisibility } from '../app/canvas-settings/signals'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { designSessionFixture } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
@@ -69,8 +70,8 @@ describe('CanvasPanel basemap feedback', () => {
     document.body.innerHTML = ''
     document.body.appendChild(container)
     locale.value = 'en'
-    layerVisibility.value = { base: true, plants: true, zones: true, annotations: true }
-    hillshadeVisible.value = false
+    layerVisibility.value = { plants: true, zones: true, annotations: true }
+    mapLayers.value = createDefaultMapLayers()
     designSessionFixture.file = null
     mockBasemapState = {
       status: 'idle',
@@ -210,8 +211,13 @@ describe('CanvasPanel basemap feedback', () => {
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {
     designSessionFixture.file = demoDesign()
-    layerVisibility.value = { base: false, plants: true, zones: true, annotations: true }
-    hillshadeVisible.value = true
+    const defaults = createDefaultMapLayers()
+    mapLayers.value = {
+      ...defaults,
+      basemap: { ...defaults.basemap, visible: false },
+      satellite: { ...defaults.satellite, visible: false },
+      hillshade: { ...defaults.hillshade, visible: true },
+    }
     mockBasemapState = {
       status: 'ready',
       errorMessage: null,
@@ -225,6 +231,28 @@ describe('CanvasPanel basemap feedback', () => {
 
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
     expect(container.querySelector('[role="status"]')).toBeNull()
+  })
+
+  it('keeps the canvas map surface active when only Satellite is visible', async () => {
+    designSessionFixture.file = demoDesign()
+    const defaults = createDefaultMapLayers()
+    mapLayers.value = {
+      ...defaults,
+      basemap: { ...defaults.basemap, visible: false },
+      satellite: { ...defaults.satellite, visible: true },
+    }
+    mockBasemapState = {
+      status: 'ready',
+      errorMessage: null,
+      terrainStatus: 'idle',
+      terrainErrorMessage: null,
+    }
+
+    await act(async () => {
+      render(<CanvasPanel />, container)
+    })
+
+    expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {

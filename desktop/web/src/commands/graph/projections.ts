@@ -96,7 +96,7 @@ export type AppCommandGraphToolbarProjection = CanvasCommandProjection
 const MENU_ORDER: readonly AppMenuId[] = ['file', 'edit', 'view', 'help']
 const MENU_COMMAND_ORDER = {
   edit: ['edit.undo', 'edit.redo'],
-  view: ['view.zoomIn', 'view.zoomOut', 'view.fitToContent'],
+  view: ['view.zoomIn', 'view.zoomOut', 'view.fitToContent', 'separator', 'view.searchPlace'],
   help: ['help.aboutCanopi', 'separator', 'help.reportProblem'],
 } as const satisfies Record<Exclude<AppMenuId, 'file'>, readonly (AppCommandId | 'separator')[]>
 

@@ -12,6 +12,7 @@ export const VIEW_SHORTCUTS = {
   zoomIn: 'Ctrl+=',
   zoomOut: 'Ctrl+-',
   fitToContent: 'Ctrl+0',
+  searchPlace: 'Ctrl+F',
 } as const
 
 export const TOOL_SHORTCUTS = CANVAS_TOOL_SHORTCUTS

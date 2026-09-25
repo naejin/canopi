@@ -212,11 +212,14 @@
       "abstract": "Abstrakt",
       "applySelection": "Auf {{count}} ausgewählte anwenden"
     },
-    "location": {
-      "searchPlaceholder": "Standort suchen...",
-      "searching": "Suche...",
-      "noResults": "Keine Ergebnisse",
-      "geocodeError": "Geokodierung fehlgeschlagen"
+    "placeSearch": {
+      "open": "Ort suchen",
+      "placeholder": "Ortsname oder Breite, Länge",
+      "searching": "Suche…",
+      "noResults": "Keine Orte gefunden",
+      "error": "Ortssuche fehlgeschlagen",
+      "results": "Orte",
+      "emptyPrompt": "Grundstück suchen"
     },
     "file": {
       "new": "Neuer Entwurf",
@@ -255,7 +258,8 @@
       "visible": "Sichtbar",
       "hidden": "Ausgeblendet",
       "locked": "Gesperrt",
-      "unlocked": "Entsperrt"
+      "unlocked": "Entsperrt",
+      "satellite": "Satellit"
     },
     "timeline": {
       "actionType": "Aktionstyp",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Basiskarte",
-      "provider": "Anbieter",
-      "street": "Straße (OpenStreetMap)",
-      "satellite": "Satellit (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "in diesem Build nicht verfügbar",
       "googleKey": "Google Maps API-Schlüssel (optional)",
       "saveKey": "Schlüssel speichern",
       "clearKey": "Schlüssel löschen",
       "keySaved": "Schlüssel auf diesem Gerät gespeichert.",
       "keyLocalOnly": "Nur in den Einstellungen dieses Geräts gespeichert. Er wird nie in einen Entwurf, Export, ein Protokoll oder einen Bericht geschrieben.",
-      "googleKeyPrompt": "Geben Sie einen Google Maps API-Schlüssel ein, um die offiziellen Google-Kacheln zu laden."
+      "style": "Stil",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Hell",
+        "dark": "Dunkel"
+      },
+      "hiddenBySatellite": "Ausgeblendet, solange Satellit aktiv ist."
     },
     "rasterSample": {
       "title": "Wert am Punkt",
@@ -559,6 +564,15 @@
       "unavailable": "Wert nicht verfügbar",
       "escapeHint": "Esc zum Beenden",
       "sampleCentre": "Am Ansichtszentrum messen"
+    },
+    "satellite": {
+      "provider": "Bilddaten",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Wolkenfreie Sentinel-2-Bilder, etwa 10 m pro Pixel.",
+      "googleKeyRequired": "Geben Sie Ihren Google-Maps-API-Schlüssel ein, um Google-Bilder zu laden."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "Vergrossern",
     "view.zoomOut": "Verkleinern",
     "view.fitToContent": "An Inhalt anpassen",
+    "view.searchPlace": "Ort suchen…",
     "help": "Hilfe",
     "help.reportProblem": "Problem melden",
     "help.aboutCanopi": "Über Canopi"

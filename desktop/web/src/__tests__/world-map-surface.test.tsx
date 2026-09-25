@@ -1,8 +1,14 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { basemapStyle, googleMapsApiKey } from '../app/settings/state'
+import { googleMapsApiKey } from '../app/settings/state'
+import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../app/map-layers/state'
+import { readWorkspaceBackgroundPresentation } from '../app/canvas-map-surface/workspace-activation-snapshot'
 import { WorldMapSurface } from '../components/world-map/WorldMapSurface'
+import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
+import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
+import type { MapBackgroundHandle, MapBackgroundOptions } from '../maplibre/map-background'
+import { EOX_SATELLITE_TILES } from '../maplibre/satellite-provider'
 import type { TemplateMeta } from '../types/community'
 
 const maplibreMock = vi.hoisted(() => ({
@@ -10,6 +16,7 @@ const maplibreMock = vi.hoisted(() => ({
   navigationControlConstructor: vi.fn(),
   markerConstructor: vi.fn(),
   boundsConstructor: vi.fn(),
+  attributionControlConstructor: vi.fn(),
 }))
 
 vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: 'test-map-worker' }))
@@ -19,14 +26,56 @@ vi.mock('maplibre-gl', () => ({
   NavigationControl: maplibreMock.navigationControlConstructor,
   Marker: maplibreMock.markerConstructor,
   LngLatBounds: maplibreMock.boundsConstructor,
+  AttributionControl: maplibreMock.attributionControlConstructor,
   setWorkerUrl: vi.fn(),
 }))
 
-
 const acceptanceHttp = vi.hoisted(() => ({ request: vi.fn() }))
-vi.mock('../maplibre/basemap-http.browser', () => ({
-  createBrowserBasemapHttp: () => ({ request: acceptanceHttp.request }),
+vi.mock('../maplibre/satellite-http.browser', () => ({
+  createBrowserSatelliteHttp: () => ({ request: acceptanceHttp.request }),
 }))
+
+// The real background owner runs; the spy only records how the surface mounts
+// and feeds it, so a regression to a surface-private basemap binder is caught.
+const backgroundSpy = vi.hoisted(() => ({
+  mounts: [] as Array<{ options: MapBackgroundOptions; update: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }>,
+}))
+vi.mock('../maplibre/map-background', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../maplibre/map-background')>()
+  return {
+    ...actual,
+    mountMapBackground: (options: MapBackgroundOptions): MapBackgroundHandle => {
+      const handle = actual.mountMapBackground(options)
+      const record = {
+        options,
+        update: vi.fn(handle.update),
+        dispose: vi.fn(handle.dispose),
+      }
+      backgroundSpy.mounts.push(record)
+      return { update: record.update, restore: handle.restore, dispose: record.dispose }
+    },
+  }
+})
+
+/** A one-layer OpenFreeMap style served offline, so no test reaches the network. */
+const OFFLINE_VECTOR_STYLE = {
+  sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+  layers: [
+    { id: 'water', type: 'fill', source: 'openmaptiles', paint: { 'fill-opacity': 1 } },
+  ],
+}
+
+function setMapLayers(patch: {
+  basemap?: Partial<MapLayersState['basemap']>
+  satellite?: Partial<MapLayersState['satellite']>
+}): void {
+  const current = mapLayers.value
+  mapLayers.value = {
+    ...current,
+    basemap: { ...current.basemap, ...patch.basemap },
+    satellite: { ...current.satellite, ...patch.satellite },
+  }
+}
 
 class FakeWorldMap {
   readonly addControl = vi.fn()
@@ -34,9 +83,10 @@ class FakeWorldMap {
   readonly resize = vi.fn()
   readonly fitBounds = vi.fn()
   readonly flyTo = vi.fn()
-  // The basemap provider binding owns a raster source and layer on the live
-  // map, so a faithful fake implements that narrow surface. A map that cannot
-  // be reconciled is not a map this surface can run against.
+  // The background owner installs the Basemap's vector sources and layers and
+  // the Satellite raster on the live map, so a faithful fake implements that
+  // narrow surface. A map that cannot be reconciled is not a map this surface
+  // can run against.
   readonly sources = new Map<string, Record<string, unknown>>()
   readonly layers = new Map<string, Record<string, unknown>>()
   readonly setLayoutProperty = vi.fn((id: string, name: string, value: unknown) => {
@@ -100,6 +150,14 @@ class FakeWorldMap {
   addLayer(layer: Record<string, unknown>) {
     this.layers.set(String(layer.id), layer)
   }
+
+  getLayersOrder(): string[] {
+    return [...this.layers.keys()]
+  }
+
+  readonly setPaintProperty = vi.fn()
+  readonly setGlyphs = vi.fn()
+  readonly setSprite = vi.fn()
 
   getLayer(id: string) {
     return this.layers.get(id)
@@ -191,13 +249,22 @@ describe('WorldMapSurface', () => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    basemapStyle.value = 'street'
+    mapLayers.value = createDefaultMapLayers()
+    backgroundSpy.mounts.length = 0
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(OFFLINE_VECTOR_STYLE), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })))
     maps = []
     markers = []
     maplibreMock.mapConstructor.mockReset()
     maplibreMock.navigationControlConstructor.mockReset()
     maplibreMock.markerConstructor.mockReset()
     maplibreMock.boundsConstructor.mockReset()
+    maplibreMock.attributionControlConstructor.mockReset()
+    maplibreMock.attributionControlConstructor.mockImplementation(function (options: unknown) {
+      return { options }
+    })
     maplibreMock.mapConstructor.mockImplementation(function (options: Record<string, unknown>) {
       const map = new FakeWorldMap(options)
       maps.push(map)
@@ -219,7 +286,41 @@ describe('WorldMapSurface', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    basemapStyle.value = 'street'
+    mapLayers.value = createDefaultMapLayers()
+    vi.unstubAllGlobals()
+  })
+
+  it('mounts one map background fed by the map layer store and disposes it with the map', async () => {
+    await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    await vi.waitFor(() => expect(backgroundSpy.mounts).toHaveLength(1))
+    const mount = backgroundSpy.mounts[0]!
+    expect(mount.options.map).toBe(maps[0])
+    // The credential owner is the one the map was created with, so Google
+    // sessions authenticate through this map's own request transform.
+    expect(mount.options.tileAuth).toBeInstanceOf(BasemapTileAuth)
+    expect(maps[0]!.options.transformRequest).toBe(mount.options.tileAuth?.transformRequest)
+    expect(mount.update).toHaveBeenLastCalledWith(readWorkspaceBackgroundPresentation())
+
+    act(() => {
+      setMapLayers({ basemap: { style: 'dark', opacity: 0.5 } })
+    })
+    expect(mount.update).toHaveBeenLastCalledWith(readWorkspaceBackgroundPresentation())
+    expect(mount.update.mock.lastCall?.[0]).toMatchObject({
+      basemap: { style: 'dark', visible: true, opacity: 0.5 },
+    })
+
+    act(() => {
+      render(null, container)
+    })
+    expect(mount.dispose).toHaveBeenCalledTimes(1)
+    // A disposed background is not fed further store changes.
+    const calls = mount.update.mock.calls.length
+    act(() => {
+      setMapLayers({ basemap: { style: 'positron' } })
+    })
+    expect(mount.update.mock.calls.length).toBe(calls)
+    expect(backgroundSpy.mounts).toHaveLength(1)
   })
 
 
@@ -235,26 +336,37 @@ describe('WorldMapSurface', () => {
         ] } }
     })
     googleMapsApiKey.value = 'synthetic-test-key'
-    basemapStyle.value = 'google_satellite'
+    setMapLayers({ satellite: { provider: 'google', visible: true } })
     try {
       await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
       await vi.waitFor(() => expect(maps).toHaveLength(1))
       const activeMap = maps[0]!
-      const readSource = () => activeMap.getSource('canopi-basemap-raster') as { maxzoom: number; attribution: string } | undefined
+      const readSource = () => activeMap.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as { maxzoom: number } | undefined
+      const readCredit = () => {
+        const options = maplibreMock.attributionControlConstructor.mock.lastCall?.[0] as
+          | { customAttribution?: string }
+          | undefined
+        return options?.customAttribution
+      }
       // Healthy control: the real provider/session/binding have installed the initial metadata.
       await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(18))
+      expect(readCredit()).toBe('Initial credit')
       const before = requests.filter(url => url.includes('viewport')).length
       activeMap.center = { lng: 22, lat: 30 }
       activeMap.zoom = 12
       activeMap.listeners.get('moveend')?.forEach(listener => listener())
       await vi.waitFor(() => expect(requests.filter(url => url.includes('viewport')).length).toBeGreaterThan(before))
       await vi.waitFor(() => expect(readSource()?.maxzoom).toBe(16))
-      expect(readSource()?.attribution).toBe('Moved credit')
+      // The viewport copyright lives on the map's one attribution control, not
+      // on the tile source, and it follows the move.
+      expect(readCredit()).toBe('Moved credit')
+      // The key and session reach tile requests through the transport only.
+      expect(JSON.stringify(readSource())).not.toContain('synthetic-test-key')
+      expect(JSON.stringify(readSource())).not.toContain('test-session')
       expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
     } finally {
       render(null, container)
       googleMapsApiKey.value = null
-      basemapStyle.value = 'street'
     }
   })
 
@@ -311,7 +423,7 @@ describe('WorldMapSurface', () => {
     expect(maps[0]!.resize).toHaveBeenCalled()
   })
 
-  it('changes the basemap on the live map instead of rebuilding it', async () => {
+  it('switches between Basemap and Satellite on the live map instead of rebuilding it', async () => {
     const templates = [template('forest', 2.35, 48.85)]
 
     await renderWorldMap(container, {
@@ -322,25 +434,41 @@ describe('WorldMapSurface', () => {
     await vi.waitFor(() => expect(maps).toHaveLength(1))
     const markersBefore = markers.length
     const map = maps[0]!
+    // The default Basemap is the OpenFreeMap vector style, installed onto the
+    // live map rather than through `setStyle()`.
+    await vi.waitFor(() => expect(map.sources.has('ofm-openmaptiles')).toBe(true))
+    expect(map.layers.has('ofm:water')).toBe(true)
     map.center = { lng: -74.006, lat: 40.7128 }
     map.zoom = 6
 
     act(() => {
-      basemapStyle.value = 'satellite'
+      setMapLayers({ satellite: { provider: 'eox', visible: true } })
     })
 
-    // The provider reconciles into the live map, so a basemap change must not
-    // recreate the map, disturb the camera, or rebuild the markers. Recreating
-    // the map is what this test used to require, and it is exactly what the
-    // product contract forbids: no `setStyle()` and no map recreation on a
-    // provider, key or session change.
-    //
-    // This build has no MapTiler key, so `satellite` is genuinely *unavailable*.
-    // The provider therefore withdraws the contribution rather than leaving
-    // street tiles on screen under the satellite name, and the map, camera and
-    // markers all stay exactly as they were.
-    await vi.waitFor(() => expect(map.sources.size).toBe(0))
+    // Satellite on hides the Basemap and shows keyless EOX imagery. The
+    // product contract forbids `setStyle()` and map recreation on a layer or
+    // provider change, so the map, camera and markers stay exactly as they were.
+    await vi.waitFor(() => expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(true))
+    expect((map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as { tiles: string[] }).tiles)
+      .toEqual([EOX_SATELLITE_TILES])
+    expect(map.sources.has('ofm-openmaptiles')).toBe(false)
+    expect(map.layers.has('ofm:water')).toBe(false)
+
+    // Google without a device key is genuinely unavailable: the EOX tiles are
+    // withdrawn rather than left on screen under Google's name.
+    act(() => {
+      setMapLayers({ satellite: { provider: 'google' } })
+    })
+    await vi.waitFor(() => expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false))
+
+    // Satellite off restores the Basemap.
+    act(() => {
+      setMapLayers({ satellite: { visible: false } })
+    })
+    await vi.waitFor(() => expect(map.sources.has('ofm-openmaptiles')).toBe(true))
+
     expect(maps).toHaveLength(1)
+    expect(maplibreMock.mapConstructor).toHaveBeenCalledTimes(1)
     expect(map.remove).not.toHaveBeenCalled()
     expect(map.getCenter()).toEqual({ lng: -74.006, lat: 40.7128 })
     expect(map.getZoom()).toBe(6)

@@ -1,0 +1,99 @@
+.root {
+  position: absolute;
+  top: calc(var(--space-7) + var(--control-size-md) + var(--space-2));
+  right: var(--space-3);
+  z-index: 20;
+}
+
+.launcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.launcher[hidden] { display: none; }
+
+.root:has(.prompt) { display: flex; flex-direction: row-reverse; align-items: center; gap: var(--space-2); }
+
+.prompt {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.prompt:hover { background: var(--color-control-hover); }
+.prompt:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.launcher:hover { background: var(--color-control-hover); }
+
+.launcher:focus-visible,
+.input:focus-visible,
+.result:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.panel {
+  width: min(320px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.status,
+.attribution {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow: auto;
+  border-top: 1px solid var(--color-border);
+}
+
+.result {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.result:hover { background: var(--color-control-hover); }

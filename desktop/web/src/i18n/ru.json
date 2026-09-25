@@ -212,11 +212,14 @@
       "abstract": "Абстрактные",
       "applySelection": "Применить к выбранным: {{count}}"
     },
-    "location": {
-      "searchPlaceholder": "Поиск местоположения...",
-      "searching": "Поиск...",
-      "noResults": "Нет результатов",
-      "geocodeError": "Ошибка геокодирования"
+    "placeSearch": {
+      "open": "Найти место",
+      "placeholder": "Название места или широта, долгота",
+      "searching": "Поиск…",
+      "noResults": "Места не найдены",
+      "error": "Не удалось найти место",
+      "results": "Места",
+      "emptyPrompt": "Найдите свой участок"
     },
     "file": {
       "new": "Новый проект",
@@ -255,7 +258,8 @@
       "visible": "Видимый",
       "hidden": "Скрытый",
       "locked": "Заблокирован",
-      "unlocked": "Разблокирован"
+      "unlocked": "Разблокирован",
+      "satellite": "Спутник"
     },
     "timeline": {
       "actionType": "Тип действия",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Базовая карта",
-      "provider": "Провайдер",
-      "street": "Улицы (OpenStreetMap)",
-      "satellite": "Спутник (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "недоступно в этой сборке",
       "googleKey": "Ключ API Google Maps (необязательно)",
       "saveKey": "Сохранить ключ",
       "clearKey": "Очистить ключ",
       "keySaved": "Ключ сохранён на этом устройстве.",
       "keyLocalOnly": "Хранится только в настройках этого устройства. Никогда не записывается в проект, экспорт, журнал или отчёт.",
-      "googleKeyPrompt": "Введите ключ API Google Maps, чтобы загрузить официальные тайлы Google."
+      "style": "Стиль",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Светлый",
+        "dark": "Тёмный"
+      },
+      "hiddenBySatellite": "Скрыта, пока включён спутник."
     },
     "rasterSample": {
       "title": "Значение в точке",
@@ -559,6 +564,15 @@
       "unavailable": "Значение недоступно",
       "escapeHint": "Esc — остановить",
       "sampleCentre": "Измерить в центре вида"
+    },
+    "satellite": {
+      "provider": "Снимки",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Безоблачные снимки Sentinel-2, около 10 м на пиксель.",
+      "googleKeyRequired": "Введите ключ API Google Maps, чтобы загрузить снимки Google."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "Увеличить",
     "view.zoomOut": "Уменьшить",
     "view.fitToContent": "По содержимому",
+    "view.searchPlace": "Найти место…",
     "help": "Справка",
     "help.reportProblem": "Сообщить о проблеме",
     "help.aboutCanopi": "О Canopi"

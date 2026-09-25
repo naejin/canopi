@@ -212,11 +212,14 @@
       "abstract": "추상 도형",
       "applySelection": "선택한 {{count}}개에 적용"
     },
-    "location": {
-      "searchPlaceholder": "위치 검색...",
-      "searching": "검색 중...",
-      "noResults": "결과 없음",
-      "geocodeError": "지오코딩 실패"
+    "placeSearch": {
+      "open": "장소 검색",
+      "placeholder": "장소 이름 또는 위도, 경도",
+      "searching": "검색 중…",
+      "noResults": "장소를 찾을 수 없습니다",
+      "error": "장소 검색에 실패했습니다",
+      "results": "장소",
+      "emptyPrompt": "부지 검색"
     },
     "file": {
       "new": "새 설계",
@@ -255,7 +258,8 @@
       "visible": "표시",
       "hidden": "숨김",
       "locked": "잠김",
-      "unlocked": "잠금 해제"
+      "unlocked": "잠금 해제",
+      "satellite": "위성"
     },
     "timeline": {
       "actionType": "작업 유형",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "배경 지도",
-      "provider": "공급자",
-      "street": "거리(OpenStreetMap)",
-      "satellite": "위성(MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "이 빌드에서는 사용할 수 없음",
       "googleKey": "Google Maps API 키(선택)",
       "saveKey": "키 저장",
       "clearKey": "키 지우기",
       "keySaved": "이 기기에 키를 저장했습니다.",
       "keyLocalOnly": "이 기기 설정에만 저장됩니다. 설계, 내보내기, 로그, 보고서에는 기록되지 않습니다.",
-      "googleKeyPrompt": "공식 Google 타일을 불러오려면 Google Maps API 키를 입력하세요."
+      "style": "스타일",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "밝게",
+        "dark": "어둡게"
+      },
+      "hiddenBySatellite": "위성이 켜져 있는 동안 숨겨집니다."
     },
     "rasterSample": {
       "title": "지점 값",
@@ -559,6 +564,15 @@
       "unavailable": "값을 사용할 수 없음",
       "escapeHint": "Esc로 중지",
       "sampleCentre": "보기 중심에서 측정"
+    },
+    "satellite": {
+      "provider": "영상",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Sentinel-2 구름 없는 영상, 픽셀당 약 10m.",
+      "googleKeyRequired": "Google 영상을 불러오려면 Google Maps API 키를 입력하세요."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "확대",
     "view.zoomOut": "축소",
     "view.fitToContent": "콘텐츠에 맞추기",
+    "view.searchPlace": "장소 검색…",
     "help": "도움말",
     "help.reportProblem": "문제 신고",
     "help.aboutCanopi": "Canopi 정보"

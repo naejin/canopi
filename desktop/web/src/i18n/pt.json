@@ -212,11 +212,14 @@
       "abstract": "Abstratos",
       "applySelection": "Aplicar a {{count}} selecionadas"
     },
-    "location": {
-      "searchPlaceholder": "Pesquisar localização...",
-      "searching": "Pesquisando...",
-      "noResults": "Sem resultados",
-      "geocodeError": "Falha na geocodificação"
+    "placeSearch": {
+      "open": "Pesquisar um lugar",
+      "placeholder": "Nome do lugar ou lat, lon",
+      "searching": "Pesquisando…",
+      "noResults": "Nenhum lugar encontrado",
+      "error": "A pesquisa de lugar falhou",
+      "results": "Lugares",
+      "emptyPrompt": "Pesquise o seu terreno"
     },
     "file": {
       "new": "Novo design",
@@ -255,7 +258,8 @@
       "visible": "Visível",
       "hidden": "Oculta",
       "locked": "Bloqueada",
-      "unlocked": "Desbloqueada"
+      "unlocked": "Desbloqueada",
+      "satellite": "Satélite"
     },
     "timeline": {
       "actionType": "Tipo de ação",
@@ -536,18 +540,19 @@
       }
     },
     "basemap": {
-      "title": "Mapa base",
-      "provider": "Fornecedor",
-      "street": "Rua (OpenStreetMap)",
-      "satellite": "Satélite (MapTiler)",
-      "googleSatellite": "Google Satellite",
-      "unavailable": "indisponível nesta compilação",
       "googleKey": "Chave de API do Google Maps (opcional)",
       "saveKey": "Guardar chave",
       "clearKey": "Limpar chave",
       "keySaved": "Chave guardada neste dispositivo.",
       "keyLocalOnly": "Guardada apenas nas definições deste dispositivo. Nunca é escrita num projeto, exportação, registo ou relatório.",
-      "googleKeyPrompt": "Introduza uma chave de API do Google Maps para carregar os mosaicos oficiais da Google."
+      "style": "Estilo",
+      "styles": {
+        "liberty": "Liberty",
+        "positron": "Positron",
+        "bright": "Claro",
+        "dark": "Escuro"
+      },
+      "hiddenBySatellite": "Oculto enquanto Satélite estiver ativo."
     },
     "rasterSample": {
       "title": "Valor no ponto",
@@ -559,6 +564,15 @@
       "unavailable": "Valor indisponível",
       "escapeHint": "Esc para parar",
       "sampleCentre": "Amostrar no centro da vista"
+    },
+    "satellite": {
+      "provider": "Imagens",
+      "providers": {
+        "eox": "Sentinel-2 (EOX)",
+        "google": "Google"
+      },
+      "eoxResolution": "Imagens Sentinel-2 sem nuvens, cerca de 10 m por pixel.",
+      "googleKeyRequired": "Introduza a sua chave de API do Google Maps para carregar as imagens do Google."
     }
   },
   "worldMap": {
@@ -769,6 +783,7 @@
     "view.zoomIn": "Ampliar",
     "view.zoomOut": "Reduzir",
     "view.fitToContent": "Ajustar ao conteudo",
+    "view.searchPlace": "Pesquisar um lugar…",
     "help": "Ajuda",
     "help.reportProblem": "Relatar um problema",
     "help.aboutCanopi": "Sobre o Canopi"

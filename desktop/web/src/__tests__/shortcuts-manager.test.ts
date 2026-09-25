@@ -10,6 +10,7 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
+import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
 
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -258,6 +259,7 @@ describe('shortcut manager canvas tool switching', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
 
     expect(copy).toHaveBeenCalledTimes(1)
     expect(paste).toHaveBeenCalledTimes(1)
@@ -270,5 +272,7 @@ describe('shortcut manager canvas tool switching', () => {
     expect(unlockSelected).not.toHaveBeenCalled()
     expect(groupSelected).toHaveBeenCalledTimes(1)
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
+    expect(placeSearchOpen.value).toBe(true)
+    closePlaceSearch()
   })
 })

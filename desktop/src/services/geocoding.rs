@@ -11,6 +11,12 @@ struct NominatimResult {
 }
 
 const MAX_GEOCODING_BYTES: u64 = 1024 * 1024;
+/// Nominatim's usage policy requires an agent that identifies the application.
+const NOMINATIM_USER_AGENT: &str = concat!(
+    "Canopi/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://projectcanopi.com)"
+);
 
 pub async fn geocode_address(
     executor: &crate::native_operation::NativeOperationExecutor,
@@ -28,7 +34,7 @@ pub async fn geocode_address(
 fn geocode_address_blocking(query: String) -> Result<Vec<GeoResult>, String> {
     let mut response = crate::http::build_get_request(
         "https://nominatim.openstreetmap.org/search",
-        "Canopi/1.0",
+        NOMINATIM_USER_AGENT,
         std::time::Duration::from_secs(5),
     )
     .query("q", &query)
@@ -61,6 +67,12 @@ fn de_f64_from_str<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Err
 #[cfg(test)]
 mod tests {
     use super::GeoResult;
+
+    #[test]
+    fn identifies_the_application_to_nominatim() {
+        assert!(super::NOMINATIM_USER_AGENT.starts_with("Canopi/"));
+        assert!(super::NOMINATIM_USER_AGENT.contains("projectcanopi.com"));
+    }
 
     #[test]
     fn parses_nominatim_string_coordinates() {

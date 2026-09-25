@@ -1,8 +1,8 @@
 import {
-  MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
-  MAPLIBRE_BASEMAP_SOURCE_ID,
+  MAPLIBRE_SATELLITE_LAYER_ID,
+  MAPLIBRE_SATELLITE_SOURCE_ID,
 } from './config'
-import type { BasemapProviderState } from './basemap-provider-session'
+import type { SatelliteProviderState } from './satellite-provider-session'
 import { hasUnresolvedSession } from './basemap-tile-auth'
 
 /**
@@ -11,14 +11,14 @@ import { hasUnresolvedSession } from './basemap-tile-auth'
  * Declared structurally so the adapter is testable without a browser GL
  * context, and so it cannot reach anything beyond exactly these operations.
  */
-export interface BasemapReconcileTarget {
+export interface SatelliteReconcileTarget {
   getSource(id: string): unknown
   getLayer(id: string): unknown
   removeLayer(id: string): void
   removeSource(id: string): void
   // These take the map's own parameter shape so a real MapLibre instance
-  // satisfies this interface structurally. `BasemapRasterSource` and
-  // `BasemapRasterLayer` remain the shapes this module *builds*, which is what
+  // satisfies this interface structurally. `SatelliteRasterSource` and
+  // `SatelliteRasterLayer` remain the shapes this module *builds*, which is what
   // keeps the reconciler from reaching beyond a raster source and layer.
   addSource(id: string, source: Record<string, unknown>): void
   addLayer(layer: Record<string, unknown>, beforeId?: string): void
@@ -31,10 +31,10 @@ export interface BasemapReconcileTarget {
    * the copyright. When absent, a copyright-only change is applied by replacing
    * the attribution-bearing source only if tile configuration also changed.
    */
-  replaceBasemapAttribution?(attribution: string): void
+  replaceSatelliteAttribution?(attribution: string): void
 }
 
-export interface BasemapRasterSource {
+export interface SatelliteRasterSource {
   readonly type: 'raster'
   readonly tiles: string[]
   readonly tileSize: number
@@ -42,7 +42,7 @@ export interface BasemapRasterSource {
   readonly maxzoom: number
 }
 
-export interface BasemapRasterLayer {
+export interface SatelliteRasterLayer {
   readonly id: string
   readonly type: 'raster'
   readonly source: string
@@ -66,7 +66,7 @@ export interface BasemapRasterLayer {
  * source; a source is rebuilt only when its actual tile configuration requires
  * it, preserving layer order, opacity and overlays.
  */
-export interface BasemapContributionOptions {
+export interface SatelliteContributionOptions {
   /**
    * Whether the map's tile transport can resolve an official session template.
    *
@@ -86,8 +86,8 @@ export interface BasemapContributionOptions {
   readonly beforeLayerId?: () => string | null
 }
 
-function readInstalledSource(target: BasemapReconcileTarget): BasemapRasterSource | null {
-  const source = target.getSource(MAPLIBRE_BASEMAP_SOURCE_ID) as BasemapRasterSource | null | undefined
+function readInstalledSource(target: SatelliteReconcileTarget): SatelliteRasterSource | null {
+  const source = target.getSource(MAPLIBRE_SATELLITE_SOURCE_ID) as SatelliteRasterSource | null | undefined
   if (!source || source.type !== 'raster') return null
   return source
 }
@@ -98,7 +98,7 @@ function sameTiles(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function sameTileConfig(
-  a: BasemapRasterSource,
+  a: SatelliteRasterSource,
   tiles: readonly string[],
   tileSize: number,
   maxzoom: number,
@@ -106,10 +106,10 @@ function sameTileConfig(
   return a.tileSize === tileSize && a.maxzoom === maxzoom && sameTiles(a.tiles, tiles)
 }
 
-export function reconcileBasemapContribution(
-  target: BasemapReconcileTarget,
-  state: BasemapProviderState,
-  options: BasemapContributionOptions = {},
+export function reconcileSatelliteContribution(
+  target: SatelliteReconcileTarget,
+  state: SatelliteProviderState,
+  options: SatelliteContributionOptions = {},
 ): void {
   const descriptor = state.state === 'ready' ? state.descriptor : null
   const tiles = descriptor?.tiles ?? []
@@ -120,7 +120,7 @@ export function reconcileBasemapContribution(
   if (state.state === 'loading') {
     const installed = readInstalledSource(target)
     if (installed) {
-      setBasemapContributionVisibility(target, false)
+      setSatelliteContributionVisibility(target, false)
       return
     }
     removeContribution(target)
@@ -155,10 +155,10 @@ export function reconcileBasemapContribution(
   if (installed && sameTileConfig(installed, tiles, tileSize, maxzoom)) {
     // Identical tile configuration retains the source and its loaded state.
     // Copyright-only: update attribution without removing the tile source.
-    if (typeof target.replaceBasemapAttribution === 'function') {
-      target.replaceBasemapAttribution(attribution)
+    if (typeof target.replaceSatelliteAttribution === 'function') {
+      target.replaceSatelliteAttribution(attribution)
     }
-    setBasemapContributionVisibility(target, true)
+    setSatelliteContributionVisibility(target, true)
     return
   }
 
@@ -166,8 +166,8 @@ export function reconcileBasemapContribution(
   // removed before its source because MapLibre refuses to drop a source that a
   // layer still references; layer order is re-applied by the insertion anchor.
   removeContribution(target)
-  const hasAttributionAdapter = typeof target.replaceBasemapAttribution === 'function'
-  target.addSource(MAPLIBRE_BASEMAP_SOURCE_ID, {
+  const hasAttributionAdapter = typeof target.replaceSatelliteAttribution === 'function'
+  target.addSource(MAPLIBRE_SATELLITE_SOURCE_ID, {
     type: 'raster',
     tiles: [...tiles],
     tileSize,
@@ -178,12 +178,12 @@ export function reconcileBasemapContribution(
     maxzoom,
   })
   if (hasAttributionAdapter) {
-    target.replaceBasemapAttribution?.(attribution)
+    target.replaceSatelliteAttribution?.(attribution)
   }
   const layer = {
-    id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+    id: MAPLIBRE_SATELLITE_LAYER_ID,
     type: 'raster' as const,
-    source: MAPLIBRE_BASEMAP_SOURCE_ID,
+    source: MAPLIBRE_SATELLITE_SOURCE_ID,
     minzoom: 0,
     layout: { visibility: 'visible' as const },
   }
@@ -195,29 +195,29 @@ export function reconcileBasemapContribution(
 }
 
 /** Withdraw the basemap contribution and its owned credit when there is one. */
-function removeContribution(target: BasemapReconcileTarget): void {
-  if (target.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)) {
-    target.removeLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)
+function removeContribution(target: SatelliteReconcileTarget): void {
+  if (target.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)) {
+    target.removeLayer(MAPLIBRE_SATELLITE_LAYER_ID)
   }
-  if (target.getSource(MAPLIBRE_BASEMAP_SOURCE_ID)) {
-    target.removeSource(MAPLIBRE_BASEMAP_SOURCE_ID)
+  if (target.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)) {
+    target.removeSource(MAPLIBRE_SATELLITE_SOURCE_ID)
   }
   // Clearing the basemap-owned credit on withdrawal keeps Idle/Unavailable
   // from retaining stale credit after imagery is gone, while credits belonging
   // to other sources remain untouched.
-  if (target.replaceBasemapAttribution) {
-    target.replaceBasemapAttribution('')
+  if (target.replaceSatelliteAttribution) {
+    target.replaceSatelliteAttribution('')
   }
 }
 
 /** Hide or show the current basemap without touching its source. */
-export function setBasemapContributionVisibility(
-  target: BasemapReconcileTarget,
+export function setSatelliteContributionVisibility(
+  target: SatelliteReconcileTarget,
   visible: boolean,
 ): void {
-  if (!target.getLayer(MAPLIBRE_BASEMAP_RASTER_LAYER_ID)) return
+  if (!target.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)) return
   target.setLayoutProperty?.(
-    MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
+    MAPLIBRE_SATELLITE_LAYER_ID,
     'visibility',
     visible ? 'visible' : 'none',
   )

@@ -49,11 +49,13 @@ import {
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
 import { t } from '../../i18n'
 import { VIEW_SHORTCUTS } from '../../shortcuts/definitions'
+import { openPlaceSearch } from '../../app/geocoding/place-search-ui'
 
 type NonToolbarAppCommandId =
   | 'view.zoomIn'
   | 'view.zoomOut'
   | 'view.fitToContent'
+  | 'view.searchPlace'
   | 'help.aboutCanopi'
   | 'help.reportProblem'
   | 'canvas.copy'
@@ -355,6 +357,14 @@ export const APP_COMMANDS: readonly AppCommandDefinition[] = [
     shortcut: VIEW_SHORTCUTS.fitToContent,
     palette: true,
     run: (state) => runCanvas(state, (canvas) => canvas.viewport.zoomToFit()),
+    disabled: (state) => !state.canvas,
+  },
+  {
+    id: 'view.searchPlace',
+    label: () => t('menu.view.searchPlace'),
+    shortcut: VIEW_SHORTCUTS.searchPlace,
+    palette: true,
+    run: (state) => { if (state.canvas) openPlaceSearch() },
     disabled: (state) => !state.canvas,
   },
   {

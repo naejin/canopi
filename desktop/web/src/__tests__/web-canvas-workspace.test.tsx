@@ -835,6 +835,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       returnToDesign: vi.fn(),
       focusTemporaryBounds: vi.fn(() => false),
       returnFromTemporaryFocus: vi.fn(() => false),
+      showPlace: vi.fn(() => false),
     },
     history: {
       canUndo: signal(false),

@@ -889,6 +889,25 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('shows a searched place by moving only the view', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const plane = runtime.querySurface.sessionPlane.value!
+    const before = runtime.querySurface.viewport.value.viewport
+    const place = plane.toGeo({ x: 250, y: -120 })
+
+    expect(runtime.commandSurface.viewport.showPlace(place, 17)).toBe(true)
+
+    const after = runtime.querySurface.viewport.value.viewport
+    expect(after).not.toEqual(before)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.sessionPlane.value).toBe(plane)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(runtime.commandSurface.viewport.showPlace({ lon: Number.NaN, lat: 0 }, 17)).toBe(false)
+    runtime.destroy()
+  })
+
   it('retries a quarantined history replay through the public command surface', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))

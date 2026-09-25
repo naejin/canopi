@@ -55,6 +55,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::saved_object_stamps::SavedObjectStamp>()
         .register::<common_types::settings::LastView>()
         .register::<common_types::settings::Locale>()
+        .register::<common_types::settings::SatelliteProvider>()
         .register::<common_types::settings::Settings>()
         .register::<common_types::settings::Theme>()
         .register::<common_types::support::FrontendDiagnosticEntry>()

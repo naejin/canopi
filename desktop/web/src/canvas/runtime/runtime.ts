@@ -63,6 +63,8 @@ export interface CanvasViewportCommandSurface {
   returnToDesign(): void
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
+  /** Moves the view to a place; design objects never move. */
+  showPlace(place: { readonly lon: number; readonly lat: number }, zoom: number): boolean
 }
 
 export interface CanvasHistoryCommandSurface {

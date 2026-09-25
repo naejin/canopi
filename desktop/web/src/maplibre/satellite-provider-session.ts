@@ -1,16 +1,15 @@
-import type { BasemapStyle } from '../generated/contracts'
+import type { SatelliteProvider } from '../generated/contracts'
 import {
-  GOOGLE_KEY_PROMPT,
-  resolveBasemapAvailability,
-  type BasemapDescriptor,
-  type BasemapProviderConfig,
-} from './basemap-provider'
+  resolveSatelliteAvailability,
+  type SatelliteDescriptor,
+  type SatelliteProviderConfig,
+} from './satellite-provider'
 import type { BasemapTileAuth } from './basemap-tile-auth'
 
 /**
  * One active basemap provider generation.
  *
- * The module above decides *what* a style maps to; this owns the lifecycle of
+ * The module above decides *what* a provider maps to; this owns the lifecycle of
  * getting there. It is deliberately separate from any map: a provider
  * generation is bound to the map surface that admitted it, owns its own
  * requests and timers, and is fenced so a superseded generation cannot publish
@@ -23,7 +22,7 @@ import type { BasemapTileAuth } from './basemap-tile-auth'
  */
 
 /** The bounded HTTP capability the provider is given, injected per edition. */
-export interface BasemapProviderHttp {
+export interface SatelliteProviderHttp {
   /**
    * Perform one request. `signal` must abort the underlying work. The provider
    * always supplies a finite timeout, so an implementation that ignores the
@@ -36,10 +35,10 @@ export interface BasemapProviderHttp {
     readonly method?: 'GET' | 'POST'
     /** JSON body for a POST; the adapter serialises it. */
     readonly body?: unknown
-  }): Promise<BasemapProviderResponse>
+  }): Promise<SatelliteProviderResponse>
 }
 
-export interface BasemapProviderResponse {
+export interface SatelliteProviderResponse {
   readonly ok: boolean
   readonly status: number
   /** Parsed JSON body, or `null` when the body is absent or not JSON. */
@@ -49,7 +48,7 @@ export interface BasemapProviderResponse {
 }
 
 /** The viewport a caller asks the provider to serve. */
-export interface BasemapViewport {
+export interface SatelliteViewport {
   readonly west: number
   readonly south: number
   readonly east: number
@@ -57,12 +56,12 @@ export interface BasemapViewport {
   readonly zoom: number
 }
 
-export type BasemapProviderState =
+export type SatelliteProviderState =
   | { readonly state: 'idle' }
-  | { readonly state: 'loading'; readonly style: BasemapStyle }
+  | { readonly state: 'loading'; readonly provider: SatelliteProvider }
   | {
       readonly state: 'ready'
-      readonly descriptor: BasemapDescriptor
+      readonly descriptor: SatelliteDescriptor
       /** Viewport copyright, when the provider supplies and requires one. */
       readonly copyright: string | null
       /**
@@ -71,7 +70,7 @@ export type BasemapProviderState =
        * logged as part of a provider state.
        */
     }
-  | { readonly state: 'unavailable'; readonly style: BasemapStyle; readonly reason: string }
+  | { readonly state: 'unavailable'; readonly provider: SatelliteProvider; readonly reason: string }
 
 /** The fixed retry/timeout policy the product contract settles. */
 export const PROVIDER_REQUEST_TIMEOUT_MS = 15_000
@@ -110,20 +109,20 @@ export function sanitizeProviderReason(text: string, secret: string | null): str
   return withoutSecret.length > 0 ? withoutSecret : 'The provider request failed.'
 }
 
-export class BasemapProvider {
+export class SatelliteImageryProvider {
   private generation = 0
   private disposed = false
-  private state: BasemapProviderState = { state: 'idle' }
-  private listeners = new Set<(state: BasemapProviderState) => void>()
+  private state: SatelliteProviderState = { state: 'idle' }
+  private listeners = new Set<(state: SatelliteProviderState) => void>()
   private controller: AbortController | null = null
   private session: GoogleSession | null = null
-  private lastViewport: BasemapViewport | null = null
+  private lastViewport: SatelliteViewport | null = null
   /**
    * The newest viewport the caller wants served, even while a request is in
    * flight. One active request plus one latest desired viewport: a newer
    * viewport supersedes the older request/result rather than queueing.
    */
-  private latestDesiredViewport: BasemapViewport | null = null
+  private latestDesiredViewport: SatelliteViewport | null = null
   /**
    * Viewport refresh in flight for one generation.
    *
@@ -132,11 +131,11 @@ export class BasemapProvider {
    * neither publish nor install itself, and at most one attempt per generation
    * can reach the publish point.
    */
-  private viewportInFlight: { readonly generation: number; readonly viewport: BasemapViewport } | null = null
+  private viewportInFlight: { readonly generation: number; readonly viewport: SatelliteViewport } | null = null
   /** Validated viewport metadata for the current generation, when established. */
   private viewportMetadata: BasemapViewportMetadata | null = null
   /** The descriptor as resolved before any viewport zoom clamp. */
-  private baseDescriptor: BasemapDescriptor | null = null
+  private baseDescriptor: SatelliteDescriptor | null = null
   /**
    * Identity of the configuration the live session was acquired under.
    *
@@ -148,7 +147,7 @@ export class BasemapProvider {
   private renewalTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
-    private readonly http: BasemapProviderHttp,
+    private readonly http: SatelliteProviderHttp,
     /**
      * The configuration, or a getter for it.
      *
@@ -156,7 +155,7 @@ export class BasemapProvider {
      * that is already serving a live map: `update()` re-reads it, so no caller
      * has to capture the key at map-creation time and go stale.
      */
-    private readonly config: BasemapProviderConfig | (() => BasemapProviderConfig),
+    private readonly config: SatelliteProviderConfig | (() => SatelliteProviderConfig),
     private readonly now: () => number = () => Date.now(),
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise((resolve) => setTimeout(resolve, ms)),
@@ -168,17 +167,17 @@ export class BasemapProvider {
   ) {}
 
   /** The configuration in force for this call. */
-  private currentConfig(): BasemapProviderConfig {
+  private currentConfig(): SatelliteProviderConfig {
     return typeof this.config === 'function' ? this.config() : this.config
   }
 
   /** The current published state. */
-  snapshot(): BasemapProviderState {
+  snapshot(): SatelliteProviderState {
     return this.state
   }
 
   /** Subscribe to state changes; the returned function removes the listener. */
-  subscribe(listener: (state: BasemapProviderState) => void): () => void {
+  subscribe(listener: (state: SatelliteProviderState) => void): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
@@ -194,7 +193,7 @@ export class BasemapProvider {
    * A configuration identity change also drops incompatible session, viewport
    * facts, credentials and renewal before the new session is acquired.
    */
-  update(presentation: { readonly style: BasemapStyle }, viewport: BasemapViewport): void {
+  update(presentation: { readonly provider: SatelliteProvider }, viewport: SatelliteViewport): void {
     if (this.disposed) return
     this.generation += 1
     const generation = this.generation
@@ -215,23 +214,23 @@ export class BasemapProvider {
     }
     this.configIdentity = nextIdentity
 
-    const resolved = resolveBasemapAvailability(presentation.style, config)
+    const resolved = resolveSatelliteAvailability(presentation.provider, config)
     if (resolved.state === 'unavailable') {
       this.session = null
       this.credentials?.clear()
       this.viewportMetadata = null
       this.baseDescriptor = null
-      // A style change or a cleared key must not leave the previous provider's
+      // A provider change or a cleared key must not leave the previous provider's
       // session usable by an in-flight map request.
-      this.publish({ state: 'unavailable', style: presentation.style, reason: resolved.reason })
+      this.publish({ state: 'unavailable', provider: presentation.provider, reason: resolved.reason })
       return
     }
 
     this.baseDescriptor = resolved.descriptor
 
     if (!resolved.descriptor.official) {
-      // Street, MapTiler and the keyless Google path need no session and no
-      // viewport metadata, so there is no loading state to show and no request.
+      // EOX needs no session and no viewport metadata, so there is no loading
+      // state to show and no request.
       this.session = null
       this.credentials?.clear()
       this.viewportMetadata = null
@@ -248,12 +247,12 @@ export class BasemapProvider {
     // configuration may be reused; otherwise it is re-acquired.
     const existing = this.session
     if (existing && existing.expiresAtMs - this.now() > PROVIDER_SESSION_RENEWAL_WINDOW_MS) {
-      this.publish({ state: 'loading', style: presentation.style })
+      this.publish({ state: 'loading', provider: presentation.provider })
       void this.refreshViewport(generation, viewport)
       return
     }
 
-    this.publish({ state: 'loading', style: presentation.style })
+    this.publish({ state: 'loading', provider: presentation.provider })
     void this.acquireSession(generation, resolved.descriptor)
   }
 
@@ -266,7 +265,7 @@ export class BasemapProvider {
    * Only the latest desired viewport is kept; an older in-flight result is
    * discarded and the latest is requested immediately.
    */
-  updateViewport(viewport: BasemapViewport): void {
+  updateViewport(viewport: SatelliteViewport): void {
     if (this.disposed) return
     this.lastViewport = viewport
     this.latestDesiredViewport = viewport
@@ -304,7 +303,7 @@ export class BasemapProvider {
   }
 
   /** Stable identity for the credential/session-relevant configuration. */
-  private configIdentityOf(config: BasemapProviderConfig): string {
+  private configIdentityOf(config: SatelliteProviderConfig): string {
     return JSON.stringify({
       key: config.googleMapsApiKey?.trim() ?? '',
       locale: config.locale ?? '',
@@ -312,9 +311,9 @@ export class BasemapProvider {
   }
 
   /** The viewport last published as current metadata, when one was published. */
-  private lastPublishedViewport: BasemapViewport | null = null
+  private lastPublishedViewport: SatelliteViewport | null = null
 
-  private publish(state: BasemapProviderState): void {
+  private publish(state: SatelliteProviderState): void {
     this.state = state
     for (const listener of this.listeners) listener(state)
   }
@@ -326,7 +325,7 @@ export class BasemapProvider {
 
   private async acquireSession(
     generation: number,
-    descriptor: BasemapDescriptor,
+    descriptor: SatelliteDescriptor,
   ): Promise<void> {
     const key = this.currentConfig().googleMapsApiKey?.trim() ?? ''
     let session: GoogleSession | null = null
@@ -345,7 +344,7 @@ export class BasemapProvider {
       this.viewportMetadata = null
       this.publish({
         state: 'unavailable',
-        style: descriptor.style,
+        provider: descriptor.provider,
         reason: sanitizeProviderReason(
           'Google Maps rejected the configured API key. Edit or clear the key to continue.',
           key,
@@ -377,9 +376,9 @@ export class BasemapProvider {
    * availability can increase and decrease.
    */
   private descriptorForSession(
-    descriptor: BasemapDescriptor,
+    descriptor: SatelliteDescriptor,
     session: GoogleSession,
-  ): BasemapDescriptor {
+  ): SatelliteDescriptor {
     const metadataZoom = this.viewportMetadata?.maxZoom
     const copyright = this.viewportMetadata?.copyright
     return {
@@ -397,7 +396,7 @@ export class BasemapProvider {
   }
 
   /** Publish Ready only when session and validated viewport metadata agree. */
-  private publishOfficialReady(generation: number, descriptor: BasemapDescriptor): void {
+  private publishOfficialReady(generation: number, descriptor: SatelliteDescriptor): void {
     if (!this.isCurrent(generation)) return
     const session = this.session
     const metadata = this.viewportMetadata
@@ -422,7 +421,7 @@ export class BasemapProvider {
   private scheduleRenewal(
     generation: number,
     session: GoogleSession,
-    descriptor: BasemapDescriptor,
+    descriptor: SatelliteDescriptor,
   ): void {
     this.clearRenewal()
     const remaining = session.expiresAtMs - this.now() - PROVIDER_SESSION_RENEWAL_WINDOW_MS
@@ -439,7 +438,7 @@ export class BasemapProvider {
       }
       this.session = null
       this.credentials?.clear()
-      this.publish({ state: 'loading', style: descriptor.style })
+      this.publish({ state: 'loading', provider: descriptor.provider })
       void this.acquireSession(generation, descriptor)
     }, delay)
   }
@@ -486,7 +485,7 @@ export class BasemapProvider {
    */
   private async refreshViewport(
     generation: number,
-    viewport: BasemapViewport,
+    viewport: SatelliteViewport,
   ): Promise<void> {
     if (this.viewportInFlight && this.viewportInFlight.generation === generation) {
       // Keep only the latest desired viewport; the in-flight request will be
@@ -504,7 +503,7 @@ export class BasemapProvider {
       `&key=${encodeURIComponent(key)}` +
       `&zoom=${viewport.zoom}&north=${viewport.north}&south=${viewport.south}` +
       `&east=${viewport.east}&west=${viewport.west}`
-    let response: BasemapProviderResponse | null = null
+    let response: SatelliteProviderResponse | null = null
     try {
       response = await this.requestWithRetry(generation, url, { method: 'GET' })
     } catch {
@@ -549,7 +548,7 @@ export class BasemapProvider {
   private failViewportMetadata(
     generation: number,
     key: string,
-    response: BasemapProviderResponse | null,
+    response: SatelliteProviderResponse | null,
   ): void {
     if (!this.isCurrent(generation)) return
     this.credentials?.clear()
@@ -557,7 +556,7 @@ export class BasemapProvider {
     this.clearRenewal()
     this.publish({
       state: 'unavailable',
-      style: styleOf(this.state),
+      provider: providerOf(this.state),
       reason: sanitizeProviderReason(
         response && response.status !== 0
           ? `Google Maps could not confirm the viewport for this layer (HTTP ${response.status}). Try again or choose another basemap.`
@@ -580,7 +579,7 @@ export class BasemapProvider {
     generation: number,
     url: string,
     options: { readonly method: 'GET' | 'POST'; readonly body?: unknown },
-  ): Promise<BasemapProviderResponse | null> {
+  ): Promise<SatelliteProviderResponse | null> {
     for (let attempt = 0; attempt <= PROVIDER_MAX_RETRIES; attempt += 1) {
       if (!this.isCurrent(generation)) return null
       const controller = this.controller
@@ -589,7 +588,7 @@ export class BasemapProvider {
       const onAbort = () => timeout.abort()
       controller.signal.addEventListener('abort', onAbort)
       const timer = setTimeout(() => timeout.abort(), PROVIDER_REQUEST_TIMEOUT_MS)
-      let response: BasemapProviderResponse
+      let response: SatelliteProviderResponse
       try {
         response = await this.http.request(
           options.method === 'POST'
@@ -665,11 +664,11 @@ export function readSessionExpiryMs(expiry: unknown, nowMs: number): number {
   return seconds * 1000
 }
 
-/** The style a published state belongs to, whichever shape it has. */
-function styleOf(state: BasemapProviderState): BasemapStyle {
-  if (state.state === 'ready') return state.descriptor.style
-  if (state.state === 'idle') return 'street'
-  return state.style
+/** The provider a published state belongs to, whichever shape it has. */
+function providerOf(state: SatelliteProviderState): SatelliteProvider {
+  if (state.state === 'ready') return state.descriptor.provider
+  if (state.state === 'idle') return 'eox'
+  return state.provider
 }
 
 /** The attribution and zoom availability one viewport answer supplies. */
@@ -695,7 +694,7 @@ export interface BasemapViewportMetadata {
  */
 export function readViewportMetadata(
   json: unknown,
-  viewport: BasemapViewport,
+  viewport: SatelliteViewport,
   fallbackMaxZoom = 22,
 ): BasemapViewportMetadata | null {
   if (!isRecord(json)) return null
@@ -792,7 +791,7 @@ function intersectLon(a: LonInterval, b: LonInterval): LonInterval | null {
  */
 function exactCoverageCeiling(
   viewPieces: readonly LonInterval[],
-  viewport: BasemapViewport,
+  viewport: SatelliteViewport,
   rects: ReadonlyArray<{ north: number; south: number; west: number; east: number; maxZoom: number }>,
 ): number | null {
   type Piece = LonInterval & { latNorth: number; latSouth: number; maxZoom: number }
@@ -845,7 +844,7 @@ function exactCoverageCeiling(
   return ceiling
 }
 
-function sameViewport(a: BasemapViewport, b: BasemapViewport): boolean {
+function sameViewport(a: SatelliteViewport, b: SatelliteViewport): boolean {
   return (
     a.west === b.west &&
     a.south === b.south &&
@@ -855,4 +854,3 @@ function sameViewport(a: BasemapViewport, b: BasemapViewport): boolean {
   )
 }
 
-export { GOOGLE_KEY_PROMPT }
