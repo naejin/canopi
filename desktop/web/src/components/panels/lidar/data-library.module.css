@@ -5,7 +5,7 @@
 .panel button:disabled { cursor: default; color: var(--color-text-muted); opacity: 0.6; }
 .panel :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .panel select, .panel input:not([type='checkbox']):not([type='range']) { min-width: 0; background: var(--canvas-bg); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-1-5) var(--space-2); }
-.panel input[type='checkbox'] { accent-color: var(--color-primary); }
+.panel input[type='checkbox'], .panel input[type='radio'] { accent-color: var(--color-primary); }
 .panel h3 { margin: 0; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
 .panel p { margin: 0; line-height: 1.55; }
 .scroll { overflow-y: auto; min-height: 0; flex: 1; overscroll-behavior: contain; }
@@ -38,6 +38,7 @@
 .form > label { display: flex; flex-direction: column; gap: var(--space-2); }
 .unit { display: flex; flex-direction: column; gap: var(--space-2); border: 0; padding: 0; margin: 0; }
 .unit > label { display: flex; flex-direction: column; gap: var(--space-2); }
+.unit > legend { padding: 0; margin-bottom: var(--space-1); }
 .unit > .check { flex-direction: row; align-items: center; gap: var(--space-2); }
 .formActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .detailTitle { display: flex; align-items: flex-start; gap: var(--space-2); }
