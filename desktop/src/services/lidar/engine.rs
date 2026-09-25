@@ -209,7 +209,6 @@ impl GdalEngine {
         cancel: Option<&AtomicBool>,
         timeout: Option<Duration>,
     ) -> Result<RunOutput, String> {
-        let started = Instant::now();
         // Output is captured through temp files instead of pipes so no
         // worker thread is needed and cancellation still kills the child.
         let token = std::time::SystemTime::now()
@@ -283,7 +282,6 @@ impl GdalEngine {
             stdout: String::from_utf8_lossy(&stdout).into_owned(),
             stderr: String::from_utf8_lossy(&stderr).into_owned(),
             exit_code: status.code().unwrap_or(-1),
-            duration: started.elapsed(),
         };
 
         if !status.success() {
@@ -316,8 +314,6 @@ pub struct RunOutput {
     pub stdout: String,
     pub stderr: String,
     pub exit_code: i32,
-    #[allow(dead_code)]
-    pub duration: Duration,
 }
 
 fn wait_cancellable(

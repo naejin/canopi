@@ -1,7 +1,7 @@
 # Raster qualification receipt (slice Q)
 
 Status: evidence — frozen historical qualification; **Q is not qualified.** Experiment subtest results are recorded below, but
-eligibility is decided by the [requirement contract](../../scripts/raster-qualification/requirements.json)
+eligibility is decided by the requirement contract
 and the retained legacy-record gate verdict is `fail` (one fail, eleven inconclusive).
 That legacy evidence set is distinct from the later exploratory Desktop pilot below; neither qualifies Q.
 The bounded numeric completion/MR1 slice is independently accepted at `579880be`; no real Q capability was added. The Desktop bridge transport slice at `fab0c381` measured the first positive observations — Q-LOCAL-1 and Q-HOST-1 pass on one generated tiled COG through the isolated host, with the other ten requirements inconclusive — and replaced and deleted `import_map.py`. It is one exploratory run on a synthetic fixture with the published engine, so **full Q remains unqualified**, the pinned-artifact correspondence failure is preserved, and that pilot authorized no private/large run, production N1 or engine substitution. See the [receipt section](raster-rework/q-typescript-receipt.md#desktop-bridge-transport-slice-implementation-response).

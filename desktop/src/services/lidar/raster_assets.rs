@@ -11,7 +11,7 @@
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
 use super::paths::LidarPaths;
-use super::prepared_raster::{self, PreparedRaster, RasterWindow};
+use super::prepared_raster::{self, PreparedRaster};
 use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -216,40 +216,10 @@ pub(super) fn admit_staged_cog(
     admitted
 }
 
-/// Read a 0/1 quality asset through the bounded reader.
-///
-/// Quality assets carry no NoData tag and every sample must be exactly 0.0 or
-/// 1.0; anything else is a corrupt asset rather than a silent partial mask.
-// No production caller yet: the quality display consumer is deferred, and this
-// read surface exists so the B1 round-trip is exercised end to end.
-#[allow(dead_code)]
-pub(super) fn read_quality_window(
-    asset: &CogAsset,
-    window: RasterWindow,
-    cancel: &AtomicBool,
-) -> Result<Vec<u8>, String> {
-    let mut reader = PreparedRaster::open_committed(&asset.path, &asset.grid, None)?;
-    let samples = reader.read_window(window, cancel)?;
-    let mut quality = Vec::with_capacity(samples.samples().len());
-    for value in samples.samples() {
-        let byte = match *value {
-            0.0 => 0u8,
-            1.0 => 1u8,
-            other => {
-                return Err(format!(
-                    "quality asset {} holds {other}, expected exact 0 or 1",
-                    asset.path.display()
-                ));
-            }
-        };
-        quality.push(byte);
-    }
-    Ok(quality)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::lidar::prepared_raster::RasterWindow;
 
     fn scratch_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -434,8 +404,11 @@ mod tests {
             &quality_values,
         )
         .expect("quality chunk is created");
-        let bytes = read_quality_window(&quality, window, &cancel).expect("quality reads");
-        assert_eq!(bytes, vec![1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1]);
+        let read_back = PreparedRaster::open_committed(&quality.path, &quality.grid, None)
+            .expect("quality asset opens")
+            .read_window(window, &cancel)
+            .expect("quality reads");
+        assert_eq!(read_back.samples(), quality_values.as_slice());
 
         // A truncated asset is rejected rather than decoded partially.
         let truncated = dir.join("truncated.tif");
@@ -459,43 +432,6 @@ mod tests {
         .expect("re-created chunk");
         assert_eq!(again.sha256, asset.sha256);
         assert_eq!(again.path, asset.path);
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn quality_asset_rejects_non_binary_samples() {
-        let engine = GdalEngine::new();
-        let cancel = AtomicBool::new(false);
-        let dir = scratch_dir("quality-corrupt");
-        let paths = library_paths(&dir);
-        let grid = chunk_grid(0, 0);
-        let mut values = vec![1.0f32; 12];
-        values[5] = 0.5;
-        let asset = write_cog_asset(
-            &engine,
-            &cancel,
-            &paths,
-            &dir,
-            "quality",
-            &grid,
-            "EPSG:3857",
-            None,
-            &values,
-        )
-        .expect("asset is created");
-        let error = read_quality_window(
-            &asset,
-            RasterWindow {
-                x: 0,
-                y: 0,
-                width: grid.width,
-                height: grid.height,
-            },
-            &cancel,
-        )
-        .expect_err("a non-binary quality sample must fail");
-        assert!(error.contains("expected exact 0 or 1"), "{error}");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

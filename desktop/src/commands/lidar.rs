@@ -226,22 +226,12 @@ pub async fn lidar_sample_pixel(
 ) -> Result<common_types::lidar::LidarSampleOutcome, String> {
     let library = library.inner().clone();
     let mut ticket = library.admit_sample_request(&request.request_id)?;
-    if let Some(slot) = ticket.as_mut() {
-        // Wait for a slot without holding an executor permit, so an inspection
-        // read can never sit in front of a heavy raster job.
-        loop {
-            if slot.try_activate()? {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(15)).await;
-        }
+    // Wait for a slot without holding an executor permit, so an inspection
+    // read can never sit in front of a heavy raster job.
+    while !ticket.try_activate()? {
+        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
     }
-    let cancel = match ticket.as_ref() {
-        Some(slot) => slot.cancel_flag(),
-        // No admission: no one can signal this read, and that is what the flag
-        // then says. It is never a stand-in for a cancellation that exists.
-        None => std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-    };
+    let cancel = ticket.cancel_flag();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
@@ -262,9 +252,6 @@ pub async fn lidar_sample_pixel(
 /// reader checks the flag between bounded reads.
 #[tauri::command]
 pub fn lidar_cancel_sample_pixel(library: State<'_, LidarLibrary>, request_id: String) {
-    if request_id.is_empty() {
-        return;
-    }
     library.cancel_sample_request(&request_id);
 }
 

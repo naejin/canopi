@@ -27,8 +27,17 @@ let refreshInFlight: Promise<void> | null = null
 let readStartSequence = 0
 let publishedReadSequence = 0
 
+/** A snapshot without its lists is refused as a failed read, never published. */
+function assertLibrarySnapshot(value: unknown): asserts value is LidarLibrarySnapshot {
+  const snapshot = value as Partial<LidarLibrarySnapshot> | null
+  if (!snapshot || !Array.isArray(snapshot.layers) || !Array.isArray(snapshot.analyses)) {
+    throw new Error('The LiDAR library returned a malformed snapshot.')
+  }
+}
+
 async function readLibrarySnapshot(startSequence: number): Promise<LidarLibrarySnapshot> {
-  const snapshot = await lidarListLibrary()
+  const snapshot: unknown = await lidarListLibrary()
+  assertLibrarySnapshot(snapshot)
   if (startSequence >= publishedReadSequence) {
     publishedReadSequence = startSequence
     lidarLibrary.value = snapshot

@@ -28,10 +28,6 @@ tauri-plugin-mcp-bridge = "0.10"
 # revision and the migration rationale live in
 # docs/design/raster-rework/geolibre-integration-design.md.
 wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }
-# Native raster tiles are encoded in-process; the crate is already in the
-# dependency graph through the Tauri plugin bridge, so this adds no new
-# transitive crate and no download.
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 # Managed command state without a window/event loop in native boundary tests.

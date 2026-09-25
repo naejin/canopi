@@ -10,6 +10,7 @@ import {
   hasActiveLibraryWork,
   installLidarLibraryObserver,
   lidarLibrary,
+  lidarStatusMessage,
   stopLidarPolling,
 } from '../app/lidar/library-store'
 
@@ -111,5 +112,17 @@ describe('LiDAR library polling', () => {
     await flushMicrotasks()
     expect(listLibraryMock.mock.calls.length).toBeGreaterThan(before)
     expect(lidarLibrary.value?.layers).toHaveLength(1)
+  })
+
+  it('refuses a malformed snapshot as a failed read and stops polling', async () => {
+    listLibraryMock.mockResolvedValue({ plant_db: 'missing' })
+    ensureLidarPolling()
+    await flushMicrotasks()
+    await flushMicrotasks()
+    expect(lidarLibrary.value).toBeNull()
+    expect(lidarStatusMessage.value).toMatch(/malformed/i)
+    const calls = listLibraryMock.mock.calls.length
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(listLibraryMock.mock.calls.length).toBe(calls)
   })
 })

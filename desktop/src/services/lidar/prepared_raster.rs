@@ -101,14 +101,12 @@ impl RasterWindow {
 /// The owning window read and committed-asset open below are consumed by the
 /// B2 generation resolver (`canopi-jv8a.4`); until it lands they carry a
 /// documented dead-code allowance rather than disappearing from the reader.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(super) struct WindowSamples {
     samples: Vec<f32>,
     valid: Vec<u8>,
 }
 
-#[allow(dead_code)]
 impl WindowSamples {
     pub(super) fn samples(&self) -> &[f32] {
         &self.samples
@@ -238,7 +236,6 @@ impl PreparedRaster {
     }
 
     /// Read one half-open, in-bounds window.
-    #[allow(dead_code)]
     pub(super) fn read_window(
         &mut self,
         window: RasterWindow,
@@ -444,7 +441,6 @@ pub(super) fn required_free_bytes(
 /// existing raster, including georeferencing for a freshly written scratch
 /// window. One profile definition is shared by source preparation and chunk
 /// creation; `None` NoData leaves the asset without a NoData tag.
-#[allow(dead_code)]
 pub(super) fn controlled_cog_arguments(
     input: &Path,
     output: &Path,

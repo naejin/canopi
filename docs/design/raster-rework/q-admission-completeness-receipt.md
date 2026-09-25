@@ -2,7 +2,7 @@
 
 Status: evidence — independently reviewed through `578e3bdb`; **not accepted**, remaining declaration/precedence defects reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [declaration/precedence prompt](q-declaration-precedence-agent-prompt.md), requirement contract, [review and debrief record](review-and-debrief.md).
 Captured cycle evidence: [q-admission-completeness-cycles.txt](evidence/q-admission-completeness-cycles.txt).
 
 ## Independent review disposition

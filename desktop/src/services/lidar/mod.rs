@@ -295,8 +295,8 @@ impl LidarLibrary {
     }
 
     /// Best-effort bounded cleanup at startup: job scratch dirs for settled
-    /// jobs, abandoned staging dirs, unregistered display derivatives and the
-    /// retired PNG display stores.
+    /// jobs, abandoned staging dirs, unregistered display derivatives and
+    /// unpublished chunk rows.
     fn prune_transient_artifacts(&self) -> Result<(), String> {
         let connection = self.catalogue()?;
         let settled: Vec<(String, String)> = {
@@ -416,7 +416,7 @@ impl LidarLibrary {
         inspection::sample(self, &self.inner.engine, cancel, request)
     }
 
-    /// Test support: an empty item row, as older builds created before import.
+    /// Test support: an empty item row, before any import job is recorded.
     #[cfg(test)]
     pub fn create_layer(
         &self,
@@ -721,19 +721,14 @@ impl LidarLibrary {
 
     /// Admit one inspection lookup into the shared bounded read admission.
     ///
-    /// `None` when the caller named no lookup: an older caller still works and
-    /// simply occupies no cancellable slot rather than reserving one it cannot
-    /// release. Inspection deliberately shares the display budget, so a burst of
+    /// Inspection deliberately shares the display budget, so a burst of
     /// abandoned lookups is bounded by the same active/queued limits tiles use.
-    pub(crate) fn admit_sample_request(
-        &self,
-        request_id: &str,
-    ) -> Result<Option<DisplayTicket>, String> {
+    /// An unnamed lookup is refused: it could never be cancelled.
+    pub(crate) fn admit_sample_request(&self, request_id: &str) -> Result<DisplayTicket, String> {
         if request_id.is_empty() {
-            return Ok(None);
+            return Err("sample request identity must not be empty".to_string());
         }
         self.admit_display_request(&sample_admission_name(request_id))
-            .map(Some)
     }
 
     /// Cancel one inspection lookup.
@@ -2133,10 +2128,7 @@ mod tests {
 
         // A named lookup takes a real slot, and cancelling it signals the flag
         // the read is actually given.
-        let mut sample = library
-            .admit_sample_request("lookup-1")
-            .unwrap()
-            .expect("a named lookup is admitted");
+        let mut sample = library.admit_sample_request("lookup-1").unwrap();
         assert!(sample.try_activate().unwrap());
         let flag = sample.cancel_flag();
         assert!(!flag.load(Ordering::Relaxed));
@@ -2151,28 +2143,21 @@ mod tests {
         library.cancel_sample_request("lookup-1");
         assert!(!tile_flag.load(Ordering::Relaxed));
         // ...and cancelling the tile leaves the inspection name alone.
-        let sample_two = library
-            .admit_sample_request("lookup-2")
-            .unwrap()
-            .expect("a named lookup is admitted");
+        let sample_two = library.admit_sample_request("lookup-2").unwrap();
         let sample_two_flag = sample_two.cancel_flag();
         library.cancel_display_request("lookup-2");
         assert!(!sample_two_flag.load(Ordering::Relaxed));
         library.cancel_sample_request("lookup-2");
         assert!(sample_two_flag.load(Ordering::Relaxed));
 
-        // A caller that names no lookup still works and occupies no slot, so
-        // it cannot hold admission it has no way to release.
-        assert!(library.admit_sample_request("").unwrap().is_none());
+        // An unnamed lookup is refused: it could hold a slot no one can release.
+        assert!(library.admit_sample_request("").is_err());
 
         // Dropping a finished lookup frees its slot for the next one.
         drop(sample);
         drop(sample_two);
         drop(tile);
-        let mut next = library
-            .admit_sample_request("lookup-3")
-            .unwrap()
-            .expect("a named lookup is admitted");
+        let mut next = library.admit_sample_request("lookup-3").unwrap();
         assert!(next.try_activate().unwrap());
         drop(next);
 

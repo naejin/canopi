@@ -2,7 +2,7 @@
 
 Status: evidence — gate-only repair independently reviewed at `47b9d508`; **not accepted**, remaining false passes reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [Q evidence integrity prompt](q-evidence-integrity-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [Q evidence integrity prompt](q-evidence-integrity-agent-prompt.md), requirement contract, [review and debrief record](review-and-debrief.md).
 
 ## Independent review disposition
 
@@ -44,7 +44,7 @@ Three conclusions that the previous harness collapsed:
 
 ### Requirement matrix
 
-The machine-readable contract is [`requirements.json`](../../../scripts/raster-qualification/requirements.json).
+The machine-readable contract is `requirements.json`.
 This receipt refers to it rather than restating it.
 
 | ID | Requirement | Phase | Assertions | Current evidence verdict |

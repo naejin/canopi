@@ -66,7 +66,7 @@ desktop/web/dist-web-artifacts/
 desktop/web/public/pdf-fonts/
 desktop/web/dist-pdf-validation/
 
-# Raster qualification scratch (Q slice): local clones, fixtures, measurement output
+# Local agent scratch: worktrees, fixtures, measurement output
 .rq-scratch/
 
 # Locally built sidecars (scripts/build-geolibre-cli.sh)

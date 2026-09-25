@@ -101,6 +101,15 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix desktop/web
 
+      - name: Geolocation precision and round-trip suite
+        working-directory: desktop/web
+        run: >-
+          npx vitest run
+          src/__tests__/session-plane.test.ts
+          src/__tests__/geolocated-design-codec.test.ts
+          src/canvas/runtime/scene-runtime/reorigin.test.ts
+          src/__tests__/new-design-view.test.ts
+
       - name: Frontend tests
         run: npm test --prefix desktop/web
 
@@ -109,6 +118,46 @@ jobs:
 
       - name: Web Edition build and browser-boundary scan
         run: npm run build:web --prefix desktop/web
+
+  lidar-native:
+    # GDAL-backed and GeoLibre-backed LiDAR lanes (ignored in the default
+    # suite). Fixture e2e lanes stay local: they need IGN tiles.
+    runs-on: ubuntu-24.04
+    env:
+      CANOPI_SKIP_BUNDLED_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - id: rust-toolchain
+        uses: dtolnay/rust-toolchain@1.97.1
+      - uses: ./.github/actions/cache-rust
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
+          workload: lidar-native
+
+      - name: Install Linux dependencies
+        uses: ./.github/actions/install-linux-deps
+
+      - name: Install GDAL (Ubuntu 24.04 ships 3.8.4)
+        run: |
+          sudo apt-get install -y gdal-bin
+          gdalinfo --version
+
+      - name: Cache the pinned GeoLibre CLI
+        id: geolibre-cache
+        uses: actions/cache@v4
+        with:
+          path: desktop/binaries
+          key: geolibre-cli-${{ runner.os }}-${{ hashFiles('scripts/build-geolibre-cli.sh') }}
+
+      - name: Build the pinned GeoLibre CLI
+        if: steps.geolibre-cache.outputs.cache-hit != 'true'
+        run: scripts/build-geolibre-cli.sh
+
+      - name: LiDAR native lanes
+        run: |
+          export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
+          "$CANOPI_GEOLIBRE_BIN" version
+          cargo test -p canopi-desktop --lib services::lidar -- --ignored --test-threads=1 --skip e2e_
 
   test-platform:
     strategy:

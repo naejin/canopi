@@ -47,18 +47,11 @@ pub(super) struct LatticeWindow {
 /// Resolved values and exact validity for one window.
 #[derive(Debug)]
 pub(super) struct ResolvedWindow {
-    #[allow(dead_code)]
+    // Production callers read `samples`/`valid`; tests assert the grid.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub grid: RasterGrid,
     pub samples: Vec<f32>,
     pub valid: Vec<u8>,
-}
-
-impl ResolvedWindow {
-    // Test-only convenience: production callers read `samples`/`valid` directly.
-    #[allow(dead_code)]
-    pub(super) fn cells(&self) -> usize {
-        self.samples.len()
-    }
 }
 
 /// Resolve one window over an ordered occurrence sequence.
@@ -369,7 +362,8 @@ pub(super) fn publish_test_chunk(
 /// This is the published-generation read path: it never replays member
 /// history, never opens a source COG and never touches a coordinate without a
 /// chunk row. Absent chunks are invalid coverage; a corrupt asset is an error,
-/// not empty coverage.
+/// not empty coverage. Tests use it to check what analysis published.
+#[cfg(test)]
 pub(super) fn read_persisted_window(
     chunks: &[PersistedChunk],
     lattice: &RasterGrid,
@@ -588,9 +582,8 @@ fn persisted_chunk(
 /// Absent quality chunks mean quality zero, and a present chunk must hold
 /// exact 0/1 samples: a corrupt mask can never read as partial coverage. The
 /// returned validity is complete, because quality zero is a value, not a gap.
-// Consumed by the bounded display transport's result tiles (`canopi-jv8a.4`,
-// B4); until that caller lands the allowance is deliberate.
-#[allow(dead_code)]
+/// Tests use it to check the quality mask analysis published.
+#[cfg(test)]
 pub(super) fn read_quality_chunks_window(
     chunks: &[PersistedChunk],
     lattice: &RasterGrid,

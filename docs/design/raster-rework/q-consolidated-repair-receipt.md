@@ -5,7 +5,7 @@ Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, the single matrix this repair is judged against.
 Current guidance: [review evidence](q-consolidated-admission-review.md), [implementation plan](../raster-data-analysis-rework.md), [LiDAR guide](../../agent/lidar.md).
 Captured cycle, sensitivity and self-review log: [q-consolidated-repair-cycles.txt](evidence/q-consolidated-repair-cycles.txt).
-Assertion-to-evidence mapping: [assertion_evidence_map.md](../../../scripts/raster-qualification/assertion_evidence_map.md).
+Assertion-to-evidence mapping: `assertion_evidence_map.md`.
 
 This receipt covers a bounded repair of the **complete admission-to-CLI decision path**. It adds no
 engine, transport, worker, decoder, slope or preparation implementation; runs no qualification

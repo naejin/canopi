@@ -79,6 +79,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
+      // An unhandled error or rejection fails the run even when every test passes.
+      dangerouslyIgnoreUnhandledErrors: false,
     },
   };
 });

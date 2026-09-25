@@ -4,7 +4,7 @@ Status: evidence — bounded NC1–NC2/MR1 accepted at `579880be`; Desktop compl
 Tracking: `canopi-kqpp`, parent `canopi-j571`; bd owns execution status.
 Acceptance contract: [q-admission-acceptance.md](q-admission-acceptance.md) — C1–C8, unchanged.
 Current guidance: [implementation plan](../raster-data-analysis-rework.md#qualification-tooling-language-and-migration), [review evidence](review-and-debrief.md), [LiDAR guide](../../agent/lidar.md).
-Assertion-to-evidence mapping: [assertion_evidence_map.md](../../../scripts/raster-qualification/assertion_evidence_map.md).
+Assertion-to-evidence mapping: `assertion_evidence_map.md`.
 
 This receipt covers one bounded migration slice: replacing the raster qualification **decision path**
 with TypeScript. It runs no qualification experiment, selects or builds no engine, changes no

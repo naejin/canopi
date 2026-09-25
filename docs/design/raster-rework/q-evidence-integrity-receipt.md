@@ -2,7 +2,7 @@
 
 Status: evidence — repair reviewed at `d963f755`; **not accepted**, remaining admission defects reproduced. Q remains unqualified.
 Tracking: `canopi-kqpp`, parent `canopi-j571`.
-Current guidance: [admission completeness prompt](q-admission-completeness-agent-prompt.md), [requirement contract](../../../scripts/raster-qualification/requirements.json), [review and debrief record](review-and-debrief.md).
+Current guidance: [admission completeness prompt](q-admission-completeness-agent-prompt.md), requirement contract, [review and debrief record](review-and-debrief.md).
 
 ## Independent review disposition
 
