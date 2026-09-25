@@ -15,7 +15,7 @@ describe('Canopi Design decoder', () => {
         color: null,
         symbol: null,
         pinned_name: false,
-        position: { x: 'east', y: 20 },
+        position: { lon: 'east', lat: 20 },
         rotation: null,
         scale: null,
         notes: null,
@@ -25,7 +25,7 @@ describe('Canopi Design decoder', () => {
     })
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      '$.plants[0].position.x: expected a finite number',
+      '$.plants[0].position.lon: expected a finite number',
     )
   })
 
@@ -33,22 +33,17 @@ describe('Canopi Design decoder', () => {
     { version: undefined, displayed: 1 },
     { version: 1, displayed: 1 },
     { version: 5, displayed: 5 },
-    { version: 7, displayed: 7 },
+    { version: 6, displayed: 6 },
+    { version: 8, displayed: 8 },
   ])('rejects unsupported old, missing, or future version $displayed', ({ version, displayed }) => {
     const input = currentDesign()
     if (version === undefined) delete input.version
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; current version is 6`,
+      `$.version: unsupported Canopi Design version ${displayed}; current version is 7`,
     )
-    try {
-      decodeCanopiDesign(input)
-      expect.fail('expected unsupported version')
-    } catch (error) {
-      expect(error).toBeInstanceOf(CanopiDesignIngestionError)
-      expect((error as CanopiDesignIngestionError).kind).toBe('unsupported_version')
-    }
+    expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
   })
 
   it.each([0, 1.5, Number.NaN])('rejects invalid version %s', (version) => {
@@ -57,48 +52,60 @@ describe('Canopi Design decoder', () => {
     )
   })
 
-  it('normalizes finite bearings without mutating the input', () => {
-    const input = currentDesign({
-      spatial_frame: confirmedFrame({ north_bearing_deg: -450 }),
-    })
+  it('admits a v7 Design with lon/lat positions', () => {
+    const decoded = decodeCanopiDesign(currentDesign({
+      plants: [plant('plant-1', 'Malus domestica')],
+      zones: [{ name: 'Bed', zone_type: 'polygon', points: [{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }] }],
+    }))
 
-    const decoded = decodeCanopiDesign(input)
+    expect(decoded.version).toBe(7)
+    expect(decoded.plants[0]!.position).toEqual({ lon: 13.0001, lat: 23.0002 })
+    expect(decoded.zones[0]!.points).toEqual([{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }])
+  })
 
-    expect(decoded.spatial_frame.north_bearing_deg).toBe(270)
-    expect((input.spatial_frame as Record<string, unknown>).north_bearing_deg).toBe(-450)
+  it.each(['location', 'north_bearing_deg', 'spatial_frame'])('rejects obsolete root authority %s', (key) => {
+    const input = currentDesign({ [key]: null })
+    expect(() => decodeCanopiDesign(input)).toThrow(
+      `$.${key}: obsolete root field; v7 stores lon/lat on each design object`,
+    )
+    expectKind(() => decodeCanopiDesign(input), 'invalid_document')
   })
 
   it.each([
     {
-      spatialFrame: confirmedFrame({ anchor_longitude_deg: 180.0001 }),
-      message: '$.spatial_frame.anchor_longitude_deg: expected a number less than or equal to 180',
+      position: { lon: 180.0001, lat: 0 },
+      message: '$.plants[0].position.lon: expected a number less than or equal to 180',
     },
     {
-      spatialFrame: confirmedFrame({ anchor_latitude_deg: 85.0511287798067 }),
-      message: '$.spatial_frame.anchor_latitude_deg: expected a number less than or equal to 85.0511287798066',
+      position: { lon: -180.0001, lat: 0 },
+      message: '$.plants[0].position.lon: expected a number greater than or equal to -180',
     },
     {
-      spatialFrame: confirmedFrame({ anchor_latitude_deg: Number.POSITIVE_INFINITY }),
-      message: '$.spatial_frame.anchor_latitude_deg: expected a finite number',
+      position: { lon: 0, lat: 85.0511287798067 },
+      message: '$.plants[0].position.lat: expected a number less than or equal to 85.0511287798066',
     },
     {
-      spatialFrame: confirmedFrame({ location_metadata: { altitude_m: Number.NaN } }),
-      message: '$.spatial_frame.location_metadata.altitude_m: expected a finite number',
+      position: { lon: 0, lat: -85.0511287798067 },
+      message: '$.plants[0].position.lat: expected a number greater than or equal to -85.0511287798066',
     },
-  ])('rejects invalid spatial-frame numbers', ({ spatialFrame, message }) => {
-    expect(() => decodeCanopiDesign(currentDesign({ spatial_frame: spatialFrame }))).toThrow(message)
+    {
+      position: { lon: 0, lat: Number.POSITIVE_INFINITY },
+      message: '$.plants[0].position.lat: expected a finite number',
+    },
+  ])('rejects out-of-range lon/lat $message', ({ position, message }) => {
+    const input = currentDesign({
+      plants: [{ ...plant('plant-1', 'Malus domestica'), position }],
+    })
+    expect(() => decodeCanopiDesign(input)).toThrow(message)
+    expectKind(() => decodeCanopiDesign(input), 'invalid_document')
   })
 
-  it('rejects invalid placement status', () => {
-    expect(() => decodeCanopiDesign(currentDesign({
-      spatial_frame: confirmedFrame({ placement_status: 'unknown' }),
-    }))).toThrow('$.spatial_frame.placement_status: expected one of "provisional", "confirmed"')
-  })
-
-  it.each(['location', 'north_bearing_deg'])('rejects obsolete root authority %s', (key) => {
-    expect(() => decodeCanopiDesign(currentDesign({ [key]: null }))).toThrow(
-      '$: v6 replaces root location and north_bearing_deg with spatial_frame',
-    )
+  it('rejects local-metre {x, y} positions', () => {
+    const input = currentDesign({
+      plants: [{ ...plant('plant-1', 'Malus domestica'), position: { x: 10, y: 20 } }],
+    })
+    expect(() => decodeCanopiDesign(input)).toThrow(/^\$\.plants\[0\]\.position\.(lon|lat): missing required value$/)
+    expectKind(() => decodeCanopiDesign(input), 'invalid_document')
   })
 
   it('materializes serde defaults and keeps only root unknown fields in extra', () => {
@@ -202,14 +209,13 @@ describe('Canopi Design decoder', () => {
   })
 })
 
-function confirmedFrame(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    anchor_longitude_deg: 2.3522,
-    anchor_latitude_deg: 48.8566,
-    north_bearing_deg: 0,
-    placement_status: 'confirmed',
-    location_metadata: { altitude_m: 35 },
-    ...overrides,
+function expectKind(run: () => unknown, kind: CanopiDesignIngestionError['kind']): void {
+  try {
+    run()
+    expect.fail(`expected ${kind}`)
+  } catch (error) {
+    expect(error).toBeInstanceOf(CanopiDesignIngestionError)
+    expect((error as CanopiDesignIngestionError).kind).toBe(kind)
   }
 }
 
@@ -217,22 +223,15 @@ function plant(id: string, canonicalName: string): Record<string, unknown> {
   return {
     id,
     canonical_name: canonicalName,
-    position: { x: 10, y: 20 },
+    position: { lon: 13.0001, lat: 23.0002 },
   }
 }
 
 function currentDesign(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: 6,
+    version: 7,
     name: 'Garden',
     description: null,
-    spatial_frame: {
-      anchor_longitude_deg: 13,
-      anchor_latitude_deg: 23,
-      north_bearing_deg: 0,
-      placement_status: 'provisional',
-      location_metadata: { altitude_m: null },
-    },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],

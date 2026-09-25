@@ -1,6 +1,4 @@
 import type { CanopiFile } from '../../types/design'
-import type { ReadonlySignal } from '@preact/signals'
-import { cloneSpatialFrame } from '../../spatial-frame'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../plant-spacing-interval'
 import type {
   CanvasPlantLabelSource,
@@ -23,19 +21,6 @@ export interface CanvasRuntimeChromeSettingsSnapshot {
 
 export interface CanvasRuntimeCleanStateAdapter {
   setCanvasClean(clean: boolean): void
-}
-
-export interface CanvasRuntimeCoordinatedHistoryAdapter {
-  readonly revision: ReadonlySignal<number>
-  readonly canUndo: ReadonlySignal<boolean>
-  readonly canRedo: ReadonlySignal<boolean>
-  readonly nextUndoSequence: ReadonlySignal<number | null>
-  readonly nextRedoSequence: ReadonlySignal<number | null>
-  reserveSequence(): number
-  announceBranch(): void
-  subscribeToBranches(onBranch: () => void): () => void
-  undo(): boolean
-  redo(): boolean
 }
 
 export interface CanvasRuntimeDocumentCompositionInput {
@@ -64,6 +49,8 @@ export interface CanvasRuntimeSettingsAdapter {
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
   readPlantSpacingIntervalMeters(): number
+  /** Where a new or empty Design opens: the app's last view, if any. */
+  readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
   commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void
   toggleSnapToGrid(): void
@@ -92,7 +79,6 @@ export type CanvasRuntimeTranslator = (
 
 export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
-  readonly coordinatedHistory?: CanvasRuntimeCoordinatedHistoryAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
   /**
@@ -182,7 +168,6 @@ function composeDetachedCanvasDocument({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? document.spatial_frame),
     consortiums: document.consortiums,
     timeline: document.timeline,
     budget: document.budget,

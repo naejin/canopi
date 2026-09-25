@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { hydrateScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
+import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
+import { hydrateSceneFromDesign, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import type { CanopiFile } from '../types/design'
+import { geoAt } from './support/geo-design'
 
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
 // Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
-  version: 6,
+  version: 7,
   name: 'Round-trip test',
   description: 'A test design',
-  spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
   plant_species_colors: {
     'Quercus robur': '#228833',
     'Malus domestica': '#AA4422',
@@ -30,7 +32,7 @@ const FIXTURE: CanopiFile = {
       color: '#228833',
       symbol: 'square',
       pinned_name: false,
-      position: { x: 100, y: 200 },
+      position: geoAt(100, 200),
       rotation: 45,
       scale: 3.5,
       notes: 'Near the pond',
@@ -44,7 +46,7 @@ const FIXTURE: CanopiFile = {
       common_name: null,
       color: null,
       pinned_name: false,
-      position: { x: -50.5, y: 300.75 },
+      position: geoAt(-50.5, 300.75),
       rotation: null,
       scale: null,
       notes: null,
@@ -58,7 +60,7 @@ const FIXTURE: CanopiFile = {
       name: 'Orchard',
       zone_type: 'planting',
       rotation: 0,
-      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }],
+      points: [geoAt(0, 0), geoAt(100, 0), geoAt(100, 100)],
       fill_color: '#99CC66',
       notes: 'Main orchard area',
       locked: false,
@@ -68,7 +70,7 @@ const FIXTURE: CanopiFile = {
     {
       id: 'ann-1',
       annotation_type: 'text',
-      position: { x: 50, y: 50 },
+      position: geoAt(50, 50),
       text: 'North boundary',
       font_size: 16,
       rotation: -10,
@@ -79,8 +81,8 @@ const FIXTURE: CanopiFile = {
     {
       id: 'measurement-guide-1',
       locked: false,
-      start: { x: -10, y: 5 },
-      end: { x: 25, y: 5 },
+      start: geoAt(-10, 5),
+      end: geoAt(25, 5),
     },
   ],
   groups: [
@@ -100,28 +102,47 @@ const FIXTURE: CanopiFile = {
   budget_currency: 'EUR',
   created_at: '2026-01-15T10:30:00.000Z',
   updated_at: '2026-02-20T14:45:00.000Z',
-  extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }], future_feature: { nested: true, count: 42 } },
+  extra: { guides: [{ id: 'guide-1', axis: 'h', lat: 23.0004 }, { id: 'guide-2', axis: 'v', lon: 12.9997 }], future_feature: { nested: true, count: 42 } },
 }
 
 describe('file format round-trip', () => {
   it('canvas codec round-trips scene-owned entity fields and guide metadata', () => {
     const now = new Date('2026-04-09T12:00:00.000Z')
-    const serialized = serializeScenePersistedState(
-      hydrateScenePersistedState(FIXTURE),
-      { now },
-    )
+    const hydrated = hydrateSceneFromDesign(FIXTURE)
+    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
 
     // updated_at is regenerated from `now`; document-owned metadata is emitted as placeholders.
+    // Unchanged lon/lat positions are written back verbatim.
     expect(serialized.updated_at).toBe(now.toISOString())
     expect(serialized).toEqual({
       ...FIXTURE,
-      version: 6,
+      version: 7,
       name: 'Untitled',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
-      extra: { guides: [{ id: 'guide-1', axis: 'h', position: 42 }] },
+      extra: { guides: [{ id: 'guide-1', axis: 'h', lat: 23.0004 }, { id: 'guide-2', axis: 'v', lon: 12.9997 }] },
     })
+    expect(serialized).not.toHaveProperty('spatial_frame')
+  })
+
+  it('round-trips a serialized v7 Design through JSON and the Design decoder', () => {
+    expect(CURRENT_CANOPI_FILE_VERSION).toBe(7)
+    const hydrated = hydrateSceneFromDesign(FIXTURE)
+    const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, {
+      now: new Date('2026-04-09T12:00:00.000Z'),
+    })
+
+    const decoded = decodeCanopiDesign(JSON.parse(JSON.stringify(serialized)))
+
+    expect(decoded.version).toBe(7)
+    expect(decoded.plants.map((plant) => plant.position)).toEqual(FIXTURE.plants.map((plant) => plant.position))
+    expect(decoded.zones).toEqual(serialized.zones)
+    expect(decoded.annotations).toEqual(serialized.annotations)
+    expect(decoded.measurement_guides).toEqual(serialized.measurement_guides)
+
+    const rehydrated = hydrateSceneFromDesign(decoded)
+    expect(rehydrated.persisted.plants.map((plant) => plant.position))
+      .toEqual(hydrated.persisted.plants.map((plant) => plant.position))
   })
 })

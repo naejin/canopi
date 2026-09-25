@@ -41,6 +41,7 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
 
   get revision(): CanvasQueryRevision { return this.options.revision }
   get viewport(): WorkspaceCameraFrameReader['snapshot'] { return this.options.camera.snapshot }
+  get sessionPlane() { return this.options.sceneStore.sessionPlaneSignal }
   capturePrintSnapshot() {
     void this.options.settledReader.revision.value
     return this.options.settledReader.readWhenSettled(() => {

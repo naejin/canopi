@@ -7,10 +7,12 @@ import {
   type WorkspaceBasemapPresentation,
 } from '../../maplibre/workspace-map'
 import type { WorkspaceActivationSnapshot } from './workspace-activation'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 
 export interface WorkspaceActivationSnapshotReaderOptions {
-  readonly store?: Pick<DesignSessionStore,
-    'hasCurrentDesign' | 'readMetadata' | 'sessionIdentity'>
+  readonly store?: Pick<DesignSessionStore, 'hasCurrentDesign' | 'sessionIdentity'>
+  /** Initial map centre; the runtime's session plane origin in production. */
+  readonly readInitialCenter?: () => { readonly lat: number; readonly lon: number }
   readonly readBasemapStyle?: () => BasemapStyle
   readonly readMapLayerPresentation?: () => {
     readonly layerVisibility: Readonly<Record<string, boolean>>
@@ -18,7 +20,7 @@ export interface WorkspaceActivationSnapshotReaderOptions {
   }
 }
 
-/** Reads only Design-session spatial authority and app settings projections. */
+/** Reads the Design session identity and app settings projections. */
 export function readWorkspaceBasemapPresentation(
   options: WorkspaceActivationSnapshotReaderOptions = {},
 ): WorkspaceBasemapPresentation {
@@ -35,18 +37,13 @@ export function readWorkspaceActivationSnapshot(
 ): WorkspaceActivationSnapshot | null {
   const store = options.store ?? designSessionStore
   if (!store.hasCurrentDesign()) return null
-  const spatialFrame = store.readMetadata().spatialFrame
-  if (!spatialFrame) throw new Error('Current Design is missing its required spatial frame.')
   const presentation = readWorkspaceBasemapPresentation(options)
+  const center = options.readInitialCenter?.()
+    ?? { lat: DEFAULT_NEW_DESIGN_VIEW.lat, lon: DEFAULT_NEW_DESIGN_VIEW.lon }
   return Object.freeze({
     sessionIdentity: store.sessionIdentity.peek(),
     map: Object.freeze({
-      anchor: Object.freeze({
-        lat: spatialFrame.anchor_latitude_deg,
-        lon: spatialFrame.anchor_longitude_deg,
-      }),
-      northBearingDeg: spatialFrame.north_bearing_deg,
-      placementStatus: spatialFrame.placement_status,
+      initialCenter: Object.freeze({ lat: center.lat, lon: center.lon }),
       ...presentation,
     }),
     maximumWorldExtentMeters: undefined,

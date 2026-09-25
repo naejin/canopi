@@ -23,15 +23,6 @@ Read the [design contract](../system.md) first.
 - Primary commands switch workspace; side commands toggle the corresponding panel
 
 
-## Location Workspace
-- Keep the search field and its one placement action together on one row at the upper left of the map.
-- Label the action **Confirm location** for a provisional Design and **Move design here** for a confirmed Design. Disable it until the current map center or pending candidate would change the committed placement.
-- A search result or map click enters a reversible **Selected location** preview. The action commits that candidate; without a preview, it commits the current map center. Escape or leaving Location aborts a preview.
-- A compact bordered status surface at the lower left identifies the provisional, selected, or confirmed location. Provisional copy must state that local Design editing remains available.
-- Show the saved pin only for a confirmed or pending-confirmed frame. Moving a confirmed Design changes its geographic anchor while preserving all local-metre object coordinates.
-- Preserve the map failure overlay while leaving search, actions, status, and Canvas return available.
-
-
 ## Slider Controls
 - Inline layout: value/bound label — track — value/bound label (all one 24px row)
 - Track: 2px `--color-border` line, fill in `--color-primary`

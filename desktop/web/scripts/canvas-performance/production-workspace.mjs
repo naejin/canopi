@@ -6,8 +6,8 @@ import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { processFixture, withTemporaryDerivative } from './fixture-receipt.mjs'
 
-const FIXTURE_EXPECTATIONS = Object.freeze({
-  'expected-sha256': '446c656e12eca21ddf5c03e79cd1f8d7862eae88626c4cb550d55b505d246f40',
+// The representative private v7 Design; its hash is supplied per run with --expected-sha256.
+const FIXTURE_COUNT_EXPECTATIONS = Object.freeze({
   'expected-plants': '2201',
   'expected-zones': '24',
   'expected-annotations': '106',
@@ -152,6 +152,8 @@ function nodeEnvironment() {
   }
 }
 
+let FIXTURE_EXPECTATIONS = FIXTURE_COUNT_EXPECTATIONS
+
 async function verifySourceReceipt(file) {
   try {
     return await processFixture(file, FIXTURE_EXPECTATIONS)
@@ -209,11 +211,11 @@ async function runBrowserScenario({ browser, base, scenario, file, dpr, profileW
       setup = await page.evaluate(async ({ sourceFile: unpreparedFile, base: baseHref, forceCanvas2d, warmupFrames, frameSamples, inputSamples, profileWork }) => {
       const source = (name) => new URL(`src/${name}`, baseHref).href
       await import(source('styles/global.css'))
-      const [{ createWorkspaceRuntimeComposition }, { createDetachedCanvasRuntimeAppAdapter }, { createDetachedSceneRuntimePanelTargetAdapter }, { newDesignSpatialFrame }, { loadMapLibreModule }, basemap, sharedScene] = await Promise.all([
+      const [{ createWorkspaceRuntimeComposition }, { createDetachedCanvasRuntimeAppAdapter }, { createDetachedSceneRuntimePanelTargetAdapter }, { CURRENT_CANOPI_FILE_VERSION }, { loadMapLibreModule }, basemap, sharedScene] = await Promise.all([
         import(source('app/canvas-map-surface/workspace-runtime-composition.ts')),
         import(source('canvas/runtime/app-adapter.ts')),
         import(source('canvas/runtime/scene-runtime/panel-target-adapter.ts')),
-        import(source('spatial-frame.ts')),
+        import(source('generated/canopi-design-format.ts')),
         import(source('maplibre/loader.ts')),
         import(source('maplibre/config.ts')),
         import(source('maplibre/shared-scene-layer.ts')),
@@ -543,18 +545,11 @@ async function runBrowserScenario({ browser, base, scenario, file, dpr, profileW
         : null
       const instrumentation = installHarnessInstrumentation(await loadMapLibreModule(), container, workProfiler)
       const file = structuredClone(unpreparedFile)
-      if (file.version !== 5) {
+      if (file.version !== CURRENT_CANOPI_FILE_VERSION) {
         instrumentation.restore()
-        throw new Error('representative fixture must be v5')
+        throw new Error('representative fixture must be the current format')
       }
-      // Development harness preparation only: retain all v5 fields and add the v6 spatial contract.
-      file.version = 6
-      file.spatial_frame = newDesignSpatialFrame()
-      const frame = file.spatial_frame
-      const map = Object.freeze({
-        anchor: Object.freeze({ lat: frame.anchor_latitude_deg, lon: frame.anchor_longitude_deg }),
-        northBearingDeg: frame.north_bearing_deg,
-        placementStatus: frame.placement_status,
+      const mapPresentation = Object.freeze({
         basemapStyle: 'street',
         basemapVisible: false,
         basemapOpacity: 1,
@@ -579,7 +574,10 @@ async function runBrowserScenario({ browser, base, scenario, file, dpr, profileW
           appAdapter: createDetachedCanvasRuntimeAppAdapter(),
           targetPresentation: createDetachedSceneRuntimePanelTargetAdapter(),
           mapContributions: { read: () => null },
-          readSnapshot: () => Object.freeze({ sessionIdentity, map }),
+          readSnapshot: (readInitialCenter) => Object.freeze({
+            sessionIdentity,
+            map: Object.freeze({ initialCenter: readInitialCenter(), ...mapPresentation }),
+          }),
           readBasemapPresentation: () => ({ basemapStyle: 'street', basemapVisible: false, basemapOpacity: 1 }),
         })
         // Load through the public document surface before admission, as an edition does.
@@ -955,8 +953,11 @@ async function main() {
     dpr: { type: 'string', default: '1' },
     headed: { type: 'boolean', default: false },
     'profile-work': { type: 'boolean', default: false },
+    'expected-sha256': { type: 'string' },
   } })
   if (!values.file) throw new Error('missing fixture')
+  if (!values['expected-sha256']) throw new Error('missing --expected-sha256 for the fixture')
+  FIXTURE_EXPECTATIONS = Object.freeze({ ...FIXTURE_COUNT_EXPECTATIONS, 'expected-sha256': values['expected-sha256'] })
   const base = assertLocalUrl(values.url)
   const dpr = parseDeviceScaleFactor(values.dpr)
   const scenarios = parseScenario(values.scenario)

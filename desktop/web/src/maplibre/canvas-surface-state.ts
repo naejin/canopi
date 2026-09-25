@@ -1,5 +1,4 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
-import { createProjectionPrecisionSnapshot } from '../canvas/projection'
 
 export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -8,43 +7,13 @@ export interface MapLibreCanvasSurfaceState {
   readonly errorMessage: string | null
   readonly terrainStatus: MapLibreCanvasSurfaceStatus
   readonly terrainErrorMessage: string | null
-  readonly precisionWarning: boolean
-  readonly designExtentMeters: number | null
 }
-
-export type MapLibreCanvasSurfaceStateInput = Omit<
-  MapLibreCanvasSurfaceState,
-  'precisionWarning' | 'designExtentMeters'
->
 
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   status: 'idle',
   errorMessage: null,
   terrainStatus: 'idle',
   terrainErrorMessage: null,
-  precisionWarning: false,
-  designExtentMeters: null,
-}
-
-export function precisionSnapshot(designExtentMeters: number | null): Pick<
-  MapLibreCanvasSurfaceState,
-  'precisionWarning' | 'designExtentMeters'
-> {
-  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
-  return {
-    precisionWarning: precision.precisionWarning,
-    designExtentMeters: precision.designExtentMeters,
-  }
-}
-
-export function mergeMapLibreCanvasSurfaceState(
-  next: MapLibreCanvasSurfaceStateInput,
-  designExtentMeters: number | null,
-): MapLibreCanvasSurfaceState {
-  return {
-    ...next,
-    ...precisionSnapshot(designExtentMeters),
-  }
 }
 
 export function mapLibreCanvasSurfaceStateEquals(
@@ -56,28 +25,19 @@ export function mapLibreCanvasSurfaceStateEquals(
     && left.errorMessage === right.errorMessage
     && left.terrainStatus === right.terrainStatus
     && left.terrainErrorMessage === right.terrainErrorMessage
-    && left.precisionWarning === right.precisionWarning
-    && left.designExtentMeters === right.designExtentMeters
   )
 }
 
-export function publishMapDiagnostics(
-  frame: MapFrame | null,
-  designExtentMeters: number | null,
-): void {
+export function publishMapDiagnostics(frame: MapFrame | null): void {
   if (!import.meta.env.DEV) return
-  const precision = createProjectionPrecisionSnapshot(designExtentMeters)
   ;(globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__ = frame
     ? {
-      projectionId: precision.projectionId,
-      precisionWarningThresholdMeters: precision.warningThresholdMeters,
+      projectionId: frame.diagnostics.projectionId,
       center: frame.center,
       zoom: frame.zoom,
       bearing: frame.bearing,
       viewportCenterWorld: frame.diagnostics.viewportCenterWorld,
       viewportCornerGeo: frame.diagnostics.viewportCornerGeo,
-      designExtentMeters: precision.designExtentMeters,
-      precisionWarning: precision.precisionWarning,
     }
     : null
 }

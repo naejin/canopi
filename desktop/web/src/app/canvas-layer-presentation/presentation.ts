@@ -1,5 +1,4 @@
 import { activeLayerName, contourIntervalMeters, hillshadeOpacity, hillshadeVisible, layerLockState, layerOpacity, layerVisibility } from '../canvas-settings/signals'
-import { readSavedLocationPresentation } from '../location/model'
 import { mutateSettingsProjection } from '../settings/projection'
 import { getCurrentCanvasLayerCommandSurface, currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
@@ -11,21 +10,12 @@ export type CanvasLayerPresentationAuthority = 'scene' | 'map-settings' | 'terra
 
 export type CanvasLayerPresentationDetail =
   | { readonly type: 'scene' }
-  | {
-      readonly type: 'location-map'
-      readonly hasLocation: boolean
-      readonly locationSummary: string | null
-      readonly opacityDisabled: boolean
-    }
+  | { readonly type: 'basemap' }
   | {
       readonly type: 'contours'
-      readonly hasLocation: boolean
       readonly contourIntervalMeters: number
     }
-  | {
-      readonly type: 'hillshade'
-      readonly hasLocation: boolean
-    }
+  | { readonly type: 'hillshade' }
 
 export interface CanvasLayerPresentationRow {
   readonly id: string
@@ -63,7 +53,6 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
   const runtime = currentCanvasQuerySurface.value
   void runtime?.revision.scene.value
   const scene = runtime?.getSceneSnapshot()
-  const savedLocation = readSavedLocationPresentation()
   const visibility = layerVisibility.value
   const locks = layerLockState.value
   const opacities = layerOpacity.value
@@ -96,10 +85,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
       locked: false,
       canLock: false,
       detail: {
-        type: 'location-map',
-        hasLocation: savedLocation.hasLocation,
-        locationSummary: savedLocation.summary,
-        opacityDisabled: !savedLocation.hasLocation,
+        type: 'basemap',
       },
     },
     {
@@ -113,7 +99,6 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
       canLock: false,
       detail: {
         type: 'contours',
-        hasLocation: savedLocation.hasLocation,
         contourIntervalMeters: contourIntervalMeters.value,
       },
     },
@@ -126,7 +111,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
       opacity: hillshadeOpacity.value,
       locked: false,
       canLock: false,
-      detail: { type: 'hillshade', hasLocation: savedLocation.hasLocation },
+      detail: { type: 'hillshade' },
     },
   ]
 

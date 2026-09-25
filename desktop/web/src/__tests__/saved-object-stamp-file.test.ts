@@ -6,13 +6,28 @@ import {
   savedObjectStampPayloadFromCanopiFile,
 } from '../app/saved-object-stamps/file'
 import type { CanopiFile } from '../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
+import { roundGeoPosition } from '../canvas/runtime/scene'
+import { createSessionPlane } from '../canvas/session-plane'
+import { geoAt } from './support/geo-design'
+
+// Portable stamp files place the arrangement around 0°/0°.
+const stampPlane = createSessionPlane({ lon: 0, lat: 0 })
+
+function stampGeo(x: number, y: number) {
+  return roundGeoPosition(stampPlane.toGeo({ x, y }))
+}
+
+function expectPointNear(actual: { x: number; y: number } | undefined, expected: { x: number; y: number }) {
+  expect(actual?.x).toBeCloseTo(expected.x, 3)
+  expect(actual?.y).toBeCloseTo(expected.y, 3)
+}
 
 function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Imported guild',
     description: 'Do not import this as stamp metadata',
-    spatial_frame: { anchor_longitude_deg: 3, anchor_latitude_deg: 45, north_bearing_deg: 15, placement_status: 'confirmed', location_metadata: { altitude_m: 20 } },
     plant_species_colors: { 'Malus domestica': '#112233' },
     plant_species_symbols: { 'Malus domestica': 'canopy' },
     layers: [
@@ -30,7 +45,7 @@ function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget_currency: 'USD',
     created_at: '2026-06-01T00:00:00.000Z',
     updated_at: '2026-06-02T00:00:00.000Z',
-    extra: { guides: [{ axis: 'h', position: 10 }] },
+    extra: { guides: [{ id: 'guide-1', axis: 'h', lat: 23 }] },
     ...overrides,
   }
 }
@@ -83,11 +98,11 @@ describe('Saved Object Stamp file composition', () => {
       now: new Date('2026-06-19T12:00:00.000Z'),
     })
 
+    expect(file).not.toHaveProperty('spatial_frame')
     expect(file).toMatchObject({
-      version: 6,
+      version: CURRENT_CANOPI_FILE_VERSION,
       name: 'Apple guild',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       consortiums: [],
@@ -111,7 +126,7 @@ describe('Saved Object Stamp file composition', () => {
       color: '#C44230',
       symbol: 'canopy',
       pinned_name: false,
-      position: { x: 10, y: 20 },
+      position: stampGeo(10, 20),
       rotation: 15,
       scale: 2,
       notes: null,
@@ -122,7 +137,7 @@ describe('Saved Object Stamp file composition', () => {
       name: 'Kitchen bed',
       locked: false,
       zone_type: 'polygon',
-      points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
+      points: [stampGeo(0, 0), stampGeo(4, 0), stampGeo(4, 4)],
       rotation: 5,
       fill_color: '#D8B35A',
       notes: null,
@@ -131,7 +146,7 @@ describe('Saved Object Stamp file composition', () => {
       id: 'annotation-source',
       locked: false,
       annotation_type: 'text',
-      position: { x: 12, y: 18 },
+      position: stampGeo(12, 18),
       text: 'Guild edge',
       font_size: 14,
       rotation: 10,
@@ -190,7 +205,7 @@ describe('Saved Object Stamp file composition', () => {
         common_name: 'Apple',
         color: '#C44230',
         symbol: 'canopy',
-        position: { x: 10, y: 20 },
+        position: geoAt(10, 20),
         rotation: 30,
         scale: 2,
         notes: 'nursery note',
@@ -201,7 +216,7 @@ describe('Saved Object Stamp file composition', () => {
         name: 'Hidden bed',
         locked: false,
         zone_type: 'polygon',
-        points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
+        points: [geoAt(0, 0), geoAt(4, 0), geoAt(4, 4)],
         rotation: 0,
         fill_color: '#D8B35A',
         notes: 'hidden zone note',
@@ -210,7 +225,7 @@ describe('Saved Object Stamp file composition', () => {
         id: 'note-1',
         locked: true,
         annotation_type: 'text',
-        position: { x: 14, y: 16 },
+        position: geoAt(14, 16),
         text: 'Guild edge',
         font_size: 14,
         rotation: 10,
@@ -227,16 +242,21 @@ describe('Saved Object Stamp file composition', () => {
       }],
     }))
 
+    // Import reads the file through a plane centred on all of its objects
+    // (authored x 0..14, y 0..20), so metres are relative to (7, 10).
+    expectPointNear(payload?.anchor, { x: 5, y: 8 })
+    expectPointNear(payload?.plants[0]?.position, { x: 3, y: 10 })
+    expectPointNear(payload?.annotations[0]?.position, { x: 7, y: 6 })
     expect(payload).toEqual({
       version: 1,
-      anchor: { x: 12, y: 18 },
+      anchor: expect.any(Object),
       plants: [{
         id: 'source-plant',
         canonicalName: 'Malus domestica',
         commonName: 'Apple',
         color: '#C44230',
         symbol: 'canopy',
-        position: { x: 10, y: 20 },
+        position: expect.any(Object),
         rotationDeg: 30,
         scale: 2,
       }],
@@ -244,7 +264,7 @@ describe('Saved Object Stamp file composition', () => {
       annotations: [{
         id: 'note-1',
         annotationType: 'text',
-        position: { x: 14, y: 16 },
+        position: expect.any(Object),
         text: 'Guild edge',
         fontSize: 14,
         rotationDeg: 10,
@@ -270,7 +290,7 @@ describe('Saved Object Stamp file composition', () => {
         common_name: 'Apple',
         color: null,
         symbol: null,
-        position: { x: 10, y: 20 },
+        position: geoAt(10, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -337,19 +357,41 @@ describe('Saved Object Stamp file composition', () => {
 
   it('imports Elliptical Zone anchors from visible bounds instead of radii coordinates', () => {
     const payload = savedObjectStampPayloadFromCanopiFile(canopiFile({
-      layers: [{ name: 'zones', visible: true, locked: false, opacity: 1 }],
+      layers: [
+        { name: 'plants', visible: false, locked: false, opacity: 1 },
+        { name: 'zones', visible: true, locked: false, opacity: 1 },
+      ],
+      // A hidden plant still frames the file, placing the plane origin at (55, 53).
+      plants: [{
+        id: 'hidden-plant',
+        locked: false,
+        canonical_name: 'Malus domestica',
+        common_name: null,
+        color: null,
+        position: geoAt(0, 0),
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: null,
+      }],
+      // Ellipses are stored as the corners of their unrotated bounding box:
+      // centre (100, 100), radii (10, 6).
       zones: [{
         name: 'Pond edge',
         locked: false,
         zone_type: 'ellipse',
-        points: [{ x: 100, y: 100 }, { x: 10, y: 6 }],
+        points: [geoAt(90, 94), geoAt(110, 106)],
         rotation: 0,
         fill_color: null,
         notes: null,
       }],
     }))
 
-    expect(payload?.anchor).toEqual({ x: 100, y: 100 })
+    expect(payload?.plants).toEqual([])
+    expectPointNear(payload?.zones[0]?.points[0], { x: 45, y: 47 })
+    expectPointNear(payload?.zones[0]?.points[1], { x: 10, y: 6 })
+    expectPointNear(payload?.anchor, { x: 45, y: 47 })
   })
 
   it('rejects empty imports and falls back to a composition name when the file name is blank', () => {
@@ -367,7 +409,7 @@ describe('Saved Object Stamp file composition', () => {
         name: 'Bed',
         locked: true,
         zone_type: 'rect',
-        points: [{ x: 0, y: 0 }, { x: 4, y: 4 }],
+        points: [geoAt(0, 0), geoAt(4, 4)],
         rotation: 0,
         fill_color: null,
         notes: null,

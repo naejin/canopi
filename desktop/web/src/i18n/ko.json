@@ -163,12 +163,9 @@
     "overview": {
       "label": "개요",
       "zoomInToEdit": "편집하려면 확대하세요",
-      "provisional": "임시 디자인 위치 · 편집하려면 확대하세요",
       "returnToDesign": "디자인으로 돌아가기",
       "design": "디자인",
-      "provisionalDesign": "임시 디자인",
-      "designMarker": "디자인으로 돌아가기",
-      "provisionalMarker": "임시 디자인으로 돌아가기"
+      "designMarker": "디자인으로 돌아가기"
     },
     "plantColor": {
       "label": "식물 색상",
@@ -216,25 +213,10 @@
       "applySelection": "선택한 {{count}}개에 적용"
     },
     "location": {
-      "title": "설계 위치",
-      "confirm": "위치 확인",
-      "move": "설계를 여기로 이동",
-      "current": "현재",
       "searchPlaceholder": "위치 검색...",
       "searching": "검색 중...",
       "noResults": "결과 없음",
-      "geocodeError": "지오코딩 실패",
-      "mapUnavailable": "지도를 사용할 수 없음",
-      "provisionalTitle": "임시 사이트",
-      "provisionalBody": "로컬 편집을 사용할 수 있습니다. 사이트별 평가 전에 사이트를 확인하세요.",
-      "confirmedTitle": "확인된 사이트",
-      "selectedTitle": "선택한 위치",
-      "coordinates": "좌표",
-      "latitude": "위도",
-      "longitude": "경도",
-      "preview": "미리보기",
-      "cancel": "취소",
-      "invalidCoordinates": "위도는 -85.051129에서 85.051129 사이, 경도는 -180에서 180 사이로 입력하세요."
+      "geocodeError": "지오코딩 실패"
     },
     "file": {
       "new": "새 설계",
@@ -266,7 +248,6 @@
       "basemap": "기본 지도",
       "basemapLoading": "기본 지도를 불러오는 중...",
       "basemapError": "기본 지도를 사용할 수 없습니다",
-      "precisionWarning": "큰 설계에서는 정밀도가 떨어질 수 있습니다",
       "references": "부지 참조",
       "sceneStack": "설계 레이어",
       "topToBottom": "위에서 아래로",

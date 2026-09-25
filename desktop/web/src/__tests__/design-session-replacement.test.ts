@@ -10,6 +10,7 @@ import {
 import { SceneHistory } from "../canvas/runtime/scene-history";
 import { SceneStore } from "../canvas/runtime/scene";
 import { SceneRuntimeEditCoordinator } from "../canvas/runtime/scene-runtime/transactions";
+import { geoAt } from "./support/geo-design";
 import type { CanopiFile } from "../types/design";
 import {
   editDesignSessionForTest,
@@ -437,7 +438,7 @@ describe("Design Session replacement", () => {
       canonical_name: "Malus domestica",
       common_name: "Apple",
       color: null,
-      position: { x: 10, y: 10 },
+      position: geoAt(10, 10),
       rotation: null,
       scale: null,
       notes: null,
@@ -815,10 +816,9 @@ function makeCanvas(events: string[]): CanvasDocumentSurface {
 
 function makeFile(name: string): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name,
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],

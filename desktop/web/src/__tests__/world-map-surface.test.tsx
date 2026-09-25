@@ -158,7 +158,7 @@ function template(id: string, lon: number, lat: number): TemplateMeta {
     title: `Template ${id}`,
     author: 'Canopi',
     description: '',
-    location: { lon, lat, altitude_m: null },
+    location: { lon, lat },
     plant_count: 12,
     climate_zone: 'temperate',
     tags: [],

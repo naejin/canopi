@@ -31,7 +31,9 @@ describe('plant spacing across scene reads', () => {
     store.updatePersisted((draft) => { draft.plants[0]!.color = '#ffffff' })
     expect(spacing()).toBe(5)
     store.hydrate(createStore().toCanopiFile())
-    expect(spacing()).toBe(3)
+    // Hydration re-centres the plane on the plants; saved lon/lat is rounded to 1e-9°.
+    const [first] = store.persisted.plants
+    expect(nearestPlantSpacing(store.persisted.plants, first!.position)).toBeCloseTo(3, 3)
   })
 
   it('owns cached coordinates and preserves defensive scene ownership', () => {

@@ -23,6 +23,7 @@ import {
 } from '../maplibre/workspace-camera'
 import {
   SceneStore,
+  roundGeoPosition,
   type SceneAnnotationEntity,
   type SceneDesignObjectTarget,
   type SceneMeasurementGuideEntity,
@@ -53,6 +54,11 @@ import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from './support/scene-interaction-events'
+
+/** The canonical lon/lat a changed plane position serializes to. */
+function storedGeo(store: SceneStore, point: { x: number; y: number }) {
+  return roundGeoPosition(store.sessionPlane.toGeo(point))
+}
 
 function createPlantPresentationContext(viewportScale: number) {
   return {
@@ -986,9 +992,7 @@ describe('SceneInteractionSession', () => {
     const map = new AttachedInteractionMap()
     expect(attachedCamera.attach({
       map,
-      anchor: { lat: 48.8566, lon: 2.3522 },
-      northBearingDeg: 0,
-      hasConfirmedGeography: true,
+      readOrigin: () => ({ lat: 48.8566, lon: 2.3522 }),
     })).toBe(true)
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
@@ -6586,8 +6590,8 @@ describe('SceneInteractionSession', () => {
       rotation: 0,
       locked: false,
       points: [
-        { x: 10, y: 20 },
-        { x: 40, y: 60 },
+        storedGeo(store, { x: 10, y: 20 }),
+        storedGeo(store, { x: 40, y: 60 }),
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-line')
@@ -6703,9 +6707,10 @@ describe('SceneInteractionSession', () => {
       zone_type: 'ellipse',
       rotation: 0,
       locked: false,
+      // Files store the opposite corners of the unrotated bounding box.
       points: [
-        { x: 40, y: 60 },
-        { x: 30, y: 40 },
+        storedGeo(store, { x: 10, y: 20 }),
+        storedGeo(store, { x: 70, y: 100 }),
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-ellipse')
@@ -6994,9 +6999,9 @@ describe('SceneInteractionSession', () => {
       rotation: 0,
       locked: false,
       points: [
-        { x: 10, y: 10 },
-        { x: 60, y: 10 },
-        { x: 60, y: 50 },
+        storedGeo(store, { x: 10, y: 10 }),
+        storedGeo(store, { x: 60, y: 10 }),
+        storedGeo(store, { x: 60, y: 50 }),
       ],
     })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-polygon')

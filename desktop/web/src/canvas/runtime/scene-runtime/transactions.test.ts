@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { designSessionFixture } from '../../../__tests__/support/design-session-state'
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt, hydratedScene } from '../../../__tests__/support/geo-design'
 import { selectedObjectIds } from '../../session-state'
 import {
   CanvasDocumentReplacementNotAdmittedError,
@@ -19,10 +21,9 @@ import {
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Transaction demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -34,7 +35,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: geoAt(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -47,7 +48,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Pyrus communis',
         common_name: 'Pear',
         color: null,
-        position: { x: 30, y: 30 },
+        position: geoAt(30, 30),
         rotation: null,
         scale: null,
         notes: null,
@@ -67,6 +68,18 @@ function makeFile(): CanopiFile {
     updated_at: '2026-04-02T00:00:00.000Z',
     extra: {},
   }
+}
+
+// Hydration centres the session plane on the Design's objects, so compare
+// against the metres the runtime hydrates rather than the authored ones.
+function plantStart(index: number) {
+  return hydratedScene(makeFile()).plants[index]!.position
+}
+
+function movedFirstPlant(x: number, y: number) {
+  const file = makeFile()
+  file.plants[0]!.position = geoAt(x, y)
+  return hydratedScene(file).plants[0]!.position
 }
 
 function createHarness() {
@@ -125,7 +138,7 @@ describe('scene edit transactions', () => {
 
     sceneEdits.undo()
 
-    expect(sceneStore.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(sceneStore.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(history.canUndo.value).toBe(false)
     expect(history.canRedo.value).toBe(true)
 
@@ -172,7 +185,7 @@ describe('scene edit transactions', () => {
     tx.abort()
 
     expect(sceneStore.persisted.plants).toHaveLength(2)
-    expect(sceneStore.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(sceneStore.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(sceneStore.persisted.plants[0]?.locked).toBe(true)
     expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
@@ -230,12 +243,7 @@ describe('Scene Edit single-writer admission', () => {
       name: 'shared-id',
       zone_type: 'rect',
       rotation: 0,
-      points: [
-        { x: 0, y: 0 },
-        { x: 5, y: 0 },
-        { x: 5, y: 5 },
-        { x: 0, y: 5 },
-      ],
+      points: [geoAt(0, 0), geoAt(5, 0), geoAt(5, 5), geoAt(0, 5)],
       fill_color: null,
       notes: null,
       locked: false,
@@ -336,7 +344,7 @@ describe('Scene Edit single-writer admission', () => {
 
     expect(() => active.abort()).toThrow('selection restore failed')
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-2' }])
     const blockedEdit = vi.fn()
     expect(coordinator.run('delete-selected', blockedEdit)).toBe(false)
@@ -346,7 +354,7 @@ describe('Scene Edit single-writer admission', () => {
 
     active.abort()
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     const next = coordinator.begin('interaction-rotation')
     next.abort()
@@ -364,7 +372,7 @@ describe('Scene Edit single-writer admission', () => {
 
     active.abort()
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.hoveredTarget).toEqual({ kind: 'plant', id: 'plant-2' })
   })
 
@@ -391,7 +399,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(store.persisted.plants[0]?.position).toEqual({ x: 99, y: 99 })
     expect(coordinator.canUndo.value).toBe(true)
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.undo()).toBe(false)
   })
 
@@ -432,7 +440,7 @@ describe('Scene Edit single-writer admission', () => {
       })
     })).toThrow('history rejected before acceptance')
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(history.canUndo.value).toBe(false)
   })
 
@@ -540,10 +548,10 @@ describe('Scene Edit single-writer admission', () => {
     expect(nextEdit).toHaveBeenCalledOnce()
     expect(store.persisted.plants[1]?.position).toEqual({ x: 77, y: 88 })
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[1]?.position).toEqual({ x: 30, y: 30 })
+    expect(store.persisted.plants[1]?.position).toEqual(plantStart(1))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.undo()).toBe(false)
   })
 
@@ -691,7 +699,7 @@ describe('Scene Edit single-writer admission', () => {
       })
       throw new Error('edit failed')
     })).toThrow('could not be settled')
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
 
     const duplicateEdit = vi.fn()
     expect(() => coordinator.run('projection-abort', duplicateEdit)).toThrow('edit failed')
@@ -725,7 +733,7 @@ describe('Scene Edit single-writer admission', () => {
       throw new Error('edit failed')
     })).toThrow('edit failed')
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(coordinator.run('after-abort', (tx) => {
       tx.mutate((draft) => {
@@ -763,7 +771,7 @@ describe('Scene Edit single-writer admission', () => {
     const quarantinedEdit = vi.fn()
     expect(() => coordinator.run('blocked-during-abort', quarantinedEdit)).toThrow('edit failed')
     expect(quarantinedEdit).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.selectedTargets).toEqual([{ kind: 'plant', id: 'plant-1' }])
     expect(coordinator.run('after-abort', (tx) => {
       tx.mutate((draft) => {
@@ -815,7 +823,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(coordinator.run('blocked-during-undo', blockedUndo)).toBe(false)
     expect(blockedUndo).not.toHaveBeenCalled()
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(store.session.selectedTargets).toEqual([])
 
     selectionFailures = 1
@@ -850,7 +858,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(coordinator.run('blocked-during-undo', blockedUndo)).toBe(false)
     expect(blockedUndo).not.toHaveBeenCalled()
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.undo()).toBe(false)
 
     invalidationFailures = 1
@@ -887,7 +895,7 @@ describe('Scene Edit single-writer admission', () => {
     expect(blocked).not.toHaveBeenCalled()
 
     expect(coordinator.undo()).toBe(true)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.undo()).toBe(false)
     expect(coordinator.redo()).toBe(true)
     expect(store.persisted.plants[0]?.position).toEqual({ x: 44, y: 55 })
@@ -918,7 +926,7 @@ describe('Scene Edit single-writer admission', () => {
 
     expect(reenteredResult).toBe(false)
     expect(revisionCount).toBe(2)
-    expect(harness.store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(harness.store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.undo()).toBe(false)
   })
 
@@ -1147,7 +1155,7 @@ describe('Settled Scene presentation maintenance', () => {
     active.abort()
 
     expect(store.persisted.plants[0]).toMatchObject({
-      position: { x: 10, y: 10 },
+      position: plantStart(0),
       stratum: 'canopy',
       canopySpreadM: 4,
     })
@@ -1171,7 +1179,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     expect(coordinator.undo()).toBe(true)
     expect(store.persisted.plants[0]).toMatchObject({
-      position: { x: 10, y: 10 },
+      position: plantStart(0),
       stratum: null,
     })
   })
@@ -1250,13 +1258,13 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness()
     const ticket = coordinator.issueTicket()
     const next = makeFile()
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
 
     coordinator.hydrate(next)
 
     expect(coordinator.applyBackfills(ticket, appleBackfill)).toBe('stale')
     expect(store.persisted.plants[0]).toMatchObject({
-      position: { x: 55, y: 66 },
+      position: movedFirstPlant(55, 66),
       stratum: null,
     })
   })
@@ -1273,7 +1281,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     expect(coordinator.undo()).toBe(true)
     expect(store.persisted.plants[0]).toMatchObject({
-      position: { x: 10, y: 10 },
+      position: plantStart(0),
       stratum: 'canopy',
       canopySpreadM: 4,
     })
@@ -1532,7 +1540,7 @@ describe('Settled Scene presentation maintenance', () => {
       .toThrow('backfill invalidation failed')
     const next = makeFile()
     next.name = 'After retained backfill publication'
-    next.plants[0]!.position = { x: 77, y: 88 }
+    next.plants[0]!.position = geoAt(77, 88)
     const prepare = vi.fn()
     const replacementToken = createCanvasDocumentReplacementToken()
 
@@ -1546,7 +1554,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     coordinator.replaceDocument(next, { token: replacementToken, prepare })
     expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 77, y: 88 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
   })
 
   it('drains backfills that arrive after content acceptance before releasing a retried commit', () => {
@@ -1688,11 +1696,11 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness({ history })
     const ticket = coordinator.issueTicket()
     const next = makeFile()
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
     cleanStateFailures = 1
 
     expect(() => coordinator.hydrate(next)).toThrow('clean-state publication failed')
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     expect(coordinator.applyBackfills(ticket, appleBackfill)).toBe('stale')
     const blocked = vi.fn()
     expect(coordinator.run('blocked-during-hydration', blocked)).toBe(false)
@@ -1746,7 +1754,7 @@ describe('Settled Scene presentation maintenance', () => {
     })
     const next = makeFile()
     next.name = 'Finalizer-safe hydration'
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
     const syncDocumentSignals = vi.fn(() => {
       stageCalls.documentSignals += 1
     })
@@ -1768,7 +1776,7 @@ describe('Settled Scene presentation maintenance', () => {
       finalizeReplacement: originalFinalizer,
     }))
       .toThrow('replacement finalizer failed')
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     const blocked = vi.fn()
     expect(coordinator.run('blocked-during-finalizer', blocked)).toBe(false)
     expect(blocked).not.toHaveBeenCalled()
@@ -1802,10 +1810,10 @@ describe('Settled Scene presentation maintenance', () => {
     })
     const first = makeFile()
     first.name = 'First reserved replacement'
-    first.plants[0]!.position = { x: 66, y: 77 }
+    first.plants[0]!.position = geoAt(66, 77)
     const competing = makeFile()
     competing.name = 'Competing replacement'
-    competing.plants[0]!.position = { x: 88, y: 99 }
+    competing.plants[0]!.position = geoAt(88, 99)
     const firstToken = createCanvasDocumentReplacementToken()
     const competingToken = createCanvasDocumentReplacementToken()
     const competingPrepare = vi.fn(() => active.abort())
@@ -1821,7 +1829,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     expect(firstPrepare).toHaveBeenCalledOnce()
     expect(competingPrepare).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 66, y: 77 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(66, 77))
     expect(coordinator.run('after-reserved-replacement', (tx) => {
       tx.mutate((draft) => {
         draft.plants[1]!.position = { x: 31, y: 32 }
@@ -1879,7 +1887,7 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
     next.name = 'Rejected before hydration'
-    next.plants[0]!.position = { x: 77, y: 88 }
+    next.plants[0]!.position = geoAt(77, 88)
     const preparationError = new Error('replacement preparation failed')
     let rejection: unknown
 
@@ -1896,7 +1904,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     expect(rejection).toBeInstanceOf(CanvasDocumentReplacementNotAdmittedError)
     expect(rejection).toMatchObject({ reason: preparationError })
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
     expect(coordinator.run('edit-after-rejection', (tx) => {
       tx.mutate((draft) => {
         draft.plants[0]!.position = { x: 44, y: 55 }
@@ -1922,7 +1930,7 @@ describe('Settled Scene presentation maintenance', () => {
     })).toThrow('could not be settled')
     const next = makeFile()
     next.name = 'After retained immediate'
-    next.plants[0]!.position = { x: 77, y: 88 }
+    next.plants[0]!.position = geoAt(77, 88)
     const prepare = vi.fn()
     const replacementToken = createCanvasDocumentReplacementToken()
 
@@ -1933,7 +1941,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     coordinator.replaceDocument(next, { token: replacementToken, prepare })
     expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 77, y: 88 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
   })
 
   it('settles and quarantines a retained history replay before replacing on retry', () => {
@@ -1955,18 +1963,18 @@ describe('Settled Scene presentation maintenance', () => {
     expect(() => coordinator.undo()).toThrow('history publication failed')
     const next = makeFile()
     next.name = 'After retained history'
-    next.plants[0]!.position = { x: 77, y: 88 }
+    next.plants[0]!.position = geoAt(77, 88)
     const prepare = vi.fn()
     const replacementToken = createCanvasDocumentReplacementToken()
 
     expect(() => coordinator.replaceDocument(next, { token: replacementToken, prepare }))
       .toThrowError(SceneEditBusyError)
     expect(prepare).not.toHaveBeenCalled()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 10, y: 10 })
+    expect(store.persisted.plants[0]?.position).toEqual(plantStart(0))
 
     coordinator.replaceDocument(next, { token: replacementToken, prepare })
     expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 77, y: 88 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
   })
 
   it('settles and quarantines a retained long-lived commit before replacing on retry', () => {
@@ -1986,7 +1994,7 @@ describe('Settled Scene presentation maintenance', () => {
     expect(() => active.commit()).toThrow('long-lived publication failed')
     const next = makeFile()
     next.name = 'After retained gesture commit'
-    next.plants[0]!.position = { x: 77, y: 88 }
+    next.plants[0]!.position = geoAt(77, 88)
     const prepare = vi.fn()
     const replacementToken = createCanvasDocumentReplacementToken()
 
@@ -1997,7 +2005,7 @@ describe('Settled Scene presentation maintenance', () => {
 
     coordinator.replaceDocument(next, { token: replacementToken, prepare })
     expect(prepare).toHaveBeenCalledOnce()
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 77, y: 88 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(77, 88))
   })
 
   it('resumes hydration when a retry supplies equivalent normalized document data', () => {
@@ -2013,12 +2021,12 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness({ history })
     const next = makeFile()
     next.name = 'Equivalent hydration retry'
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
 
     expect(() => coordinator.hydrate(next)).toThrow('clean-state publication failed')
     coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     expect(coordinator.run('after-equivalent-hydration', (tx) => {
       tx.mutate((draft) => {
         draft.plants[1]!.position = { x: 31, y: 32 }
@@ -2039,10 +2047,10 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness({ history })
     const accepted = makeFile()
     accepted.name = 'Accepted hydration'
-    accepted.plants[0]!.position = { x: 55, y: 66 }
+    accepted.plants[0]!.position = geoAt(55, 66)
     const competing = makeFile()
     competing.name = 'Competing hydration'
-    competing.plants[0]!.position = { x: 99, y: 101 }
+    competing.plants[0]!.position = geoAt(99, 101)
 
     expect(() => coordinator.hydrate(accepted)).toThrow('clean-state publication failed')
 
@@ -2053,11 +2061,11 @@ describe('Settled Scene presentation maintenance', () => {
       expect(error).toBeInstanceOf(SceneEditBusyError)
       expect((error as SceneEditBusyError).activeType).toBe('document-hydration')
     }
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
 
     coordinator.hydrate(JSON.parse(JSON.stringify(accepted)) as CanopiFile)
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     expect(coordinator.run('after-competing-hydration', (tx) => {
       tx.mutate((draft) => {
         draft.plants[1]!.position = { x: 31, y: 32 }
@@ -2078,33 +2086,32 @@ describe('Settled Scene presentation maintenance', () => {
     const { coordinator, store } = createAdmissionHarness({ history })
     const next = makeFile()
     next.name = 'Owned hydration snapshot'
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
     const equivalentRetry = JSON.parse(JSON.stringify(next)) as CanopiFile
     const syncDocumentSignals = vi.fn<(hydratedFile: CanopiFile) => void>()
 
     expect(() => coordinator.hydrate(next, syncDocumentSignals))
       .toThrow('clean-state publication failed')
-    next.plants[0]!.position = { x: 999, y: 999 }
+    next.plants[0]!.position = geoAt(999, 999)
 
     coordinator.hydrate(equivalentRetry)
 
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
     expect(syncDocumentSignals.mock.calls[0]?.[0].plants[0]?.position)
-      .toEqual({ x: 55, y: 66 })
+      .toEqual(geoAt(55, 66))
   })
 
   it('passes a fresh accepted snapshot to each hydration callback retry', () => {
     const { coordinator, store } = createAdmissionHarness()
     const next = makeFile()
     next.name = 'Callback-safe hydration'
-    next.spatial_frame.north_bearing_deg = 15
-    next.plants[0]!.position = { x: 55, y: 66 }
+    next.plants[0]!.position = geoAt(55, 66)
     let callbackAttempts = 0
-    const projectedBearings: number[] = []
+    const projectedNames: string[] = []
     const syncDocumentSignals = (hydratedFile: CanopiFile): void => {
       callbackAttempts += 1
-      projectedBearings.push(hydratedFile.spatial_frame.north_bearing_deg)
-      hydratedFile.spatial_frame.north_bearing_deg = 270
+      projectedNames.push(hydratedFile.name)
+      hydratedFile.name = 'Mutated by callback'
       if (callbackAttempts === 1) throw new Error('document projection failed')
     }
 
@@ -2112,9 +2119,9 @@ describe('Settled Scene presentation maintenance', () => {
       .toThrow('document projection failed')
     coordinator.hydrate(JSON.parse(JSON.stringify(next)) as CanopiFile)
 
-    expect(projectedBearings).toEqual([15, 15])
-    expect(next.spatial_frame.north_bearing_deg).toBe(15)
-    expect(store.persisted.plants[0]?.position).toEqual({ x: 55, y: 66 })
+    expect(projectedNames).toEqual(['Callback-safe hydration', 'Callback-safe hydration'])
+    expect(next.name).toBe('Callback-safe hydration')
+    expect(store.persisted.plants[0]?.position).toEqual(movedFirstPlant(55, 66))
   })
 
   it('publishes one hydration revision when a revision observer throws', () => {

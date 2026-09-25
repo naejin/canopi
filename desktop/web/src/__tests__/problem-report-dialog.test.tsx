@@ -22,13 +22,24 @@ vi.mock('../ipc/problem-report', () => ({
 
 function makeDesign(): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Secret Orchard',
     description: 'Private notes',
-    spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
     plant_species_colors: {},
     layers: [],
-    plants: [],
+    plants: [{
+      id: 'plant-1',
+      canonical_name: 'Malus domestica',
+      common_name: null,
+      color: null,
+      position: { lon: 2.3522, lat: 48.8566 },
+      rotation: null,
+      scale: null,
+      notes: null,
+      planted_date: null,
+      quantity: 1,
+      locked: false,
+    }],
     zones: [],
     annotations: [],
     consortiums: [],
@@ -152,8 +163,8 @@ describe('ProblemReportDialog', () => {
 
     const request = mocks.createProblemReport.mock.calls[0]![0]
     expect(request.sensitive_attachments.current_design).toContain('"name": "Secret Orchard"')
-    expect(request.sensitive_attachments.current_design).toContain('"spatial_frame"')
     const attached = JSON.parse(request.sensitive_attachments.current_design) as Record<string, unknown>
+    expect((attached.plants as Array<{ position: unknown }>)[0]!.position).toEqual({ lon: 2.3522, lat: 48.8566 })
     expect(attached.future_top_level).toEqual({ keep: true })
     expect(attached).not.toHaveProperty('extra')
   })

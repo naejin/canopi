@@ -10,7 +10,6 @@ export type ShellCommandIdByCapability = {
   readonly exportCanvasPdf: 'file.exportCanvasPdf'
   readonly exitApp: 'file.exit'
   readonly navigateCanvas: 'nav.canvas'
-  readonly navigateLocation: 'nav.location'
   readonly navigateTemplates: 'nav.templates'
   readonly navigatePlantDatabase: 'nav.plantDb'
   readonly navigateDesignNotebook: 'nav.designNotebook'
@@ -223,15 +222,6 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
     shortcut: SHELL_PANEL_SHORTCUTS.canvas,
     palette: true,
     panel: { panel: 'canvas', group: 'primary', order: 0 },
-  },
-  {
-    capabilityId: 'navigateLocation',
-    id: 'nav.location',
-    family: 'navigation',
-    labelKey: 'canvas.location.title',
-    chromeLabelKey: 'canvas.location.title',
-    palette: true,
-    panel: { panel: 'location', group: 'primary', order: 1 },
   },
   {
     capabilityId: 'navigateTemplates',

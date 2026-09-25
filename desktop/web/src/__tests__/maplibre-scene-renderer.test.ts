@@ -166,7 +166,7 @@ describe('MapLibre scene renderer bridge', () => {
       destroy: vi.fn(), context: { extensions: { loseContext: { loseContext: vi.fn() } } },
     }
     const layer = composition.createLayer({
-      id: 'design', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+      id: 'design', readOrigin: () => ({ lat: 0, lon: 0 }),
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({
@@ -204,7 +204,7 @@ describe('MapLibre scene renderer bridge', () => {
       }],
     })
     const layer = composition.createLayer({
-      id: 'design', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+      id: 'design', readOrigin: () => ({ lat: 0, lon: 0 }),
     })
     await host.initialize({ container: document.createElement('div') })
     composition.failActiveLayer(new Error('MapLibre failed to start'))

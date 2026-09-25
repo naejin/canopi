@@ -8,9 +8,10 @@ import {
 import { readWorkspaceActivationSnapshot } from '../app/canvas-map-surface/workspace-activation-snapshot'
 import { createBrowserCanvasRuntimeAppAdapter } from './browser-canvas-runtime'
 import { createBrowserWorkspaceMapContributionAdapter } from './browser-workspace-map-contribution-adapter'
+import { persistLastView } from '../app/canvas-map-surface/last-view'
 
 export interface BrowserWorkspaceRuntimeMountOptions extends WorkspaceRuntimeMountOptions {
-  readonly store?: Pick<DesignSessionStore, 'sessionIdentity' | 'hasCurrentDesign' | 'readMetadata'>
+  readonly store?: Pick<DesignSessionStore, 'sessionIdentity' | 'hasCurrentDesign'>
 }
 
 /** Browser's complete shared-workspace assembly, with browser-only map policy. */
@@ -23,6 +24,7 @@ export function createBrowserWorkspaceRuntimeComposition(
     appAdapter: createBrowserCanvasRuntimeAppAdapter(),
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
     mapContributions: createBrowserWorkspaceMapContributionAdapter(store),
-    readSnapshot: () => readWorkspaceActivationSnapshot({ store }),
+    readSnapshot: (readInitialCenter) => readWorkspaceActivationSnapshot({ store, readInitialCenter }),
+    onViewSettled: persistLastView,
   })
 }

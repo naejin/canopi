@@ -59,7 +59,6 @@ export interface LayerPanelActions {
   locked(id: string, locked: boolean): void
   opacity(id: string, opacity: number): void
   contourInterval?(meters: number): void
-  location?(): void
 }
 
 export function LayerPanel({ rows, actions, trailingSection }: {
@@ -144,42 +143,15 @@ export function LayerPanel({ rows, actions, trailingSection }: {
 
 function LayerDetail({ row, actions }: { row: CanvasLayerPresentationRow; actions: LayerPanelActions }) {
   switch (row.detail.type) {
-    case 'location-map':
-      return <LocationLayerDetail row={row} detail={row.detail} actions={actions} />
+    case 'basemap':
+      return <SceneLayerDetail row={row} actions={actions} />
     case 'contours':
       return <ContourLayerDetail row={row} detail={row.detail} actions={actions} />
     case 'hillshade':
-      return <HillshadeLayerDetail row={row} detail={row.detail} actions={actions} />
+      return <HillshadeLayerDetail row={row} actions={actions} />
     case 'scene':
       return <SceneLayerDetail row={row} actions={actions} />
   }
-}
-
-function DesignLocationButton({ actions }: { actions: LayerPanelActions }) {
-  if (!actions.location) return null
-  return <button type="button" className={styles.locationActionButton} onClick={actions.location}>{t('canvas.location.title')}</button>
-}
-
-function LocationLayerDetail({ row, detail, actions }: {
-  actions: LayerPanelActions
-  row: CanvasLayerPresentationRow
-  detail: Extract<CanvasLayerPresentationDetail, { type: 'location-map' }>
-}) {
-  return (
-    <div className={styles.layerDetail}>
-      {detail.hasLocation ? (
-        <>
-          <div className={styles.locationCard} data-has-location="true">
-            <span className={styles.locationCardLabel}>{t('canvas.location.current')}</span>
-            <span className={styles.locationCardText}>{detail.locationSummary}</span>
-          </div>
-          <OpacitySlider actions={actions} row={row} disabled={detail.opacityDisabled} />
-        </>
-      ) : (
-        <DesignLocationButton actions={actions} />
-      )}
-    </div>
-  )
 }
 
 function ContourLayerDetail({ row, detail, actions }: {
@@ -189,45 +161,34 @@ function ContourLayerDetail({ row, detail, actions }: {
 }) {
   return (
     <div className={styles.layerDetail}>
-      {detail.hasLocation ? (
-        <>
-          <OpacitySlider actions={actions} row={row} />
-          <div className={styles.controlRow}>
-            <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              className={styles.numericInput}
-              value={String(detail.contourIntervalMeters)}
-              aria-label={t('canvas.terrain.contourInterval')}
-              onInput={(event) => {
-                const raw = event.currentTarget.value
-                const value = Number(raw)
-                if (raw.trim() && Number.isFinite(value) && value >= 0) actions.contourInterval?.(value)
-              }}
-            />
-          </div>
-        </>
-      ) : (
-        <DesignLocationButton actions={actions} />
-      )}
+      <OpacitySlider actions={actions} row={row} />
+      <div className={styles.controlRow}>
+        <span className={styles.controlLabel}>{t('canvas.terrain.contourInterval')}</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          className={styles.numericInput}
+          value={String(detail.contourIntervalMeters)}
+          aria-label={t('canvas.terrain.contourInterval')}
+          onInput={(event) => {
+            const raw = event.currentTarget.value
+            const value = Number(raw)
+            if (raw.trim() && Number.isFinite(value) && value >= 0) actions.contourInterval?.(value)
+          }}
+        />
+      </div>
     </div>
   )
 }
 
-function HillshadeLayerDetail({ row, detail, actions }: {
+function HillshadeLayerDetail({ row, actions }: {
   actions: LayerPanelActions
   row: CanvasLayerPresentationRow
-  detail: Extract<CanvasLayerPresentationDetail, { type: 'hillshade' }>
 }) {
   return (
     <div className={styles.layerDetail}>
-      {detail.hasLocation ? (
-        <OpacitySlider actions={actions} row={row} label={t('canvas.terrain.hillshadeOpacity')} />
-      ) : (
-        <DesignLocationButton actions={actions} />
-      )}
+      <OpacitySlider actions={actions} row={row} label={t('canvas.terrain.hillshadeOpacity')} />
     </div>
   )
 }

@@ -35,31 +35,15 @@ Add `--backend canvas2d` to emulate unavailable WebGL on HTML and Offscreen canv
 
 This mounts the real SceneCanvasRuntime with its detached app adapter, exercises pointer pan, wheel zoom, selection, plant dragging, undo and teardown, and asserts their state transitions. It changes only the isolated in-memory scene. It is a correctness check rather than a native input-latency benchmark.
 
-Run the isolated shared-workspace interaction check against a temporary v2 Design with editable Plants:
+Run the isolated shared-workspace interaction check against a temporary current-format (v7) Design with editable Plants:
 
 ```bash
 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
   node scripts/canvas-performance/workspace-interactions.mjs \
-  --file '/path/to/temporary-v2-design.canopi'
+  --file '/path/to/temporary-v7-design.canopi'
 ```
 
 It composes the real `SceneCanvasRuntime`, `WorkspaceActivationCoordinator`, `MapLibreWorkspaceCameraOwner`, and the production non-interactive workspace map shell. It uses an offline map contribution, changes only in-memory Scene state, and reports aggregate pass names for pointer pan, wheel, selection, tool drag, undo, capture loss, and teardown. It does not qualify physical two-contact pinch, `touch-action`, edition mounting, native WebKit input delivery, or input-to-visible latency.
-
-For the isolated v2 MapLibre-owned renderer experiment, run the production Pixi baseline first and pass its JSON back to the shared runner. The shared runner requires the real fixture and uses an offline style. It fails when alignment, ordering, input ownership, context ownership, style/context recovery, teardown, or repeat-mount checks fail:
-
-```bash
-DISPLAY=:0 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
-  node scripts/canvas-performance/run.mjs \
-  --file '/path/to/design.canopi' --backend pixi --dpr 1 --headed \
-  --output /tmp/canopi-pixi-dpr1.json
-
-DISPLAY=:0 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
-  node scripts/canvas-performance/shared-map-scene.mjs \
-  --file '/path/to/design.canopi' --baseline /tmp/canopi-pixi-dpr1.json \
-  --dpr 1 --headed --output /tmp/canopi-shared-dpr1.json
-```
-
-Repeat at DPR 2. `performanceComparison` compares synchronous botanical renderer submission for the same local-metre viewports, dimensions, warm-up, and 30 samples. `performance` also records full MapLibre frame wall time. Neither duration is GPU completion or input-to-visible latency. The global WebGL context count includes MapLibre's detached capability probe; `connectedWebglCanvasCount` and `mapCanvasContextCount` are the ownership checks. Read the private fixture with `fixture-receipt.mjs` before and after the run, and keep all JSON and screenshots outside the repository.
 
 Use separate worktrees and servers for before/after runs. Keep browser, GPU, DPR, dimensions, fixture, warm-up and sample counts equal. Run serially on an otherwise quiet machine; repeat if results vary. Check `metadata.backend` and `metadata.gpu` before interpreting timings. Never present SwiftShader results as native hardware frame rates. The trace JSON can be opened in Perfetto.
 
@@ -98,14 +82,15 @@ Start a local Web Vite server, then run one named scenario or all four serially:
 ```bash
 CANOPI_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
   node scripts/canvas-performance/production-workspace.mjs \
-  --file '<private-v5-design.canopi>' --scenario all --dpr 1 --headed
+  --file '<private-v7-design.canopi>' --expected-sha256 '<its-sha256>' \
+  --scenario all --dpr 1 --headed
 ```
 
 The scenarios are `representative` (shared renderer), `fallback` (forced
 Canvas2D fallback), `dense` (synthetic dense 10,000 Plants), and `dispersed`
-(synthetic dispersed 10,000 Plants). The in-browser development preparation
-changes a v5 file only by setting `version: 6` and adding
-`newDesignSpatialFrame()`; it is not a shipping converter.
+(synthetic dispersed 10,000 Plants). The fixture must already be a v7 Design;
+the runner does not convert files. Synthetic derivatives offset lon/lat by
+local metres.
 
 Use `--dpr 1`, `--dpr 2`, and one fractional value such as `--dpr 1.5` for
 the qualification matrix. The accepted range is 1 through 3, and the reported

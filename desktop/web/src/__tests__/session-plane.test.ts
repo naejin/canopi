@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest'
+import {
+  createSessionPlane,
+  roundGeoDegrees,
+  SESSION_PLANE_REORIGIN_DISTANCE_METERS,
+  sessionPlaneOriginForPoints,
+} from '../canvas/session-plane'
+
+const EARTH_RADIUS_METERS = 6371008.8
+
+function haversineMeters(a: { lon: number; lat: number }, b: { lon: number; lat: number }): number {
+  const toRad = Math.PI / 180
+  const dLat = (b.lat - a.lat) * toRad
+  const dLon = (b.lon - a.lon) * toRad
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLon / 2) ** 2
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h))
+}
+
+describe('session plane', () => {
+  it('maps its origin to plane (0, 0) with x east and y south', () => {
+    const plane = createSessionPlane({ lon: 2.2945, lat: 48.8584 })
+    expect(plane.toPlane({ lon: 2.2945, lat: 48.8584 })).toEqual({ x: 0, y: 0 })
+    const east = plane.toPlane({ lon: 2.2955, lat: 48.8584 })
+    const north = plane.toPlane({ lon: 2.2945, lat: 48.8594 })
+    expect(east.x).toBeGreaterThan(0)
+    expect(Math.abs(east.y)).toBeLessThan(1e-9)
+    expect(north.y).toBeLessThan(0)
+    expect(Math.abs(north.x)).toBeLessThan(1e-9)
+  })
+
+  it('round-trips lon/lat through the plane within 0.1 mm up to 10 km from the origin', () => {
+    for (const origin of [
+      { lon: 13, lat: 23 },
+      { lon: -122.4194, lat: 37.7749 },
+      { lon: 174.7633, lat: -36.8485 },
+      { lon: 25.7482, lat: 66.5039 },
+    ]) {
+      const plane = createSessionPlane(origin)
+      for (let i = 0; i < 64; i += 1) {
+        const angle = (i / 64) * 2 * Math.PI
+        const radius = 10_000 * ((i % 8) + 1) / 8
+        const planePoint = { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius }
+        const geo = plane.toGeo(planePoint)
+        const back = plane.toGeo(plane.toPlane(geo))
+        expect(haversineMeters(geo, back)).toBeLessThan(1e-4)
+        const replane = plane.toPlane(geo)
+        expect(Math.hypot(replane.x - planePoint.x, replane.y - planePoint.y)).toBeLessThan(1e-4)
+      }
+    }
+  })
+
+  it('keeps plane distances metric near the origin', () => {
+    const plane = createSessionPlane({ lon: 5.5, lat: 45 })
+    const a = plane.toGeo({ x: -50, y: 0 })
+    const b = plane.toGeo({ x: 50, y: 0 })
+    expect(haversineMeters(a, b)).toBeCloseTo(100, 3)
+  })
+
+  it('rounds degrees to 1e-9 and prints them without float noise', () => {
+    expect(roundGeoDegrees(2.29448123449999)).toBe(2.294481234)
+    expect(String(roundGeoDegrees(48.85837012351))).toBe('48.858370124')
+    expect(roundGeoDegrees(-0.0000000001)).toBe(0)
+    expect(Object.is(roundGeoDegrees(-0.0000000001), -0)).toBe(false)
+  })
+
+  it('centres the origin on the bounds of the given points', () => {
+    expect(sessionPlaneOriginForPoints([
+      { lon: 10, lat: 40 },
+      { lon: 12, lat: 44 },
+      { lon: 11, lat: 41 },
+    ], { lon: 0, lat: 0 })).toEqual({ lon: 11, lat: 42 })
+  })
+
+  it('uses the fallback origin when there are no points', () => {
+    expect(sessionPlaneOriginForPoints([], { lon: 13, lat: 23 })).toEqual({ lon: 13, lat: 23 })
+  })
+
+  it('re-origins beyond 10 km', () => {
+    expect(SESSION_PLANE_REORIGIN_DISTANCE_METERS).toBe(10_000)
+    const plane = createSessionPlane({ lon: 13, lat: 23 })
+    expect(plane.needsReorigin({ x: 9_999, y: 0 })).toBe(false)
+    expect(plane.needsReorigin({ x: 7_072, y: 7_072 })).toBe(true)
+  })
+})

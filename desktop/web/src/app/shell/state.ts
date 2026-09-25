@@ -1,7 +1,7 @@
 import { signal, batch } from "@preact/signals";
 import { DEFAULT_SETTINGS } from "../../generated/settings";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "location" | "templates" | "design-notebook" | "species-key" | "data" | "layers" | "calendar" | "budget" | "consortium";
+export type Panel = "plant-db" | "canvas" | "favorites" | "templates" | "design-notebook" | "species-key" | "data" | "layers" | "calendar" | "budget" | "consortium";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
 export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-key" | "data" | "layers" | "calendar" | "budget" | "consortium";
@@ -40,7 +40,7 @@ export function selectPanel(panel: Panel): void {
 /**
  * Navigate to a panel using the correct routing model:
  * - side panels share a single dock alongside the canvas (toggle if already open)
- * - canvas / location / templates: full-screen primary panels
+ * - canvas / templates: full-screen primary panels
  */
 export function navigateTo(panel: Panel): void {
   if (isSidePanel(panel) && sidePanel.value === panel) {

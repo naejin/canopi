@@ -11,7 +11,6 @@ export interface WorkspaceMapContributionSnapshot {
   readonly terrain: TerrainLayerState
   readonly overlays: CanvasMapSurfaceOverlaySnapshot
   readonly frame: MapFrame | null
-  readonly designExtentMeters: number | null
 }
 
 export interface WorkspaceMapContributionAdapter {

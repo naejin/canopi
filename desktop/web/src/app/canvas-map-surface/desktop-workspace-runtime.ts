@@ -1,6 +1,7 @@
 import { createDesktopCanvasRuntimeAppAdapter } from '../canvas-runtime/desktop-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../canvas-runtime/panel-target-adapter'
 import { createDesktopWorkspaceMapContributionAdapter } from './desktop-workspace-map-contribution-adapter'
+import { persistLastView } from './last-view'
 import {
   createWorkspaceRuntimeComposition,
   type WorkspaceRuntimeComposition,
@@ -16,5 +17,6 @@ export function createDesktopWorkspaceRuntimeComposition(
     appAdapter: createDesktopCanvasRuntimeAppAdapter(),
     targetPresentation: createAppSceneRuntimePanelTargetAdapter(),
     mapContributions: createDesktopWorkspaceMapContributionAdapter(),
+    onViewSettled: persistLastView,
   })
 }

@@ -7,15 +7,13 @@ import type {
   DocumentFileFieldOwner,
   KnownCanopiKey,
 } from '../../generated/known-canopi-keys'
-import type { CanopiFile, SpatialFrame } from '../../types/design'
-import { cloneSpatialFrame } from '../../spatial-frame'
+import type { CanopiFile } from '../../types/design'
 
 export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
 
 export interface DocumentFileSaveMetadata {
   name: string
   description?: string | null
-  spatialFrame?: SpatialFrame
 }
 
 export interface ComposeDocumentForSaveOptions {
@@ -93,7 +91,6 @@ export function composeDocumentForSave({
     ...composed,
     name: metadata.name,
     description: metadata.description ?? composed.description ?? null,
-    spatial_frame: cloneSpatialFrame(metadata.spatialFrame ?? composed.spatial_frame),
   }
 }
 
@@ -127,7 +124,6 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     version: file.version,
     name: file.name,
     description: file.description ?? null,
-    spatial_frame: cloneSpatialFrame(file.spatial_frame),
     plant_species_colors: file.plant_species_colors,
     plant_species_symbols: file.plant_species_symbols ?? {},
     plant_species_codes: file.plant_species_codes ?? {},

@@ -1,4 +1,5 @@
 import { signal, type ReadonlySignal } from '@preact/signals'
+import type { SessionPlaneTransform } from '../session-plane'
 import type { ScenePersistedState, ScenePoint, SceneViewportState } from './scene'
 import { getAnnotationWorldBounds } from './annotation-layout'
 import { getPlantWorldBounds, type PlantPresentationContext } from './plant-presentation'
@@ -78,6 +79,8 @@ export interface WorkspaceCameraNavigation {
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
   clearTemporaryFocus(): void
+  /** Keeps the same view after the session plane moved: next = previous * scale + offset. */
+  reprojectViewport(transform: SessionPlaneTransform): SceneViewportState
 }
 
 /** Owns the paired read and command roles admitted into one active workspace. */
@@ -103,6 +106,8 @@ export interface SceneBounds {
 export interface SceneBoundsOptions {
   annotationViewportScale?: number
   plantContext?: PlantPresentationContext
+  /** Scale that frames an empty Design, centred on the session plane origin. */
+  emptySceneScale?: number
 }
 
 export interface TemporaryBoundsFocusOptions {
@@ -285,6 +290,12 @@ export class CameraController implements
     return true
   }
 
+  reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {
+    const bookmark = this.temporaryFocusBookmark
+    this.temporaryFocusBookmark = bookmark && reprojectPlaneViewport(bookmark, transform)
+    return this.setViewport(reprojectPlaneViewport(this._snapshot.peek().viewport, transform))
+  }
+
   clearTemporaryFocus(): void {
     this.temporaryFocusBookmark = null
   }
@@ -459,7 +470,7 @@ export function fitCameraViewport(
       annotationViewportScale: currentScale,
       plantContext: options.plantContext,
     })
-    if (!bounds) return { ...snapshot.viewport }
+    if (!bounds) return emptySceneViewport(snapshot, options.emptySceneScale)
 
     const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
     const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
@@ -673,4 +684,23 @@ function finitePoint(point: ScenePoint): boolean {
 
 function sameViewport(left: Readonly<SceneViewportState>, right: Readonly<SceneViewportState>): boolean {
   return left.x === right.x && left.y === right.y && left.scale === right.scale
+}
+
+// screen = p * scale + v must hold for the reprojected point p' = p * s + o.
+function reprojectPlaneViewport(
+  viewport: SceneViewportState,
+  transform: SessionPlaneTransform,
+): SceneViewportState {
+  const scale = viewport.scale / transform.scale
+  return {
+    x: viewport.x - transform.offsetX * scale,
+    y: viewport.y - transform.offsetY * scale,
+    scale,
+  }
+}
+
+function emptySceneViewport(snapshot: CameraViewportSnapshot, emptySceneScale: number | undefined): SceneViewportState {
+  if (emptySceneScale === undefined || !(emptySceneScale > 0)) return { ...snapshot.viewport }
+  const scale = clampCameraScale(emptySceneScale, snapshot.scaleBounds)
+  return { x: snapshot.screenSize.width / 2, y: snapshot.screenSize.height / 2, scale }
 }

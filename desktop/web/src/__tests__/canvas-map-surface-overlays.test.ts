@@ -74,7 +74,6 @@ function createSnapshot(
       getSceneSnapshot: () => scene,
     },
     location: { lat: 48.8566, lon: 2.3522 },
-    northBearingDeg: 12,
     hoveredTargets: [{ kind: 'zone', zone_name: 'orchard' }],
     selectedTargets: [{ kind: 'placed_plant', plant_id: 'plant-1' }],
     ...overrides,

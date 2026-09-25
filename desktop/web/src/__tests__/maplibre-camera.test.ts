@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createMapFrame,
-  maplibreBearingFromNorthBearing,
-} from '../canvas/maplibre-camera'
+import { createMapFrame } from '../canvas/maplibre-camera'
 import {
   geoToMercator,
   stageScaleToMapZoom,
@@ -12,7 +9,6 @@ import { CameraController } from '../canvas/runtime/camera'
 import type { ScenePersistedState } from '../canvas/runtime/scene'
 
 const MAPLIBRE_WORLD_TILE_SIZE = 512
-const DEGREES_TO_RADIANS = Math.PI / 180
 
 function projectWorldToCanvasScreen(
   viewport: { x: number; y: number; scale: number },
@@ -22,14 +18,6 @@ function projectWorldToCanvasScreen(
     x: viewport.x + world.x * viewport.scale,
     y: viewport.y + world.y * viewport.scale,
   }
-}
-
-function normalizeBearingDegrees(degrees: number): number {
-  return ((degrees % 360) + 360) % 360
-}
-
-function expectedMapLibreBearing(northBearingDeg: number | null | undefined): number {
-  return normalizeBearingDegrees(-(northBearingDeg ?? 0))
 }
 
 function projectGeoToMapScreen(
@@ -43,13 +31,10 @@ function projectGeoToMapScreen(
   const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** frame.zoom)
   const deltaX = (point.x - center.x) * worldSizePx
   const deltaY = (point.y - center.y) * worldSizePx
-  const bearingRad = frame.bearing * DEGREES_TO_RADIANS
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
 
   return {
-    x: screenSize.width / 2 + deltaX * cos + deltaY * sin,
-    y: screenSize.height / 2 - deltaX * sin + deltaY * cos,
+    x: screenSize.width / 2 + deltaX,
+    y: screenSize.height / 2 + deltaY,
   }
 }
 
@@ -58,9 +43,8 @@ function projectWorldToExpectedMapScreen(
   frame: NonNullable<ReturnType<typeof createMapFrame>>,
   screenSize: { width: number; height: number },
   location: { lat: number; lon: number },
-  northBearingDeg: number | null | undefined,
 ) {
-  const geo = worldToGeo(point.x, point.y, location.lat, location.lon, northBearingDeg ?? 0)
+  const geo = worldToGeo(point.x, point.y, location.lat, location.lon)
   return projectGeoToMapScreen(geo.lng, geo.lat, frame, screenSize)
 }
 
@@ -132,7 +116,6 @@ describe('createMapFrame', () => {
       { x: 0, y: 0, scale: 1 },
       { width: 1000, height: 800 },
       null,
-      12,
     )
 
     expect(result).toBeNull()
@@ -143,27 +126,24 @@ describe('createMapFrame', () => {
       { x: 0, y: 0, scale: 1 },
       { width: 0, height: 800 },
       { lat: 45.52, lon: -122.68 },
-      12,
     )
 
     expect(result).toBeNull()
   })
 
-  it('projects viewport center into a MapLibre camera', () => {
-    const northBearingDeg = 14
+  it('projects viewport center into a north-up MapLibre camera', () => {
     const result = createMapFrame(
       { x: -200, y: -100, scale: 2 },
       { width: 1000, height: 800 },
       { lat: 45.52, lon: -122.68 },
-      northBearingDeg,
     )
 
     expect(result).not.toBeNull()
-    const expectedCenter = worldToGeo(350, 250, 45.52, -122.68, northBearingDeg)
+    const expectedCenter = worldToGeo(350, 250, 45.52, -122.68)
     expect(result!.center[0]).toBeCloseTo(expectedCenter.lng, 8)
     expect(result!.center[1]).toBeCloseTo(expectedCenter.lat, 8)
     expect(result!.zoom).toBeCloseTo(stageScaleToMapZoom(2, 45.52), 8)
-    expect(result!.bearing).toBe(maplibreBearingFromNorthBearing(northBearingDeg))
+    expect(result!.bearing).toBe(0)
   })
 
   it('clamps extreme zoom values at the configured zoom-27 ceiling', () => {
@@ -171,7 +151,6 @@ describe('createMapFrame', () => {
       { x: 0, y: 0, scale: 5000 },
       { width: 1000, height: 800 },
       { lat: 0, lon: 0 },
-      null,
     )
 
     expect(result).not.toBeNull()
@@ -179,47 +158,17 @@ describe('createMapFrame', () => {
     expect(result!.bearing).toBe(0)
   })
 
-  it('uses an explicit MapLibre bearing adapter for document bearings', () => {
-    expect(maplibreBearingFromNorthBearing(null)).toBe(0)
-    expect(maplibreBearingFromNorthBearing(90)).toBe(270)
-    expect(maplibreBearingFromNorthBearing(450)).toBe(270)
-    expect(maplibreBearingFromNorthBearing(-90)).toBe(90)
-  })
-
-  it('changes the projected center when north bearing rotates the canvas axes', () => {
-    const northUp = createMapFrame(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      { lat: 45.52, lon: -122.68 },
-      0,
-    )
-    const rotated = createMapFrame(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      { lat: 45.52, lon: -122.68 },
-      90,
-    )
-
-    expect(northUp).not.toBeNull()
-    expect(rotated).not.toBeNull()
-    expect(rotated!.center[0]).not.toBeCloseTo(northUp!.center[0], 8)
-    expect(rotated!.center[1]).not.toBeCloseTo(northUp!.center[1], 8)
-    expect(rotated!.bearing).toBe(expectedMapLibreBearing(90))
-  })
-
   it('exposes viewport diagnostics through the canonical frame', () => {
     const frame = createMapFrame(
       { x: -200, y: -100, scale: 2 },
       { width: 1000, height: 800 },
       { lat: 45.52, lon: -122.68 },
-      14,
     )
 
     expect(frame).not.toBeNull()
     expect(frame!.diagnostics.viewportCenterWorld.x).toBeCloseTo(350, 8)
     expect(frame!.diagnostics.viewportCenterWorld.y).toBeCloseTo(250, 8)
     expect(frame!.diagnostics.projectionId).toBe('local-mercator')
-    expect(frame!.diagnostics.warningThresholdMeters).toBe(10_000)
     expect(frame!.diagnostics.viewportCornerGeo).toHaveLength(4)
   })
 })
@@ -234,112 +183,87 @@ describe('screen-lock validation', () => {
     { x: 500, y: -250 },
   ] as const
 
-  it('keeps the same world point on the same screen pixel at zero bearing', () => {
+  it('keeps the same world point on the same screen pixel', () => {
     const viewport = { x: -175.25, y: 92.5, scale: 3.75 }
-    const frame = createMapFrame(viewport, screenSize, location, 0)
+    const frame = createMapFrame(viewport, screenSize, location)
 
     expect(frame).not.toBeNull()
     for (const point of worldPoints) {
       const canvas = projectWorldToCanvasScreen(viewport, point)
-      const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location, 0)
-      expect(map.x).toBeCloseTo(canvas.x, 6)
-      expect(map.y).toBeCloseTo(canvas.y, 6)
-    }
-  })
-
-  it('keeps the same world point on the same screen pixel for rotated designs', () => {
-    const northBearingDeg = 37
-    const viewport = { x: 221.75, y: -144.5, scale: 1.8 }
-    const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
-
-    expect(frame).not.toBeNull()
-    for (const point of worldPoints) {
-      const canvas = projectWorldToCanvasScreen(viewport, point)
-      const map = projectWorldToExpectedMapScreen(
-        point,
-        frame!,
-        screenSize,
-        location,
-        northBearingDeg,
-      )
+      const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location)
       expect(map.x).toBeCloseTo(canvas.x, 6)
       expect(map.y).toBeCloseTo(canvas.y, 6)
     }
   })
 
   it('preserves screen lock across tiny pan changes', () => {
-    const northBearingDeg = 23
     const beforeViewport = { x: -200.125, y: 50.75, scale: 2.2 }
     const afterViewport = { x: -200.0625, y: 50.6875, scale: 2.2 }
     const world = { x: 42.5, y: -18.25 }
-    const beforeFrame = createMapFrame(beforeViewport, screenSize, location, northBearingDeg)
-    const afterFrame = createMapFrame(afterViewport, screenSize, location, northBearingDeg)
+    const beforeFrame = createMapFrame(beforeViewport, screenSize, location)
+    const afterFrame = createMapFrame(afterViewport, screenSize, location)
 
     expect(beforeFrame).not.toBeNull()
     expect(afterFrame).not.toBeNull()
     const beforeCanvas = projectWorldToCanvasScreen(beforeViewport, world)
     const afterCanvas = projectWorldToCanvasScreen(afterViewport, world)
-    const beforeMap = projectWorldToExpectedMapScreen(world, beforeFrame!, screenSize, location, northBearingDeg)
-    const afterMap = projectWorldToExpectedMapScreen(world, afterFrame!, screenSize, location, northBearingDeg)
+    const beforeMap = projectWorldToExpectedMapScreen(world, beforeFrame!, screenSize, location)
+    const afterMap = projectWorldToExpectedMapScreen(world, afterFrame!, screenSize, location)
 
     expect(afterMap.x - beforeMap.x).toBeCloseTo(afterCanvas.x - beforeCanvas.x, 6)
     expect(afterMap.y - beforeMap.y).toBeCloseTo(afterCanvas.y - beforeCanvas.y, 6)
   })
 
   it('preserves screen lock across tiny zoom changes', () => {
-    const northBearingDeg = 12
     const beforeViewport = { x: -80, y: 32, scale: 0.95 }
     const afterViewport = { x: -80, y: 32, scale: 0.9505 }
     const world = { x: -120, y: 75 }
-    const beforeFrame = createMapFrame(beforeViewport, screenSize, location, northBearingDeg)
-    const afterFrame = createMapFrame(afterViewport, screenSize, location, northBearingDeg)
+    const beforeFrame = createMapFrame(beforeViewport, screenSize, location)
+    const afterFrame = createMapFrame(afterViewport, screenSize, location)
 
     expect(beforeFrame).not.toBeNull()
     expect(afterFrame).not.toBeNull()
     const beforeCanvas = projectWorldToCanvasScreen(beforeViewport, world)
     const afterCanvas = projectWorldToCanvasScreen(afterViewport, world)
-    const beforeMap = projectWorldToExpectedMapScreen(world, beforeFrame!, screenSize, location, northBearingDeg)
-    const afterMap = projectWorldToExpectedMapScreen(world, afterFrame!, screenSize, location, northBearingDeg)
+    const beforeMap = projectWorldToExpectedMapScreen(world, beforeFrame!, screenSize, location)
+    const afterMap = projectWorldToExpectedMapScreen(world, afterFrame!, screenSize, location)
 
     expect(afterMap.x - beforeMap.x).toBeCloseTo(afterCanvas.x - beforeCanvas.x, 6)
     expect(afterMap.y - beforeMap.y).toBeCloseTo(afterCanvas.y - beforeCanvas.y, 6)
   })
 
   it('keeps screen lock after viewport resize', () => {
-    const northBearingDeg = 18
     const viewport = { x: -200, y: 80, scale: 2.1 }
     const resizedScreen = { width: 1600, height: 900 }
     const point = { x: 150, y: -45 }
-    const frame = createMapFrame(viewport, resizedScreen, location, northBearingDeg)
+    const frame = createMapFrame(viewport, resizedScreen, location)
 
     expect(frame).not.toBeNull()
     const canvas = projectWorldToCanvasScreen(viewport, point)
-    const map = projectWorldToExpectedMapScreen(point, frame!, resizedScreen, location, northBearingDeg)
+    const map = projectWorldToExpectedMapScreen(point, frame!, resizedScreen, location)
 
     expect(map.x).toBeCloseTo(canvas.x, 6)
     expect(map.y).toBeCloseTo(canvas.y, 6)
   })
 
   it('keeps screen lock for fit-to-content viewports', () => {
-    const northBearingDeg = 27
     const scene = createScene()
     const camera = new CameraController()
     const screenSize = { width: 1280, height: 820 }
     camera.initialize(screenSize)
     const viewport = camera.zoomToFit(scene)
-    const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
+    const frame = createMapFrame(viewport, screenSize, location)
     const point = scene.plants[1]!.position
 
     expect(frame).not.toBeNull()
     const canvas = projectWorldToCanvasScreen(viewport, point)
-    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location, northBearingDeg)
+    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location)
 
     expect(map.x).toBeCloseTo(canvas.x, 6)
     expect(map.y).toBeCloseTo(canvas.y, 6)
   })
 
   it('keeps screen lock for document-open auto-fit viewports', () => {
-    const northBearingDeg = 11
     const scene = createScene()
     scene.annotations.push({
       kind: 'annotation',
@@ -355,12 +279,12 @@ describe('screen-lock validation', () => {
     const screenSize = { width: 1100, height: 760 }
     camera.initialize(screenSize)
     const viewport = camera.zoomToFit(scene)
-    const frame = createMapFrame(viewport, screenSize, location, northBearingDeg)
+    const frame = createMapFrame(viewport, screenSize, location)
     const point = scene.annotations[0]!.position
 
     expect(frame).not.toBeNull()
     const canvas = projectWorldToCanvasScreen(viewport, point)
-    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location, northBearingDeg)
+    const map = projectWorldToExpectedMapScreen(point, frame!, screenSize, location)
 
     expect(map.x).toBeCloseTo(canvas.x, 6)
     expect(map.y).toBeCloseTo(canvas.y, 6)

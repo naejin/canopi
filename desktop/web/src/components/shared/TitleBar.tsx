@@ -46,7 +46,7 @@ function LocalePicker() {
 
 export function TitleBar() {
   const hasActiveDesign = currentDesign.value !== null
-  const showsDocumentName = hasActiveDesign && (activePanel.value === 'canvas' || activePanel.value === 'location')
+  const showsDocumentName = hasActiveDesign && activePanel.value === 'canvas'
   const name = designName.value
   const dirty = designDirty.value
   const visibleName = visibleDesignName(name)

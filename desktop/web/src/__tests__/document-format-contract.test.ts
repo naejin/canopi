@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hydrateScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
+import { hydrateSceneFromDesign, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
 import {
   composeDocumentForSave,
   DOCUMENT_FILE_FIELD_OWNERS,
@@ -8,12 +8,12 @@ import {
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import type { CanopiFile } from '../types/design'
+import { geoAt } from './support/geo-design'
 
 const RAW_DOCUMENT = {
-  version: 6,
+  version: 7,
   name: 'Format contract',
   description: null,
-  spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 9, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [],
   plants: [],
@@ -38,10 +38,9 @@ const RAW_DOCUMENT = {
 } as const
 
 const BASE_DOCUMENT: CanopiFile = {
-  version: 6,
+  version: 7,
   name: 'Contract base',
   description: null,
-  spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [],
   plants: [],
@@ -67,7 +66,6 @@ describe('document format contract', () => {
       ...BASE_DOCUMENT,
       version: 101,
       description: 'Document-owned description',
-      spatial_frame: { anchor_longitude_deg: 2, anchor_latitude_deg: 1, north_bearing_deg: 11, placement_status: 'confirmed', location_metadata: { altitude_m: 3 } },
       consortiums: [{
         target: consortiumTarget('Document species'),
         stratum: 'document',
@@ -109,7 +107,7 @@ describe('document format contract', () => {
       created_at: '2026-04-13T01:00:00.000Z',
       extra: {
         future_panel_field: { source: 'document' },
-        guides: [{ id: 'document-guide', axis: 'h', position: 1 }],
+        guides: [{ id: 'document-guide', axis: 'h', lat: 23.001 }],
       },
     } satisfies CanopiFile
     const canvas = {
@@ -124,7 +122,7 @@ describe('document format contract', () => {
         canonical_name: 'Canvas species',
         common_name: null,
         color: null,
-        position: { x: 10, y: 20 },
+        position: geoAt(10, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -136,7 +134,7 @@ describe('document format contract', () => {
         name: 'Canvas zone',
         zone_type: 'polygon',
         rotation: 0,
-        points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+        points: [geoAt(0, 0), geoAt(1, 0), geoAt(1, 1)],
         fill_color: null,
         notes: null,
         locked: false,
@@ -144,7 +142,7 @@ describe('document format contract', () => {
       annotations: [{
         id: 'canvas-annotation',
         annotation_type: 'text',
-        position: { x: 3, y: 4 },
+        position: geoAt(3, 4),
         text: 'Canvas annotation',
         font_size: 12,
         rotation: null,
@@ -153,8 +151,8 @@ describe('document format contract', () => {
       measurement_guides: [{
         id: 'canvas-measurement-guide',
         locked: false,
-        start: { x: 2, y: 3 },
-        end: { x: 12, y: 3 },
+        start: geoAt(2, 3),
+        end: geoAt(12, 3),
       }],
       groups: [{
         id: 'canvas-group',
@@ -164,7 +162,7 @@ describe('document format contract', () => {
       }],
       updated_at: '2026-04-13T02:00:00.000Z',
       extra: {
-        guides: [{ id: 'canvas-guide', axis: 'v', position: 2 }],
+        guides: [{ id: 'canvas-guide', axis: 'v', lon: 13.002 }],
       },
     } satisfies CanopiFile
 
@@ -187,40 +185,11 @@ describe('document format contract', () => {
 
     expect(saved.name).toBe('Metadata name')
     expect(saved.description).toBe('Document-owned description')
-    expect(saved.spatial_frame).toEqual(document.spatial_frame)
+    expect(saved).not.toHaveProperty('spatial_frame')
     expect(saved.extra).toEqual({
       future_panel_field: { source: 'document' },
-      guides: [{ id: 'canvas-guide', axis: 'v', position: 2 }],
+      guides: [{ id: 'canvas-guide', axis: 'v', lon: 13.002 }],
     })
-  })
-
-  it('preserves the document spatial frame unless metadata supplies a complete replacement', () => {
-    const document = {
-      ...BASE_DOCUMENT,
-      spatial_frame: { ...BASE_DOCUMENT.spatial_frame, north_bearing_deg: 18 },
-    }
-    const preserved = composeDocumentForSave({
-      metadata: { name: 'Existing frame' },
-      document,
-      canvas: BASE_DOCUMENT,
-    })
-    const replacement = {
-      anchor_longitude_deg: -73.6,
-      anchor_latitude_deg: 45.5,
-      north_bearing_deg: 27,
-      placement_status: 'confirmed' as const,
-      location_metadata: { altitude_m: 12 },
-    }
-    const replaced = composeDocumentForSave({
-      metadata: { name: 'Replaced frame', spatialFrame: replacement },
-      document,
-      canvas: BASE_DOCUMENT,
-    })
-
-    expect(preserved.spatial_frame).toEqual(document.spatial_frame)
-    expect(replaced.spatial_frame).toEqual(replacement)
-    expect(replaced.spatial_frame).not.toBe(replacement)
-    expect(replaced.spatial_frame.location_metadata).not.toBe(replacement.location_metadata)
   })
 
   it('normalizes raw loaded files into extra while the scene codec keeps only scene-owned extra', () => {
@@ -238,10 +207,8 @@ describe('document format contract', () => {
     expect('experimental_block' in (normalized as unknown as Record<string, unknown>)).toBe(false)
 
     const now = new Date('2026-04-13T12:00:00.000Z')
-    const roundTripped = serializeScenePersistedState(
-      hydrateScenePersistedState(normalized),
-      { now },
-    )
+    const hydrated = hydrateSceneFromDesign(normalized)
+    const roundTripped = serializeScenePersistedState(hydrated.persisted, hydrated.geo, { now })
 
     expect(roundTripped.extra).toEqual({})
     expect(roundTripped.updated_at).toBe(now.toISOString())
@@ -262,7 +229,7 @@ describe('document format contract', () => {
       }],
     } satisfies CanopiFile
 
-    const scene = hydrateScenePersistedState(file)
+    const { persisted: scene, geo } = hydrateSceneFromDesign(file)
     expect(scene.groups).toEqual([{
       kind: 'group',
       id: 'group-1',
@@ -279,7 +246,7 @@ describe('document format contract', () => {
     expect(scene.groups[0]).not.toHaveProperty('position')
     expect(scene.groups[0]).not.toHaveProperty('rotationDeg')
 
-    const serialized = serializeScenePersistedState(scene)
+    const serialized = serializeScenePersistedState(scene, geo)
     expect(serialized.groups).toEqual([{
       id: 'group-1',
       locked: false,
@@ -353,7 +320,6 @@ describe('document format contract', () => {
       ...BASE_DOCUMENT,
       name: 'Document copy',
       description: 'Document description',
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 22, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       consortiums: [{
         target: consortiumTarget('Quercus robur'),
         stratum: 'high',
@@ -393,7 +359,7 @@ describe('document format contract', () => {
         }],
       },
       extra: {
-        guides: [{ id: 'old-guide', axis: 'h', position: 12 }],
+        guides: [{ id: 'old-guide', axis: 'h', lat: 23.012 }],
         future_panel_field: { preserve: true },
       },
       future_top_level: 'drop-after-normalize',
@@ -408,7 +374,7 @@ describe('document format contract', () => {
         canonical_name: 'Quercus robur',
         common_name: 'English oak',
         color: '#228833',
-        position: { x: 10, y: 20 },
+        position: geoAt(10, 20),
         rotation: null,
         scale: 3,
         notes: null,
@@ -420,7 +386,7 @@ describe('document format contract', () => {
         name: 'North bed',
         zone_type: 'planting',
         rotation: 0,
-        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
+        points: [geoAt(0, 0), geoAt(10, 0), geoAt(10, 10)],
         fill_color: '#99CC66',
         notes: null,
         locked: false,
@@ -428,7 +394,7 @@ describe('document format contract', () => {
       annotations: [{
         id: 'annotation-1',
         annotation_type: 'text',
-        position: { x: 5, y: 5 },
+        position: geoAt(5, 5),
         text: 'North',
         font_size: 12,
         rotation: null,
@@ -442,22 +408,19 @@ describe('document format contract', () => {
       }],
       updated_at: '2026-04-13T12:00:00.000Z',
       extra: {
-        guides: [{ id: 'new-guide', axis: 'v', position: 42 }],
+        guides: [{ id: 'new-guide', axis: 'v', lon: 13.042 }],
       },
     } satisfies CanopiFile
 
     const saved = composeDocumentForSave({
-      metadata: {
-        name: 'Saved document',
-        spatialFrame: { ...document.spatial_frame, north_bearing_deg: 14 },
-      },
+      metadata: { name: 'Saved document' },
       document,
       canvas,
     })
 
     expect(saved.name).toBe('Saved document')
     expect(saved.description).toBe('Document description')
-    expect(saved.spatial_frame).toEqual({ ...document.spatial_frame, north_bearing_deg: 14 })
+    expect(saved).not.toHaveProperty('spatial_frame')
     expect(saved.created_at).toBe(document.created_at)
     expect(saved.updated_at).toBe(canvas.updated_at)
     expect(saved.consortiums).toEqual(document.consortiums)
@@ -482,7 +445,7 @@ describe('document format contract', () => {
     expect(saved.groups[0]).not.toHaveProperty('position')
     expect(saved.groups[0]).not.toHaveProperty('rotation')
     expect(saved.extra).toEqual({
-      guides: [{ id: 'new-guide', axis: 'v', position: 42 }],
+      guides: [{ id: 'new-guide', axis: 'v', lon: 13.042 }],
       future_panel_field: { preserve: true },
     })
     expect('future_top_level' in (saved as unknown as Record<string, unknown>)).toBe(false)

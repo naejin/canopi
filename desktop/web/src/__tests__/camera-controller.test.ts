@@ -366,7 +366,7 @@ describe('CameraController', () => {
     camera.initialize({ width: 400, height: 300 })
     camera.focusTemporaryBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, { paddingCssPx: 48 })
 
-    camera.replacePolicy(createWorkspaceCameraPolicy(45, true))
+    camera.replacePolicy(createWorkspaceCameraPolicy(45))
 
     expect(camera.returnFromTemporaryFocus()).toBe(false)
   })

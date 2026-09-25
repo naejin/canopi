@@ -35,7 +35,6 @@ import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   NEW_DESIGN_LAYER_DEFAULTS,
 } from "../generated/new-design-defaults";
-import { newDesignSpatialFrame } from "../spatial-frame";
 import {
   browserAppDataStore,
   type BrowserAppDataStore,
@@ -501,7 +500,6 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
     version: CURRENT_CANOPI_FILE_VERSION,
     name,
     description: null,
-    spatial_frame: newDesignSpatialFrame(),
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: NEW_DESIGN_LAYER_DEFAULTS.map((layer) => ({ ...layer })),

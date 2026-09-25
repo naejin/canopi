@@ -27,7 +27,7 @@ function validateDocument(document) {
     if (!plant || typeof plant !== 'object' || typeof plant.id !== 'string' || !plant.id) throw new Error('plant has invalid id')
     if (ids.has(plant.id)) throw new Error('plant ids are not unique')
     ids.add(plant.id)
-    if (!plant.position || typeof plant.position !== 'object' || !Number.isFinite(plant.position.x) || !Number.isFinite(plant.position.y)) throw new Error('plant has invalid position')
+    if (!plant.position || typeof plant.position !== 'object' || !Number.isFinite(plant.position.lon) || !Number.isFinite(plant.position.lat)) throw new Error('plant has invalid position')
   }
   const references = { groupsPlant: { total: 0, valid: 0 }, timelinePlant: { total: 0, valid: 0 }, budgetPlant: { total: 0, valid: 0 } }
   const groups = document.groups ?? []
@@ -89,6 +89,16 @@ function offsetFor(index, mode) {
   return { x: (index % 100) * 4, y: Math.floor(index / 100) * 4 }
 }
 
+// Shifts a v7 lon/lat by local metres (x east, y south) on a local Mercator plane.
+function offsetGeo(position, offset) {
+  const metresPerDegreeLat = 2 * Math.PI * 6371008.8 / 360
+  const metresPerDegreeLon = metresPerDegreeLat * Math.cos(position.lat * Math.PI / 180)
+  return {
+    lon: position.lon + offset.x / metresPerDegreeLon,
+    lat: position.lat - offset.y / metresPerDegreeLat,
+  }
+}
+
 export function createDerivative(document, mode = 'dense') {
   if (!['dense', 'dispersed'].includes(mode)) throw new Error('layout must be dense or dispersed')
   const { ids, references } = validateDocument(document)
@@ -101,7 +111,7 @@ export function createDerivative(document, mode = 'dense') {
     const id = `synthetic-plant-${String(index + 1).padStart(5, '0')}`
     if (index < document.plants.length) firstCopyIds.set(source.id, id)
     const offset = offsetFor(index, mode)
-    return { ...source, id, position: { x: source.position.x + offset.x, y: source.position.y + offset.y } }
+    return { ...source, id, position: offsetGeo(source.position, offset) }
   })
   const derivative = structuredClone(document)
   derivative.plants = plants

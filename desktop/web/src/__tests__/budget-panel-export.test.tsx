@@ -25,10 +25,9 @@ import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfac
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Budget export test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -52,7 +51,7 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,

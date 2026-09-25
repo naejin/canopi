@@ -139,13 +139,12 @@ describe('createWorkspaceDocumentSurface', () => {
         installStyleRestorer: () => () => {},
       },
       layer: {},
+      readOrigin: () => ({ lat: 0, lon: 0 }),
     })
     const activation = workspace.activate({
       sessionIdentity: {},
       map: {
-        anchor: { lat: 0, lon: 0 },
-        northBearingDeg: 0,
-        placementStatus: 'confirmed',
+        initialCenter: { lat: 0, lon: 0 },
         basemapStyle: 'street',
         basemapVisible: true,
         basemapOpacity: 1,
@@ -223,9 +222,7 @@ function createReconciler(workspace: ReturnType<typeof createWorkspaceLifecycle>
 
 function mapSnapshot(): WorkspaceMapSnapshot {
   return {
-    anchor: { lat: 0, lon: 0 },
-    northBearingDeg: 0,
-    placementStatus: 'confirmed' as const,
+    initialCenter: { lat: 0, lon: 0 },
     basemapStyle: 'street',
     basemapVisible: true,
     basemapOpacity: 1,

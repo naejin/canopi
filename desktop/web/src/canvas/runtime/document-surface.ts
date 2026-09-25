@@ -19,6 +19,7 @@ import type { CanvasInspectionHandle } from '../inspection'
 import type { SceneCanvasInspectionOwner } from './inspection-lens'
 
 interface SceneCanvasDocumentSurfaceOptions {
+  readonly readEmptySceneScale?: () => number
   readonly inspection: Pick<SceneCanvasInspectionOwner, 'mount' | 'reset' | 'dispose'>
   readonly documents: Pick<
     SceneRuntimeDocumentBridge,
@@ -88,6 +89,7 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   zoomToFit(): void {
     this.options.cameraNavigation.zoomToFit(this.options.getSceneSnapshot(), {
       plantContext: this.options.createPlantPresentationContext(this.options.camera.viewport.scale),
+      emptySceneScale: this.options.readEmptySceneScale?.(),
     })
     this.options.invalidateViewport()
   }

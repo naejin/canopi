@@ -444,9 +444,7 @@ function snapshot({
   return {
     sessionIdentity,
     map: {
-      anchor: { lat: latitude, lon: 2.3522 },
-      northBearingDeg: 0,
-      placementStatus: 'confirmed',
+      initialCenter: { lat: latitude, lon: 2.3522 },
       basemapStyle: 'street',
       basemapVisible: true,
       basemapOpacity: 1,
@@ -455,7 +453,7 @@ function snapshot({
 }
 
 function label(candidate: WorkspaceActivationSnapshot): string {
-  return candidate.map.anchor.lat === 10 ? 'A' : 'B'
+  return candidate.map.initialCenter.lat === 10 ? 'A' : 'B'
 }
 
 function deferred<T>() {

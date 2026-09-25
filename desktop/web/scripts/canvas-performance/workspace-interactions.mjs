@@ -37,7 +37,8 @@ async function main() {
       const { WorkspaceActivationCoordinator } = await import(source('app/canvas-map-surface/workspace-activation.ts'))
       const container = document.querySelector('#scene')
       if (!(container instanceof HTMLElement)) throw new Error('Missing workspace container')
-      if (!file.spatial_frame) throw new Error('Workspace interaction check requires a v2 spatial frame')
+      const { CURRENT_CANOPI_FILE_VERSION } = await import(source('generated/canopi-design-format.ts'))
+      if (file.version !== CURRENT_CANOPI_FILE_VERSION) throw new Error('Workspace interaction check requires a current-format Design')
 
       const camera = new MapLibreWorkspaceCameraOwner()
       const composition = createSharedMapSceneRendererComposition()
@@ -54,17 +55,12 @@ async function main() {
         composition,
         map: controls,
         layer: {},
+        readOrigin: () => runtime.querySurface.sessionPlane.peek().origin,
       })
-      const frame = file.spatial_frame
       const result = await workspace.activate({
         sessionIdentity: {},
         map: {
-          anchor: {
-            lat: frame.anchor_latitude_deg,
-            lon: frame.anchor_longitude_deg,
-          },
-          northBearingDeg: frame.north_bearing_deg,
-          placementStatus: frame.placement_status,
+          initialCenter: runtime.querySurface.sessionPlane.peek().origin,
           basemapStyle: file.basemap_style ?? 'street',
           // The production map shell stays offline for this isolated check.
           basemapVisible: false,

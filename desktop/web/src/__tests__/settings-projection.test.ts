@@ -24,6 +24,7 @@ import {
   savedStampsFrameHeight,
   theme,
   googleMapsApiKey,
+  lastView,
 } from '../app/settings/state'
 import {
   flushSettingsProjection,
@@ -52,11 +53,13 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     hillshade_opacity: 0.55,
     plant_spacing_interval_m: 0.5,
     saved_stamps_frame_height: 220,
+    last_view: null,
     ...overrides,
   }
 }
 
 function resetProjectionSignals(): void {
+  lastView.value = null
   locale.value = 'en'
   theme.value = 'light'
   basemapStyle.value = 'street'
@@ -119,6 +122,22 @@ afterEach(() => {
 })
 
 describe('settings projection', () => {
+  it('hydrates, snapshots and normalizes the last view', () => {
+    hydrateSettingsProjection(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
+    expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+    expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
+
+    mutateSettingsProjection((draft) => {
+      draft.lastView = { lon: 13, lat: 89, zoom: 4 }
+    }, { persist: 'none' })
+    expect(lastView.value).toBeNull()
+
+    mutateSettingsProjection((draft) => {
+      draft.lastView = { lon: -122.4, lat: 37.8, zoom: Number.NaN }
+    }, { persist: 'none' })
+    expect(lastView.value).toBeNull()
+  })
+
   it('hydrates platform settings into the frontend projection without persisting', () => {
     hydrateSettingsProjection(baseSettings({
       locale: 'fr',
@@ -196,6 +215,7 @@ describe('settings projection', () => {
       hillshade_opacity: 0.25,
       plant_spacing_interval_m: 0.25,
       google_maps_api_key: null,
+      last_view: null,
     })
     expect(saveSettings).not.toHaveBeenCalled()
   })

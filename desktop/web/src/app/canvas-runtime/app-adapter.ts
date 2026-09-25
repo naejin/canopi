@@ -15,10 +15,9 @@ import {
   snapToGuidesEnabled,
 } from '../canvas-settings/signals'
 import { mutateSettingsProjection } from '../settings/projection'
-import { locale, plantSpacingIntervalM, theme } from '../settings/state'
+import { lastView, locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
-import { getDesignHistoryParticipant } from '../design-edit/core'
 import { t } from '../../i18n'
 
 const APP_OWNED_LAYER_PROJECTIONS = new Set(['base', 'contours'])
@@ -39,10 +38,8 @@ export interface CanvasRuntimeAppCapabilities {
 export function createAppCanvasRuntimeAppAdapter(
   capabilities: CanvasRuntimeAppCapabilities,
 ): CanvasRuntimeAppAdapter {
-  const coordinatedHistory = getDesignHistoryParticipant()
   return {
     cleanState: { setCanvasClean },
-    coordinatedHistory,
     document: { composeDocumentForSave },
     // Read per gesture, so an inspection session needs no runtime rebuild, and
     // absent in an edition that has no raster capability.
@@ -61,6 +58,7 @@ export function createAppCanvasRuntimeAppAdapter(
       readSnapToGridEnabled: () => snapToGridEnabled.value,
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
+      readLastView: () => lastView.peek(),
       commitPlantSpacingIntervalMeters: (meters) => {
         mutateSettingsProjection((settings) => {
           settings.plantSpacingIntervalM = meters

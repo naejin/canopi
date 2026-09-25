@@ -70,6 +70,7 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       value.plant_spacing_interval_m,
       DEFAULT_SETTINGS.plant_spacing_interval_m,
     ),
+    last_view: readLastView(value.last_view),
   }
 }
 
@@ -89,6 +90,14 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 
 function readU32(value: unknown, fallback: number): number {
   return isU32(value) ? value : fallback
+}
+
+function readLastView(value: unknown): Settings['last_view'] {
+  if (!value || typeof value !== 'object') return null
+  const { lon, lat, zoom } = value as Record<string, unknown>
+  return [lon, lat, zoom].every((part) => typeof part === 'number' && Number.isFinite(part))
+    ? { lon: lon as number, lat: lat as number, zoom: zoom as number }
+    : null
 }
 
 function readNullableString(value: unknown, fallback: string | null): string | null {

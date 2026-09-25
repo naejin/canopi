@@ -163,12 +163,9 @@
     "overview": {
       "label": "Vista general",
       "zoomInToEdit": "Acerca la vista para editar",
-      "provisional": "Ubicación provisional del diseño · Acerca la vista para editar",
       "returnToDesign": "Volver al diseño",
       "design": "Diseño",
-      "provisionalDesign": "Diseño provisional",
-      "designMarker": "Volver al diseño",
-      "provisionalMarker": "Volver al diseño provisional"
+      "designMarker": "Volver al diseño"
     },
     "plantColor": {
       "label": "Color de planta",
@@ -216,25 +213,10 @@
       "applySelection": "Aplicar a {{count}} seleccionadas"
     },
     "location": {
-      "title": "Ubicación del diseño",
-      "confirm": "Confirmar ubicación",
-      "move": "Mover diseño aquí",
-      "current": "Actual",
       "searchPlaceholder": "Buscar ubicación...",
       "searching": "Buscando...",
       "noResults": "Sin resultados",
-      "geocodeError": "Error de geocodificación",
-      "mapUnavailable": "Mapa no disponible",
-      "provisionalTitle": "Sitio provisional",
-      "provisionalBody": "La edición local está disponible. Confirma un sitio antes de la evaluación específica del lugar.",
-      "confirmedTitle": "Sitio confirmado",
-      "selectedTitle": "Ubicación seleccionada",
-      "coordinates": "Coordenadas",
-      "latitude": "Latitud",
-      "longitude": "Longitud",
-      "preview": "Vista previa",
-      "cancel": "Cancelar",
-      "invalidCoordinates": "Introduce una latitud entre -85,051129 y 85,051129 y una longitud entre -180 y 180."
+      "geocodeError": "Error de geocodificación"
     },
     "file": {
       "new": "Nuevo diseño",
@@ -266,7 +248,6 @@
       "basemap": "Mapa base",
       "basemapLoading": "Cargando mapa base...",
       "basemapError": "Mapa base no disponible",
-      "precisionWarning": "La precisión puede degradarse en diseños grandes",
       "references": "Referencias del lugar",
       "sceneStack": "Capas del diseño",
       "topToBottom": "De arriba abajo",

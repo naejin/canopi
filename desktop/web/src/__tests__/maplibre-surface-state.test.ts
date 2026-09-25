@@ -2,13 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
-  mergeMapLibreCanvasSurfaceState,
   publishMapDiagnostics,
 } from '../maplibre/canvas-surface-state'
-import {
-  LOCAL_MERCATOR_PROJECTION_ID,
-  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-} from '../canvas/projection'
+import { LOCAL_MERCATOR_PROJECTION_ID } from '../canvas/projection'
 
 describe('maplibre surface state adapter', () => {
   afterEach(() => {
@@ -21,31 +17,15 @@ describe('maplibre surface state adapter', () => {
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     })
   })
 
-  it('merges precision warning data from the current scene extent', () => {
-    const merged = mergeMapLibreCanvasSurfaceState({
-      status: 'ready',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-    }, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 5)
-
-    expect(merged.precisionWarning).toBe(true)
-    expect(merged.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-  })
-
-  it('detects state equality including terrain and precision fields', () => {
+  it('detects state equality including terrain fields', () => {
     const left = {
       status: 'ready' as const,
       errorMessage: null,
       terrainStatus: 'error' as const,
       terrainErrorMessage: 'dem failed',
-      precisionWarning: true,
-      designExtentMeters: 1234,
     }
     const right = { ...left }
     const different = { ...left, terrainErrorMessage: null }
@@ -58,10 +38,9 @@ describe('maplibre surface state adapter', () => {
     const frame = {
       center: [2.3522, 48.8566],
       zoom: 17,
-      bearing: 12,
+      bearing: 0,
       diagnostics: {
         projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-        warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
         viewportCenterWorld: { x: 20, y: -10 },
         viewportCornerGeo: [
           { lng: 2.35, lat: 48.86 },
@@ -72,51 +51,23 @@ describe('maplibre surface state adapter', () => {
       },
     } as const
 
-    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-    const atThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
+    publishMapDiagnostics(frame)
+    const published = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
       .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
-    expect(atThreshold).toMatchObject({
-      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-      precisionWarning: false,
-    })
-
-    publishMapDiagnostics(frame, LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1)
-    const beyondThreshold = (globalThis as { __CANOPI_MAP_DEBUG__?: unknown })
-      .__CANOPI_MAP_DEBUG__ as Record<string, unknown>
-    expect(beyondThreshold).toMatchObject({
+    expect(published).toMatchObject({
       projectionId: 'local-mercator',
-      precisionWarningThresholdMeters: 10_000,
-      designExtentMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 1,
-      precisionWarning: true,
-    })
-    expect(beyondThreshold).not.toHaveProperty('projectionBackendId')
-  })
-
-  it('publishes precision diagnostics from the canonical scalar policy', () => {
-    const frame = {
       center: [2.3522, 48.8566],
       zoom: 17,
       bearing: 0,
-      diagnostics: {
-        projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-        warningThresholdMeters: 1,
-        viewportCenterWorld: { x: 0, y: 0 },
-        viewportCornerGeo: [
-          { lng: 2.35, lat: 48.86 },
-          { lng: 2.36, lat: 48.86 },
-          { lng: 2.36, lat: 48.85 },
-          { lng: 2.35, lat: 48.85 },
-        ],
-      },
-    } as const
+      viewportCenterWorld: { x: 20, y: -10 },
+    })
+    expect(published).not.toHaveProperty('projectionBackendId')
+    expect(published).not.toHaveProperty('precisionWarning')
+    expect(published).not.toHaveProperty('designExtentMeters')
+  })
 
-    publishMapDiagnostics(frame, 2)
-
-    expect((globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__)
-      .toMatchObject({
-        precisionWarningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-        designExtentMeters: 2,
-        precisionWarning: false,
-      })
+  it('clears the published diagnostics when no frame is available', () => {
+    publishMapDiagnostics(null)
+    expect((globalThis as { __CANOPI_MAP_DEBUG__?: unknown }).__CANOPI_MAP_DEBUG__).toBeNull()
   })
 })

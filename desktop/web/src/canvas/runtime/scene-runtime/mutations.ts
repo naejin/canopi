@@ -234,6 +234,25 @@ export class SceneRuntimeMutationController {
     )
   }
 
+  // Keeps copied objects at their geographic position across a re-origin.
+  remapClipboard(reproject: (state: Partial<ScenePersistedState>) => Partial<ScenePersistedState>): void {
+    const clipboard = this._clipboard
+    if (!clipboard) return
+    const remapped = reproject({
+      plants: clipboard.plants,
+      zones: clipboard.zones,
+      annotations: clipboard.annotations,
+      measurementGuides: clipboard.measurementGuides,
+    })
+    this._clipboard = {
+      ...clipboard,
+      plants: remapped.plants ?? clipboard.plants,
+      zones: remapped.zones ?? clipboard.zones,
+      annotations: remapped.annotations ?? clipboard.annotations,
+      measurementGuides: remapped.measurementGuides ?? clipboard.measurementGuides,
+    }
+  }
+
   private _copyWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()

@@ -1,7 +1,7 @@
 import type { SpeciesDetail, SpeciesListItem } from '../src/types/species'
 import type { CanopiFile } from '../src/types/design'
 import { createDefaultScenePersistedState } from '../src/canvas/runtime/scene'
-import { serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { createSceneGeoFrame, serializeScenePersistedState } from '../src/canvas/runtime/scene'
 
 export const detail: SpeciesDetail = {
   "canonical_name": "Malus domestica",
@@ -209,11 +209,10 @@ export function designFixture(state = 'populated'): CanopiFile {
     ...serializeScenePersistedState({ ...scene, plants,
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
-    }, { now: new Date('2026-01-01T00:00:00Z') }),
+    }, createSceneGeoFrame(state === 'located'
+      ? { lon: 0.033854, lat: 48.220272 }
+      : { lon: 13, lat: 23 }), { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
-    spatial_frame: state === 'located' || state === 'overview-confirmed'
-      ? { anchor_longitude_deg: 0.033854, anchor_latitude_deg: 48.220272, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 118 } }
-      : { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     lidar: state === 'empty' ? null : {
       schema_version: 1,
       entries: [

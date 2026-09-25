@@ -7,8 +7,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   LOCAL_MERCATOR_PROJECTION_ID,
-  LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  createProjectionPrecisionSnapshot,
   mercatorToWorld,
   worldToMercator,
   worldToGeo,
@@ -45,11 +43,10 @@ describe('worldToGeo', () => {
     expect(result.lat).toBeLessThan(45.52)
   })
 
-  it('rotates canvas axes when north bearing is non-zero', () => {
-    const northUp = worldToGeo(100, 0, 45.52, -122.68, 0)
-    const rotated = worldToGeo(100, 0, 45.52, -122.68, 90)
-    expect(rotated.lng).not.toBeCloseTo(northUp.lng, 8)
-    expect(rotated.lat).not.toBeCloseTo(northUp.lat, 8)
+  it('keeps the canvas north-up: x displacement changes only longitude', () => {
+    const result = worldToGeo(100, 0, 45.52, -122.68)
+    expect(result.lng).toBeGreaterThan(-122.68)
+    expect(result.lat).toBeCloseTo(45.52, 10)
   })
 })
 
@@ -122,19 +119,12 @@ describe('worldToGeo / geoToWorld round-trip', () => {
     expect(geo.lng).toBeCloseTo(lng, 8)
     expect(geo.lat).toBeCloseTo(lat, 8)
   })
-
-  it('round-trips with non-zero north bearing', () => {
-    const geo = worldToGeo(300, -150, 45.52, -122.68, 90)
-    const world = geoToWorld(geo.lng, geo.lat, 45.52, -122.68, 90)
-    expect(world.x).toBeCloseTo(300, 2)
-    expect(world.y).toBeCloseTo(-150, 2)
-  })
 })
 
 describe('worldToMercator / mercatorToWorld round-trip', () => {
-  it('preserves local meters and bearing through the canonical Mercator operations', () => {
-    const mercator = worldToMercator(325.5, -149.25, 45.52, -122.68, 37)
-    const world = mercatorToWorld(mercator.x, mercator.y, 45.52, -122.68, 37)
+  it('preserves local meters through the canonical Mercator operations', () => {
+    const mercator = worldToMercator(325.5, -149.25, 45.52, -122.68)
+    const world = mercatorToWorld(mercator.x, mercator.y, 45.52, -122.68)
 
     expect(world.x).toBeCloseTo(325.5, 6)
     expect(world.y).toBeCloseTo(-149.25, 6)
@@ -173,22 +163,9 @@ describe('stageScaleToMapZoom', () => {
   })
 })
 
-describe('canonical projection diagnostics', () => {
-  it('derives warning-only precision metrics from a scalar physical extent', () => {
-    const atThreshold = createProjectionPrecisionSnapshot(
-      LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-    )
-    expect(atThreshold.precisionWarning).toBe(false)
-
-    const precision = createProjectionPrecisionSnapshot(
-      LOCAL_PROJECTION_WARNING_THRESHOLD_METERS + 25,
-    )
-
+describe('canonical projection identity', () => {
+  it('names the local Mercator projection', () => {
     expect(LOCAL_MERCATOR_PROJECTION_ID).toBe('local-mercator')
-    expect(precision.projectionId).toBe(LOCAL_MERCATOR_PROJECTION_ID)
-    expect(precision.warningThresholdMeters).toBe(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-    expect(precision.designExtentMeters).toBeGreaterThan(LOCAL_PROJECTION_WARNING_THRESHOLD_METERS)
-    expect(precision.precisionWarning).toBe(true)
   })
 })
 
@@ -199,30 +176,10 @@ describe('viewportCenterGeo', () => {
       { width: 1000, height: 800 },
       45.52,
       -122.68,
-      0,
     )
     const expected = worldToGeo(350, 250, 45.52, -122.68)
     expect(result.lng).toBeCloseTo(expected.lng, 8)
     expect(result.lat).toBeCloseTo(expected.lat, 8)
-  })
-
-  it('accounts for north bearing when converting viewport center', () => {
-    const rotated = viewportCenterGeo(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      45.52,
-      -122.68,
-      90,
-    )
-    const northUp = viewportCenterGeo(
-      { x: -200, y: -100, scale: 2 },
-      { width: 1000, height: 800 },
-      45.52,
-      -122.68,
-      0,
-    )
-    expect(rotated.lng).not.toBeCloseTo(northUp.lng, 8)
-    expect(rotated.lat).not.toBeCloseTo(northUp.lat, 8)
   })
 })
 
@@ -233,7 +190,6 @@ describe('viewportCornerGeoPoints', () => {
       { width: 1000, height: 800 },
       45.52,
       -122.68,
-      0,
     )
 
     expect(corners).toHaveLength(4)

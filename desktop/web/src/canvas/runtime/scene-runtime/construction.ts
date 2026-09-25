@@ -1,5 +1,5 @@
 import type { SpeciesFocus } from '../species-key'
-import { signal, type Signal } from '@preact/signals'
+import { effect, signal, type Signal } from '@preact/signals'
 import {
   createDetachedCanvasRuntimeAppAdapter,
   type CanvasRuntimeAppAdapter,
@@ -44,6 +44,9 @@ import {
   type SceneRuntimePanelTargetAdapter,
 } from './panel-target-adapter'
 import { SceneRuntimeMutationController } from './mutations'
+import { SceneRuntimeReoriginController } from './reorigin'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../../session-plane'
+import { mapZoomToStageScale } from '../../projection'
 import { SceneRuntimePresentationController } from './presentation'
 import { SceneRuntimeRenderScheduler } from './render-scheduler'
 import {
@@ -128,7 +131,17 @@ export function createSceneRuntimeConstruction(
   options: SceneRuntimeConstructionOptions,
   callbacks: SceneRuntimeConstructionCallbacks,
 ): SceneRuntimeConstruction {
-  const sceneStore = new SceneStore()
+  const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
+  const readEmptyDesignView = () => appAdapter.settings.readLastView?.() ?? DEFAULT_NEW_DESIGN_VIEW
+  const sceneStore = new SceneStore(undefined, {}, () => {
+    const view = readEmptyDesignView()
+    return { lon: view.lon, lat: view.lat }
+  })
+  // Fitting an empty Design shows the last view: its centre is the plane origin.
+  const readEmptySceneScale = () => mapZoomToStageScale(
+    readEmptyDesignView().zoom,
+    sceneStore.sessionPlane.origin.lat,
+  )
   const cameraOwner = options.camera ?? new CameraController()
   const camera = cameraOwner.frame
   const cameraNavigation = cameraOwner.navigation
@@ -148,12 +161,8 @@ export function createSceneRuntimeConstruction(
       ],
     },
   )
-  const appAdapter = options.appAdapter ?? createDetachedCanvasRuntimeAppAdapter()
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
-    reserveSequence: appAdapter.coordinatedHistory?.reserveSequence,
-    announceBranch: appAdapter.coordinatedHistory?.announceBranch,
-    subscribeToBranches: appAdapter.coordinatedHistory?.subscribeToBranches,
   })
   const sceneEdits = new SceneRuntimeEditCoordinator({
     sceneStore,
@@ -215,6 +224,7 @@ export function createSceneRuntimeConstruction(
     setHoveredTarget: callbacks.setHoveredTarget,
   })
   const documentSurface = createSceneCanvasDocumentSurface({
+    readEmptySceneScale,
     inspection,
     documents,
     camera,
@@ -259,6 +269,15 @@ export function createSceneRuntimeConstruction(
     },
     invalidateScene: () => callbacks.invalidate('scene'),
   })
+  const reorigin = new SceneRuntimeReoriginController({
+    sceneState: sceneStore,
+    authority: sceneEdits,
+    commandAdmission: sceneEdits,
+    clipboard: mutations,
+    cameraNavigation,
+  })
+  disposeEffects.push(effect(() => reorigin.observe(camera.snapshot.value)))
+  disposeEffects.push(() => reorigin.dispose())
   const updateSpeciesFocus = (change: Partial<SpeciesFocus>) => {
     if (!runtimeActive) return
     const current = sceneStore.session.speciesFocus
@@ -270,6 +289,7 @@ export function createSceneRuntimeConstruction(
     callbacks.invalidate('scene')
   }
   const commandSurface = createSceneCanvasCommandSurface({
+    readEmptySceneScale,
     speciesFocus: {
       focus: (canonicalName) => updateSpeciesFocus({ canonicalName }),
       showCodes: (showCodes) => updateSpeciesFocus({ showCodes }),
@@ -278,7 +298,6 @@ export function createSceneRuntimeConstruction(
     camera,
     cameraNavigation,
     history: sceneEdits,
-    coordinatedHistory: appAdapter.coordinatedHistory,
     commandAdmission: sceneEdits,
     settledReader,
     savedObjectStamps: appAdapter.savedObjectStamps,

@@ -163,12 +163,9 @@
     "overview": {
       "label": "Overview",
       "zoomInToEdit": "Zoom in to edit",
-      "provisional": "Provisional Design location · Zoom in to edit",
       "returnToDesign": "Return to Design",
       "design": "Design",
-      "provisionalDesign": "Provisional Design",
-      "designMarker": "Return to the Design",
-      "provisionalMarker": "Return to the provisional Design"
+      "designMarker": "Return to the Design"
     },
     "plantColor": {
       "label": "Plant color",
@@ -216,25 +213,10 @@
       "applySelection": "Apply to {{count}} selected"
     },
     "location": {
-      "title": "Design Location",
-      "confirm": "Confirm location",
-      "move": "Move design here",
-      "current": "Current",
       "searchPlaceholder": "Search for a location...",
       "searching": "Searching...",
       "noResults": "No results found",
-      "geocodeError": "Geocoding failed",
-      "mapUnavailable": "Map unavailable",
-      "provisionalTitle": "Provisional site",
-      "provisionalBody": "Local editing is available. Confirm a site before site-specific evaluation.",
-      "confirmedTitle": "Confirmed site",
-      "selectedTitle": "Selected location",
-      "coordinates": "Coordinates",
-      "latitude": "Latitude",
-      "longitude": "Longitude",
-      "preview": "Preview",
-      "cancel": "Cancel",
-      "invalidCoordinates": "Enter a latitude between -85.051129 and 85.051129 and a longitude between -180 and 180."
+      "geocodeError": "Geocoding failed"
     },
     "file": {
       "new": "New Design",
@@ -266,7 +248,6 @@
       "basemap": "Basemap",
       "basemapLoading": "Loading basemap...",
       "basemapError": "Basemap unavailable",
-      "precisionWarning": "Precision may degrade for large designs",
       "references": "Site references",
       "sceneStack": "Scene stack",
       "topToBottom": "Top to bottom",

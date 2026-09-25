@@ -4,10 +4,8 @@ import type { MapLibreMapInstance } from '../../maplibre/loader'
 import {
   IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   mapLibreCanvasSurfaceStateEquals,
-  mergeMapLibreCanvasSurfaceState,
   publishMapDiagnostics,
   type MapLibreCanvasSurfaceState,
-  type MapLibreCanvasSurfaceStateInput,
 } from '../../maplibre/canvas-surface-state'
 import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
 import { applyTerrainPaintUpdates, classifyTerrainSync, clearTerrain, rebuildTerrain } from '../../maplibre/terrain-sync'
@@ -24,7 +22,7 @@ export interface WorkspaceMapContributionsOptions {
   readonly createRasterDisplay?: WorkspaceMapContributionAdapter['createRasterDisplay']
   readonly publishViewBounds?: WorkspaceMapContributionAdapter['publishViewBounds']
   readonly onStateChange?: (state: MapLibreCanvasSurfaceState) => void
-  readonly publishDiagnostics?: (frame: MapFrame | null, extent: number | null) => void
+  readonly publishDiagnostics?: (frame: MapFrame | null) => void
   readonly logError?: (message?: unknown, ...args: unknown[]) => void
 }
 
@@ -163,7 +161,7 @@ export class WorkspaceMapContributions {
           if (!this.current(revision)) continue
           this.publishBounds()
           if (!this.current(revision)) continue
-          this.publishDiagnostics(snapshot.frame, snapshot.designExtentMeters)
+          this.publishDiagnostics(snapshot.frame)
           if (!this.current(revision)) continue
           void this.syncTerrain(map, snapshot, revision)
         } catch (error) {
@@ -294,7 +292,7 @@ export class WorkspaceMapContributions {
     this.terrain = null
     this.terrainTouched = false
     this.attempt('Failed to clear map view bounds:', () => this.options.publishViewBounds?.(null))
-    this.attempt('Failed to clear map diagnostics:', () => this.publishDiagnostics(null, null))
+    this.attempt('Failed to clear map diagnostics:', () => this.publishDiagnostics(null))
   }
 
   private current(revision: number): boolean {
@@ -327,16 +325,15 @@ export class WorkspaceMapContributions {
     })
   }
 
-  private publishState(next: MapLibreCanvasSurfaceStateInput): void {
-    const state = mergeMapLibreCanvasSurfaceState(next, this.snapshot?.designExtentMeters ?? null)
+  private publishState(state: MapLibreCanvasSurfaceState): void {
     if (mapLibreCanvasSurfaceStateEquals(this.state, state)) return
     this.state = state
     this.attempt('Map contribution state observer failed:', () => this.options.onStateChange?.(state))
   }
 
-  private publishDiagnostics(frame: MapFrame | null, extent: number | null): void {
+  private publishDiagnostics(frame: MapFrame | null): void {
     this.attempt('Map contribution diagnostics observer failed:', () => {
-      (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame, extent)
+      (this.options.publishDiagnostics ?? publishMapDiagnostics)(frame)
     })
   }
 

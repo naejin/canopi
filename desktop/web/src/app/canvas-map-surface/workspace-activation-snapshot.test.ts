@@ -3,21 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { layerOpacity, layerVisibility } from '../canvas-settings/signals'
 import { basemapStyle } from '../settings/state'
 import { normalizeBasemapStyle } from '../../maplibre/config'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 import { readWorkspaceActivationSnapshot, readWorkspaceBasemapPresentation } from './workspace-activation-snapshot'
 
 const identity = {}
-const frame = {
-  anchor_latitude_deg: 48.86,
-  anchor_longitude_deg: 2.35,
-  north_bearing_deg: 12,
-  placement_status: 'confirmed' as const,
-  location_metadata: { altitude_m: null },
-}
 
-function store(hasDesign = true, spatialFrame: typeof frame | null = frame) {
+function store(hasDesign = true) {
   return {
     hasCurrentDesign: () => hasDesign,
-    readMetadata: () => ({ spatialFrame }),
     sessionIdentity: { peek: () => identity },
   } as never
 }
@@ -27,13 +20,14 @@ describe('readWorkspaceActivationSnapshot', () => {
     expect(readWorkspaceActivationSnapshot({ store: store(false) })).toBeNull()
   })
 
-  it('copies only session spatial facts and normalized basemap presentation', () => {
+  it('copies the initial map centre and normalized basemap presentation', () => {
     const presentation = {
       layerVisibility: { base: true },
       layerOpacity: { base: Number.NaN },
     }
     const snapshot = readWorkspaceActivationSnapshot({
       store: store(),
+      readInitialCenter: () => ({ lat: 48.86, lon: 2.35 }),
       readBasemapStyle: () => 'street',
       readMapLayerPresentation: () => presentation,
     })
@@ -41,17 +35,28 @@ describe('readWorkspaceActivationSnapshot', () => {
       sessionIdentity: identity,
       maximumWorldExtentMeters: undefined,
       map: expect.objectContaining({
-        anchor: { lat: 48.86, lon: 2.35 }, northBearingDeg: 12, basemapOpacity: 0,
+        initialCenter: { lat: 48.86, lon: 2.35 }, basemapOpacity: 0,
       }),
     }))
+    expect(snapshot?.map).not.toHaveProperty('anchor')
+    expect(snapshot?.map).not.toHaveProperty('northBearingDeg')
+    expect(snapshot?.map).not.toHaveProperty('placementStatus')
     presentation.layerVisibility.base = false
     expect(snapshot?.map.basemapVisible).toBe(true)
-    expect(Object.isFrozen(snapshot?.map.anchor)).toBe(true)
+    expect(Object.isFrozen(snapshot?.map.initialCenter)).toBe(true)
   })
 
-  it('rejects a missing spatial frame for a current Design', () => {
-    expect(() => readWorkspaceActivationSnapshot({ store: store(true, null) }))
-      .toThrow('missing its required spatial frame')
+  it('centres a Design without a session plane origin on the new-Design default view', () => {
+    const snapshot = readWorkspaceActivationSnapshot({
+      store: store(),
+      readBasemapStyle: () => 'street',
+      readMapLayerPresentation: () => ({ layerVisibility: {}, layerOpacity: {} }),
+    })
+    expect(snapshot?.map.initialCenter).toEqual({
+      lat: DEFAULT_NEW_DESIGN_VIEW.lat,
+      lon: DEFAULT_NEW_DESIGN_VIEW.lon,
+    })
+    expect(snapshot?.map.basemapVisible).toBe(true)
   })
 
   it('shares normalized presentation with the live settings reader', () => {

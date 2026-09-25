@@ -189,20 +189,10 @@
   }
 }
 
-.basemapFeedback[data-location-cue="true"] .basemapFeedbackDot {
-  animation: basemapCue 1.8s ease-out;
-}
-
 @keyframes basemapPulse {
   0%,
   100% { opacity: 0.45; }
   50% { opacity: 1; }
-}
-
-@keyframes basemapCue {
-  0% { transform: scale(0.6); opacity: 0.5; }
-  20% { transform: scale(1.5); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Thin utility bar below the canvas for zoom controls */

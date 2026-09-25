@@ -10,7 +10,6 @@ import type { PanelTarget } from '../../types/design'
 export interface CanvasMapSurfaceOverlaySnapshot {
   readonly runtime: Pick<CanvasQuerySurface, 'getSceneSnapshot'> | null
   readonly location: { readonly lat: number; readonly lon: number } | null
-  readonly northBearingDeg: number | null
   readonly hoveredTargets: readonly PanelTarget[]
   readonly selectedTargets: readonly PanelTarget[]
 }
@@ -46,6 +45,5 @@ function toCanvasOverlayLocation(
   return {
     lat: snapshot.location.lat,
     lon: snapshot.location.lon,
-    northBearingDeg: snapshot.northBearingDeg,
   }
 }

@@ -17,7 +17,6 @@ export interface MapLibreSurfaceCameraMap {
 export function resolveMapLibreSurfaceFrame(
   runtime: MapLibreSurfaceCameraRuntime | null,
   location: MapLibreCameraLocation | null,
-  bearing: number | null,
 ): MapFrame | null {
   if (!runtime || !location) return null
   const snapshot = runtime.viewport.value
@@ -26,7 +25,6 @@ export function resolveMapLibreSurfaceFrame(
     snapshot.viewport,
     snapshot.screenSize,
     location,
-    bearing,
   )
 }
 
@@ -34,9 +32,8 @@ export function applyMapLibreSurfaceCamera(
   map: MapLibreSurfaceCameraMap,
   runtime: MapLibreSurfaceCameraRuntime | null,
   location: MapLibreCameraLocation | null,
-  bearing: number | null,
 ): MapFrame | null {
-  const frame = resolveMapLibreSurfaceFrame(runtime, location, bearing)
+  const frame = resolveMapLibreSurfaceFrame(runtime, location)
   if (!frame) return null
 
   map.jumpTo({

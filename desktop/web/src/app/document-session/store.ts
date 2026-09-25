@@ -1,16 +1,13 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals'
-import type { CanopiFile, SpatialFrame } from '../../types/design'
-import { cloneSpatialFrame } from '../../spatial-frame'
+import type { CanopiFile } from '../../types/design'
 import {
   DesignEditBusyError,
   DesignEditUnavailableError,
   registerDesignEditAuthorityCapability,
-  type DesignPreviewOptions,
   type DesignPreviewOutcome,
   type DesignPreviewTransaction,
   type DesignProjector,
 } from '../design-edit/authority-capability'
-import { DesignHistory } from '../design-edit/history'
 import {
   registerDesignSessionPersistenceCapability,
   type DesignSessionPersistenceCapture,
@@ -28,10 +25,6 @@ export interface DesignSessionIdentity {
   readonly name: string
 }
 
-export interface DesignSessionMetadataSnapshot {
-  readonly spatialFrame: SpatialFrame | null
-}
-
 export interface DesignSessionStore {
   readonly sessionIdentity: ReadonlySignal<object>
   readonly currentDesign: ReadonlySignal<CanopiFile | null>
@@ -43,7 +36,6 @@ export interface DesignSessionStore {
   readonly committedDesignRevision: ReadonlySignal<number>
 
   readIdentity(): DesignSessionIdentity
-  readMetadata(): DesignSessionMetadataSnapshot
   readCurrentDesign(): CanopiFile | null
   readDesignPath(): string | null
   readDesignName(): string
@@ -165,38 +157,7 @@ function createDesignSessionStore(
     readonly intent: string
     projector: DesignProjector | null
     mutated: boolean
-    readonly options: DesignPreviewOptions
   } | null = null
-  const designHistory = new DesignHistory({
-    applySpatialFrame: (spatialFrame) => {
-      if (activePreview) throw new DesignEditBusyError(activePreview.intent)
-      applyCommittedDesign((design) => ({
-        ...design,
-        spatial_frame: cloneSpatialFrame(spatialFrame),
-      }), true)
-    },
-  })
-  const designHistoryRevision = computed(() => {
-    const historyRevision = designHistory.revision.value
-    return historyRevision * 2 + (designPreviewActive.value ? 1 : 0)
-  })
-  const designHistoryParticipant = Object.freeze({
-    revision: designHistoryRevision,
-    canUndo: computed(() => !designPreviewActive.value && designHistory.canUndo.value),
-    canRedo: computed(() => !designPreviewActive.value && designHistory.canRedo.value),
-    nextUndoSequence: computed(() => designPreviewActive.value
-      ? null
-      : designHistory.nextUndoSequence.value),
-    nextRedoSequence: computed(() => designPreviewActive.value
-      ? null
-      : designHistory.nextRedoSequence.value),
-    reserveSequence: () => designHistory.reserveSequence(),
-    announceBranch: () => designHistory.announceBranch(),
-    subscribeToBranches: (onBranch: () => void) => designHistory.subscribeToBranches(onBranch),
-    undo: () => !designPreviewActive.value && batch(() => designHistory.undo()),
-    redo: () => !designPreviewActive.value && batch(() => designHistory.redo()),
-  })
-
   function invalidateActivePreview(): void {
     if (activePreview) previewGeneration += 1
     activePreview = null
@@ -230,10 +191,7 @@ function createDesignSessionStore(
     return next
   }
 
-  function beginPreview(
-    intent: string,
-    options: DesignPreviewOptions = {},
-  ): DesignPreviewTransaction {
+  function beginPreview(intent: string): DesignPreviewTransaction {
     const current = committedDesign
     if (!current) throw new DesignEditUnavailableError()
     if (activePreview) throw new DesignEditBusyError(activePreview.intent)
@@ -245,7 +203,6 @@ function createDesignSessionStore(
       intent,
       projector: null,
       mutated: false,
-      options,
     }
     designPreviewActive.value = true
     previewGeneration += 1
@@ -277,11 +234,6 @@ function createDesignSessionStore(
         const before = committedDesign!
         const next = activePreview!.projector?.(before) ?? before
         const changed = next !== before
-        const beforeSpatialFrame = before.spatial_frame
-        const previewOptions = activePreview!.options
-        if (changed && previewOptions.history?.field === 'spatial_frame') {
-          assertOnlySpatialFrameChanged(before, next)
-        }
         activePreview = null
         previewGeneration += 1
         if (changed) {
@@ -293,13 +245,6 @@ function createDesignSessionStore(
           signals.currentDesign.value = committedDesign
           if (changed) committedDesignRevision.value += 1
           if (changed) signals.nonCanvasRevision.value += 1
-          if (changed && previewOptions.history?.field === 'spatial_frame') {
-            designHistory.recordSpatialFrame(
-              previewOptions.history.type,
-              beforeSpatialFrame,
-              next.spatial_frame,
-            )
-          }
           designPreviewActive.value = false
         })
         return outcome
@@ -347,14 +292,6 @@ function createDesignSessionStore(
       }
     },
 
-    readMetadata() {
-      return {
-        spatialFrame: signals.currentDesign.value
-          ? cloneSpatialFrame(signals.currentDesign.value.spatial_frame)
-          : null,
-      }
-    },
-
     readCurrentDesign() {
       return signals.currentDesign.value
     },
@@ -386,7 +323,6 @@ function createDesignSessionStore(
       invalidateActivePreview()
       committedDesign = file
       batch(() => {
-        designHistory.clear()
         designPreviewActive.value = false
         sessionIdentity.value = Object.freeze({})
         signals.currentDesign.value = file
@@ -428,7 +364,6 @@ function createDesignSessionStore(
 
     resetDirtyBaselines() {
       batch(() => {
-        designHistory.clear()
         signals.canvasClean.value = true
         signals.detachedCanvasDirty.value = false
         signals.nonCanvasRevision.value = 0
@@ -472,7 +407,6 @@ function createDesignSessionStore(
   registerDesignEditAuthorityCapability(
     store,
     {
-      history: designHistoryParticipant,
       editCommitted: (projector) => applyCommittedDesign(projector, true),
       reconcileCommitted: (projector) => applyCommittedDesign(projector, false),
       markCommittedDirty: () => {
@@ -577,7 +511,6 @@ function createDesignSessionStore(
       activePreview = null
       committedDesign = state.file ?? null
       batch(() => {
-        designHistory.clear()
         designPreviewActive.value = false
         sessionIdentity.value = Object.freeze({})
         signals.currentDesign.value = committedDesign
@@ -606,8 +539,7 @@ function createDesignSessionStore(
       }
       batch(() => {
         if (has('file')) {
-          designHistory.clear()
-          designPreviewActive.value = false
+            designPreviewActive.value = false
           sessionIdentity.value = Object.freeze({})
           signals.currentDesign.value = committedDesign
           committedDesignRevision.value += 1
@@ -700,15 +632,4 @@ export const setPendingTemplateImport = (template: PendingTemplateImport | null)
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile
-}
-
-function assertOnlySpatialFrameChanged(before: CanopiFile, after: CanopiFile): void {
-  const keys = new Set<keyof CanopiFile>([
-    ...Object.keys(before),
-    ...Object.keys(after),
-  ] as Array<keyof CanopiFile>)
-  for (const key of keys) {
-    if (key === 'spatial_frame' || before[key] === after[key]) continue
-    throw new Error(`Design history preview changed undeclared field '${key}'`)
-  }
 }

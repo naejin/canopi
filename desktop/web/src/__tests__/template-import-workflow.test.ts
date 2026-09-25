@@ -30,7 +30,7 @@ const TEMPLATE: TemplateMeta = {
   title: 'Forest Edge',
   author: 'Canopi',
   description: 'A test template',
-  location: { lat: 10, lon: 12, altitude_m: null },
+  location: { lat: 10, lon: 12 },
   plant_count: 12,
   climate_zone: 'Temperate',
   tags: ['forest'],
@@ -233,10 +233,9 @@ async function flushMicrotasks(): Promise<void> {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Test Template',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],

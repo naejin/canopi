@@ -19,7 +19,8 @@ export const DEFAULT_SETTINGS = {
   "contour_interval": 0,
   "hillshade_visible": false,
   "hillshade_opacity": 0.55,
-  "plant_spacing_interval_m": 0.5
+  "plant_spacing_interval_m": 0.5,
+  "last_view": null
 } as const satisfies Settings
 
 export const SETTINGS_LOCALES = [

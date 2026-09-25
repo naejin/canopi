@@ -16,7 +16,6 @@ type BrowserShellCapabilityId =
   | 'downloadCanopi'
   | 'exportCanvasPdf'
   | 'navigateCanvas'
-  | 'navigateLocation'
   | 'navigateTemplates'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
@@ -96,9 +95,6 @@ export function createBrowserShellCommandProjection({
       isProjectionDisabled: () => !downloadCanopiEnabled,
     },
     navigateCanvas: { execute: () => capabilities.navigate('canvas') },
-    // Location placement is now a Web capability under ADR 0028; it stays
-    // disabled without a Design because there is nothing to place.
-    navigateLocation: { execute: () => capabilities.navigate('location'), isExecutionDisabled: () => !downloadCanopiEnabled },
     ...(templatesEnabled
       ? { navigateTemplates: { execute: () => capabilities.navigate('templates') } }
       : {}),

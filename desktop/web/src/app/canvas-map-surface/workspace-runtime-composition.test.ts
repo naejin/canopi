@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { signal, type Signal } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { createDetachedCanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import { CanvasRuntimeCleanupError } from '../../canvas/runtime/cleanup'
@@ -17,13 +17,21 @@ import {
   createTestCanvasDocumentSurface,
   createTestCanvasRuntimeSurfaces,
 } from '../../__tests__/support/canvas-runtime-surfaces'
+import { createTestCanvasQuerySurface } from '../../__tests__/support/canvas-query-surface'
+import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
+import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
+import { stageScaleToMapZoom } from '../../canvas/projection'
 import type {
   WorkspaceActivationOptions,
   WorkspaceActivationOutcome,
   WorkspaceActivationSnapshot,
 } from './workspace-activation'
 import type { WorkspaceGenerationLifecycle } from './workspace-generation-reconciler'
-import { createWorkspaceRuntimeComposition } from './workspace-runtime-composition'
+import {
+  createWorkspaceRuntimeComposition,
+  WORKSPACE_VIEW_SETTLE_MS,
+  type WorkspaceSettledView,
+} from './workspace-runtime-composition'
 
 describe('createWorkspaceRuntimeComposition', () => {
   it('assembles one camera and ordered shared/fallback backends before awaiting existing-Design readiness', async () => {
@@ -217,8 +225,8 @@ describe('createWorkspaceRuntimeComposition', () => {
     const next: WorkspaceMapContributionSnapshot = {
       sessionIdentity: initial.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
-      frame: null, designExtentMeters: 0,
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [] },
+      frame: null,
     }
     contribution.value = next
     await vi.waitFor(() => expect(fixture.workspace.updateMapContributions).toHaveBeenLastCalledWith(next))
@@ -231,15 +239,19 @@ describe('createWorkspaceRuntimeComposition', () => {
   })
 
   it('publishes memoized disposal before cleanup, joins teardown, and aggregates failures', async () => {
-    const effectError = new Error('effect cleanup failed')
+    const originEffectError = new Error('origin effect cleanup failed')
+    const presentationEffectError = new Error('presentation effect cleanup failed')
+    const effectErrors = [originEffectError, presentationEffectError]
     const teardownError = new Error('workspace teardown failed')
     let reentered: Promise<void> | null = null
     let fixture!: ReturnType<typeof compositionFixture>
+    let installed = 0
     fixture = compositionFixture({
       readSnapshot: () => null,
       teardown: async () => { throw teardownError },
       installEffect: (callback) => {
         callback()
+        const effectError = effectErrors[installed++]
         return () => {
           reentered = fixture.composition.dispose()
           throw effectError
@@ -256,8 +268,56 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.teardown).toHaveBeenCalledOnce()
     const error = await first.catch((reason: unknown) => reason)
     expect(error).toBeInstanceOf(CanvasRuntimeCleanupError)
-    expect((error as CanvasRuntimeCleanupError).errors).toEqual([effectError, teardownError])
+    expect(installed).toBe(2)
+    expect((error as CanvasRuntimeCleanupError).errors)
+      .toEqual([originEffectError, presentationEffectError, teardownError])
     await expect(fixture.composition.start()).resolves.toBe('cancelled')
+  })
+
+  it('reports one settled view after the camera stops moving and none after disposal', async () => {
+    vi.useFakeTimers()
+    try {
+      const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
+      const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
+      await expect(fixture.composition.start()).resolves.toBe('no-design')
+      const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+      fixture.sessionPlane.value = plane
+      const viewport = fixture.runtime.querySurface.viewport as Signal<CameraViewportSnapshot>
+      const moveTo = (x: number) => {
+        viewport.value = {
+          ...viewport.value,
+          viewport: { x, y: 5, scale: 2 },
+          revision: viewport.value.revision + 1,
+        }
+      }
+
+      for (const x of [10, 20, 30]) {
+        moveTo(x)
+        vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS - 1)
+      }
+      expect(onViewSettled).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+
+      expect(onViewSettled).toHaveBeenCalledOnce()
+      const { width, height } = viewport.value.screenSize
+      const centre = plane.toGeo({ x: (width / 2 - 30) / 2, y: (height / 2 - 5) / 2 })
+      const view = onViewSettled.mock.calls[0]![0]
+      expect(view.lon).toBeCloseTo(centre.lon, 12)
+      expect(view.lat).toBeCloseTo(centre.lat, 12)
+      expect(view.zoom).toBeCloseTo(stageScaleToMapZoom(2, centre.lat), 12)
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 4)
+      expect(onViewSettled).toHaveBeenCalledOnce()
+
+      // A pending settle is cancelled by disposal and later moves are ignored.
+      moveTo(40)
+      await fixture.composition.dispose()
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      moveTo(50)
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      expect(onViewSettled).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not start after terminal disposal before startup', async () => {
@@ -282,6 +342,7 @@ interface CompositionFixtureOptions {
   readonly replaceDocument?: CanvasDocumentSurface['replaceDocument']
   readonly initializeViewport?: () => void
   readonly zoomToFit?: () => void
+  readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
 
 function compositionFixture(options: CompositionFixtureOptions) {
@@ -294,7 +355,11 @@ function compositionFixture(options: CompositionFixtureOptions) {
   })
   documents.initializeViewport = vi.fn(documents.initializeViewport)
   documents.zoomToFit = vi.fn(documents.zoomToFit)
-  const surfaces = createTestCanvasRuntimeSurfaces({ documents })
+  const sessionPlane = signal<SessionPlane | null>(null)
+  const surfaces = createTestCanvasRuntimeSurfaces({
+    documents,
+    queries: { ...createTestCanvasQuerySurface(), sessionPlane },
+  })
   const runtime = {
     commandSurface: surfaces.commands,
     querySurface: surfaces.queries,
@@ -348,6 +413,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     onFailure: options.onFailure,
     readSnapshot: options.readSnapshot,
     readBasemapPresentation: options.readBasemapPresentation,
+    onViewSettled: options.onViewSettled,
   }, dependencies)
 
   return {
@@ -362,6 +428,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     },
     rendererComposition,
     runtime,
+    sessionPlane,
     setLoaded(value: boolean) { loaded = value },
     workspace,
   }
@@ -379,9 +446,7 @@ function workspaceSnapshot({ latitude = 48.86 } = {}): WorkspaceActivationSnapsh
   return {
     sessionIdentity: {},
     map: {
-      anchor: { lat: latitude, lon: 2.35 },
-      northBearingDeg: 0,
-      placementStatus: 'confirmed',
+      initialCenter: { lat: latitude, lon: 2.35 },
       basemapStyle: 'street',
       basemapVisible: true,
       basemapOpacity: 1,

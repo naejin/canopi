@@ -14,10 +14,9 @@ import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfac
 
 function design(): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Planning keyboard test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],
@@ -56,7 +55,7 @@ function plant(): PlacedPlant {
     canonical_name: 'Malus domestica',
     common_name: 'Apple',
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,

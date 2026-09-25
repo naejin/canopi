@@ -16,7 +16,6 @@ import { basemapStyle } from '../app/settings/state'
 import type { Settings } from '../types/settings'
 import {
   designSessionFixture,
-  currentDesign,
 } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -50,6 +49,7 @@ function baseSettings(): Settings {
     hillshade_visible: false,
     hillshade_opacity: 0.55,
     plant_spacing_interval_m: 0.5,
+    last_view: null,
   }
 }
 
@@ -66,10 +66,9 @@ describe('LayerPanel', () => {
     saveSettings.mockReset().mockResolvedValue(undefined)
     resetSettingsProjectionForTests()
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'Demo',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -121,8 +120,7 @@ describe('LayerPanel', () => {
     const rows = Array.from(container.querySelectorAll('[role="listitem"]'))
     const basemapRow = rows.find((row) => row.textContent?.includes('Basemap'))
     expect(basemapRow).toBeTruthy()
-    expect(container.textContent).toContain('Current')
-    expect(container.textContent).toContain('48.8566, 2.3522')
+    expect(container.querySelector('input[aria-label="Opacity: Basemap"]')).toBeTruthy()
 
     const basemapToggle = basemapRow?.querySelector('button')
     expect(basemapToggle).toBeTruthy()
@@ -159,51 +157,31 @@ describe('LayerPanel', () => {
     expect(basemapStyle.value).toBe('street')
   })
 
-  it('shows Design Location buttons in map layer details when no Location is saved', async () => {
-    designSessionFixture.file = {
-      ...currentDesign.value!,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
-    }
-
+  it('shows map layer detail controls without a Design Location action', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
     })
 
-    expect(container.textContent).not.toContain('Set a design location first')
-    expect(container.textContent).not.toContain('Set a design location to enable map layers')
+    const hasLocationButton = () => Array.from(container.querySelectorAll('button'))
+      .some((button) => button.textContent === 'Design Location')
+    expect(hasLocationButton()).toBe(false)
+    expect(container.querySelector('input[aria-label="Opacity: Basemap"]')).toBeTruthy()
 
-    let locationButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Design Location')
-    expect(locationButton).toBeTruthy()
-
-    await act(async () => {
-      locationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(activePanel.value).toBe('location')
-    expect(sidePanel.value).toBeNull()
-
-    activePanel.value = 'canvas'
-    sidePanel.value = 'favorites'
     await act(async () => {
       activeLayerName.value = 'contours'
       await Promise.resolve()
     })
 
-    locationButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Design Location')
-    expect(locationButton).toBeTruthy()
-    expect(container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')).toBeNull()
+    expect(hasLocationButton()).toBe(false)
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Contour interval"]')).toBeTruthy()
 
     await act(async () => {
       activeLayerName.value = 'hillshading'
       await Promise.resolve()
     })
 
-    locationButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Design Location')
-    expect(locationButton).toBeTruthy()
-    expect(container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')).toBeNull()
+    expect(hasLocationButton()).toBe(false)
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Hillshade opacity"]')).toBeTruthy()
   })
 
   it('exposes scene Layer lock controls through Canvas Layer Presentation', async () => {

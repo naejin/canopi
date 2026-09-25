@@ -2,6 +2,7 @@ import {
   CANOPI_FILE_SCHEMA,
   CURRENT_CANOPI_FILE_VERSION,
   MISSING_CANOPI_FILE_VERSION,
+  OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
 import { normalizeLoadedDocument } from './document'
@@ -15,16 +16,15 @@ export { CanopiDesignIngestionError }
 
 export function decodeCanopiDesign(value: unknown): CanopiFile {
   try {
-    admitV6DesignValue(value)
+    admitCurrentDesignValue(value)
     const decoded = decodeCanopiFileSchema(value, CANOPI_FILE_SCHEMA) as CanopiFile
-    normalizeSpatialFrame(decoded)
     return normalizeLoadedDocument(decoded)
   } catch (error) {
     throw asCanopiDesignIngestionError(error)
   }
 }
 
-function admitV6DesignValue(value: unknown): asserts value is Record<string, unknown> {
+function admitCurrentDesignValue(value: unknown): asserts value is Record<string, unknown> {
   if (!isRecord(value)) throw new Error('$: expected a Canopi Design object')
 
   const version = Object.prototype.hasOwnProperty.call(value, 'version')
@@ -42,21 +42,13 @@ function admitV6DesignValue(value: unknown): asserts value is Record<string, unk
       `$.version: unsupported Canopi Design version ${version}; current version is ${CURRENT_CANOPI_FILE_VERSION}`,
     )
   }
-  if (
-    Object.prototype.hasOwnProperty.call(value, 'location')
-    || Object.prototype.hasOwnProperty.call(value, 'north_bearing_deg')
-  ) {
+  const obsolete = OBSOLETE_CANOPI_ROOT_KEYS.find((key) => Object.prototype.hasOwnProperty.call(value, key))
+  if (obsolete) {
     throw new CanopiDesignIngestionError(
       'invalid_document',
-      '$: v6 replaces root location and north_bearing_deg with spatial_frame',
+      `$.${obsolete}: obsolete root field; v7 stores lon/lat on each design object`,
     )
   }
-}
-
-function normalizeSpatialFrame(file: CanopiFile): void {
-  const bearing = file.spatial_frame.north_bearing_deg
-  const normalized = ((bearing % 360) + 360) % 360
-  file.spatial_frame.north_bearing_deg = Object.is(normalized, -0) ? 0 : normalized
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

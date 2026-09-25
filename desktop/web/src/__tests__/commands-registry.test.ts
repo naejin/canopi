@@ -105,7 +105,7 @@ describe('command registry canvas tool switching', () => {
     expect(setTool).toHaveBeenCalledWith('ellipse')
     expect(activeTool.value).toBe('ellipse')
 
-    activePanel.value = 'location'
+    activePanel.value = 'templates'
     sidePanel.value = null
     getCommand('canvas.tool.hand').action()
 
@@ -200,7 +200,6 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('nav.canvas').shortcut).toBe('Ctrl+1')
     expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl+2')
     expect(getCommand('nav.designNotebook').shortcut).toBeUndefined()
-    expect(getCommand('nav.location').shortcut).toBeUndefined()
     expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)
     expect(getCommand('canvas.tool.line').shortcut).toBe(TOOL_SHORTCUTS.line)
     expect(getCommand('canvas.tool.text').shortcut).toBe(TOOL_SHORTCUTS.text)
@@ -208,10 +207,9 @@ describe('command registry canvas tool switching', () => {
 
   it('routes file commands through document-session actions', () => {
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'test',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -259,10 +257,9 @@ describe('command registry canvas tool switching', () => {
     expect(saveCommand.disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'test',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -316,10 +313,9 @@ describe('command registry canvas tool switching', () => {
     expect(zoomIn().disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'test',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -354,11 +350,7 @@ describe('command registry canvas tool switching', () => {
       disabled: false,
       active: true,
     })
-    expect(panelCommand('location')).toMatchObject({
-      commandId: 'nav.location',
-      disabled: true,
-      active: false,
-    })
+    expect(panelCommand('location')).toBeUndefined()
     expect(panelCommand('plant-db')).toMatchObject({
       commandId: 'nav.plantDb',
       disabled: true,
@@ -391,10 +383,9 @@ describe('command registry canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
 
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'test',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],

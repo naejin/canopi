@@ -1,12 +1,12 @@
 use common_types::design::{
     CURRENT_CANOPI_FILE_VERSION, CanopiDesignIngestionErrorKind, CanopiFile,
-    DEFAULT_BUDGET_CURRENCY, Layer, MISSING_CANOPI_FILE_VERSION,
-    validate_and_normalize_spatial_frame,
+    DEFAULT_BUDGET_CURRENCY, Layer, MISSING_CANOPI_FILE_VERSION, OBSOLETE_CANOPI_ROOT_KEYS,
+    validate_design_geometry,
 };
 use std::fmt;
 use std::path::Path;
 
-use super::new_design_defaults::{NEW_DESIGN_LAYER_DEFAULTS, new_design_spatial_frame};
+use super::new_design_defaults::NEW_DESIGN_LAYER_DEFAULTS;
 
 #[derive(Debug)]
 struct CanopiDesignIngestionError {
@@ -107,10 +107,13 @@ fn decode_design_value(
     let object = value
         .as_object()
         .expect("version admission requires an object");
-    if object.contains_key("location") || object.contains_key("north_bearing_deg") {
+    if let Some(key) = OBSOLETE_CANOPI_ROOT_KEYS
+        .iter()
+        .find(|key| object.contains_key(**key))
+    {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
-            "$: v6 replaces root location and north_bearing_deg with spatial_frame",
+            format!("$.{key}: obsolete root field; v7 stores lon/lat on each design object"),
         ));
     }
 
@@ -121,7 +124,7 @@ fn decode_design_value(
             format!("$: {error}"),
         )
     })?;
-    validate_and_normalize_spatial_frame(&mut file.spatial_frame).map_err(|error| {
+    validate_design_geometry(&file).map_err(|error| {
         CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
     })?;
     normalize_loaded_extra(&mut file);
@@ -198,7 +201,6 @@ pub(crate) fn create_new_design(
         version: CURRENT_CANOPI_FILE_VERSION,
         name: name.into(),
         description: None,
-        spatial_frame: new_design_spatial_frame(),
         plant_species_colors: std::collections::HashMap::new(),
         plant_species_symbols: std::collections::HashMap::new(),
         plant_species_codes: std::collections::HashMap::new(),
@@ -332,14 +334,6 @@ mod tests {
         let design = create_default();
         assert_eq!(design.version, CURRENT_CANOPI_FILE_VERSION);
         assert_eq!(design.name, "Untitled");
-        assert_eq!(design.spatial_frame.anchor_longitude_deg, 13.0);
-        assert_eq!(design.spatial_frame.anchor_latitude_deg, 23.0);
-        assert_eq!(design.spatial_frame.north_bearing_deg, 0.0);
-        assert!(matches!(
-            design.spatial_frame.placement_status,
-            common_types::design::PlacementStatus::Provisional
-        ));
-        assert_eq!(design.spatial_frame.location_metadata.altitude_m, None);
         assert_eq!(design.layers.len(), 8);
         assert!(design.measurement_guides.is_empty());
     }
@@ -369,7 +363,7 @@ mod tests {
         assert_eq!(
             by_name,
             std::collections::HashMap::from([
-                ("base", false),
+                ("base", true),
                 ("contours", false),
                 ("climate", false),
                 ("zones", true),
@@ -665,20 +659,32 @@ mod tests {
     }
 
     #[test]
-    fn test_v6_panel_sections_spatial_frame_and_unknown_fields_round_trip() {
+    fn geolocated_objects_panel_sections_and_unknown_fields_round_trip() {
         use serde_json::json;
 
         let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v6_panel_round_trip.canopi");
+        let path: PathBuf = dir.join("canopi_test_v7_round_trip.canopi");
 
         let mut value = serde_json::to_value(create_default()).expect("default design serializes");
-        value["spatial_frame"] = json!({
-            "anchor_longitude_deg": 2.3522,
-            "anchor_latitude_deg": 48.8566,
-            "north_bearing_deg": -14.0,
-            "placement_status": "confirmed",
-            "location_metadata": { "altitude_m": 35.0 }
-        });
+        value["plants"] = json!([{
+            "id": "plant-1",
+            "canonical_name": "Quercus robur",
+            "position": { "lon": 2.352_212_345_6, "lat": 48.856_612_345_6 }
+        }]);
+        value["zones"] = json!([{
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": [
+                { "lon": 2.3522, "lat": 48.8567 },
+                { "lon": 2.3523, "lat": 48.8566 }
+            ],
+            "rotation": 30.0
+        }]);
+        value["measurement_guides"] = json!([{
+            "id": "guide-1",
+            "start": { "lon": -180.0, "lat": -85.0511287798066 },
+            "end": { "lon": 180.0, "lat": 85.0511287798066 }
+        }]);
         value["future_panel_field"] = json!({ "preserve": true });
         value["consortiums"] = json!([
             {
@@ -717,15 +723,31 @@ mod tests {
         ]);
 
         std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v6 file");
-        let loaded = load_from_file(&path).expect("v6 file should load");
-        save_to_file(&path, &loaded).expect("v6 file should save");
-        let reloaded = load_from_file(&path).expect("saved v6 file should reload");
+            .expect("write v7 file");
+        let loaded = load_from_file(&path).expect("v7 file should load");
+        save_to_file(&path, &loaded).expect("v7 file should save");
+        let reloaded = load_from_file(&path).expect("saved v7 file should reload");
 
         assert_eq!(reloaded.version, CURRENT_CANOPI_FILE_VERSION);
-        assert_eq!(reloaded.spatial_frame.anchor_latitude_deg, 48.8566);
-        assert_eq!(reloaded.spatial_frame.anchor_longitude_deg, 2.3522);
-        assert_eq!(reloaded.spatial_frame.north_bearing_deg, 346.0);
+        let reloaded_value = serde_json::to_value(&reloaded).expect("reloaded design serializes");
+        assert_eq!(
+            reloaded_value["plants"][0]["position"],
+            value["plants"][0]["position"]
+        );
+        assert_eq!(
+            reloaded_value["zones"][0]["points"],
+            value["zones"][0]["points"]
+        );
+        assert_eq!(reloaded_value["zones"][0]["rotation"], json!(30.0));
+        assert_eq!(
+            reloaded_value["measurement_guides"][0]["start"],
+            value["measurement_guides"][0]["start"]
+        );
+        assert_eq!(
+            reloaded_value["measurement_guides"][0]["end"],
+            value["measurement_guides"][0]["end"]
+        );
+        assert!(reloaded_value.get("spatial_frame").is_none());
         assert_eq!(reloaded.consortiums.len(), 1);
         assert_eq!(reloaded.timeline.len(), 1);
         assert_eq!(reloaded.timeline[0].targets.len(), 2);

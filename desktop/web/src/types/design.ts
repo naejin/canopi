@@ -1,16 +1,7 @@
 import type * as Contracts from '../generated/contracts'
 
-/** Location UI projection. Persisted Designs use the required SpatialFrame. */
-export interface Location {
-  lat: number
-  lon: number
-  altitude_m: number | null
-}
-export type LocationMetadata = Contracts.LocationMetadata
-export type PlacementStatus = Contracts.PlacementStatus
-export type SpatialFrame = Contracts.SpatialFrame
 export type Layer = Contracts.Layer
-export type Position = Contracts.Position
+export type GeoPoint = Contracts.GeoPoint
 export type Zone = Contracts.Zone
 export type Annotation = Contracts.Annotation
 export type MeasurementGuide = Contracts.MeasurementGuide

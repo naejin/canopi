@@ -3,11 +3,9 @@ import { designSessionStore } from '../document-session/store'
 import {
   designEditAuthorityCapability,
   disposeDesignEditAuthority,
-  type DesignPreviewOptions,
   type DesignPreviewOutcome,
   type DesignPreviewTransaction,
 } from './authority-capability'
-import type { DesignHistoryParticipant } from './history'
 
 export type { DesignPreviewOutcome, DesignPreviewTransaction }
 
@@ -32,15 +30,8 @@ export function reconcileCurrentDesign(
   return designEditAuthorityCapability(designSessionStore).reconcileCommitted(updater)
 }
 
-export function beginDesignPreview(
-  intent: string,
-  options?: DesignPreviewOptions,
-): DesignPreviewTransaction {
-  return designEditAuthorityCapability(designSessionStore).beginPreview(intent, options)
-}
-
-export function getDesignHistoryParticipant(): DesignHistoryParticipant {
-  return designEditAuthorityCapability(designSessionStore).history
+export function beginDesignPreview(intent: string): DesignPreviewTransaction {
+  return designEditAuthorityCapability(designSessionStore).beginPreview(intent)
 }
 
 export function setDesignName(name: string): void {

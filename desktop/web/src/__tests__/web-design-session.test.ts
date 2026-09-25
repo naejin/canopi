@@ -2,6 +2,7 @@ import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { beginTimelineActionEdit } from '../app/design-edit'
 import { composeDocumentForSave } from '../app/contracts/document'
+import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import {
   createMemoryDesignSessionStore,
   designSessionStore,
@@ -50,15 +51,15 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignPath()).toBeNull()
     expect(store.readDesignName()).toBe('Untitled')
     expect(store.isDesignDirty()).toBe(false)
+    expect(design).not.toHaveProperty('spatial_frame')
     expect(design).toMatchObject({
-      version: 6,
+      version: 7,
       name: 'Untitled',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       plant_species_symbols: {},
       layers: [
-        { name: 'base', visible: false, locked: false, opacity: 1 },
+        { name: 'base', visible: true, locked: false, opacity: 1 },
         { name: 'contours', visible: false, locked: false, opacity: 1 },
         { name: 'climate', visible: false, locked: false, opacity: 1 },
         { name: 'zones', visible: true, locked: false, opacity: 1 },
@@ -99,11 +100,12 @@ describe('browser Design Session lifecycle', () => {
     if (!firstLayer || !secondLayer) throw new Error('canonical layer catalog is empty')
 
     expect(firstLayer).not.toBe(secondLayer)
-    firstLayer.visible = true
-    expect(secondLayer.visible).toBe(false)
+    expect(secondLayer.visible).toBe(true)
+    firstLayer.visible = false
+    expect(secondLayer.visible).toBe(true)
   })
 
-  it('preserves a new browser Design provisional spatial frame through draft and download composition', async () => {
+  it('composes a new browser Design as v7 without a spatial frame through draft and download', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const downloadCanopiFile = vi.fn<(download: BrowserCanopiDownload) => Promise<void>>(
@@ -132,20 +134,19 @@ describe('browser Design Session lifecycle', () => {
     try {
       await controller.newDesign()
 
-      const expectedFrame = {
-        anchor_longitude_deg: 13,
-        anchor_latitude_deg: 23,
-        north_bearing_deg: 0,
-        placement_status: 'provisional',
-        location_metadata: { altitude_m: null },
-      }
-      expect(lastComposed.current?.spatial_frame).toEqual(expectedFrame)
-      expect(appDataStore.loadDraft('draft-canonical-new-design')?.spatial_frame).toEqual(expectedFrame)
+      expect(lastComposed.current?.version).toBe(7)
+      expect(lastComposed.current).not.toHaveProperty('spatial_frame')
+      const draft = appDataStore.loadDraft('draft-canonical-new-design')
+      expect(draft?.version).toBe(7)
+      expect(draft).not.toHaveProperty('spatial_frame')
 
       await controller.downloadCanopi()
       const download = downloadCanopiFile.mock.calls[0]?.[0]
       if (!download) throw new Error('browser download was not captured')
-      expect((JSON.parse(download.text) as CanopiFile).spatial_frame).toEqual(expectedFrame)
+      const downloaded = JSON.parse(download.text) as Record<string, unknown>
+      expect(downloaded.version).toBe(7)
+      expect(downloaded).not.toHaveProperty('spatial_frame')
+      expect(decodeCanopiDesign(downloaded).layers.find((layer) => layer.name === 'base')?.visible).toBe(true)
     } finally {
       detach()
     }
@@ -205,7 +206,41 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readCurrentDesign()).toEqual(original)
   })
 
-  it('rejects an older Design before replacing the active session', async () => {
+  it.each([
+    {
+      label: 'a v5 Design',
+      content: () => ({ ...makeCanopiFile(), version: 5 }),
+      message: '$.version: unsupported Canopi Design version 5; current version is 7',
+      kind: 'unsupported_version',
+    },
+    {
+      label: 'a v6 Design',
+      content: () => ({ ...makeCanopiFile(), version: 6 }),
+      message: '$.version: unsupported Canopi Design version 6; current version is 7',
+      kind: 'unsupported_version',
+    },
+    {
+      label: 'an obsolete root spatial_frame',
+      content: () => ({
+        ...makeCanopiFile(),
+        spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0 },
+      }),
+      message: '$.spatial_frame: obsolete root field',
+      kind: 'invalid_document',
+    },
+    {
+      label: 'an out-of-range longitude',
+      content: () => ({ ...makeCanopiFile(), plants: [{ ...plantAt({ lon: 181, lat: 0 }) }] }),
+      message: '$.plants[0].position.lon: expected a number less than or equal to 180',
+      kind: 'invalid_document',
+    },
+    {
+      label: 'a local-metre position',
+      content: () => ({ ...makeCanopiFile(), plants: [{ ...plantAt({ lon: 0, lat: 0 }), position: { x: 10, y: 20 } }] }),
+      message: 'missing required value',
+      kind: 'invalid_document',
+    },
+  ])('rejects $label before replacing the active session', async ({ content, message, kind }) => {
     const original = makeCanopiFile({ name: 'Working Garden' })
     const store = createMemoryDesignSessionStore({
       file: original,
@@ -216,18 +251,42 @@ describe('browser Design Session lifecycle', () => {
       store,
       fileAdapter: testFileAdapter({
         openCanopiFile: vi.fn(async () => ({
-          fileName: 'version-5.canopi',
-          text: JSON.stringify({ ...makeCanopiFile(), version: 5 }),
+          fileName: 'refused.canopi',
+          text: JSON.stringify(content()),
         })),
       }),
       now: () => NOW,
     })
 
-    await expect(controller.openCanopi()).rejects.toThrow(
-      '$.version: unsupported Canopi Design version 5; current version is 6',
-    )
+    const opening = controller.openCanopi()
+    await expect(opening).rejects.toThrow(message)
+    await expect(opening).rejects.toMatchObject({ kind })
     expect(store.readDesignName()).toBe('Working Garden')
     expect(store.readCurrentDesign()).toEqual(original)
+  })
+
+  it('opens a v7 Design with lon/lat positions', async () => {
+    const openedFile = makeCanopiFile({
+      name: 'Geolocated Garden',
+      plants: [plantAt({ lon: 2.3522, lat: 48.8566 })],
+    })
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter({
+        openCanopiFile: vi.fn(async () => ({
+          fileName: 'geolocated.canopi',
+          text: JSON.stringify(openedFile),
+        })),
+      }),
+      now: () => NOW,
+    })
+
+    await controller.openCanopi()
+
+    expect(store.readDesignName()).toBe('Geolocated Garden')
+    expect(store.readCurrentDesign()?.plants[0]?.position).toEqual({ lon: 2.3522, lat: 48.8566 })
+    expect(store.readCurrentDesign()).not.toHaveProperty('spatial_frame')
   })
 
   it('does not let an older pending Open overwrite a later New Design', async () => {
@@ -372,7 +431,7 @@ describe('browser Design Session lifecycle', () => {
     const templateFile = makeCanopiFile({
       name: 'Downloaded Template',
       description: 'Bundled example',
-      spatial_frame: { anchor_longitude_deg: -73.6, anchor_latitude_deg: 45.5, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
+      plants: [plantAt({ lon: -73.6, lat: 45.5 })],
     })
     const store = createMemoryDesignSessionStore()
     const controller = createBrowserDesignSessionController({
@@ -388,6 +447,7 @@ describe('browser Design Session lifecycle', () => {
 
     expect(store.readCurrentDesign()?.name).toBe('Downloaded Template')
     expect(store.readCurrentDesign()?.description).toBe('Bundled example')
+    expect(store.readCurrentDesign()?.plants[0]?.position).toEqual({ lon: -73.6, lat: 45.5 })
     expect(store.readDesignName()).toBe('Forest Edge')
     expect(store.readDesignPath()).toBeNull()
     expect(store.isDesignDirty()).toBe(false)
@@ -974,7 +1034,7 @@ describe('browser Design Session lifecycle', () => {
             canonical_name: 'Malus domestica',
             common_name: null,
             color: null,
-            position: { x: 12, y: 24 },
+            position: { lon: 13.0001, lat: 23.0002 },
             rotation: null,
             scale: 1,
             notes: null,
@@ -1002,7 +1062,7 @@ describe('browser Design Session lifecycle', () => {
         color: null,
         symbol: null,
         pinned_name: false,
-        position: { x: 12, y: 24 },
+        position: { lon: 13.0001, lat: 23.0002 },
         rotation: null,
         scale: 1,
         notes: null,
@@ -1379,7 +1439,7 @@ describe('browser Design Session lifecycle', () => {
               color: null,
               symbol: null,
               pinned_name: false,
-              position: { x: captureNumber, y: 0 },
+              position: { lon: 13 + captureNumber * 0.001, lat: 23 },
               rotation: null,
               scale: null,
               notes: null,
@@ -1878,7 +1938,7 @@ describe('browser Design Session lifecycle', () => {
       canonical_name: 'Malus domestica',
       common_name: null,
       color: null,
-      position: { x: 10, y: 20 },
+      position: { lon: 13.0001, lat: 23.0002 },
       rotation: null,
       scale: 1,
       notes: null,
@@ -2139,10 +2199,9 @@ function memoryStorage(): MemoryStorage {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Test Design',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     plant_species_symbols: {},
     layers: [],
@@ -2159,5 +2218,21 @@ function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     updated_at: '2026-06-02T00:00:00.000Z',
     extra: {},
     ...overrides,
+  }
+}
+
+function plantAt(position: { lon: number; lat: number }): CanopiFile['plants'][number] {
+  return {
+    id: 'plant-at',
+    locked: false,
+    canonical_name: 'Malus domestica',
+    common_name: null,
+    color: null,
+    position,
+    rotation: null,
+    scale: null,
+    notes: null,
+    planted_date: null,
+    quantity: 1,
   }
 }

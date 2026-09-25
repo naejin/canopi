@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hillshadeVisible, layerVisibility } from '../app/canvas-settings/signals'
 import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { designSessionFixture } from './support/design-session-state'
-import { northBearingAvailable, northBearingDeg } from '../canvas/scene-metadata-state'
+import type { CanopiFile } from '../types/design'
 import { locale } from '../app/settings/state'
 import {
   CANVAS_NOTICE_MARGIN_PX,
@@ -18,15 +18,11 @@ let mockBasemapState: {
   errorMessage: string | null
   terrainStatus: 'idle' | 'loading' | 'ready' | 'error'
   terrainErrorMessage: string | null
-  precisionWarning: boolean
-  designExtentMeters: number | null
 } = {
   status: 'idle',
   errorMessage: null,
   terrainStatus: 'idle',
   terrainErrorMessage: null,
-  precisionWarning: false,
-  designExtentMeters: null,
 }
 
 vi.mock('../components/canvas/CanvasToolbar', () => ({
@@ -75,16 +71,12 @@ describe('CanvasPanel basemap feedback', () => {
     locale.value = 'en'
     layerVisibility.value = { base: true, plants: true, zones: true, annotations: true }
     hillshadeVisible.value = false
-    northBearingDeg.value = 0
-    northBearingAvailable.value = false
     designSessionFixture.file = null
     mockBasemapState = {
       status: 'idle',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
   })
 
@@ -93,26 +85,9 @@ describe('CanvasPanel basemap feedback', () => {
     container.remove()
   })
 
-  it('does not show a Location Notice when no design location is saved', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('does not show a Map Notice or activate the map surface without an open Design', async () => {
+    designSessionFixture.file = null
+    mockBasemapState = { ...mockBasemapState, status: 'loading' }
 
     await act(async () => {
       render(<CanvasPanel />, container)
@@ -122,33 +97,13 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[data-map-active="true"]')).toBeNull()
   })
 
-  it('places loading feedback as a bottom-left Location Notice above the scale bar', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('places loading feedback as a bottom-left Map Notice above the scale bar', async () => {
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'loading',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -163,35 +118,15 @@ describe('CanvasPanel basemap feedback', () => {
     expect(status.style.top).toBe('auto')
   })
 
-  it('shifts Location Notices to the right of the scale bar when canvas height is tight', async () => {
+  it('shifts Map Notices to the right of the scale bar when canvas height is tight', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'loading',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     try {
@@ -209,35 +144,15 @@ describe('CanvasPanel basemap feedback', () => {
     }
   })
 
-  it('keeps compact Location Notices visible under severe layout pressure', async () => {
+  it('keeps compact Map Notices visible under severe layout pressure', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'loading',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     try {
@@ -258,32 +173,12 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'loading',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -296,33 +191,13 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 
-  it('hides the clean ready Location Notice once the basemap becomes active', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+  it('hides the clean ready Map Notice once the basemap becomes active', async () => {
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'ready',
       errorMessage: null,
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -334,25 +209,7 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('keeps the canvas map surface active for terrain-only visibility', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     layerVisibility.value = { base: false, plants: true, zones: true, annotations: true }
     hillshadeVisible.value = true
     mockBasemapState = {
@@ -360,8 +217,6 @@ describe('CanvasPanel basemap feedback', () => {
       errorMessage: null,
       terrainStatus: 'ready',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -373,32 +228,12 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('shows a basemap error when the surface reports a load failure', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'error',
       errorMessage: 'style fetch failed',
       terrainStatus: 'idle',
       terrainErrorMessage: null,
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -411,32 +246,12 @@ describe('CanvasPanel basemap feedback', () => {
   })
 
   it('surfaces terrain degradation while keeping the basemap ready', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
+    designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'ready',
       errorMessage: null,
       terrainStatus: 'error',
       terrainErrorMessage: 'dem fetch failed',
-      precisionWarning: false,
-      designExtentMeters: null,
     }
 
     await act(async () => {
@@ -445,45 +260,27 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Map Layers: dem fetch failed')
-    expect(status?.textContent).not.toContain('48.8566, 2.3522')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
-
-  it('surfaces a precision warning for large designs', async () => {
-    designSessionFixture.file = {
-      version: 6,
-      name: 'Demo',
-      description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-      plant_species_colors: {},
-      layers: [],
-      plants: [],
-      zones: [],
-      annotations: [],
-      consortiums: [],
-      groups: [],
-      timeline: [],
-      budget: [],
-      budget_currency: 'EUR',
-      created_at: '2026-04-12T00:00:00.000Z',
-      updated_at: '2026-04-12T00:00:00.000Z',
-      extra: {},
-    }
-    mockBasemapState = {
-      status: 'ready',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-      precisionWarning: true,
-      designExtentMeters: 12_000,
-    }
-
-    await act(async () => {
-      render(<CanvasPanel />, container)
-    })
-
-    const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Precision may degrade for large designs')
-    expect(status?.textContent).not.toContain('48.8566, 2.3522')
-  })
 })
+
+function demoDesign(): CanopiFile {
+  return {
+    version: 7,
+    name: 'Demo',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-04-12T00:00:00.000Z',
+    updated_at: '2026-04-12T00:00:00.000Z',
+    extra: {},
+  }
+}

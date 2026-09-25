@@ -96,7 +96,7 @@ test('runner errors omit private paths and payload fragments', () => {
 
 test('runner CLI redacts a private fixture location before loading a browser', async () => {
   const privatePath = '/tmp/PRIVATE-CAPACITY-DESIGN.canopi'
-  await assert.rejects(run(process.execPath, [script.pathname, '--file', privatePath]), (error) => {
+  await assert.rejects(run(process.execPath, [script.pathname, '--file', privatePath, '--expected-sha256', '0'.repeat(64)]), (error) => {
     assert.equal(error.code, 1)
     assert.equal(error.stderr.includes(privatePath), false)
     assert.equal(error.stderr.includes('PRIVATE'), false)
@@ -256,3 +256,10 @@ function extractFunction(source, name) {
   }
   throw new Error(`unterminated ${name}`)
 }
+
+test('runner CLI requires the fixture hash before loading a browser', async () => {
+  await assert.rejects(run(process.execPath, [script.pathname, '--file', '/tmp/any.canopi']), (error) => {
+    assert.equal(error.code, 1)
+    return true
+  })
+})

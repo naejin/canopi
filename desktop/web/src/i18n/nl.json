@@ -163,12 +163,9 @@
     "overview": {
       "label": "Overzicht",
       "zoomInToEdit": "Zoom in om te bewerken",
-      "provisional": "Voorlopige ontwerplocatie · Zoom in om te bewerken",
       "returnToDesign": "Terug naar ontwerp",
       "design": "Ontwerp",
-      "provisionalDesign": "Voorlopig ontwerp",
-      "designMarker": "Terug naar het ontwerp",
-      "provisionalMarker": "Terug naar het voorlopige ontwerp"
+      "designMarker": "Terug naar het ontwerp"
     },
     "plantColor": {
       "label": "Plantkleur",
@@ -216,25 +213,10 @@
       "applySelection": "Toepassen op {{count}} geselecteerde"
     },
     "location": {
-      "title": "Ontwerplocatie",
-      "confirm": "Locatie bevestigen",
-      "move": "Ontwerp hierheen verplaatsen",
-      "current": "Huidig",
       "searchPlaceholder": "Locatie zoeken...",
       "searching": "Zoeken...",
       "noResults": "Geen resultaten",
-      "geocodeError": "Geocodering mislukt",
-      "mapUnavailable": "Kaart niet beschikbaar",
-      "provisionalTitle": "Voorlopige locatie",
-      "provisionalBody": "Lokaal bewerken is beschikbaar. Bevestig een locatie vóór locatiespecifieke evaluatie.",
-      "confirmedTitle": "Bevestigde locatie",
-      "selectedTitle": "Geselecteerde locatie",
-      "coordinates": "Coördinaten",
-      "latitude": "Breedtegraad",
-      "longitude": "Lengtegraad",
-      "preview": "Voorbeeld",
-      "cancel": "Annuleren",
-      "invalidCoordinates": "Voer een breedtegraad tussen -85,051129 en 85,051129 en een lengtegraad tussen -180 en 180 in."
+      "geocodeError": "Geocodering mislukt"
     },
     "file": {
       "new": "Nieuw ontwerp",
@@ -266,7 +248,6 @@
       "basemap": "Basiskaart",
       "basemapLoading": "Basiskaart laden...",
       "basemapError": "Basiskaart niet beschikbaar",
-      "precisionWarning": "De nauwkeurigheid kan afnemen bij grote ontwerpen",
       "references": "Terreinreferenties",
       "sceneStack": "Tekenlagen",
       "topToBottom": "Van boven naar beneden",

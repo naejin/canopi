@@ -103,7 +103,6 @@ function createApi(
 
 function createControls(options: {
   contributions?: ConstructorParameters<typeof WorkspaceMapControls>[0]['contributions']
-  placementStatus?: 'provisional' | 'confirmed'
   basemapVisible?: boolean
   load?: () => Promise<MapLibreApi>
   webgl2?: WebGL2RenderingContext | null
@@ -124,8 +123,7 @@ function createControls(options: {
     },
   })
   const snapshot: WorkspaceMapSnapshot = {
-    anchor: { lat: 48.86, lon: 2.35 }, northBearingDeg: 12,
-    placementStatus: options.placementStatus ?? 'confirmed',
+    initialCenter: { lat: 48.86, lon: 2.35 },
     basemapStyle: 'street', basemapVisible: options.basemapVisible ?? true, basemapOpacity: 0.4,
   }
   const controls = new TestWorkspaceMapControls({
@@ -162,8 +160,8 @@ function targetContribution(sessionIdentity: object): WorkspaceMapContributionSn
   return {
     sessionIdentity, lidar: [],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, northBearingDeg: 0, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [] },
-    frame: null, designExtentMeters: 0,
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [] },
+    frame: null,
   }
 }
 
@@ -403,8 +401,8 @@ describe('WorkspaceMapControls', () => {
       sessionIdentity: controls.sessionIdentity,
       lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
-      frame: null, designExtentMeters: 0,
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [] },
+      frame: null,
     }
     controls.updateMapContributions(input)
     const map = await waitForMap(maps)
@@ -422,7 +420,7 @@ describe('WorkspaceMapControls', () => {
     map.remove.mockImplementation(() => {
       expect([...map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
       expect(bounds).toHaveBeenLastCalledWith(null)
-      expect(diagnostics).toHaveBeenLastCalledWith(null, null)
+      expect(diagnostics).toHaveBeenLastCalledWith(null)
       expect(states.mock.lastCall?.[0].status).toBe('idle')
     })
     controls.releaseMap(admitted)
@@ -431,11 +429,8 @@ describe('WorkspaceMapControls', () => {
     expect(observers[0]?.disconnect).toHaveBeenCalledOnce()
   })
 
-  it.each([
-    ['provisional', true],
-    ['confirmed', false],
-  ] as const)('does not add a remote source for %s or hidden base presentation', async (placementStatus, basemapVisible) => {
-    const { controls, maps } = createControls({ placementStatus, basemapVisible })
+  it('does not add a remote source for hidden base presentation', async () => {
+    const { controls, maps } = createControls({ basemapVisible: false })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
 
@@ -446,7 +441,7 @@ describe('WorkspaceMapControls', () => {
     expect(JSON.stringify(map.options.style)).not.toContain('tile.openstreetmap.org')
   })
 
-  it('adds the confirmed visible contribution at style admission without waiting for tile events', async () => {
+  it('adds the visible contribution at style admission without waiting for tile events', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
@@ -567,19 +562,20 @@ describe('WorkspaceMapControls', () => {
     expect(map.addLayer).not.toHaveBeenCalled()
   })
 
-  it('keeps a confirmed presentation update inert for a provisional attempt', async () => {
-    const { controls, maps } = createControls({ placementStatus: 'provisional' })
+  it('adds the basemap when a hidden attempt receives a visible presentation update', async () => {
+    const { controls, maps } = createControls({ basemapVisible: false })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     await acquisition
+    expect(map.addSource).not.toHaveBeenCalled()
 
     controls.updateBasemapPresentation({
       basemapStyle: 'street', basemapVisible: true, basemapOpacity: 0.8,
     })
 
-    expect(map.addSource).not.toHaveBeenCalled()
-    expect(map.addLayer).not.toHaveBeenCalled()
+    expect(map.addSource).toHaveBeenCalledWith(MAPLIBRE_BASEMAP_SOURCE_ID, expect.objectContaining({ type: 'raster' }))
+    expect(map.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: MAPLIBRE_BASEMAP_RASTER_LAYER_ID }))
   })
 
   it('replaces and hides only the basemap while preserving local contribution identities and order', async () => {
@@ -671,17 +667,13 @@ describe('WorkspaceMapControls', () => {
     try {
     const { controls, maps } = createControls()
     const snapshotA: WorkspaceMapSnapshot = {
-      anchor: { lat: 10, lon: 20 },
-      northBearingDeg: 30,
-      placementStatus: 'confirmed',
+      initialCenter: { lat: 10, lon: 20 },
       basemapStyle: 'street',
       basemapVisible: true,
       basemapOpacity: 0.2,
     }
     const snapshotB: WorkspaceMapSnapshot = {
-      anchor: { lat: -40, lon: 70 },
-      northBearingDeg: 80,
-      placementStatus: 'confirmed',
+      initialCenter: { lat: -40, lon: 70 },
       basemapStyle: 'satellite',
       basemapVisible: true,
       basemapOpacity: 0.8,
@@ -706,7 +698,7 @@ describe('WorkspaceMapControls', () => {
     mapB.emit('style.load')
 
     expect(mapA.options.center).toEqual([20, 10])
-    expect(mapA.options.bearing).toBe(330)
+    expect(mapA.options.bearing).toBe(0)
     expect(mapA.setPaintProperty).toHaveBeenCalledTimes(1)
     expect(mapA.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
@@ -714,7 +706,7 @@ describe('WorkspaceMapControls', () => {
       0.2,
     )
     expect(mapB.options.center).toEqual([70, -40])
-    expect(mapB.options.bearing).toBe(280)
+    expect(mapB.options.bearing).toBe(0)
     expect(mapB.setPaintProperty).toHaveBeenCalledTimes(2)
     expect(mapB.setPaintProperty).toHaveBeenLastCalledWith(
       MAPLIBRE_BASEMAP_RASTER_LAYER_ID,
@@ -731,9 +723,7 @@ describe('WorkspaceMapControls', () => {
     try {
       const { controls, maps } = createControls()
       const snapshot: WorkspaceMapSnapshot = {
-        anchor: { lat: 11, lon: 22 },
-        northBearingDeg: 33,
-        placementStatus: 'confirmed',
+        initialCenter: { lat: 11, lon: 22 },
         basemapStyle: 'street',
         basemapVisible: true,
         basemapOpacity: 0.25,
@@ -741,9 +731,8 @@ describe('WorkspaceMapControls', () => {
       const acquisition = controls.createMap(new AbortController().signal, snapshot)
       const map = await waitForMap(maps)
 
-      ;(snapshot.anchor as { lat: number; lon: number }).lat = 81
-      ;(snapshot.anchor as { lat: number; lon: number }).lon = 82
-      ;(snapshot as { northBearingDeg: number }).northBearingDeg = 83
+      ;(snapshot.initialCenter as { lat: number; lon: number }).lat = 81
+      ;(snapshot.initialCenter as { lat: number; lon: number }).lon = 82
       ;(snapshot as { basemapStyle: 'street' | 'satellite' }).basemapStyle = 'satellite'
       ;(snapshot as { basemapVisible: boolean }).basemapVisible = false
       ;(snapshot as { basemapOpacity: number }).basemapOpacity = 0.95
@@ -753,7 +742,7 @@ describe('WorkspaceMapControls', () => {
       controls.installStyleRestorer(map as never, vi.fn())
 
       expect(map.options.center).toEqual([22, 11])
-      expect(map.options.bearing).toBe(327)
+      expect(map.options.bearing).toBe(0)
       expect(map.addSource).toHaveBeenCalledWith(
         MAPLIBRE_BASEMAP_SOURCE_ID,
         expect.objectContaining({ tiles: [REMOTE_BASEMAP_TILE_URL_TEMPLATE] }),
@@ -990,11 +979,8 @@ describe('WorkspaceMapControls', () => {
     }
   })
 
-  it.each([
-    ['provisional', true],
-    ['confirmed', false],
-  ] as const)('does not restore a remote basemap for %s or hidden presentation', async (placementStatus, basemapVisible) => {
-    const { controls, maps } = createControls({ placementStatus, basemapVisible })
+  it('does not restore a remote basemap for hidden presentation', async () => {
+    const { controls, maps } = createControls({ basemapVisible: false })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
@@ -1183,7 +1169,7 @@ describe('WorkspaceMapControls', () => {
       canCreateWebGL2Context: () => true,
     })
     await expect(controls.createMap(new AbortController().signal, {
-      anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
+      initialCenter: { lat: 0, lon: 0 },
       basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
     }, {})).rejects.toBe(error)
   })
@@ -1213,7 +1199,7 @@ describe('WorkspaceMapControls', () => {
       })
 
       await expect(controls.createMap(new AbortController().signal, {
-        anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, placementStatus: 'confirmed',
+        initialCenter: { lat: 0, lon: 0 },
         basemapStyle: 'street', basemapVisible: true, basemapOpacity: 1,
       }, {})).rejects.toThrow('WebGL2 is unavailable')
 
@@ -1427,9 +1413,7 @@ describe('WorkspaceMapControls shared basemap provider', () => {
     try {
       const { controls, maps } = createControls()
       const acquisition = controls.createMap(new AbortController().signal, {
-        anchor: { lat: 48.86, lon: 2.35 },
-        northBearingDeg: 0,
-        placementStatus: 'confirmed',
+        initialCenter: { lat: 48.86, lon: 2.35 },
         basemapStyle: 'google_satellite',
         basemapVisible: true,
         basemapOpacity: 0.8,

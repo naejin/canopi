@@ -12,7 +12,6 @@ import type { PanelTarget } from '../types/design'
 
 const LOCATION = { lat: 48.8566, lon: 2.3522 }
 const MAPLIBRE_WORLD_TILE_SIZE = 512
-const DEGREES_TO_RADIANS = Math.PI / 180
 
 function projectWorldToCanvasScreen(
   viewport: { x: number; y: number; scale: number },
@@ -35,13 +34,10 @@ function projectGeoToMapScreen(
   const worldSizePx = MAPLIBRE_WORLD_TILE_SIZE * (2 ** frame.zoom)
   const deltaX = (point.x - center.x) * worldSizePx
   const deltaY = (point.y - center.y) * worldSizePx
-  const bearingRad = frame.bearing * DEGREES_TO_RADIANS
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
 
   return {
-    x: screenSize.width / 2 + deltaX * cos + deltaY * sin,
-    y: screenSize.height / 2 - deltaX * sin + deltaY * cos,
+    x: screenSize.width / 2 + deltaX,
+    y: screenSize.height / 2 + deltaY,
   }
 }
 
@@ -326,47 +322,31 @@ describe('projectTargetsToMapFeatures', () => {
     expect(result.skippedReason).toBeNull()
   })
 
-  it('projects features through the same north-bearing transform as the map camera', () => {
+  it('projects session plane metres north-up: x east, y south', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'placed_plant', plant_id: 'plant-2' }],
-      createScene(),
-      { ...LOCATION, northBearingDeg: 90 },
-    )
-    const northUp = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       createScene(),
       LOCATION,
     )
 
     expect(result.features).toHaveLength(1)
-    expect(northUp.features).toHaveLength(1)
-    const rotatedPoint = result.features[0]
-    const northUpPoint = northUp.features[0]
-    expect(rotatedPoint?.geometry.type).toBe('Point')
-    expect(northUpPoint?.geometry.type).toBe('Point')
-    const rotatedCoords = rotatedPoint?.geometry.type === 'Point' ? rotatedPoint.geometry.coordinates : null
-    const northUpCoords = northUpPoint?.geometry.type === 'Point' ? northUpPoint.geometry.coordinates : null
-    expect(rotatedCoords?.[0]).not.toBeCloseTo(
-      northUpCoords![0],
-      8,
-    )
-    expect(rotatedCoords?.[1]).not.toBeCloseTo(
-      northUpCoords![1],
-      8,
-    )
-    expect(rotatedCoords?.[0]).toBeLessThan(northUpCoords![0])
+    const point = result.features[0]
+    expect(point?.geometry.type).toBe('Point')
+    const coords = point?.geometry.type === 'Point' ? point.geometry.coordinates : null
+    // plant-2 sits 12 m east and 6 m north of the origin.
+    expect(coords![0]).toBeGreaterThan(LOCATION.lon)
+    expect(coords![1]).toBeGreaterThan(LOCATION.lat)
   })
 
   it('keeps projected plant overlays screen-locked to the same canonical map frame', () => {
     const scene = createScene()
     const viewport = { x: -180, y: 64, scale: 2.4 }
     const screenSize = { width: 1200, height: 800 }
-    const northBearingDeg = 32
-    const frame = createMapFrame(viewport, screenSize, LOCATION, northBearingDeg)
+    const frame = createMapFrame(viewport, screenSize, LOCATION)
     const result = projectTargetsToMapFeatures(
       [{ kind: 'placed_plant', plant_id: 'plant-2' }],
       scene,
-      { ...LOCATION, northBearingDeg },
+      LOCATION,
     )
 
     expect(frame).not.toBeNull()

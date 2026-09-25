@@ -14,11 +14,11 @@ function fixture() {
   return {
     version: 7, name: 'PRIVATE DESIGN NAME', description: 'private', layers: [{ name: 'layer', visible: true, locked: false, opacity: 1 }],
     plants: [
-      { id: 'alpha', canonical_name: 'Secretus alpha', position: { x: 1, y: 2 }, color: '#123456', symbol: 'shrub', locked: false },
-      { id: 'beta', canonical_name: 'Secretus beta', position: { x: -4, y: 3 }, color: '#abcdef', symbol: 'herb', locked: true },
+      { id: 'alpha', canonical_name: 'Secretus alpha', position: { lon: 13.00001, lat: 22.99998 }, color: '#123456', symbol: 'shrub', locked: false },
+      { id: 'beta', canonical_name: 'Secretus beta', position: { lon: 12.99996, lat: 22.99997 }, color: '#abcdef', symbol: 'herb', locked: true },
     ],
-    zones: [{ name: 'zone', points: [] }], annotations: [{ id: 'annotation', text: 'private', position: { x: 0, y: 0 } }],
-    measurement_guides: [{ id: 'measure', start: { x: 0, y: 0 }, end: { x: 1, y: 1 } }], guides: [{ id: 'guide', axis: 'h', position: 2 }],
+    zones: [{ name: 'zone', points: [] }], annotations: [{ id: 'annotation', text: 'private', position: { lon: 13, lat: 23 } }],
+    measurement_guides: [{ id: 'measure', start: { lon: 13, lat: 23 }, end: { lon: 13.00001, lat: 22.99999 } }], guides: [{ id: 'guide', axis: 'h', lat: 22.99998 }],
     consortiums: [],
     timeline: [{ id: 'action', targets: [{ kind: 'placed_plant', plant_id: 'beta' }] }],
     budget: [{ description: 'item', target: { kind: 'placed_plant', plant_id: 'alpha' } }],

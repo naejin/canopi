@@ -35,6 +35,9 @@ import { WorkspaceMapControls } from './workspace-map-controls'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
+import { DEFAULT_NEW_DESIGN_VIEW, type SessionPlane } from '../../canvas/session-plane'
+import { stageScaleToMapZoom, viewportCenterWorld } from '../../canvas/projection'
+import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -55,6 +58,15 @@ export interface WorkspaceRuntimeMountOptions {
   readonly onFailure?: (error: unknown) => void
 }
 
+/** The geographic view a settled camera shows, for the app's last-view setting. */
+export interface WorkspaceSettledView {
+  readonly lon: number
+  readonly lat: number
+  readonly zoom: number
+}
+
+export const WORKSPACE_VIEW_SETTLE_MS = 750
+
 export interface WorkspaceRuntimeCompositionOptions {
   readonly container: HTMLElement
   readonly appAdapter: CanvasRuntimeAppAdapter
@@ -62,8 +74,12 @@ export interface WorkspaceRuntimeCompositionOptions {
   readonly mapContributions: WorkspaceMapContributionAdapter
   readonly onMapStateChange?: (state: MapLibreCanvasSurfaceState) => void
   readonly onFailure?: (error: unknown) => void
-  readonly readSnapshot?: () => WorkspaceActivationSnapshot | null
+  readonly readSnapshot?: (
+    readInitialCenter: () => { readonly lat: number; readonly lon: number },
+  ) => WorkspaceActivationSnapshot | null
   readonly readBasemapPresentation?: () => ReturnType<typeof readWorkspaceBasemapPresentation>
+  /** Called once the camera has been still for `WORKSPACE_VIEW_SETTLE_MS` on a Design. */
+  readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
 
 interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
@@ -121,6 +137,13 @@ export function createWorkspaceRuntimeComposition(
       onStateChange: options.onMapStateChange,
     },
   })
+  // Read without subscribing: the camera and scene layer call this per frame.
+  const readOrigin = () => {
+    const plane = runtime.querySurface.sessionPlane.peek()
+    return plane
+      ? { lat: plane.origin.lat, lon: plane.origin.lon }
+      : { lat: DEFAULT_NEW_DESIGN_VIEW.lat, lon: DEFAULT_NEW_DESIGN_VIEW.lon }
+  }
   const workspace = dependencies.createWorkspace({
     container: options.container,
     runtime,
@@ -128,10 +151,13 @@ export function createWorkspaceRuntimeComposition(
     composition: rendererComposition,
     map: controls,
     layer: {},
+    readOrigin,
   })
   const reconciler = new WorkspaceGenerationReconciler({
     workspace,
-    readSnapshot: options.readSnapshot ?? readWorkspaceActivationSnapshot,
+    readSnapshot: () => options.readSnapshot
+      ? options.readSnapshot(readOrigin)
+      : readWorkspaceActivationSnapshot({ readInitialCenter: readOrigin }),
     onFailure: options.onFailure,
     onOutcome: (outcome) => initializeViewport(outcome),
   })
@@ -148,6 +174,13 @@ export function createWorkspaceRuntimeComposition(
   let cancelledStartResult: Promise<WorkspaceRuntimeStartOutcome> | null = null
   let disposeResult: Promise<void> | null = null
   let disposePresentationEffect: (() => void) | null = null
+  let disposeOriginEffect: (() => void) | null = null
+  let disposeSettleEffect: (() => void) | null = null
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  const clearSettleTimer = () => {
+    if (settleTimer !== null) clearTimeout(settleTimer)
+    settleTimer = null
+  }
   let viewportInitialized = false
   let viewportReady = false
 
@@ -175,6 +208,25 @@ export function createWorkspaceRuntimeComposition(
         resolveStart = resolve
       })
       try {
+        // A new session plane (hydration or re-origin) keeps the map where it
+        // is and republishes the plane viewport derived from it.
+        disposeOriginEffect = dependencies.installEffect(() => {
+          if (runtime.querySurface.sessionPlane.value) camera.attachment.refreshOrigin()
+        })
+        if (options.onViewSettled) {
+          const onViewSettled = options.onViewSettled
+          disposeSettleEffect = dependencies.installEffect(() => {
+            const frame = runtime.querySurface.viewport.value
+            const plane = runtime.querySurface.sessionPlane.value
+            clearSettleTimer()
+            if (!plane) return
+            settleTimer = setTimeout(() => {
+              settleTimer = null
+              const view = settledViewOf(frame, plane)
+              if (view) onViewSettled(view)
+            }, WORKSPACE_VIEW_SETTLE_MS)
+          })
+        }
         disposePresentationEffect = dependencies.installEffect(() => {
           workspace.updateMapContributions(options.mapContributions.read(runtime.querySurface))
           workspace.updateBasemapPresentation(
@@ -203,13 +255,20 @@ export function createWorkspaceRuntimeComposition(
         rejectDispose = reject
       })
       const presentationEffect = disposePresentationEffect
+      const originEffect = disposeOriginEffect
+      const settleEffect = disposeSettleEffect
       disposePresentationEffect = null
+      disposeOriginEffect = null
+      disposeSettleEffect = null
+      clearSettleTimer()
       void (async () => {
         const errors: unknown[] = []
-        try {
-          presentationEffect?.()
-        } catch (error) {
-          errors.push(error)
+        for (const disposeEffect of [settleEffect, originEffect, presentationEffect]) {
+          try {
+            disposeEffect?.()
+          } catch (error) {
+            errors.push(error)
+          }
         }
         try {
           await reconciler.dispose()
@@ -221,6 +280,14 @@ export function createWorkspaceRuntimeComposition(
       return disposeResult
     },
   }
+}
+
+function settledViewOf(frame: CameraViewportSnapshot, plane: SessionPlane): WorkspaceSettledView | null {
+  const centre = plane.toGeo(viewportCenterWorld(frame.viewport, frame.screenSize))
+  const zoom = stageScaleToMapZoom(frame.viewport.scale, centre.lat)
+  return [centre.lon, centre.lat, zoom].every(Number.isFinite)
+    ? { lon: centre.lon, lat: centre.lat, zoom }
+    : null
 }
 
 function reportCompositionFailure(

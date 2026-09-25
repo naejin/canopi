@@ -3,7 +3,7 @@ import { plantColorMenuOpen } from '../../plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../../plant-symbol-menu-state'
 import { syncPlantSpeciesColorDefaults } from '../../plant-species-color-defaults'
 import type { CanopiFile } from '../../../types/design'
-import { guides, northBearingAvailable, northBearingDeg } from '../../scene-metadata-state'
+import { guides } from '../../scene-metadata-state'
 import { setCanvasSelection } from '../../session-state'
 import type { SceneStateReader } from '../scene'
 import type { CanvasRuntimeLayerProjectionAdapter } from '../app-adapter'
@@ -24,8 +24,6 @@ function syncCanvasSignalsFromDocument(
     layerProjections.syncFromLayers(file.layers)
     syncPlantSpeciesColorDefaults(file.plant_species_colors)
     guides.value = Array.isArray(file.extra?.guides) ? file.extra.guides as never[] : []
-    northBearingDeg.value = file.spatial_frame.north_bearing_deg
-    northBearingAvailable.value = true
   })
 }
 

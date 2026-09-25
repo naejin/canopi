@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt } from '../../../__tests__/support/geo-design'
 import {
   resolvePlantSymbolForPlant,
   SceneStore,
@@ -12,10 +14,9 @@ import { SceneRuntimeEditCoordinator } from './transactions'
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Mutation demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -28,7 +29,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: geoAt(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -41,7 +42,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 20, y: 20 },
+        position: geoAt(20, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -56,10 +57,10 @@ function makeFile(): CanopiFile {
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          geoAt(0, 0),
+          geoAt(5, 0),
+          geoAt(5, 5),
+          geoAt(0, 5),
         ],
         fill_color: null,
         notes: null,
@@ -70,7 +71,7 @@ function makeFile(): CanopiFile {
       {
         id: 'annotation-1',
         annotation_type: 'text',
-        position: { x: 50, y: 60 },
+        position: geoAt(50, 60),
         text: 'Note',
         font_size: 20,
         rotation: null,
@@ -493,7 +494,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Pyrus communis',
         common_name: 'Pear',
         color: null,
-        position: { x: 30, y: 30 },
+        position: geoAt(30, 30),
         rotation: null,
         scale: null,
         notes: null,
@@ -506,7 +507,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 40, y: 40 },
+        position: geoAt(40, 40),
         rotation: null,
         scale: null,
         notes: null,
@@ -519,7 +520,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 50, y: 50 },
+        position: geoAt(50, 50),
         rotation: null,
         scale: null,
         notes: null,
@@ -767,7 +768,7 @@ describe('scene runtime mutation controller', () => {
         canonical_name: 'Pyrus communis',
         common_name: 'Pear',
         color: null,
-        position: { x: 30, y: 30 },
+        position: geoAt(30, 30),
         rotation: null,
         scale: null,
         notes: null,

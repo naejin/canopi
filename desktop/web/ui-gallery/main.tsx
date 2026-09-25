@@ -8,8 +8,6 @@ import { DesktopSpeciesKeyPanel } from '../src/components/panels/DesktopSpeciesK
 import { LayersPanel } from '../src/components/panels/LayersPanel'
 import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
 import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
-import { LocationPanel } from '../src/components/panels/LocationPanel'
-import { WebLocationPanel } from '../src/web/WebLocationPanel'
 import { WebLocalRasterPanel } from '../src/web/WebLocalRasterPanel'
 import { DataLibraryPanel } from '../src/components/panels/lidar/DataLibraryPanel'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
@@ -80,7 +78,7 @@ plantDbStatus.value = 'available'
 
 const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   ? {
-      primary: { canvas: GalleryCanvasWorkspace, location: WebLocationPanel },
+      primary: { canvas: GalleryCanvasWorkspace },
       side: {
         data: () => <WebLocalRasterPanel title={t('canvas.lidar.library.title')} />,
         'species-key': WebSpeciesKeyPanel,
@@ -93,7 +91,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
       },
     }
   : {
-      primary: { canvas: GalleryCanvasWorkspace, location: LocationPanel },
+      primary: { canvas: GalleryCanvasWorkspace },
       side: {
         data: DataLibraryPanel,
         'species-key': DesktopSpeciesKeyPanel,
@@ -121,7 +119,7 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'overview-confirmed', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
@@ -143,7 +141,7 @@ function GalleryCanvasWorkspace() {
       activeSurface={selectedSurface}
       design={file}
       dense={fixtureState === 'dense'}
-      cameraState={fixtureState === 'overview' || fixtureState === 'overview-confirmed'
+      cameraState={fixtureState === 'overview'
         ? 'overview'
         : fixtureState === 'max-zoom' ? 'maximum' : 'site'}
       onReadyChange={setGalleryCanvasReady}
@@ -198,19 +196,7 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
 
 function GalleryLayersSurface() {
   if (lidarPrototypeEnabled) return <Suspense fallback={null}><LidarPanelPrototype /></Suspense>
-  return <LayersPanel onLocation={() => {
-    designSessionStore.replaceCurrentDesignSnapshot({
-      ...file,
-      spatial_frame: {
-        anchor_longitude_deg: 0.033854,
-        anchor_latitude_deg: 48.220272,
-        north_bearing_deg: 0,
-        placement_status: 'confirmed',
-        location_metadata: { altitude_m: 118 },
-      },
-    })
-    activity.value = 'Sample location set in memory.'
-  }} />
+  return <LayersPanel />
 }
 
 function GalleryNotebookSurface() {

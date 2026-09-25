@@ -326,9 +326,9 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
    * reachable through the shared provider and the map's request transform.
    */
   private applyBasemapPresentation(attempt: WorkspaceMapAttempt): void {
-    const { map, snapshot, presentation } = attempt
+    const { map, presentation } = attempt
     if (!map) return
-    if (snapshot.placementStatus !== 'confirmed' || !presentation.basemapVisible) {
+    if (!presentation.basemapVisible) {
       this.releaseBasemapProvider(attempt)
       this.removeBasemapContribution(map)
       return
@@ -575,12 +575,10 @@ function canCreateWebGL2Context(): boolean {
 
 function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
   return Object.freeze({
-    anchor: Object.freeze({
-      lat: snapshot.anchor.lat,
-      lon: snapshot.anchor.lon,
+    initialCenter: Object.freeze({
+      lat: snapshot.initialCenter.lat,
+      lon: snapshot.initialCenter.lon,
     }),
-    northBearingDeg: snapshot.northBearingDeg,
-    placementStatus: snapshot.placementStatus,
     basemapStyle: snapshot.basemapStyle,
     basemapVisible: snapshot.basemapVisible,
     basemapOpacity: snapshot.basemapOpacity,

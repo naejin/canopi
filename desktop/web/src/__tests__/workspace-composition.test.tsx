@@ -115,14 +115,14 @@ describe('shared edition workspace composition', () => {
       return <div data-testid="canvas" />
     }
     const surfaces: WorkspaceSurfaces = {
-      primary: { canvas: Canvas, location: Location },
+      primary: { canvas: Canvas, templates: Templates },
       side: { calendar: Calendar },
     }
 
     await act(async () => {
       render(
         <WorkspaceComposition
-          panelProjection={projection({ primary: ['canvas', 'location'], design: ['calendar'] })}
+          panelProjection={projection({ primary: ['canvas', 'templates'], design: ['calendar'] })}
           surfaces={surfaces}
         />,
         container,
@@ -132,8 +132,8 @@ describe('shared edition workspace composition', () => {
     expect(container.querySelector('[data-workspace-side-panel="calendar"]')).not.toBeNull()
     expect(unmounted).not.toHaveBeenCalled()
 
-    await act(async () => { navigateTo('location') })
-    expect(container.querySelector('[data-testid="location"]')).not.toBeNull()
+    await act(async () => { navigateTo('templates') })
+    expect(container.querySelector('[data-testid="templates"]')).not.toBeNull()
     expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
     expect(unmounted).toHaveBeenCalledOnce()
 
@@ -181,8 +181,8 @@ function Canvas() {
   return <div data-testid="canvas" />
 }
 
-function Location() {
-  return <div data-testid="location" />
+function Templates() {
+  return <div data-testid="templates" />
 }
 
 function Calendar() {

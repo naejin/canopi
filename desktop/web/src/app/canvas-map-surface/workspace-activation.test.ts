@@ -33,9 +33,7 @@ function createActivationSnapshot(
   return {
     sessionIdentity,
     map: {
-      anchor: { lat: 0, lon: 0 },
-      northBearingDeg: 0,
-      placementStatus: 'confirmed',
+      initialCenter: { lat: 0, lon: 0 },
       basemapStyle: 'street',
       basemapVisible: true,
       basemapOpacity: 1,
@@ -183,6 +181,7 @@ function createCoordinator(input: {
   unwatchFailure?: () => void
   watchFailure?: WorkspaceActivationMapControls['watchFailure']
   installStyleRestorer?: WorkspaceActivationMapControls['installStyleRestorer']
+  readOrigin?: () => { readonly lat: number; readonly lon: number }
 } = {}) {
   const map = input.map ?? new FakeMap()
   const camera = new MapLibreWorkspaceCameraOwner()
@@ -200,12 +199,14 @@ function createCoordinator(input: {
     watchFailure: input.watchFailure
       ?? (input.unwatchFailure ? () => input.unwatchFailure! : undefined),
   }
+  const readOrigin = input.readOrigin ?? (() => ({ lat: 0, lon: 0 }))
   const coordinator = new TestWorkspaceActivationCoordinator({
     container: document.createElement('div'), runtime, camera, composition,
     map: mapControls,
     layer: {},
+    readOrigin,
   })
-  return { coordinator, camera, composition, runtime, map, mapControls }
+  return { coordinator, camera, composition, runtime, map, mapControls, readOrigin }
 }
 
 describe('WorkspaceActivationCoordinator', () => {
@@ -233,8 +234,8 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, northBearingDeg: 0, hoveredTargets: [], selectedTargets: [] },
-      frame: null, designExtentMeters: 0,
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [] },
+      frame: null,
     }
     f.coordinator.updateMapContributions(contribution)
     expect(f.mapControls.updateMapContributions).not.toHaveBeenCalled()
@@ -272,44 +273,45 @@ describe('WorkspaceActivationCoordinator', () => {
       return created.promise
     })
     const composed = createComposition()
+    const readOrigin = () => ({ lat: 10, lon: 20 })
     const { coordinator, camera, map } = createCoordinator({
       createMap,
       composition: composed.composition,
+      readOrigin,
     })
     const attach = vi.spyOn(camera.attachment, 'attach')
     const snapshot: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
-        anchor: { lat: 10, lon: 20 },
-        northBearingDeg: 30,
+        initialCenter: { lat: 10, lon: 20 },
+        basemapOpacity: 0.3,
       }),
       maximumWorldExtentMeters: 4000,
     }
 
     const activation = coordinator.activate(snapshot)
-    ;(snapshot.map.anchor as { lat: number; lon: number }).lat = 90
+    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lat = 90
     await vi.waitFor(() => expect(createMap).toHaveBeenCalledOnce())
     expect(capturedMapSnapshot).toEqual(expect.objectContaining({
-      anchor: { lat: 10, lon: 20 },
-      northBearingDeg: 30,
+      initialCenter: { lat: 10, lon: 20 },
+      basemapOpacity: 0.3,
     }))
 
-    ;(snapshot.map.anchor as { lat: number; lon: number }).lon = 91
-    ;(snapshot.map as { northBearingDeg: number }).northBearingDeg = 92
+    ;(snapshot.map.initialCenter as { lat: number; lon: number }).lon = 91
+    ;(snapshot.map as { basemapOpacity: number }).basemapOpacity = 0.92
     ;(snapshot as { maximumWorldExtentMeters?: number }).maximumWorldExtentMeters = 9300
     created.resolve(map as unknown as WorkspaceActivationMap)
 
     await expect(activation).resolves.toBe('shared-ready')
     expect(composed.composition.createLayer).toHaveBeenCalledWith(expect.objectContaining({
-      anchor: { lat: 10, lon: 20 },
-      northBearingDeg: 30,
+      readOrigin,
       maximumWorldExtentMeters: 4000,
     }))
     expect(attach).toHaveBeenCalledWith(expect.objectContaining({
       map,
-      anchor: { lat: 10, lon: 20 },
-      northBearingDeg: 30,
+      readOrigin,
       maximumWorldExtentMeters: 4000,
     }))
+    expect(camera.policy.referenceLatitudeDeg).toBe(10)
   })
 
   it('waits for connected shared-layer admission before initializing the runtime', async () => {
@@ -651,7 +653,7 @@ describe('WorkspaceActivationCoordinator', () => {
     })
     const disposeStyleRestorer = vi.fn(() => { events.push('style-restorer') })
     const unwatchFailure = vi.fn(() => { events.push('failure-watcher') })
-    const { coordinator, camera, runtime } = createCoordinator({
+    const { coordinator, camera, runtime, readOrigin } = createCoordinator({
       createMap,
       composition,
       installStyleRestorer: () => disposeStyleRestorer,
@@ -659,14 +661,12 @@ describe('WorkspaceActivationCoordinator', () => {
     })
     const attach = vi.spyOn(camera.attachment, 'attach')
     const snapshotA = createActivationSnapshot({
-      anchor: { lat: 1, lon: 2 },
-      northBearingDeg: 3,
+      initialCenter: { lat: 1, lon: 2 },
       basemapOpacity: 0.2,
     })
     const snapshotB: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
-        anchor: { lat: 40, lon: -70 },
-        northBearingDeg: 27,
+        initialCenter: { lat: 40, lon: -70 },
         basemapOpacity: 0.8,
       }),
       maximumWorldExtentMeters: 4321,
@@ -677,14 +677,12 @@ describe('WorkspaceActivationCoordinator', () => {
 
     expect(snapshots).toEqual([snapshotA.map, snapshotB.map])
     expect(composition.createLayer).toHaveBeenLastCalledWith(expect.objectContaining({
-      anchor: snapshotB.map.anchor,
-      northBearingDeg: snapshotB.map.northBearingDeg,
+      readOrigin,
       maximumWorldExtentMeters: 4321,
     }))
     expect(attach).toHaveBeenLastCalledWith(expect.objectContaining({
       map: secondMap,
-      anchor: snapshotB.map.anchor,
-      northBearingDeg: snapshotB.map.northBearingDeg,
+      readOrigin,
       maximumWorldExtentMeters: 4321,
     }))
     expect(events).toEqual([
@@ -1056,10 +1054,10 @@ describe('WorkspaceActivationCoordinator', () => {
     const maps = [new FakeMap(), new FakeMap()]
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
     const { coordinator } = createCoordinator({ createMap, composition })
-    await coordinator.activate(createActivationSnapshot({ northBearingDeg: 1 }))
+    await coordinator.activate(createActivationSnapshot({ basemapOpacity: 0.1 }))
 
     coordinator.requestGenerationDisconnect()
-    const activation = coordinator.activate(createActivationSnapshot({ northBearingDeg: 2 }))
+    const activation = coordinator.activate(createActivationSnapshot({ basemapOpacity: 0.2 }))
     await Promise.resolve()
 
     expect(createMap).toHaveBeenCalledOnce()
@@ -1381,9 +1379,9 @@ describe('WorkspaceActivationCoordinator', () => {
       return maps[signals.length - 1] as unknown as WorkspaceActivationMap
     })
     const { coordinator, mapControls } = createCoordinator({ createMap, composition })
-    const snapshotA = createActivationSnapshot({ northBearingDeg: 1 })
-    const snapshotB = createActivationSnapshot({ northBearingDeg: 2 })
-    const snapshotC = createActivationSnapshot({ northBearingDeg: 3 })
+    const snapshotA = createActivationSnapshot({ basemapOpacity: 0.1 })
+    const snapshotB = createActivationSnapshot({ basemapOpacity: 0.2 })
+    const snapshotC = createActivationSnapshot({ basemapOpacity: 0.3 })
     await expect(coordinator.activate(snapshotA)).resolves.toBe('shared-ready')
 
     const superseded = coordinator.activate(snapshotB)
@@ -1672,6 +1670,7 @@ describe('WorkspaceActivationCoordinator', () => {
         createStage: () => ({ destroy: vi.fn() }) as never,
         createPresentation: () => ({ dispose() {}, resize() {}, setViewport() {}, renderScene() {} }),
       },
+      readOrigin: () => ({ lat: 0, lon: 0 }),
     })
 
     await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('shared-ready')

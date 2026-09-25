@@ -12,10 +12,6 @@ export {
   DesignEditUnavailableError,
 } from './authority-capability'
 export {
-  beginDesignPlacementEdit,
-  type DesignPlacementEditTransaction,
-} from './location'
-export {
   setBudgetCurrency,
   setPlantBudgetPrice,
 } from './budget'

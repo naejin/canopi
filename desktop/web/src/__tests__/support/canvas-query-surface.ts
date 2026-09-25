@@ -12,6 +12,8 @@ import type {
   CanvasQuerySurface,
 } from '../../canvas/runtime/runtime'
 import type { PlacedPlant } from '../../types/design'
+import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
+import { TEST_GEO_ORIGIN } from './geo-design'
 
 interface TestCanvasQuerySurfaceOptions {
   readonly scene?: ScenePersistedState
@@ -19,6 +21,8 @@ interface TestCanvasQuerySurfaceOptions {
   readonly plants?: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
   readonly selection?: SceneDesignObjectSelection
+  /** Defaults to a plane at the shared test origin; pass `null` for no Design frame. */
+  readonly sessionPlane?: SessionPlane | null
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -36,7 +40,9 @@ export function createTestCanvasQuerySurface({
   plants = [],
   localizedNames = new Map(),
   selection = [],
+  sessionPlane = createSessionPlane(TEST_GEO_ORIGIN),
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
+  const sessionPlaneSignal = signal<SessionPlane | null>(sessionPlane)
   const sceneRevision = signal(0)
   const plantNamesRevision = signal(0)
   const viewportSnapshot = signal<CameraViewportSnapshot>({
@@ -63,6 +69,7 @@ export function createTestCanvasQuerySurface({
   return {
     revision,
     viewport: viewportSnapshot,
+    sessionPlane: sessionPlaneSignal,
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => {
       void admissionRevision.value

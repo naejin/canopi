@@ -7,6 +7,8 @@ vi.mock('../../../ipc/species', () => ({
 }))
 
 import type { CanopiFile } from '../../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
+import { geoAt } from '../../../__tests__/support/geo-design'
 import { SceneStore } from '../scene'
 import { CanvasPlantLabelResolver } from '../plant-labels'
 import { CanvasSpeciesCache } from '../species-cache'
@@ -15,10 +17,9 @@ import { getCommonNames, getFlowerColorBatch, getSpeciesBatch } from '../../../i
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Presentation demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -31,7 +32,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: geoAt(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -46,10 +47,10 @@ function makeFile(): CanopiFile {
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          geoAt(0, 0),
+          geoAt(5, 0),
+          geoAt(5, 5),
+          geoAt(0, 5),
         ],
         fill_color: null,
         notes: null,

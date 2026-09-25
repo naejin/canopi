@@ -79,8 +79,10 @@ export interface WorkspaceActivationOptions {
   readonly map: WorkspaceActivationMapControls
   readonly layer: Omit<
     SharedMapSceneLayerOptions,
-    'id' | 'anchor' | 'northBearingDeg' | 'maximumWorldExtentMeters' | 'onFailure'
+    'id' | 'readOrigin' | 'maximumWorldExtentMeters' | 'onFailure'
   >
+  /** Live session plane origin of the runtime's open Design. */
+  readonly readOrigin: () => { readonly lat: number; readonly lon: number }
 }
 
 interface ActivationGeneration {
@@ -162,10 +164,7 @@ export class WorkspaceActivationCoordinator {
       throw error
     }
     if (request !== this.activationRequest || this.disposed) return 'cancelled'
-    this.options.camera.replacePolicy(createWorkspaceCameraPolicy(
-      ownedSnapshot.map.anchor.lat,
-      ownedSnapshot.map.placementStatus === 'confirmed',
-    ))
+    this.options.camera.replacePolicy(createWorkspaceCameraPolicy(this.options.readOrigin().lat))
     if (this.sharedBackendTerminal) return 'fallback-ready'
     const current: ActivationGeneration = {
       id: ++this.generation,
@@ -256,8 +255,7 @@ export class WorkspaceActivationCoordinator {
           () => this.options.composition.createLayer({
             ...this.options.layer,
             id: MAPLIBRE_SHARED_SCENE_LAYER_ID,
-            anchor: current.snapshot.map.anchor,
-            northBearingDeg: current.snapshot.map.northBearingDeg,
+            readOrigin: this.options.readOrigin,
             maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
             onFailure: (error) => {
               this.observeFailure(current, error)
@@ -328,9 +326,7 @@ export class WorkspaceActivationCoordinator {
           'camera attachment',
           () => this.options.camera.attachment.attach({
             map,
-            anchor: current.snapshot.map.anchor,
-            northBearingDeg: current.snapshot.map.northBearingDeg,
-            hasConfirmedGeography: current.snapshot.map.placementStatus === 'confirmed',
+            readOrigin: this.options.readOrigin,
             maximumWorldExtentMeters: current.snapshot.maximumWorldExtentMeters,
           }),
         )
@@ -939,12 +935,10 @@ function captureActivationSnapshot(
 
 function captureMapSnapshot(snapshot: WorkspaceMapSnapshot): WorkspaceMapSnapshot {
   return Object.freeze({
-    anchor: Object.freeze({
-      lat: snapshot.anchor.lat,
-      lon: snapshot.anchor.lon,
+    initialCenter: Object.freeze({
+      lat: snapshot.initialCenter.lat,
+      lon: snapshot.initialCenter.lon,
     }),
-    northBearingDeg: snapshot.northBearingDeg,
-    placementStatus: snapshot.placementStatus,
     basemapStyle: snapshot.basemapStyle,
     basemapVisible: snapshot.basemapVisible,
     basemapOpacity: snapshot.basemapOpacity,

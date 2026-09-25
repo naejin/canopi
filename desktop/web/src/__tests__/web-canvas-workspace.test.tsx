@@ -17,6 +17,8 @@ import type {
   CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
+import { TEST_GEO_ORIGIN } from './support/geo-design'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
@@ -897,6 +899,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
       groundMetersPerCssPixel: null,
       revision: 0,
     }),
+    sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
     getScenePhysicalExtentMeters: () => null,

@@ -39,20 +39,16 @@ const {
 } = await import('../app/lidar/inspection')
 const { setCurrentCanvasSession } = await import('../canvas/session')
 const { createTestCanvasRuntimeSurfaces } = await import('./support/canvas-runtime-surfaces')
+const { createTestCanvasQuerySurface } = await import('./support/canvas-query-surface')
+const { createSessionPlane } = await import('../canvas/session-plane')
+const { signal } = await import('@preact/signals')
 
 /** A Design whose only presentation entry is a visible source layer. */
 function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState>[0] {
   return {
-    version: 6,
+    version: 7,
     name: 'Inspect',
     description: null,
-    spatial_frame: {
-      anchor_longitude_deg: 0.0911,
-      anchor_latitude_deg: 48.4312,
-      north_bearing_deg: 12,
-      placement_status: 'confirmed',
-      location_metadata: { altitude_m: null },
-    },
     plant_species_colors: {},
     plant_species_symbols: {},
     plant_species_codes: {},
@@ -326,7 +322,10 @@ describe('numeric inspection session state', () => {
   it('samples the viewport centre through the same command as a click', async () => {
     // The centre button reads the live viewport through the existing canvas
     // query surface, so the test provides one rather than a second camera owner.
-    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    const plane = createSessionPlane(POINT)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: { ...createTestCanvasQuerySurface(), sessionPlane: signal(plane) },
+    }))
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const submitted = sampleInspectionCentre()
     expect(submitted).toBe(true)
@@ -339,6 +338,11 @@ describe('numeric inspection session state', () => {
     expect(request.expected_generation_id).toBe('gen-1')
     expect(Number.isFinite(request.longitude)).toBe(true)
     expect(Number.isFinite(request.latitude)).toBe(true)
+    // The test query surface's 400x300 view at the identity viewport is
+    // centred on plane (200, 150); the sample is that point's geography.
+    const centre = plane.toGeo({ x: 200, y: 150 })
+    expect(request.longitude).toBeCloseTo(centre.lon, 12)
+    expect(request.latitude).toBeCloseTo(centre.lat, 12)
     // The displayed coordinate is the sampled point, not an anchor.
     expect(inspectionLocation.value).toEqual({
       lat: request.latitude,
@@ -521,13 +525,13 @@ describe('numeric inspection session state', () => {
     expect(inspectionSample.value).toEqual({ kind: 'unavailable', reason: 'bad-point' })
   })
 
-  it('ends inspection and releases the gesture when navigating to Location', async () => {
+  it('ends inspection and releases the gesture when leaving the Canvas surface', async () => {
     const { activePanel } = await import('../app/shell/state')
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const reading = sampleInspectionPoint(POINT)
     expect(hasInspectionPointerHandler()).toBe(true)
 
-    activePanel.value = 'location'
+    activePanel.value = 'plant-db'
     // The observer ends the session without waiting for a later reconcile.
     expect(inspectionTarget.value).toBeNull()
     expect(hasInspectionPointerHandler()).toBe(false)

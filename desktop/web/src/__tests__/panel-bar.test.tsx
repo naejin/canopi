@@ -18,10 +18,9 @@ describe('PanelBar', () => {
     activePanel.value = 'canvas'
     sidePanel.value = null
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'test',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -61,7 +60,7 @@ describe('PanelBar', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
-    expect(strokes).toEqual(Array(11).fill('1.5'))
+    expect(strokes).toEqual(Array(10).fill('1.5'))
   })
 
   it('orders the Design Notebook before plant-library panels', async () => {
@@ -71,7 +70,6 @@ describe('PanelBar', () => {
 
     expect(panelButtonLabels()).toEqual([
       'Design Canvas',
-      'Design Location',
       'Species key',
       'Data Library',
       'Layers',
@@ -84,20 +82,12 @@ describe('PanelBar', () => {
     ])
   })
 
-  it('renders the location entry point and routes to the location shell', async () => {
+  it('does not render a Design Location entry point', async () => {
     await act(async () => {
       render(<PanelBar />, container)
     })
 
-    const locationButton = panelButton('Design Location')
-    expect(locationButton.disabled).toBe(false)
-
-    await act(async () => {
-      locationButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(activePanel.value).toBe('location')
-    expect(sidePanel.value).toBe(null)
+    expect(container.querySelector('button[aria-label="Design Location"]')).toBeNull()
   })
 
   it('disables design-dependent panel entry points when no design is open', async () => {
@@ -109,7 +99,6 @@ describe('PanelBar', () => {
 
     expect(panelButton('Design Canvas').disabled).toBe(false)
     expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
-    expect(panelButton('Design Location').disabled).toBe(true)
     expect(panelButton('Species key').disabled).toBe(true)
     expect(panelButton('Layers').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
@@ -172,17 +161,17 @@ describe('PanelBar', () => {
       render(<PanelBar />, container)
     })
 
-    expect(container.querySelector('button[aria-label="Design Location"] [role="tooltip"]')?.textContent)
-      .toContain('Design Location')
+    expect(container.querySelector('button[aria-label="Layers"] [role="tooltip"]')?.textContent)
+      .toContain('Layers')
 
     await act(async () => {
       locale.value = 'fr'
       await Promise.resolve()
     })
 
-    const locationButton = container.querySelector('button[aria-label="Emplacement du design"]')
-    expect(locationButton).not.toBeNull()
-    expect(locationButton?.querySelector('[role="tooltip"]')?.textContent)
-      .toContain('Emplacement du design')
+    const layersButton = container.querySelector('button[aria-label="Calques"]')
+    expect(layersButton).not.toBeNull()
+    expect(layersButton?.querySelector('[role="tooltip"]')?.textContent)
+      .toContain('Calques')
   })
 })

@@ -51,11 +51,6 @@ const ConsortiumPanel = lazy(async () => {
   return { default: module.ConsortiumPanel }
 })
 
-const LocationPanel = lazy(async () => {
-  const module = await import('../panels/LocationPanel')
-  return { default: module.LocationPanel }
-})
-
 function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
@@ -71,7 +66,6 @@ function DataSurface() {
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
   primary: {
     canvas: CanvasPanel,
-    location: LocationPanel,
   },
   side: {
     'plant-db': PlantDbPanel,

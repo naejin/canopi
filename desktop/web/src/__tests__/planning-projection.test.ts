@@ -15,7 +15,7 @@ function makePlant(canonicalName: string, commonName: string | null = null): Pla
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,

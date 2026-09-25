@@ -4,7 +4,7 @@ export type Annotation = {
 	id: string,
 	locked: boolean,
 	annotation_type: string,
-	position: Position,
+	position: GeoPoint,
 	text: string,
 	font_size: number,
 	rotation: number | null,
@@ -47,7 +47,6 @@ export type CanopiFile = {
 	version: number,
 	name: string,
 	description: string | null,
-	spatial_frame: SpatialFrame,
 	plant_species_colors: { [key in string]: string },
 	plant_species_symbols?: { [key in string]: string },
 	plant_species_codes?: { [key in string]: string },
@@ -150,10 +149,22 @@ export type FrontendDiagnosticEntry = {
 	timestamp_ms: number,
 };
 
+export type GeoPoint = {
+	lon: number,
+	lat: number,
+};
+
 export type GeoResult = {
 	display_name: string,
 	lat: number,
 	lon: number,
+};
+
+// A geographic camera view: WGS84 centre and MapLibre zoom.
+export type LastView = {
+	lon: number,
+	lat: number,
+	zoom: number,
 };
 
 export type Layer = {
@@ -551,15 +562,11 @@ export type LidarSlopeUnit = "Degrees" | "Percent";
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
 
-export type LocationMetadata = {
-	altitude_m: number | null,
-};
-
 export type MeasurementGuide = {
 	id?: string,
 	locked?: boolean,
-	start: Position,
-	end: Position,
+	start: GeoPoint,
+	end: GeoPoint,
 };
 
 export type ObjectGroup = {
@@ -587,7 +594,7 @@ export type PlacedPlant = {
 	color?: string | null,
 	symbol?: string | null,
 	pinned_name?: boolean,
-	position: Position,
+	position: GeoPoint,
 	rotation: number | null,
 	scale: number | null,
 	notes: string | null,
@@ -595,14 +602,7 @@ export type PlacedPlant = {
 	quantity: number | null,
 };
 
-export type PlacementStatus = "provisional" | "confirmed";
-
 export type PlantDbStatus = "available" | "missing" | "corrupt";
-
-export type Position = {
-	x: number,
-	y: number,
-};
 
 export type ProblemReportRequest = {
 	description: string,
@@ -656,17 +656,11 @@ export type Settings = {
 	hillshade_visible: boolean,
 	hillshade_opacity: number,
 	plant_spacing_interval_m: number,
+	// The camera view last shown on a Design; a new Design opens here.
+	last_view: LastView | null,
 };
 
 export type Sort = "Name" | "Family" | "Height" | "Hardiness" | "GrowthRate" | "Relevance";
-
-export type SpatialFrame = {
-	anchor_longitude_deg: number,
-	anchor_latitude_deg: number,
-	north_bearing_deg: number,
-	placement_status: PlacementStatus,
-	location_metadata: LocationMetadata,
-};
 
 export type SpeciesDetail = {
 	canonical_name: string,
@@ -920,7 +914,7 @@ export type Zone = {
 	name: string,
 	locked: boolean,
 	zone_type: string,
-	points: Position[],
+	points: GeoPoint[],
 	rotation: number,
 	fill_color: string | null,
 	notes: string | null,

@@ -1,4 +1,5 @@
-import { computed, signal, type ReadonlySignal } from '@preact/signals'
+import { batch, computed, signal, type ReadonlySignal } from '@preact/signals'
+import type { GeoPosition, SessionPlaneTransform } from '../../session-plane'
 
 import type { CanopiFile } from '../../../types/design'
 import { throwCanvasRuntimeCleanupErrors } from '../cleanup'
@@ -12,6 +13,7 @@ import {
   cloneScenePersistedState,
   type SceneDesignObjectTarget,
   type ScenePersistedState,
+  type SceneGeoFrame,
   type ScenePlantEntity,
   type SceneStore,
 } from '../scene'
@@ -78,6 +80,7 @@ export type ScenePersistenceAcknowledgement = 'applied' | 'stale'
 
 export interface ScenePersistenceCapture {
   readonly scene: ScenePersistedState
+  readonly geo: SceneGeoFrame
   isCurrent(): boolean
   acknowledgeSaved(): ScenePersistenceAcknowledgement
 }
@@ -395,6 +398,41 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     return replay.resume()
   }
 
+  /**
+   * Rebuilds the session plane at `origin` while settled. The scene, every
+   * undo command and caller-held metre state (`remapExternal`) move through
+   * one reprojector, so stored lon/lat is unchanged and nothing is dirtied or
+   * recorded. Returns the plane-to-plane transform, or null when not settled.
+   */
+  reoriginSessionPlane(
+    origin: GeoPosition,
+    remapExternal: (reproject: <T extends Partial<ScenePersistedState>>(state: T) => T) => void,
+  ): SessionPlaneTransform | null {
+    if (
+      this._persistenceDisposed
+      || this._active
+      || this._replacementHandoff
+      || this._isPresentationMaintenanceBusy()
+    ) return null
+    const previous = this._sceneStore.sessionPlane
+    const reprojector = this._sceneStore.beginReorigin(origin)
+    const reprojectPatch = (patch: SceneCommandPatch): SceneCommandPatch => patch.persisted
+      ? { ...patch, persisted: reprojector.persisted(patch.persisted) }
+      : patch
+    batch(() => {
+      this._history.remapCommands((command) => ({
+        ...command,
+        before: reprojectPatch(command.before),
+        after: reprojectPatch(command.after),
+      }))
+      remapExternal((state) => reprojector.persisted(state))
+      this._sceneStore.commitReorigin(reprojector)
+      this._incrementSceneRevision()
+      this._invalidate('scene')
+    })
+    return previous.transformTo(this._sceneStore.sessionPlane)
+  }
+
   capturePersistence(): ScenePersistenceCapture {
     if (this._persistenceDisposed) {
       throw new SceneEditBusyError('runtime-disposed')
@@ -426,6 +464,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
 
     return Object.freeze({
       scene: cloneScenePersistedState(scene),
+      geo: this._sceneStore.geoFrame,
       isCurrent: captureIsCurrent,
       acknowledgeSaved: (): ScenePersistenceAcknowledgement => {
         if (acknowledgement) return acknowledgement

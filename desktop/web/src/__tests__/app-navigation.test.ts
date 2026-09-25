@@ -20,10 +20,10 @@ describe('app navigation', () => {
     expect(sidePanel.value).toBe(null)
   })
 
-  it('opens the location shell as a full-screen panel', () => {
-    navigateTo('location')
+  it('opens the templates shell as a full-screen panel', () => {
+    navigateTo('templates')
 
-    expect(activePanel.value).toBe('location')
+    expect(activePanel.value).toBe('templates')
     expect(sidePanel.value).toBe(null)
   })
 
@@ -57,8 +57,8 @@ describe('app navigation', () => {
     expect(sidePanel.value).toBe(null)
   })
 
-  it('routes sidebar navigation back through the canvas shell from location', () => {
-    navigateTo('location')
+  it('routes sidebar navigation back through the canvas shell from templates', () => {
+    navigateTo('templates')
     navigateTo('design-notebook')
 
     expect(activePanel.value).toBe('canvas')
@@ -72,8 +72,8 @@ describe('app navigation', () => {
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('calendar')
 
-    selectPanel('location')
-    expect(activePanel.value).toBe('location')
+    selectPanel('templates')
+    expect(activePanel.value).toBe('templates')
     expect(sidePanel.value).toBe(null)
   })
 })

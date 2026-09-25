@@ -72,9 +72,8 @@ function snapshot(identity: object, overrides: Partial<WorkspaceMapContributionS
     sessionIdentity: identity,
     lidar: [layer()],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, northBearingDeg: 0, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [] },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [] },
     frame: null,
-    designExtentMeters: 100,
     ...overrides,
   }
 }
@@ -365,12 +364,12 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)?.status).toBe('idle')
   })
 
-  it('disposes overlays, terrain, rasters, listeners, bounds and diagnostics once with non-ready precision state', async () => {
+  it('disposes overlays, terrain, rasters, listeners, bounds and diagnostics once with idle state', async () => {
     const f = fixture()
-    f.manager.update(snapshot(f.identity, { designExtentMeters: 10001, terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
+    f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
     f.manager.restoreStyle()
     await flush()
-    expect(f.states.at(-1)?.precisionWarning).toBe(true)
+    expect(f.states.at(-1)?.status).toBe('ready')
     f.manager.dispose()
     const mutations = f.map.removeSource.mock.calls.length
     f.manager.dispose()
@@ -380,7 +379,7 @@ describe('WorkspaceMapContributions', () => {
     expect(f.map.sources.size).toBe(0)
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
     expect(f.bounds).toHaveBeenLastCalledWith(null)
-    expect(f.diagnostics).toHaveBeenLastCalledWith(null, null)
-    expect(f.states.at(-1)).toMatchObject({ status: 'idle', terrainStatus: 'idle', precisionWarning: false, designExtentMeters: null })
+    expect(f.diagnostics).toHaveBeenLastCalledWith(null)
+    expect(f.states.at(-1)).toEqual({ status: 'idle', errorMessage: null, terrainStatus: 'idle', terrainErrorMessage: null })
   })
 })

@@ -11,7 +11,12 @@ import {
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
 import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
-import { createDefaultScenePersistedState, serializeScenePersistedState } from '../canvas/runtime/scene'
+import {
+  createDefaultScenePersistedState,
+  createSceneGeoFrame,
+  serializeScenePersistedState,
+} from '../canvas/runtime/scene'
+import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW } from '../canvas/session-plane'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
@@ -33,6 +38,7 @@ function createQuerySurface() {
       groundMetersPerCssPixel: null,
       revision: 0,
     }),
+    sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
     getScenePhysicalExtentMeters: () => null,
@@ -299,7 +305,7 @@ describe('canvas runtime surfaces', () => {
 
     expect(runtimeSource).toContain("from './scene-runtime/construction'")
     expect(constructionSource).toContain('createSceneRuntimeConstruction')
-    expect(constructionSource).toContain('new SceneStore()')
+    expect(constructionSource).toContain('new SceneStore(')
     expect(constructionSource).toContain('camera?: WorkspaceCameraOwner')
     expect(constructionSource).toContain('options.camera ?? new CameraController()')
     expect(constructionSource).toContain('new SceneRuntimeDocumentBridge')
@@ -335,7 +341,7 @@ describe('canvas runtime surfaces', () => {
   it('routes representative command, query, and document behavior through role surfaces', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       surfaces.commands.tools.setTool('hand')
@@ -375,7 +381,7 @@ describe('canvas runtime surfaces', () => {
 
   it('keeps document consumers away from panel queries and toolbar commands', () => {
     const documentSurface = createDocumentSurface()
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
     const replacementToken = createCanvasDocumentReplacementToken()
 
     if (false) {
@@ -395,7 +401,7 @@ describe('canvas runtime surfaces', () => {
   it('reports whether a runtime has loaded a document without caller monkey-patching', () => {
     const runtime = new SceneCanvasRuntime()
     const surfaces = createCanvasRuntimeSurfaces(runtime)
-    const file = serializeScenePersistedState(createDefaultScenePersistedState())
+    const file = serializeScenePersistedState(createDefaultScenePersistedState(), createSceneGeoFrame(DEFAULT_NEW_DESIGN_VIEW))
 
     try {
       expect(surfaces.documents.hasLoadedDocument()).toBe(false)

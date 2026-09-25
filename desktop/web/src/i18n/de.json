@@ -163,12 +163,9 @@
     "overview": {
       "label": "Übersicht",
       "zoomInToEdit": "Zum Bearbeiten hineinzoomen",
-      "provisional": "Vorläufiger Entwurfsstandort · Zum Bearbeiten hineinzoomen",
       "returnToDesign": "Zum Entwurf zurückkehren",
       "design": "Entwurf",
-      "provisionalDesign": "Vorläufiger Entwurf",
-      "designMarker": "Zum Entwurf zurückkehren",
-      "provisionalMarker": "Zum vorläufigen Entwurf zurückkehren"
+      "designMarker": "Zum Entwurf zurückkehren"
     },
     "plantColor": {
       "label": "Pflanzenfarbe",
@@ -216,25 +213,10 @@
       "applySelection": "Auf {{count}} ausgewählte anwenden"
     },
     "location": {
-      "title": "Entwurfsstandort",
-      "confirm": "Standort bestätigen",
-      "move": "Entwurf hierher verschieben",
-      "current": "Aktuell",
       "searchPlaceholder": "Standort suchen...",
       "searching": "Suche...",
       "noResults": "Keine Ergebnisse",
-      "geocodeError": "Geokodierung fehlgeschlagen",
-      "mapUnavailable": "Karte nicht verfügbar",
-      "provisionalTitle": "Provisorischer Standort",
-      "provisionalBody": "Lokale Bearbeitung ist verfügbar. Bestätigen Sie vor standortbezogenen Auswertungen einen Standort.",
-      "confirmedTitle": "Bestätigter Standort",
-      "selectedTitle": "Ausgewählter Standort",
-      "coordinates": "Koordinaten",
-      "latitude": "Breitengrad",
-      "longitude": "Längengrad",
-      "preview": "Vorschau",
-      "cancel": "Abbrechen",
-      "invalidCoordinates": "Geben Sie einen Breitengrad zwischen -85.051129 und 85.051129 und einen Längengrad zwischen -180 und 180 ein."
+      "geocodeError": "Geokodierung fehlgeschlagen"
     },
     "file": {
       "new": "Neuer Entwurf",
@@ -266,7 +248,6 @@
       "basemap": "Basiskarte",
       "basemapLoading": "Basiskarte wird geladen...",
       "basemapError": "Basiskarte nicht verfügbar",
-      "precisionWarning": "Die Genauigkeit kann bei großen Entwürfen abnehmen",
       "references": "Standortreferenzen",
       "sceneStack": "Zeichenebenen",
       "topToBottom": "Von oben nach unten",

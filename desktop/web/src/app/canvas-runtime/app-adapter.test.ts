@@ -205,6 +205,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     hillshade_visible: false,
     hillshade_opacity: 0.55,
     plant_spacing_interval_m: 0.5,
+    last_view: null,
     ...overrides,
   }
 }

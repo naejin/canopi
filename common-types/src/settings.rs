@@ -54,6 +54,16 @@ pub struct Settings {
     pub hillshade_opacity: f32,
     #[serde(default = "default_plant_spacing_interval_m")]
     pub plant_spacing_interval_m: f64,
+    /// The camera view last shown on a Design; a new Design opens here.
+    pub last_view: Option<LastView>,
+}
+
+/// A geographic camera view: WGS84 centre and MapLibre zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct LastView {
+    pub lon: f64,
+    pub lat: f64,
+    pub zoom: f64,
 }
 
 impl Default for Settings {
@@ -76,6 +86,7 @@ impl Default for Settings {
             hillshade_visible: false,
             hillshade_opacity: 0.55,
             plant_spacing_interval_m: default_plant_spacing_interval_m(),
+            last_view: None,
         }
     }
 }
@@ -144,7 +155,29 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, Locale, Settings, Theme};
+    use super::{BasemapStyle, LastView, Locale, Settings, Theme};
+
+    #[test]
+    fn last_view_defaults_to_none_and_round_trips() {
+        assert_eq!(Settings::default().last_view, None);
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "last_view": { "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 }
+        }))
+        .expect("last view should load");
+        assert_eq!(
+            settings.last_view,
+            Some(LastView {
+                lon: 2.3522,
+                lat: 48.8566,
+                zoom: 17.5
+            })
+        );
+        let value = serde_json::to_value(&settings).expect("settings should serialize");
+        assert_eq!(
+            value["last_view"],
+            serde_json::json!({ "lon": 2.3522, "lat": 48.8566, "zoom": 17.5 })
+        );
+    }
 
     #[test]
     fn every_declared_basemap_style_deserializes_through_settings() {

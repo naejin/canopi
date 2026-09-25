@@ -25,7 +25,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 | Map layer store (replaces `app/canvas-map-surface/layer-stack.ts` and per-surface binders) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
 | Settings | Last view, basemap style, satellite provider, Google key (device-local credential), locale, theme | Settings actions |
 
-- One undo history covers the scene runtime and Design Edit. Map layers and settings are not undoable.
+- Undo covers scene runtime edits only. Design Edit commands, map layers and settings are not undoable.
 - Neither document authority duplicates the other's data. Save composition goes through the document-session seam, which asks each authority for its part.
 - Panels read canvas entities through read-only runtime queries, not mirrored signals.
 - Every resource-owning surface (runtime, renderer, MapLibre instance, timers, listeners, cancellation tokens, DOM overlays) has one lifecycle owner for setup, update and teardown.

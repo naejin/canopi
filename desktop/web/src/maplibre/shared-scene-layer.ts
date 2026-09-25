@@ -53,8 +53,8 @@ export interface SharedMapSceneDiagnostics {
 
 export interface SharedMapSceneLayerOptions {
   readonly id: string
-  readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly northBearingDeg: number
+  /** Live session plane origin, read on every render. */
+  readonly readOrigin: () => { readonly lat: number; readonly lon: number }
   readonly maximumWorldExtentMeters?: number
   readonly onFailure?: (error: Error) => void
   readonly createRenderer?: () => SharedPixiRenderer
@@ -192,8 +192,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       rendererSize = nextSize
       const transform = deriveSharedMapSceneViewport({
         project: point => map!.project(point),
-        anchor: options.anchor,
-        northBearingDeg: options.northBearingDeg,
+        anchor: options.readOrigin(),
         pitchDeg: map.getPitch(),
         maximumWorldExtentMeters: options.maximumWorldExtentMeters ?? 10_000,
       })

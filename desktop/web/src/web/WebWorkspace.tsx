@@ -3,7 +3,6 @@ import type { BrowserDesignSessionController } from './browser-design-session'
 import { WebCanvasWorkspace } from './WebCanvasWorkspace'
 import { WebLayersPanel } from './WebLayersPanel'
 import { WebLocalRasterPanel } from './WebLocalRasterPanel'
-import { WebLocationPanel } from './WebLocationPanel'
 import { t } from '../i18n'
 import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from './WebSpeciesCatalogPanel'
 import { BudgetPanel } from '../components/panels/BudgetPanel'
@@ -38,7 +37,6 @@ export function WebWorkspace({
     return {
       primary: {
         canvas: Canvas,
-        location: WebLocationPanel,
         ...(templatesEnabled ? { templates: WorldMapPanel } : {}),
       },
       side: {

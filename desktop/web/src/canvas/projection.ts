@@ -1,13 +1,9 @@
 // ---------------------------------------------------------------------------
 // Canonical canvas↔map projection seam.
 //
-// Canvas world coordinates remain authoritative and are expressed in local
-// design meters. MapLibre is derived from those meters through a Mercator-
-// anchored local frame so the canvas and map share the same affine surface.
-//
-// The design location is the local-frame origin (0,0 in canvas world space).
-// The local frame is still an approximation over very large extents, so callers
-// may warn when a design grows too large for the local model.
+// Canvas world coordinates are metres in the session plane (x east, y south),
+// a Mercator-anchored local frame so the canvas and map share one affine
+// surface. The origin is the session plane origin; see `session-plane.ts`.
 // ---------------------------------------------------------------------------
 
 const EARTH_RADIUS_METERS = 6371008.8
@@ -15,50 +11,10 @@ const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
 const MAPLIBRE_WORLD_TILE_SIZE = 512
 export const LOCAL_MERCATOR_PROJECTION_ID = 'local-mercator' as const
-export const LOCAL_PROJECTION_WARNING_THRESHOLD_METERS = 10_000
 
 export interface MapMercatorCoordinate {
   x: number
   y: number
-}
-
-export interface ProjectionPrecisionSnapshot {
-  readonly projectionId: typeof LOCAL_MERCATOR_PROJECTION_ID
-  readonly warningThresholdMeters: number
-  readonly designExtentMeters: number | null
-  readonly precisionWarning: boolean
-}
-
-function resolveBearingRad(northBearingDeg: number | null | undefined): number {
-  return (northBearingDeg ?? 0) * DEGREES_TO_RADIANS
-}
-
-function canvasWorldToEastNorthMeters(
-  x: number,
-  y: number,
-  northBearingDeg: number | null | undefined,
-): { east: number; north: number } {
-  const bearingRad = resolveBearingRad(northBearingDeg)
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
-  return {
-    east: x * cos + y * sin,
-    north: x * sin - y * cos,
-  }
-}
-
-function eastNorthMetersToCanvasWorld(
-  east: number,
-  north: number,
-  northBearingDeg: number | null | undefined,
-): { x: number; y: number } {
-  const bearingRad = resolveBearingRad(northBearingDeg)
-  const cos = Math.cos(bearingRad)
-  const sin = Math.sin(bearingRad)
-  return {
-    x: east * cos + north * sin,
-    y: east * sin - north * cos,
-  }
 }
 
 function mercatorXfromLng(lng: number): number {
@@ -101,14 +57,12 @@ export function worldToMercator(
   y: number,
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): MapMercatorCoordinate {
   const origin = geoToMercator(originLon, originLat)
   const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  const { east, north } = canvasWorldToEastNorthMeters(x, y, northBearingDeg)
   return {
-    x: origin.x + east * mercatorUnitsPerMeter,
-    y: origin.y - north * mercatorUnitsPerMeter,
+    x: origin.x + x * mercatorUnitsPerMeter,
+    y: origin.y + y * mercatorUnitsPerMeter,
   }
 }
 
@@ -117,13 +71,13 @@ export function mercatorToWorld(
   y: number,
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): { x: number; y: number } {
   const origin = geoToMercator(originLon, originLat)
   const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  const east = (x - origin.x) / mercatorUnitsPerMeter
-  const north = -(y - origin.y) / mercatorUnitsPerMeter
-  return eastNorthMetersToCanvasWorld(east, north, northBearingDeg)
+  return {
+    x: (x - origin.x) / mercatorUnitsPerMeter,
+    y: (y - origin.y) / mercatorUnitsPerMeter,
+  }
 }
 
 export function worldToGeo(
@@ -131,9 +85,8 @@ export function worldToGeo(
   y: number,
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): { lng: number; lat: number } {
-  const mercator = worldToMercator(x, y, originLat, originLon, northBearingDeg)
+  const mercator = worldToMercator(x, y, originLat, originLon)
   return mercatorToGeo(mercator.x, mercator.y)
 }
 
@@ -142,10 +95,9 @@ export function geoToWorld(
   lat: number,
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): { x: number; y: number } {
   const mercator = geoToMercator(lng, lat)
-  return mercatorToWorld(mercator.x, mercator.y, originLat, originLon, northBearingDeg)
+  return mercatorToWorld(mercator.x, mercator.y, originLat, originLon)
 }
 
 /**
@@ -178,10 +130,9 @@ export function viewportCenterGeo(
   screenSize: { width: number; height: number },
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): { lng: number; lat: number } {
   const center = viewportCenterWorld(viewport, screenSize)
-  return worldToGeo(center.x, center.y, originLat, originLon, northBearingDeg)
+  return worldToGeo(center.x, center.y, originLat, originLon)
 }
 
 export function viewportCornerWorldPoints(
@@ -212,7 +163,6 @@ export function viewportCornerGeoPoints(
   screenSize: { width: number; height: number },
   originLat: number,
   originLon: number,
-  northBearingDeg: number | null = 0,
 ): readonly [
   { lng: number; lat: number },
   { lng: number; lat: number },
@@ -221,20 +171,9 @@ export function viewportCornerGeoPoints(
 ] {
   const [topLeft, topRight, bottomRight, bottomLeft] = viewportCornerWorldPoints(viewport, screenSize)
   return [
-    worldToGeo(topLeft.x, topLeft.y, originLat, originLon, northBearingDeg),
-    worldToGeo(topRight.x, topRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomRight.x, bottomRight.y, originLat, originLon, northBearingDeg),
-    worldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon, northBearingDeg),
+    worldToGeo(topLeft.x, topLeft.y, originLat, originLon),
+    worldToGeo(topRight.x, topRight.y, originLat, originLon),
+    worldToGeo(bottomRight.x, bottomRight.y, originLat, originLon),
+    worldToGeo(bottomLeft.x, bottomLeft.y, originLat, originLon),
   ]
-}
-
-export function createProjectionPrecisionSnapshot(
-  designExtentMeters: number | null,
-): ProjectionPrecisionSnapshot {
-  return {
-    projectionId: LOCAL_MERCATOR_PROJECTION_ID,
-    warningThresholdMeters: LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-    designExtentMeters,
-    precisionWarning: designExtentMeters != null && designExtentMeters > LOCAL_PROJECTION_WARNING_THRESHOLD_METERS,
-  }
 }

@@ -20,7 +20,6 @@ export type TargetMapProjectionPoint = TargetScenePoint
 export interface TargetMapProjectionLocation {
   readonly lat: number
   readonly lon: number
-  readonly northBearingDeg?: number | null
 }
 
 export interface TargetMapPlantRef {
@@ -122,7 +121,6 @@ export function projectTargetResolutionToMapFeatures(
       point.y,
       location.lat,
       location.lon,
-      location.northBearingDeg ?? 0,
     )
     return [geo.lng, geo.lat]
   }
@@ -139,7 +137,6 @@ export function projectTargetResolutionToMapFeatures(
         ref.plant.position.y,
         location.lat,
         location.lon,
-        location.northBearingDeg ?? 0,
       )
       features.push({
         type: 'Feature',

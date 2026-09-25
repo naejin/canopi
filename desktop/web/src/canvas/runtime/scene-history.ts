@@ -159,6 +159,14 @@ export class SceneHistory {
     this._updateSignals()
   }
 
+  // Re-expresses every recorded command after a session plane change. Only
+  // called while settled, so no record or replay operation is in flight.
+  remapCommands(map: (command: SceneCommand) => SceneCommand): void {
+    const remap = (entry: SceneHistoryEntry): SceneHistoryEntry => ({ ...entry, command: map(entry.command) })
+    this._past = this._past.map(remap)
+    this._future = this._future.map(remap)
+  }
+
   dispose(): void {
     this._disposeBranchSubscription()
   }

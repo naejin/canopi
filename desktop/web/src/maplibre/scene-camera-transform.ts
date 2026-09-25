@@ -12,8 +12,8 @@ export interface SharedMapProjector {
 
 export interface SharedMapSceneCameraTransformInput {
   readonly project: SharedMapProjector['project']
+  // Session plane origin: plane (0, 0).
   readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly northBearingDeg: number
   readonly pitchDeg: number
   /** Largest local-coordinate distance covered by the active workspace. */
   readonly maximumWorldExtentMeters?: number
@@ -33,8 +33,8 @@ export type SharedMapSceneCameraTransform =
 
 /**
  * Derives the existing canvas viewport from MapLibre CSS-pixel projection.
- * MapLibre has already been configured with the inverse design north bearing,
- * so local x/y must project to right/down with a shared scalar scale.
+ * The map is north-up, so plane x/y must project to right/down with a shared
+ * scalar scale.
  */
 export function deriveSharedMapSceneViewport(
   input: SharedMapSceneCameraTransformInput,
@@ -43,9 +43,9 @@ export function deriveSharedMapSceneViewport(
     return { accepted: false, reason: 'pitched-camera' }
   }
 
-  const origin = input.project(worldToGeo(0, 0, input.anchor.lat, input.anchor.lon, input.northBearingDeg))
-  const xUnit = input.project(worldToGeo(1, 0, input.anchor.lat, input.anchor.lon, input.northBearingDeg))
-  const yUnit = input.project(worldToGeo(0, 1, input.anchor.lat, input.anchor.lon, input.northBearingDeg))
+  const origin = input.project(worldToGeo(0, 0, input.anchor.lat, input.anchor.lon))
+  const xUnit = input.project(worldToGeo(1, 0, input.anchor.lat, input.anchor.lon))
+  const yUnit = input.project(worldToGeo(0, 1, input.anchor.lat, input.anchor.lon))
   const values = [origin.x, origin.y, xUnit.x, xUnit.y, yUnit.x, yUnit.y]
   if (!values.every(Number.isFinite)) return { accepted: false, reason: 'non-finite-projection' }
 

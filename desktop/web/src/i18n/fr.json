@@ -163,12 +163,9 @@
     "overview": {
       "label": "Vue d’ensemble",
       "zoomInToEdit": "Zoomez pour modifier",
-      "provisional": "Emplacement provisoire du projet · Zoomez pour modifier",
       "returnToDesign": "Revenir au projet",
       "design": "Projet",
-      "provisionalDesign": "Projet provisoire",
-      "designMarker": "Revenir au projet",
-      "provisionalMarker": "Revenir au projet provisoire"
+      "designMarker": "Revenir au projet"
     },
     "plantColor": {
       "label": "Couleur de plante",
@@ -216,25 +213,10 @@
       "applySelection": "Appliquer aux {{count}} sélectionnés"
     },
     "location": {
-      "title": "Emplacement du design",
-      "confirm": "Confirmer l'emplacement",
-      "move": "Déplacer le design ici",
-      "current": "Actuel",
       "searchPlaceholder": "Rechercher un lieu...",
       "searching": "Recherche...",
       "noResults": "Aucun résultat",
-      "geocodeError": "Échec du géocodage",
-      "mapUnavailable": "Carte indisponible",
-      "provisionalTitle": "Site provisoire",
-      "provisionalBody": "L'édition locale reste disponible. Confirmez un site avant toute évaluation liée au lieu.",
-      "confirmedTitle": "Site confirmé",
-      "selectedTitle": "Emplacement sélectionné",
-      "coordinates": "Coordonnées",
-      "latitude": "Latitude",
-      "longitude": "Longitude",
-      "preview": "Aperçu",
-      "cancel": "Annuler",
-      "invalidCoordinates": "Saisissez une latitude entre -85,051129 et 85,051129 et une longitude entre -180 et 180."
+      "geocodeError": "Échec du géocodage"
     },
     "file": {
       "new": "Nouveau design",
@@ -266,7 +248,6 @@
       "basemap": "Fond de carte",
       "basemapLoading": "Chargement du fond de carte...",
       "basemapError": "Fond de carte indisponible",
-      "precisionWarning": "La précision peut diminuer pour les grands designs",
       "references": "Repères du site",
       "sceneStack": "Calques du dessin",
       "topToBottom": "De haut en bas",

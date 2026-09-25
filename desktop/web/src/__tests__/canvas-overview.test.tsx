@@ -7,12 +7,6 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
-const locationMock = vi.hoisted(() => ({ placementStatus: 'confirmed' as 'confirmed' | 'provisional' }))
-
-vi.mock('../app/location', () => ({
-  useSavedLocationPresentation: () => locationMock,
-}))
-
 import { CanvasOverview } from '../components/canvas/CanvasOverview'
 
 function overviewFrame(overrides: Partial<CameraViewportSnapshot['viewport']> = {}) {
@@ -35,7 +29,6 @@ describe('CanvasOverview', () => {
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
-    locationMock.placementStatus = 'confirmed'
   })
 
   afterEach(() => {
@@ -59,16 +52,15 @@ describe('CanvasOverview', () => {
     expect(returnToDesign).toHaveBeenCalledOnce()
   })
 
-  it('omits an offscreen provisional marker while retaining the truthful notice action', async () => {
+  it('omits an offscreen marker while retaining the notice action', async () => {
     const returnToDesign = vi.fn()
-    locationMock.placementStatus = 'provisional'
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: { ...createTestCanvasQuerySurface(), viewport: overviewFrame({ x: -100 }) },
       commands: createTestCanvasCommandSurface({ viewport: { returnToDesign } }),
     }))
 
     await act(async () => render(<CanvasOverview />, container))
-    expect(container.textContent).toContain('Provisional Design location · Zoom in to edit')
+    expect(container.textContent).toContain('Zoom in to edit')
     expect(container.querySelector('[class*="overviewMarker"]')).toBeNull()
     const returnButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Return to Design')

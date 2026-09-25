@@ -14,7 +14,8 @@ import {
 } from '../../maplibre/canvas-surface-state'
 import { WelcomeScreen } from '../shared/WelcomeScreen'
 import { readCanvasLayerPresentation } from '../../app/canvas-layer-presentation/presentation'
-import { getLocationNoticeReadModel, useSavedLocationPresentation } from '../../app/location'
+import { getMapNoticeReadModel } from '../../app/canvas-map-surface/map-notice'
+import { currentDesign } from '../../app/document-session/store'
 import {
   CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
   CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
@@ -42,12 +43,10 @@ export function CanvasPanel() {
   const [basemapState, setBasemapState] = useState<MapLibreCanvasSurfaceState>(
     () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   )
-  const [locationCueVisible, setLocationCueVisible] = useState(false)
   const [canvasNoticeViewport, setCanvasNoticeViewport] = useState<CanvasNoticeViewportState>({
     canvasWidth: CANVAS_NOTICE_DEFAULT_CANVAS_WIDTH_PX,
     canvasHeight: CANVAS_NOTICE_DEFAULT_CANVAS_HEIGHT_PX,
   })
-  const lastLocationRef = useRef<string | null>(null)
 
   useCanvasDocumentSession({
     canvasAreaRef,
@@ -56,33 +55,14 @@ export function CanvasPanel() {
     onMapStateChange: setBasemapState,
   })
 
-  const savedLocation = useSavedLocationPresentation()
-  const hasDesign = savedLocation.hasDesign
+  const hasDesign = currentDesign.value !== null
   const mapVisible = readCanvasLayerPresentation().hasVisibleMapLayer
-  const locationNotice = getLocationNoticeReadModel({
-    saved: savedLocation,
+  const locationNotice = getMapNoticeReadModel({
+    hasDesign,
     mapVisible,
     mapSurface: basemapState,
     t,
   })
-  const locationKey = locationNotice.locationKey
-
-  useEffect(() => {
-    if (locationKey === null) {
-      lastLocationRef.current = null
-      setLocationCueVisible(false)
-      return
-    }
-    if (lastLocationRef.current === null) {
-      lastLocationRef.current = locationKey
-      return
-    }
-    if (lastLocationRef.current === locationKey) return
-    lastLocationRef.current = locationKey
-    setLocationCueVisible(true)
-    const timer = window.setTimeout(() => setLocationCueVisible(false), 1800)
-    return () => window.clearTimeout(timer)
-  }, [locationKey])
 
   useEffect(() => {
     if (!hasDesign) return
@@ -143,7 +123,6 @@ export function CanvasPanel() {
               <div
                 className={styles.basemapFeedback}
                 data-tone={locationNotice.tone}
-                data-location-cue={locationCueVisible ? 'true' : 'false'}
                 data-location-notice-placement={locationNoticePlacement.placement}
                 data-compact={locationNoticePlacement.compact ? 'true' : 'false'}
                 style={locationNoticeStyle}

@@ -43,8 +43,7 @@ describe('createSharedMapSceneLayer', () => {
     const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
     const adapter = createSharedMapSceneLayer({
       id: 'v2-scene',
-      anchor: { lat: 0, lon: 0 },
-      northBearingDeg: 0,
+      readOrigin: () => ({ lat: 0, lon: 0 }),
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => presentation,
@@ -80,7 +79,7 @@ describe('createSharedMapSceneLayer', () => {
     const renderer = createRenderer()
     const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => presentation,
     })
@@ -109,7 +108,7 @@ describe('createSharedMapSceneLayer', () => {
     const renderer = createRenderer()
     const remove = vi.spyOn(canvas, 'remove')
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
     })
@@ -137,7 +136,7 @@ describe('createSharedMapSceneLayer', () => {
     let resolveInit: (() => void) | undefined
     const renderer = createRenderer(vi.fn(() => new Promise<void>(resolve => { resolveInit = resolve })))
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
     })
@@ -158,7 +157,7 @@ describe('createSharedMapSceneLayer', () => {
     const renderer = createRenderer()
     const presentation = { dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => presentation,
     })
@@ -188,7 +187,7 @@ describe('createSharedMapSceneLayer', () => {
     const canvas = createCanvas()
     const renderer = createRenderer()
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0, createRenderer: () => renderer,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({ dispose() {}, resize() {}, renderScene() {}, setViewport() {} }),
     })
@@ -206,7 +205,7 @@ describe('createSharedMapSceneLayer', () => {
     const renderer = createRenderer()
     const onFailure = vi.fn()
     const adapter = createSharedMapSceneLayer({
-      id: 'v2-scene', anchor: { lat: 0, lon: 0 }, northBearingDeg: 0,
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }),
       createRenderer: () => renderer,
       createStage: () => ({ destroy: vi.fn() }) as never,
       createPresentation: () => ({

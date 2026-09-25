@@ -4,12 +4,15 @@ use specta::Type;
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
-pub const CURRENT_CANOPI_FILE_VERSION: u32 = 6;
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 7;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
-pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 6;
+pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 7;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
 pub const WEB_MERCATOR_MAX_LATITUDE_DEG: f64 = 85.051_128_779_806_6;
+/// Root keys of earlier formats. A current-version document carrying one is
+/// malformed and is rejected instead of being preserved as an unknown field.
+pub const OBSOLETE_CANOPI_ROOT_KEYS: &[&str] = &["location", "north_bearing_deg", "spatial_frame"];
 
 fn deserialize_json_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
@@ -149,10 +152,6 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
-        key: "spatial_frame",
-        owner: DesignFileFieldOwner::Document,
-    },
-    DesignFileField {
         key: "plant_species_colors",
         owner: DesignFileFieldOwner::Scene,
     },
@@ -230,7 +229,6 @@ pub struct CanopiFile {
     pub name: String,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub description: Option<String>,
-    pub spatial_frame: SpatialFrame,
     pub plant_species_colors: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub plant_species_symbols: std::collections::HashMap<String, String>,
@@ -274,121 +272,6 @@ pub fn canopi_file_json_schema() -> serde_json::Value {
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SpatialFrame {
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -180.0, max = 180.0))
-    )]
-    pub anchor_longitude_deg: f64,
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
-    )]
-    pub anchor_latitude_deg: f64,
-    pub north_bearing_deg: f64,
-    pub placement_status: PlacementStatus,
-    pub location_metadata: LocationMetadata,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum PlacementStatus {
-    Provisional,
-    Confirmed,
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Type)]
-pub struct LocationMetadata {
-    #[cfg_attr(
-        feature = "design-schema",
-        schemars(required, schema_with = "required_nullable_f64_schema")
-    )]
-    pub altitude_m: Option<f64>,
-}
-
-#[cfg(feature = "design-schema")]
-fn required_nullable_f64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    generator.subschema_for::<Option<f64>>()
-}
-
-impl<'de> Deserialize<'de> for LocationMetadata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct LocationMetadataVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for LocationMetadataVisitor {
-            type Value = LocationMetadata;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("a location metadata object with altitude_m")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut altitude_m: Option<Option<f64>> = None;
-                while let Some(key) = map.next_key::<String>()? {
-                    if key == "altitude_m" {
-                        if altitude_m.is_some() {
-                            return Err(serde::de::Error::duplicate_field("altitude_m"));
-                        }
-                        altitude_m = Some(map.next_value()?);
-                    } else {
-                        map.next_value::<serde::de::IgnoredAny>()?;
-                    }
-                }
-
-                Ok(LocationMetadata {
-                    altitude_m: altitude_m
-                        .ok_or_else(|| serde::de::Error::missing_field("altitude_m"))?,
-                })
-            }
-        }
-
-        deserializer.deserialize_map(LocationMetadataVisitor)
-    }
-}
-
-/// Validate a v6 spatial frame and canonicalize its clockwise north bearing.
-pub fn validate_and_normalize_spatial_frame(frame: &mut SpatialFrame) -> Result<(), &'static str> {
-    if !frame.anchor_longitude_deg.is_finite()
-        || !(-180.0..=180.0).contains(&frame.anchor_longitude_deg)
-    {
-        return Err(
-            "$.spatial_frame.anchor_longitude_deg: expected a finite longitude in [-180, 180]",
-        );
-    }
-    if !frame.anchor_latitude_deg.is_finite()
-        || !(-WEB_MERCATOR_MAX_LATITUDE_DEG..=WEB_MERCATOR_MAX_LATITUDE_DEG)
-            .contains(&frame.anchor_latitude_deg)
-    {
-        return Err("$.spatial_frame.anchor_latitude_deg: expected a finite Web Mercator latitude");
-    }
-    if !frame.north_bearing_deg.is_finite() {
-        return Err("$.spatial_frame.north_bearing_deg: expected a finite number");
-    }
-    if frame
-        .location_metadata
-        .altitude_m
-        .is_some_and(|altitude| !altitude.is_finite())
-    {
-        return Err(
-            "$.spatial_frame.location_metadata.altitude_m: expected a finite number or null",
-        );
-    }
-
-    let normalized = frame.north_bearing_deg.rem_euclid(360.0);
-    frame.north_bearing_deg = if normalized == 0.0 { 0.0 } else { normalized };
-    Ok(())
-}
-
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Layer {
     pub name: String,
     pub visible: bool,
@@ -412,7 +295,7 @@ pub struct PlacedPlant {
     pub symbol: Option<String>,
     #[serde(default)]
     pub pinned_name: bool,
-    pub position: Position,
+    pub position: GeoPoint,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: Option<f64>,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -439,7 +322,7 @@ struct PlacedPlantInput {
     symbol: Option<String>,
     #[serde(default)]
     pinned_name: bool,
-    position: Position,
+    position: GeoPoint,
     rotation: Option<f64>,
     scale: Option<f64>,
     notes: Option<String>,
@@ -472,11 +355,69 @@ impl<'de> Deserialize<'de> for PlacedPlant {
     }
 }
 
+// A WGS84 position in degrees. Every persisted design object position is a
+// `GeoPoint`; metres exist only in the runtime's session plane.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Position {
-    pub x: f64,
-    pub y: f64,
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct GeoPoint {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -180.0, max = 180.0))
+    )]
+    pub lon: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
+    )]
+    pub lat: f64,
+}
+
+impl GeoPoint {
+    pub fn is_valid(&self) -> bool {
+        self.lon.is_finite()
+            && (-180.0..=180.0).contains(&self.lon)
+            && self.lat.is_finite()
+            && (-WEB_MERCATOR_MAX_LATITUDE_DEG..=WEB_MERCATOR_MAX_LATITUDE_DEG).contains(&self.lat)
+    }
+}
+
+/// Check every persisted position of an admitted Design. Serde accepts any
+/// finite `f64`; the WGS84 and Web Mercator ranges are enforced here so native
+/// admission matches the generated Web schema.
+pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
+    let check = |point: &GeoPoint, path: String| {
+        if point.is_valid() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{path}: expected lon in [-180, 180] and a Web Mercator latitude"
+            ))
+        }
+    };
+    for (index, plant) in file.plants.iter().enumerate() {
+        check(&plant.position, format!("$.plants[{index}].position"))?;
+    }
+    for (index, zone) in file.zones.iter().enumerate() {
+        for (point_index, point) in zone.points.iter().enumerate() {
+            check(point, format!("$.zones[{index}].points[{point_index}]"))?;
+        }
+        if !zone.rotation.is_finite() {
+            return Err(format!(
+                "$.zones[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    for (index, annotation) in file.annotations.iter().enumerate() {
+        check(
+            &annotation.position,
+            format!("$.annotations[{index}].position"),
+        )?;
+    }
+    for (index, guide) in file.measurement_guides.iter().enumerate() {
+        check(&guide.start, format!("$.measurement_guides[{index}].start"))?;
+        check(&guide.end, format!("$.measurement_guides[{index}].end"))?;
+    }
+    Ok(())
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -486,7 +427,10 @@ pub struct Zone {
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub zone_type: String,
-    pub points: Vec<Position>,
+    // Polygon and line zones list their vertices. Rectangle and ellipse zones
+    // list opposite corners of their unrotated bounding box.
+    pub points: Vec<GeoPoint>,
+    // Degrees clockwise from true north, about the zone's centre.
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub rotation: f64,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -501,7 +445,7 @@ struct ZoneInput {
     #[serde(default)]
     locked: bool,
     zone_type: String,
-    points: Vec<Position>,
+    points: Vec<GeoPoint>,
     #[serde(default)]
     rotation: f64,
     fill_color: Option<String>,
@@ -533,7 +477,7 @@ pub struct Annotation {
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub annotation_type: String,
-    pub position: Position,
+    pub position: GeoPoint,
     pub text: String,
     pub font_size: f64,
     #[cfg_attr(feature = "design-schema", schemars(default))]
@@ -547,8 +491,8 @@ pub struct MeasurementGuide {
     pub id: String,
     #[serde(default)]
     pub locked: bool,
-    pub start: Position,
-    pub end: Position,
+    pub start: GeoPoint,
+    pub end: GeoPoint,
 }
 
 #[derive(Deserialize)]
@@ -557,7 +501,7 @@ struct AnnotationInput {
     #[serde(default)]
     locked: bool,
     annotation_type: String,
-    position: Position,
+    position: GeoPoint,
     text: String,
     font_size: f64,
     rotation: Option<f64>,
@@ -760,49 +704,86 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn spatial_frame_validation_rejects_non_finite_values_and_normalizes_bearing() {
-        let mut frame = SpatialFrame {
-            anchor_longitude_deg: 13.0,
-            anchor_latitude_deg: 23.0,
-            north_bearing_deg: -450.0,
-            placement_status: PlacementStatus::Provisional,
-            location_metadata: LocationMetadata { altitude_m: None },
-        };
+    fn geo_file(plants: serde_json::Value) -> CanopiFile {
+        serde_json::from_value(json!({
+            "version": 7,
+            "name": "Geo",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": plants,
+            "zones": [],
+            "created_at": "2026-09-25T00:00:00.000Z",
+            "updated_at": "2026-09-25T00:00:00.000Z"
+        }))
+        .expect("v7 design should deserialize")
+    }
 
-        validate_and_normalize_spatial_frame(&mut frame).expect("valid frame should normalize");
-        assert_eq!(frame.north_bearing_deg, 270.0);
-
-        frame.location_metadata.altitude_m = Some(f64::INFINITY);
-        assert_eq!(
-            validate_and_normalize_spatial_frame(&mut frame),
-            Err("$.spatial_frame.location_metadata.altitude_m: expected a finite number or null"),
-        );
+    fn plant_at(lon: f64, lat: f64) -> serde_json::Value {
+        json!({
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": { "lon": lon, "lat": lat }
+        })
     }
 
     #[test]
-    fn location_metadata_requires_explicit_nullable_altitude() {
-        let result = serde_json::from_value::<LocationMetadata>(json!({}));
-
-        assert!(
-            result.is_err(),
-            "v6 metadata must name its nullable altitude"
+    fn design_positions_are_lon_lat_and_round_trip_exactly() {
+        let file = geo_file(json!([plant_at(2.294_481_234_5, 48.858_370_123_4)]));
+        assert_eq!(
+            file.plants[0].position,
+            GeoPoint {
+                lon: 2.294_481_234_5,
+                lat: 48.858_370_123_4
+            }
         );
+        validate_design_geometry(&file).expect("in-range positions are valid");
+        let value = serde_json::to_value(&file).expect("design should serialize");
+        assert_eq!(
+            value["plants"][0]["position"],
+            json!({ "lon": 2.294_481_234_5, "lat": 48.858_370_123_4 })
+        );
+        assert!(value.get("spatial_frame").is_none());
+    }
+
+    #[test]
+    fn design_geometry_rejects_out_of_range_positions() {
+        for (lon, lat) in [(180.0001, 0.0), (-180.0001, 0.0), (0.0, 85.0511287798067)] {
+            let file = geo_file(json!([plant_at(lon, lat)]));
+            assert_eq!(
+                validate_design_geometry(&file),
+                Err(
+                    "$.plants[0].position: expected lon in [-180, 180] and a Web Mercator latitude"
+                        .to_owned()
+                ),
+            );
+        }
+    }
+
+    #[test]
+    fn design_positions_reject_local_metre_points() {
+        let result = serde_json::from_value::<CanopiFile>(json!({
+            "version": 7,
+            "name": "Metres",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [{
+                "id": "plant-1",
+                "canonical_name": "Malus domestica",
+                "position": { "x": 1.0, "y": 2.0 }
+            }],
+            "zones": [],
+            "created_at": "2026-09-25T00:00:00.000Z",
+            "updated_at": "2026-09-25T00:00:00.000Z"
+        }));
+        assert!(result.is_err(), "v7 positions must be lon/lat");
     }
 
     #[test]
     fn design_objects_missing_lock_state_load_unlocked_and_serialize_explicitly() {
         let file: CanopiFile = serde_json::from_value(json!({
-            "version": 6,
-            "name": "Legacy locks",
+            "version": 7,
+            "name": "Implicit locks",
             "description": null,
-            "spatial_frame": {
-                "anchor_longitude_deg": 13.0,
-                "anchor_latitude_deg": 23.0,
-                "north_bearing_deg": 0.0,
-                "placement_status": "provisional",
-                "location_metadata": { "altitude_m": null }
-            },
             "plant_species_colors": {},
             "layers": [
                 { "name": "plants", "visible": true, "locked": false, "opacity": 1.0 }
@@ -812,7 +793,7 @@ mod tests {
                     "id": "plant-1",
                     "canonical_name": "Malus domestica",
                     "common_name": "Apple",
-                    "position": { "x": 1.0, "y": 2.0 },
+                    "position": { "lon": 13.0, "lat": 23.0 },
                     "rotation": null,
                     "scale": null,
                     "notes": null,
@@ -825,9 +806,9 @@ mod tests {
                     "name": "zone-1",
                     "zone_type": "rect",
                     "points": [
-                        { "x": 0.0, "y": 0.0 },
-                        { "x": 1.0, "y": 0.0 },
-                        { "x": 1.0, "y": 1.0 }
+                        { "lon": 13.0, "lat": 23.0 },
+                        { "lon": 13.00001, "lat": 23.0 },
+                        { "lon": 13.00001, "lat": 22.99999 }
                     ],
                     "fill_color": null,
                     "notes": null
@@ -837,7 +818,7 @@ mod tests {
                 {
                     "id": "annotation-1",
                     "annotation_type": "text",
-                    "position": { "x": 2.0, "y": 3.0 },
+                    "position": { "lon": 13.00002, "lat": 23.00003 },
                     "text": "Note",
                     "font_size": 16.0,
                     "rotation": null
@@ -860,7 +841,7 @@ mod tests {
             "created_at": "2026-04-02T00:00:00.000Z",
             "updated_at": "2026-04-02T00:00:00.000Z"
         }))
-        .expect("legacy design objects without locked fields should load");
+        .expect("design objects without locked fields should load");
 
         assert!(!file.plants[0].locked);
         assert!(!file.zones[0].locked);
@@ -879,21 +860,14 @@ mod tests {
     #[test]
     fn general_deserialization_rejects_obsolete_object_group_shape() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 6,
+            "version": 7,
             "name": "Legacy groups require ingestion",
-            "spatial_frame": {
-                "anchor_longitude_deg": 13.0,
-                "anchor_latitude_deg": 23.0,
-                "north_bearing_deg": 0.0,
-                "placement_status": "provisional",
-                "location_metadata": { "altitude_m": null }
-            },
             "plant_species_colors": {},
             "layers": [],
             "plants": [{
                 "id": "plant-1",
                 "canonical_name": "Malus domestica",
-                "position": { "x": 1.0, "y": 2.0 }
+                "position": { "lon": 13.0, "lat": 23.0 }
             }],
             "zones": [{
                 "name": "zone-1",
@@ -910,7 +884,7 @@ mod tests {
 
         assert!(
             result.is_err(),
-            "obsolete Object Groups must not enter the v6 runtime",
+            "obsolete Object Groups must not enter the runtime",
         );
     }
 }

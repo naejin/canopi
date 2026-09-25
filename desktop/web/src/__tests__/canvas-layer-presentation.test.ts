@@ -71,12 +71,12 @@ describe('Canvas Layer Presentation', () => {
       hillshade_visible: true,
       hillshade_opacity: 0.45,
       plant_spacing_interval_m: 0.5,
+      last_view: null,
     })
     designSessionFixture.file = {
-      version: 6,
+      version: 7,
       name: 'Layer presentation',
       description: null,
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 0, placement_status: 'confirmed', location_metadata: { altitude_m: null } },
       plant_species_colors: {},
       layers: [],
       plants: [],
@@ -189,12 +189,7 @@ describe('Canvas Layer Presentation', () => {
         opacity: 0.65,
         locked: false,
         canLock: false,
-        detail: {
-          type: 'location-map',
-          hasLocation: true,
-          locationSummary: '48.8566, 2.3522',
-          opacityDisabled: false,
-        },
+        detail: { type: 'basemap' },
       },
       {
         id: 'contours',
@@ -208,7 +203,6 @@ describe('Canvas Layer Presentation', () => {
         detail: {
           type: 'contours',
           contourIntervalMeters: 12,
-          hasLocation: true,
         },
       },
       {
@@ -220,10 +214,7 @@ describe('Canvas Layer Presentation', () => {
         opacity: 0.45,
         locked: false,
         canLock: false,
-        detail: {
-          type: 'hillshade',
-          hasLocation: true,
-        },
+        detail: { type: 'hillshade' },
       },
     ])
     expect(presentation.hasVisibleMapLayer).toBe(true)

@@ -220,7 +220,7 @@ describe('Settled Scene persistence authority', () => {
       canonical_name: 'Malus domestica',
       common_name: 'Apple',
       color: null,
-      position: { x: 10, y: 10 },
+      position: { lon: 13, lat: 23 },
       rotation: null,
       scale: null,
       notes: null,

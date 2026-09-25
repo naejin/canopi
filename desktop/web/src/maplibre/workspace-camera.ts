@@ -22,10 +22,8 @@ import type { MapLibreMapInstance } from './loader'
 export interface MapLibreWorkspaceCameraAttachment {
   /** One already-created map; map mounting remains owned by the workspace lifecycle. */
   readonly map: MapLibreWorkspaceCameraMap
-  /** Local-world origin in geographic coordinates. */
-  readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly northBearingDeg: number
-  readonly hasConfirmedGeography: boolean
+  /** Live session plane origin; read on every frame so re-origin needs no reattach. */
+  readonly readOrigin: () => { readonly lat: number; readonly lon: number }
   readonly maximumWorldExtentMeters?: number
 }
 
@@ -61,6 +59,8 @@ export interface MapLibreWorkspaceCameraOwnerOptions {
 export interface WorkspaceCameraAttachmentControl {
   attach(attachment: MapLibreWorkspaceCameraAttachment): boolean
   detach(): void
+  /** Republishes the frame after the session plane origin changed; the map stays put. */
+  refreshOrigin(): void
   /** Workspace owners may observe failures without taking over camera ownership. */
   subscribeFailure(observer: (failure: MapLibreWorkspaceCameraFailure) => void): () => void
 }
@@ -90,6 +90,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   readonly attachment: WorkspaceCameraAttachmentControl = {
     attach: (next) => this.attach(next),
     detach: () => this.detach(),
+    refreshOrigin: () => this.refreshOrigin(),
     subscribeFailure: (observer) => this.subscribeFailure(observer),
   }
 
@@ -100,15 +101,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   attach(attachment: MapLibreWorkspaceCameraAttachment): boolean {
     if (this.disposed) return false
     this.detach()
-    if (
-      this.policy.referenceLatitudeDeg !== attachment.anchor.lat
-      || this.policy.hasConfirmedGeography !== attachment.hasConfirmedGeography
-    ) {
-      this.replacePolicy(createWorkspaceCameraPolicy(
-        attachment.anchor.lat,
-        attachment.hasConfirmedGeography,
-      ))
-    }
+    this.syncPolicyToOrigin(attachment.readOrigin())
 
     const generation = ++this.generation
     const active: ActiveAttachment = {
@@ -127,8 +120,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       const initialFrame = createMapFrame(
         this.boundAttachedViewport(attachment.map, current.viewport),
         this.mapScreenMetrics(attachment.map),
-        attachment.anchor,
-        attachment.northBearingDeg,
+        attachment.readOrigin(),
         this.policy,
       )
       if (!initialFrame) throw new Error('Cannot attach a map camera without a finite viewport and screen size.')
@@ -154,6 +146,19 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     const active = this.active
     if (!active) return
     this.deactivate(active)
+  }
+
+  refreshOrigin(): void {
+    const active = this.active
+    if (!active) return
+    this.syncPolicyToOrigin(active.attachment.readOrigin())
+    this.publishAttachedFrame(active)
+  }
+
+  private syncPolicyToOrigin(origin: { readonly lat: number }): void {
+    if (this.policy.referenceLatitudeDeg !== origin.lat) {
+      this.replacePolicy(createWorkspaceCameraPolicy(origin.lat))
+    }
   }
 
   private subscribeFailure(
@@ -215,8 +220,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       const frame = createMapFrame(
         boundedViewport,
         this.mapScreenMetrics(active.attachment.map),
-        active.attachment.anchor,
-        active.attachment.northBearingDeg,
+        active.attachment.readOrigin(),
         this.policy,
       )
       if (!frame) throw new Error('Cannot navigate MapLibre without a finite CSS-pixel frame.')
@@ -244,8 +248,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       const map = active.attachment.map
       const transform = deriveSharedMapSceneViewport({
         project: ({ lng, lat }) => map.project([lng, lat]),
-        anchor: active.attachment.anchor,
-        northBearingDeg: active.attachment.northBearingDeg,
+        anchor: active.attachment.readOrigin(),
         pitchDeg: map.getPitch(),
         maximumWorldExtentMeters: active.attachment.maximumWorldExtentMeters,
       })
@@ -258,10 +261,9 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       const zoom = map.getZoom()
       const scaleBounds = this.attachedScaleBounds(active, metrics, transform.viewport.scale, zoom)
       const center = map.getCenter()
-      const groundMetersPerCssPixel = this.policy.hasConfirmedGeography && (
-        Number.isFinite(zoom)
-        && Number.isFinite(center.lat)
-      ) ? 1 / mapZoomToStageScale(zoom, center.lat) : null
+      const groundMetersPerCssPixel = Number.isFinite(zoom) && Number.isFinite(center.lat)
+        ? 1 / mapZoomToStageScale(zoom, center.lat)
+        : null
       const frame: CameraViewportPublication = {
         viewport: transform.viewport,
         screenSize: { width: metrics.width, height: metrics.height },
@@ -308,7 +310,6 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     const effectiveMinimum = singleWorldEffectiveMinimumZoom(
       metrics.width,
       metrics.height,
-      active.attachment.northBearingDeg,
       configuredMinimum,
     )
     const resolvedMinimum = active.resolvedMinimumZoom === null

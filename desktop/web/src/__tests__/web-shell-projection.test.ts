@@ -31,9 +31,6 @@ describe('Web Edition shell projection', () => {
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual([
       'nav.canvas',
-      // ADR 0028 makes Location placement a Web capability, so it is part of the
-      // browser-safe primary rail rather than Desktop-only chrome.
-      'nav.location',
     ])
     expect(projection.panelBar.side.map((command) => command.id)).toEqual([
       'nav.plantDb',

@@ -227,10 +227,6 @@ function snapshotsEqual(
 ): boolean {
   if (!left || left.sessionIdentity !== right.sessionIdentity) return false
   return left.maximumWorldExtentMeters === right.maximumWorldExtentMeters
-    && left.map.anchor.lat === right.map.anchor.lat
-    && left.map.anchor.lon === right.map.anchor.lon
-    && left.map.northBearingDeg === right.map.northBearingDeg
-    && left.map.placementStatus === right.map.placementStatus
     && left.map.basemapStyle === right.map.basemapStyle
     && left.map.basemapVisible === right.map.basemapVisible
     && left.map.basemapOpacity === right.map.basemapOpacity

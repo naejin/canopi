@@ -70,9 +70,7 @@ class FakeMap implements MapLibreWorkspaceCameraMap {
 
 const attachmentFor = (map: FakeMap) => ({
   map,
-  anchor: { lat: 48.8566, lon: 2.3522 },
-  northBearingDeg: 0,
-  hasConfirmedGeography: true,
+  readOrigin: () => ({ lat: 48.8566, lon: 2.3522 }),
   maximumWorldExtentMeters: 1_000,
 })
 
@@ -116,14 +114,14 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     expect(owner.snapshot.value).toBe(boundary)
   })
 
-  it('publishes the exact zoom-27 scale at a high-latitude Design anchor', () => {
+  it('publishes the exact zoom-27 scale at a high-latitude session plane origin', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })
     const map = new FakeMap()
     const maximumScale = mapZoomToStageScale(27, 80)
     owner.attach({
       ...attachmentFor(map),
-      anchor: { lat: 80, lon: 179.9 },
+      readOrigin: () => ({ lat: 80, lon: 179.9 }),
     })
     map.currentZoom = 27
     map.center = { lng: 179.9, lat: 80 }
@@ -144,7 +142,6 @@ describe('MapLibreWorkspaceCameraOwner', () => {
       owner.viewport,
       { width: 400, height: 300 },
       { lat: 48.8566, lon: 2.3522 },
-      0,
     )!
 
     owner.attachment.attach(attachmentFor(map))
@@ -197,7 +194,6 @@ describe('MapLibreWorkspaceCameraOwner', () => {
       { x: 50, y: 0, scale: 3 },
       { width: 400, height: 300 },
       { lat: 48.8566, lon: 2.3522 },
-      0,
     )!
     expect(map.jumpTo).toHaveBeenLastCalledWith({
       center: expectedInitializeFrame.center,

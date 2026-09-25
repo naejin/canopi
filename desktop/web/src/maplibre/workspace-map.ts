@@ -1,22 +1,20 @@
-import type { BasemapStyle, PlacementStatus } from '../generated/contracts'
+import type { BasemapStyle } from '../generated/contracts'
 import { createMapLibreEmptyStyle, normalizeBasemapStyle } from './config'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
 import {
   WORKSPACE_MAP_MAX_ZOOM,
   WORKSPACE_MAP_MIN_ZOOM,
 } from '../canvas/workspace-camera-policy'
-import { maplibreBearingFromNorthBearing } from '../canvas/maplibre-camera'
 
 export interface WorkspaceMapSnapshot {
-  readonly anchor: { readonly lat: number; readonly lon: number }
-  readonly northBearingDeg: number
-  readonly placementStatus: PlacementStatus
+  /** Where the map starts; the camera owner positions it on attach. */
+  readonly initialCenter: { readonly lat: number; readonly lon: number }
   readonly basemapStyle: BasemapStyle
   readonly basemapVisible: boolean
   readonly basemapOpacity: number
 }
 
-/** Live, map-owned presentation. Spatial placement remains generation-fixed. */
+/** Live, map-owned presentation. */
 export interface WorkspaceBasemapPresentation {
   readonly basemapStyle: BasemapStyle
   readonly basemapVisible: boolean
@@ -54,8 +52,8 @@ export function createWorkspaceMapLibreMap(
   return new maplibre.Map({
     container,
     style: createMapLibreEmptyStyle(),
-    center: [snapshot.anchor.lon, snapshot.anchor.lat],
-    bearing: maplibreBearingFromNorthBearing(snapshot.northBearingDeg),
+    center: [snapshot.initialCenter.lon, snapshot.initialCenter.lat],
+    bearing: 0,
     minZoom: WORKSPACE_MAP_MIN_ZOOM,
     maxZoom: WORKSPACE_MAP_MAX_ZOOM,
     renderWorldCopies: false,

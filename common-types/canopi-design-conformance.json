@@ -1,9 +1,9 @@
 {
   "contract_version": 1,
   "facts": {
-    "current_version": 6,
+    "current_version": 7,
     "missing_version": 1,
-    "minimum_supported_version": 6,
+    "minimum_supported_version": 7,
     "future_version_policy": "reject",
     "error_kinds": [
       "invalid_version",
@@ -13,18 +13,9 @@
   },
   "accepted_documents": {
     "empty-current": {
-      "version": 6,
+      "version": 7,
       "name": "Conformance Garden",
       "description": null,
-      "spatial_frame": {
-        "anchor_longitude_deg": 13.0,
-        "anchor_latitude_deg": 23.0,
-        "north_bearing_deg": 0.0,
-        "placement_status": "provisional",
-        "location_metadata": {
-          "altitude_m": null
-        }
-      },
       "plant_species_colors": {},
       "plant_species_symbols": {},
       "plant_species_codes": {},
@@ -38,38 +29,93 @@
       "timeline": [],
       "budget": [],
       "budget_currency": "EUR",
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "updated_at": "2026-07-15T00:00:00.000Z",
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
     },
-    "normalized-bearing": {
-      "version": 6,
-      "name": "Bearing Garden",
+    "geolocated-objects": {
+      "version": 7,
+      "name": "Geolocated Garden",
       "description": null,
-      "spatial_frame": {
-        "anchor_longitude_deg": -180.0,
-        "anchor_latitude_deg": 85.0511287798066,
-        "north_bearing_deg": 270.0,
-        "placement_status": "confirmed",
-        "location_metadata": {
-          "altitude_m": 42.5
-        }
-      },
       "plant_species_colors": {},
       "plant_species_symbols": {},
       "plant_species_codes": {},
       "layers": [],
-      "plants": [],
-      "zones": [],
-      "annotations": [],
-      "measurement_guides": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 2.294481234,
+            "lat": 48.858370123
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [
+        {
+          "name": "North bed",
+          "locked": false,
+          "zone_type": "ellipse",
+          "points": [
+            {
+              "lon": -180.0,
+              "lat": 85.0511287798066
+            },
+            {
+              "lon": 180.0,
+              "lat": -85.0511287798066
+            }
+          ],
+          "rotation": 30.0,
+          "fill_color": null,
+          "notes": null
+        }
+      ],
+      "annotations": [
+        {
+          "id": "note-1",
+          "locked": false,
+          "annotation_type": "text",
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "text": "Well",
+          "font_size": 14.0,
+          "rotation": null
+        }
+      ],
+      "measurement_guides": [
+        {
+          "id": "guide-1",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.0001,
+            "lat": 23.0001
+          }
+        }
+      ],
       "consortiums": [],
       "groups": [],
       "timeline": [],
       "budget": [],
       "budget_currency": "EUR",
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "updated_at": "2026-07-15T00:00:00.000Z",
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {
         "future_top_level": {
           "enabled": true
@@ -81,51 +127,83 @@
     {
       "id": "accept-current-minimal",
       "input": {
-        "version": 6,
+        "version": 7,
         "name": "Conformance Garden",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": {
-            "altitude_m": null
-          }
-        },
         "plant_species_colors": {},
         "layers": [],
         "plants": [],
         "zones": [],
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z"
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "accepted": "empty-current"
     },
     {
-      "id": "accept-and-normalize-bearing",
+      "id": "accept-geolocated-objects",
       "input": {
-        "version": 6,
-        "name": "Bearing Garden",
-        "spatial_frame": {
-          "anchor_longitude_deg": -180.0,
-          "anchor_latitude_deg": 85.0511287798066,
-          "north_bearing_deg": -90.0,
-          "placement_status": "confirmed",
-          "location_metadata": {
-            "altitude_m": 42.5
-          }
-        },
+        "version": 7,
+        "name": "Geolocated Garden",
         "plant_species_colors": {},
         "layers": [],
-        "plants": [],
-        "zones": [],
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 2.294481234,
+              "lat": 48.858370123
+            }
+          }
+        ],
+        "zones": [
+          {
+            "name": "North bed",
+            "zone_type": "ellipse",
+            "points": [
+              {
+                "lon": -180.0,
+                "lat": 85.0511287798066
+              },
+              {
+                "lon": 180.0,
+                "lat": -85.0511287798066
+              }
+            ],
+            "rotation": 30.0
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "annotations": [
+          {
+            "id": "note-1",
+            "annotation_type": "text",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "text": "Well",
+            "font_size": 14.0
+          }
+        ],
+        "measurement_guides": [
+          {
+            "id": "guide-1",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.0001,
+              "lat": 23.0001
+            }
+          }
+        ],
         "future_top_level": {
           "enabled": true
         }
       },
-      "accepted": "normalized-bearing"
+      "accepted": "geolocated-objects"
     },
     {
       "id": "reject-missing-version",
@@ -134,122 +212,210 @@
     },
     {
       "id": "reject-version-one",
-      "input": { "version": 1 },
+      "input": {
+        "version": 1
+      },
       "error_kind": "unsupported_version"
     },
     {
-      "id": "reject-version-five",
-      "input": { "version": 5 },
+      "id": "reject-version-six",
+      "input": {
+        "version": 6
+      },
       "error_kind": "unsupported_version"
     },
     {
       "id": "reject-future-version",
-      "input": { "version": 7 },
+      "input": {
+        "version": 8
+      },
       "error_kind": "unsupported_version"
     },
     {
       "id": "reject-zero-version",
-      "input": { "version": 0 },
+      "input": {
+        "version": 0
+      },
       "error_kind": "invalid_version"
     },
     {
       "id": "reject-fractional-version",
-      "input": { "version": 6.5 },
+      "input": {
+        "version": 7.5
+      },
       "error_kind": "invalid_version"
     },
     {
-      "id": "reject-missing-spatial-frame",
-      "input": { "version": 6, "name": "Missing frame" },
-      "error_kind": "invalid_document"
-    },
-    {
-      "id": "reject-obsolete-root-location-authority",
+      "id": "reject-obsolete-root-spatial-frame",
       "input": {
-        "version": 6,
-        "name": "Duplicate authority",
-        "location": null,
+        "version": 7,
+        "name": "Anchored",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
         "spatial_frame": {
           "anchor_longitude_deg": 13.0,
           "anchor_latitude_deg": 23.0,
           "north_bearing_deg": 0.0,
           "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
+          "location_metadata": {
+            "altitude_m": null
+          }
         }
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-obsolete-root-location",
+      "input": {
+        "version": 7,
+        "name": "Located",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "location": null
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-obsolete-root-north-bearing",
+      "input": {
+        "version": 7,
+        "name": "Bearing",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "north_bearing_deg": 0.0
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-local-metre-position",
+      "input": {
+        "version": 7,
+        "name": "Metres",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "x": 1.0,
+              "y": 2.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
       "id": "reject-longitude-outside-wgs84",
       "input": {
-        "version": 6,
+        "version": 7,
         "name": "Bad longitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 180.0001,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
-        }
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 180.0001,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
       "id": "reject-latitude-outside-web-mercator",
       "input": {
-        "version": 6,
+        "version": 7,
         "name": "Bad latitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 85.0511287798067,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": null }
-        }
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 85.0511287798067
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-invalid-placement-status",
+      "id": "reject-zone-point-outside-web-mercator",
       "input": {
-        "version": 6,
-        "name": "Bad placement",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "unknown",
-          "location_metadata": { "altitude_m": null }
-        }
+        "version": 7,
+        "name": "Bad zone",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [
+          {
+            "name": "z",
+            "zone_type": "polygon",
+            "points": [
+              {
+                "lon": 13.0,
+                "lat": -85.0511287798067
+              }
+            ]
+          }
+        ],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z"
       },
       "error_kind": "invalid_document"
     },
     {
-      "id": "reject-invalid-altitude",
+      "id": "reject-guide-endpoint-outside-wgs84",
       "input": {
-        "version": 6,
-        "name": "Bad altitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": { "altitude_m": "high" }
-        }
-      },
-      "error_kind": "invalid_document"
-    },
-    {
-      "id": "reject-missing-altitude",
-      "input": {
-        "version": 6,
-        "name": "Missing altitude",
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": {}
-        }
+        "version": 7,
+        "name": "Bad guide",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "measurement_guides": [
+          {
+            "id": "g",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": -180.0001,
+              "lat": 23.0
+            }
+          }
+        ]
       },
       "error_kind": "invalid_document"
     }

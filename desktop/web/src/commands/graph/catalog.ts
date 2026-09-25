@@ -75,7 +75,6 @@ type DesktopShellCapabilityId =
   | 'exportCanvasPdf'
   | 'exitApp'
   | 'navigateCanvas'
-  | 'navigateLocation'
   | 'navigatePlantDatabase'
   | 'navigateSpeciesKey'
   | 'navigateData'
@@ -263,10 +262,6 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   },
   navigateCanvas: {
     execute: () => switchPanel('canvas'),
-  },
-  navigateLocation: {
-    execute: () => switchPanel('location'),
-    isExecutionDisabled: (state) => !state.hasDesign,
   },
   navigatePlantDatabase: {
     execute: () => switchPanel('plant-db'),

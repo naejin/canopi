@@ -258,7 +258,7 @@ let inspectionObserverDisposer: (() => void) | null = null
  * Install one disposable observer of Design identity, entity presence and
  * displayed generation for the active inspection session.
  *
- * Hide/remove, Design replacement, Location navigation and a published head
+ * Hide/remove, Design replacement, leaving Canvas and a published head
  * change all arrive here reactively, so a completed answer cannot silently
  * outlive the generation it was read from even when no action module runs.
  */
@@ -275,7 +275,7 @@ export function installInspectionObserver(): () => void {
       lastObservedGenerationId = null
       return
     }
-    // Leaving Canvas for Location (or any other primary surface) ends the
+    // Leaving Canvas for any other primary surface ends the
     // canvas gesture and releases its inspection session.
     if (panel !== 'canvas') {
       endInspection()
@@ -471,10 +471,7 @@ export function hasInspectionPointerHandler(): boolean {
  */
 export function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
   if (!inspectionTarget.value) return false
-  const aim = inspectionPointForScenePoint(
-    point,
-    currentDesign.value?.spatial_frame ?? null,
-  )
+  const aim = inspectionPointForScenePoint(point)
   if (!aim) return false
   void sampleInspectionPoint(aim)
   return true

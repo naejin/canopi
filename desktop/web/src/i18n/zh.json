@@ -163,12 +163,9 @@
     "overview": {
       "label": "概览",
       "zoomInToEdit": "放大以编辑",
-      "provisional": "设计位置尚未确认 · 放大以编辑",
       "returnToDesign": "返回设计",
       "design": "设计",
-      "provisionalDesign": "临时设计位置",
-      "designMarker": "返回设计",
-      "provisionalMarker": "返回临时设计位置"
+      "designMarker": "返回设计"
     },
     "plantColor": {
       "label": "植物颜色",
@@ -216,25 +213,10 @@
       "applySelection": "应用于所选的 {{count}} 个"
     },
     "location": {
-      "title": "设计位置",
-      "confirm": "确认位置",
-      "move": "将设计移到这里",
-      "current": "当前",
       "searchPlaceholder": "搜索位置...",
       "searching": "搜索中...",
       "noResults": "没有结果",
-      "geocodeError": "地理编码失败",
-      "mapUnavailable": "地图不可用",
-      "provisionalTitle": "临时场地",
-      "provisionalBody": "可以继续本地编辑。进行场地专项评估前，请先确认场地。",
-      "confirmedTitle": "已确认场地",
-      "selectedTitle": "已选择的位置",
-      "coordinates": "坐标",
-      "latitude": "纬度",
-      "longitude": "经度",
-      "preview": "预览",
-      "cancel": "取消",
-      "invalidCoordinates": "请输入介于 -85.051129 与 85.051129 之间的纬度，以及介于 -180 与 180 之间的经度。"
+      "geocodeError": "地理编码失败"
     },
     "file": {
       "new": "新建设计",
@@ -266,7 +248,6 @@
       "basemap": "底图",
       "basemapLoading": "正在加载底图...",
       "basemapError": "底图不可用",
-      "precisionWarning": "对于较大的设计，精度可能会下降",
       "references": "场地参考",
       "sceneStack": "设计图层",
       "topToBottom": "从上到下",

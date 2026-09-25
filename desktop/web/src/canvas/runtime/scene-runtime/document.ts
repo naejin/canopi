@@ -70,7 +70,7 @@ export class SceneRuntimeDocumentBridge {
     doc: CanopiFile,
   ): CanvasPersistenceCapture {
     const capture = this._authority.capturePersistence()
-    const canvas = serializeScenePersistedState(capture.scene, { now: new Date() })
+    const canvas = serializeScenePersistedState(capture.scene, capture.geo, { now: new Date() })
     const content = this._composeDocumentForSave({ metadata, document: doc, canvas })
     return Object.freeze({
       content,

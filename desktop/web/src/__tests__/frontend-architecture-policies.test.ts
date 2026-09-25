@@ -57,17 +57,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/transition.ts',
       'src/app/document-session/state-machine.ts',
       'src/app/problem-report/**',
-      // ADR 0028 authorizes Web Location placement, so the shared coordinate
-      // workbench and its map-editing host are now legitimate Web imports: Web
-      // composes them directly and runs the same validation, preview, confirm,
-      // cancel and undo semantics Desktop does.
-      //
-      // The geocoding boundary is unchanged and is what this guard still
-      // protects: the `app/location` barrel pulls the search controller in with
-      // it, so both stay forbidden and Web must import the coordinate seams
-      // individually.
-      'src/app/location/index.ts',
-      'src/app/location/search-controller.ts',
       'src/commands/registry.ts',
       'src/commands/graph/**',
     ],
@@ -941,7 +930,6 @@ const REQUIRED_IMPORT_POLICIES = [
     kind: 'require-imports',
     name: 'Non-canvas Design writers consume Design Edit',
     from: [
-      'src/app/location/controller.ts',
       'src/app/budget/workbench.ts',
       'src/app/timeline/calendar-workbench.ts',
       'src/app/consortium/dock-workbench.ts',
@@ -1310,6 +1298,18 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/web/browser-theme.ts',
       'src/web/browser-shell-projection.ts',
       'src/state/design.ts',
+      // Canopi v2 (ADR 0001): Location placement, spatial frame and
+      // coordinated Design history are gone.
+      'src/spatial-frame.ts',
+      'src/maplibre/location-map.ts',
+      'src/app/design-edit/history.ts',
+      'src/app/design-edit/location.ts',
+      'src/app/location/index.ts',
+      'src/app/location/controller.ts',
+      'src/app/location/workbench.ts',
+      'src/app/location/search-controller.ts',
+      'src/components/canvas/LocationTab.tsx',
+      'src/components/panels/LocationPanel.tsx',
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]

@@ -23,7 +23,7 @@ function plant(id: string, canonicalName: string, commonName: string): PlacedPla
     canonical_name: canonicalName,
     common_name: commonName,
     color: null,
-    position: { x: 0, y: 0 },
+    position: { lon: 13, lat: 23 },
     rotation: null,
     scale: null,
     notes: null,
@@ -50,10 +50,9 @@ function action(): TimelineAction {
 
 function design(): CanopiFile {
   return {
-    version: 6,
+    version: 7,
     name: 'Calendar editor test',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [],
     plants: [],

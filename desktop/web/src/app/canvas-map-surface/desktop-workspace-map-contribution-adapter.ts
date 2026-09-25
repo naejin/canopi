@@ -18,12 +18,12 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
     read(runtime) {
       const sessionIdentity = designSessionStore.sessionIdentity.value
       if (!designSessionStore.hasCurrentDesign()) return null
-      const spatial = designSessionStore.readMetadata().spatialFrame
-      if (!spatial) throw new Error('Current Design is missing its required spatial frame.')
+      const plane = runtime.sessionPlane.value
+      if (!plane) return null
       void runtime.revision.scene.value
       const overview = runtime.viewport.value.mode === 'overview'
       const panelTargets = readPanelTargetOverlaySnapshot()
-      const anchor = { lat: spatial.anchor_latitude_deg, lon: spatial.anchor_longitude_deg }
+      const anchor = { lat: plane.origin.lat, lon: plane.origin.lon }
       return captureWorkspaceMapContributions({
         sessionIdentity,
         lidar: lidarDisplayLayers(
@@ -34,13 +34,11 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
         terrain: { ...readCanvasMapLayerPresentation().terrain, isDark: theme.value === 'dark' },
         overlays: {
           runtime,
-          location: spatial.placement_status === 'confirmed' ? anchor : null,
-          northBearingDeg: spatial.north_bearing_deg,
+          location: anchor,
           hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
         },
-        frame: resolveMapLibreSurfaceFrame(runtime, anchor, spatial.north_bearing_deg),
-        designExtentMeters: runtime.getScenePhysicalExtentMeters(),
+        frame: resolveMapLibreSurfaceFrame(runtime, anchor),
       })
     },
   }

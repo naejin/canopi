@@ -1,5 +1,6 @@
 import { batch } from '@preact/signals'
-import type { BasemapStyle } from '../../generated/contracts'
+import type { BasemapStyle, LastView } from '../../generated/contracts'
+import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
 import { normalizeBasemapStyle } from '../../maplibre/config'
@@ -19,6 +20,7 @@ import {
   autoSaveIntervalMs,
   basemapStyle,
   googleMapsApiKey,
+  lastView,
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
@@ -37,6 +39,7 @@ export interface SettingsProjectionDraft {
   snapToGuides: boolean
   autoSaveIntervalMs: number
   plantSpacingIntervalM: number
+  lastView: LastView | null
   sidePanel: {
     width: number | null
   }
@@ -138,6 +141,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     snapToGuides: snapToGuidesEnabled.value,
     autoSaveIntervalMs: autoSaveIntervalMs.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
+    lastView: lastView.value,
     sidePanel: {
       width: sidePanelWidth.value,
     },
@@ -182,6 +186,7 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
       draft.plantSpacingIntervalM,
       FALLBACK_PLANT_SPACING_INTERVAL_M,
     ),
+    lastView: normalizeLastView(draft.lastView),
     sidePanel: {
       width: normalizeSidePanelWidth(draft.sidePanel.width),
     },
@@ -210,6 +215,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     snapToGuidesEnabled.value = draft.snapToGuides
     autoSaveIntervalMs.value = draft.autoSaveIntervalMs
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
+    if (!sameLastView(lastView.value, draft.lastView)) lastView.value = draft.lastView
     sidePanelWidth.value = draft.sidePanel.width
     savedStampsFrameHeight.value = draft.savedStamps.frameHeight
     layerVisibility.value = {
@@ -236,6 +242,7 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     snap_to_guides: draft.snapToGuides,
     auto_save_interval_s: Math.round(draft.autoSaveIntervalMs / 1000),
     plant_spacing_interval_m: draft.plantSpacingIntervalM,
+    last_view: draft.lastView,
     side_panel_width: draft.sidePanel.width,
     saved_stamps_frame_height: draft.savedStamps.frameHeight,
     map_layer_visible: draft.mapLayers.baseVisible,
@@ -250,12 +257,28 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
   }
 }
 
+function normalizeLastView(view: LastView | null): LastView | null {
+  if (!view) return null
+  const { lon, lat, zoom } = view
+  if (![lon, lat, zoom].every(Number.isFinite)) return null
+  if (lon < -180 || lon > 180 || Math.abs(lat) > WEB_MERCATOR_MAX_LATITUDE_DEG) return null
+  return { lon, lat, zoom }
+}
+
+function sameLastView(left: LastView | null | undefined, right: LastView | null | undefined): boolean {
+  if (!left || !right) return !left && !right
+  return left.lon === right.lon && left.lat === right.lat && left.zoom === right.zoom
+}
+
 function settingsEqual(left: Settings, right: Settings): boolean {
   const leftKeys = Object.keys(left) as Array<keyof Settings>
   if (leftKeys.length !== Object.keys(right).length) return false
 
   return leftKeys.every((key) => (
-    Object.prototype.hasOwnProperty.call(right, key) && Object.is(left[key], right[key])
+    Object.prototype.hasOwnProperty.call(right, key)
+    && (key === 'last_view'
+      ? sameLastView(left.last_view, right.last_view)
+      : Object.is(left[key], right[key]))
   ))
 }
 
@@ -273,6 +296,7 @@ function projectSettingsToSignals(settings: Settings): Settings {
     snapToGuides: settings.snap_to_guides,
     autoSaveIntervalMs: settings.auto_save_interval_s * 1000,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,
+    lastView: settings.last_view ?? null,
     sidePanel: {
       width: settings.side_panel_width,
     },

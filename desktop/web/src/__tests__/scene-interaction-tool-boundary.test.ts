@@ -84,6 +84,7 @@ describe('Scene Interaction tool module boundaries', () => {
       if (name !== authorityPath) {
         expect(source, name).not.toContain('.updatePersisted(')
         expect(source, name).not.toContain('.restoreSnapshot(')
+        expect(source, name).not.toContain('.commitReorigin(')
       }
       if (name !== '../canvas/runtime/scene-runtime.ts') {
         expect(source, name).not.toContain('_sceneStore.setSelection(')

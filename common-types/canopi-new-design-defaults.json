@@ -1,18 +1,9 @@
 {
   "contract_version": 1,
-  "spatial_frame": {
-    "anchor_longitude_deg": 13.0,
-    "anchor_latitude_deg": 23.0,
-    "north_bearing_deg": 0.0,
-    "placement_status": "provisional",
-    "location_metadata": {
-      "altitude_m": null
-    }
-  },
   "layers": [
     {
       "name": "base",
-      "visible": false,
+      "visible": true,
       "locked": false,
       "opacity": 1.0
     },

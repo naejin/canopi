@@ -163,12 +163,9 @@
     "overview": {
       "label": "概要",
       "zoomInToEdit": "編集するには拡大してください",
-      "provisional": "仮のデザイン位置 · 編集するには拡大してください",
       "returnToDesign": "デザインに戻る",
       "design": "デザイン",
-      "provisionalDesign": "仮のデザイン",
-      "designMarker": "デザインに戻る",
-      "provisionalMarker": "仮のデザインに戻る"
+      "designMarker": "デザインに戻る"
     },
     "plantColor": {
       "label": "植物の色",
@@ -216,25 +213,10 @@
       "applySelection": "選択した{{count}}個に適用"
     },
     "location": {
-      "title": "デザインの位置",
-      "confirm": "場所を確定",
-      "move": "デザインをここに移動",
-      "current": "現在",
       "searchPlaceholder": "場所を検索...",
       "searching": "検索中...",
       "noResults": "結果なし",
-      "geocodeError": "ジオコーディング失敗",
-      "mapUnavailable": "マップを利用できません",
-      "provisionalTitle": "仮サイト",
-      "provisionalBody": "ローカル編集は利用できます。場所に固有の評価を行う前にサイトを確定してください。",
-      "confirmedTitle": "確定済みサイト",
-      "selectedTitle": "選択した場所",
-      "coordinates": "座標",
-      "latitude": "緯度",
-      "longitude": "経度",
-      "preview": "プレビュー",
-      "cancel": "キャンセル",
-      "invalidCoordinates": "緯度は -85.051129 ～ 85.051129、経度は -180 ～ 180 の範囲で入力してください。"
+      "geocodeError": "ジオコーディング失敗"
     },
     "file": {
       "new": "新規デザイン",
@@ -266,7 +248,6 @@
       "basemap": "ベースマップ",
       "basemapLoading": "ベースマップを読み込み中...",
       "basemapError": "ベースマップを利用できません",
-      "precisionWarning": "大きなデザインでは精度が低下する場合があります",
       "references": "敷地の参照情報",
       "sceneStack": "設計レイヤー",
       "topToBottom": "上から下へ",

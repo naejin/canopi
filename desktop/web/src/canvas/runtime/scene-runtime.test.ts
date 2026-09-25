@@ -33,6 +33,8 @@ import { createDesktopCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/d
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
 import type { CanopiFile, PanelTarget } from '../../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+import { geoAt } from '../../__tests__/support/geo-design'
 import { speciesTarget } from '../../target'
 import {
   CanvasDocumentReplacementNotAdmittedError,
@@ -57,15 +59,20 @@ import { t } from '../../i18n'
 import { createSceneInteractionEventHarness } from '../../__tests__/support/scene-interaction-events'
 import { CameraController } from './camera'
 
+// Fixtures are authored in metres around the equator, where Mercator scale is
+// stationary, so re-centring the session plane on them keeps their metre
+// distances exact to well below the tools' 1 µm tolerances.
+const FIXTURE_ORIGIN = { lon: 0, lat: 0 }
+const at = (x: number, y: number) => geoAt(x, y, FIXTURE_ORIGIN)
+
 const plantTarget = (id: string) => ({ kind: 'plant' as const, id })
 const zoneTarget = (id: string) => ({ kind: 'zone' as const, id })
 
 function makeFile(): CanopiFile {
   return {
-    version: 6,
+    version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Runtime demo',
     description: null,
-    spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
     plant_species_colors: {},
     layers: [
       { name: 'plants', visible: true, locked: false, opacity: 1 },
@@ -77,7 +84,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 10, y: 10 },
+        position: at(10, 10),
         rotation: null,
         scale: null,
         notes: null,
@@ -90,7 +97,7 @@ function makeFile(): CanopiFile {
         canonical_name: 'Malus domestica',
         common_name: 'Apple',
         color: null,
-        position: { x: 20, y: 20 },
+        position: at(20, 20),
         rotation: null,
         scale: null,
         notes: null,
@@ -105,10 +112,10 @@ function makeFile(): CanopiFile {
         zone_type: 'rect',
         rotation: 0,
         points: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
+          at(0, 0),
+          at(5, 0),
+          at(5, 5),
+          at(0, 5),
         ],
         fill_color: null,
         notes: null,
@@ -147,7 +154,7 @@ function fileWithOnlyAnnotation(text: string): CanopiFile {
     annotations: [{
       id: 'annotation-1',
       annotation_type: 'text',
-      position: { x: 24, y: 32 },
+      position: at(24, 32),
       text,
       font_size: 20,
       rotation: null,
@@ -190,8 +197,8 @@ function fileWithMeasurementGuide(overrides: Partial<TestMeasurementGuideFileEnt
     measurement_guides: [{
       id: 'measurement-guide-1',
       locked: false,
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
+      start: at(10, 10),
+      end: at(40, 10),
       ...overrides,
     }],
   }
@@ -245,12 +252,55 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   return { container, renderer }
 }
 
+// Loading a Design centres the session plane on its objects. Offset the
+// viewport by where the fixtures' authoring origin landed so the screen
+// points below keep addressing the authored metres (x, y) around it.
+function authoringOffset(runtime: SceneCanvasRuntime): { x: number; y: number } {
+  const plane = runtime.querySurface.sessionPlane.value
+  return plane ? plane.toPlane(FIXTURE_ORIGIN) : { x: 0, y: 0 }
+}
+
 function setInteractionViewport(
   runtime: SceneCanvasRuntime,
   viewport: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
 ): void {
-  ;(runtime as any)._camera.setViewport(viewport)
+  const offset = authoringOffset(runtime)
+  ;(runtime as any)._camera.setViewport({
+    x: viewport.x - offset.x * viewport.scale,
+    y: viewport.y - offset.y * viewport.scale,
+    scale: viewport.scale,
+  })
   runtime.documentSurface.resize(400, 300)
+}
+
+// Plane metres of an authored fixture point in the runtime's current plane.
+function planeAt(runtime: SceneCanvasRuntime, x: number, y: number): { x: number; y: number } {
+  const offset = authoringOffset(runtime)
+  return { x: offset.x + x, y: offset.y + y }
+}
+
+function expectGuideNear(
+  runtime: SceneCanvasRuntime,
+  guide: { start: { x: number; y: number }; end: { x: number; y: number } } | undefined,
+  start: readonly [number, number],
+  end: readonly [number, number],
+): void {
+  expectPointNear(guide?.start, planeAt(runtime, start[0], start[1]))
+  expectPointNear(guide?.end, planeAt(runtime, end[0], end[1]))
+}
+
+// Changed positions are saved at 1e-9 degree precision.
+function geoNear(point: { lon: number; lat: number }) {
+  return { lon: expect.closeTo(point.lon, 8), lat: expect.closeTo(point.lat, 8) }
+}
+
+function expectPointNear(
+  actual: { x: number; y: number } | undefined,
+  expected: { x: number; y: number },
+  digits = 6,
+): void {
+  expect(actual?.x).toBeCloseTo(expected.x, digits)
+  expect(actual?.y).toBeCloseTo(expected.y, digits)
 }
 
 function clickAt(
@@ -347,12 +397,6 @@ function composeTestDocumentForSave({
     ...canvas,
     name: metadata.name,
     description: metadata.description ?? document.description ?? null,
-    spatial_frame: {
-      ...(metadata.spatialFrame ?? document.spatial_frame),
-      location_metadata: {
-        ...(metadata.spatialFrame ?? document.spatial_frame).location_metadata,
-      },
-    },
     extra: {
       ...document.extra,
       ...canvas.extra,
@@ -610,13 +654,14 @@ describe('scene canvas runtime', () => {
       )
 
       expect(abortCalls).toBe(2)
+      // A lone Plant frames the replacement's session plane at its origin.
       expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
-        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+        expect.objectContaining({ id: 'plant-2', position: { x: 0, y: 0 } }),
       ])
 
       events.pointerUp({ x: 30, y: 30 }, { pointerId: 61 })
       expect(runtime.querySurface.getSceneSnapshot().plants).toEqual([
-        expect.objectContaining({ id: 'plant-2', position: { x: 20, y: 20 } }),
+        expect.objectContaining({ id: 'plant-2', position: { x: 0, y: 0 } }),
       ])
     } finally {
       beginSpy.mockRestore()
@@ -820,7 +865,8 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(20)
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
     runtime.commandSurface.history.undo()
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
     runtime.destroy()
   })
 
@@ -829,14 +875,15 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
     const before = runtime.querySurface.getSceneSnapshot()
-    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(0)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     const active = sceneEdits.begin('interaction-drag')
     active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
     expect(runtime.querySurface.capturePrintSnapshot()).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(30)
     active.abort()
-    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(10)
+    expect(runtime.querySurface.capturePrintSnapshot()?.plants[0]?.position.x).toBe(0)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(before)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     runtime.destroy()
@@ -862,14 +909,15 @@ describe('scene canvas runtime', () => {
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     expect(runtime.commandSurface.history.canRedo.value).toBe(false)
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    // A lone Plant frames the session plane at its origin.
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
 
     runtime.commandSurface.history.undo()
 
     expect(invalidate).toHaveBeenCalledTimes(2)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
-    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(10)
+    expect(runtime.querySurface.getSceneSnapshot().plants[0]?.position.x).toBe(0)
     invalidate.mockRestore()
     runtime.destroy()
   })
@@ -1799,11 +1847,17 @@ describe('scene canvas runtime', () => {
 
     runtime.commandSurface.sceneEdits.selectAll()
 
-    expect(runtime.querySurface.getDesignObjectSelection()).toEqual({
+    const selection = runtime.querySurface.getDesignObjectSelection()
+    // The lone 5 m square Zone frames the session plane around its centre.
+    expect(selection.bounds?.minX).toBeCloseTo(-2.5, 6)
+    expect(selection.bounds?.minY).toBeCloseTo(-2.5, 6)
+    expect(selection.bounds?.maxX).toBeCloseTo(2.5, 6)
+    expect(selection.bounds?.maxY).toBeCloseTo(2.5, 6)
+    expect(selection).toEqual({
       editableTargets: [{ kind: 'zone', id: 'zone-1' }],
       lockedTargets: [],
       blockedTargets: [],
-      bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
+      bounds: expect.any(Object),
       sameSpeciesReferenceCanonicalName: null,
       plantNamePinning: {
         plantIds: [],
@@ -1843,12 +1897,7 @@ describe('scene canvas runtime', () => {
       name: 'zone-1',
       zone_type: 'rect',
       rotation: 0,
-      points: [
-        { x: 10, y: 10 },
-        { x: 110, y: 10 },
-        { x: 110, y: 90 },
-        { x: 10, y: 90 },
-      ],
+      points: [at(10, 10), at(110, 10), at(110, 90), at(10, 90)],
       fill_color: null,
       notes: null,
       locked: false,
@@ -2085,7 +2134,6 @@ describe('scene canvas runtime', () => {
     const file = {
       ...makeFile(),
       description: 'Loaded description',
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 18, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       consortiums: [{
         target: { kind: 'species', canonical_name: 'Malus domestica' },
         stratum: 'canopy',
@@ -2133,7 +2181,7 @@ describe('scene canvas runtime', () => {
 
     expect(serialized.name).toBe('Detached save')
     expect(serialized.description).toBe('Loaded description')
-    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
+    expect(serialized).not.toHaveProperty('spatial_frame')
     expect(serialized.consortiums).toEqual(file.consortiums)
     expect(serialized.timeline).toEqual(file.timeline)
     expect(serialized.budget).toEqual(file.budget)
@@ -2143,23 +2191,18 @@ describe('scene canvas runtime', () => {
     expect(serialized.plants[0]?.color).toBe('#228833')
   })
 
-  it('preserves the required spatial frame in detached composition', () => {
+  it('saves unchanged loaded positions back verbatim in detached composition', () => {
     const runtime = new SceneCanvasRuntime()
-    const file = {
-      ...makeFile(),
-      spatial_frame: {
-        ...makeFile().spatial_frame,
-        north_bearing_deg: 315,
-      },
-    }
+    const file = makeFile()
     runtime.documentSurface.loadDocument(file)
 
     const serialized = runtime.documentSurface.captureForPersistence(
-      { name: 'Required frame' },
+      { name: 'Verbatim positions' },
       file,
     ).content
 
-    expect(serialized.spatial_frame).toEqual(file.spatial_frame)
+    expect(serialized.plants.map((plant) => plant.position)).toEqual(file.plants.map((plant) => plant.position))
+    expect(serialized.zones.map((zone) => zone.points)).toEqual(file.zones.map((zone) => zone.points))
   })
 
   it('publishes canvas-origin species hover targets without mutating selection', async () => {
@@ -2300,7 +2343,7 @@ describe('scene canvas runtime', () => {
     expect(pasted.canonicalName).toBe('Malus domestica')
     expect(pasted.symbol).toBe('conifer')
     expect(pasted.pinnedName).toBe(false)
-    expect(pasted.position).toEqual({ x: 21, y: 20 })
+    expectPointNear(pasted.position, planeAt(runtime, 21, 20))
     events.dispose()
     runtime.destroy()
   })
@@ -2456,12 +2499,8 @@ describe('scene canvas runtime', () => {
     const created = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(created).toHaveLength(1)
     const createdGuide = created?.[0]!
-    expect(createdGuide).toMatchObject({
-      kind: 'measurement-guide',
-      locked: false,
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
-    })
+    expect(createdGuide).toMatchObject({ kind: 'measurement-guide', locked: false })
+    expectGuideNear(runtime, createdGuide, [10, 10], [40, 10])
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
@@ -2469,8 +2508,8 @@ describe('scene canvas runtime', () => {
       {
         id: createdGuide.id,
         locked: false,
-        start: { x: 10, y: 10 },
-        end: { x: 40, y: 10 },
+        start: geoNear(at(10, 10)),
+        end: geoNear(at(40, 10)),
       },
     ])
 
@@ -2572,23 +2611,18 @@ describe('scene canvas runtime', () => {
       kind: 'measurement-guide',
       id: 'measurement-guide-1',
       locked: false,
-      start: { x: 20, y: 20 },
-      end: { x: 50, y: 20 },
+      start: expect.any(Object),
+      end: expect.any(Object),
     }])
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [20, 20], [50, 20])
     expect(runtime.commandSurface.history.canUndo.value).toBe(true)
 
     runtime.commandSurface.history.undo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
-      start: { x: 10, y: 10 },
-      end: { x: 40, y: 10 },
-    })
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [10, 10], [40, 10])
     expect(runtime.commandSurface.history.canRedo.value).toBe(true)
 
     runtime.commandSurface.history.redo()
-    expect(runtime.querySurface.getSceneSnapshot().measurementGuides[0]).toMatchObject({
-      start: { x: 20, y: 20 },
-      end: { x: 50, y: 20 },
-    })
+    expectGuideNear(runtime, runtime.querySurface.getSceneSnapshot().measurementGuides[0], [20, 20], [50, 20])
     events.dispose()
     runtime.destroy()
   })
@@ -2607,11 +2641,8 @@ describe('scene canvas runtime', () => {
     let guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(2)
     const duplicate = guides.find((guide) => guide.id !== 'measurement-guide-1')
-    expect(duplicate).toMatchObject({
-      locked: false,
-      start: { x: 11, y: 10 },
-      end: { x: 41, y: 10 },
-    })
+    expect(duplicate).toMatchObject({ locked: false })
+    expectGuideNear(runtime, duplicate, [11, 10], [41, 10])
     expect(selectedObjectIds.value).toEqual(new Set([duplicate!.id]))
 
     runtime.commandSurface.sceneEdits.copy()
@@ -2620,11 +2651,9 @@ describe('scene canvas runtime', () => {
     guides = runtime.querySurface.getSceneSnapshot().measurementGuides
     expect(guides).toHaveLength(3)
     const pastedId = [...selectedObjectIds.value][0]!
-    expect(guides.find((guide) => guide.id === pastedId)).toMatchObject({
-      locked: false,
-      start: { x: 12, y: 10 },
-      end: { x: 42, y: 10 },
-    })
+    const pasted = guides.find((guide) => guide.id === pastedId)
+    expect(pasted).toMatchObject({ locked: false })
+    expectGuideNear(runtime, pasted, [12, 10], [42, 10])
 
     runtime.commandSurface.sceneEdits.deleteSelected()
 
@@ -2921,8 +2950,10 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._addGuide('v', 42)
 
     const serialized = runtime.documentSurface.captureForPersistence({ name: file.name }, file).content
+    // Ruler guides persist as a longitude (vertical) or latitude (horizontal).
+    const guideLon = runtime.querySurface.sessionPlane.value!.toGeo({ x: 42, y: 0 }).lon
     expect(serialized.extra).toEqual({
-      guides: [{ id: expect.any(String), axis: 'v', position: 42 }],
+      guides: [{ id: expect.any(String), axis: 'v', lon: expect.closeTo(guideLon, 9) }],
     })
     expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)

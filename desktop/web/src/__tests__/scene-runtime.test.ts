@@ -1,24 +1,38 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearCanvasSelection, selectedObjectIds } from '../canvas/session-state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
-import { beginDesignPlacementEdit } from '../app/design-edit'
-import { confirmedSpatialFrame } from '../spatial-frame'
 import type { CanopiFile } from '../types/design'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
 import {
   createLiveTestCanvasRuntimeHost,
   type TestCanvasRuntimeHostOptions,
 } from './support/live-canvas-runtime'
-import {
-  currentDesign,
-  designSessionFixture,
-} from './support/design-session-state'
+import { geoAt } from './support/geo-design'
+
+// Fixtures are authored in metres around the equator, where Mercator scale is
+// stationary, so metre offsets survive the session plane's re-centring.
+const FIXTURE_ORIGIN = { lon: 0, lat: 0 }
+const at = (x: number, y: number) => geoAt(x, y, FIXTURE_ORIGIN)
+const GUIDE_LAT = at(0, 42).lat
+
+// Changed positions are saved at 1e-9 degree precision.
+function geoNear(point: { lon: number; lat: number }) {
+  return { lon: expect.closeTo(point.lon, 8), lat: expect.closeTo(point.lat, 8) }
+}
+
+function expectPointNear(
+  actual: { x: number; y: number } | undefined,
+  expected: { x: number; y: number },
+): void {
+  expect(actual?.x).toBeCloseTo(expected.x, 6)
+  expect(actual?.y).toBeCloseTo(expected.y, 6)
+}
 
 const BASE_FILE: CanopiFile = {
-  version: 6,
+  version: CURRENT_CANOPI_FILE_VERSION,
   name: 'Demo',
   description: null,
-  spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'provisional', location_metadata: { altitude_m: null } },
   plant_species_colors: {},
   layers: [
     { name: 'base', visible: true, locked: false, opacity: 1 },
@@ -48,7 +62,7 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
     canonical_name: canonical,
     common_name: 'Oak',
     color: null,
-    position: { x, y },
+    position: at(x, y),
     rotation: null,
     scale: null,
     notes: null,
@@ -68,10 +82,8 @@ function createEllipseZone(
   return {
     name,
     zone_type: 'ellipse',
-    points: [
-      { x, y },
-      { x: radiusX, y: radiusY },
-    ],
+    // Files store the opposite corners of the unrotated bounding box.
+    points: [at(x - radiusX, y - radiusY), at(x + radiusX, y + radiusY)],
     rotation: 0,
     fill_color: null,
     notes: null,
@@ -88,7 +100,7 @@ function createAnnotation(
   return {
     id,
     annotation_type: 'text',
-    position: { x, y },
+    position: at(x, y),
     text,
     font_size: 20,
     rotation: null,
@@ -128,8 +140,8 @@ describe('Canvas runtime surfaces', () => {
 
       const pasted = queries.getPlacedPlants()
       expect(pasted).toHaveLength(3)
-      expect(pasted[1]?.position).toEqual({ x: 11, y: 20 })
-      expect(pasted[2]?.position).toEqual({ x: 12, y: 20 })
+      expect(pasted[1]?.position).toEqual(geoNear(at(11, 20)))
+      expect(pasted[2]?.position).toEqual(geoNear(at(12, 20)))
 
       commands.history.undo()
       expect(queries.getPlacedPlants()).toHaveLength(2)
@@ -159,9 +171,10 @@ describe('Canvas runtime surfaces', () => {
       commands.sceneEdits.pasteAt({ x: 100, y: 50 })
 
       const pasted = queries.getPlacedPlants()
+      const plane = queries.sessionPlane.value!
       expect(pasted).toHaveLength(4)
-      expect(pasted[2]?.position).toEqual({ x: 98, y: 50 })
-      expect(pasted[3]?.position).toEqual({ x: 102, y: 50 })
+      expect(pasted[2]?.position).toEqual(geoNear(plane.toGeo({ x: 98, y: 50 })))
+      expect(pasted[3]?.position).toEqual(geoNear(plane.toGeo({ x: 102, y: 50 })))
     } finally {
       host.destroy()
     }
@@ -212,28 +225,25 @@ describe('Canvas runtime surfaces', () => {
       commands.sceneEdits.paste()
 
       let scene = queries.getSceneSnapshot()
-      expect(scene.zones[1]?.points).toEqual([
-        { x: 11, y: 20 },
-        { x: 3, y: 2 },
-      ])
+      // The runtime holds ellipses as centre + radii in the session plane.
+      const centre = scene.zones[0]!.points[0]!
+      expectPointNear(scene.zones[0]?.points[1], { x: 3, y: 2 })
+      expectPointNear(scene.zones[1]?.points[0], { x: centre.x + 1, y: centre.y })
+      expectPointNear(scene.zones[1]?.points[1], { x: 3, y: 2 })
       expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[1]!.name }])
 
       commands.sceneEdits.duplicateSelected()
 
       scene = queries.getSceneSnapshot()
-      expect(scene.zones[2]?.points).toEqual([
-        { x: 12, y: 20 },
-        { x: 3, y: 2 },
-      ])
+      expectPointNear(scene.zones[2]?.points[0], { x: centre.x + 2, y: centre.y })
+      expectPointNear(scene.zones[2]?.points[1], { x: 3, y: 2 })
 
       commands.sceneEdits.copy()
       commands.sceneEdits.pasteAt({ x: 100, y: 50 })
 
       scene = queries.getSceneSnapshot()
-      expect(scene.zones[3]?.points).toEqual([
-        { x: 100, y: 50 },
-        { x: 3, y: 2 },
-      ])
+      expectPointNear(scene.zones[3]?.points[0], { x: 100, y: 50 })
+      expectPointNear(scene.zones[3]?.points[1], { x: 3, y: 2 })
       expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[3]!.name }])
 
       commands.history.undo()
@@ -241,10 +251,8 @@ describe('Canvas runtime surfaces', () => {
 
       commands.history.redo()
       scene = queries.getSceneSnapshot()
-      expect(scene.zones[3]?.points).toEqual([
-        { x: 100, y: 50 },
-        { x: 3, y: 2 },
-      ])
+      expectPointNear(scene.zones[3]?.points[0], { x: 100, y: 50 })
+      expectPointNear(scene.zones[3]?.points[1], { x: 3, y: 2 })
     } finally {
       host.destroy()
     }
@@ -259,7 +267,7 @@ describe('Canvas runtime surfaces', () => {
         ...BASE_FILE,
         plants: [{ ...createPlant('plant-1', 10, 20), pinned_name: true }],
         extra: {
-          guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+          guides: [{ id: 'guide-1', axis: 'h', lat: GUIDE_LAT }],
         },
       })
 
@@ -268,13 +276,13 @@ describe('Canvas runtime surfaces', () => {
 
       const duplicated = queries.getPlacedPlants()
       expect(duplicated).toHaveLength(2)
-      expect(duplicated[1]?.position).toEqual({ x: 11, y: 20 })
+      expect(duplicated[1]?.position).toEqual(geoNear(at(11, 20)))
       expect(duplicated[1]?.pinned_name).toBe(true)
 
       commands.sceneEdits.duplicateSelected()
       const duplicatedAgain = queries.getPlacedPlants()
       expect(duplicatedAgain).toHaveLength(3)
-      expect(duplicatedAgain[2]?.position).toEqual({ x: 12, y: 20 })
+      expect(duplicatedAgain[2]?.position).toEqual(geoNear(at(12, 20)))
       expect(duplicatedAgain[2]?.pinned_name).toBe(true)
 
       commands.history.undo()
@@ -284,94 +292,6 @@ describe('Canvas runtime surfaces', () => {
       expect(queries.getPlacedPlants()).toHaveLength(3)
     } finally {
       host.destroy()
-    }
-  })
-
-  it('orders Design placement and later Scene edits through the global undo commands', () => {
-    designSessionFixture.file = {
-      ...BASE_FILE,
-      plants: [createPlant('plant-1', 10, 20)],
-    }
-    const placement = beginDesignPlacementEdit()
-    placement.preview(confirmedSpatialFrame(placement.original, {
-      lat: 48.8566,
-      lon: 2.3522,
-      altitude_m: 35,
-    }))
-    placement.commit()
-
-    const host = createRuntimeHostWithAppComposition()
-    const { commands, documents, queries } = host.surfaces
-    try {
-      documents.loadDocument(currentDesign.value!)
-      expect(commands.layers.setSceneLayerVisibility('plants', false)).toBe(true)
-
-      commands.history.undo()
-      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(true)
-      expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
-
-      commands.history.undo()
-      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
-      expect(queries.getPlacedPlants()).toHaveLength(1)
-
-      commands.history.redo()
-      expect(currentDesign.value?.spatial_frame.placement_status).toBe('confirmed')
-      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(true)
-
-      commands.history.redo()
-      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible).toBe(false)
-    } finally {
-      host.destroy()
-      designSessionFixture.file = null
-    }
-  })
-
-  it('discards redo from both participants when global history branches', () => {
-    designSessionFixture.file = {
-      ...BASE_FILE,
-      plants: [createPlant('plant-1', 10, 20)],
-    }
-    const placement = beginDesignPlacementEdit()
-    placement.preview(confirmedSpatialFrame(placement.original, {
-      lat: 48.8566,
-      lon: 2.3522,
-      altitude_m: 35,
-    }))
-    placement.commit()
-
-    const host = createRuntimeHostWithAppComposition()
-    const { commands, documents, queries } = host.surfaces
-    try {
-      documents.loadDocument(currentDesign.value!)
-
-      commands.history.undo()
-      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
-      expect(commands.history.canRedo.value).toBe(true)
-
-      commands.layers.setSceneLayerVisibility('plants', false)
-      expect(commands.history.canRedo.value).toBe(false)
-      commands.history.redo()
-      expect(currentDesign.value?.spatial_frame.placement_status).toBe('provisional')
-
-      commands.history.undo()
-      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
-        .toBe(true)
-      expect(commands.history.canRedo.value).toBe(true)
-
-      const replacementPlacement = beginDesignPlacementEdit()
-      replacementPlacement.preview(confirmedSpatialFrame(replacementPlacement.original, {
-        lat: 51.5072,
-        lon: -0.1276,
-        altitude_m: 11,
-      }))
-      replacementPlacement.commit()
-      expect(commands.history.canRedo.value).toBe(false)
-      commands.history.redo()
-      expect(queries.getSceneSnapshot().layers.find((layer) => layer.name === 'plants')?.visible)
-        .toBe(true)
-    } finally {
-      host.destroy()
-      designSessionFixture.file = null
     }
   })
 
@@ -439,10 +359,10 @@ describe('Canvas runtime surfaces', () => {
         .filter((position): position is { x: number; y: number } => position !== undefined)
         .sort((left, right) => left.x - right.x)
 
-      expect(clonedMembers).toEqual([
-        { x: 11, y: 20 },
-        { x: 13, y: 20 },
-      ])
+      const original = (id: string) => scene.plants.find((plant) => plant.id === id)!.position
+      expect(clonedMembers).toHaveLength(2)
+      expectPointNear(clonedMembers[0], { x: original('plant-1').x + 1, y: original('plant-1').y })
+      expectPointNear(clonedMembers[1], { x: original('plant-2').x + 1, y: original('plant-2').y })
       expect(selectedObjectIds.value).toEqual(new Set([clonedGroup.id]))
     } finally {
       host.destroy()
@@ -544,17 +464,14 @@ describe('Canvas runtime surfaces', () => {
         ...BASE_FILE,
         plants: [createPlant('plant-1', 10, 20)],
         extra: {
-          guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+          guides: [{ id: 'guide-1', axis: 'h', lat: GUIDE_LAT }],
         },
       })
       commands.sceneEdits.selectAll()
       commands.plantPresentation.setSelectedPlantColor('#228833')
 
       const serialized = documents.captureForPersistence(
-        {
-          name: 'Updated',
-          spatialFrame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
-        },
+        { name: 'Updated' },
         {
           ...BASE_FILE,
           name: 'Doc copy',
@@ -586,20 +503,20 @@ describe('Canvas runtime surfaces', () => {
             end_phase: 3,
           }],
           extra: {
-            guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+            guides: [{ id: 'guide-1', axis: 'h', lat: GUIDE_LAT }],
             preserved_from_document: true,
           },
         },
       ).content
 
       expect(serialized.name).toBe('Updated')
-      expect(serialized.spatial_frame).toEqual({ anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 14, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } })
+      expect(serialized).not.toHaveProperty('spatial_frame')
       expect(serialized.timeline).toHaveLength(1)
       expect(serialized.budget).toHaveLength(1)
       expect(serialized.consortiums).toHaveLength(1)
       expect(serialized.budget_currency).toBe('EUR')
       expect(serialized.extra).toEqual({
-        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        guides: [{ id: 'guide-1', axis: 'h', lat: GUIDE_LAT }],
         preserved_from_document: true,
       })
       expect(serialized.plants[0]?.color).toBe('#228833')
@@ -614,10 +531,9 @@ describe('Canvas runtime surfaces', () => {
     const documentCopy: CanopiFile = {
       ...BASE_FILE,
       description: 'Document authority description',
-      spatial_frame: { anchor_longitude_deg: 2.3522, anchor_latitude_deg: 48.8566, north_bearing_deg: 27, placement_status: 'confirmed', location_metadata: { altitude_m: 35 } },
       plants: [createPlant('plant-1', 10, 20)],
       extra: {
-        guides: [{ id: 'guide-1', axis: 'h', position: 42 }],
+        guides: [{ id: 'guide-1', axis: 'h', lat: GUIDE_LAT }],
         preserved_from_document: { nested: true },
       },
     }
@@ -632,13 +548,11 @@ describe('Canvas runtime surfaces', () => {
         {
           name: 'Updated',
           description: documentCopy.description,
-          spatialFrame: documentCopy.spatial_frame,
         },
         documentCopy,
       ).content
 
       expect(afterUndo.description).toBe(documentCopy.description)
-      expect(afterUndo.spatial_frame).toEqual(documentCopy.spatial_frame)
       expect(afterUndo.extra).toEqual(documentCopy.extra)
       expect(afterUndo.plants[0]?.color).toBeNull()
 
@@ -648,13 +562,11 @@ describe('Canvas runtime surfaces', () => {
         {
           name: 'Updated',
           description: documentCopy.description,
-          spatialFrame: documentCopy.spatial_frame,
         },
         documentCopy,
       ).content
 
       expect(afterRedo.description).toBe(documentCopy.description)
-      expect(afterRedo.spatial_frame).toEqual(documentCopy.spatial_frame)
       expect(afterRedo.extra).toEqual(documentCopy.extra)
       expect(afterRedo.plants[0]?.color).toBe('#228833')
     } finally {

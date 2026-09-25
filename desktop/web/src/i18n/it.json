@@ -163,12 +163,9 @@
     "overview": {
       "label": "Panoramica",
       "zoomInToEdit": "Ingrandisci per modificare",
-      "provisional": "Posizione provvisoria del progetto · Ingrandisci per modificare",
       "returnToDesign": "Torna al progetto",
       "design": "Progetto",
-      "provisionalDesign": "Progetto provvisorio",
-      "designMarker": "Torna al progetto",
-      "provisionalMarker": "Torna al progetto provvisorio"
+      "designMarker": "Torna al progetto"
     },
     "plantColor": {
       "label": "Colore della pianta",
@@ -216,25 +213,10 @@
       "applySelection": "Applica a {{count}} selezionate"
     },
     "location": {
-      "title": "Posizione del progetto",
-      "confirm": "Conferma posizione",
-      "move": "Sposta qui il progetto",
-      "current": "Attuale",
       "searchPlaceholder": "Cerca posizione...",
       "searching": "Ricerca...",
       "noResults": "Nessun risultato",
-      "geocodeError": "Geocodifica fallita",
-      "mapUnavailable": "Mappa non disponibile",
-      "provisionalTitle": "Sito provvisorio",
-      "provisionalBody": "La modifica locale è disponibile. Conferma un sito prima delle valutazioni specifiche del luogo.",
-      "confirmedTitle": "Sito confermato",
-      "selectedTitle": "Posizione selezionata",
-      "coordinates": "Coordinate",
-      "latitude": "Latitudine",
-      "longitude": "Longitudine",
-      "preview": "Anteprima",
-      "cancel": "Annulla",
-      "invalidCoordinates": "Inserisci una latitudine tra -85,051129 e 85,051129 e una longitudine tra -180 e 180."
+      "geocodeError": "Geocodifica fallita"
     },
     "file": {
       "new": "Nuovo design",
@@ -266,7 +248,6 @@
       "basemap": "Mappa base",
       "basemapLoading": "Caricamento mappa base...",
       "basemapError": "Mappa base non disponibile",
-      "precisionWarning": "La precisione può ridursi per i progetti di grandi dimensioni",
       "references": "Riferimenti del sito",
       "sceneStack": "Livelli del disegno",
       "topToBottom": "Dall’alto in basso",
