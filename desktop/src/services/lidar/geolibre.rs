@@ -31,7 +31,11 @@ pub struct GeolibreTool {
 impl GeolibreTool {
     /// What a published result records as the engine that actually ran.
     pub fn provenance(&self) -> String {
-        format!("{} (geolibre-rust {})", self.version, &GEOLIBRE_REVISION[..12])
+        format!(
+            "{} (geolibre-rust {})",
+            self.version,
+            &GEOLIBRE_REVISION[..12]
+        )
     }
 }
 
