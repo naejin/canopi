@@ -124,6 +124,10 @@ smoke coverage. MapLibre 6's worker setup is documented in [MapLibre](maplibre.m
 If npm 10's updater fails on the Vitest peer graph with `edgesOut`, use a Node-compatible
 npm 11 through `npx` for the lockfile update, then verify a normal `npm ci` from that
 lockfile. Do not force an incompatible npm release or suppress the audit findings.
+`package.json` `overrides` lift `image-size` (≥2.0.4) and `fflate` (≥0.8.3) inside the
+deck.gl loader tree that `maplibre-gl-raster` requires; Canopi never reaches those glTF,
+3D Tiles or ICNS paths, and `npm audit --fix --force` would break the peer range. Drop an
+override when upstream ships the fixed version.
 Vite's development filesystem admission is the frontend directory plus the exact
 `desktop/tauri.conf.json` file used by the About dialog's version import. Vite 6.4.3
 also checks the complete raw-import ID during transformation, so that exact `?raw`

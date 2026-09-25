@@ -65,7 +65,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 | Any Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` |
 | Native commands | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
 | Shared contracts | `cd desktop/web && npm run gen:types && npm run check:types` |
-| Frontend | `cd desktop/web && npx tsc --noEmit && npm test` (zero failures, zero unhandled errors) |
+| Frontend | `cd desktop/web && npx tsc --noEmit && npm test` (zero failures, zero unhandled errors); `npm run test:coverage` must stay above the ratchet in `vite.config.ts` (raise it, never lower it) |
 | Shared composition | `cd desktop/web && npm run check:ui && npm run build && npm run build:web` |
 | Species catalog contract | `python3 scripts/species_catalog_contract.py check` plus the focused Python tests |
 | LiDAR | GDAL + GeoLibre ignored lanes; see the [LiDAR guide](docs/agent/lidar.md) |

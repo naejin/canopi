@@ -71,3 +71,4 @@ desktop/web/dist-pdf-validation/
 
 # Locally built sidecars (scripts/build-geolibre-cli.sh)
 /desktop/binaries/
+desktop/web/coverage/

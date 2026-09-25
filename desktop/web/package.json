@@ -19,6 +19,7 @@
     "generate:web-catalog": "cd ../.. && python3 scripts/generate-web-catalog.py",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --testTimeout=120000 --exclude '**/frontend-architecture-policies.test.ts' --exclude '**/canvas-command-boundary.test.ts'",
     "gen:types": "cargo run -p bindings-gen",
     "check:web-catalog-artifact": "cd ../.. && python3 scripts/web_catalog_artifact_contract.py check",
     "check:types": "cargo run -p bindings-gen -- --check",
@@ -66,10 +67,15 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "husky": "^9.1.7",
     "jsdom": "^29.0.1",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^4.1.1"
+  },
+  "overrides": {
+    "image-size": "^2.0.4",
+    "fflate": "^0.8.3"
   }
 }

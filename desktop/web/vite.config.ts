@@ -81,6 +81,14 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       // An unhandled error or rejection fails the run even when every test passes.
       dangerouslyIgnoreUnhandledErrors: false,
+      coverage: {
+        provider: "v8",
+        include: ["src/**/*.{ts,tsx}"],
+        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**", "src/vendor/**"],
+        reporter: ["text-summary", "json-summary"],
+        // Ratchet: the floor is the measured baseline; raise it, never lower it.
+        thresholds: { statements: 86.7, branches: 76.9, functions: 87.4, lines: 90.0 },
+      },
     },
   };
 });

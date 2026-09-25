@@ -113,6 +113,9 @@ jobs:
       - name: Frontend tests
         run: npm test --prefix desktop/web
 
+      - name: Frontend coverage ratchet
+        run: npm run test:coverage --prefix desktop/web
+
       - name: Frontend build
         run: npm run build --prefix desktop/web
 
