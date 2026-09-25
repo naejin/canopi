@@ -9,6 +9,7 @@ const retryAnalysisMock = vi.hoisted(() => vi.fn())
 const deleteLayerMock = vi.hoisted(() => vi.fn())
 const deleteAnalysisMock = vi.hoisted(() => vi.fn())
 const cancelAnalysisMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const createAnalysisMock = vi.hoisted(() => vi.fn())
 const upsertMock = vi.hoisted(() => vi.fn())
 const removeMock = vi.hoisted(() => vi.fn())
 const moveMock = vi.hoisted(() => vi.fn())
@@ -21,6 +22,7 @@ const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }
 vi.mock('../ipc/lidar', () => ({
   lidarCancelAnalysisJob: cancelAnalysisMock,
   lidarCancelImport: vi.fn().mockResolvedValue(undefined),
+  lidarCreateAnalysis: createAnalysisMock,
   lidarDeleteAnalysis: deleteAnalysisMock,
   lidarDeleteLayer: deleteLayerMock,
   lidarDeleteLayerImpact: vi.fn(),
@@ -60,8 +62,10 @@ vi.mock('../app/document-session/store', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }))
 
 import { open } from '@tauri-apps/plugin-dialog'
+import type { LidarAnalysisSummary, LidarLibrarySnapshot } from '../generated/contracts'
 import {
   addToDesign,
+  calculateSlope,
   cancelAnalysisJob,
   chooseImportFiles,
   deleteLibraryItem,
@@ -74,6 +78,7 @@ import {
   retryLibraryImport,
   runningAnalysisJobId,
   setLidarEntryVisibility,
+  settleSlopeAttachments,
 } from '../app/lidar/actions'
 import { lidarStatusMessage } from '../app/lidar/library-store'
 
@@ -197,5 +202,62 @@ describe('Design data references', () => {
     moveReference('layer-1', 'front')
     moveReference('layer-1', 'back')
     expect(moveMock.mock.calls).toEqual([['layer-1', 'down'], ['layer-1', 'up']])
+  })
+})
+
+function snapshotWith(analysis: Partial<LidarAnalysisSummary> & { id: string }): LidarLibrarySnapshot {
+  return {
+    layers: [],
+    analyses: [{
+      generation_id: null, input_generation_id: 'g1', source_layer_id: 'layer-1', kind: 'Slope', name: null,
+      state: 'Preparing', detail: null, bounds: null, value_range: null, slope_unit: 'Degrees', ...analysis,
+    } as LidarAnalysisSummary],
+    engine: { available: true, version: null, detail: null },
+  }
+}
+
+describe('contextual slope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionIdentity.value = 'design-a'
+    let sequence = 0
+    createAnalysisMock.mockImplementation(async () => ({ definition_id: `adef-${++sequence}`, job_id: `job-${sequence}` }))
+  })
+
+  it('creates a separate result each time, with the chosen unit and name', async () => {
+    const first = await calculateSlope('layer-1', 'Percent', ' North slope ', false)
+    const second = await calculateSlope('layer-1', 'Percent', ' North slope ', false)
+
+    expect(first).not.toBe(second)
+    expect(createAnalysisMock).toHaveBeenCalledWith('layer-1', 'Slope', { slope_unit: 'Percent', name: null }, 'North slope')
+    expect(runningAnalysisJobId(second)).toBe('job-2')
+    expect(upsertMock).not.toHaveBeenCalled()
+  })
+
+  it('adds a Layers-initiated result to the asking Design once it is ready', async () => {
+    const id = await calculateSlope('layer-1', 'Degrees', 'Slope', true)
+    settleSlopeAttachments(snapshotWith({ id }))
+    expect(upsertMock).not.toHaveBeenCalled()
+
+    settleSlopeAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
+    settleSlopeAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
+    expect(upsertMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledWith('Analysis', id)
+  })
+
+  it('never adds the result to a Design opened while it was calculating', async () => {
+    const id = await calculateSlope('layer-1', 'Degrees', 'Slope', true)
+    sessionIdentity.value = 'design-b'
+    settleSlopeAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
+    sessionIdentity.value = 'design-a'
+    settleSlopeAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
+    expect(upsertMock).not.toHaveBeenCalled()
+  })
+
+  it('drops the request when the calculation fails', async () => {
+    const id = await calculateSlope('layer-1', 'Degrees', 'Slope', true)
+    settleSlopeAttachments(snapshotWith({ id, state: 'Failed' }))
+    settleSlopeAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-9' }))
+    expect(upsertMock).not.toHaveBeenCalled()
   })
 })

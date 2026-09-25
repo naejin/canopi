@@ -39,6 +39,58 @@ impl AnalysisParameters {
     }
 }
 
+/// How a slope definition is computed, selected by its stored recipe version.
+///
+/// The version column is the execution authority: a retry runs the version
+/// its definition stored, never the current default, and an unknown version
+/// fails instead of being coerced. A changed method needs a new version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlopeRecipe {
+    /// Version 1: GDAL `gdaldem slope` (Horn 3×3), for existing definitions.
+    GdalHorn,
+    /// Version 2: the pinned GeoLibre projected slope (5×5 Florinsky stencil).
+    GeolibreProjected,
+}
+
+impl SlopeRecipe {
+    pub const fn version(self) -> i64 {
+        match self {
+            Self::GdalHorn => 1,
+            Self::GeolibreProjected => 2,
+        }
+    }
+
+    pub const fn method_id(self) -> &'static str {
+        match self {
+            Self::GdalHorn => "gdal-horn-v1",
+            Self::GeolibreProjected => "geolibre-projected-slope-v1",
+        }
+    }
+
+    pub fn from_version(version: i64) -> Result<Self, String> {
+        match version {
+            1 => Ok(Self::GdalHorn),
+            2 => Ok(Self::GeolibreProjected),
+            other => Err(format!(
+                "slope recipe version {other} is not supported by this version of Canopi"
+            )),
+        }
+    }
+
+    /// Input cells beyond each side of a core window the stencil reads.
+    const fn halo(self) -> i64 {
+        match self {
+            Self::GdalHorn => 1,
+            Self::GeolibreProjected => 2,
+        }
+    }
+}
+
+/// Finite staging marker for GeoLibre windows: -2^127, exact in Float32 and in
+/// its decimal tag. The pinned tool compares neighbour NoData by equality, so
+/// NaN would not trigger its valid-centre substitution.
+const GEOLIBRE_STAGING_NODATA: f32 = f32::from_bits(0xFF00_0000);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultManifest {
     pub definition_id: String,
@@ -239,13 +291,16 @@ struct SlopeChunk {
 
 /// Compute one slope block through the bounded resolver.
 ///
-/// The core is the generation's 1024×1024 chunk; the resolver supplies one
-/// extra cell on every side, because GDAL's Horn slope needs the full 3×3
-/// neighborhood and produces NoData wherever that neighborhood is incomplete.
-/// The scratch export uses NaN NoData so a valid finite sample can never
-/// collide with a transport sentinel.
+/// The core is the generation's 1024×1024 chunk and the resolver supplies the
+/// recipe's halo on every side: one cell for GDAL's Horn 3×3, which produces
+/// NoData wherever that neighbourhood is incomplete, and two for GeoLibre's
+/// 5×5 stencil, which substitutes the valid centre for missing neighbours.
+/// Horn staging uses NaN NoData; GeoLibre staging uses a finite sentinel no
+/// valid sample of the window may equal. Only the core is kept.
 #[allow(clippy::too_many_arguments)]
 fn compute_slope_block(
+    recipe: SlopeRecipe,
+    geolibre: &super::geolibre::GeolibreEngine,
     engine: &super::engine::GdalEngine,
     cancel: &AtomicBool,
     paths: &super::paths::LidarPaths,
@@ -258,20 +313,36 @@ fn compute_slope_block(
     chunk_y: i64,
 ) -> Result<SlopeChunk, String> {
     let side = generation::CHUNK_SIDE;
+    let halo = recipe.halo();
     let halo_window = generation::LatticeWindow {
-        x: chunk_x * side - 1,
-        y: chunk_y * side - 1,
-        width: (side + 2) as u32,
-        height: (side + 2) as u32,
+        x: chunk_x * side - halo,
+        y: chunk_y * side - halo,
+        width: (side + 2 * halo) as u32,
+        height: (side + 2 * halo) as u32,
     };
     let resolved = generation::resolve_window(occurrences, lattice, halo_window, cancel)?;
     let halo_grid = generation::window_grid(lattice, halo_window)?;
     let halo_side = halo_window.width as usize;
+    let staging_nodata = match recipe {
+        SlopeRecipe::GdalHorn => f32::NAN,
+        SlopeRecipe::GeolibreProjected => GEOLIBRE_STAGING_NODATA,
+    };
+    if staging_nodata.is_finite()
+        && resolved
+            .samples
+            .iter()
+            .zip(resolved.valid.iter())
+            .any(|(value, valid)| *valid != 0 && *value == staging_nodata)
+    {
+        return Err(format!(
+            "slope block {chunk_x},{chunk_y} holds a valid sample equal to the staging NoData marker"
+        ));
+    }
     let scratch_values: Vec<f32> = resolved
         .samples
         .iter()
         .zip(resolved.valid.iter())
-        .map(|(value, valid)| if *valid == 0 { f32::NAN } else { *value })
+        .map(|(value, valid)| if *valid == 0 { staging_nodata } else { *value })
         .collect();
 
     let raw = scratch.join(format!("slope-{chunk_x}-{chunk_y}.raw"));
@@ -284,26 +355,36 @@ fn compute_slope_block(
         &halo_path,
         &halo_grid,
         crs_wkt,
-        f32::NAN,
+        staging_nodata,
     );
     let _ = std::fs::remove_file(&raw);
     written?;
 
     let block_path = scratch.join(format!("slope-{chunk_x}-{chunk_y}-block.tif"));
-    let mut args = vec![
-        "slope".to_string(),
-        "-s".to_string(),
-        "1".to_string(),
-        "-q".to_string(),
-        halo_path.display().to_string(),
-        block_path.display().to_string(),
-    ];
-    if percent {
-        args.insert(1, "-p".to_string());
-    }
-    let computed = engine.run(super::engine::GdalProgram::Dem, &args, Some(cancel));
+    let computed = match recipe {
+        SlopeRecipe::GdalHorn => {
+            let mut args = vec![
+                "slope".to_string(),
+                "-s".to_string(),
+                "1".to_string(),
+                "-q".to_string(),
+                halo_path.display().to_string(),
+                block_path.display().to_string(),
+            ];
+            if percent {
+                args.insert(1, "-p".to_string());
+            }
+            engine
+                .run(super::engine::GdalProgram::Dem, &args, Some(cancel))
+                .map(|_| ())
+        }
+        SlopeRecipe::GeolibreProjected => geolibre.slope(&halo_path, &block_path, percent, cancel),
+    };
     let _ = std::fs::remove_file(&halo_path);
-    computed?;
+    if let Err(error) = computed {
+        let _ = std::fs::remove_file(&block_path);
+        return Err(error);
+    }
 
     // GDAL marks uncomputed cells of the block with its own NoData marker
     // (a NaN *input* marker does not survive `gdaldem`), so read it back and
@@ -344,19 +425,26 @@ fn compute_slope_block(
     };
     for row in 0..core_side {
         for column in 0..core_side {
-            // The core cell sits one halo cell inside the resolved window.
-            let halo_x = column + 1;
-            let halo_y = row + 1;
+            // The core cell sits one halo inside the resolved window.
+            let halo_x = column + halo as usize;
+            let halo_y = row + halo as usize;
             let value = super::import::f32_sample(&block_raw, halo_y * halo_side + halo_x);
             let index = row * core_side + column;
-            if value.is_finite() && Some(value) != block_nodata {
+            // An invalid centre is invalid output whatever the tool wrote, and
+            // neither the tool's marker nor the staging sentinel is a slope.
+            let centre_valid = resolved.valid[halo_y * halo_side + halo_x] != 0;
+            if centre_valid
+                && value.is_finite()
+                && Some(value) != block_nodata
+                && value != GEOLIBRE_STAGING_NODATA
+            {
                 values[index] = value;
                 aggregate.valid_cells += 1;
                 aggregate.min_value = aggregate.min_value.min(f64::from(value));
                 aggregate.max_value = aggregate.max_value.max(f64::from(value));
                 aggregate.sum_value += f64::from(value);
             }
-            if neighborhood_is_valid(&resolved.valid, halo_side, halo_x, halo_y) {
+            if neighborhood_is_valid(&resolved.valid, halo_side, halo_x, halo_y, halo as usize) {
                 quality[index] = 1.0;
             }
         }
@@ -406,10 +494,11 @@ fn compute_slope_block(
     })
 }
 
-/// Whether the full 3×3 accepted-input neighborhood of one halo cell is valid.
-fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize) -> bool {
-    for row in y.saturating_sub(1)..=(y + 1).min(side - 1) {
-        for column in x.saturating_sub(1)..=(x + 1).min(side - 1) {
+/// Whether the recipe's full input neighbourhood (3×3 for Horn, 5×5 for
+/// GeoLibre) of one halo cell was originally valid.
+fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize, reach: usize) -> bool {
+    for row in y.saturating_sub(reach)..=(y + reach).min(side - 1) {
+        for column in x.saturating_sub(reach)..=(x + reach).min(side - 1) {
             if valid[row * side + column] == 0 {
                 return false;
             }
@@ -432,11 +521,13 @@ fn neighborhood_is_valid(valid: &[u8], side: usize, x: usize, y: usize) -> bool 
 pub(super) fn admit_sparse_slope_storage(
     scratch: &Path,
     occupied_blocks: usize,
+    halo: u64,
 ) -> Result<(), String> {
     let side = u64::try_from(generation::CHUNK_SIDE)
         .map_err(|_| "chunk side is not representable".to_string())?;
-    let halo_side = side
-        .checked_add(2)
+    let halo_side = halo
+        .checked_mul(2)
+        .and_then(|margin| side.checked_add(margin))
         .ok_or_else(|| "slope halo side overflows".to_string())?;
     let halo_cells = halo_side
         .checked_mul(halo_side)
@@ -478,6 +569,7 @@ fn publish_sparse_slope(
     job_id: &str,
     definition_id: &str,
     layer_id: &str,
+    recipe: SlopeRecipe,
     parameters: &AnalysisParameters,
     head: &catalogue::GenerationRow,
     manifest: &GenerationManifest,
@@ -486,6 +578,12 @@ fn publish_sparse_slope(
 ) -> Result<AnalysisOutcome, String> {
     let engine = &library.inner.engine;
     let paths = &library.inner.paths;
+    // What actually runs is recorded with the result; resolving it first also
+    // makes a missing engine fail before any work or output.
+    let engine_version = match recipe {
+        SlopeRecipe::GdalHorn => engine.discover()?.version,
+        SlopeRecipe::GeolibreProjected => library.inner.geolibre.discover()?.provenance(),
+    };
     let Some(occurrences) = head_occurrences(library, head, manifest, cancel)? else {
         return Err(
             "slope requires reconstructible member history; this generation predates it"
@@ -502,15 +600,17 @@ fn publish_sparse_slope(
         // halos, bounded working buffers, staged result/quality bytes and the
         // shared reserve. Checked arithmetic; no first-member lattice envelope.
         let total_blocks = blocks.len();
-        admit_sparse_slope_storage(&scratch, total_blocks)?;
+        admit_sparse_slope_storage(&scratch, total_blocks, recipe.halo() as u64)?;
         let mut chunks = Vec::with_capacity(total_blocks);
         for (index, (chunk_x, chunk_y)) in blocks.into_iter().enumerate() {
             super::import::check_cancel(cancel)?;
             // Recheck before each bounded output: remaining work plus reserve,
             // not a second charge of bytes already written.
             let remaining = total_blocks.saturating_sub(index);
-            admit_sparse_slope_storage(&scratch, remaining)?;
+            admit_sparse_slope_storage(&scratch, remaining, recipe.halo() as u64)?;
             chunks.push(compute_slope_block(
+                recipe,
+                &library.inner.geolibre,
                 engine,
                 cancel,
                 paths,
@@ -589,7 +689,7 @@ fn publish_sparse_slope(
             kind: "slope".to_string(),
             source_generation_id: expected.to_string(),
             parameters: parameters.clone(),
-            engine_version: engine.discover().map(|t| t.version).unwrap_or_default(),
+            engine_version,
             grid: manifest.grid.clone(),
             crs_wkt: manifest.crs_wkt.clone(),
             nodata: None,
@@ -632,10 +732,11 @@ fn publish_sparse_slope(
                 if current_head.as_deref() != Some(expected) {
                     return Err("source layer changed during analysis publication".to_string());
                 }
+                require_definition_recipe(&connection, definition_id, recipe)?;
                 connection
                     .execute(
-                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name)
-                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name, method_id, recipe_version)
+                         VALUES(?1, ?2, ?3, ?4, 'ready', NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                         rusqlite::params![
                             generation_id,
                             definition_id,
@@ -648,6 +749,8 @@ fn publish_sparse_slope(
                             head.bounds_3857,
                             now_iso(),
                             parameters.published_name(),
+                            recipe.method_id(),
+                            recipe.version(),
                         ],
                     )
                     .map_err(|e| e.to_string())?;
@@ -774,14 +877,17 @@ pub fn run_slope_job(
     let expected = source_generation_id.to_string();
 
     // Short read: definition + immutable input generation.
-    let (definition, head, manifest) = {
+    let (definition, recipe, head, manifest) = {
         let connection = library.catalogue()?;
         let definition = definition_row(&connection, definition_id)?
             .ok_or_else(|| format!("Analysis definition {definition_id} no longer exists"))?;
+        // The stored version decides the method; an unknown one fails here,
+        // before any input is read, and the previous result stays as it is.
+        let recipe = SlopeRecipe::from_version(definition.version)?;
         let head = catalogue::head_generation(&connection, &definition.layer_id)?
             .ok_or_else(|| "source layer has no accepted coverage yet".to_string())?;
         let manifest = read_generation_manifest(&head.manifest_json)?;
-        (definition, head, manifest)
+        (definition, recipe, head, manifest)
     };
     // Sparse slope is admitted by its own occupied work, not the lattice
     // envelope. The dense guard applies only to the dense fallback below.
@@ -815,11 +921,18 @@ pub fn run_slope_job(
             job_id,
             definition_id,
             &definition.layer_id,
+            recipe,
             parameters,
             &head,
             &manifest,
             &expected,
             cancel,
+        );
+    }
+    if recipe != SlopeRecipe::GdalHorn {
+        return Err(
+            "the GeoLibre slope needs an input with reconstructible sources; this legacy item has only a dense mosaic"
+                .to_string(),
         );
     }
 
@@ -993,10 +1106,11 @@ pub fn run_slope_job(
             if current_head.as_deref() != Some(expected.as_str()) {
                 return Err("source layer changed during analysis publication".to_string());
             }
+            require_definition_recipe(&connection, definition_id, SlopeRecipe::GdalHorn)?;
             connection
                 .execute(
-                    "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name)
-                     VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    "INSERT INTO lidar_analysis_generations(id, definition_id, source_generation_id, engine_version, state, result_path, quality_mask_path, manifest_json, coverage_cells, min_value, max_value, bounds_3857, published_at, name, method_id, recipe_version)
+                     VALUES(?1, ?2, ?3, ?4, 'ready', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                     rusqlite::params![
                         generation_id,
                         definition_id,
@@ -1011,6 +1125,8 @@ pub fn run_slope_job(
                         head.bounds_3857,
                         now_iso(),
                         parameters.published_name(),
+                        SlopeRecipe::GdalHorn.method_id(),
+                        SlopeRecipe::GdalHorn.version(),
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -1104,7 +1220,7 @@ pub fn definition_row(
 ) -> Result<Option<catalogue::AnalysisDefinitionRow>, String> {
     connection
         .query_row(
-            "SELECT id, layer_id, kind, parameters_json
+            "SELECT id, layer_id, kind, parameters_json, version
              FROM lidar_analysis_definitions WHERE id = ?1",
             [definition_id],
             |row| {
@@ -1113,6 +1229,7 @@ pub fn definition_row(
                     layer_id: row.get(1)?,
                     kind: row.get(2)?,
                     parameters_json: row.get(3)?,
+                    version: row.get(4)?,
                 })
             },
         )
@@ -1121,6 +1238,36 @@ pub fn definition_row(
             rusqlite::Error::QueryReturnedNoRows => Ok(None),
             other => Err(other.to_string()),
         })
+}
+
+/// Refuse publication when the definition vanished or its stored recipe is not
+/// the one that ran, inside the publishing transaction.
+fn require_definition_recipe(
+    connection: &rusqlite::Connection,
+    definition_id: &str,
+    recipe: SlopeRecipe,
+) -> Result<(), String> {
+    let stored: Option<i64> = connection
+        .query_row(
+            "SELECT version FROM lidar_analysis_definitions WHERE id = ?1",
+            [definition_id],
+            |row| row.get(0),
+        )
+        .map(Some)
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other.to_string()),
+        })?;
+    match stored {
+        None => Err(format!(
+            "analysis {definition_id} was deleted during the calculation"
+        )),
+        Some(version) if version == recipe.version() => Ok(()),
+        Some(version) => Err(format!(
+            "analysis {definition_id} stores recipe version {version}, not the {} that ran",
+            recipe.method_id()
+        )),
+    }
 }
 
 pub fn parse_parameters(json: &str) -> Result<AnalysisParameters, String> {
@@ -1265,7 +1412,7 @@ mod tests {
         unit: LidarSlopeUnit,
     ) -> (String, String) {
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -1531,7 +1678,7 @@ mod tests {
         // A job whose input generation is no longer the layer head publishes
         // nothing and leaves the previous result in place.
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 &layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -1610,7 +1757,7 @@ mod tests {
     /// Build one definition and its queued job without running it.
     fn queued_slope_job(library: &LidarLibrary, layer_id: &str) -> (String, String, String) {
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -1900,6 +2047,347 @@ mod tests {
         (values.samples, values.valid, quality)
     }
 
+    /// A smooth analytic surface `z = 40 sin(2πx/90) + 16 cos(2πy/54)` on a
+    /// 1 m projected lattice, with a square NoData hole.
+    fn curved_member(root: &Path, width: u32, height: u32, hole: std::ops::Range<u32>) -> PathBuf {
+        let engine = super::super::engine::GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let values: Vec<f32> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                if hole.contains(&x) && hole.contains(&(y + 600)) {
+                    -9999.0
+                } else {
+                    curved_height(f64::from(x), f64::from(y)) as f32
+                }
+            })
+            .collect();
+        let raw = root.join("curved.raw");
+        super::super::import::write_f32_raw(&raw, &values).expect("curved raw");
+        let source = root.join("curved.tif");
+        super::super::import::raw_to_tif(
+            &engine,
+            &cancel,
+            &raw,
+            &source,
+            &RasterGrid {
+                width,
+                height,
+                geotransform: [0.0, 1.0, 0.0, f64::from(height), 0.0, -1.0],
+            },
+            "EPSG:3857",
+            -9999.0,
+        )
+        .expect("curved converts");
+        let _ = std::fs::remove_file(&raw);
+        source
+    }
+
+    fn curved_height(x: f64, y: f64) -> f64 {
+        40.0 * (std::f64::consts::TAU * x / 90.0).sin()
+            + 16.0 * (std::f64::consts::TAU * y / 54.0).cos()
+    }
+
+    /// Analytic gradient magnitude (rise over run) at a cell centre.
+    fn curved_gradient(x: f64, y: f64) -> f64 {
+        let dx = 40.0 * std::f64::consts::TAU / 90.0 * (std::f64::consts::TAU * x / 90.0).cos();
+        let dy = -16.0 * std::f64::consts::TAU / 54.0 * (std::f64::consts::TAU * y / 54.0).sin();
+        dx.hypot(dy)
+    }
+
+    fn run_created_job(
+        library: &LidarLibrary,
+        layer_id: &str,
+        unit: LidarSlopeUnit,
+        name: &str,
+    ) -> String {
+        let receipt = library
+            .create_analysis(
+                layer_id,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: Some(unit),
+                    name: None,
+                },
+                Some(name.to_string()),
+            )
+            .expect("a new slope is created with the GeoLibre recipe");
+        let connection = library.catalogue().expect("catalogue");
+        let (parameters, input): (String, String) = connection
+            .query_row(
+                "SELECT d.parameters_json, j.source_generation_id FROM lidar_analysis_jobs j
+                 JOIN lidar_analysis_definitions d ON d.id = j.definition_id WHERE j.id = ?1",
+                [&receipt.job_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("job");
+        drop(connection);
+        let outcome = run_slope_job(
+            library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &parse_parameters(&parameters).expect("parameters"),
+            &input,
+            &AtomicBool::new(false),
+        )
+        .expect("the GeoLibre slope job runs");
+        assert!(outcome.published, "{}", outcome.summary());
+        receipt.definition_id
+    }
+
+    /// Recipe 2 runs the pinned GeoLibre CLI window by window and publishes the
+    /// projected 5×5 slope: it matches the analytic surface on both sides of a
+    /// 1024-cell chunk seam, keeps NoData centres invalid, marks quality only
+    /// where the whole 5×5 input neighbourhood was valid, records what ran,
+    /// and a second calculation is a separate result that leaves the first.
+    #[test]
+    #[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
+    fn geolibre_slope_matches_the_analytic_surface_across_a_chunk_seam() {
+        let root = scratch_root("geolibre-slope");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let (width, height) = (1040u32, 12u32);
+        // Hole columns 600..603 on rows 0..3 (the helper offsets rows by 600).
+        let layer_id = sparse_layer(&library, &[curved_member(&root, width, height, 600..603)]);
+        let degrees = run_created_job(&library, &layer_id, LidarSlopeUnit::Degrees, "Steepness");
+        // Read in two halves: one window stays within the resolver's cap.
+        let read = |definition: &str| {
+            let half = width / 2;
+            let left = sparse_result_window(
+                &library,
+                definition,
+                generation::LatticeWindow {
+                    x: 0,
+                    y: 0,
+                    width: half,
+                    height,
+                },
+            );
+            let right = sparse_result_window(
+                &library,
+                definition,
+                generation::LatticeWindow {
+                    x: i64::from(half),
+                    y: 0,
+                    width: half,
+                    height,
+                },
+            );
+            let join = |l: &[f32], r: &[f32]| -> Vec<f32> {
+                (0..height as usize)
+                    .flat_map(|row| {
+                        l[row * half as usize..(row + 1) * half as usize]
+                            .iter()
+                            .chain(&r[row * half as usize..(row + 1) * half as usize])
+                            .copied()
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
+            };
+            let join_u8 = |l: &[u8], r: &[u8]| -> Vec<u8> {
+                (0..height as usize)
+                    .flat_map(|row| {
+                        l[row * half as usize..(row + 1) * half as usize]
+                            .iter()
+                            .chain(&r[row * half as usize..(row + 1) * half as usize])
+                            .copied()
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
+            };
+            (
+                join(&left.0, &right.0),
+                join_u8(&left.1, &right.1),
+                join_u8(&left.2, &right.2),
+            )
+        };
+        let (values, valid, quality) = read(&degrees);
+        let near_hole = |x: u32, y: u32| (598..605).contains(&x) && y < 5;
+        let mut compared = 0usize;
+        for y in 0..height {
+            for x in 0..width {
+                let index = (y * width + x) as usize;
+                let in_hole = (600..603).contains(&x) && y < 3;
+                if in_hole {
+                    assert_eq!(valid[index], 0, "a NoData centre stays invalid at {x},{y}");
+                    continue;
+                }
+                assert_eq!(valid[index], 1, "a valid centre has a value at {x},{y}");
+                let interior = (2..height - 2).contains(&y) && (2..width - 2).contains(&x);
+                let expected_quality = interior && !near_hole(x, y);
+                assert_eq!(
+                    quality[index],
+                    u8::from(expected_quality),
+                    "quality at {x},{y}"
+                );
+                if expected_quality {
+                    // The surface is sampled at integer cell indices, 1 m apart.
+                    let expected = curved_gradient(f64::from(x), f64::from(y))
+                        .atan()
+                        .to_degrees();
+                    let error = (f64::from(values[index]) - expected).abs();
+                    assert!(error < 0.01, "{x},{y}: {} vs {expected}", values[index]);
+                    compared += 1;
+                }
+            }
+        }
+        assert!(
+            compared > 8_000,
+            "the comparison covers the surface ({compared} cells)"
+        );
+        for x in 1020..1028 {
+            assert_eq!(
+                quality[(5 * width + x) as usize],
+                1,
+                "the seam at column {x} is interior"
+            );
+        }
+
+        let (method, version, engine): (String, i64, String) = library
+            .catalogue()
+            .unwrap()
+            .query_row(
+                "SELECT g.method_id, g.recipe_version, g.engine_version FROM lidar_analysis_heads h
+                 JOIN lidar_analysis_generations g ON g.id = h.generation_id WHERE h.definition_id = ?1",
+                [&degrees],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("provenance");
+        assert_eq!(
+            (method.as_str(), version),
+            ("geolibre-projected-slope-v1", 2)
+        );
+        assert!(engine.starts_with("geolibre-cli "), "{engine}");
+
+        let percent = run_created_job(&library, &layer_id, LidarSlopeUnit::Percent, "Steepness");
+        assert_ne!(
+            percent, degrees,
+            "a second calculation is a separate result"
+        );
+        let (values, _, _) = read(&percent);
+        let (x, y) = (1024u32, 6u32);
+        let expected = 100.0 * curved_gradient(f64::from(x), f64::from(y));
+        let got = f64::from(values[(y * width + x) as usize]);
+        assert!((got - expected).abs() < 0.05, "percent {got} vs {expected}");
+        let snapshot = library.library_snapshot().expect("snapshot");
+        assert_eq!(
+            snapshot.analyses.len(),
+            2,
+            "the first result is still there"
+        );
+        assert!(
+            snapshot
+                .analyses
+                .iter()
+                .all(|analysis| analysis.generation_id.is_some())
+        );
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Processes currently running one executable, read from `/proc`.
+    #[cfg(target_os = "linux")]
+    fn running(executable: &Path) -> usize {
+        let wanted = std::fs::canonicalize(executable).expect("tool path");
+        std::fs::read_dir("/proc")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| {
+                std::fs::read_link(entry.path().join("exe")).is_ok_and(|exe| exe == wanted)
+            })
+            .count()
+    }
+
+    /// Cancelling while the GeoLibre child computes a window kills and reaps
+    /// that child, publishes nothing and leaves no scratch behind.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
+    fn cancelling_a_geolibre_slope_kills_its_child_and_publishes_nothing() {
+        let root = scratch_root("geolibre-cancel");
+        let library = LidarLibrary::open(&root).expect("library opens");
+        let tool = library
+            .inner
+            .geolibre
+            .discover()
+            .expect("GeoLibre CLI")
+            .path;
+        let layer_id = sparse_layer(&library, &[curved_member(&root, 1024, 1024, 0..0)]);
+        let receipt = library
+            .create_analysis(
+                &layer_id,
+                LidarAnalysisKind::Slope,
+                common_types::lidar::LidarAnalysisParameters {
+                    slope_unit: None,
+                    name: None,
+                },
+                None,
+            )
+            .expect("created");
+        let input: String = library
+            .catalogue()
+            .unwrap()
+            .query_row(
+                "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
+                [&receipt.job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let watcher = {
+            let cancel = cancel.clone();
+            let tool = tool.clone();
+            std::thread::spawn(move || {
+                let started = std::time::Instant::now();
+                while running(&tool) == 0 {
+                    assert!(
+                        started.elapsed().as_secs() < 60,
+                        "the GeoLibre child never started"
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+        };
+        let error = run_slope_job(
+            &library,
+            &receipt.job_id,
+            &receipt.definition_id,
+            &AnalysisParameters {
+                slope_unit: None,
+                name: None,
+            },
+            &input,
+            &cancel,
+        )
+        .expect_err("a cancelled GeoLibre slope does not publish");
+        watcher.join().expect("watcher");
+        assert_eq!(error, "cancelled");
+        assert_eq!(running(&tool), 0, "the GeoLibre child was reaped");
+        let heads: i64 = library
+            .catalogue()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM lidar_analysis_heads", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(heads, 0);
+        let leftovers = std::fs::read_dir(library.inner.paths.prepared_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("scratch-slope-")
+            })
+            .count();
+        assert_eq!(leftovers, 0, "slope scratch removed");
+        drop(library);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn slope_eligibility_refuses_non_metre_elevations() {
         let engine = super::super::engine::GdalEngine::new();
@@ -2122,12 +2610,12 @@ mod tests {
             let _guard = crate::services::lidar::paths::capacity_probe::override_available(
                 8 * 1024 * 1024 * 1024,
             );
-            admit_sparse_slope_storage(&root, 4).expect("ample capacity admits");
+            admit_sparse_slope_storage(&root, 4, 2).expect("ample capacity admits");
         }
         // Capacity loss before output refuses the block without writing.
         {
             let _guard = crate::services::lidar::paths::capacity_probe::override_available(1);
-            let error = admit_sparse_slope_storage(&root, 4).expect_err("low capacity refuses");
+            let error = admit_sparse_slope_storage(&root, 4, 2).expect_err("low capacity refuses");
             assert!(error.contains("free"), "named capacity reason: {error}");
         }
         let _ = std::fs::remove_dir_all(&root);

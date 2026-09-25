@@ -517,7 +517,24 @@
           "SurfaceElevation": "표면 고도",
           "AboveGroundHeight": "지상 높이",
           "OtherContinuous": "기타 값"
-        }
+        },
+        "calculateSlope": "경사 계산",
+        "calculating": "계산 중",
+        "calculateTitle": "경사 계산",
+        "calculateFrom": "{{name}}에서",
+        "resultName": "결과 이름",
+        "unitDegrees": "도",
+        "unitPercent": "퍼센트",
+        "run": "실행",
+        "calculateAttachNote": "준비되면 결과가 이 디자인에 추가됩니다.",
+        "calculateLibraryNote": "결과는 라이브러리에 저장됩니다. 어느 디자인에나 추가하세요.",
+        "slopeNeedsSource": "경사는 준비된 가져온 원본에서 계산합니다.",
+        "slopeNeedsGround": "경사에는 지면 고도가 필요합니다.",
+        "slopeNeedsMetres": "경사에는 미터 단위 고도가 필요합니다.",
+        "slopeEngineMissing": "경사 계산을 사용할 수 없습니다: GeoLibre 엔진이 없습니다.",
+        "methodGeolibre": "GeoLibre 투영 경사 (5×5)",
+        "methodUnknown": "알 수 없는 방법",
+        "factEngine": "엔진"
       },
       "layers": {
         "title": "데이터",

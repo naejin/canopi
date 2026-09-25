@@ -218,6 +218,8 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
 
 #[test]
 #[ignore = "requires GDAL on PATH; real published plane and Tauri-managed command state"]
+/// R50 under the fixed-item contract: Retry reruns only a failed operation, with
+/// its saved identity, against its pinned input, through the actual command.
 fn acceptance_retry_command_preserves_saved_identity_and_publication() {
     use crate::native_operation::NativeOperationExecutor;
     use tauri::Manager;
@@ -287,7 +289,7 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
         ("South slope", LidarSlopeUnit::Percent),
     ] {
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 &layer,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -310,10 +312,6 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
     let first_alpha = head(alpha);
     let first_beta = head(beta);
     assert_eq!(first_beta.name.as_deref(), Some("South slope"));
-    let parameters = definition_row(&library.catalogue().unwrap(), beta)
-        .unwrap()
-        .unwrap()
-        .parameters_json;
     // The fixture is a real published raster, readable through normal inspection.
     let request = common_types::lidar::LidarSampleRequest {
         kind: common_types::lidar::LidarSampleEntityKind::Analysis,
@@ -329,32 +327,78 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
         matches!(sample, common_types::lidar::LidarSampleOutcome::Value { value, .. } if (value - 100.0).abs() < 0.01),
         "{sample:?}"
     );
+    let retry = |definition: &str, input: &str| {
+        tauri::async_runtime::block_on(crate::commands::lidar::lidar_retry_analysis(
+            app.state(),
+            app.state(),
+            definition.to_string(),
+            input.to_string(),
+        ))
+    };
+    let mut accepted_bytes = Vec::new();
+    files(&root.join("lidar/assets"), &mut accepted_bytes);
+    assert!(!accepted_bytes.is_empty());
 
-    // This is the actual command function, with Tauri-managed State arguments.
-    let retry = tauri::async_runtime::block_on(crate::commands::lidar::lidar_retry_analysis(
-        app.state(),
-        app.state(),
-        beta.clone(),
-        source.id.clone(),
-    ))
-    .unwrap();
-    assert_eq!(&retry.definition_id, beta);
-    assert_ne!(retry.job_id, receipts[1].job_id);
-    await_job(&library, &retry.job_id);
-    assert_eq!(head(alpha).id, first_alpha.id);
-    let accepted = head(beta);
-    assert_ne!(accepted.id, first_beta.id);
-    assert_eq!(accepted.name, first_beta.name);
+    // A complete result is never recalculated in place: the actual command
+    // refuses before enqueueing anything, and every accepted byte stays.
+    let refused = retry(beta, &source.id).unwrap_err();
+    assert!(refused.contains("new slope"), "{refused}");
+    assert_eq!(job_count(&library), 2, "refusal must not enqueue work");
+    assert_eq!(head(beta).id, first_beta.id);
+
+    // A failed operation retries through the actual command with its saved
+    // recipe, parameters and name, against the input it was pinned to.
+    let seed_failed = |definition: &str, name: &str, input: &str| {
+        let connection = library.catalogue().unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_definitions (id, layer_id, kind, version, parameters_json, created_at)
+                 VALUES (?1, ?2, 'slope', 1, ?3, '0')",
+                rusqlite::params![
+                    definition,
+                    layer,
+                    format!("{{\"slope_unit\":\"Percent\",\"name\":\"{name}\"}}")
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_dependencies(definition_id, layer_id, kind) VALUES (?1, ?2, 'source')",
+                rusqlite::params![definition, layer],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_jobs (id, definition_id, source_generation_id, state, message, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 'failed', 'engine stopped', '1', '1')",
+                rusqlite::params![format!("job-{definition}"), definition, input],
+            )
+            .unwrap();
+    };
+    seed_failed("adef-west", "West slope", &source.id);
+    let parameters = definition_row(&library.catalogue().unwrap(), "adef-west")
+        .unwrap()
+        .unwrap()
+        .parameters_json;
+    let receipt = retry("adef-west", &source.id).unwrap();
+    assert_eq!(receipt.definition_id, "adef-west");
+    await_job(&library, &receipt.job_id);
+    let west = head("adef-west");
+    assert_eq!(west.name.as_deref(), Some("West slope"));
+    assert_eq!(west.source_generation_id, source.id);
     assert_eq!(
-        definition_row(&library.catalogue().unwrap(), beta)
+        definition_row(&library.catalogue().unwrap(), "adef-west")
             .unwrap()
             .unwrap()
             .parameters_json,
         parameters
     );
-    assert_eq!(job_count(&library), 3);
+    assert_eq!(head(alpha).id, first_alpha.id);
+    assert_eq!(head(beta).id, first_beta.id);
+    assert_eq!(job_count(&library), 4);
 
-    // Advance the real source, then refuse the old expected generation before enqueue.
+    // Advance the real source: an operation pinned to the old input is refused
+    // before enqueue instead of being retargeted, and accepted bytes stay.
     publish_source(&library, &layer, &root.join("plane.tif"), true);
     assert_ne!(
         catalogue::head_generation(&library.catalogue().unwrap(), &layer)
@@ -363,22 +407,10 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
             .id,
         source.id
     );
-    let mut accepted_bytes = Vec::new();
-    files(&root.join("lidar/assets"), &mut accepted_bytes);
-    assert!(!accepted_bytes.is_empty());
-    let refused = tauri::async_runtime::block_on(crate::commands::lidar::lidar_retry_analysis(
-        app.state(),
-        app.state(),
-        beta.clone(),
-        source.id.clone(),
-    ))
-    .unwrap_err();
-    assert!(refused.contains("source head changed"), "{refused}");
-    assert_eq!(job_count(&library), 3, "refusal must not enqueue work");
-    assert_eq!(head(beta).id, accepted.id);
-    assert_eq!(head(beta).manifest_json, accepted.manifest_json);
-    assert_eq!(head(beta).name, accepted.name);
-    assert_eq!(head(alpha).id, first_alpha.id);
+    seed_failed("adef-east", "East slope", &source.id);
+    let stale = retry("adef-east", &source.id).unwrap_err();
+    assert!(stale.contains("no longer available"), "{stale}");
+    assert_eq!(job_count(&library), 5, "refusal must not enqueue work");
     for (path, bytes) in accepted_bytes {
         assert_eq!(std::fs::read(&path).unwrap(), bytes, "{}", path.display());
     }

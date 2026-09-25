@@ -29,6 +29,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarAnalysisJobStatus>()
         .register::<common_types::lidar::LidarAnalysisReceipt>()
         .register::<common_types::lidar::LidarAnalysisKind>()
+        .register::<common_types::lidar::LidarAnalysisMethod>()
         .register::<common_types::lidar::LidarAnalysisParameters>()
         .register::<common_types::lidar::LidarAnalysisSummary>()
         .register::<common_types::lidar::LidarDeleteImpact>()

@@ -15,3 +15,14 @@ export function openInDataLibrary(id: string): void {
 export function openDataLibrary(): void {
   sidePanel.value = 'data'
 }
+
+/**
+ * A request, from Layers, to calculate slope from one source in the Data
+ * Library. The finished result then joins the Design that asked.
+ */
+export const libraryCalculateRequest = signal<string | null>(null)
+
+export function calculateSlopeInLibrary(id: string): void {
+  libraryCalculateRequest.value = id
+  sidePanel.value = 'data'
+}

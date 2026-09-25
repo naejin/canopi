@@ -517,7 +517,24 @@
           "SurfaceElevation": "Altitude de surface",
           "AboveGroundHeight": "Hauteur au-dessus du sol",
           "OtherContinuous": "Autres valeurs"
-        }
+        },
+        "calculateSlope": "Calculer la pente",
+        "calculating": "Calcul en cours",
+        "calculateTitle": "Calculer la pente",
+        "calculateFrom": "À partir de {{name}}",
+        "resultName": "Nom du résultat",
+        "unitDegrees": "Degrés",
+        "unitPercent": "Pourcentage",
+        "run": "Lancer",
+        "calculateAttachNote": "Le résultat est ajouté à ce Design quand il est prêt.",
+        "calculateLibraryNote": "Le résultat est enregistré dans la bibliothèque ; ajoutez-le à n’importe quel Design.",
+        "slopeNeedsSource": "La pente se calcule à partir d’une source importée prête.",
+        "slopeNeedsGround": "La pente nécessite l’altitude du sol.",
+        "slopeNeedsMetres": "La pente nécessite des altitudes en mètres.",
+        "slopeEngineMissing": "Le calcul de pente est indisponible : le moteur GeoLibre est absent.",
+        "methodGeolibre": "Pente projetée GeoLibre (5×5)",
+        "methodUnknown": "Méthode inconnue",
+        "factEngine": "Moteur"
       },
       "layers": {
         "title": "Données",

@@ -517,7 +517,24 @@
           "SurfaceElevation": "Quota della superficie",
           "AboveGroundHeight": "Altezza dal suolo",
           "OtherContinuous": "Altri valori"
-        }
+        },
+        "calculateSlope": "Calcola pendenza",
+        "calculating": "Calcolo in corso",
+        "calculateTitle": "Calcola pendenza",
+        "calculateFrom": "Da {{name}}",
+        "resultName": "Nome del risultato",
+        "unitDegrees": "Gradi",
+        "unitPercent": "Percentuale",
+        "run": "Esegui",
+        "calculateAttachNote": "Il risultato viene aggiunto a questo Progetto quando è pronto.",
+        "calculateLibraryNote": "Il risultato viene salvato nella libreria; aggiungilo a qualsiasi Progetto.",
+        "slopeNeedsSource": "La pendenza si calcola da una sorgente importata pronta.",
+        "slopeNeedsGround": "La pendenza richiede la quota del terreno.",
+        "slopeNeedsMetres": "La pendenza richiede quote in metri.",
+        "slopeEngineMissing": "Il calcolo della pendenza non è disponibile: manca il motore GeoLibre.",
+        "methodGeolibre": "Pendenza proiettata GeoLibre (5×5)",
+        "methodUnknown": "Metodo sconosciuto",
+        "factEngine": "Motore"
       },
       "layers": {
         "title": "Dati",

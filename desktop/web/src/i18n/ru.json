@@ -517,7 +517,24 @@
           "SurfaceElevation": "Высота поверхности",
           "AboveGroundHeight": "Высота над землёй",
           "OtherContinuous": "Другие значения"
-        }
+        },
+        "calculateSlope": "Рассчитать уклон",
+        "calculating": "Идёт расчёт",
+        "calculateTitle": "Рассчитать уклон",
+        "calculateFrom": "Из {{name}}",
+        "resultName": "Название результата",
+        "unitDegrees": "Градусы",
+        "unitPercent": "Проценты",
+        "run": "Запустить",
+        "calculateAttachNote": "Результат будет добавлен в этот проект, когда будет готов.",
+        "calculateLibraryNote": "Результат сохраняется в библиотеке; добавьте его в любой проект.",
+        "slopeNeedsSource": "Уклон рассчитывается по готовому импортированному источнику.",
+        "slopeNeedsGround": "Для уклона нужна высота рельефа.",
+        "slopeNeedsMetres": "Для уклона нужны высоты в метрах.",
+        "slopeEngineMissing": "Расчёт уклона недоступен: отсутствует движок GeoLibre.",
+        "methodGeolibre": "Проекционный уклон GeoLibre (5×5)",
+        "methodUnknown": "Неизвестный метод",
+        "factEngine": "Движок"
       },
       "layers": {
         "title": "Данные",

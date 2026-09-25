@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Spatial chunk side shared by resolved generation and result storage.
 pub(super) const CHUNK_SIDE: i64 = 1024;
 /// Largest requested window side, matching the reader's halo allowance.
-const MAX_WINDOW_SIDE: i64 = 1026;
+const MAX_WINDOW_SIDE: i64 = super::prepared_raster::MAX_HALO_SIDE as i64;
 /// Catalogue role of a generation's resolved numeric chunks.
 pub(super) const RESULT_ROLE: &str = "result";
 /// Catalogue role of a result's separate 0/1 quality chunks.
@@ -1527,7 +1527,7 @@ mod tests {
         let error = resolve_window(
             std::slice::from_ref(&member),
             &lattice,
-            full_window(0, 0, 1027, 1),
+            full_window(0, 0, MAX_WINDOW_SIDE as u32 + 1, 1),
             &cancellation(),
         )
         .expect_err("oversized windows are rejected");

@@ -177,10 +177,40 @@ impl GdalEngine {
         )
     }
 
+    /// Run one managed raster executable other than GDAL (the pinned GeoLibre
+    /// CLI) under the same bounded contract: fixed argv, no shell, bounded
+    /// output, the finite process deadline, and kill/reap on cancel.
+    pub(super) fn run_managed(
+        path: &std::path::Path,
+        args: &[String],
+        envs: &[(&str, &str)],
+        cancel: Option<&AtomicBool>,
+    ) -> Result<RunOutput, String> {
+        Self::run_once_with_env(
+            path,
+            args,
+            None,
+            envs,
+            cancel,
+            Some(DEFAULT_PROCESS_TIMEOUT),
+        )
+    }
+
     fn run_once(
         path: &std::path::Path,
         args: &[String],
         input: Option<&[u8]>,
+        cancel: Option<&AtomicBool>,
+        timeout: Option<Duration>,
+    ) -> Result<RunOutput, String> {
+        Self::run_once_with_env(path, args, input, &[], cancel, timeout)
+    }
+
+    fn run_once_with_env(
+        path: &std::path::Path,
+        args: &[String],
+        input: Option<&[u8]>,
+        envs: &[(&str, &str)],
         cancel: Option<&AtomicBool>,
         timeout: Option<Duration>,
     ) -> Result<RunOutput, String> {
@@ -207,6 +237,7 @@ impl GdalEngine {
             // decoded raster data, so the engine is given exactly that and no
             // tool can silently exceed the pipeline's own bound.
             .env("GDAL_CACHEMAX", GDAL_CACHE_BYTES.to_string())
+            .envs(envs.iter().copied())
             .stdin(if input.is_some() {
                 Stdio::piped()
             } else {
@@ -370,7 +401,7 @@ fn truncate_message(message: &str) -> String {
     }
 }
 
-fn which_on_path(name: &str) -> Option<PathBuf> {
+pub(super) fn which_on_path(name: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     std::env::split_paths(&path_var)
         .map(|dir| dir.join(name))

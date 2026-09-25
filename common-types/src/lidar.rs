@@ -109,7 +109,7 @@ pub struct LidarImportProgress {
 
 /// Detected external raster engine used behind the narrow LiDAR adapter.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct LidarEngineStatus {
     pub available: bool,
     pub version: Option<String>,
@@ -230,6 +230,24 @@ pub struct LidarAnalysisSummary {
     /// analysis path itself applies.
     #[serde(default)]
     pub slope_unit: Option<LidarSlopeUnit>,
+    /// How this definition is computed, from its stored recipe version.
+    /// `None` for a version this build does not know.
+    #[serde(default)]
+    pub method: Option<LidarAnalysisMethod>,
+    /// The engine build that produced the current result, as recorded at
+    /// publication; `None` without a result.
+    #[serde(default)]
+    pub engine_version: Option<String>,
+}
+
+/// A qualified analysis method, identified by its recipe.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum LidarAnalysisMethod {
+    /// Recipe 1: GDAL `gdaldem slope`, Horn 3×3 (existing results).
+    GdalHornV1,
+    /// Recipe 2: the pinned GeoLibre projected slope, 5×5 Florinsky stencil.
+    GeolibreProjectedSlopeV1,
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
@@ -238,6 +256,10 @@ pub struct LidarLibrarySnapshot {
     pub layers: Vec<LidarLayerSummary>,
     pub analyses: Vec<LidarAnalysisSummary>,
     pub engine: LidarEngineStatus,
+    /// Whether new slope results can be calculated: the GeoLibre engine they
+    /// need. Saved results stay readable whatever this reports.
+    #[serde(default)]
+    pub slope_engine: LidarEngineStatus,
 }
 
 /// One occurrence in a Data Layer's priority list, topmost first.

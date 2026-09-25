@@ -7,14 +7,15 @@
 use super::catalogue;
 use super::engine::GdalEngine;
 use common_types::lidar::{
-    LidarAnalysisKind, LidarAnalysisSummary, LidarEngineStatus, LidarLayerSummary,
-    LidarLibrarySnapshot, LidarResultState,
+    LidarAnalysisKind, LidarAnalysisMethod, LidarAnalysisSummary, LidarEngineStatus,
+    LidarLayerSummary, LidarLibrarySnapshot, LidarResultState,
 };
 use rusqlite::Connection;
 
 pub fn library_snapshot(
     connection: &Connection,
     engine: &GdalEngine,
+    slope_engine: LidarEngineStatus,
 ) -> Result<LidarLibrarySnapshot, String> {
     let layers = catalogue::list_layers(connection)?;
     let definitions = catalogue::list_definitions(connection)?;
@@ -118,12 +119,31 @@ pub fn library_snapshot(
             }
             None => (None, None),
         };
+        // A result describes the input it was calculated from; an operation
+        // without one describes the input its latest job was pinned to, which
+        // is what Retry reruns.
+        let input_generation_id = match &head_result {
+            Some(result) => Some(result.source_generation_id.clone()),
+            None => catalogue::latest_analysis_job_input(connection, &definition.id)?,
+        };
+        let method = super::analysis::SlopeRecipe::from_version(definition.version)
+            .ok()
+            .map(|recipe| match recipe {
+                super::analysis::SlopeRecipe::GdalHorn => LidarAnalysisMethod::GdalHornV1,
+                super::analysis::SlopeRecipe::GeolibreProjected => {
+                    LidarAnalysisMethod::GeolibreProjectedSlopeV1
+                }
+            });
+        let engine_version = head_result.as_ref().and_then(|result| {
+            serde_json::from_str::<super::analysis::ResultManifest>(&result.manifest_json)
+                .ok()
+                .map(|manifest| manifest.engine_version)
+                .filter(|version| !version.is_empty())
+        });
         analysis_summaries.push(LidarAnalysisSummary {
             id: definition.id.clone(),
             generation_id: head_result.as_ref().map(|result| result.id.clone()),
-            input_generation_id: head_result
-                .as_ref()
-                .map(|result| result.source_generation_id.clone()),
+            input_generation_id,
             source_layer_id: definition.layer_id.clone(),
             kind: parse_analysis_kind(&definition.kind)?,
             name: result_name,
@@ -132,6 +152,8 @@ pub fn library_snapshot(
             bounds,
             value_range,
             slope_unit,
+            method,
+            engine_version,
         });
     }
 
@@ -152,6 +174,7 @@ pub fn library_snapshot(
         layers: layer_summaries,
         analyses: analysis_summaries,
         engine: engine_status,
+        slope_engine,
     })
 }
 

@@ -1,4 +1,5 @@
 import type {
+  LidarAnalysisMethod,
   LidarImportJob,
   LidarLibrarySnapshot,
   LidarMeasurementKind,
@@ -34,6 +35,10 @@ export interface LibraryItem {
   /** A source's saved results. */
   readonly resultCount: number
   readonly message: string | null
+  /** A result's method, from its recipe; null for a source or an unknown recipe. */
+  readonly method: LidarAnalysisMethod | null
+  /** The engine build that produced a result, as recorded when it was published. */
+  readonly engineVersion: string | null
 }
 
 export type LibraryTypeFilter = 'all' | 'sources' | 'slope'
@@ -63,6 +68,8 @@ export function libraryItems(snapshot: LidarLibrarySnapshot | null, slopeLabel =
       inputGenerationId: null,
       resultCount: layer.analysis_count,
       message: layer.generation_id ? null : job?.message ?? null,
+      method: null,
+      engineVersion: null,
     })
   }
   for (const analysis of snapshot.analyses) {
@@ -87,6 +94,8 @@ export function libraryItems(snapshot: LidarLibrarySnapshot | null, slopeLabel =
       inputGenerationId: analysis.input_generation_id ?? null,
       resultCount: 0,
       message: analysis.detail ?? null,
+      method: analysis.method ?? null,
+      engineVersion: analysis.engine_version ?? null,
     })
   }
   // Stable name order, identity as the tie-breaker: names are not unique.
@@ -127,4 +136,19 @@ export function suggestedItemName(paths: readonly string[]): string {
   }
   const trimmed = prefix.replace(/[\s_\-.]+$/, '')
   return trimmed.length >= 3 ? trimmed : names[0]!
+}
+
+/** Why slope cannot be calculated from this item, or null when it can. */
+export type SlopeIneligibility = 'notSource' | 'notReady' | 'notGround' | 'notMetres' | 'engine'
+
+export function slopeIneligibility(
+  item: LibraryItem,
+  engineAvailable: boolean,
+): SlopeIneligibility | null {
+  if (item.kind !== 'Source') return 'notSource'
+  if (item.status !== 'ready') return 'notReady'
+  if (item.type !== 'GroundElevation') return 'notGround'
+  if (!/^(m|metres?|meters?)$/i.test(item.units.trim())) return 'notMetres'
+  if (!engineAvailable) return 'engine'
+  return null
 }

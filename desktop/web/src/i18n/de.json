@@ -517,7 +517,24 @@
           "SurfaceElevation": "Oberflächenhöhe",
           "AboveGroundHeight": "Höhe über Grund",
           "OtherContinuous": "Andere Werte"
-        }
+        },
+        "calculateSlope": "Hangneigung berechnen",
+        "calculating": "Wird berechnet",
+        "calculateTitle": "Hangneigung berechnen",
+        "calculateFrom": "Aus {{name}}",
+        "resultName": "Name des Ergebnisses",
+        "unitDegrees": "Grad",
+        "unitPercent": "Prozent",
+        "run": "Starten",
+        "calculateAttachNote": "Das Ergebnis wird diesem Design hinzugefügt, sobald es bereit ist.",
+        "calculateLibraryNote": "Das Ergebnis wird in der Bibliothek gespeichert; fügen Sie es einem beliebigen Design hinzu.",
+        "slopeNeedsSource": "Die Hangneigung wird aus einer bereiten importierten Quelle berechnet.",
+        "slopeNeedsGround": "Die Hangneigung benötigt Geländehöhen.",
+        "slopeNeedsMetres": "Die Hangneigung benötigt Höhen in Metern.",
+        "slopeEngineMissing": "Die Hangneigungsberechnung ist nicht verfügbar: Die GeoLibre-Engine fehlt.",
+        "methodGeolibre": "GeoLibre projizierte Hangneigung (5×5)",
+        "methodUnknown": "Unbekannte Methode",
+        "factEngine": "Engine"
       },
       "layers": {
         "title": "Daten",

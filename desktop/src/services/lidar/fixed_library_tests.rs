@@ -400,3 +400,227 @@ fn renaming_a_result_changes_only_its_name() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+fn seed_head(connection: &Connection, layer_id: &str, generation_id: &str) {
+    connection
+        .execute(
+            "INSERT INTO lidar_layer_generations
+             (id, layer_id, created_at, mosaic_path, coverage_mask_path, manifest_json,
+              coverage_cells, min_value, max_value, bounds_3857)
+             VALUES (?1, ?2, '0', '', '', '{}', 1, 0, 1, '[0,0,1,1]')",
+            rusqlite::params![generation_id, layer_id],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)
+             ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
+            rusqlite::params![layer_id, generation_id],
+        )
+        .unwrap();
+}
+
+/// A definition whose operation failed, optionally with a job pinned to an input.
+fn seed_failed(
+    connection: &Connection,
+    layer_id: &str,
+    definition_id: &str,
+    version: i64,
+    pinned: Option<&str>,
+) {
+    connection
+        .execute(
+            "INSERT INTO lidar_analysis_definitions
+             (id, layer_id, kind, version, parameters_json, created_at)
+             VALUES (?1, ?2, 'slope', ?3, '{\"slope_unit\":\"Percent\",\"name\":\"North\"}', '0')",
+            rusqlite::params![definition_id, layer_id, version],
+        )
+        .unwrap();
+    if let Some(input) = pinned {
+        connection
+            .execute(
+                "INSERT INTO lidar_analysis_jobs
+                 (id, definition_id, source_generation_id, state, message, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 'failed', 'engine stopped', '1', '1')",
+                rusqlite::params![format!("job-{definition_id}"), definition_id, input],
+            )
+            .unwrap();
+    }
+}
+
+fn source_item(library: &LidarLibrary, root: &Path) -> String {
+    library
+        .record_import_item(
+            "Orchard",
+            LidarMeasurementKind::GroundElevation,
+            None,
+            false,
+            &[root.join("a.tif")],
+        )
+        .unwrap()
+        .0
+}
+
+/// The stored recipe version decides the method: a version this build does not
+/// know fails by name before any work, and the saved result stays as it is.
+#[test]
+fn an_unknown_recipe_version_fails_explicitly_and_keeps_the_result() {
+    let root = scratch("unknown-recipe");
+    let library = LidarLibrary::open(&root).unwrap();
+    let layer_id = source_item(&library, &root);
+    {
+        let connection = library.catalogue().unwrap();
+        seed_head(&connection, &layer_id, "gen-1");
+        seed_result(&connection, &layer_id, "adef-future", "gen-1");
+        connection
+            .execute("UPDATE lidar_analysis_definitions SET version = 7", [])
+            .unwrap();
+    }
+    let error = analysis::run_slope_job(
+        &library,
+        "job-future",
+        "adef-future",
+        &analysis::AnalysisParameters {
+            slope_unit: None,
+            name: None,
+        },
+        "gen-1",
+        &AtomicBool::new(false),
+    )
+    .expect_err("an unknown recipe does not run");
+    assert!(error.contains("recipe version 7"), "{error}");
+    assert!(
+        library.retry_analysis("adef-future", "gen-1").is_err(),
+        "nor is it retried"
+    );
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_analysis_heads"),
+        1
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert_eq!(snapshot.analyses[0].method, None);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Retry reruns a failed operation with its saved definition against the input
+/// it was pinned to. A complete result, an operation without a recorded input
+/// and an input that is gone or not the expected one are refused by name.
+#[test]
+fn retry_reruns_only_a_failed_operation_with_its_pinned_input() {
+    let root = scratch("retry-rules");
+    let library = LidarLibrary::open(&root).unwrap();
+    let layer_id = source_item(&library, &root);
+    {
+        let connection = library.catalogue().unwrap();
+        seed_head(&connection, &layer_id, "gen-1");
+        seed_result(&connection, &layer_id, "adef-done", "gen-1");
+        seed_failed(&connection, &layer_id, "adef-orphan", 2, None);
+        seed_failed(&connection, &layer_id, "adef-old", 2, Some("gen-0"));
+        seed_failed(&connection, &layer_id, "adef-failed", 2, Some("gen-1"));
+    }
+    let complete = library.retry_analysis("adef-done", "gen-1").unwrap_err();
+    assert!(complete.contains("new slope"), "{complete}");
+    let orphan = library.retry_analysis("adef-orphan", "gen-1").unwrap_err();
+    assert!(orphan.contains("no recorded input"), "{orphan}");
+    let gone = library.retry_analysis("adef-old", "gen-0").unwrap_err();
+    assert!(gone.contains("no longer available"), "{gone}");
+    let retargeted = library.retry_analysis("adef-old", "gen-1").unwrap_err();
+    assert!(retargeted.contains("not the one expected"), "{retargeted}");
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_analysis_jobs"),
+        2
+    );
+
+    let receipt = library.retry_analysis("adef-failed", "gen-1").unwrap();
+    assert_eq!(receipt.definition_id, "adef-failed");
+    let (input, version): (String, i64) = library
+        .catalogue()
+        .unwrap()
+        .query_row(
+            "SELECT j.source_generation_id, d.version FROM lidar_analysis_jobs j
+             JOIN lidar_analysis_definitions d ON d.id = j.definition_id WHERE j.id = ?1",
+            [&receipt.job_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        (input.as_str(), version),
+        ("gen-1", 2),
+        "same input, same recipe"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Without the GeoLibre engine new slope results are unavailable by name and
+/// nothing is created; there is no fallback to the legacy Horn recipe.
+#[test]
+fn creating_a_slope_without_the_geolibre_engine_is_refused_by_name() {
+    let root = scratch("no-geolibre");
+    let library = LidarLibrary::open(&root).unwrap();
+    library
+        .inner
+        .geolibre
+        .preset(Err("the GeoLibre slope engine is not installed".to_string()));
+    let layer_id = source_item(&library, &root);
+    seed_head(&library.catalogue().unwrap(), &layer_id, "gen-1");
+    let error = library
+        .create_analysis(
+            &layer_id,
+            common_types::lidar::LidarAnalysisKind::Slope,
+            common_types::lidar::LidarAnalysisParameters {
+                slope_unit: None,
+                name: None,
+            },
+            None,
+        )
+        .unwrap_err();
+    assert!(error.contains("not installed"), "{error}");
+    assert_eq!(
+        count(&library, "SELECT COUNT(*) FROM lidar_analysis_definitions"),
+        0
+    );
+    let snapshot = library.library_snapshot().unwrap();
+    assert!(!snapshot.slope_engine.available);
+    assert!(
+        snapshot
+            .slope_engine
+            .detail
+            .unwrap()
+            .contains("not installed")
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The read model names each definition's method from its recipe, and a failed
+/// operation reports the input it was pinned to, which is what Retry reruns.
+#[test]
+fn the_snapshot_reports_method_and_the_pinned_input_of_a_failed_operation() {
+    let root = scratch("method-read-model");
+    let library = LidarLibrary::open(&root).unwrap();
+    let layer_id = source_item(&library, &root);
+    {
+        let connection = library.catalogue().unwrap();
+        seed_head(&connection, &layer_id, "gen-1");
+        seed_result(&connection, &layer_id, "adef-horn", "gen-1");
+        seed_failed(&connection, &layer_id, "adef-new", 2, Some("gen-1"));
+    }
+    let snapshot = library.library_snapshot().unwrap();
+    let find = |id: &str| snapshot.analyses.iter().find(|a| a.id == id).unwrap();
+    assert_eq!(
+        find("adef-horn").method,
+        Some(common_types::lidar::LidarAnalysisMethod::GdalHornV1)
+    );
+    let failed = find("adef-new");
+    assert_eq!(
+        failed.method,
+        Some(common_types::lidar::LidarAnalysisMethod::GeolibreProjectedSlopeV1)
+    );
+    assert_eq!(failed.state, common_types::lidar::LidarResultState::Failed);
+    assert_eq!(failed.input_generation_id.as_deref(), Some("gen-1"));
+    assert_eq!(failed.generation_id, None);
+    assert_eq!(
+        failed.slope_unit,
+        Some(common_types::lidar::LidarSlopeUnit::Percent)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -517,7 +517,24 @@
           "SurfaceElevation": "Surface elevation",
           "AboveGroundHeight": "Height above ground",
           "OtherContinuous": "Other values"
-        }
+        },
+        "calculateSlope": "Calculate slope",
+        "calculating": "Calculating",
+        "calculateTitle": "Calculate slope",
+        "calculateFrom": "From {{name}}",
+        "resultName": "Result name",
+        "unitDegrees": "Degrees",
+        "unitPercent": "Percent",
+        "run": "Run",
+        "calculateAttachNote": "The result is added to this Design when it is ready.",
+        "calculateLibraryNote": "The result is saved to the library; add it to any Design.",
+        "slopeNeedsSource": "Slope is calculated from an imported source that is ready.",
+        "slopeNeedsGround": "Slope needs ground elevation.",
+        "slopeNeedsMetres": "Slope needs elevations in metres.",
+        "slopeEngineMissing": "Slope calculation is unavailable: the GeoLibre engine is missing.",
+        "methodGeolibre": "GeoLibre projected slope (5×5)",
+        "methodUnknown": "Unknown method",
+        "factEngine": "Engine"
       },
       "layers": {
         "title": "Data",

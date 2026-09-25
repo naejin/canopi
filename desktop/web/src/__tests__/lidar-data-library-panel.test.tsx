@@ -5,6 +5,9 @@ import type { LidarAnalysisSummary, LidarLayerSummary, LidarLibrarySnapshot } fr
 
 const actions = vi.hoisted(() => ({
   addToDesign: vi.fn(),
+  calculateSlope: vi.fn().mockResolvedValue('adef-new'),
+  cancelAnalysisJob: vi.fn().mockResolvedValue(true),
+  runningAnalysisJobId: vi.fn().mockReturnValue(null),
   cancelLibraryImport: vi.fn().mockResolvedValue(undefined),
   chooseImportFiles: vi.fn(),
   deleteLibraryItem: vi.fn().mockResolvedValue(undefined),
@@ -41,7 +44,7 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { DataLibraryPanel } from '../components/panels/lidar/DataLibraryPanel'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { libraryFocusRequest } from '../app/lidar/library-navigation'
+import { libraryCalculateRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
 import { locale } from '../app/settings/state'
 
 function layer(id: string, name: string, overrides: Partial<LidarLayerSummary> = {}): LidarLayerSummary {
@@ -58,8 +61,15 @@ function slope(id: string, source: string, overrides: Partial<LidarAnalysisSumma
   } as LidarAnalysisSummary
 }
 
-function library(layers: LidarLayerSummary[], analyses: LidarAnalysisSummary[] = []): LidarLibrarySnapshot {
-  return { layers, analyses, engine: { available: true, version: null, detail: null } }
+function library(layers: LidarLayerSummary[], analyses: LidarAnalysisSummary[] = [], slopeEngine = true): LidarLibrarySnapshot {
+  return {
+    layers,
+    analyses,
+    engine: { available: true, version: null, detail: null },
+    slope_engine: slopeEngine
+      ? { available: true, version: 'geolibre-cli 1.5.3', detail: null }
+      : { available: false, version: null, detail: 'not installed' },
+  }
 }
 
 function design(entries: { kind: 'Source' | 'Analysis'; id: string }[]) {
@@ -194,5 +204,75 @@ describe('Data Library panel', () => {
     expect(container.querySelector('h3')?.textContent).toBe('Steepness')
     await click(button(/^Retry$/))
     expect(actions.retryFailedCalculation).toHaveBeenCalledWith('s', 'a-g1')
+  })
+
+  async function openCalculate(name: string): Promise<void> {
+    await click(button(`Actions for ${name}`))
+    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Calculate slope"]')!)
+  }
+
+  it('calculates slope from a source as a new library result', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')])
+    mount()
+    await openCalculate('Ground')
+
+    expect(container.textContent).toContain('From Ground')
+    const name = container.querySelector('form input:not([type])') as HTMLInputElement
+    expect(name.value).toBe('Ground · Slope')
+    const percent = [...container.querySelectorAll<HTMLInputElement>('input[type="radio"]')][1]!
+    await act(async () => { percent.click() })
+    await act(async () => {
+      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+
+    expect(actions.calculateSlope).toHaveBeenCalledWith('a', 'Percent', 'Ground · Slope', false)
+    expect(container.querySelector('form')).toBeNull()
+  })
+
+  it('explains why slope cannot run instead of choosing another method', async () => {
+    lidarLibrary.value = library([layer('s', 'Canopy', { measurement_kind: 'SurfaceElevation' }), layer('g', 'Ground')], [], false)
+    mount()
+    await openCalculate('Canopy')
+    expect(container.textContent).toContain('Slope needs ground elevation.')
+    expect(button(/^Run$/).disabled).toBe(true)
+
+    await click(button('Back'))
+    await openCalculate('Ground')
+    expect(container.textContent).toContain('the GeoLibre engine is missing')
+    expect(button(/^Run$/).disabled).toBe(true)
+    expect(actions.calculateSlope).not.toHaveBeenCalled()
+  })
+
+  it('attaches a Layers-initiated calculation to the asking Design', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')])
+    mount()
+    await act(async () => { libraryCalculateRequest.value = 'a' })
+    expect(container.textContent).toContain('added to this Design when it is ready')
+    await act(async () => {
+      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(actions.calculateSlope).toHaveBeenCalledWith('a', 'Degrees', 'Ground · Slope', true)
+  })
+
+  it('names each result by its method and engine', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [
+      slope('old', 'a', { name: 'Old', method: 'GdalHornV1', engine_version: 'GDAL 3.8.4' }),
+      slope('new', 'a', { name: 'New', method: 'GeolibreProjectedSlopeV1', engine_version: 'geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)' }),
+    ])
+    mount()
+    await act(async () => { libraryFocusRequest.value = 'new' })
+    expect(container.textContent).toContain('GeoLibre projected slope (5×5)')
+    expect(container.textContent).toContain('geolibre-cli 1.5.3')
+    await act(async () => { libraryFocusRequest.value = 'old' })
+    expect(container.textContent).toContain('Horn (3×3)')
+  })
+
+  it('offers Cancel for a calculation this session started', async () => {
+    actions.runningAnalysisJobId.mockReturnValue('job-1')
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { generation_id: null, state: 'Preparing', name: 'Pending' })])
+    mount()
+    expect(container.textContent).toContain('Calculating')
+    await click(button(/^Cancel$/))
+    expect(actions.cancelAnalysisJob).toHaveBeenCalledWith('s')
   })
 })

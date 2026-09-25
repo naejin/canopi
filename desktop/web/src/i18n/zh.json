@@ -517,7 +517,24 @@
           "SurfaceElevation": "表面高程",
           "AboveGroundHeight": "离地高度",
           "OtherContinuous": "其他数值"
-        }
+        },
+        "calculateSlope": "计算坡度",
+        "calculating": "正在计算",
+        "calculateTitle": "计算坡度",
+        "calculateFrom": "来源：{{name}}",
+        "resultName": "结果名称",
+        "unitDegrees": "度",
+        "unitPercent": "百分比",
+        "run": "运行",
+        "calculateAttachNote": "结果就绪后将添加到此设计。",
+        "calculateLibraryNote": "结果保存在数据库中；可添加到任何设计。",
+        "slopeNeedsSource": "坡度需从已就绪的导入数据计算。",
+        "slopeNeedsGround": "坡度需要地面高程。",
+        "slopeNeedsMetres": "坡度需要以米为单位的高程。",
+        "slopeEngineMissing": "无法计算坡度：缺少 GeoLibre 引擎。",
+        "methodGeolibre": "GeoLibre 投影坡度（5×5）",
+        "methodUnknown": "未知方法",
+        "factEngine": "引擎"
       },
       "layers": {
         "title": "数据",

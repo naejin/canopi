@@ -308,7 +308,7 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     // 4. One persisted slope result via the analysis pipeline.
     let receipt = library
-        .create_analysis(
+        .create_horn_analysis(
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
@@ -677,7 +677,7 @@ fn e2e_sparse_generation_lifecycle() {
 
     // 3. Slope over the chunked head publishes sparse result and quality.
     let receipt = library
-        .create_analysis(
+        .create_horn_analysis(
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {

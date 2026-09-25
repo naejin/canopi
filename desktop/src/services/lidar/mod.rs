@@ -16,6 +16,7 @@ mod display_cog;
 mod e2e;
 pub mod engine;
 mod generation;
+mod geolibre;
 pub mod grid;
 pub mod import;
 mod inspection;
@@ -54,6 +55,8 @@ pub(crate) struct LidarLibraryInner {
     catalogue: Mutex<Connection>,
     display_cache: Mutex<Connection>,
     pub(crate) engine: GdalEngine,
+    /// The pinned GeoLibre runner for recipe-2 slope definitions.
+    pub(crate) geolibre: geolibre::GeolibreEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
     /// Prepared compatibility leases for preserved dense compositions.
@@ -248,6 +251,7 @@ impl LidarLibrary {
                 catalogue: Mutex::new(catalogue),
                 display_cache: Mutex::new(display_cache),
                 engine: GdalEngine::new(),
+                geolibre: geolibre::GeolibreEngine::new(),
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
@@ -438,7 +442,19 @@ impl LidarLibrary {
 
     pub fn library_snapshot(&self) -> Result<LidarSnapshot, String> {
         let connection = self.catalogue()?;
-        presentation::library_snapshot(&connection, &self.inner.engine)
+        let slope_engine = match self.inner.geolibre.discover() {
+            Ok(tool) => common_types::lidar::LidarEngineStatus {
+                available: true,
+                version: Some(tool.provenance()),
+                detail: None,
+            },
+            Err(error) => common_types::lidar::LidarEngineStatus {
+                available: false,
+                version: None,
+                detail: Some(error),
+            },
+        };
+        presentation::library_snapshot(&connection, &self.inner.engine, slope_engine)
     }
 
     /// One bounded numeric inspection lookup.
@@ -1521,11 +1537,20 @@ impl LidarLibrary {
         let Ok(executor) = self.executor() else {
             return;
         };
-        let parameters =
-            analysis::parse_parameters(&parameters_json).unwrap_or(analysis::AnalysisParameters {
-                slope_unit: None,
-                name: None,
-            });
+        // Malformed stored parameters fail the job by name; they are never
+        // replaced by defaults that would compute something else.
+        let parameters = match analysis::parse_parameters(&parameters_json) {
+            Ok(parameters) => parameters,
+            Err(error) => {
+                if let Ok(connection) = self.catalogue() {
+                    let _ = connection.execute(
+                        "UPDATE lidar_analysis_jobs SET state = 'failed', message = ?2, updated_at = ?3 WHERE id = ?1",
+                        rusqlite::params![job_id, format!("the saved calculation settings are unreadable: {error}"), now_iso()],
+                    );
+                }
+                return;
+            }
+        };
         let flag = self.register_cancel(&job_id);
         let library = self.clone();
         let job_id_for_run = job_id.clone();
@@ -1585,14 +1610,54 @@ impl LidarLibrary {
         self.settle_cancel(&job_id);
     }
 
-    /// Create an analysis definition and run its first job through the
-    /// standard enqueue path.
+    /// Create a new slope result with the current method, the pinned GeoLibre
+    /// projected slope (recipe 2), and run its first job.
+    ///
+    /// A missing GeoLibre engine refuses creation by name; it never falls back
+    /// to the legacy Horn recipe.
     pub fn create_analysis(
         &self,
         layer_id: &str,
         kind: LidarAnalysisKind,
         parameters: LidarAnalysisParameters,
         result_name: Option<String>,
+    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+        self.inner.geolibre.discover()?;
+        self.create_analysis_with_recipe(
+            layer_id,
+            kind,
+            parameters,
+            result_name,
+            analysis::SlopeRecipe::GeolibreProjected,
+        )
+    }
+
+    /// Test support: create a legacy GDAL Horn definition, as existing
+    /// libraries hold, to exercise version-1 execution.
+    #[cfg(test)]
+    pub fn create_horn_analysis(
+        &self,
+        layer_id: &str,
+        kind: LidarAnalysisKind,
+        parameters: LidarAnalysisParameters,
+        result_name: Option<String>,
+    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+        self.create_analysis_with_recipe(
+            layer_id,
+            kind,
+            parameters,
+            result_name,
+            analysis::SlopeRecipe::GdalHorn,
+        )
+    }
+
+    fn create_analysis_with_recipe(
+        &self,
+        layer_id: &str,
+        kind: LidarAnalysisKind,
+        parameters: LidarAnalysisParameters,
+        result_name: Option<String>,
+        recipe: analysis::SlopeRecipe,
     ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
         let connection = self.catalogue()?;
         let layer = catalogue::get_layer(&connection, layer_id)?
@@ -1612,8 +1677,8 @@ impl LidarLibrary {
         connection
             .execute(
                 "INSERT INTO lidar_analysis_definitions(id, layer_id, kind, version, parameters_json, created_at)
-                 VALUES(?1, ?2, ?3, 1, ?4, ?5)",
-                rusqlite::params![definition_id, layer_id, kind.as_str(), parameters_json, now_iso()],
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![definition_id, layer_id, kind.as_str(), recipe.version(), parameters_json, now_iso()],
             )
             .map_err(|e| format!("Failed to create analysis definition: {e}"))?;
         connection
@@ -1649,12 +1714,13 @@ impl LidarLibrary {
         })
     }
 
-    /// Retry one existing analysis definition against its current source head.
+    /// Retry one failed or cancelled calculation with its saved definition.
     ///
-    /// The definition identity, parameters and published name are preserved: a
-    /// retry is a new job for the same definition, not a second definition. A
-    /// changed source head is refused before work so the previous valid result
-    /// survives and the caller can re-aim.
+    /// Retry reruns the stored recipe, parameters and name against the input
+    /// the failed operation was pinned to; it is never a way to recalculate a
+    /// result. A definition that already has a result is refused (make a new
+    /// calculation instead), as is a failed attempt whose pinned input is not
+    /// the one expected or is no longer the source's current generation.
     pub fn retry_analysis(
         &self,
         definition_id: &str,
@@ -1663,10 +1729,37 @@ impl LidarLibrary {
         let connection = self.catalogue()?;
         let definition = analysis::definition_row(&connection, definition_id)?
             .ok_or_else(|| format!("Analysis {definition_id} does not exist"))?;
+        analysis::SlopeRecipe::from_version(definition.version)?;
+        if catalogue::head_analysis_generation(&connection, definition_id)?.is_some() {
+            return Err(
+                "this result is complete; calculate a new slope instead of retrying it".to_string(),
+            );
+        }
+        let pinned: Option<String> = connection
+            .query_row(
+                "SELECT source_generation_id FROM lidar_analysis_jobs
+                 WHERE definition_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
+                [definition_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let Some(pinned) = pinned else {
+            return Err(
+                "this calculation has no recorded input to retry; calculate a new slope instead"
+                    .to_string(),
+            );
+        };
+        if pinned != expected_source_generation_id {
+            return Err("the input of this calculation is not the one expected".to_string());
+        }
         let head = catalogue::head_generation(&connection, &definition.layer_id)?
             .ok_or_else(|| "source layer has no accepted coverage to analyse yet".to_string())?;
-        if head.id != expected_source_generation_id {
-            return Err("source head changed; re-aim before retrying".to_string());
+        if head.id != pinned {
+            return Err(
+                "the input of this calculation is no longer available; calculate a new slope instead"
+                    .to_string(),
+            );
         }
         let active = matches!(
             catalogue::latest_analysis_job_state(&connection, definition_id)
@@ -1678,20 +1771,12 @@ impl LidarLibrary {
         if active {
             return Err("analysis is already running".to_string());
         }
-        let previous = catalogue::head_analysis_generation(&connection, definition_id)
-            .ok()
-            .flatten();
-        let state = if previous.is_some() {
-            "refreshing"
-        } else {
-            "preparing"
-        };
         let job_id = new_id("anl");
         connection
             .execute(
                 "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5, ?5)",
-                rusqlite::params![job_id, definition_id, head.id, state, now_iso()],
+                 VALUES(?1, ?2, ?3, 'preparing', ?4, ?4)",
+                rusqlite::params![job_id, definition_id, head.id, now_iso()],
             )
             .map_err(|e| format!("Failed to enqueue analysis retry: {e}"))?;
         let parameters_json = definition.parameters_json.clone();

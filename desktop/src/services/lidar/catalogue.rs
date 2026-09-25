@@ -927,6 +927,8 @@ pub struct AnalysisDefinitionRow {
     pub layer_id: String,
     pub kind: String,
     pub parameters_json: String,
+    /// Recipe version: the execution authority for how the kind is computed.
+    pub version: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -1043,7 +1045,7 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
 pub fn list_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitionRow>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT id, layer_id, kind, parameters_json
+            "SELECT id, layer_id, kind, parameters_json, version
              FROM lidar_analysis_definitions ORDER BY created_at, id",
         )
         .map_err(|e| e.to_string())?;
@@ -1054,6 +1056,7 @@ pub fn list_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitio
                 layer_id: row.get(1)?,
                 kind: row.get(2)?,
                 parameters_json: row.get(3)?,
+                version: row.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1068,7 +1071,7 @@ pub fn list_definitions_for_layer(
 ) -> Result<Vec<AnalysisDefinitionRow>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT id, layer_id, kind, parameters_json
+            "SELECT id, layer_id, kind, parameters_json, version
              FROM lidar_analysis_definitions WHERE layer_id = ?1 ORDER BY created_at, id",
         )
         .map_err(|e| e.to_string())?;
@@ -1079,6 +1082,7 @@ pub fn list_definitions_for_layer(
                 layer_id: row.get(1)?,
                 kind: row.get(2)?,
                 parameters_json: row.get(3)?,
+                version: row.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1123,6 +1127,22 @@ pub fn latest_analysis_job_state(
     connection
         .query_row(
             "SELECT state FROM lidar_analysis_jobs WHERE definition_id = ?1
+             ORDER BY created_at DESC, id DESC LIMIT 1",
+            [definition_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// The input generation the latest job of a definition was pinned to.
+pub fn latest_analysis_job_input(
+    connection: &Connection,
+    definition_id: &str,
+) -> Result<Option<String>, String> {
+    connection
+        .query_row(
+            "SELECT source_generation_id FROM lidar_analysis_jobs WHERE definition_id = ?1
              ORDER BY created_at DESC, id DESC LIMIT 1",
             [definition_id],
             |row| row.get(0),

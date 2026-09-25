@@ -4084,7 +4084,13 @@ pub fn raw_to_tif(
                 grid.geotransform[3] + grid.geotransform[5] * grid.height as f64
             ),
             "-a_nodata".to_string(),
-            format!("{nodata}"),
+            // The exact decimal of a finite marker, so a reader comparing the
+            // tag to Float32 samples finds the very value that was written.
+            if nodata.is_finite() {
+                format!("{:?}", f64::from(nodata))
+            } else {
+                format!("{nodata}")
+            },
             "-co".to_string(),
             "TILED=YES".to_string(),
             "-co".to_string(),
@@ -5958,7 +5964,7 @@ mod tests {
         // The layer is a valid analysis input while it is still a preserved
         // generation.
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 &layer_id,
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -6059,7 +6065,7 @@ mod tests {
         let superseded = head_of(&library, &layer_id).id;
 
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 &layer_id,
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
@@ -8457,7 +8463,7 @@ mod tests {
         let (_job_one, staging_one) = stage_review(&library, &layer_id, &[first], &cancel);
         apply_import(&library, &staging_one, true, false, &cancel).expect("first publishes");
         let receipt = library
-            .create_analysis(
+            .create_horn_analysis(
                 &layer_id,
                 common_types::lidar::LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {

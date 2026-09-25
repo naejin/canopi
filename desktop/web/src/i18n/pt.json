@@ -517,7 +517,24 @@
           "SurfaceElevation": "Elevação da superfície",
           "AboveGroundHeight": "Altura acima do solo",
           "OtherContinuous": "Outros valores"
-        }
+        },
+        "calculateSlope": "Calcular declividade",
+        "calculating": "Calculando",
+        "calculateTitle": "Calcular declividade",
+        "calculateFrom": "A partir de {{name}}",
+        "resultName": "Nome do resultado",
+        "unitDegrees": "Graus",
+        "unitPercent": "Porcentagem",
+        "run": "Executar",
+        "calculateAttachNote": "O resultado é adicionado a este Projeto quando estiver pronto.",
+        "calculateLibraryNote": "O resultado é salvo na biblioteca; adicione-o a qualquer Projeto.",
+        "slopeNeedsSource": "A declividade é calculada a partir de uma fonte importada pronta.",
+        "slopeNeedsGround": "A declividade precisa da elevação do terreno.",
+        "slopeNeedsMetres": "A declividade precisa de elevações em metros.",
+        "slopeEngineMissing": "O cálculo de declividade está indisponível: o motor GeoLibre está ausente.",
+        "methodGeolibre": "Declividade projetada GeoLibre (5×5)",
+        "methodUnknown": "Método desconhecido",
+        "factEngine": "Motor"
       },
       "layers": {
         "title": "Dados",

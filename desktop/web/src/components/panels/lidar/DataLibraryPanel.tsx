@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { currentDesign } from '../../../app/document-session/store'
 import {
   addToDesign,
+  calculateSlope,
+  cancelAnalysisJob,
   cancelLibraryImport,
   chooseImportFiles,
   deleteLibraryItem,
@@ -12,17 +14,21 @@ import {
   renameLibraryItem,
   retryFailedCalculation,
   retryLibraryImport,
+  runningAnalysisJobId,
 } from '../../../app/lidar/actions'
 import {
   filterLibraryItems,
   libraryItems,
+  slopeIneligibility,
   suggestedItemName,
   type LibraryItem,
   type LibraryTypeFilter,
+  type SlopeIneligibility,
 } from '../../../app/lidar/library-items'
 import { installLidarLibraryObserver, lidarLibrary, lidarStatusMessage } from '../../../app/lidar/library-store'
-import { libraryFocusRequest } from '../../../app/lidar/library-navigation'
+import { libraryCalculateRequest, libraryFocusRequest } from '../../../app/lidar/library-navigation'
 import type { LidarDeleteImpact, LidarMeasurementKind } from '../../../ipc/lidar'
+import type { LidarAnalysisMethod, LidarSlopeUnit } from '../../../generated/contracts'
 import { t } from '../../../i18n'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'
@@ -34,6 +40,7 @@ type View =
   | { readonly kind: 'list' }
   | { readonly kind: 'import'; readonly paths: readonly string[] }
   | { readonly kind: 'details' | 'rename' | 'delete'; readonly id: string }
+  | { readonly kind: 'calculate'; readonly id: string; readonly attach: boolean }
 
 const MEASUREMENTS: readonly LidarMeasurementKind[] = ['GroundElevation', 'SurfaceElevation', 'AboveGroundHeight', 'OtherContinuous']
 
@@ -65,6 +72,7 @@ export function DataLibraryPanel() {
   const visible = filterLibraryItems(items, query, type, relatedTo)
   const item = 'id' in view ? items.find((candidate) => candidate.id === view.id) ?? null : null
   const isAdded = (row: LibraryItem) => references.some((entry) => entry.id === row.id)
+  const slopeEngine = snapshot?.slope_engine
 
   // Another surface (Layers) can ask to show one item's details.
   useEffect(() => {
@@ -73,6 +81,14 @@ export function DataLibraryPanel() {
     libraryFocusRequest.value = null
     open({ kind: 'details', id: request })
   }, [libraryFocusRequest.value])
+
+  // Layers can ask to calculate slope; that result joins the asking Design.
+  useEffect(() => {
+    const request = libraryCalculateRequest.value
+    if (!request) return
+    libraryCalculateRequest.value = null
+    open({ kind: 'calculate', id: request, attach: true })
+  }, [libraryCalculateRequest.value])
 
   useLayoutEffect(() => {
     if (view.kind === 'list' && restoringList.current) {
@@ -134,6 +150,9 @@ export function DataLibraryPanel() {
   }
   const menu = (row: LibraryItem) => (
     <ActionMenu label={t('canvas.lidar.library.actionsFor', { name: row.name })} items={[
+      ...(row.kind === 'Source' && row.status === 'ready'
+        ? [{ label: t('canvas.lidar.library.calculateSlope'), run: () => open({ kind: 'calculate', id: row.id, attach: false }) }]
+        : []),
       ...(row.status === 'ready' ? [{ label: t('canvas.lidar.library.rename'), run: () => open({ kind: 'rename', id: row.id }) }] : []),
       ...(row.status === 'ready' || row.kind === 'Analysis'
         ? [{ label: t('canvas.lidar.library.deleteFromLibrary'), danger: true, run: () => open({ kind: 'delete', id: row.id }) }]
@@ -153,6 +172,19 @@ export function DataLibraryPanel() {
           <button type="button" onClick={() => void run(() => cancelLibraryImport(row.importJob!.job_id))}>
             {t('canvas.lidar.library.cancel')}
           </button>
+        </div>
+      )
+    }
+    if (row.status === 'preparing' && row.kind === 'Analysis') {
+      const running = runningAnalysisJobId(row.id) !== null
+      return (
+        <div className={styles.job}>
+          <span role="status">{t('canvas.lidar.library.calculating')}</span>
+          {running && (
+            <button type="button" onClick={() => void run(() => cancelAnalysisJob(row.id))}>
+              {t('canvas.lidar.library.cancel')}
+            </button>
+          )}
         </div>
       )
     }
@@ -282,6 +314,22 @@ export function DataLibraryPanel() {
               ? undefined
               : void run(() => retryFailedCalculation(item.id, item.inputGenerationId!))}
             onOpen={(id) => open({ kind: 'details', id })}
+            onCalculate={() => open({ kind: 'calculate', id: item.id, attach: false })}
+          />
+        )}
+        {view.kind === 'calculate' && item && (
+          <CalculateSlopeForm
+            item={item}
+            reason={slopeIneligibility(item, slopeEngine?.available ?? false)}
+            engineDetail={slopeEngine?.detail ?? null}
+            attach={view.attach}
+            busy={busy}
+            error={error}
+            onCancel={back}
+            onSubmit={(unit, name) => void run(
+              () => calculateSlope(item.id, unit, name, view.attach),
+              () => { restoreFocusId.current = null; back() },
+            )}
           />
         )}
         {view.kind === 'details' && !item && <p className={styles.muted}>{t('canvas.lidar.library.itemGone')}</p>}
@@ -393,7 +441,13 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
   )
 }
 
-function ItemDetails({ item, client, items, addButton, menu, operation, busy, onRetryCalculation, onOpen }: {
+function methodLabel(method: LidarAnalysisMethod | null): string {
+  if (method === 'GeolibreProjectedSlopeV1') return t('canvas.lidar.library.methodGeolibre')
+  if (method === 'GdalHornV1') return t('canvas.lidar.library.methodHorn')
+  return t('canvas.lidar.library.methodUnknown')
+}
+
+function ItemDetails({ item, client, items, addButton, menu, operation, busy, onRetryCalculation, onOpen, onCalculate }: {
   item: LibraryItem
   client: ReturnType<typeof usePreviewClient>
   items: readonly LibraryItem[]
@@ -403,6 +457,7 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
   busy: boolean
   onRetryCalculation(): void
   onOpen(id: string): void
+  onCalculate(): void
 }) {
   const [files, setFiles] = useState<string[] | null>(null)
   useEffect(() => {
@@ -445,7 +500,11 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
             ? <button type="button" className={styles.link} onClick={() => onOpen(input.id)}>{input.name}</button>
             : t('canvas.lidar.library.dataUnavailable')}</dd>
           <dt>{t('canvas.lidar.library.factMethod')}</dt>
-          <dd>{t('canvas.lidar.library.methodHorn')}</dd>
+          <dd>{methodLabel(item.method)}</dd>
+          {item.engineVersion && <>
+            <dt>{t('canvas.lidar.library.factEngine')}</dt>
+            <dd className={styles.filename}>{item.engineVersion}</dd>
+          </>}
         </>}
         {item.kind === 'Source' && item.resultCount > 0 && <>
           <dt>{t('canvas.lidar.library.factResults')}</dt>
@@ -453,6 +512,9 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
         </>}
       </dl>
       {item.status === 'ready' && addButton}
+      {item.kind === 'Source' && item.status === 'ready' && (
+        <button type="button" onClick={onCalculate}>{t('canvas.lidar.library.calculateSlope')}</button>
+      )}
       {operation}
       {item.kind === 'Analysis' && item.status === 'failed' && item.inputGenerationId !== null && (
         <button type="button" disabled={busy} onClick={onRetryCalculation}>{t('canvas.lidar.library.retry')}</button>
@@ -530,5 +592,70 @@ function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onShow
         </div>
       </>}
     </div>
+  )
+}
+
+const INELIGIBLE: Record<SlopeIneligibility, string> = {
+  notSource: 'canvas.lidar.library.slopeNeedsSource',
+  notReady: 'canvas.lidar.library.slopeNeedsSource',
+  notGround: 'canvas.lidar.library.slopeNeedsGround',
+  notMetres: 'canvas.lidar.library.slopeNeedsMetres',
+  engine: 'canvas.lidar.library.slopeEngineMissing',
+}
+
+/**
+ * One contextual operation: slope from a fixed input as a new library result.
+ * With a single qualified method there is no algorithm picker; the method is
+ * named in the result's details.
+ */
+function CalculateSlopeForm({ item, reason, engineDetail, attach, busy, error, onCancel, onSubmit }: {
+  item: LibraryItem
+  reason: SlopeIneligibility | null
+  engineDetail: string | null
+  attach: boolean
+  busy: boolean
+  error: string | null
+  onCancel(): void
+  onSubmit(unit: LidarSlopeUnit, name: string): void
+}) {
+  const [name, setName] = useState(`${item.name} · ${t('canvas.lidar.library.typeSlope')}`)
+  const [unit, setUnit] = useState<LidarSlopeUnit>('Degrees')
+  return (
+    <form className={styles.form} onSubmit={(event) => {
+      event.preventDefault()
+      if (!reason && name.trim() && !busy) onSubmit(unit, name.trim())
+    }}>
+      <h3 tabIndex={-1} data-autofocus="true">{t('canvas.lidar.library.calculateTitle')}</h3>
+      <p>{t('canvas.lidar.library.calculateFrom', { name: item.name })}</p>
+      {reason ? (
+        <p className={styles.error} role="alert">
+          {t(INELIGIBLE[reason])}{reason === 'engine' && engineDetail ? ` (${engineDetail})` : ''}
+        </p>
+      ) : <>
+        <label>
+          {t('canvas.lidar.library.resultName')}
+          <input required value={name} onInput={(event) => setName(event.currentTarget.value)} />
+        </label>
+        <fieldset className={styles.unit}>
+          <legend>{t('canvas.lidar.library.unit')}</legend>
+          {(['Degrees', 'Percent'] as const).map((value) => (
+            <label key={value} className={styles.check}>
+              <input type="radio" name="slope-unit" checked={unit === value} onChange={() => setUnit(value)} />
+              {t(`canvas.lidar.library.unit${value}`)}
+            </label>
+          ))}
+        </fieldset>
+        <p className={styles.muted}>
+          {attach ? t('canvas.lidar.library.calculateAttachNote') : t('canvas.lidar.library.calculateLibraryNote')}
+        </p>
+      </>}
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      <div className={styles.formActions}>
+        <button type="button" onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
+        <button type="submit" className={styles.primary} disabled={busy || reason !== null || !name.trim()}>
+          {t('canvas.lidar.library.run')}
+        </button>
+      </div>
+    </form>
   )
 }

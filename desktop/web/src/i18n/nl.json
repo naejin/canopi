@@ -517,7 +517,24 @@
           "SurfaceElevation": "Oppervlaktehoogte",
           "AboveGroundHeight": "Hoogte boven maaiveld",
           "OtherContinuous": "Andere waarden"
-        }
+        },
+        "calculateSlope": "Helling berekenen",
+        "calculating": "Bezig met berekenen",
+        "calculateTitle": "Helling berekenen",
+        "calculateFrom": "Uit {{name}}",
+        "resultName": "Naam van het resultaat",
+        "unitDegrees": "Graden",
+        "unitPercent": "Procent",
+        "run": "Uitvoeren",
+        "calculateAttachNote": "Het resultaat wordt aan dit Ontwerp toegevoegd zodra het gereed is.",
+        "calculateLibraryNote": "Het resultaat wordt in de bibliotheek bewaard; voeg het aan elk Ontwerp toe.",
+        "slopeNeedsSource": "Helling wordt berekend uit een geïmporteerde bron die gereed is.",
+        "slopeNeedsGround": "Helling vereist maaiveldhoogte.",
+        "slopeNeedsMetres": "Helling vereist hoogtes in meters.",
+        "slopeEngineMissing": "Hellingsberekening is niet beschikbaar: de GeoLibre-engine ontbreekt.",
+        "methodGeolibre": "GeoLibre geprojecteerde helling (5×5)",
+        "methodUnknown": "Onbekende methode",
+        "factEngine": "Engine"
       },
       "layers": {
         "title": "Data",

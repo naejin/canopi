@@ -28,7 +28,7 @@ vi.mock('../app/document-session/store', async () => {
 import { LidarLayersSection } from '../components/panels/lidar/LidarLayersSection'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { libraryFocusRequest } from '../app/lidar/library-navigation'
+import { libraryCalculateRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 
@@ -111,6 +111,9 @@ describe('Layers data band', () => {
     expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
     await click(button('Open in Data Library'))
     expect(libraryFocusRequest.value).toBe('a')
+    expect(sidePanel.value).toBe('data')
+    await click(button('Calculate slope'))
+    expect(libraryCalculateRequest.value).toBe('a')
     expect(sidePanel.value).toBe('data')
     await click(button('Remove from Design'))
     expect(actions.removeFromDesign).toHaveBeenCalledWith('a')

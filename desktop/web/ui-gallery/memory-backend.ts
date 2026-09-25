@@ -46,6 +46,8 @@ let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
   bounds: lidarBounds,
   value_range: [0, 41.6],
   slope_unit: 'Degrees',
+  method: 'GdalHornV1',
+  engine_version: 'GDAL 3.8.4',
 }]
 function galleryImport(layerId: string, name: string, kind: LidarLayerSummary['measurement_kind'], job: Partial<LidarImportJob>): LidarLayerSummary {
   return {
@@ -103,7 +105,23 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
         layers: lidarLayers,
         analyses: lidarAnalyses,
         engine: { available: true, version: '3.8.4', detail: null },
+        slope_engine: { available: true, version: 'geolibre-cli 1.5.3 (gallery)', detail: null },
       }; break
+    case 'lidar_create_analysis': {
+      const id = `lidar-analysis-${sequence++}`
+      const layerId = String(args.layerId)
+      const unit = (args.parameters as { slope_unit?: 'Degrees' | 'Percent' } | undefined)?.slope_unit ?? 'Degrees'
+      lidarAnalyses = [...lidarAnalyses, {
+        id, generation_id: `${id}-g1`, input_generation_id: `${layerId}-g1`, source_layer_id: layerId,
+        kind: 'Slope', name: typeof args.resultName === 'string' ? args.resultName : null, state: 'Ready',
+        detail: null, bounds: lidarBounds, value_range: unit === 'Percent' ? [0, 89.4] : [0, 41.6], slope_unit: unit,
+        method: 'GeolibreProjectedSlopeV1', engine_version: 'geolibre-cli 1.5.3 (gallery)',
+      }]
+      lidarLayers = lidarLayers.map(layer => layer.id === layerId ? { ...layer, analysis_count: layer.analysis_count + 1 } : layer)
+      activity.value = 'Calculated a slope result in memory.'
+      result = { definition_id: id, job_id: `job-${id}` }
+      break
+    }
     case 'lidar_import_item': {
       const id = `lidar-layer-${sequence++}`
       lidarLayers = [...lidarLayers, galleryImport(id, String(args.name), args.kind as LidarLayerSummary['measurement_kind'], {})]

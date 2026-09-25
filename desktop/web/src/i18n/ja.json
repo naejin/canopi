@@ -517,7 +517,24 @@
           "SurfaceElevation": "表面標高",
           "AboveGroundHeight": "地上高",
           "OtherContinuous": "その他の値"
-        }
+        },
+        "calculateSlope": "傾斜を計算",
+        "calculating": "計算中",
+        "calculateTitle": "傾斜を計算",
+        "calculateFrom": "{{name}}から",
+        "resultName": "結果の名前",
+        "unitDegrees": "度",
+        "unitPercent": "パーセント",
+        "run": "実行",
+        "calculateAttachNote": "準備ができるとこのデザインに結果が追加されます。",
+        "calculateLibraryNote": "結果はライブラリに保存されます。どのデザインにも追加できます。",
+        "slopeNeedsSource": "傾斜は準備済みのインポート元から計算します。",
+        "slopeNeedsGround": "傾斜には地表標高が必要です。",
+        "slopeNeedsMetres": "傾斜にはメートル単位の標高が必要です。",
+        "slopeEngineMissing": "傾斜を計算できません：GeoLibre エンジンがありません。",
+        "methodGeolibre": "GeoLibre 投影傾斜（5×5）",
+        "methodUnknown": "不明な手法",
+        "factEngine": "エンジン"
       },
       "layers": {
         "title": "データ",

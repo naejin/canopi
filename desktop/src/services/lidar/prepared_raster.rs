@@ -27,9 +27,13 @@ use wbgeotiff::{CogLevel, Compression, GeoTiff, SampleFormat};
 
 /// Largest side of one requested window, and the row band used by a scan.
 const MAX_WINDOW_SIDE: u32 = 1024;
+/// Widest halo any qualified analysis recipe reads: Horn's 3×3 needs one
+/// cell, GeoLibre's projected 5×5 two.
+pub(super) const MAX_RECIPE_HALO: u32 = 2;
 /// Largest side of an explicitly requested window: a scan window plus the
-/// one-cell analysis halo on each edge.
-pub(super) const MAX_HALO_SIDE: u32 = MAX_WINDOW_SIDE + 2;
+/// widest recipe halo on each edge. One such window stays far inside
+/// `MAX_LIVE_BYTES`.
+pub(super) const MAX_HALO_SIDE: u32 = MAX_WINDOW_SIDE + 2 * MAX_RECIPE_HALO;
 /// Controlled derivative geometry.
 const TILE_SIDE: u32 = 256;
 const TILE_SAMPLES: usize = (TILE_SIDE as usize) * (TILE_SIDE as usize);

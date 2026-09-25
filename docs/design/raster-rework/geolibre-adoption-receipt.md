@@ -113,3 +113,24 @@ No page errors. Deliberately removed surfaces are absent: no Analysis navigation
 Gates at `16e4e392`: `npx tsc --noEmit`; full Vitest 286 files / 2795 tests; `npm run check:ui`; `npm run build`; `npm run build:web` (boundary check passes); `npm run gen:types` + `check:types`; `cargo fmt --check`; `cargo clippy --workspace --all-targets -D warnings`; `cargo test --workspace` (358 lib tests); serial GDAL lane 65 passed, 3 failed only for missing fixtures (IGN MNT tile absent on this machine for the dense and sparse e2e lanes; capacity plane not set) — the capacity-plane lane then passed with `CANOPI_LIDAR_CAPACITY_PLANE` set (display derivatives for the 397M-cell plane in 12.9 s, seams and NoData holes exact). The dense and sparse e2e lanes remain **unverified** here for want of the IGN MNT fixture.
 
 Environment notes: release binaries resolve the plant database from `/usr/lib/Canopi` (schema 8), so the catalog reports "corrupt" in these runs; this does not affect the library. The first GTK chooser in a fresh nested session can wait on GVFS start-up.
+
+## S4 — contextual GeoLibre slope
+
+Process-boundary proof first: `geolibre-rust` `aac2b743` built with `cargo build --locked --release -p geolibre-cli` (7 min, `geolibre-cli 1.5.3`). The real `geolibre slope --input=… --output=… --units=… --z_factor=1` on the analytic `curved256` surface matched the analytic slope to 0.0004° in the interior (GDAL Horn: 0.062°), wrote wrong values only in the two-cell edge ring (published with quality 0), kept NoData centres NoData, substituted the valid centre for NoData neighbours, and matched analytic percent (550.7836 vs 550.7844). A `-1e30` NoData tag did not round-trip; the runner stages with the exact -2^127 sentinel instead, and `raw_to_tif` now tags finite NoData with its exact decimal.
+
+Implementation: `SlopeRecipe` dispatch on the stored definition version (1 Horn, 2 GeoLibre), `geolibre.rs` runner on the bounded process runner, recipe-specific halo and storage admission, window caps sized to the widest halo, in-transaction recipe recheck, `method_id`/`recipe_version`/engine provenance, explicit failure for unknown versions and unreadable parameters, Retry restricted to failed operations with their pinned input, typed `method`/`engine_version`/`slope_engine` in the read model, Calculate slope form in the Data Library and from Layers with session-bound attachment. No catalogue bump beyond v19: v19 is unreleased on this branch and every released binary (v18 and older) already refuses it, so no released binary can run a recipe-2 definition as Horn.
+
+Native proof (ignored lanes, `CANOPI_GEOLIBRE_BIN` set): an analytic surface 1040 cells wide matches within 0.01° on both sides of the 1024-cell chunk seam, NoData centres stay invalid, quality is exactly the 5×5 margin around the hole and edges, provenance is `geolibre-projected-slope-v1`/2/`geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)`, percent matches, and a second calculation is a separate result that leaves the first; cancelling while the child computes a 1024² window kills and reaps it, publishes nothing and removes scratch. Default suite: unknown recipe fails before any input read and keeps the result; Retry refusals (complete result, no recorded input, gone or unexpected input) enqueue nothing; missing engine refuses creation by name; read model reports method and the pinned input of a failed operation; build script revision matches. The R50 acceptance test now proves, through the actual Tauri command, refusal on a complete result, retry of a failed operation with its saved identity, and refusal of a stale pinned input with accepted bytes unchanged.
+
+Driven Desktop proof (`adoption-bench/s4-journey.mjs`, `results-s4-journey.json`; build `canopi-desktop` with `geolibre` placed beside it, so discovery used the packaged location; `plane2000`, 2000×2000 at 0.5 m, analytic slope 24.0948°):
+
+| Step | Result |
+| --- | --- |
+| Calculate slope from Layers (form shows "From plane2000", suggested name, attach note) → result in this Design's Layers | 10.6 s |
+| Inspect the result at view centre | 24.0950° (error 0.0002°) |
+| Calculate from the library in percent, named | Ready in 10.7 s; stays in the library, not added to the Design |
+| Result details | GeoLibre projected slope (5×5); engine `geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)`; input link |
+| Save, reopen | both references restored |
+| Same binary without the CLI | `slope_engine` unavailable with its reason; create refused by name; nothing created; both saved results Ready |
+
+No page errors. Gates: `tsc`; Vitest 286 files / 2804 tests; `check:ui`; `check:types`; `cargo fmt --check`; `cargo clippy -D warnings`; `cargo test --workspace` (364 lib tests); GDAL analysis/fixed-library/display lanes and both GeoLibre lanes pass. Not done here: release bundling of the sidecar (tracked in bd) and Windows/macOS execution of the CLI.

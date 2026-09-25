@@ -517,7 +517,24 @@
           "SurfaceElevation": "Elevación de superficie",
           "AboveGroundHeight": "Altura sobre el suelo",
           "OtherContinuous": "Otros valores"
-        }
+        },
+        "calculateSlope": "Calcular pendiente",
+        "calculating": "Calculando",
+        "calculateTitle": "Calcular pendiente",
+        "calculateFrom": "A partir de {{name}}",
+        "resultName": "Nombre del resultado",
+        "unitDegrees": "Grados",
+        "unitPercent": "Porcentaje",
+        "run": "Ejecutar",
+        "calculateAttachNote": "El resultado se añade a este Diseño cuando esté listo.",
+        "calculateLibraryNote": "El resultado se guarda en la biblioteca; añádalo a cualquier Diseño.",
+        "slopeNeedsSource": "La pendiente se calcula a partir de una fuente importada lista.",
+        "slopeNeedsGround": "La pendiente necesita la elevación del terreno.",
+        "slopeNeedsMetres": "La pendiente necesita elevaciones en metros.",
+        "slopeEngineMissing": "El cálculo de pendiente no está disponible: falta el motor GeoLibre.",
+        "methodGeolibre": "Pendiente proyectada GeoLibre (5×5)",
+        "methodUnknown": "Método desconocido",
+        "factEngine": "Motor"
       },
       "layers": {
         "title": "Datos",

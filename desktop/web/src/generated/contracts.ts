@@ -178,6 +178,13 @@ export type LidarAnalysisKind =
 // Terrain slope from a ground-elevation layer.
 "Slope";
 
+// A qualified analysis method, identified by its recipe.
+export type LidarAnalysisMethod =
+// Recipe 1: GDAL `gdaldem slope`, Horn 3×3 (existing results).
+"GdalHornV1" |
+// Recipe 2: the pinned GeoLibre projected slope, 5×5 Florinsky stencil.
+"GeolibreProjectedSlopeV1";
+
 /**
  *  Analysis parameters. Slope output unit is selected in the definition per
  *  the plan (§5); other parameters arrive with later slices.
@@ -238,6 +245,16 @@ export type LidarAnalysisSummary = {
 	 *  analysis path itself applies.
 	 */
 	slope_unit?: LidarSlopeUnit | null,
+	/**
+	 *  How this definition is computed, from its stored recipe version.
+	 *  `None` for a version this build does not know.
+	 */
+	method?: LidarAnalysisMethod | null,
+	/**
+	 *  The engine build that produced the current result, as recorded at
+	 *  publication; `None` without a result.
+	 */
+	engine_version?: string | null,
 };
 
 // Impact summary shown before a layer deletion is confirmed.
@@ -439,6 +456,11 @@ export type LidarLibrarySnapshot = {
 	layers: LidarLayerSummary[],
 	analyses: LidarAnalysisSummary[],
 	engine: LidarEngineStatus,
+	/**
+	 *  Whether new slope results can be calculated: the GeoLibre engine they
+	 *  need. Saved results stay readable whatever this reports.
+	 */
+	slope_engine?: LidarEngineStatus,
 };
 
 /**

@@ -9,7 +9,7 @@ import {
 import { lidarDisplayStyle, readLidarDisplay, entityKind } from '../../../app/lidar/display'
 import { formatLegendValue, legendGradient } from '../../../app/lidar/display-legend'
 import { lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
-import { openDataLibrary, openInDataLibrary } from '../../../app/lidar/library-navigation'
+import { calculateSlopeInLibrary, openDataLibrary, openInDataLibrary } from '../../../app/lidar/library-navigation'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
 import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { t } from '../../../i18n'
@@ -165,6 +165,11 @@ function ReferenceSettings({ item, units, inspecting, focused, onFit, onReturn, 
         >
           {t('canvas.lidar.layers.inspect')}
         </button>
+        {item.kind === 'Source' && available && (
+          <button type="button" onClick={() => calculateSlopeInLibrary(item.id)}>
+            {t('canvas.lidar.library.calculateSlope')}
+          </button>
+        )}
       </div>
       {item.state !== 'unavailable' && (
         <button type="button" className={styles.linkButton} onClick={() => openInDataLibrary(item.id)}>

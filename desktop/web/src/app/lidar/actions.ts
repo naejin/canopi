@@ -1,11 +1,14 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
+  LidarLibrarySnapshot,
   LidarMeasurementKind,
   LidarPresentationEntryKind,
+  LidarSlopeUnit,
 } from '../../generated/contracts'
 import {
   lidarCancelAnalysisJob,
   lidarCancelImport,
+  lidarCreateAnalysis,
   lidarDeleteAnalysis,
   lidarDeleteLayer,
   lidarDeleteLayerImpact,
@@ -169,6 +172,51 @@ export function setLidarEntryOpacity(id: string, opacity: number): void {
 export function moveReference(id: string, towards: 'front' | 'back'): void {
   // Saved order renders back to front, so "front" is a higher order.
   moveLidarEntry(id, towards === 'front' ? 'down' : 'up')
+}
+
+/**
+ * Calculate slope from one source as a new, separate library result.
+ *
+ * Inputs and earlier results never change, and a second calculation with the
+ * same settings is a second result. When asked from Layers, the finished
+ * result joins only the Design session that asked: switching Designs while it
+ * runs leaves it in the library, never in the replacement Design.
+ */
+export async function calculateSlope(
+  layerId: string,
+  unit: LidarSlopeUnit,
+  name: string,
+  attachToDesign: boolean,
+): Promise<string> {
+  const identity = designSessionStore.sessionIdentity.value
+  const receipt = await withLidarError(() =>
+    lidarCreateAnalysis(layerId, 'Slope', { slope_unit: unit, name: null }, name.trim() || null))
+  runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
+  if (attachToDesign) pendingAttachments.set(receipt.definition_id, identity)
+  await refreshLidarLibrary()
+  ensureLidarPolling()
+  return receipt.definition_id
+}
+
+/** Layers-initiated results waiting to join the Design session that asked. */
+const pendingAttachments = new Map<string, object>()
+
+/**
+ * Attach finished Layers-initiated results to their originating Design
+ * session, and drop requests whose session ended or whose operation failed.
+ */
+export function settleSlopeAttachments(snapshot: LidarLibrarySnapshot | null): void {
+  if (!snapshot || pendingAttachments.size === 0) return
+  const current = designSessionStore.sessionIdentity.value
+  for (const [id, identity] of [...pendingAttachments]) {
+    const analysis = snapshot.analyses.find((candidate) => candidate.id === id)
+    if (identity !== current || !analysis || analysis.state === 'Failed') {
+      pendingAttachments.delete(id)
+    } else if (analysis.generation_id) {
+      pendingAttachments.delete(id)
+      upsertLidarEntry('Analysis', id)
+    }
+  }
 }
 
 /**
