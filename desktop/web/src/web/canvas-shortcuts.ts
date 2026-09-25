@@ -2,6 +2,8 @@ import {
   canvasCommandIntentForShortcut,
   type CanvasCommandShortcutInput,
 } from '../app/canvas-commands'
+import { isPlaceSearchShortcut, openPlaceSearch } from '../app/geocoding/place-search-ui'
+import { getCurrentCanvasSession } from '../canvas/session'
 import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
 import { dispatchCurrentWebCanvasCommandIntent } from './canvas-command-adapter'
 
@@ -18,6 +20,12 @@ export function installWebCanvasShortcuts(target: Window = window): () => void {
 
   const handler = (event: KeyboardEvent): void => {
     if (isEditableTarget(event.target)) return
+    if (isPlaceSearchShortcut(event)) {
+      if (!getCurrentCanvasSession()) return
+      openPlaceSearch()
+      event.preventDefault()
+      return
+    }
     const intent = canvasCommandIntentForShortcut(shortcutInput(event))
     if (!intent || !dispatchCurrentWebCanvasCommandIntent(intent)) return
     event.preventDefault()

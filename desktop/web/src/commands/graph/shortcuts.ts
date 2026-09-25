@@ -13,6 +13,7 @@ import {
   runCatalogCommand,
   type AppCommandId,
 } from './catalog'
+import { isPlaceSearchShortcut } from '../../app/geocoding/place-search-ui'
 
 interface AppCommandShortcutMatch {
   readonly commandId: AppCommandId
@@ -112,7 +113,7 @@ function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | 
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '0') {
     return { commandId: 'view.fitToContent', preventDefault: true }
   }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'f') {
+  if (isPlaceSearchShortcut(event)) {
     return { commandId: 'view.searchPlace', preventDefault: true }
   }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'c') {

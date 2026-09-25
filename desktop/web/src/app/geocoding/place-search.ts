@@ -130,13 +130,18 @@ export function createPlaceSearchController(options: PlaceSearchOptions): PlaceS
           limit: options.limit ?? 5,
         })
         if (controller !== current) return
-        results.value = matches.map((match) => ({
-          label: match.displayName,
-          lat: match.lat,
-          lon: match.lon,
-          source: 'geocoder',
-        }))
-        status.value = matches.length > 0 ? 'results' : 'no-results'
+        // Nominatim can return several OSM objects (a town and its boundary)
+        // under one name; the user can only tell them apart by label.
+        const seen = new Set<string>()
+        results.value = matches
+          .filter((match) => !seen.has(match.displayName) && seen.add(match.displayName))
+          .map((match) => ({
+            label: match.displayName,
+            lat: match.lat,
+            lon: match.lon,
+            source: 'geocoder',
+          }))
+        status.value = results.value.length > 0 ? 'results' : 'no-results'
         attribution.value = getGeocodingProvider(config.providerId).attribution
       } catch (error) {
         if (controller !== current || (error instanceof DOMException && error.name === 'AbortError')) return

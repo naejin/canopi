@@ -172,6 +172,32 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     })
   })
 
+  it('re-derives an attached view from the map when the session plane moves, never transforming it twice', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    owner.attach(attachmentFor(map))
+    // The origin effect has already republished the map's frame for the new
+    // plane; the re-origin transform must not be applied on top of it.
+    const mapFrame = owner.viewport
+    const jumps = map.jumpTo.mock.calls.length
+
+    const result = owner.reprojectViewport({ scale: 0.7, offsetX: 783_189, offsetY: 2_378_261 })
+
+    expect(result).toEqual(mapFrame)
+    expect(owner.viewport).toEqual(mapFrame)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+  })
+
+  it('reprojects a detached view through the transform', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    owner.setViewport({ x: 10, y: 20, scale: 2 })
+    const before = owner.viewport
+    const after = owner.reprojectViewport({ scale: 0.5, offsetX: 4, offsetY: -6 })
+    expect(after).not.toEqual(before)
+  })
+
   it('routes attached navigation into the map and returns to Canvas2D after detach', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })

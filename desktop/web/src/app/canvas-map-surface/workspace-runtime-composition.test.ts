@@ -287,6 +287,7 @@ describe('createWorkspaceRuntimeComposition', () => {
       const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
       const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
       await expect(fixture.composition.start()).resolves.toBe('no-design')
+      fixture.setLoaded(true)
       const plane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
       fixture.sessionPlane.value = plane
       const viewport = fixture.runtime.querySurface.viewport as Signal<CameraViewportSnapshot>
@@ -322,6 +323,30 @@ describe('createWorkspaceRuntimeComposition', () => {
       moveTo(50)
       vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
       expect(onViewSettled).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never reports a settled view before a Design is loaded', async () => {
+    vi.useFakeTimers()
+    try {
+      const onViewSettled = vi.fn<(view: WorkspaceSettledView) => void>()
+      const fixture = compositionFixture({ readSnapshot: () => null, onViewSettled })
+      await expect(fixture.composition.start()).resolves.toBe('no-design')
+      // The map settles on the camera's default viewport before the Design
+      // arrives; that view is not the user's and must not become the last view.
+      fixture.sessionPlane.value = createSessionPlane({ lon: 13, lat: 23 })
+      const viewport = fixture.runtime.querySurface.viewport as Signal<CameraViewportSnapshot>
+      viewport.value = { ...viewport.value, viewport: { x: 0, y: 0, scale: 1 }, revision: viewport.value.revision + 1 }
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 2)
+      expect(onViewSettled).not.toHaveBeenCalled()
+
+      fixture.setLoaded(true)
+      viewport.value = { ...viewport.value, viewport: { x: 5, y: 5, scale: 2 }, revision: viewport.value.revision + 1 }
+      vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS)
+      expect(onViewSettled).toHaveBeenCalledOnce()
+      await fixture.composition.dispose()
     } finally {
       vi.useRealTimers()
     }

@@ -3,7 +3,7 @@ import { geocodingTransport } from '#geocoding-transport'
 import { createPlaceSearchController, type PlaceSearchResult } from '../../app/geocoding/place-search'
 import { closePlaceSearch, openPlaceSearch, placeSearchOpen, PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
-import { lastView } from '../../app/settings/state'
+import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 import { VIEW_SHORTCUTS } from '../../shortcuts/definitions'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { t } from '../../i18n'
@@ -108,10 +108,16 @@ export function PlaceSearch() {
   )
 }
 
-/** An empty Design with no remembered view starts at the world view: invite a site search. */
+/**
+ * An empty Design that opened without a remembered view has its session plane
+ * at the default world view: invite a site search. This reads the plane, not
+ * the live last view, which the camera rewrites as soon as it settles.
+ */
 function isEmptySite(): boolean {
   const queries = currentCanvasQuerySurface.value
-  if (!queries || lastView.value !== null) return false
+  const origin = queries?.sessionPlane.value?.origin
+  if (!queries || !origin) return false
+  if (origin.lon !== DEFAULT_NEW_DESIGN_VIEW.lon || origin.lat !== DEFAULT_NEW_DESIGN_VIEW.lat) return false
   void queries.revision.scene.value
   return queries.getScenePhysicalExtentMeters() === null
 }

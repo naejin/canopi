@@ -11,6 +11,8 @@ import { lastView } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { PlaceSearch } from '../components/canvas/PlaceSearch'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createSessionPlane, DEFAULT_NEW_DESIGN_VIEW } from '../canvas/session-plane'
 
 describe('PlaceSearch', () => {
   let container: HTMLDivElement
@@ -88,10 +90,24 @@ describe('PlaceSearch', () => {
     expect(document.activeElement).toBe(launcher())
   })
 
-  it('invites a site search only for an empty Design without a remembered view', async () => {
+  it('invites a site search for an empty Design opened at the default world view, even after the view is remembered', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ viewport: { showPlace } }),
+      queries: createTestCanvasQuerySurface({ sessionPlane: createSessionPlane(DEFAULT_NEW_DESIGN_VIEW) }),
+    }))
     await act(async () => { render(<PlaceSearch />, container) })
     expect(container.textContent).toContain('Search your site')
-    await act(async () => { lastView.value = { lon: 0.69, lat: 47.39, zoom: 16 } as typeof lastView.value })
+    // The camera remembers its view as soon as it settles; the invitation stays.
+    await act(async () => { lastView.value = { lon: 13, lat: 23, zoom: 4 } as typeof lastView.value })
+    expect(container.textContent).toContain('Search your site')
+  })
+
+  it('does not invite a site search when the empty Design opened at a remembered view', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ viewport: { showPlace } }),
+      queries: createTestCanvasQuerySurface({ sessionPlane: createSessionPlane({ lon: 0.69, lat: 47.39 }) }),
+    }))
+    await act(async () => { render(<PlaceSearch />, container) })
     expect(container.textContent).not.toContain('Search your site')
   })
 })

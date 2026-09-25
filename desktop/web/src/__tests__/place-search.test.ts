@@ -44,6 +44,18 @@ describe('place search', () => {
     expect(search.attribution.value).toBe(NOMINATIM_ATTRIBUTION)
   })
 
+  it('lists a place once when the geocoder returns several objects with the same name', async () => {
+    const transport = vi.fn(async () => [
+      { lat: '47.39', lon: '0.689', display_name: 'Tours, France' },
+      { lat: '47.3941', lon: '0.6848', display_name: 'Tours, France' },
+      { lat: '47.2', lon: '0.9', display_name: 'Tours-sur-Marne, France' },
+    ])
+    const search = createPlaceSearchController({ transport, sleep: async () => {} })
+    await search.search('Tours')
+    expect(search.results.value.map((result) => result.label)).toEqual(['Tours, France', 'Tours-sur-Marne, France'])
+    expect(search.results.value[0]).toMatchObject({ lat: 47.39, lon: 0.689 })
+  })
+
   it('spaces Nominatim requests at least 1.1 s apart', async () => {
     let clock = 10_000
     const waits: number[] = []

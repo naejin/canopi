@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
+import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
 import {
   disposeWebCanvasShortcuts,
   installWebCanvasShortcuts,
@@ -24,6 +25,18 @@ describe('Web Canvas shortcuts', () => {
     activeTool.value = 'select'
     document.body.innerHTML = ''
     vi.restoreAllMocks()
+  })
+
+  it('opens place search on Ctrl+F only while a Design canvas is live', () => {
+    installWebCanvasShortcuts()
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(placeSearchOpen.value).toBe(false)
+
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(placeSearchOpen.value).toBe(true)
+    closePlaceSearch()
   })
 
   it('dispatches tool and history shortcuts with exact Ctrl, Meta, Shift, and Alt semantics', () => {

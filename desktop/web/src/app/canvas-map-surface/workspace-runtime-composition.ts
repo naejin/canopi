@@ -219,6 +219,9 @@ export function createWorkspaceRuntimeComposition(
             if (!plane) return
             settleTimer = setTimeout(() => {
               settleTimer = null
+              // Before a Design is loaded and fitted the camera shows its
+              // default viewport, which is not a view the user chose.
+              if (!documents.hasLoadedDocument()) return
               const view = settledViewOf(frame, plane)
               if (view) onViewSettled(view)
             }, WORKSPACE_VIEW_SETTLE_MS)

@@ -13,3 +13,14 @@ export function closePlaceSearch(): void {
 
 /** Zoom at which a found place is shown: close enough to start designing. */
 export const PLACE_SEARCH_ZOOM = 17
+
+/** The place search shortcut (Ctrl+F, or Cmd+F), shared by both editions' shortcut routing. */
+export function isPlaceSearchShortcut(event: {
+  readonly key: string
+  readonly ctrlKey: boolean
+  readonly metaKey: boolean
+  readonly shiftKey: boolean
+  readonly altKey: boolean
+}): boolean {
+  return (event.ctrlKey !== event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f'
+}

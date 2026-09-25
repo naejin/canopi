@@ -10,6 +10,7 @@ import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
+import { PlaceSearch } from '../components/canvas/PlaceSearch'
 import { CanvasOverview } from '../components/canvas/CanvasOverview'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
@@ -226,6 +227,7 @@ export function WebCanvasWorkspace({
               data-testid="web-canvas-workspace-surface"
             />
             <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
+            {hasDesign && <PlaceSearch />}
             {hasDesign && <InspectionLens canvasRef={containerRef} />}
             {hasDesign && <SpeciesFocusChip />}
             {hasDesign && <CanvasOverview />}

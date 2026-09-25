@@ -7,6 +7,7 @@ import {
   type WorkspaceCameraOwner,
 } from '../canvas/runtime/camera'
 import type { SceneViewportState } from '../canvas/runtime/scene'
+import type { SessionPlaneTransform } from '../canvas/session-plane'
 import { createMapFrame } from '../canvas/maplibre-camera'
 import { mapZoomToStageScale } from '../canvas/projection'
 import {
@@ -189,6 +190,18 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     const active = this.active
     if (!active) return super.setViewport(viewport)
     return this.jumpAttachedMap(active, viewport)
+  }
+
+  /**
+   * While attached, the map is the camera: a session-plane move changes only
+   * how its unchanged view is expressed in metres, which the origin refresh
+   * already republished. Transforming that frame again would double-apply the
+   * move and send the view back across the re-origin threshold.
+   */
+  override reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {
+    const active = this.active
+    if (!active) return super.reprojectViewport(transform)
+    return this.publishAttachedFrame(active)
   }
 
   override dispose(): void {

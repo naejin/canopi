@@ -522,6 +522,33 @@ describe('Web Edition canvas workspace', () => {
     expect(runtime.documents.replaceDocument).not.toHaveBeenCalled()
   })
 
+  it('offers place search beside the inspection lens once a Design is open', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      now: () => new Date('2026-07-04T12:00:00.000Z'),
+    })
+    const runtime = fakeRuntimeComposition()
+
+    await controller.newDesign()
+    await act(async () => {
+      render(
+        <WebCanvasWorkspace
+          controller={controller}
+          store={store}
+          createRuntimeComposition={() => runtime.composition}
+        />,
+        container,
+      )
+      await flushMicrotasks()
+    })
+
+    expect(container.querySelector('button[aria-label="Search for a place"]')).not.toBeNull()
+  })
+
   it('releases a runtime whose Design attachment fails', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
