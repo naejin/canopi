@@ -70,8 +70,8 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 | Slope | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
 | Geocoding registry | `packages/core/src/geocoding.ts` | Copy into `app/geocoding/` |
 | Basemap presets | `packages/core/src/types.ts` (`OPENFREEMAP_BASEMAPS`) | Copy |
-| Layer sync pattern | `packages/map/src/layer-sync.ts` | Copy ideas and parts, not wholesale |
-| Candidates | `packages/map/src/fill-patterns.ts`, `packages/map/src/map-capture.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | Copy only if Canopi code gets smaller or clearly better |
+| Layer sync pattern | `packages/map/src/layer-sync.ts` | Pattern only (store-driven, idempotent sync); no code copied |
+| Evaluated, not adopted (V7) | `packages/map/src/{layer-sync,terrain-control,cog-dem-source,cog-imagery,fill-patterns,map-capture,collapsed-attribution-control,map-resize,map-bounds}.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | None would make Canopi code smaller or clearly better; reasons in the [MapLibre guide](agent/maplibre.md#geolibre-reuse). Re-evaluate map capture and print layout when PDF maps return (ADR 0008) |
 
 Every copied file keeps an MIT header naming its source path and commit and gets an entry in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). `@geolibre/map` is not a dependency (it pulls Cesium and React); `@geolibre/core` may be used for types only if it adds no heavy runtime.
 
