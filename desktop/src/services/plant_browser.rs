@@ -308,7 +308,7 @@ pub fn search_species(
     };
 
     {
-        hydrate_favorite_flags(user_db, &mut result.items);
+        hydrate_favorite_flags(user_db, &mut result.items)?;
     }
 
     Ok(result)
@@ -382,7 +382,7 @@ pub async fn search_species_async_cancellable(
                     cancellation.ensure_current()?;
                 }
 
-                hydrate_favorite_flags(&user_db, &mut result.items);
+                hydrate_favorite_flags(&user_db, &mut result.items)?;
 
                 if let Some(cancellation) = &cancellation {
                     cancellation.ensure_current()?;
@@ -394,11 +394,16 @@ pub async fn search_species_async_cancellable(
         .await
 }
 
-pub(crate) fn hydrate_favorite_flags(user_db: &UserDb, items: &mut [SpeciesListItem]) {
+pub(crate) fn hydrate_favorite_flags(
+    user_db: &UserDb,
+    items: &mut [SpeciesListItem],
+) -> Result<(), String> {
     let conn = user_db.acquire();
     for item in items {
-        item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name);
+        item.is_favorite = crate::db::user_db::is_favorite(&conn, &item.canonical_name)
+            .map_err(|e| format!("Failed to read favorites: {e}"))?;
     }
+    Ok(())
 }
 
 pub fn get_species_detail(
@@ -482,7 +487,7 @@ pub fn get_recently_viewed(
 ) -> Result<Vec<SpeciesListItem>, String> {
     let names = get_recently_viewed_names(user_db, limit)?;
     let mut items = project_personal_species_list_items(plant_db, names, locale)?;
-    hydrate_favorite_flags(user_db, &mut items);
+    hydrate_favorite_flags(user_db, &mut items)?;
 
     Ok(items)
 }

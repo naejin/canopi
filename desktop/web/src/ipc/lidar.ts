@@ -1,10 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
   LidarDeleteImpact,
-  LidarEngineStatus,
-  LidarImportJob,
   LidarImportReceipt,
-  LidarAnalysisJobStatus,
   LidarAnalysisReceipt,
   LidarAnalysisKind,
   LidarAnalysisParameters,
@@ -29,7 +26,6 @@ export type {
   LidarEngineStatus,
   LidarImportJob,
   LidarImportReceipt,
-  LidarAnalysisJobStatus,
   LidarAnalysisReceipt,
   LidarAnalysisKind,
   LidarAnalysisParameters,
@@ -37,9 +33,6 @@ export type {
   LidarMeasurementKind,
 } from '../generated/contracts'
 
-export async function lidarEngineStatus(): Promise<LidarEngineStatus> {
-  return invoke('lidar_engine_status')
-}
 
 export async function lidarListLibrary(): Promise<LidarLibrarySnapshot> {
   return invoke('lidar_list_library')
@@ -93,10 +86,6 @@ export async function lidarDeleteLayer(layerId: string): Promise<void> {
   return invoke('lidar_delete_layer', { layerId })
 }
 
-export async function lidarGetImportJob(jobId: string): Promise<LidarImportJob | null> {
-  return invoke('lidar_get_import_job', { jobId })
-}
-
 export async function lidarCancelImport(jobId: string): Promise<void> {
   return invoke('lidar_cancel_import', { jobId })
 }
@@ -124,12 +113,6 @@ export async function lidarRetryAnalysis(
     definitionId,
     expectedSourceGenerationId,
   })
-}
-
-export async function lidarGetAnalysisJobStatus(
-  jobId: string,
-): Promise<LidarAnalysisJobStatus | null> {
-  return invoke('lidar_get_analysis_job_status', { jobId })
 }
 
 export async function lidarCancelAnalysisJob(jobId: string): Promise<void> {

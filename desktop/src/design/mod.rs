@@ -1,4 +1,4 @@
-// .canopi file format: serialize, deserialize, migrate, autosave
+// .canopi Design files: admission, durable writes, autosave
 pub mod autosave;
 pub mod format;
 mod new_design_defaults;
@@ -20,32 +20,70 @@ static NEXT_SIDECAR_ID: AtomicU64 = AtomicU64::new(0);
 /// Publish derived output with the same target admission and replacement safety
 /// as Design writes, without a Design backup or persistence acknowledgement.
 pub(crate) fn write_derived_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    with_write_admission(path, || write_file_durably(path, bytes, "export"))
+}
+
+/// Durably replace `path` with `bytes`.
+///
+/// Writes an operation-owned temporary created with `create_new`, flushes it
+/// to stable storage, atomically replaces the target and, on Unix, flushes the
+/// parent directory so the rename itself survives a crash. On failure the
+/// temporary is removed and the previous target is left in place. Callers own
+/// write admission for the target.
+pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::io::Result<()> {
     use std::io::Write;
-    with_write_admission(path, || {
-        let temporary = operation_sidecar_path(path, "export");
+    let temporary = operation_sidecar_path(path, role);
+    let result = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temporary)?;
-        let result = (|| {
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            drop(file);
-            atomic_replace(&temporary, path)
-        })();
-        if let Err(ref original) = result {
-            match std::fs::remove_file(&temporary) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(std::io::Error::other(format!(
-                        "Export failed: {original}; temporary cleanup also failed: {error}"
-                    )));
-                }
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        atomic_replace(&temporary, path)?;
+        sync_parent_directory(path)
+    })();
+    if let Err(ref original) = result {
+        match std::fs::remove_file(&temporary) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(std::io::Error::new(
+                    original.kind(),
+                    format!("{original}; temporary cleanup also failed: {error}"),
+                ));
             }
         }
-        result
-    })
+    }
+    result
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    match std::fs::File::open(parent).and_then(|directory| directory.sync_all()) {
+        Ok(()) => Ok(()),
+        // Some filesystems cannot sync a directory handle; the file itself is
+        // already on stable storage, so that is not a failed write.
+        Err(error)
+            if error.kind() == std::io::ErrorKind::InvalidInput
+                || error.kind() == std::io::ErrorKind::Unsupported =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+    // Windows commits the rename with the file's metadata; there is no
+    // directory handle to flush.
+    Ok(())
 }
 
 fn operation_sidecar_path(dest: &Path, role: &str) -> PathBuf {
@@ -293,6 +331,60 @@ mod tests {
                 name.starts_with(".canopi-") && name.ends_with(&suffix)
             })
             .collect()
+    }
+
+    #[test]
+    fn durable_write_round_trips_content_without_leaving_a_temporary() {
+        let root = unique_root("durable_write");
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("garden.canopi");
+        fs::write(&target, "previous").unwrap();
+
+        write_file_durably(&target, b"replacement", "tmp").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "replacement");
+        assert!(operation_sidecars(&root, "tmp").is_empty());
+        assert!(operation_sidecars(&root, "old").is_empty());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn failed_durable_write_keeps_the_target_and_removes_its_temporary() {
+        let root = unique_root("durable_write_failure");
+        fs::create_dir_all(&root).unwrap();
+        // A directory cannot be replaced by a file, so the replace step fails
+        // after the temporary has been written.
+        let target = root.join("garden.canopi");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("marker.txt"), "kept").unwrap();
+
+        assert!(write_file_durably(&target, b"replacement", "tmp").is_err());
+
+        assert_eq!(
+            fs::read_to_string(target.join("marker.txt")).unwrap(),
+            "kept"
+        );
+        assert!(
+            operation_sidecars(&root, "tmp").is_empty(),
+            "a failed durable write must not leave its temporary behind"
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn derived_file_write_is_durable_and_leaves_no_temporary() {
+        let root = unique_root("derived_write");
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("export.geojson");
+
+        write_derived_file(&target, b"{}").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{}");
+        assert!(operation_sidecars(&root, "export").is_empty());
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

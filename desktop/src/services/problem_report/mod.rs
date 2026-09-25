@@ -37,35 +37,49 @@ pub fn create_problem_report(
     request: &ProblemReportRequest,
     context: ProblemReportContext,
 ) -> Result<ProblemReportResult, String> {
+    create_problem_report_with_writer(request, context, |path, bytes| std::fs::write(path, bytes))
+}
+
+/// Create the report folder and its files. A failure after the folder exists
+/// removes the folder, so no half-written report is left for the user to send.
+fn create_problem_report_with_writer(
+    request: &ProblemReportRequest,
+    context: ProblemReportContext,
+    write_file: impl Fn(&Path, &[u8]) -> std::io::Result<()>,
+) -> Result<ProblemReportResult, String> {
     let timestamp_iso = crate::design::unix_to_iso8601(context.timestamp_secs);
     let folder_name = format!("Canopi Problem Report {}", folder_stamp(&timestamp_iso));
     let folder = create_unique_report_folder(&context.output_root, &folder_name)?;
     let redactions = Redactions::from_context(&context);
 
-    let summary = build_report_summary(request, &context, &timestamp_iso, &redactions);
-    let summary_path = folder.join(SUMMARY_FILENAME);
-    std::fs::write(&summary_path, &summary).map_err(|error| {
-        format!(
-            "Failed to write report summary to {}: {error}",
-            summary_path.display()
-        )
-    })?;
+    let result = (|| {
+        let summary = build_report_summary(request, &context, &timestamp_iso, &redactions);
+        let summary_path = folder.join(SUMMARY_FILENAME);
+        write_file(&summary_path, summary.as_bytes())
+            .map_err(|error| format!("Failed to write the report summary: {error}"))?;
 
-    let bundle = build_diagnostic_bundle(request, &context, &timestamp_iso, &summary, &redactions)?;
-    let bundle_path = folder.join(BUNDLE_FILENAME);
-    std::fs::write(&bundle_path, bundle).map_err(|error| {
-        format!(
-            "Failed to write diagnostic bundle to {}: {error}",
-            bundle_path.display()
-        )
-    })?;
+        let bundle =
+            build_diagnostic_bundle(request, &context, &timestamp_iso, &summary, &redactions)?;
+        let bundle_path = folder.join(BUNDLE_FILENAME);
+        write_file(&bundle_path, &bundle)
+            .map_err(|error| format!("Failed to write the diagnostic bundle: {error}"))?;
 
-    Ok(ProblemReportResult {
-        folder_path: folder.to_string_lossy().into_owned(),
-        summary_path: summary_path.to_string_lossy().into_owned(),
-        bundle_path: bundle_path.to_string_lossy().into_owned(),
-        report_summary: summary,
-    })
+        Ok(ProblemReportResult {
+            folder_path: folder.to_string_lossy().into_owned(),
+            summary_path: summary_path.to_string_lossy().into_owned(),
+            bundle_path: bundle_path.to_string_lossy().into_owned(),
+            report_summary: summary,
+        })
+    })();
+
+    if let Err(error) = &result
+        && let Err(cleanup) = std::fs::remove_dir_all(&folder)
+    {
+        return Err(format!(
+            "{error}; the incomplete report folder could not be removed: {cleanup}"
+        ));
+    }
+    result
 }
 
 fn folder_stamp(timestamp_iso: &str) -> String {
@@ -252,7 +266,7 @@ mod tests {
                 frontend_diagnostics: Vec::new(),
                 sensitive_attachments: ProblemReportSensitiveAttachments {
                     current_design: Some(
-                        "{\n  \"name\": \"Secret Orchard\",\n  \"location\": {\"lat\": 48.8566, \"lon\": 2.3522}\n}\n"
+                        "{\n  \"name\": \"Secret Orchard\",\n  \"plants\": [{\"position\": {\"lat\": 48.8566, \"lon\": 2.3522}}]\n}\n"
                             .to_owned(),
                     ),
                 },
@@ -282,19 +296,123 @@ mod tests {
         assert!(bundle_text.contains("Secret Orchard"));
         assert!(bundle_text.contains("Current Design included by explicit user consent"));
         assert!(bundle_text.contains("\"includes_design_contents\": true"));
-        assert!(bundle_text.contains("\"includes_precise_location\": true"));
+        assert!(
+            !bundle_text.contains("precise_location"),
+            "v2 has no Design location"
+        );
+        assert!(
+            !bundle_text.contains("Precise Location"),
+            "v2 has no Design location"
+        );
+    }
+
+    fn minimal_context(
+        output_root: PathBuf,
+        log_dir: Option<PathBuf>,
+    ) -> super::ProblemReportContext {
+        super::ProblemReportContext {
+            output_root,
+            log_dir,
+            app_data_dir: None,
+            timestamp_secs: 1_801_440_000,
+            app_version: "0.5.0".to_owned(),
+            target: "test-os/test-arch".to_owned(),
+            settings: Some(Settings::default()),
+            settings_error: None,
+            health: SubsystemHealth {
+                plant_db: PlantDbStatus::Available,
+            },
+        }
+    }
+
+    fn request(description: &str) -> ProblemReportRequest {
+        ProblemReportRequest {
+            description: description.to_owned(),
+            frontend_diagnostics: Vec::new(),
+            sensitive_attachments: ProblemReportSensitiveAttachments::default(),
+        }
+    }
+
+    #[test]
+    fn a_saved_design_name_never_reaches_the_diagnostic_bundle() {
+        let temp = TempProblemReportDir::new("design-name");
+        let log_dir = temp.root.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let user_db =
+            crate::db::UserDb::initialize(rusqlite::Connection::open_in_memory().unwrap()).unwrap();
+        let design_path = temp.root.join("designs").join("orchard.canopi");
+        std::fs::create_dir_all(design_path.parent().unwrap()).unwrap();
+        let (_, logs) = crate::services::design_files::capture_logs(|| {
+            crate::services::design_files::save_design(
+                &user_db,
+                design_path.to_string_lossy().into_owned(),
+                crate::design::format::create_new_design(
+                    "Secret Orchard of Alice",
+                    "2026-07-02T00:00:00Z",
+                ),
+            )
+            .unwrap();
+        });
+        assert!(logs.contains("Design saved"), "{logs}");
+        std::fs::write(log_dir.join("canopi.log"), logs).unwrap();
+
+        let result = super::create_problem_report(
+            &request("Save felt slow"),
+            minimal_context(temp.root.join("Desktop"), Some(log_dir)),
+        )
+        .unwrap();
+
+        let bundle = std::fs::read(&result.bundle_path).unwrap();
+        let bundle_text = String::from_utf8_lossy(&bundle);
+        assert!(
+            bundle_text.contains("Design saved"),
+            "the log line is still reported"
+        );
+        assert!(!bundle_text.contains("Secret Orchard of Alice"));
+        assert!(!bundle_text.contains("orchard.canopi"));
+    }
+
+    #[test]
+    fn a_failed_bundle_write_leaves_no_report_folder() {
+        let temp = TempProblemReportDir::new("failed-write");
+        let output_root = temp.root.join("Desktop");
+
+        let error = super::create_problem_report_with_writer(
+            &request("Bundle write fails"),
+            minimal_context(output_root.clone(), None),
+            |path, bytes| {
+                if path.ends_with(super::BUNDLE_FILENAME) {
+                    Err(std::io::Error::other("disk full"))
+                } else {
+                    std::fs::write(path, bytes)
+                }
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.contains("disk full"), "{error}");
+        assert_eq!(
+            std::fs::read_dir(&output_root).unwrap().count(),
+            0,
+            "the half-written report folder must be removed"
+        );
+    }
+
+    fn report_folder_in(root: &Path) -> PathBuf {
+        let report_folder = root.join("Canopi Problem Report 2027-02-01 00-00-00");
+        std::fs::create_dir_all(&report_folder).unwrap();
+        std::fs::write(report_folder.join("Report Summary.txt"), "summary").unwrap();
+        std::fs::write(report_folder.join("Diagnostic Bundle.zip"), b"bundle").unwrap();
+        report_folder
     }
 
     #[test]
     fn show_problem_report_folder_reveals_generated_report_folder() {
         let temp = TempProblemReportDir::new("show-folder");
-        let report_folder = temp.root.join("Canopi Problem Report 2027-02-01 00-00-00");
-        std::fs::create_dir_all(&report_folder).unwrap();
-        std::fs::write(report_folder.join("Report Summary.txt"), "summary").unwrap();
-        std::fs::write(report_folder.join("Diagnostic Bundle.zip"), b"bundle").unwrap();
+        let report_folder = report_folder_in(&temp.root);
         let revealer = RecordingFolderRevealer::new();
 
-        super::show_problem_report_folder(&report_folder, &revealer).unwrap();
+        super::show_problem_report_folder(&report_folder, &temp.root, &revealer).unwrap();
 
         assert_eq!(revealer.opened.borrow().as_slice(), &[report_folder]);
     }
@@ -306,9 +424,29 @@ mod tests {
         std::fs::create_dir_all(&not_a_report).unwrap();
         let revealer = RecordingFolderRevealer::new();
 
-        let error = super::show_problem_report_folder(&not_a_report, &revealer).unwrap_err();
+        let error =
+            super::show_problem_report_folder(&not_a_report, &temp.root, &revealer).unwrap_err();
 
         assert!(error.contains("is not a Canopi Problem Report folder"));
+        assert!(revealer.opened.borrow().is_empty());
+    }
+
+    #[test]
+    fn show_problem_report_folder_rejects_report_folders_outside_the_output_root() {
+        let temp = TempProblemReportDir::new("show-folder-outside");
+        let elsewhere = temp.root.join("elsewhere");
+        let report_folder = report_folder_in(&elsewhere);
+        let output_root = temp.root.join("Desktop");
+        std::fs::create_dir_all(&output_root).unwrap();
+        let revealer = RecordingFolderRevealer::new();
+
+        let error =
+            super::show_problem_report_folder(&report_folder, &output_root, &revealer).unwrap_err();
+
+        assert!(
+            error.contains("is not a Canopi Problem Report folder"),
+            "{error}"
+        );
         assert!(revealer.opened.borrow().is_empty());
     }
 }

@@ -846,25 +846,48 @@ pub fn new_id(prefix: &str) -> String {
     format!("{prefix}-{nanos:016x}{counter:04x}")
 }
 
-/// Whether any committed catalogue row references one asset digest.
-///
-/// Promotion cleanup asks this before removing a file: a digest referenced as a
-/// source payload *or* as a published generation/result chunk belongs to
-/// accepted history and is never deleted, even when the promoting job's journal
-/// still lists it. Ownership that cannot be established fails closed.
-pub fn asset_reference_exists(connection: &Connection, sha256: &str) -> Result<bool, String> {
+/// Every asset digest a catalogue row references: a source interpretation's
+/// COG or any generation or result chunk, published or not.
+pub fn referenced_asset_digests(
+    connection: &Connection,
+) -> Result<std::collections::HashSet<String>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT asset_sha256 FROM lidar_interpretation_cogs
+             UNION SELECT asset_sha256 FROM lidar_generation_chunks",
+        )
+        .map_err(|e| format!("Failed to read asset references: {e}"))?;
+    statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Failed to read asset references: {e}"))?
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("Failed to read asset references: {e}"))
+}
+
+/// Drop asset metadata rows no reference names; their files are swept too.
+pub fn discard_unreferenced_asset_rows(connection: &Connection) -> Result<usize, String> {
+    connection
+        .execute(
+            "DELETE FROM lidar_raster_assets WHERE sha256 NOT IN (
+                SELECT asset_sha256 FROM lidar_interpretation_cogs
+                UNION SELECT asset_sha256 FROM lidar_generation_chunks)",
+            [],
+        )
+        .map_err(|e| format!("Failed to discard unreferenced asset rows: {e}"))
+}
+
+/// Whether an import or calculation is still running.
+pub fn jobs_in_flight(connection: &Connection) -> Result<bool, String> {
     connection
         .query_row(
-            "SELECT 1 FROM lidar_interpretation_cogs WHERE asset_sha256 = ?1
-             UNION ALL
-             SELECT 1 FROM lidar_generation_chunks WHERE asset_sha256 = ?1
-             LIMIT 1",
-            [sha256],
-            |_| Ok(()),
+            "SELECT EXISTS(
+                SELECT 1 FROM lidar_import_jobs WHERE state IN ('staging', 'applying')
+                UNION ALL
+                SELECT 1 FROM lidar_analysis_jobs WHERE state = 'preparing')",
+            [],
+            |row| row.get(0),
         )
-        .optional()
-        .map(|row| row.is_some())
-        .map_err(|e| format!("Failed to read asset references: {e}"))
+        .map_err(|e| format!("Failed to read job states: {e}"))
 }
 
 /// One published resolved-chunk reference.

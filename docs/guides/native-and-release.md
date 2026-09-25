@@ -31,6 +31,9 @@ cargo build --release
 
 - `rust-toolchain.toml` pins the exact stable compiler. Every `dtolnay/rust-toolchain` step in Build & Test and Release Candidate uses the same version. Update them together and run the full matrix. The pin is not an MSRV, so do not add `rust-version`.
 - `.github/actions/cache-rust` keys caches by OS/arch, compiler, workload and Cargo target. Do not collapse the keys to OS/compiler/lockfile: GitHub caches are immutable, so a tiny test cache would shadow packaging forever. Only dependency sources and compiled deps are cached.
+- Runtime crates (`desktop`, `common-types`) deny `clippy::unwrap_used` and `clippy::expect_used`; tests may unwrap (`clippy.toml`). A true invariant uses `#[expect(clippy::expect_used, reason = "...")]` at its function, so every possible panic is reviewed and justified. Build tools (`bindings-gen`, `desktop/build.rs`) may fail loudly.
+- Rust coverage: `cargo cov` (alias in `.cargo/config.toml`, needs `cargo-llvm-cov` and the `llvm-tools-preview` component) runs the workspace tests instrumented and fails below the recorded floor; CI runs it as the Rust test step. Raise the floor when coverage grows; never lower it.
+- CI builds and tests with `--locked`, so a release is always built from the reviewed `Cargo.lock`.
 - Validation workflows cancel superseded runs only within the same PR. `windows-compression-benchmark.yml` is an isolated experiment and must never publish release assets.
 - CI polling: avoid streaming `gh run watch`. Poll quietly with `gh run view <id> --json status,conclusion,jobs`. Wait at least 2 minutes between checks once only packaging remains, and 5 minutes when only Windows packaging remains.
 
@@ -41,25 +44,29 @@ cargo build --release
 - Every `#[tauri::command]` is registered once in `tauri::generate_handler!` and is either executor-backed async or a reviewed synchronous allowance in `desktop/src/native_command_policy.rs`. The policy test parses production sources with test-only `syn` and fails on missing executor use, registry drift, blocking-pool bypasses and new synchronous commands.
 - The synchronous allowlist is `new_design`, `get_health`, `supersede_species_search` and the three LiDAR cancel signals. Each entry has a reviewed reason. Never extend it to avoid moving a command onto the executor.
 - Filesystem, SQLite, network, rendering, encoding, compression, process, sleeping and unbounded CPU work never run synchronously in a command body. Direct `spawn_blocking`/`block_in_place` calls belong only in `desktop/src/native_operation.rs`.
+- Outside the closure passed to `executor.run`, an async command only unwraps (`inner()`) and clones its `State<...>` handles, or passes them to a helper that also receives the executor. Any other method or free-function call on managed state, or on a value bound from it, needs a reviewed entry in `STATE_ACCESS_ALLOWLIST` (bounded in-memory work such as a supersession token or inspection admission). A cache-hit probe is filesystem work and runs inside the executor like the fetch it short-circuits.
+- Every registered command has an `invoke('<name>'...)` call site in production frontend source (`desktop/web/src`, excluding tests). A command nothing invokes is deleted with everything only it uses. `UNINVOKED_COMMAND_ALLOWLIST` holds only `list_autosaves` and `recover_autosave`, pending a user decision on autosave recovery.
 
 ### Native operation executor
 
 - Commands carry and await the Tauri-managed `NativeOperationExecutor`. Classes are chosen by the constrained resource:
   - `Catalog` (admitted 8 / running 1): species search, detail, batches, filters, names, media.
-  - `UserData` (8/1): settings, favorites, Recent Designs, Design Notebook, stamp CRUD.
-  - `Local` (6/2): Design save/load, autosave and recovery, exports (`export_file`, `save_canvas_pdf`, PNG), GeoJSON read, stamp files, Problem Reports, LiDAR raster work.
-  - `Network` (12/4): HTTP such as geocoding and remote assets.
+  - `UserData` (8/1): settings, favorites, Recent Designs, Design Notebook, stamp CRUD, LiDAR catalogue commands (library listing, presentation, display descriptors).
+  - `Local` (6/2): Design save/load, autosave and recovery, exports (`export_file`, `save_canvas_pdf`), GeoJSON read, stamp files, Problem Reports, LiDAR raster work (import, slope, pixel sampling).
+  - `Network` (12/4): HTTP such as geocoding and the species image cache (hits included, so no cache probe runs on the async thread).
 - Admission is immediate. A full class returns its stable busy error before touching any destination, DB or folder. Admitted work waits FIFO for running capacity, and classes are isolated.
 - Admission and running permits move into the started blocking closure. Validation, locks, transactions and publication stay inside it. Dropping the async caller may cancel queued work but never releases capacity for work that cannot be aborted.
 - Labels are static and payload-safe. Never trace request values, paths, URLs, Design content or error payloads.
-- The direct Tokio dependency enables only `sync`. Never build a second runtime.
+- The direct Tokio dependency enables only `sync` and `time`. Never build a second runtime.
 - Command tests use `tauri::test::mock_builder().manage(service).manage(executor)` and invoke the real command through `app.state()`. A copied closure passed to `executor.run` does not prove command wiring.
 
-### Platform, files and Linux
+### Files, network and Linux
 
-- The platform trait (`desktop/src/platform/mod.rs`) exposes only native PNG snapshot export. macOS and Windows implementations sit behind `#[cfg(target_os)]`, and CI compiles each platform. There is no OS PDF renderer, file watching or thumbnailing.
+- There are no platform crates and no native rendering: PDF and every other export are produced by the frontend and delivered through the executor. There is no OS PDF renderer, file watching or thumbnailing.
+- Derived files go through `write_derived_file()` (`desktop/src/design/mod.rs`): a same-directory temporary, `sync_all` and `atomic_replace()`. `save_canvas_pdf` admits only a `.pdf` destination and a bounded `%PDF-` payload. `export_file` (budget CSV and GeoJSON) admits only `.csv`, `.geojson` and `.json` destinations and at most 64 MiB; the frontend appends the chosen format's extension when the dialog returns a bare name. Export services never log destination paths.
+- The species image cache (`desktop/src/image_cache.rs`) fetches only the plant DB's media hosts: `inaturalist-open-data.s3.amazonaws.com`, `commons.wikimedia.org` and its redirect target `upload.wikimedia.org`, on the default port and without credentials. Any other URL is refused (`ImageCacheError::DisallowedUrl`) before the cache or network is touched. The plant DB's `http://` Commons links are fetched over HTTPS. Redirects are followed by hand, at most five, each re-checked against the allowlist and HTTPS-only. Only `image/*` responses other than SVG are cached, at most 10 MB each. Requests identify as `Canopi/<version> (+https://projectcanopi.com)`, like geocoding.
 - Design writes use `atomic_replace()` (`desktop/src/design/mod.rs`) because `std::fs::rename` can fail on locked Windows files. Temporary and rollback sidecars are operation-owned and live in the same directory. `.canopi.prev` is target-owned. Saves admit the normalized target family, and autosave admits the whole store.
-- Linux: native PNG uses `cairo-rs` (`png` feature). System deps are GTK/WebKitGTK, librsvg and patchelf; do not add `libappindicator3-dev`. `desktop/src/main.rs` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before WebKitGTK starts. Keep `cargo tauri dev` the normal command. Bundles are deb and AppImage. Debian depends use alternatives for Ubuntu t64 transitions.
+- Linux: system deps are GTK/WebKitGTK, librsvg and patchelf; do not add `libappindicator3-dev`. `desktop/src/main.rs` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before WebKitGTK starts. Keep `cargo tauri dev` the normal command. Bundles are deb and AppImage. Debian depends use alternatives for Ubuntu t64 transitions.
 - Desktop icons come from `scripts/generate-desktop-icons.sh` (PNG, ICNS, ICO). Every icon referenced by `tauri.conf.json` must exist or `generate_context!()` panics. Commit generated assets with their source.
 
 ### Tauri config gotchas
@@ -67,7 +74,8 @@ cargo build --release
 - `beforeDevCommand` is `{ "script": "npm run dev", "cwd": "web" }`, relative to `desktop/`.
 - The CSP allows scripts from `'self'` plus `'wasm-unsafe-eval'` (raster decode), blob workers and HTTPS image and connection sources. Review it when you add a resource type or origin.
 - The asset protocol scope is `$APPDATA/image-cache/**` and `$APPDATA/lidar/display-cog/*.tif` only.
-- `decorations: false` window dragging needs the window permissions in `capabilities/main-window.json`. `core:window:allow-destroy` enables discard-without-save close, which uses `destroy()` rather than `close()`.
+- `capabilities/main-window.json` grants exactly what the frontend calls, never a `default` set: event listen/unlisten (the close guard's `onCloseRequested`), the window start-dragging, minimize, toggle-maximize, close and destroy permissions (`decorations: false` title bar; `destroy()` is the discard-without-save close) and dialog open, save and message. Add a permission in the change that first calls the API.
+- The MCP bridge (`tauri-plugin-mcp-bridge`, behind the default `mcp-bridge` Cargo feature) exists only for `cargo tauri dev` automation. Only a debug build registers it, bound to `127.0.0.1`, and only then does `desktop/build.rs` merge `withGlobalTauri: true` and the `mcp-bridge-dev` capability (`desktop/capabilities-dev/`, outside the release capability pattern) into the Tauri config. Release builds never expose `window.__TAURI__` or the bridge permissions, and `--no-default-features` drops the crate. A lib test checks both states.
 - Use the JS dialog API (`@tauri-apps/plugin-dialog`), because Linux blocking dialogs can deadlock. Events emitted in `setup()` are lost because the frontend has not loaded yet. The shell plugin is removed: process execution happens only in admitted native services with fixed commands.
 
 ## Frontend dependency maintenance
@@ -88,7 +96,8 @@ cargo build --release
 
 ## Bundled plant DB
 
-- `CANOPI_SKIP_BUNDLED_DB=1` (read by `desktop/build.rs`) empties the bundle resources so the crate builds without `desktop/resources/canopi-core.db`. CI lint and test jobs set it.
+- `CANOPI_SKIP_BUNDLED_DB=1` (read by `desktop/build.rs`) drops the plant DB from the bundle resources, keeping `THIRD_PARTY_NOTICES.md`, so the crate builds without `desktop/resources/canopi-core.db`. CI lint and test jobs set it. A release-profile build with it set emits a `cargo:warning`.
+- Only debug builds fall back to `desktop/resources/canopi-core.db` in the repository when the bundled resource is absent; a release build reads only its bundle.
 - Release builds derive an immutable asset name from the prepared schema version, the contract fingerprint and the source-export SHA-256 (`species_catalog_contract.py value prepared-db-asset-name`). They download it from the `canopi-core-db` release tag and verify it against the prepared profile before packaging. A matching `user_version` alone is not enough. Packages are hundreds of MB.
 - Publish or refresh the DB: `scripts/publish-db-release.sh --export-path <export>.db [--tag <tag>] [--repo <owner/repo>]`. It verifies the export against `prepared_artifact.source_export_sha256`, prepares and verifies the DB, and refuses to overwrite an existing identity asset.
 - When catalog content changes, update the source pin to the exact reviewed export and publish its asset before same-repository PR packaging can pass. Fork PRs skip trusted packaging; a maintainer reproduces the change on a same-repository branch. Details are in [species catalog](species-catalog.md#storage-contract).
@@ -109,7 +118,8 @@ Failure triage: on a version mismatch, fix `tauri.conf.json` or the input. When 
 ## Problem reports
 
 - Desktop only ([ADR 0005](../adr/0005-web-edition-scope.md)). Reports are local-first, with no automatic upload, telemetry, email or issue creation.
-- Output: a timestamped `Canopi Problem Report ...` folder with `Report Summary.txt` and `Diagnostic Bundle.zip`. The success screen can reveal it through `show_problem_report_folder`, which validates that the path is a generated report folder and runs a fixed `open`, `explorer` or `xdg-open` inside `Local`.
-- Privacy boundary: by default the bundle excludes Design contents, object coordinates, screenshots, raw filesystem paths, the Google key and personal libraries (Saved Object Stamps). The current Design may be attached only through an explicit, off-by-default consent control. When it is, the manifest and summary name that attachment. Settings summaries include only preferences with a live consumer.
+- Output: a timestamped `Canopi Problem Report ...` folder with `Report Summary.txt` and `Diagnostic Bundle.zip`. A failure after the folder is created removes the folder, so no half-written report is left behind. The success screen can reveal it through `show_problem_report_folder`, which validates that the path is a generated report folder directly inside the report output root, runs a fixed `open`, `explorer` or `xdg-open` inside `Local` and reaps that process on a background thread.
+- Privacy boundary: by default the bundle excludes Design contents (object coordinates are Design contents; there is no separate Design location), screenshots, raw filesystem paths, the Google key and personal libraries (Saved Object Stamps). The current Design may be attached only through an explicit, off-by-default consent control. When it is, the manifest and summary name that attachment. Settings summaries include only preferences with a live consumer.
+- The bundle carries recent backend log lines, so backend logs never name a Design or its path; log the event only. Redaction (`redactions.rs`, mirrored for frontend diagnostics in `app/problem-report/diagnostics.ts`) replaces known folders and absolute paths, including the file name after a known folder, up to a `: ` separator so the error reason stays readable, and replaces `key=`, `api-key=`, `api_key=` and `apikey=` query values with `<redacted>`.
 - Seams: types in `common-types/src/support.rs`, orchestration in `desktop/src/services/problem_report/mod.rs`, with `bundle.rs`, `redactions.rs`, `summary.rs`, `zip.rs` and `folder_reveal.rs` as siblings. The command reads diagnostic settings through `UserData`, then creates and publishes the folder in `Local`, rejecting before creating anything when the class is full. The frontend enters through the App Command Graph. `app/problem-report/submission.ts` owns request assembly and state. The Design attachment is captured through the document-session persistence seam.
 - Tests exercise the service through its artifacts and privacy exclusions, and the frontend through dialog and command behaviour. Tests inject the reveal seam and never launch a file manager.

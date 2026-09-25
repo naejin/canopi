@@ -19,9 +19,9 @@ pub(crate) fn build_report_summary(
         "- None selected"
     };
     let privacy_note = if includes_current_design {
-        "The diagnostic bundle includes the current Design because you opted in. It may include canvas contents, notes, timeline, budget, and saved location. Screenshots are still excluded by default."
+        "The diagnostic bundle includes the current Design because you opted in. It includes its objects and their map coordinates, notes, timeline and budget. Screenshots are still excluded by default."
     } else {
-        "The diagnostic bundle excludes Design contents, precise Location, screenshots, and raw filesystem paths by default."
+        "The diagnostic bundle excludes Design contents (including object coordinates), screenshots and raw filesystem paths by default."
     };
     let settings_line = match (&context.settings, &context.settings_error) {
         (Some(settings), _) => format!(

@@ -218,11 +218,8 @@ pub struct LidarAnalysisSummary {
     ///
     /// Read from the definition's own parameters rather than from the input
     /// layer, so a slope in percent is never labelled with an elevation unit or
-    /// with the other slope unit. `None` for a definition written before the
-    /// unit was recorded, which the UI shows as degrees — the default the
-    /// analysis path itself applies.
-    #[serde(default)]
-    pub slope_unit: Option<LidarSlopeUnit>,
+    /// with the other slope unit.
+    pub slope_unit: LidarSlopeUnit,
     /// How this definition is computed, from its stored recipe version.
     /// `None` for a version this build does not know.
     #[serde(default)]
@@ -327,21 +324,13 @@ pub struct LidarAnalysisReceipt {
     pub job_id: String,
 }
 
-#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct LidarAnalysisJobStatus {
-    pub job_id: String,
-    pub definition_id: String,
-    pub state: LidarResultState,
-    pub message: Option<String>,
-}
-
 /// Analysis parameters. Slope output unit is selected in the definition per
 /// the plan (§5); other parameters arrive with later slices.
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct LidarAnalysisParameters {
-    pub slope_unit: Option<LidarSlopeUnit>,
+    /// The slope output unit. Always chosen by the user; there is no default.
+    pub slope_unit: LidarSlopeUnit,
     /// The name to publish this result under.
     ///
     /// Optional and defaulted, so an existing caller that sends only a slope

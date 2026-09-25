@@ -1,7 +1,4 @@
-use crate::{
-    native_operation::{NativeOperationClass, NativeOperationExecutor},
-    platform,
-};
+use crate::native_operation::{NativeOperationClass, NativeOperationExecutor};
 use tauri::State;
 
 #[tauri::command]
@@ -19,7 +16,7 @@ pub async fn save_canvas_pdf(
         .await
 }
 
-/// Write `data` (UTF-8 text) to `path`. Used for CSV and GeoJSON export.
+/// Write `data` (UTF-8 text) to `path`: the budget CSV and GeoJSON exports.
 #[tauri::command]
 pub async fn export_file(
     executor: State<'_, NativeOperationExecutor>,
@@ -54,59 +51,9 @@ pub async fn read_geojson_file(
         .await
 }
 
-// ---------------------------------------------------------------------------
-// Native PNG export at DPI
-// ---------------------------------------------------------------------------
-
-/// Export a canvas snapshot as PNG at the specified DPI.
-///
-/// `snapshot_base64`: base64-encoded PNG data captured by the frontend renderer
-/// `width`, `height`: logical canvas dimensions in pixels
-/// `dpi`: target DPI (72 = 1x, 150, 300)
-/// `path`: destination file path (chosen by frontend dialog)
-#[tauri::command]
-pub async fn export_native_png(
-    executor: State<'_, NativeOperationExecutor>,
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-    dpi: u32,
-    path: String,
-) -> Result<String, String> {
-    export_native_png_with_executor(executor.inner(), snapshot_base64, width, height, dpi, path)
-        .await
-}
-
-async fn export_native_png_with_executor(
-    executor: &NativeOperationExecutor,
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-    dpi: u32,
-    path: String,
-) -> Result<String, String> {
-    executor
-        .run(
-            NativeOperationClass::Local,
-            "native PNG export",
-            move || {
-                let platform = platform::native_platform();
-                crate::services::export::export_native_png(
-                    &platform,
-                    snapshot_base64,
-                    width,
-                    height,
-                    dpi,
-                    path,
-                )
-            },
-        )
-        .await
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{export_file_with_executor, export_native_png_with_executor};
+    use super::export_file_with_executor;
     use crate::native_operation::{
         NativeOperationClass, NativeOperationClassLimits, NativeOperationExecutor,
         NativeOperationLimits,
@@ -175,7 +122,7 @@ mod tests {
             started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
 
             let temp_dir = TempTestDir::new("queued-local");
-            let text_path = temp_dir.file("queued.txt");
+            let text_path = temp_dir.file("queued.csv");
             let mut export = Box::pin(export_file_with_executor(
                 &executor,
                 "hello".to_owned(),
@@ -217,7 +164,7 @@ mod tests {
             started_rx.recv_timeout(WAIT_TIMEOUT).unwrap();
 
             let temp_dir = TempTestDir::new("busy-local");
-            let text_path = temp_dir.file("rejected.txt");
+            let text_path = temp_dir.file("rejected.csv");
             let error = export_file_with_executor(
                 &executor,
                 "must not be written".to_owned(),
@@ -229,20 +176,6 @@ mod tests {
             assert_eq!(error, "Native local operations are busy; try again");
             assert!(!text_path.exists());
 
-            let png_path = temp_dir.file("rejected.png");
-            let png_error = export_native_png_with_executor(
-                &executor,
-                "invalid base64 must not be decoded".to_owned(),
-                100,
-                100,
-                72,
-                png_path.display().to_string(),
-            )
-            .await
-            .unwrap_err();
-            assert_eq!(png_error, "Native local operations are busy; try again");
-            assert!(!png_path.exists());
-
             release_tx.send(()).unwrap();
             blocker.await.unwrap().unwrap();
         });
@@ -251,7 +184,7 @@ mod tests {
     #[test]
     fn executor_backed_text_export_writes_through_service_boundary() {
         let temp_dir = TempTestDir::new("files");
-        let text_path = temp_dir.file("export.txt");
+        let text_path = temp_dir.file("export.csv");
         let executor = local_test_executor(1, 1);
 
         tauri::async_runtime::block_on(export_file_with_executor(
@@ -262,22 +195,5 @@ mod tests {
         .unwrap();
 
         assert_eq!(std::fs::read(text_path).unwrap(), b"hello");
-    }
-
-    #[test]
-    fn executor_backed_native_png_preserves_decode_errors() {
-        let temp_dir = TempTestDir::new("native-errors");
-        let executor = local_test_executor(2, 2);
-
-        let png_err = tauri::async_runtime::block_on(export_native_png_with_executor(
-            &executor,
-            "***".to_string(),
-            100,
-            100,
-            72,
-            temp_dir.file("bad.png").display().to_string(),
-        ))
-        .unwrap_err();
-        assert!(png_err.contains("Failed to decode base64 snapshot"));
     }
 }

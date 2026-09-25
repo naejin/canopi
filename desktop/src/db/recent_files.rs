@@ -59,14 +59,7 @@ mod tests {
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE recent_files (
-                path TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                last_opened TEXT NOT NULL
-            );",
-        )
-        .unwrap();
+        crate::db::user_db::initialize_connection(&conn).unwrap();
         conn
     }
 

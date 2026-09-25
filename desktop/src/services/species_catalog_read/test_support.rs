@@ -55,12 +55,6 @@ pub(crate) fn test_plant_db() -> PlantDb {
 	            url TEXT NOT NULL,
 	            sort_order INTEGER NOT NULL
 	        );
-        CREATE TABLE species_external_links (
-            id TEXT PRIMARY KEY,
-            species_id TEXT NOT NULL,
-            link_type TEXT NOT NULL,
-            url TEXT NOT NULL
-        );
 	        ",
     )
     .unwrap();
@@ -161,12 +155,6 @@ pub(crate) fn test_plant_db() -> PlantDb {
     conn.execute(
         "INSERT INTO species_images (id, species_id, url, sort_order)
          VALUES ('img-1', 's1', 'https://example.test/apple.jpg', 1)",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO species_external_links (id, species_id, link_type, url)
-         VALUES ('link-1', 's1', 'pfaf', 'https://example.test/apple')",
         [],
     )
     .unwrap();

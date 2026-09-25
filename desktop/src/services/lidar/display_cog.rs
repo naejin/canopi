@@ -1123,7 +1123,7 @@ mod chunk_display_tests {
                  VALUES ('lyr-{definition_id}', 'Source', 'ground-elevation', 'm', '0');
                  INSERT INTO lidar_analysis_definitions
                     (id, layer_id, kind, version, parameters_json, created_at)
-                 VALUES ('{definition_id}', 'lyr-{definition_id}', 'slope', 2, '{{}}', '0');
+                 VALUES ('{definition_id}', 'lyr-{definition_id}', 'slope', 2, '{{\"slope_unit\":\"Degrees\",\"name\":null}}', '0');
                  INSERT INTO lidar_analysis_generations
                     (id, definition_id, source_generation_id, engine_version, state, manifest_json,
                      coverage_cells, min_value, max_value, bounds_3857, published_at,

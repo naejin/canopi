@@ -988,7 +988,7 @@
     "intro": "Cria um resumo e um pacote de diagnóstico que você pode compartilhar depois.",
     "descriptionLabel": "O que aconteceu?",
     "descriptionPlaceholder": "Descreva o que você estava fazendo, o que falhou e se consegue repetir.",
-    "privacyNote": "O pacote de diagnóstico exclui por padrão seu design, localização precisa, capturas de tela e caminhos de arquivo brutos.",
+    "privacyNote": "O pacote de diagnóstico exclui por padrão o seu design (incluindo as suas coordenadas), capturas de tela e caminhos de arquivo brutos.",
     "create": "Criar relatório",
     "creating": "Criando...",
     "cancel": "Cancelar",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "Não foi possível mostrar a pasta. O caminho exato da pasta continua visível acima.",
     "optionalAttachments": "Anexos opcionais",
     "includeCurrentDesign": "Incluir o Design atual",
-    "includeCurrentDesignDescription": "Adiciona uma cópia .canopi com conteúdo da tela, notas, cronograma, orçamento e local salvo.",
+    "includeCurrentDesignDescription": "Adiciona uma cópia .canopi com o conteúdo da tela e as suas coordenadas, notas, cronograma e orçamento.",
     "currentDesignUnavailable": "Não há um Design atual disponível para anexar."
   },
   "pdf": {

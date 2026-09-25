@@ -988,7 +988,7 @@
     "intro": "後で共有できる概要と診断バンドルを作成します。",
     "descriptionLabel": "何が起きましたか？",
     "descriptionPlaceholder": "何をしていたか、何がうまくいかなかったか、再現できるかを説明してください。",
-    "privacyNote": "診断バンドルには、デザイン、正確な位置、スクリーンショット、生のファイルパスは既定で含まれません。",
+    "privacyNote": "診断バンドルには、既定でデザイン（座標を含む）、スクリーンショット、生のファイルパスは含まれません。",
     "create": "レポートを作成",
     "creating": "作成中...",
     "cancel": "キャンセル",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "フォルダーを表示できませんでした。正確なフォルダーパスは上に表示されたままです。",
     "optionalAttachments": "任意の添付",
     "includeCurrentDesign": "現在のデザインを含める",
-    "includeCurrentDesignDescription": "キャンバス内容、メモ、タイムライン、予算、保存済みの位置を含む .canopi コピーを追加します。",
+    "includeCurrentDesignDescription": "キャンバスの内容とその座標、メモ、タイムライン、予算を含む .canopi のコピーを追加します。",
     "currentDesignUnavailable": "添付できる現在のデザインがありません。"
   },
   "pdf": {

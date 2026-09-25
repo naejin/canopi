@@ -2,18 +2,13 @@ use tauri::State;
 
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
-    Sort, SpeciesDetail, SpeciesExternalLink, SpeciesFilter, SpeciesImage, SpeciesListItem,
-    SpeciesSearchRequest,
+    SpeciesDetail, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
 };
 
 /// Search species with optional full-text and structured filters.
 ///
 /// Lock ordering: PlantDb is locked first, released before UserDb is locked.
 /// Both locks are never held simultaneously.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Tauri IPC currently exposes species search as flat named arguments"
-)]
 #[tauri::command]
 pub async fn search_species(
     plant_db: tauri::State<'_, crate::db::PlantDb>,
@@ -23,24 +18,8 @@ pub async fn search_species(
         '_,
         crate::services::plant_browser::SpeciesSearchCancellation,
     >,
-    text: String,
-    filters: SpeciesFilter,
-    cursor: Option<String>,
-    limit: u32,
-    sort: Sort,
-    locale: String,
-    include_total: Option<bool>,
+    request: SpeciesSearchRequest,
 ) -> Result<PaginatedResult<SpeciesListItem>, String> {
-    let request = SpeciesSearchRequest {
-        text,
-        filters,
-        cursor,
-        limit,
-        sort,
-        locale,
-        include_total: include_total.unwrap_or(true),
-    };
-
     let plant_db = plant_db.inner().clone();
     let cancellation = search_cancellation
         .inner()
@@ -239,28 +218,6 @@ pub async fn get_species_images(
         .await
 }
 
-/// Returns external links for a species by canonical name.
-#[tauri::command]
-pub async fn get_species_external_links(
-    executor: State<'_, crate::native_operation::NativeOperationExecutor>,
-    plant_db: State<'_, crate::db::PlantDb>,
-    canonical_name: String,
-) -> Result<Vec<SpeciesExternalLink>, String> {
-    let plant_db = plant_db.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::Catalog,
-            "species external links",
-            move || {
-                crate::services::species_catalog::get_species_external_links(
-                    &plant_db,
-                    canonical_name,
-                )
-            },
-        )
-        .await
-}
-
 /// Returns all common names for a species in the given locale.
 #[tauri::command]
 pub async fn get_locale_common_names(
@@ -291,10 +248,6 @@ pub async fn get_cached_image_path(
     executor: State<'_, crate::native_operation::NativeOperationExecutor>,
     url: String,
 ) -> Result<String, String> {
-    if let Some(path) = cache.cached_path_if_present(&url) {
-        return Ok(path.to_string_lossy().to_string());
-    }
-
     let cache = cache.inner().clone();
     executor
         .run(
@@ -304,6 +257,7 @@ pub async fn get_cached_image_path(
                 cache
                     .fetch_and_cache(&url)
                     .map(|path| path.to_string_lossy().to_string())
+                    .map_err(|error| error.to_string())
             },
         )
         .await

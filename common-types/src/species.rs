@@ -223,14 +223,6 @@ pub struct SpeciesImage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SpeciesExternalLink {
-    pub id: String,
-    pub species_id: String,
-    pub link_type: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CommonNameEntry {
     pub name: String,
     pub is_primary: bool,

@@ -1,0 +1,9 @@
+{
+  "identifier": "mcp-bridge-dev",
+  "description": "Debug builds only: the MCP bridge used by `cargo tauri dev` automation",
+  "windows": ["main"],
+  "permissions": [
+    "mcp-bridge:default",
+    "core:event:allow-emit"
+  ]
+}

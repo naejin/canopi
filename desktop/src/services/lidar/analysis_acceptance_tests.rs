@@ -118,32 +118,21 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
         let library = LidarLibrary::open(&root).unwrap();
         // Two occupied chunks; fault happens only after the first has produced output.
         let layer = plane_layer(&library, &root, 1030, 16);
-        let (job, definition) = run_first_slope_job(&library, &layer, LidarSlopeUnit::Degrees);
-        let head = catalogue::head_analysis_generation(&library.catalogue().unwrap(), &definition)
+        // A published result whose files must survive another calculation's
+        // failure untouched.
+        let (_, published) = run_first_slope_job(&library, &layer, LidarSlopeUnit::Degrees);
+        let head = catalogue::head_analysis_generation(&library.catalogue().unwrap(), &published)
             .unwrap()
             .unwrap();
         let mut accepted_bytes = Vec::new();
         files(&root.join("lidar/assets"), &mut accepted_bytes);
         assert!(!accepted_bytes.is_empty());
-        let parameters = parse_parameters(
-            &definition_row(&library.catalogue().unwrap(), &definition)
-                .unwrap()
-                .unwrap()
-                .parameters_json,
-        )
-        .unwrap();
-        let source = catalogue::head_generation(&library.catalogue().unwrap(), &layer)
-            .unwrap()
-            .unwrap()
-            .id;
-        library
-            .catalogue()
-            .unwrap()
-            .execute(
-                "UPDATE lidar_analysis_jobs SET state = 'preparing' WHERE id = ?1",
-                [&job],
-            )
-            .unwrap();
+        // A second, separate calculation with the same settings is the one
+        // that fails: a published result is never recalculated in place.
+        let (job, definition, encoded) = queued_slope_job(&library, &layer);
+        let (parameters, source) = encoded.split_once('|').expect("encoded pair");
+        let parameters = parse_parameters(parameters).unwrap();
+        let source = source.to_string();
         let reached = std::rc::Rc::new(std::cell::Cell::new(false));
         let observed = reached.clone();
         let guard =
@@ -176,7 +165,7 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
             assert!(error.contains("Failed to create raw buffer"), "{error}");
         }
         drop(guard);
-        let after = catalogue::head_analysis_generation(&library.catalogue().unwrap(), &definition)
+        let after = catalogue::head_analysis_generation(&library.catalogue().unwrap(), &published)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -184,16 +173,17 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
             "failed publication changed the accepted head"
         );
         assert_eq!(after.manifest_json, head.manifest_json);
+        assert!(
+            catalogue::head_analysis_generation(&library.catalogue().unwrap(), &definition)
+                .unwrap()
+                .is_none(),
+            "the failed calculation published nothing"
+        );
         for (path, bytes) in accepted_bytes {
             assert_eq!(std::fs::read(path).unwrap(), bytes);
         }
         assert!(
-            !library
-                .inner
-                .paths
-                .prepared_dir()
-                .join(format!("scratch-slope-{job}"))
-                .exists()
+            !library.inner.paths.slope_scratch_dir(&job).exists()
         );
         // Re-enter the actual worker without the fault; scheduler/IPC Retry is a separate contract.
         let retry = run_slope_job(
@@ -205,7 +195,7 @@ fn acceptance_sparse_midwrite_failure_preserves_publication_and_retries() {
             &AtomicBool::new(false),
         )
         .unwrap();
-        assert!(retry.published && !retry.stale);
+        assert!(retry.coverage_cells > 0, "{}", retry.summary());
         let next = catalogue::head_analysis_generation(&library.catalogue().unwrap(), &definition)
             .unwrap()
             .unwrap();
@@ -292,7 +282,7 @@ fn acceptance_retry_command_preserves_saved_identity_and_publication() {
                 &layer,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(unit),
+                    slope_unit: unit,
                     name: None,
                 },
                 Some(name.to_string()),

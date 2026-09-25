@@ -35,8 +35,7 @@ pub(crate) fn build_diagnostic_bundle(
         ]
     } else {
         vec![
-            "Design contents excluded",
-            "Precise Location excluded",
+            "Design contents excluded, including object coordinates",
             "Screenshots excluded",
             "Filesystem paths sanitized",
         ]
@@ -61,7 +60,6 @@ pub(crate) fn build_diagnostic_bundle(
         "settings": settings_summary(context),
         "privacy": {
             "includes_design_contents": includes_current_design,
-            "includes_precise_location": includes_current_design,
             "includes_screenshot": false,
             "filesystem_paths_sanitized": true,
         },

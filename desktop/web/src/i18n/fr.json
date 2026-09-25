@@ -988,7 +988,7 @@
     "intro": "Crée un résumé et un paquet de diagnostic faciles à partager plus tard.",
     "descriptionLabel": "Que s’est-il passé ?",
     "descriptionPlaceholder": "Décrivez ce que vous faisiez, ce qui a échoué et si vous pouvez le reproduire.",
-    "privacyNote": "Le paquet de diagnostic exclut par défaut votre design, l’emplacement précis, les captures d’écran et les chemins de fichiers bruts.",
+    "privacyNote": "Le paquet de diagnostic exclut par défaut votre design (y compris ses coordonnées), les captures d'écran et les chemins de fichiers bruts.",
     "create": "Créer le rapport",
     "creating": "Création...",
     "cancel": "Annuler",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "Impossible d’afficher le dossier. Le chemin exact du dossier reste affiché ci-dessus.",
     "optionalAttachments": "Pièces jointes facultatives",
     "includeCurrentDesign": "Inclure le design actuel",
-    "includeCurrentDesignDescription": "Ajoute une copie .canopi avec le contenu du canevas, les notes, le calendrier, le budget et l’emplacement enregistré.",
+    "includeCurrentDesignDescription": "Ajoute une copie .canopi avec le contenu du canevas et ses coordonnées, les notes, le calendrier et le budget.",
     "currentDesignUnavailable": "Aucun design actuel n’est disponible à joindre."
   },
   "pdf": {

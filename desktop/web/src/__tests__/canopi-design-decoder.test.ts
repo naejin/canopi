@@ -112,7 +112,6 @@ describe('Canopi Design decoder', () => {
     const input = currentDesign({
       description: undefined,
       future_top_level: { enabled: true },
-      extra: { preserved: 'yes' },
       zones: [{
         name: 'Orchard',
         zone_type: 'bed',
@@ -135,9 +134,14 @@ describe('Canopi Design decoder', () => {
       notes: null,
     })
     expect(decoded.extra).toEqual({
-      preserved: 'yes',
       future_top_level: { enabled: true },
     })
+  })
+
+  it('refuses a root extra key: unknown fields are carried at the root, never nested', () => {
+    const input = currentDesign({ extra: { preserved: 'no' } })
+    expect(() => decodeCanopiDesign(input)).toThrow(/^\$\.extra: /)
+    expectKind(() => decodeCanopiDesign(input), 'invalid_document')
   })
 
   it('rejects malformed tagged targets at their discriminator', () => {
@@ -246,7 +250,6 @@ function currentDesign(overrides: Record<string, unknown> = {}): Record<string, 
     budget_currency: 'EUR',
     created_at: '2026-07-15T00:00:00.000Z',
     updated_at: '2026-07-15T00:00:00.000Z',
-    extra: {},
     ...overrides,
   }
 }

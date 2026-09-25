@@ -6,7 +6,8 @@
 
 use super::*;
 use common_types::lidar::{
-    LidarDisplayRequest, LidarDisplayState, LidarMeasurementKind, LidarSampleEntityKind,
+    LidarDisplayRequest, LidarDisplayState, LidarMeasurementKind, LidarResultState,
+    LidarSampleEntityKind,
 };
 use std::path::Path;
 
@@ -26,7 +27,7 @@ fn seed_result(
         .execute(
             "INSERT INTO lidar_analysis_definitions
              (id, layer_id, kind, version, parameters_json, created_at)
-             VALUES (?1, ?2, 'slope', 2, '{}', '0')",
+             VALUES (?1, ?2, 'slope', 2, '{\"slope_unit\":\"Degrees\",\"name\":null}', '0')",
             rusqlite::params![definition_id, layer_id],
         )
         .unwrap();
@@ -414,8 +415,7 @@ fn seed_head(connection: &Connection, layer_id: &str, generation_id: &str) {
         .unwrap();
     connection
         .execute(
-            "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)
-             ON CONFLICT(layer_id) DO UPDATE SET generation_id = excluded.generation_id",
+            "INSERT INTO lidar_layer_heads(layer_id, generation_id) VALUES (?1, ?2)",
             rusqlite::params![layer_id, generation_id],
         )
         .unwrap();
@@ -482,7 +482,7 @@ fn an_unknown_recipe_version_fails_explicitly_and_keeps_the_result() {
         "job-future",
         "adef-future",
         &analysis::AnalysisParameters {
-            slope_unit: None,
+            slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
             name: None,
         },
         "gen-1",
@@ -569,7 +569,7 @@ fn creating_a_slope_without_the_geolibre_engine_is_refused_by_name() {
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
-                slope_unit: None,
+                slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
                 name: None,
             },
             None,
@@ -621,7 +621,7 @@ fn the_snapshot_reports_method_and_the_pinned_input_of_a_failed_operation() {
     assert_eq!(failed.generation_id, None);
     assert_eq!(
         failed.slope_unit,
-        Some(common_types::lidar::LidarSlopeUnit::Percent)
+        common_types::lidar::LidarSlopeUnit::Percent
     );
     // An operation without a result is shown under the name its author gave it.
     assert_eq!(failed.name.as_deref(), Some("North"));

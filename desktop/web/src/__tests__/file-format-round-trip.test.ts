@@ -1,3 +1,4 @@
+import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import { describe, expect, it } from 'vitest'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { hydrateSceneFromDesign, serializeScenePersistedState } from '../canvas/runtime/scene/codec'
@@ -133,7 +134,7 @@ describe('file format round-trip', () => {
       now: new Date('2026-04-09T12:00:00.000Z'),
     })
 
-    const decoded = decodeCanopiDesign(JSON.parse(JSON.stringify(serialized)))
+    const decoded = decodeCanopiDesign(JSON.parse(JSON.stringify(encodeCanopiDesign(serialized))))
 
     expect(decoded.version).toBe(7)
     expect(decoded.plants.map((plant) => plant.position)).toEqual(FIXTURE.plants.map((plant) => plant.position))

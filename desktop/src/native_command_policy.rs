@@ -1,8 +1,11 @@
 //! Test-only, AST-backed policy for native command registration and blocking execution.
 //!
 //! The Rust test suite parses command modules and the Tauri registry with `syn`, then checks the
-//! complete command set against one small synchronous allowlist. It also scans production source
-//! for blocking-pool and raw-thread escapes outside the managed executor owner.
+//! complete command set against one small synchronous allowlist. Async command bodies may touch
+//! managed state outside executor work only through a reviewed allowlist of bounded in-memory
+//! operations. It also scans production source for blocking-pool and raw-thread escapes outside
+//! the managed executor owner, and checks every registered command against the frontend's
+//! `invoke(...)` call sites.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -11,8 +14,8 @@ use std::{
 };
 
 use syn::{
-    Attribute, Expr, ExprCall, ExprForLoop, ExprLoop, ExprMethodCall, ExprPath, ExprWhile, Item,
-    ItemFn, ItemMod, Macro, Path as SynPath, TypePath,
+    Attribute, Expr, ExprCall, ExprForLoop, ExprLet, ExprLoop, ExprMethodCall, ExprPath, ExprWhile,
+    FnArg, Item, ItemFn, ItemMod, Local, Macro, Pat, Path as SynPath, TypePath,
     parse::Parser,
     punctuated::Punctuated,
     visit::{self, Visit},
@@ -51,6 +54,68 @@ const SYNC_COMMAND_ALLOWLIST: &[SyncCommandAllowance] = &[
     },
 ];
 
+/// One reviewed operation an async command performs on managed state (`State<...>` or a value
+/// derived from it) before or around its executor work. Everything else, including any
+/// filesystem, SQLite or network touch, belongs inside the `executor.run(...)` closure.
+#[derive(Clone, Copy)]
+struct StateAccessAllowance {
+    path: &'static str,
+    operation: &'static str,
+    reason: &'static str,
+}
+
+const STATE_ACCESS_ALLOWLIST: &[StateAccessAllowance] = &[
+    StateAccessAllowance {
+        path: "commands::species::search_species",
+        operation: "begin_request",
+        reason: "registers the in-memory supersession token before Catalog work is queued",
+    },
+    StateAccessAllowance {
+        path: "commands::species::search_species",
+        operation: "interrupt_handle",
+        reason: "clones the SQLite interrupt handle; no statement runs",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_sample_pixel",
+        operation: "admit_sample_request",
+        reason: "bounded in-memory inspection admission",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_sample_pixel",
+        operation: "activate",
+        reason: "awaits a bounded in-memory inspection slot without holding an executor permit",
+    },
+    StateAccessAllowance {
+        path: "commands::lidar::lidar_sample_pixel",
+        operation: "cancel_flag",
+        reason: "clones the in-memory cancellation flag",
+    },
+    StateAccessAllowance {
+        path: "commands::problem_report::create_problem_report",
+        operation: "get_health",
+        reason: "clones the immutable startup health snapshot",
+    },
+];
+
+/// Registered commands the frontend does not invoke yet. Every other command must have an
+/// `invoke('<name>'...)` call site in production frontend source; a dead command is deleted.
+#[derive(Clone, Copy)]
+struct UninvokedCommandAllowance {
+    name: &'static str,
+    reason: &'static str,
+}
+
+const UNINVOKED_COMMAND_ALLOWLIST: &[UninvokedCommandAllowance] = &[
+    UninvokedCommandAllowance {
+        name: "list_autosaves",
+        reason: "pending user decision on autosave recovery",
+    },
+    UninvokedCommandAllowance {
+        name: "recover_autosave",
+        reason: "pending user decision on autosave recovery",
+    },
+];
+
 #[derive(Debug)]
 struct CommandFact {
     path: String,
@@ -59,12 +124,14 @@ struct CommandFact {
     routes_through_executor: bool,
     awaits_managed_work: bool,
     direct_capabilities: BTreeSet<&'static str>,
+    state_accesses: BTreeSet<String>,
 }
 
 fn audit_command_policy(
     registry_source: &str,
     command_sources: &[(&str, &str)],
     sync_allowlist: &[SyncCommandAllowance],
+    state_allowlist: &[StateAccessAllowance],
 ) -> Vec<String> {
     let mut violations = Vec::new();
     let registry = match parse_command_registry(registry_source) {
@@ -127,8 +194,32 @@ fn audit_command_policy(
         }
     }
 
+    let mut state_allowances = BTreeSet::new();
+    for allowance in state_allowlist {
+        if allowance.reason.trim().is_empty() {
+            violations.push(format!(
+                "managed-state access allowance has no reason: {} ({})",
+                allowance.path, allowance.operation
+            ));
+        }
+        if !state_allowances.insert((allowance.path, allowance.operation)) {
+            violations.push(format!(
+                "duplicate managed-state access allowance: {} ({})",
+                allowance.path, allowance.operation
+            ));
+        }
+    }
+
     for command in commands.values() {
         if command.is_async {
+            for operation in &command.state_accesses {
+                if !state_allowances.contains(&(command.path.as_str(), operation.as_str())) {
+                    violations.push(format!(
+                        "async native command touches managed state outside executor work: {} ({operation})",
+                        command.path
+                    ));
+                }
+            }
             if !command.has_executor_state {
                 violations.push(format!(
                     "async native command is missing NativeOperationExecutor state: {}",
@@ -184,6 +275,17 @@ fn audit_command_policy(
         }
     }
 
+    for (path, operation) in &state_allowances {
+        let used = commands
+            .get(*path)
+            .is_some_and(|command| command.is_async && command.state_accesses.contains(*operation));
+        if !used {
+            violations.push(format!(
+                "unused managed-state access allowance: {path} ({operation})"
+            ));
+        }
+    }
+
     violations.sort();
     violations.dedup();
     violations
@@ -208,6 +310,8 @@ fn parse_command_facts(module: &str, source: &str) -> Result<Vec<CommandFact>, S
         }
         let mut body = CommandBodyVisitor::default();
         body.visit_block(&function.block);
+        let mut state = StateAccessVisitor::for_inputs(&function.sig.inputs);
+        state.visit_block(&function.block);
         facts.push(CommandFact {
             path: format!("commands::{module}::{}", function.sig.ident),
             is_async: function.sig.asyncness.is_some(),
@@ -215,6 +319,7 @@ fn parse_command_facts(module: &str, source: &str) -> Result<Vec<CommandFact>, S
             routes_through_executor: body.routes_through_executor,
             awaits_managed_work: body.awaits_managed_work,
             direct_capabilities: body.direct_capabilities,
+            state_accesses: state.accesses,
         });
     }
 
@@ -427,6 +532,229 @@ impl<'ast> Visit<'ast> for ExecutorRouteVisitor {
     }
 }
 
+/// Records operations an async command body performs on managed state outside the closures it
+/// hands to `executor.run(...)`. A value is managed state when it is a `State<...>` argument
+/// (other than the executor) or is bound from an expression that mentions one. Unwrapping
+/// (`inner`) and cloning a handle to move it into executor work are not operations; nor is
+/// passing it to a call that also receives the executor.
+struct StateAccessVisitor {
+    managed: BTreeSet<String>,
+    executors: BTreeSet<String>,
+    accesses: BTreeSet<String>,
+}
+
+impl StateAccessVisitor {
+    fn for_inputs(inputs: &Punctuated<FnArg, syn::Token![,]>) -> Self {
+        let mut visitor = Self {
+            managed: BTreeSet::new(),
+            executors: BTreeSet::new(),
+            accesses: BTreeSet::new(),
+        };
+        for input in inputs {
+            let FnArg::Typed(argument) = input else {
+                continue;
+            };
+            let Pat::Ident(name) = argument.pat.as_ref() else {
+                continue;
+            };
+            let mut executor = ExecutorTypeVisitor::default();
+            executor.visit_type(&argument.ty);
+            if executor.found {
+                visitor.executors.insert(name.ident.to_string());
+            } else if type_mentions(&argument.ty, "State") {
+                visitor.managed.insert(name.ident.to_string());
+            }
+        }
+        visitor
+    }
+
+    fn mentions(&self, expression: &Expr, names: &BTreeSet<String>) -> bool {
+        let mut finder = IdentifierFinder {
+            names,
+            found: false,
+        };
+        finder.visit_expr(expression);
+        finder.found
+    }
+
+    fn bind_if_managed(&mut self, pattern: &Pat, init: &Expr) {
+        if self.mentions(init, &self.managed) {
+            let mut bindings = PatternBindings::default();
+            bindings.visit_pat(pattern);
+            self.managed.extend(bindings.names);
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for StateAccessVisitor {
+    fn visit_local(&mut self, node: &'ast Local) {
+        if let Some(init) = &node.init {
+            self.visit_expr(&init.expr);
+            if let Some((_, diverge)) = &init.diverge {
+                self.visit_expr(diverge);
+            }
+            self.bind_if_managed(&node.pat, &init.expr);
+        }
+    }
+
+    fn visit_expr_let(&mut self, node: &'ast ExprLet) {
+        self.visit_expr(&node.expr);
+        self.bind_if_managed(&node.pat, &node.expr);
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        if node.method == "run"
+            && receiver_root(&node.receiver).is_some_and(|root| self.executors.contains(&root))
+        {
+            // The executor closure is the managed boundary; its body is not inspected here.
+            self.visit_expr(&node.receiver);
+            for argument in &node.args {
+                if !matches!(argument, Expr::Closure(_)) {
+                    self.visit_expr(argument);
+                }
+            }
+            return;
+        }
+
+        let (root, chain) = method_chain(node);
+        if root.is_some_and(|root| self.managed.contains(&root)) {
+            let operation = chain
+                .iter()
+                .filter(|method| !matches!(method.as_str(), "inner" | "clone"))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !operation.is_empty() {
+                self.accesses.insert(operation.join("."));
+            }
+            // The receiver chain is reported as one operation; arguments are still inspected.
+            let mut receiver = node;
+            loop {
+                for argument in &receiver.args {
+                    self.visit_expr(argument);
+                }
+                match strip_transparent(&receiver.receiver) {
+                    Expr::MethodCall(inner) => receiver = inner,
+                    _ => break,
+                }
+            }
+            return;
+        }
+        visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Expr::Path(function) = node.func.as_ref()
+            && let Some(name) = function.path.segments.last().map(|s| s.ident.to_string())
+            && !name.starts_with(|c: char| c.is_ascii_uppercase())
+            && node
+                .args
+                .iter()
+                .any(|argument| self.mentions(argument, &self.managed))
+            && !node
+                .args
+                .iter()
+                .any(|argument| self.mentions(argument, &self.executors))
+        {
+            self.accesses.insert(name);
+        }
+        visit::visit_expr_call(self, node);
+    }
+}
+
+#[derive(Default)]
+struct PatternBindings {
+    names: Vec<String>,
+}
+
+impl<'ast> Visit<'ast> for PatternBindings {
+    fn visit_pat_ident(&mut self, node: &'ast syn::PatIdent) {
+        self.names.push(node.ident.to_string());
+        visit::visit_pat_ident(self, node);
+    }
+}
+
+struct IdentifierFinder<'a> {
+    names: &'a BTreeSet<String>,
+    found: bool,
+}
+
+impl<'ast> Visit<'ast> for IdentifierFinder<'_> {
+    fn visit_expr_path(&mut self, node: &'ast ExprPath) {
+        if node.qself.is_none()
+            && let Some(ident) = node.path.get_ident()
+            && self.names.contains(&ident.to_string())
+        {
+            self.found = true;
+        }
+        visit::visit_expr_path(self, node);
+    }
+}
+
+fn type_mentions(ty: &syn::Type, segment: &str) -> bool {
+    struct Finder<'a> {
+        segment: &'a str,
+        found: bool,
+    }
+    impl<'ast> Visit<'ast> for Finder<'_> {
+        fn visit_type_path(&mut self, node: &'ast TypePath) {
+            if node.path.segments.iter().any(|s| s.ident == self.segment) {
+                self.found = true;
+            }
+            visit::visit_type_path(self, node);
+        }
+    }
+    let mut finder = Finder {
+        segment,
+        found: false,
+    };
+    finder.visit_type(ty);
+    finder.found
+}
+
+/// Parentheses, references, `?`, `.await` and field access do not change which value a
+/// method is called on.
+fn strip_transparent(expression: &Expr) -> &Expr {
+    match expression {
+        Expr::Paren(inner) => strip_transparent(&inner.expr),
+        Expr::Reference(inner) => strip_transparent(&inner.expr),
+        Expr::Try(inner) => strip_transparent(&inner.expr),
+        Expr::Await(inner) => strip_transparent(&inner.base),
+        Expr::Field(inner) => strip_transparent(&inner.base),
+        Expr::Unary(inner) => strip_transparent(&inner.expr),
+        other => other,
+    }
+}
+
+fn receiver_root(expression: &Expr) -> Option<String> {
+    match strip_transparent(expression) {
+        Expr::MethodCall(call) => receiver_root(&call.receiver),
+        Expr::Path(path) if path.qself.is_none() => path.path.get_ident().map(ToString::to_string),
+        _ => None,
+    }
+}
+
+/// The root identifier of a method chain and its methods in call order.
+fn method_chain(call: &ExprMethodCall) -> (Option<String>, Vec<String>) {
+    let mut methods = vec![call.method.to_string()];
+    let mut receiver = call.receiver.as_ref();
+    loop {
+        match strip_transparent(receiver) {
+            Expr::MethodCall(inner) => {
+                methods.push(inner.method.to_string());
+                receiver = inner.receiver.as_ref();
+            }
+            Expr::Path(path) if path.qself.is_none() => {
+                methods.reverse();
+                return (path.path.get_ident().map(ToString::to_string), methods);
+            }
+            _ => {
+                methods.reverse();
+                return (None, methods);
+            }
+        }
+    }
+}
+
 fn audit_blocking_pool_sources(sources: &[(&str, &str)], allowed_sources: &[&str]) -> Vec<String> {
     let allowed = allowed_sources.iter().copied().collect::<BTreeSet<_>>();
     let mut violations = Vec::new();
@@ -502,6 +830,153 @@ impl<'ast> Visit<'ast> for BlockingEscapeVisitor {
     }
 }
 
+fn audit_frontend_invocations(
+    registry_source: &str,
+    frontend_sources: &[(&str, &str)],
+    uninvoked_allowlist: &[UninvokedCommandAllowance],
+) -> Vec<String> {
+    let mut violations = Vec::new();
+    let registered = match parse_command_registry(registry_source) {
+        Ok(registry) => registry
+            .iter()
+            .filter_map(|path| path.rsplit("::").next().map(str::to_owned))
+            .collect::<BTreeSet<_>>(),
+        Err(error) => return vec![error],
+    };
+    let invoked = frontend_sources
+        .iter()
+        .flat_map(|(_, source)| invoked_command_names(source))
+        .collect::<BTreeSet<_>>();
+
+    let mut allowed = BTreeSet::new();
+    for allowance in uninvoked_allowlist {
+        if allowance.reason.trim().is_empty() {
+            violations.push(format!(
+                "uninvoked command allowance has no reason: {}",
+                allowance.name
+            ));
+        }
+        if !allowed.insert(allowance.name) {
+            violations.push(format!(
+                "duplicate uninvoked command allowance: {}",
+                allowance.name
+            ));
+        }
+        if !registered.contains(allowance.name) {
+            violations.push(format!(
+                "uninvoked command allowance names no registered command: {}",
+                allowance.name
+            ));
+        } else if invoked.contains(allowance.name) {
+            violations.push(format!(
+                "uninvoked command allowance names an invoked command: {}",
+                allowance.name
+            ));
+        }
+    }
+    for name in &registered {
+        if !invoked.contains(name) && !allowed.contains(name.as_str()) {
+            violations.push(format!(
+                "registered native command is never invoked by the frontend: {name}"
+            ));
+        }
+    }
+    violations.sort();
+    violations
+}
+
+/// Command names of `invoke('name', ...)` / `invoke<T>("name")` call sites.
+fn invoked_command_names(source: &str) -> Vec<String> {
+    let bytes = source.as_bytes();
+    let mut names = Vec::new();
+    let mut search = 0;
+    while let Some(offset) = source[search..].find("invoke") {
+        let start = search + offset;
+        search = start + "invoke".len();
+        if start > 0 && is_identifier_byte(bytes[start - 1]) {
+            continue;
+        }
+        let mut cursor = skip_whitespace(bytes, search);
+        if bytes.get(cursor) == Some(&b'<') {
+            let mut depth = 0usize;
+            while let Some(&byte) = bytes.get(cursor) {
+                cursor += 1;
+                match byte {
+                    b'<' => depth += 1,
+                    b'>' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            cursor = skip_whitespace(bytes, cursor);
+        }
+        if bytes.get(cursor) != Some(&b'(') {
+            continue;
+        }
+        cursor = skip_whitespace(bytes, cursor + 1);
+        let Some(&quote) = bytes
+            .get(cursor)
+            .filter(|byte| matches!(byte, b'\'' | b'"' | b'`'))
+        else {
+            continue;
+        };
+        let name_start = cursor + 1;
+        let mut name_end = name_start;
+        while bytes
+            .get(name_end)
+            .is_some_and(|byte| is_identifier_byte(*byte))
+        {
+            name_end += 1;
+        }
+        if name_end > name_start && bytes.get(name_end) == Some(&quote) {
+            names.push(source[name_start..name_end].to_owned());
+        }
+    }
+    names
+}
+
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
+}
+
+fn skip_whitespace(bytes: &[u8], mut cursor: usize) -> usize {
+    while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+        cursor += 1;
+    }
+    cursor
+}
+
+/// Production frontend source: TypeScript outside `__tests__/` and `*.test.*` files.
+fn is_production_frontend_source(relative: &Path) -> bool {
+    let is_typescript = relative
+        .extension()
+        .is_some_and(|extension| extension == "ts" || extension == "tsx");
+    let is_test = relative
+        .components()
+        .any(|component| component.as_os_str() == "__tests__")
+        || relative
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.contains(".test."));
+    is_typescript && !is_test
+}
+
+fn frontend_sources_under(root: &Path, path: &Path, sources: &mut Vec<(String, String)>) {
+    for entry in fs::read_dir(path).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            frontend_sources_under(root, &path, sources);
+        } else if is_production_frontend_source(path.strip_prefix(root).unwrap()) {
+            let relative = path.strip_prefix(root).unwrap().display().to_string();
+            sources.push((relative, fs::read_to_string(&path).unwrap()));
+        }
+    }
+}
+
 fn audit_repository() -> Vec<String> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_root = manifest.join("src");
@@ -525,8 +1000,12 @@ fn audit_repository() -> Vec<String> {
         .map(|(module, source)| (module.as_str(), source.as_str()))
         .collect::<Vec<_>>();
 
-    let mut violations =
-        audit_command_policy(&registry_source, &command_sources, SYNC_COMMAND_ALLOWLIST);
+    let mut violations = audit_command_policy(
+        &registry_source,
+        &command_sources,
+        SYNC_COMMAND_ALLOWLIST,
+        STATE_ACCESS_ALLOWLIST,
+    );
 
     let mut rust_paths = Vec::new();
     rust_sources_under(&source_root, &mut rust_paths);
@@ -550,6 +1029,18 @@ fn audit_repository() -> Vec<String> {
     violations.extend(audit_blocking_pool_sources(
         &rust_sources,
         &["src/native_operation.rs"],
+    ));
+    let frontend_root = manifest.join("web").join("src");
+    let mut owned_frontend_sources = Vec::new();
+    frontend_sources_under(&frontend_root, &frontend_root, &mut owned_frontend_sources);
+    let frontend_sources = owned_frontend_sources
+        .iter()
+        .map(|(path, source)| (path.as_str(), source.as_str()))
+        .collect::<Vec<_>>();
+    violations.extend(audit_frontend_invocations(
+        &registry_source,
+        &frontend_sources,
+        UNINVOKED_COMMAND_ALLOWLIST,
     ));
     if source_root.join("blocking.rs").exists() {
         violations.push("obsolete unbounded blocking helper still exists: src/blocking.rs".into());
@@ -618,8 +1109,11 @@ fn duplicates(values: &[String]) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SyncCommandAllowance, audit_blocking_pool_sources, audit_command_policy, audit_repository,
+        StateAccessAllowance, SyncCommandAllowance, UninvokedCommandAllowance,
+        audit_blocking_pool_sources, audit_command_policy, audit_frontend_invocations,
+        audit_repository, invoked_command_names, is_production_frontend_source,
     };
+    use std::path::Path;
 
     #[test]
     fn unclassified_synchronous_command_fixture_is_rejected() {
@@ -634,6 +1128,7 @@ mod tests {
                     }
                 "#,
             )],
+            &[],
             &[],
         );
 
@@ -656,6 +1151,7 @@ mod tests {
                 "#[tauri::command] pub fn read_file() { std::fs::read(\"fixture\"); }",
             )],
             &allowance,
+            &[],
         );
 
         assert_eq!(
@@ -685,6 +1181,7 @@ mod tests {
                 "tauri::generate_handler![commands::fixture::effect];",
                 &[("fixture", source.as_str())],
                 &allowance,
+                &[],
             );
 
             assert!(
@@ -704,6 +1201,7 @@ mod tests {
                 "fixture",
                 "#[tauri::command] pub async fn read_file() { ready().await; }",
             )],
+            &[],
             &[],
         );
 
@@ -726,6 +1224,7 @@ mod tests {
                 "#[tauri::command] pub async fn fake_async(executor: State<'_, NativeOperationExecutor>) { let _ = executor; }",
             )],
             &[],
+            &[],
         );
 
         assert_eq!(
@@ -745,6 +1244,7 @@ mod tests {
                 "fixture",
                 "#[tauri::command] pub async fn fake_async(executor: State<'_, NativeOperationExecutor>) { let _ = executor; ready().await; }",
             )],
+            &[],
             &[],
         );
 
@@ -774,6 +1274,7 @@ mod tests {
                 "#,
             )],
             &[],
+            &[],
         );
 
         assert_eq!(
@@ -790,7 +1291,7 @@ mod tests {
             path: "commands::fixture::removed",
             reason: "stale fixture",
         }];
-        let violations = audit_command_policy("tauri::generate_handler![];", &[], &allowance);
+        let violations = audit_command_policy("tauri::generate_handler![];", &[], &allowance, &[]);
 
         assert_eq!(
             violations,
@@ -803,6 +1304,7 @@ mod tests {
         let violations = audit_command_policy(
             "tauri::generate_handler![commands::fixture::registered_only];",
             &[("fixture", "#[tauri::command] pub fn annotated_only() {}")],
+            &[],
             &[],
         );
 
@@ -885,9 +1387,183 @@ mod tests {
                 "##,
             )],
             &[],
+            &[],
         );
 
         assert!(violations.is_empty(), "{violations:?}");
+    }
+
+    #[test]
+    fn filesystem_probe_before_executor_work_is_rejected() {
+        // The shape `get_cached_image_path` had: a cache-hit `fs::metadata` probe on the async
+        // runtime thread before the executor was reached.
+        let violations = audit_command_policy(
+            "tauri::generate_handler![commands::fixture::cached_path];",
+            &[(
+                "fixture",
+                r#"
+                    #[tauri::command]
+                    pub async fn cached_path(
+                        cache: State<'_, ImageCache>,
+                        executor: State<'_, NativeOperationExecutor>,
+                        url: String,
+                    ) -> Result<String, String> {
+                        if let Some(path) = cache.cached_path_if_present(&url) {
+                            return Ok(path);
+                        }
+                        let cache = cache.inner().clone();
+                        executor
+                            .run(NativeOperationClass::Network, "fetch", move || {
+                                cache.fetch_and_cache(&url)
+                            })
+                            .await
+                    }
+                "#,
+            )],
+            &[],
+            &[],
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "async native command touches managed state outside executor work: commands::fixture::cached_path (cached_path_if_present)"
+            ]
+        );
+    }
+
+    #[test]
+    fn managed_state_derived_bindings_and_free_calls_are_tracked() {
+        let violations = audit_command_policy(
+            "tauri::generate_handler![commands::fixture::derived];",
+            &[(
+                "fixture",
+                r#"
+                    #[tauri::command]
+                    pub async fn derived(
+                        db: tauri::State<'_, PlantDb>,
+                        executor: State<'_, NativeOperationExecutor>,
+                    ) -> Result<(), String> {
+                        let db = db.inner().clone();
+                        let status = db.status();
+                        let _ = crate::services::probe(&db);
+                        helper_with_executor(executor.inner(), db.clone()).await
+                    }
+                "#,
+            )],
+            &[],
+            &[],
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "async native command touches managed state outside executor work: commands::fixture::derived (probe)",
+                "async native command touches managed state outside executor work: commands::fixture::derived (status)",
+            ]
+        );
+    }
+
+    #[test]
+    fn reviewed_state_access_passes_and_stale_allowances_are_rejected() {
+        let allowance = [
+            StateAccessAllowance {
+                path: "commands::fixture::cancel_aware",
+                operation: "begin_request",
+                reason: "bounded in-memory token",
+            },
+            StateAccessAllowance {
+                path: "commands::fixture::cancel_aware",
+                operation: "removed_operation",
+                reason: "stale fixture",
+            },
+        ];
+        let violations = audit_command_policy(
+            "tauri::generate_handler![commands::fixture::cancel_aware];",
+            &[(
+                "fixture",
+                r#"
+                    #[tauri::command]
+                    pub async fn cancel_aware(
+                        tokens: State<'_, Tokens>,
+                        executor: State<'_, NativeOperationExecutor>,
+                    ) -> Result<(), String> {
+                        let token = tokens.inner().begin_request();
+                        executor.run(NativeOperationClass::Catalog, "work", move || token.run()).await
+                    }
+                "#,
+            )],
+            &[],
+            &allowance,
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "unused managed-state access allowance: commands::fixture::cancel_aware (removed_operation)"
+            ]
+        );
+    }
+
+    #[test]
+    fn invoke_call_sites_are_recognised_in_every_quoting_style() {
+        let names = invoked_command_names(
+            r#"
+                invoke('single', { a })
+                await invoke<string>("double_quoted", { path })
+                invoke(
+                  `template`,
+                )
+                reinvoke('not_a_call')
+                invoke(dynamicName)
+            "#,
+        );
+        assert_eq!(names, ["single", "double_quoted", "template"]);
+    }
+
+    #[test]
+    fn registered_commands_must_be_invoked_by_production_frontend_source() {
+        let registry =
+            "tauri::generate_handler![commands::a::used, commands::a::dead, commands::a::pending];";
+        let allowance = [
+            UninvokedCommandAllowance {
+                name: "pending",
+                reason: "pending fixture decision",
+            },
+            UninvokedCommandAllowance {
+                name: "used",
+                reason: "stale: now invoked",
+            },
+            UninvokedCommandAllowance {
+                name: "gone",
+                reason: "stale: deleted command",
+            },
+        ];
+        let violations = audit_frontend_invocations(
+            registry,
+            &[("ipc/a.ts", "export const a = () => invoke('used')")],
+            &allowance,
+        );
+
+        assert_eq!(
+            violations,
+            [
+                "registered native command is never invoked by the frontend: dead",
+                "uninvoked command allowance names an invoked command: used",
+                "uninvoked command allowance names no registered command: gone",
+            ]
+        );
+        assert!(is_production_frontend_source(Path::new("ipc/species.ts")));
+        assert!(is_production_frontend_source(Path::new("components/A.tsx")));
+        assert!(!is_production_frontend_source(Path::new(
+            "__tests__/ipc.test.ts"
+        )));
+        assert!(!is_production_frontend_source(Path::new(
+            "canvas/runtime.test.ts"
+        )));
+        assert!(!is_production_frontend_source(Path::new(
+            "generated/artifact.mjs"
+        )));
     }
 
     #[test]

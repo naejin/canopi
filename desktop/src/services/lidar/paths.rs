@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 /// Catalogue file name inside the library root.
 pub const CATALOGUE_FILE: &str = "lidar-library.sqlite";
 
+/// Name prefix of a slope scratch directory; the rest is its job id.
+pub const SLOPE_SCRATCH_PREFIX: &str = "scratch-slope-";
+
 /// Managed library root under the app data directory.
 pub fn library_root(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("lidar")
@@ -35,6 +38,7 @@ impl LidarPaths {
             root.join("display-cog-staging"),
             root.join("assets"),
             root.join("jobs"),
+            root.join("engine-logs"),
         ] {
             std::fs::create_dir_all(&dir)
                 .map_err(|e| format!("Failed to create LiDAR dir {}: {e}", dir.display()))?;
@@ -80,12 +84,21 @@ impl LidarPaths {
         self.source_dir(sha256).join("original")
     }
 
-    pub fn source_manifest(&self, sha256: &str) -> PathBuf {
-        self.source_dir(sha256).join("manifest.json")
-    }
-
+    /// Holds only per-job slope scratch directories.
     pub fn prepared_dir(&self) -> PathBuf {
         self.root.join("prepared")
+    }
+
+    /// One analysis job's slope scratch; removed when the job settles and
+    /// swept at startup if a crash left it.
+    pub fn slope_scratch_dir(&self, job_id: &str) -> PathBuf {
+        self.prepared_dir()
+            .join(format!("{SLOPE_SCRATCH_PREFIX}{job_id}"))
+    }
+
+    /// Captured stdout and stderr of running engine children; swept at startup.
+    pub fn engine_log_dir(&self) -> PathBuf {
+        self.root.join("engine-logs")
     }
 
     /// Published display derivatives: immutable, content-keyed tiled COGs the

@@ -3,7 +3,6 @@
   "facts": {
     "current_version": 7,
     "missing_version": 1,
-    "minimum_supported_version": 7,
     "future_version_policy": "reject",
     "error_kinds": [
       "invalid_version",
@@ -280,6 +279,23 @@
         "created_at": "2026-09-25T00:00:00.000Z",
         "updated_at": "2026-09-25T00:00:00.000Z",
         "location": null
+      },
+      "error_kind": "invalid_document"
+    },
+    {
+      "id": "reject-root-extra",
+      "input": {
+        "version": 7,
+        "name": "Nested extra",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "extra": {
+          "preserved": "no"
+        }
       },
       "error_kind": "invalid_document"
     },

@@ -279,7 +279,7 @@ jobs:
           echo "Bundled DB checksum matches preflight: $actual_db_sha256"
 
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -36,7 +36,6 @@ pub struct Settings {
     pub side_panel_width: Option<u32>,
     pub saved_stamps_frame_height: Option<u32>,
     /// OpenFreeMap vector style of the Basemap row.
-    #[serde(deserialize_with = "deserialize_basemap_style")]
     pub basemap_style: BasemapStyle,
     pub basemap_visible: bool,
     pub basemap_opacity: f32,
@@ -113,16 +112,6 @@ settings_enum! {
     }
 }
 
-fn deserialize_basemap_style<'de, D>(deserializer: D) -> Result<BasemapStyle, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match serde_json::Value::deserialize(deserializer) {
-        Ok(value) => Ok(serde_json::from_value(value).unwrap_or_default()),
-        Err(_) => Ok(BasemapStyle::default()),
-    }
-}
-
 settings_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
     #[serde(rename_all = "lowercase")]
@@ -152,7 +141,7 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, Locale, Settings, Theme};
+    use super::{BasemapStyle, LastView, Settings};
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -194,11 +183,24 @@ mod tests {
         assert_eq!(settings.basemap_style, BasemapStyle::Liberty);
         assert!(settings.basemap_visible);
         assert!(!settings.satellite_visible);
-        let unknown: Settings = serde_json::from_value(serde_json::json!({
-            "basemap_style": "street"
-        }))
-        .expect("unknown map choices fall back to defaults");
-        assert_eq!(unknown.basemap_style, BasemapStyle::Liberty);
+    }
+
+    /// Settings are read strictly: an invalid value refuses the whole record,
+    /// and the Desktop settings service replaces a refused record with
+    /// defaults. No field quietly rewrites a value it does not understand.
+    #[test]
+    fn invalid_setting_values_are_refused() {
+        for invalid in [
+            serde_json::json!({ "basemap_style": "street" }),
+            serde_json::json!({ "theme": "sepia" }),
+            serde_json::json!({ "locale": "xx" }),
+            serde_json::json!({ "auto_save_interval_s": "soon" }),
+        ] {
+            assert!(
+                serde_json::from_value::<Settings>(invalid.clone()).is_err(),
+                "{invalid} should be refused"
+            );
+        }
     }
 
     #[test]
@@ -214,58 +216,5 @@ mod tests {
         assert_eq!(settings.satellite_opacity, 0.4);
         let serialized = serde_json::to_value(settings).expect("settings should serialize");
         assert!(serialized.get("satellite_provider").is_none());
-    }
-
-    #[test]
-    fn legacy_unconsumed_keys_are_accepted_but_not_serialized() {
-        let settings: Settings = serde_json::from_value(serde_json::json!({
-            "locale": "fr",
-            "theme": "dark",
-            "show_smart_guides": false,
-            "confirm_destructive": false,
-            "default_currency": "USD",
-            "measurement_units": "imperial",
-            "show_botanical_names": false,
-            "debug_logging": true,
-            "check_updates": false,
-            "default_design_dir": "/legacy/designs",
-            "recent_files_max": 99,
-            "last_active_panel": "legacy-panel",
-            "bottom_panel_open": true,
-            "bottom_panel_timeline_height": 280,
-            "bottom_panel_budget_height": 300,
-            "bottom_panel_consortium_height": 320,
-            "bottom_panel_tab": "timeline",
-            "bottom_panel_height": 260
-        }))
-        .expect("legacy settings should remain readable");
-
-        assert_eq!(settings.locale, Locale::Fr);
-        assert_eq!(settings.theme, Theme::Dark);
-
-        let serialized = serde_json::to_value(settings).expect("settings should serialize");
-        for retired_key in [
-            "show_smart_guides",
-            "confirm_destructive",
-            "default_currency",
-            "measurement_units",
-            "show_botanical_names",
-            "debug_logging",
-            "check_updates",
-            "default_design_dir",
-            "recent_files_max",
-            "last_active_panel",
-            "bottom_panel_open",
-            "bottom_panel_timeline_height",
-            "bottom_panel_budget_height",
-            "bottom_panel_consortium_height",
-            "bottom_panel_tab",
-            "bottom_panel_height",
-        ] {
-            assert!(
-                serialized.get(retired_key).is_none(),
-                "retired key {retired_key} must not be emitted"
-            );
-        }
     }
 }

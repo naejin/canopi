@@ -124,6 +124,10 @@ impl NativeOperationExecutor {
         })
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the production limits are constants validated by tests"
+    )]
     pub fn production() -> Self {
         Self::new(NativeOperationLimits::production())
             .expect("production native operation limits must be valid")

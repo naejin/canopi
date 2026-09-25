@@ -1,3 +1,4 @@
+import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
 import type { CanopiFile } from "../types/design";
 
@@ -61,6 +62,8 @@ interface BrowserStoragePartition<TRecord> {
   readonly key: string;
   accepts(value: unknown): boolean;
   normalize(value: unknown): TRecord;
+  /** Storage form of a record; defaults to the record itself. */
+  encode?(record: TRecord): unknown;
 }
 
 const PARTITIONS = {
@@ -68,6 +71,9 @@ const PARTITIONS = {
     key: STORAGE_KEYS.drafts,
     accepts: isSupportedDraftsRecord,
     normalize: normalizeDraftsRecord,
+    // Draft files are stored in the .canopi wire form, like every other
+    // persisted Design, so they decode through the same admission.
+    encode: encodeDraftsRecord,
   },
   settings: {
     key: STORAGE_KEYS.settings,
@@ -131,7 +137,10 @@ export function createBrowserAppDataStore({
   ): BrowserAppDataWriteResult<TValue> {
     try {
       const mutation = mutate(readPartition(partition));
-      storage.setItem(partition.key, JSON.stringify(mutation.next));
+      storage.setItem(
+        partition.key,
+        JSON.stringify(partition.encode ? partition.encode(mutation.next) : mutation.next),
+      );
       return { ok: true, value: mutation.value };
     } catch (error) {
       return { ok: false, error };
@@ -374,6 +383,19 @@ function emptyStampsRecord(): BrowserSavedObjectStampsRecord {
 
 function isV2Record(value: unknown): value is Record<string, unknown> & { version: 2 } {
   return isRecord(value) && value.version === RECORD_VERSION;
+}
+
+function encodeDraftsRecord(record: BrowserDraftsRecord): unknown {
+  const draftFiles: Record<string, unknown> = {};
+  for (const [id, file] of Object.entries(record.draftFiles)) {
+    Object.defineProperty(draftFiles, id, {
+      configurable: true,
+      enumerable: true,
+      value: encodeCanopiDesign(file),
+      writable: true,
+    });
+  }
+  return { ...record, draftFiles };
 }
 
 function decodeDraftFiles(value: unknown): Record<string, CanopiFile> {

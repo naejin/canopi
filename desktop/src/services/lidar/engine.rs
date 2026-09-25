@@ -7,10 +7,10 @@
 //! recorded so manifests can prove which engine produced a numeric output.
 
 use std::io::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(600);
@@ -24,9 +24,94 @@ pub(super) const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_OUTPUT_FILE_BYTES: u64 = (MAX_OUTPUT_BYTES as u64) * 2;
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Sequence of captured-output files within this process.
+static NEXT_LOG: AtomicU64 = AtomicU64::new(0);
+
+/// Prefix of every captured-output file this process creates.
+///
+/// Process id plus start time, so a later process that reuses the id never
+/// mistakes an earlier one's leftovers for its own. Startup sweeps every file
+/// in the log directory without this prefix.
+pub(super) fn process_log_tag() -> &'static str {
+    static TAG: OnceLock<String> = OnceLock::new();
+    TAG.get_or_init(|| {
+        let started = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        format!("{}-{started}", std::process::id())
+    })
+}
+
+/// Create one run's stdout and stderr capture files in `log_dir`.
+///
+/// `create_new` never truncates or follows an existing path, so a planted or
+/// leftover file makes the run fail by name instead of being overwritten.
+fn create_output_files(
+    log_dir: &Path,
+) -> Result<(PathBuf, std::fs::File, PathBuf, std::fs::File), String> {
+    let sequence = NEXT_LOG.fetch_add(1, Ordering::Relaxed);
+    let tag = process_log_tag();
+    let stdout_path = log_dir.join(format!("{tag}-{sequence}-out.log"));
+    let stderr_path = log_dir.join(format!("{tag}-{sequence}-err.log"));
+    let create = |path: &Path, what: &str| {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| {
+                format!(
+                    "Failed to create engine {what} file {}: {e}",
+                    path.display()
+                )
+            })
+    };
+    let stdout_file = create(&stdout_path, "output")?;
+    let stderr_file = match create(&stderr_path, "error") {
+        Ok(file) => file,
+        Err(error) => {
+            drop(stdout_file);
+            let _ = std::fs::remove_file(&stdout_path);
+            return Err(error);
+        }
+    };
+    Ok((stdout_path, stdout_file, stderr_path, stderr_file))
+}
+
+/// Remove captured-output files an earlier process left in `log_dir`.
+///
+/// Files carrying this process's tag belong to children that may still be
+/// running under another handle on the same library, so they stay.
+pub(super) fn prune_engine_logs(log_dir: &Path) -> Result<usize, String> {
+    let own = format!("{}-", process_log_tag());
+    let entries = match std::fs::read_dir(log_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => {
+            return Err(format!(
+                "Failed to list engine logs {}: {error}",
+                log_dir.display()
+            ));
+        }
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(&own) {
+            continue;
+        }
+        if std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 #[derive(Debug, Clone)]
 pub struct GdalEngine {
     discovery: ArcDiscovery,
+    /// Where child output is captured: inside the library root, never the
+    /// shared system temp directory.
+    log_dir: PathBuf,
 }
 
 #[derive(Clone)]
@@ -47,10 +132,24 @@ pub struct DiscoveredTools {
 }
 
 impl GdalEngine {
-    pub fn new() -> Self {
+    /// An engine that captures child output in `log_dir`, which must exist.
+    pub fn in_dir(log_dir: PathBuf) -> Self {
         Self {
             discovery: ArcDiscovery(Arc::new(Mutex::new(None))),
+            log_dir,
         }
+    }
+
+    /// Test support: an engine outside any library, capturing output in a
+    /// per-process scratch directory.
+    #[cfg(test)]
+    pub fn new() -> Self {
+        let log_dir = std::env::temp_dir().join(format!(
+            "canopi-lidar-engine-test-logs-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&log_dir).expect("test engine log directory");
+        Self::in_dir(log_dir)
     }
 
     /// Detect the tool set once per process; detection failures are cached so
@@ -65,12 +164,12 @@ impl GdalEngine {
         if let Some(cached) = guard.as_ref() {
             return cached.clone();
         }
-        let discovered = Self::discover_uncached();
+        let discovered = self.discover_uncached();
         *guard = Some(discovered.clone());
         discovered
     }
 
-    fn discover_uncached() -> Result<DiscoveredTools, String> {
+    fn discover_uncached(&self) -> Result<DiscoveredTools, String> {
         let search_dir = std::env::var_os("CANOPI_LIDAR_GDAL_BIN").map(PathBuf::from);
         let find = |name: &str| -> Result<PathBuf, String> {
             if let Some(dir) = &search_dir {
@@ -90,7 +189,7 @@ impl GdalEngine {
             gdaltransform: find("gdaltransform")?,
             version: String::new(),
         };
-        let version_output = Self::run_once(
+        let version_output = self.run_once(
             &gdalinfo,
             &["--version".to_string()],
             None,
@@ -119,7 +218,7 @@ impl GdalEngine {
             GdalProgram::Translate => tools.gdal_translate,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
+        self.run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
     }
 
     /// Run the controlled source-conversion call with no elapsed-time ceiling.
@@ -141,7 +240,7 @@ impl GdalEngine {
             GdalProgram::Translate => tools.gdal_translate,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(&path, args, None, cancel, None)
+        self.run_once(&path, args, None, cancel, None)
     }
 
     /// Run a GDAL tool with a small caller-owned stdin payload. This keeps
@@ -163,7 +262,7 @@ impl GdalEngine {
             GdalProgram::Translate => tools.gdal_translate,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        Self::run_once(
+        self.run_once(
             &path,
             args,
             Some(input),
@@ -176,10 +275,11 @@ impl GdalEngine {
     /// CLI) under the same bounded contract: fixed argv, no shell, bounded
     /// output, the finite process deadline, and kill/reap on cancel.
     pub(super) fn run_managed(
-        path: &std::path::Path,
+        path: &Path,
         args: &[String],
         envs: &[(&str, &str)],
         cancel: Option<&AtomicBool>,
+        log_dir: &Path,
     ) -> Result<RunOutput, String> {
         Self::run_once_with_env(
             path,
@@ -188,40 +288,34 @@ impl GdalEngine {
             envs,
             cancel,
             Some(DEFAULT_PROCESS_TIMEOUT),
+            log_dir,
         )
     }
 
     fn run_once(
-        path: &std::path::Path,
+        &self,
+        path: &Path,
         args: &[String],
         input: Option<&[u8]>,
         cancel: Option<&AtomicBool>,
         timeout: Option<Duration>,
     ) -> Result<RunOutput, String> {
-        Self::run_once_with_env(path, args, input, &[], cancel, timeout)
+        Self::run_once_with_env(path, args, input, &[], cancel, timeout, &self.log_dir)
     }
 
     fn run_once_with_env(
-        path: &std::path::Path,
+        path: &Path,
         args: &[String],
         input: Option<&[u8]>,
         envs: &[(&str, &str)],
         cancel: Option<&AtomicBool>,
         timeout: Option<Duration>,
+        log_dir: &Path,
     ) -> Result<RunOutput, String> {
-        // Output is captured through temp files instead of pipes so no
-        // worker thread is needed and cancellation still kills the child.
-        let token = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let stdout_path = std::env::temp_dir().join(format!("canopi-gdal-out-{token}.log"));
-        let stderr_path = std::env::temp_dir().join(format!("canopi-gdal-err-{token}.log"));
-        let stdout_file = std::fs::File::create(&stdout_path)
-            .map_err(|e| format!("Failed to create engine output file: {e}"))?;
-        let stderr_file = std::fs::File::create(&stderr_path)
-            .map_err(|e| format!("Failed to create engine error file: {e}"))?;
-        let child = Command::new(path)
+        // Output is captured through files instead of pipes so no worker
+        // thread is needed and cancellation still kills the child.
+        let (stdout_path, stdout_file, stderr_path, stderr_file) = create_output_files(log_dir)?;
+        let spawned = Command::new(path)
             .args(args)
             // GDAL's block cache defaults to a share of *system* RAM, not to
             // anything this pipeline budgeted: measured on the representative
@@ -239,9 +333,15 @@ impl GdalEngine {
             })
             .stdout(Stdio::from(stdout_file))
             .stderr(Stdio::from(stderr_file))
-            .spawn()
-            .map_err(|e| format!("Failed to start {}: {e}", path.display()))?;
-        let mut child = child;
+            .spawn();
+        let mut child = match spawned {
+            Ok(child) => child,
+            Err(error) => {
+                let _ = std::fs::remove_file(&stdout_path);
+                let _ = std::fs::remove_file(&stderr_path);
+                return Err(format!("Failed to start {}: {error}", path.display()));
+            }
+        };
         if let Some(input) = input {
             let write_result = match child.stdin.as_mut() {
                 Some(stdin) => stdin.write_all(input),
@@ -293,12 +393,6 @@ impl GdalEngine {
             ));
         }
         Ok(output)
-    }
-}
-
-impl Default for GdalEngine {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -436,6 +530,54 @@ mod tests {
         // The child was killed and reaped: try_wait reports a status, not a hang.
         let status = child.try_wait().expect("reaped child polls");
         assert!(status.is_some(), "child must be reaped after timeout");
+    }
+
+    /// Captured output lives in the caller's log directory under names private
+    /// to this process and run, and is removed when the run settles.
+    #[cfg(unix)]
+    #[test]
+    fn engine_output_is_captured_under_the_log_dir_and_removed() {
+        let dir = std::env::temp_dir().join(format!(
+            "canopi-engine-logs-{}-{}",
+            std::process::id(),
+            NEXT_LOG.load(Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let list = |dir: &std::path::Path| {
+            GdalEngine::run_managed(
+                std::path::Path::new("/bin/sh"),
+                &[
+                    "-c".to_string(),
+                    "ls -1 \"$0\"".to_string(),
+                    dir.display().to_string(),
+                ],
+                &[],
+                None,
+                dir,
+            )
+            .expect("sh lists the log directory")
+            .stdout
+        };
+        let first = list(&dir);
+        let second = list(&dir);
+        let tag = format!("{}-", process_log_tag());
+        let names: Vec<&str> = first.lines().chain(second.lines()).collect();
+        assert_eq!(
+            names.len(),
+            4,
+            "one out and one err file per run: {names:?}"
+        );
+        assert!(names.iter().all(|name| name.starts_with(&tag)), "{names:?}");
+        assert!(
+            first.lines().all(|name| !second.contains(name)),
+            "each run has its own files"
+        );
+        assert!(
+            std::fs::read_dir(&dir).unwrap().next().is_none(),
+            "settled runs leave nothing behind"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// An explicit cancel settles a running child within the contract bound

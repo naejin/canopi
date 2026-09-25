@@ -138,6 +138,10 @@ fn build_count_statement(
     SqlStatementPlan::new(sql, sql_builder.into_params())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "relevance pages always build a relevance plan"
+)]
 fn build_list_statement(
     request: &SpeciesSearchPlanRequest,
     search_text: &SearchText,
@@ -249,6 +253,10 @@ fn build_indexed_count_statement(
     SqlStatementPlan::new(sql, sql_builder.into_params())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "the indexed list is only chosen when Common Name tokens exist"
+)]
 fn build_indexed_list_statement(
     request: &SpeciesSearchPlanRequest,
     search_text: &SearchText,
@@ -343,6 +351,10 @@ enum IndexedNameSearchMode {
     Staged { fallback_threshold: u32 },
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "indexed name search is only chosen when Common Name tokens exist"
+)]
 fn indexed_name_search_cte(
     search_text: &SearchText,
     locale_placeholder: &str,

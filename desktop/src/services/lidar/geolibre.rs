@@ -39,23 +39,30 @@ impl GeolibreTool {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct GeolibreEngine {
     /// A fixed binary instead of discovery; tests use it to name a missing one.
     fixed: Option<PathBuf>,
     discovery: Arc<Mutex<Option<Result<GeolibreTool, String>>>>,
+    /// Where child output is captured, inside the library root.
+    log_dir: PathBuf,
 }
 
 impl GeolibreEngine {
-    pub fn new() -> Self {
-        Self::default()
+    /// A runner that captures child output in `log_dir`, which must exist.
+    pub fn in_dir(log_dir: PathBuf) -> Self {
+        Self {
+            fixed: None,
+            discovery: Arc::new(Mutex::new(None)),
+            log_dir,
+        }
     }
 
     #[cfg(test)]
     pub fn at(path: PathBuf) -> Self {
         Self {
             fixed: Some(path),
-            ..Self::default()
+            ..Self::in_dir(std::env::temp_dir())
         }
     }
 
@@ -91,7 +98,8 @@ impl GeolibreEngine {
                 path.display()
             ));
         }
-        let output = GdalEngine::run_managed(&path, &["version".to_string()], &[], None)?;
+        let output =
+            GdalEngine::run_managed(&path, &["version".to_string()], &[], None, &self.log_dir)?;
         let version = output.stdout.trim().to_string();
         if version.is_empty() {
             return Err("the GeoLibre slope engine reported no version".to_string());
@@ -124,6 +132,7 @@ impl GeolibreEngine {
             &args,
             &[("RAYON_NUM_THREADS", RAYON_THREADS)],
             Some(cancel),
+            &self.log_dir,
         )?;
         if !output.is_file() {
             return Err("the GeoLibre slope engine produced no output".to_string());

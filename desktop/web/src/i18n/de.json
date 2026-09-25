@@ -988,7 +988,7 @@
     "intro": "Erstellt eine Zusammenfassung und ein Diagnosepaket, das du später teilen kannst.",
     "descriptionLabel": "Was ist passiert?",
     "descriptionPlaceholder": "Beschreibe, was du getan hast, was fehlgeschlagen ist und ob du es wiederholen kannst.",
-    "privacyNote": "Das Diagnosepaket schließt standardmäßig dein Design, den genauen Standort, Screenshots und rohe Dateipfade aus.",
+    "privacyNote": "Das Diagnosepaket schließt standardmäßig Ihr Design (einschließlich seiner Koordinaten), Screenshots und rohe Dateipfade aus.",
     "create": "Bericht erstellen",
     "creating": "Wird erstellt...",
     "cancel": "Abbrechen",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "Der Ordner konnte nicht angezeigt werden. Der genaue Ordnerpfad bleibt oben sichtbar.",
     "optionalAttachments": "Optionale Anhänge",
     "includeCurrentDesign": "Aktuelles Design einschließen",
-    "includeCurrentDesignDescription": "Fügt eine .canopi-Kopie mit Canvas-Inhalten, Notizen, Zeitplan, Budget und gespeichertem Standort hinzu.",
+    "includeCurrentDesignDescription": "Fügt eine .canopi-Kopie mit den Canvas-Inhalten und ihren Koordinaten, Notizen, Zeitplan und Budget hinzu.",
     "currentDesignUnavailable": "Es ist kein aktuelles Design zum Anhängen verfügbar."
   },
   "pdf": {

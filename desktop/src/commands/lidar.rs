@@ -6,25 +6,8 @@
 //! Operation Executor.
 
 use crate::{native_operation::NativeOperationExecutor, services::lidar::LidarLibrary};
-use common_types::lidar::{
-    LidarAnalysisKind, LidarAnalysisParameters, LidarEngineStatus, LidarLibrarySnapshot,
-};
+use common_types::lidar::{LidarAnalysisKind, LidarAnalysisParameters, LidarLibrarySnapshot};
 use tauri::State;
-
-#[tauri::command]
-pub async fn lidar_engine_status(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-) -> Result<LidarEngineStatus, String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar engine status",
-            move || Ok(library.engine_status()),
-        )
-        .await
-}
 
 #[tauri::command]
 pub async fn lidar_list_library(
@@ -86,22 +69,6 @@ pub async fn lidar_delete_layer(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar delete layer",
             move || library.delete_layer(&layer_id),
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn lidar_get_import_job(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    job_id: String,
-) -> Result<Option<common_types::lidar::LidarImportJob>, String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar import job status",
-            move || library.get_import_job(&job_id),
         )
         .await
 }
@@ -179,22 +146,6 @@ pub async fn lidar_layer_collection(
 }
 
 #[tauri::command]
-pub async fn lidar_get_analysis_job_status(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    job_id: String,
-) -> Result<Option<common_types::lidar::LidarAnalysisJobStatus>, String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar analysis job status",
-            move || library.analysis_job_status(&job_id),
-        )
-        .await
-}
-
-#[tauri::command]
 pub async fn lidar_delete_analysis(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
@@ -217,7 +168,8 @@ pub async fn lidar_delete_analysis(
 /// nothing could ever set: a superseded lookup then stops at its next bounded
 /// read, and a burst of abandoned lookups cannot outrun the active-request
 /// budget. The admission name is scoped to the inspection surface, so a caller
-/// can only ever cancel its own lookup.
+/// can only ever cancel its own lookup. The read runs GDAL against raster
+/// files, so it belongs to the `Local` class, never to `UserData`.
 #[tauri::command]
 pub async fn lidar_sample_pixel(
     library: State<'_, LidarLibrary>,
@@ -228,13 +180,11 @@ pub async fn lidar_sample_pixel(
     let mut ticket = library.admit_sample_request(&request.request_id)?;
     // Wait for a slot without holding an executor permit, so an inspection
     // read can never sit in front of a heavy raster job.
-    while !ticket.try_activate()? {
-        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
-    }
+    ticket.activate().await?;
     let cancel = ticket.cancel_flag();
     executor
         .run(
-            crate::native_operation::NativeOperationClass::UserData,
+            crate::native_operation::NativeOperationClass::Local,
             "lidar sample pixel",
             move || {
                 // The ticket is held for the whole read and released with it,

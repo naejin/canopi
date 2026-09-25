@@ -18,10 +18,8 @@ use std::sync::atomic::AtomicBool;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisParameters {
-    #[serde(default)]
-    pub slope_unit: Option<LidarSlopeUnit>,
-    /// Published with the result.
-    #[serde(default)]
+    pub slope_unit: LidarSlopeUnit,
+    /// Published with the result; `None` publishes an unnamed result.
     pub name: Option<String>,
 }
 
@@ -96,23 +94,20 @@ pub struct ResultManifest {
     pub created_at: String,
 }
 
+/// A published slope result. Every other ending is an error: the input of a
+/// job is a fixed item, so there is no superseded or stale outcome.
 #[derive(Debug)]
 pub struct AnalysisOutcome {
-    pub published: bool,
-    pub stale: bool,
-    pub message: Option<String>,
+    pub coverage_cells: u64,
+    pub blocks: usize,
 }
 
 impl AnalysisOutcome {
     pub fn summary(&self) -> String {
-        let detail = self.message.clone().unwrap_or_default();
-        if self.stale {
-            format!("stale result discarded {detail}")
-        } else if self.published {
-            format!("result published {detail}")
-        } else {
-            format!("no result published {detail}")
-        }
+        format!(
+            "sparse slope result published: {} cells in {} blocks",
+            self.coverage_cells, self.blocks
+        )
     }
 }
 
@@ -443,7 +438,8 @@ pub(super) fn admit_sparse_slope_storage(
     super::paths::require_free_space(scratch, total, "the sparse slope working set")
 }
 
-/// layer head.
+/// Compute one slope result block by block in job scratch and publish it
+/// against the pinned input generation `expected`.
 #[allow(clippy::too_many_arguments)]
 fn publish_sparse_slope(
     library: &LidarLibrary,
@@ -465,8 +461,8 @@ fn publish_sparse_slope(
     let engine_version = match recipe {
         SlopeRecipe::GeolibreProjected => library.inner.geolibre.discover()?.provenance(),
     };
-    let percent = parameters.slope_unit == Some(LidarSlopeUnit::Percent);
-    let scratch = paths.prepared_dir().join(format!("scratch-slope-{job_id}"));
+    let percent = parameters.slope_unit == LidarSlopeUnit::Percent;
+    let scratch = paths.slope_scratch_dir(job_id);
     std::fs::create_dir_all(&scratch)
         .map_err(|e| format!("Failed to create slope scratch: {e}"))?;
     let outcome = (|| -> Result<AnalysisOutcome, String> {
@@ -602,8 +598,11 @@ fn publish_sparse_slope(
                         rusqlite::Error::QueryReturnedNoRows => Ok(None),
                         other => Err(other.to_string()),
                     })?;
+                // A published item never changes its generation, so this only
+                // guards the catalogue against a result for an input it no
+                // longer holds.
                 if current_head.as_deref() != Some(expected) {
-                    return Err("source layer changed during analysis publication".to_string());
+                    return Err("the input of this calculation is no longer available".to_string());
                 }
                 require_definition_recipe(&connection, definition_id, recipe)?;
                 connection
@@ -630,8 +629,7 @@ fn publish_sparse_slope(
                 catalogue::publish_generation_chunks(&connection, &generation_id)?;
                 connection
                     .execute(
-                        "INSERT INTO lidar_analysis_heads(definition_id, generation_id) VALUES(?1, ?2)
-                         ON CONFLICT(definition_id) DO UPDATE SET generation_id = excluded.generation_id",
+                        "INSERT INTO lidar_analysis_heads(definition_id, generation_id) VALUES(?1, ?2)",
                         rusqlite::params![definition_id, generation_id],
                     )
                     .map_err(|e| e.to_string())?;
@@ -653,44 +651,16 @@ fn publish_sparse_slope(
                 }
             }
         })();
-        match published {
-            Ok(()) => {}
-            // A superseded job is the scheduler's ordinary coalescing outcome,
-            // not a failure: settlement rechecks the head and schedules the
-            // latest one. Reporting it as a plain error would end the refresh
-            // chain and leave the newest composition without a current result.
-            Err(error) if error == "source layer changed during analysis publication" => {
-                if let Ok(connection) = library.catalogue() {
-                    let _ = catalogue::discard_unpublished_generation_chunks(
-                        &connection,
-                        &generation_id,
-                    );
-                }
-                return Ok(AnalysisOutcome {
-                    published: false,
-                    stale: true,
-                    message: Some(
-                        "source layer changed during analysis; result discarded".to_string(),
-                    ),
-                });
+        if let Err(error) = published {
+            if let Ok(connection) = library.catalogue() {
+                let _ =
+                    catalogue::discard_unpublished_generation_chunks(&connection, &generation_id);
             }
-            Err(error) => {
-                if let Ok(connection) = library.catalogue() {
-                    let _ = catalogue::discard_unpublished_generation_chunks(
-                        &connection,
-                        &generation_id,
-                    );
-                }
-                return Err(error);
-            }
+            return Err(error);
         }
         Ok(AnalysisOutcome {
-            published: true,
-            stale: false,
-            message: Some(format!(
-                "sparse slope result published: {coverage_cells} cells in {} blocks",
-                chunks.len()
-            )),
+            coverage_cells,
+            blocks: chunks.len(),
         })
     })();
     let _ = std::fs::remove_dir_all(&scratch);
@@ -698,8 +668,8 @@ fn publish_sparse_slope(
 }
 
 /// Run one slope analysis job. `job_id` is the catalogue job row this run
-/// settles. The input snapshot is resolved up front; the publish transaction
-/// verifies it is still the layer head, discarding stale artifacts.
+/// settles. The input generation is resolved up front; the publish
+/// transaction rechecks it before anything becomes visible.
 pub fn run_slope_job(
     library: &LidarLibrary,
     job_id: &str,
@@ -945,7 +915,7 @@ mod tests {
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(unit),
+                    slope_unit: unit,
                     name: None,
                 },
                 None,
@@ -979,7 +949,7 @@ mod tests {
             &AtomicBool::new(false),
         )
         .expect("slope job runs");
-        assert!(outcome.published && !outcome.stale, "{}", outcome.summary());
+        assert!(outcome.coverage_cells > 0, "{}", outcome.summary());
         (receipt.job_id, receipt.definition_id)
     }
 
@@ -1073,7 +1043,7 @@ mod tests {
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(LidarSlopeUnit::Degrees),
+                    slope_unit: LidarSlopeUnit::Degrees,
                     name: None,
                 },
                 None,
@@ -1285,7 +1255,7 @@ mod tests {
                 layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: Some(unit),
+                    slope_unit: unit,
                     name: None,
                 },
                 Some(name.to_string()),
@@ -1310,7 +1280,7 @@ mod tests {
             &AtomicBool::new(false),
         )
         .expect("the GeoLibre slope job runs");
-        assert!(outcome.published, "{}", outcome.summary());
+        assert!(outcome.coverage_cells > 0, "{}", outcome.summary());
         receipt.definition_id
     }
 
@@ -1497,7 +1467,7 @@ mod tests {
                 &layer_id,
                 LidarAnalysisKind::Slope,
                 common_types::lidar::LidarAnalysisParameters {
-                    slope_unit: None,
+                    slope_unit: LidarSlopeUnit::Degrees,
                     name: None,
                 },
                 None,
@@ -1533,7 +1503,7 @@ mod tests {
             &receipt.job_id,
             &receipt.definition_id,
             &AnalysisParameters {
-                slope_unit: None,
+                slope_unit: LidarSlopeUnit::Degrees,
                 name: None,
             },
             &input,

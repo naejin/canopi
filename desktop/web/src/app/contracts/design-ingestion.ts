@@ -48,6 +48,13 @@ function admitCurrentDesignValue(value: unknown): asserts value is Record<string
       'invalid_document',
       `$.${obsolete}: obsolete root field; v7 stores lon/lat on each design object`,
     )
+  }  // Unknown fields travel at the root; `extra` is only the in-memory holder
+  // and the canonical encoder never writes it, so a root `extra` is refused.
+  if (Object.prototype.hasOwnProperty.call(value, 'extra')) {
+    throw new CanopiDesignIngestionError(
+      'invalid_document',
+      '$.extra: unknown fields belong at the document root',
+    )
   }
 }
 

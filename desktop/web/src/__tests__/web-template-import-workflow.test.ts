@@ -34,7 +34,7 @@ describe('Web Edition Design Template import workflow', () => {
     expect(openCanopiTemplate).toHaveBeenCalledWith(
       {
         name: 'Forest Edge',
-        file: templateFile,
+        file: { ...templateFile, extra: {} },
       },
       { isCancelled: expect.any(Function) },
     )
@@ -97,7 +97,6 @@ function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-06-01T00:00:00.000Z',
     updated_at: '2026-06-02T00:00:00.000Z',
-    extra: {},
     ...overrides,
   }
 }

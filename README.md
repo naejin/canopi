@@ -56,11 +56,10 @@ cd desktop/web && npx tsc --noEmit && npm test
 ## Project structure
 
 ```
-desktop/src/        Rust backend (IPC, services, DB, platform)
+desktop/src/        Rust backend (IPC, services, DB)
 desktop/web/        Preact frontend
 common-types/       authored cross-language contracts
 bindings-gen/       TypeScript transport codegen
-lib-c/ lib-swift/ lib-cpp/   platform crates
 scripts/            DB preparation, docs check, release tooling
 docs/               architecture, ADRs, guides, release notes
 .interface-design/  design system

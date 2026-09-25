@@ -28,4 +28,36 @@ describe('frontend problem-report diagnostics', () => {
     expect(diagnostics[49]!.message).not.toContain('design-59.canopi')
     expect(diagnostics[49]!.source).toBe('command:Open design')
   })
+
+  it('keeps the error reason that follows a redacted path', () => {
+    recordFrontendDiagnostic({
+      level: 'error',
+      source: 'command:Open design',
+      message: 'Failed to read /media/alice/USB Drive/Secret Orchard.canopi: No such file or directory',
+    })
+    recordFrontendDiagnostic({
+      level: 'error',
+      source: 'command:Save design',
+      message: String.raw`Failed to save C:\Users\alice\Secret Orchard.canopi: Access is denied.`,
+    })
+
+    const [unix, windows] = recentFrontendDiagnostics()
+
+    expect(unix!.message).toBe('Failed to read <path>: No such file or directory')
+    expect(windows!.message).toBe('Failed to save <path>: Access is denied.')
+  })
+
+  it('redacts credential query values', () => {
+    recordFrontendDiagnostic({
+      level: 'error',
+      source: 'satellite',
+      message: 'GET https://tile.googleapis.com/v1/createSession?key=AIzaSECRET&session=abc failed; api-key=SECRET2',
+    })
+
+    const [entry] = recentFrontendDiagnostics()
+
+    expect(entry!.message).not.toContain('SECRET')
+    expect(entry!.message).toContain('?key=<redacted>&session=abc')
+    expect(entry!.message).toContain('api-key=<redacted>')
+  })
 })

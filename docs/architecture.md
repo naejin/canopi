@@ -12,7 +12,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 
 ## Stack
 
-- Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services, DB access and platform code. `common-types/` holds the authored cross-language contracts; `bindings-gen/` generates the TypeScript transport.
+- Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services and DB access. `common-types/` holds the authored cross-language contracts; `bindings-gen/` generates the TypeScript transport.
 - Frontend: Preact, `@preact/signals`, TypeScript, Vite, CSS Modules, i18next core with 11 UI languages. Source is in `desktop/web/src/`.
 - Map and scene: MapLibre GL JS owns the WebGL2 context and camera. The design scene is drawn by PixiJS inside a MapLibre custom layer (`maplibre-pixi`), the only renderer. See [ADR 0004](adr/0004-one-renderer.md).
 
@@ -90,6 +90,6 @@ Every `#[tauri::command]` is registered once and is either executor-backed async
 
 ## Persistence of app data
 
-- Desktop user DB: one schema, no migrations. An older database is renamed `user.db.v<N>-set-aside` and an empty one is created.
+- Desktop user DB: one schema, no migrations. An older database is renamed `user.db.v<N>-set-aside`, an unreadable or damaged one `user.db.corrupt-<unix-seconds>`, and an empty one is created. A newer database is refused with a typed error.
 - LiDAR library: catalogue v20. A library written by an older Canopi is deleted on first open; a newer one is refused.
 - Web: independent browser-local records for drafts, settings, species activity and stamps. Web v1 storage is ignored.

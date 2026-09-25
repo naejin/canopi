@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, SpeciesDetail,
-    SpeciesExternalLink, SpeciesImage,
+    SpeciesImage,
 };
 
 use crate::db::{self, PlantDb};
@@ -54,14 +54,6 @@ pub fn get_species_images(
 ) -> Result<Vec<SpeciesImage>, String> {
     let conn = db::require_plant_db(plant_db)?;
     SpeciesCatalogRead::new(&conn).images_for_canonical_name(&canonical_name)
-}
-
-pub fn get_species_external_links(
-    plant_db: &PlantDb,
-    canonical_name: String,
-) -> Result<Vec<SpeciesExternalLink>, String> {
-    let conn = db::require_plant_db(plant_db)?;
-    SpeciesCatalogRead::new(&conn).external_links_for_canonical_name(&canonical_name)
 }
 
 pub fn get_locale_common_names(

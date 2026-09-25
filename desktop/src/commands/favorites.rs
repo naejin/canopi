@@ -128,7 +128,7 @@ async fn get_recently_viewed_with_executor(
             NativeOperationClass::UserData,
             "recently viewed favorite hydration",
             move || {
-                crate::services::plant_browser::hydrate_favorite_flags(&user_db, &mut items);
+                crate::services::plant_browser::hydrate_favorite_flags(&user_db, &mut items)?;
                 Ok(items)
             },
         )

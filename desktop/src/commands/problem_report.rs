@@ -78,9 +78,11 @@ async fn create_problem_report_with_executor(
 
 #[tauri::command]
 pub async fn show_problem_report_folder(
+    app: AppHandle,
     executor: State<'_, NativeOperationExecutor>,
     path: String,
 ) -> Result<(), String> {
+    let output_root = report_output_root(&app)?;
     executor
         .run(
             NativeOperationClass::Local,
@@ -89,6 +91,7 @@ pub async fn show_problem_report_folder(
                 let revealer = crate::services::problem_report::SystemProblemReportFolderRevealer;
                 crate::services::problem_report::show_problem_report_folder(
                     Path::new(&path),
+                    &output_root,
                     &revealer,
                 )
             },

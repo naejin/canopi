@@ -988,7 +988,7 @@
     "intro": "Maak een samenvatting en diagnosebundel die je later kunt delen.",
     "descriptionLabel": "Wat is er gebeurd?",
     "descriptionPlaceholder": "Beschrijf wat je deed, wat er misging en of je het kunt herhalen.",
-    "privacyNote": "De diagnosebundel bevat standaard geen ontwerp, precieze locatie, schermafbeeldingen of ruwe bestandspaden.",
+    "privacyNote": "Het diagnosepakket sluit standaard je ontwerp (inclusief de coördinaten), schermafbeeldingen en ruwe bestandspaden uit.",
     "create": "Rapport maken",
     "creating": "Maken...",
     "cancel": "Annuleren",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "Kan de map niet tonen. Het exacte pad blijft hierboven zichtbaar.",
     "optionalAttachments": "Optionele bijlagen",
     "includeCurrentDesign": "Huidig ontwerp opnemen",
-    "includeCurrentDesignDescription": "Voegt een .canopi-kopie toe met canvasinhoud, notities, planning, budget en opgeslagen locatie.",
+    "includeCurrentDesignDescription": "Voegt een .canopi-kopie toe met de canvasinhoud en de coördinaten, notities, tijdlijn en budget.",
     "currentDesignUnavailable": "Er is geen huidig ontwerp beschikbaar om bij te voegen."
   },
   "pdf": {

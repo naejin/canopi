@@ -14,12 +14,19 @@ const SCHEMA: &str = include_str!("user_db_schema.sql");
 pub enum UserDbInitError {
     Open(rusqlite::Error),
     ReadSchemaVersion(rusqlite::Error),
-    UnsupportedSchemaVersion {
+    /// Written by an older Canopi. [`crate::db::UserDb::open`] sets it aside.
+    OlderSchemaVersion {
+        found: i32,
+        supported: i32,
+    },
+    /// Written by a newer Canopi. It is refused and left untouched; the user
+    /// must run that newer Canopi (or move the file) to continue.
+    NewerSchemaVersion {
         found: i32,
         supported: i32,
     },
     SetAside {
-        found: i32,
+        reason: UserDbSetAsideReason,
         source: std::io::Error,
     },
     ConfigureForeignKeys(rusqlite::Error),
@@ -34,6 +41,59 @@ pub enum UserDbInitError {
     },
 }
 
+/// Why an existing user database file is renamed aside instead of opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserDbSetAsideReason {
+    /// Written by an older Canopi; there is no migration.
+    Older { found: i32 },
+    /// Not a SQLite database, damaged, or failing its integrity checks.
+    Corrupt,
+}
+
+impl fmt::Display for UserDbSetAsideReason {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Older { found } => {
+                write!(formatter, "written by an older Canopi (schema {found})")
+            }
+            Self::Corrupt => write!(formatter, "unreadable or damaged"),
+        }
+    }
+}
+
+impl UserDbInitError {
+    /// The set-aside this error calls for, if the file should be kept aside
+    /// and replaced by an empty database. A newer database is never set aside.
+    pub(crate) fn set_aside_reason(&self) -> Option<UserDbSetAsideReason> {
+        match self {
+            Self::OlderSchemaVersion { found, .. } => {
+                Some(UserDbSetAsideReason::Older { found: *found })
+            }
+            Self::ForeignKeyViolation { .. } => Some(UserDbSetAsideReason::Corrupt),
+            Self::ReadSchemaVersion(error)
+            | Self::ConfigureForeignKeys(error)
+            | Self::CreateSchema(error)
+            | Self::VerifyIntegrity(error)
+                if is_corrupt_database_error(error) =>
+            {
+                Some(UserDbSetAsideReason::Corrupt)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn is_corrupt_database_error(error: &rusqlite::Error) -> bool {
+    matches!(
+        error,
+        rusqlite::Error::SqliteFailure(failure, _)
+            if matches!(
+                failure.code,
+                rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt
+            )
+    )
+}
+
 impl fmt::Display for UserDbInitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -42,13 +102,17 @@ impl fmt::Display for UserDbInitError {
                 formatter,
                 "failed to read user database schema version: {error}"
             ),
-            Self::UnsupportedSchemaVersion { found, supported } => write!(
+            Self::OlderSchemaVersion { found, supported } => write!(
                 formatter,
-                "user database schema version {found} is not supported (expected {supported})"
+                "user database schema version {found} is from an older Canopi (expected {supported})"
             ),
-            Self::SetAside { found, source } => write!(
+            Self::NewerSchemaVersion { found, supported } => write!(
                 formatter,
-                "failed to set aside the user database from an older Canopi (schema version {found}): {source}"
+                "user database schema version {found} was written by a newer Canopi (this version reads {supported}); open it with that newer Canopi"
+            ),
+            Self::SetAside { reason, source } => write!(
+                formatter,
+                "failed to set aside the user database ({reason}): {source}"
             ),
             Self::ConfigureForeignKeys(error) => write!(
                 formatter,
@@ -89,7 +153,8 @@ impl std::error::Error for UserDbInitError {
             | Self::CreateSchema(error)
             | Self::VerifyIntegrity(error) => Some(error),
             Self::SetAside { source, .. } => Some(source),
-            Self::UnsupportedSchemaVersion { .. }
+            Self::OlderSchemaVersion { .. }
+            | Self::NewerSchemaVersion { .. }
             | Self::ForeignKeysDisabled
             | Self::ForeignKeyViolation { .. } => None,
         }
@@ -123,8 +188,14 @@ pub(super) fn initialize_connection(conn: &Connection) -> Result<(), UserDbInitE
     match version {
         0 => create_schema(conn)?,
         CURRENT_USER_DB_VERSION => {}
+        found if found > CURRENT_USER_DB_VERSION => {
+            return Err(UserDbInitError::NewerSchemaVersion {
+                found,
+                supported: CURRENT_USER_DB_VERSION,
+            });
+        }
         found => {
-            return Err(UserDbInitError::UnsupportedSchemaVersion {
+            return Err(UserDbInitError::OlderSchemaVersion {
                 found,
                 supported: CURRENT_USER_DB_VERSION,
             });
@@ -189,23 +260,18 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rusq
 }
 
 /// Returns true if the given canonical name is in the favorites table.
-pub fn is_favorite(conn: &Connection, canonical_name: &str) -> bool {
+pub fn is_favorite(conn: &Connection, canonical_name: &str) -> Result<bool, rusqlite::Error> {
     conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM favorites WHERE canonical_name = ?1)",
         [canonical_name],
         |row| row.get::<_, bool>(0),
     )
-    .unwrap_or(false)
 }
 
 /// Returns all favorited canonical names, ordered by most recently added.
 pub fn get_favorite_names(conn: &Connection) -> Result<Vec<String>, rusqlite::Error> {
     let mut stmt = conn.prepare("SELECT canonical_name FROM favorites ORDER BY added_at DESC")?;
-    let names = stmt
-        .query_map([], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(names)
+    stmt.query_map([], |row| row.get(0))?.collect()
 }
 
 /// Toggles a favorite. Returns `true` if now favorited, `false` if unfavorited.
@@ -253,11 +319,7 @@ pub fn get_recently_viewed_names(
 ) -> Result<Vec<String>, rusqlite::Error> {
     let mut stmt = conn
         .prepare("SELECT canonical_name FROM recently_viewed ORDER BY viewed_at DESC LIMIT ?1")?;
-    let names = stmt
-        .query_map([limit], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(names)
+    stmt.query_map([limit], |row| row.get(0))?.collect()
 }
 
 pub fn create_saved_object_stamp(
@@ -388,13 +450,31 @@ mod tests {
     #[test]
     fn test_toggle_favorite_adds_then_removes() {
         let conn = test_db();
-        assert!(!is_favorite(&conn, "Lavandula angustifolia"));
+        assert!(!is_favorite(&conn, "Lavandula angustifolia").unwrap());
         let now_fav = toggle_favorite(&conn, "Lavandula angustifolia").unwrap();
         assert!(now_fav);
-        assert!(is_favorite(&conn, "Lavandula angustifolia"));
+        assert!(is_favorite(&conn, "Lavandula angustifolia").unwrap());
         let still_fav = toggle_favorite(&conn, "Lavandula angustifolia").unwrap();
         assert!(!still_fav);
-        assert!(!is_favorite(&conn, "Lavandula angustifolia"));
+        assert!(!is_favorite(&conn, "Lavandula angustifolia").unwrap());
+    }
+
+    #[test]
+    fn favorite_reads_report_database_errors_instead_of_hiding_them() {
+        let conn = test_db();
+        conn.execute_batch(
+            "DROP TABLE favorites;
+             CREATE TABLE favorites (canonical_name BLOB, added_at TEXT);
+             INSERT INTO favorites VALUES (x'ff', '1');",
+        )
+        .unwrap();
+
+        assert!(
+            get_favorite_names(&conn).is_err(),
+            "an unreadable favorite row must not be dropped silently"
+        );
+        conn.execute_batch("DROP TABLE favorites;").unwrap();
+        assert!(is_favorite(&conn, "Malus domestica").is_err());
     }
 
     #[test]
@@ -518,13 +598,17 @@ mod tests {
                 Err(error) => error,
             };
 
-            assert!(matches!(
-                error,
-                UserDbInitError::UnsupportedSchemaVersion {
+            assert!(match error {
+                UserDbInitError::OlderSchemaVersion {
                     found: f,
-                    supported: CURRENT_USER_DB_VERSION
-                } if f == found
-            ));
+                    supported,
+                }
+                | UserDbInitError::NewerSchemaVersion {
+                    found: f,
+                    supported,
+                } => f == found && supported == CURRENT_USER_DB_VERSION,
+                _ => false,
+            });
         }
     }
 
@@ -562,7 +646,118 @@ mod tests {
         std::fs::remove_file(aside).unwrap();
     }
 
-    /// A newer database is refused and left exactly where it is.
+    fn files_starting_with(path: &std::path::Path, suffix: &str) -> Vec<std::path::PathBuf> {
+        let prefix = format!("{}{suffix}", path.file_name().unwrap().to_string_lossy());
+        let mut found = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with(&prefix))
+            })
+            .collect::<Vec<_>>();
+        found.sort();
+        found
+    }
+
+    fn remove_all_starting_with(path: &std::path::Path) {
+        for file in files_starting_with(path, "") {
+            let _ = std::fs::remove_file(file);
+        }
+    }
+
+    fn write_older_database(path: &std::path::Path, favorite: &str) {
+        let old = Connection::open(path).unwrap();
+        old.execute_batch(&format!(
+            "CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+             INSERT INTO favorites VALUES ('{favorite}', '0');
+             PRAGMA user_version = 8;"
+        ))
+        .unwrap();
+    }
+
+    #[test]
+    fn a_second_older_database_does_not_overwrite_the_first_set_aside() {
+        let path = temp_user_db_path("older_twice");
+        write_older_database(&path, "Malus domestica");
+        drop(crate::db::UserDb::open(&path).unwrap());
+        std::fs::remove_file(&path).unwrap();
+        write_older_database(&path, "Pyrus communis");
+        drop(crate::db::UserDb::open(&path).unwrap());
+
+        let aside = files_starting_with(&path, ".v8-set-aside");
+        assert_eq!(aside.len(), 2, "{aside:?}");
+        let mut kept = aside
+            .iter()
+            .flat_map(|file| get_favorite_names(&Connection::open(file).unwrap()).unwrap())
+            .collect::<Vec<_>>();
+        kept.sort();
+        assert_eq!(kept, ["Malus domestica", "Pyrus communis"]);
+
+        remove_all_starting_with(&path);
+    }
+
+    #[test]
+    fn a_corrupt_database_is_set_aside_and_the_app_starts_fresh() {
+        let path = temp_user_db_path("corrupt");
+        std::fs::write(&path, b"this is not a SQLite database, it is just text").unwrap();
+
+        let user_db =
+            crate::db::UserDb::open(&path).expect("a corrupt user DB must not stop startup");
+        {
+            let conn = user_db.acquire();
+            assert_eq!(schema_version(&conn).unwrap(), CURRENT_USER_DB_VERSION);
+        }
+        drop(user_db);
+
+        let aside = files_starting_with(&path, ".corrupt-");
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(
+            std::fs::read(&aside[0]).unwrap(),
+            b"this is not a SQLite database, it is just text"
+        );
+
+        remove_all_starting_with(&path);
+    }
+
+    #[test]
+    fn a_database_with_foreign_key_violations_is_set_aside_as_corrupt() {
+        let path = temp_user_db_path("foreign_keys");
+        {
+            let conn = Connection::open(&path).unwrap();
+            initialize_connection(&conn).unwrap();
+            conn.pragma_update(None, "foreign_keys", false).unwrap();
+            conn.execute(
+                "INSERT INTO design_notebook_section_memberships (
+                    path, section_id, created_at, updated_at
+                 ) VALUES ('/orphan.canopi', 'missing', datetime('now'), datetime('now'))",
+                [],
+            )
+            .unwrap();
+        }
+
+        let user_db =
+            crate::db::UserDb::open(&path).expect("an FK-violating user DB must not stop startup");
+        {
+            let conn = user_db.acquire();
+            let memberships: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM design_notebook_section_memberships",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(memberships, 0);
+        }
+        drop(user_db);
+        assert_eq!(files_starting_with(&path, ".corrupt-").len(), 1);
+
+        remove_all_starting_with(&path);
+    }
+
+    /// A newer database is refused with a typed error and left exactly where it is.
     #[test]
     fn opening_a_newer_database_is_refused_and_kept() {
         let path = temp_user_db_path("newer");
@@ -570,7 +765,15 @@ mod tests {
             .unwrap()
             .pragma_update(None, "user_version", CURRENT_USER_DB_VERSION + 1)
             .unwrap();
-        assert!(crate::db::UserDb::open(&path).is_err());
+        assert!(matches!(
+            crate::db::UserDb::open(&path),
+            Err(UserDbInitError::NewerSchemaVersion { found, supported })
+                if found == CURRENT_USER_DB_VERSION + 1 && supported == CURRENT_USER_DB_VERSION
+        ));
+        assert!(
+            files_starting_with(&path, ".").is_empty(),
+            "nothing is set aside"
+        );
         let kept = Connection::open(&path).unwrap();
         assert_eq!(schema_version(&kept).unwrap(), CURRENT_USER_DB_VERSION + 1);
         drop(kept);

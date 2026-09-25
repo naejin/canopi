@@ -26,10 +26,18 @@ use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
 
-/// Degrees, the unit every slope result carries unless it chose percent.
+/// The label of a slope result computed in degrees.
 const DEGREES_UNIT: &str = "°";
-/// Percent, the unit a slope result chooses explicitly.
+/// The label of a slope result computed in percent.
 const PERCENT_UNIT: &str = "%";
+
+/// The unit label a slope result is sampled in.
+fn result_units(unit: LidarSlopeUnit) -> &'static str {
+    match unit {
+        LidarSlopeUnit::Degrees => DEGREES_UNIT,
+        LidarSlopeUnit::Percent => PERCENT_UNIT,
+    }
+}
 
 /// One analysis definition's own row, by definition id.
 fn analysis_definition_layer(
@@ -110,10 +118,7 @@ fn resolve_target(
             // A result reports the measurement it was computed in, not the unit
             // string of the layer it was derived from: a slope in percent is not
             // a source elevation in metres.
-            let units = match manifest.parameters.slope_unit {
-                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
-                _ => DEGREES_UNIT.to_string(),
-            };
+            let units = result_units(manifest.parameters.slope_unit).to_string();
             Ok(Some(SampleTarget {
                 generation_id: row.id,
                 grid: manifest.grid.clone(),
@@ -562,17 +567,7 @@ mod tests {
     /// A result's unit is its own parameter, not its source layer's.
     #[test]
     fn a_slope_result_reports_the_unit_it_was_computed_in() {
-        for (unit, expected) in [
-            (Some(LidarSlopeUnit::Degrees), DEGREES_UNIT),
-            (Some(LidarSlopeUnit::Percent), PERCENT_UNIT),
-            // A manifest written before the choice existed is in degrees.
-            (None, DEGREES_UNIT),
-        ] {
-            let units = match unit {
-                Some(LidarSlopeUnit::Percent) => PERCENT_UNIT.to_string(),
-                _ => DEGREES_UNIT.to_string(),
-            };
-            assert_eq!(units, expected);
-        }
+        assert_eq!(result_units(LidarSlopeUnit::Degrees), DEGREES_UNIT);
+        assert_eq!(result_units(LidarSlopeUnit::Percent), PERCENT_UNIT);
     }
 }

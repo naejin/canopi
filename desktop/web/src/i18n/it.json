@@ -988,7 +988,7 @@
     "intro": "Crea un riepilogo e un pacchetto diagnostico da condividere più tardi.",
     "descriptionLabel": "Che cosa è successo?",
     "descriptionPlaceholder": "Descrivi cosa stavi facendo, cosa non ha funzionato e se riesci a ripeterlo.",
-    "privacyNote": "Il pacchetto diagnostico esclude per impostazione predefinita design, posizione precisa, schermate e percorsi file non filtrati.",
+    "privacyNote": "Il pacchetto diagnostico esclude per impostazione predefinita il tuo design (comprese le sue coordinate), gli screenshot e i percorsi dei file grezzi.",
     "create": "Crea rapporto",
     "creating": "Creazione...",
     "cancel": "Annulla",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "Impossibile mostrare la cartella. Il percorso esatto resta visibile sopra.",
     "optionalAttachments": "Allegati facoltativi",
     "includeCurrentDesign": "Includi il design attuale",
-    "includeCurrentDesignDescription": "Aggiunge una copia .canopi con contenuti della tela, note, cronologia, budget e posizione salvata.",
+    "includeCurrentDesignDescription": "Aggiunge una copia .canopi con i contenuti della tela e le loro coordinate, note, cronologia e budget.",
     "currentDesignUnavailable": "Nessun design attuale è disponibile da allegare."
   },
   "pdf": {

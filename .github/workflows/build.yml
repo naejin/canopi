@@ -44,13 +44,16 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Species Catalog contract tests
         run: python3 -m unittest scripts.test_species_search_normalization scripts.test_species_catalog_contract scripts.test_prepare_db scripts.test_web_catalog_artifact_contract scripts.test_generate_web_catalog
 
       - name: Check Species Search Unicode facts
         run: python3 scripts/species_search_unicode_facts.py check
+
+      - name: Species Catalog contract check
+        run: python3 scripts/species_catalog_contract.py check
 
       - name: Release promotion tests
         run: python3 -m unittest scripts.test_promote_release
@@ -81,6 +84,8 @@ jobs:
       - uses: actions/checkout@v4
       - id: rust-toolchain
         uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: llvm-tools-preview
       - uses: ./.github/actions/cache-rust
         with:
           toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
@@ -89,8 +94,14 @@ jobs:
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
 
-      - name: Rust tests
-        run: cargo test --workspace
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      # `cargo cov` (.cargo/config.toml) runs the workspace tests instrumented
+      # and fails below the recorded coverage floor.
+      - name: Rust tests with coverage ratchet
+        run: cargo cov
 
       - uses: actions/setup-node@v4
         with:
@@ -160,39 +171,10 @@ jobs:
         run: |
           export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
           "$CANOPI_GEOLIBRE_BIN" version
-          cargo test -p canopi-desktop --lib services::lidar -- --ignored --test-threads=1 --skip e2e_
-
-  test-platform:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            package: lib-c
-          - os: macos-14
-            package: lib-swift
-          - os: windows-latest
-            package: lib-cpp
-
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: rust-toolchain
-        uses: dtolnay/rust-toolchain@1.97.1
-      - uses: ./.github/actions/cache-rust
-        with:
-          toolchain: ${{ steps.rust-toolchain.outputs.cachekey }}
-          workload: platform-${{ matrix.package }}
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/install-linux-deps
-
-      - name: Platform-specific tests (${{ matrix.package }})
-        run: cargo test -p ${{ matrix.package }}
+          cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
   build:
-    needs: [lint, test, test-platform]
+    needs: [lint, test]
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -268,7 +250,7 @@ jobs:
           desktop/resources/canopi-core.db
 
       - name: Build Tauri app
-        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
+        run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

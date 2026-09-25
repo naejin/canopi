@@ -7,7 +7,6 @@ pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 pub const CURRENT_CANOPI_FILE_VERSION: u32 = 7;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
-pub const MIN_SUPPORTED_CANOPI_FILE_VERSION: u32 = 7;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
 pub const WEB_MERCATOR_MAX_LATITUDE_DEG: f64 = 85.051_128_779_806_6;
 /// Root keys of earlier formats. A current-version document carrying one is
@@ -264,6 +263,10 @@ pub struct CanopiFile {
     pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "schema serialization of an authored type cannot fail"
+)]
 #[cfg(feature = "design-schema")]
 pub fn canopi_file_json_schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CanopiFile))

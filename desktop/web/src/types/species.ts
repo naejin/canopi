@@ -9,7 +9,6 @@ export type {
   PaginatedResult,
   Sort,
   SpeciesDetail,
-  SpeciesExternalLink,
   SpeciesFilter,
   SpeciesImage,
   SpeciesListItem,

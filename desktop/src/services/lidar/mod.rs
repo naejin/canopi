@@ -31,8 +31,8 @@ mod raster_info;
 
 use catalogue::{new_id, now_iso};
 use common_types::lidar::{
-    LidarAnalysisJobStatus, LidarAnalysisKind, LidarAnalysisParameters, LidarImportJob,
-    LidarImportJobState, LidarImportProgress, LidarImportProgressPhase, LidarResultState,
+    LidarAnalysisKind, LidarAnalysisParameters, LidarImportJob, LidarImportJobState,
+    LidarImportProgress, LidarImportProgressPhase,
 };
 use engine::GdalEngine;
 use paths::LidarPaths;
@@ -64,6 +64,9 @@ pub(crate) struct LidarLibraryInner {
     heavy_job: Mutex<Option<String>>,
     /// Bounded display read admission, separate from the heavy lease.
     display: Mutex<DisplayAdmission>,
+    /// Signalled whenever a waiting read may now proceed or must stop: a slot
+    /// or queue place was released, or a read was cancelled.
+    display_changed: tokio::sync::Notify,
     /// One lane preparing display derivatives, separate from numeric jobs.
     display_preparation: Mutex<display_cog::DisplayPreparation>,
 }
@@ -176,6 +179,23 @@ impl DisplayTicket {
         self.active = true;
         Ok(true)
     }
+
+    /// Wait until this request holds a slot, without occupying an executor
+    /// permit. Woken by a released slot or a cancel, never by a timer; a
+    /// cancelled request stops waiting with `cancelled`.
+    pub(crate) async fn activate(&mut self) -> Result<(), String> {
+        let inner = Arc::clone(&self.inner);
+        loop {
+            // Registered before the check, so a release between the check and
+            // the wait is not missed.
+            let mut changed = std::pin::pin!(inner.display_changed.notified());
+            changed.as_mut().enable();
+            if self.try_activate()? {
+                return Ok(());
+            }
+            changed.await;
+        }
+    }
 }
 
 impl Drop for DisplayTicket {
@@ -186,6 +206,7 @@ impl Drop for DisplayTicket {
                 .queued
                 .retain(|(queued_id, _)| queued_id != &self.request_id);
         }
+        self.inner.display_changed.notify_waiters();
     }
 }
 
@@ -238,17 +259,19 @@ impl LidarLibrary {
         let paths = LidarPaths::open(app_data_dir)?;
         let catalogue = catalogue::open(&paths.catalogue_path())?;
         let display_cache = open_display_cache(&paths.display_cache_path())?;
+        let engine_logs = paths.engine_log_dir();
         let library = Self {
             inner: Arc::new(LidarLibraryInner {
                 paths,
                 catalogue: Mutex::new(catalogue),
                 display_cache: Mutex::new(display_cache),
-                engine: GdalEngine::new(),
-                geolibre: geolibre::GeolibreEngine::new(),
+                engine: GdalEngine::in_dir(engine_logs.clone()),
+                geolibre: geolibre::GeolibreEngine::in_dir(engine_logs),
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
                 heavy_job: Mutex::new(None),
                 display: Mutex::new(DisplayAdmission::default()),
+                display_changed: tokio::sync::Notify::new(),
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
         };
@@ -262,8 +285,8 @@ impl LidarLibrary {
         Ok(library)
     }
 
-    /// Attach the managed Native Operation Executor so service-initiated
-    /// refreshes run through the same bounded admission as command work.
+    /// Attach the managed Native Operation Executor so queued calculations run
+    /// through the same bounded admission as command work.
     pub fn attach_executor(&self, executor: crate::native_operation::NativeOperationExecutor) {
         if let Ok(mut slot) = self.inner.executor.lock() {
             *slot = Some(executor);
@@ -294,9 +317,48 @@ impl LidarLibrary {
             .map_err(|_| "LiDAR display cache lock poisoned".to_string())
     }
 
-    /// Best-effort bounded cleanup at startup: job scratch dirs for settled
-    /// jobs, abandoned staging dirs, unregistered display derivatives and
-    /// unpublished chunk rows.
+    /// Remove slope scratch that no running analysis job owns.
+    ///
+    /// A job removes its own scratch when it settles; a crash leaves it. Only
+    /// a job still `preparing` keeps its directory, and startup recovery has
+    /// already failed every job the previous run left preparing.
+    fn prune_slope_scratch(&self) -> Result<(), String> {
+        let prepared = self.inner.paths.prepared_dir();
+        let entries = match std::fs::read_dir(&prepared) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => {
+                return Err(format!("Failed to list {}: {error}", prepared.display()));
+            }
+        };
+        let connection = self.catalogue()?;
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(job_id) = name.strip_prefix(paths::SLOPE_SCRATCH_PREFIX) else {
+                continue;
+            };
+            let running = connection
+                .query_row(
+                    "SELECT 1 FROM lidar_analysis_jobs WHERE id = ?1 AND state = 'preparing'",
+                    [job_id],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?
+                .is_some();
+            if running {
+                continue;
+            }
+            if let Err(error) = std::fs::remove_dir_all(entry.path()) {
+                tracing::warn!(job_id, %error, "failed to remove settled slope scratch");
+            }
+        }
+        Ok(())
+    }
+
+    /// Best-effort bounded cleanup at startup: job roots of settled jobs,
+    /// unregistered display derivatives, settled slope scratch, leftover engine
+    /// output, unpublished chunk rows and unreferenced assets.
     fn prune_transient_artifacts(&self) -> Result<(), String> {
         let connection = self.catalogue()?;
         let settled: Vec<(String, String)> = {
@@ -315,52 +377,24 @@ impl LidarLibrary {
                 .map_err(|e| e.to_string())?
         };
         drop(connection);
-        // Reconcile promotion journals before any settled job payload is
-        // removed: a committed asset stays, an uncommitted owned promotion is
-        // removed, and a journal that cannot be settled is retained as
-        // recoverable evidence instead of being silently declared clean.
-        let journal_jobs: Vec<String> = {
-            let connection = self.catalogue()?;
-            let mut statement = connection
-                .prepare("SELECT id FROM lidar_import_jobs")
-                .map_err(|e| e.to_string())?;
-            statement
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
-        };
-        // Recovery is a precondition for opening the library: an unresolved
-        // journal leaves the only record of what an interrupted job promoted, so
-        // opening fails with a named recoverable error and the unresolved root
-        // stays intact. Removing the fault and reopening completes cleanup; no
-        // retry loop and no background recovery service are involved.
-        match import::reconcile_promotion_journals(self, &journal_jobs) {
-            Ok(removed) if removed > 0 => {
-                tracing::info!(removed, "removed uncommitted promoted source assets");
-            }
-            Ok(_) => {}
-            Err(error) => {
-                return Err(format!(
-                    "LiDAR library recovery is incomplete; unresolved promotion evidence was retained and can be retried by reopening: {error}"
-                ));
-            }
-        }
         for (job_id, _state) in settled {
-            // One cleanup decision per root: a journal that cannot be settled
-            // keeps its directory and its evidence.
-            if let Err(error) = import::settle_job_root(self, &job_id) {
-                return Err(format!(
-                    "LiDAR library recovery is incomplete; job {job_id} was retained for retry: {error}"
-                ));
+            if let Err(error) = import::remove_job_root(self, &job_id) {
+                tracing::warn!(job_id, %error, "a settled job root was kept until the next start");
             }
         }
         // Display derivatives nobody registered, and interrupted writes, can go
         // now: no WebView reader exists before the library opens.
         display_cog::prune_display_derivatives(self)?;
+        self.prune_slope_scratch()?;
+        // Output files of engine children an earlier process never reaped.
+        let removed = engine::prune_engine_logs(&self.inner.paths.engine_log_dir())?;
+        if removed > 0 {
+            tracing::info!(removed, "removed leftover engine output files");
+        }
         // A job that crashed before its publish transaction left chunk rows
         // that were never readable. Removing them cannot revoke an accepted
-        // generation; only physical assets remain for reclamation.
+        // generation; the files they named are swept with the other
+        // unreferenced assets below.
         {
             let connection = self.catalogue()?;
             let discarded = catalogue::discard_unpublished_chunks(&connection)?;
@@ -368,9 +402,52 @@ impl LidarLibrary {
                 tracing::info!(discarded, "discarded unpublished raster chunk rows");
             }
         }
+        self.prune_unreferenced_assets()
+    }
+
+    /// Delete asset directories and metadata rows no catalogue reference owns.
+    ///
+    /// Files reach the store before the transaction that references them, so a
+    /// crash or failure between the two leaves unreferenced files; they are
+    /// removed here. A digest a source interpretation or any chunk row names is
+    /// never touched, and nothing is swept while an import or calculation is
+    /// in flight, because its files may not be referenced yet. Startup
+    /// recovery has already failed every job the previous run left running.
+    fn prune_unreferenced_assets(&self) -> Result<(), String> {
+        let connection = self.catalogue()?;
+        if catalogue::jobs_in_flight(&connection)? {
+            return Ok(());
+        }
+        let referenced = catalogue::referenced_asset_digests(&connection)?;
+        let asset_root = self.inner.paths.root().join("assets");
+        let entries = std::fs::read_dir(&asset_root)
+            .map_err(|e| format!("Failed to list {}: {e}", asset_root.display()))?;
+        let mut removed = 0usize;
+        for entry in entries.flatten() {
+            if referenced.contains(entry.file_name().to_string_lossy().as_ref()) {
+                continue;
+            }
+            let path = entry.path();
+            let result = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            match result {
+                Ok(()) => removed += 1,
+                Err(error) => {
+                    tracing::warn!(path = %path.display(), %error, "failed to remove an unreferenced asset");
+                }
+            }
+        }
+        catalogue::discard_unreferenced_asset_rows(&connection)?;
+        if removed > 0 {
+            tracing::info!(removed, "removed unreferenced raster assets");
+        }
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn engine_status(&self) -> common_types::lidar::LidarEngineStatus {
         match self.inner.engine.discover() {
             Ok(tools) => common_types::lidar::LidarEngineStatus {
@@ -679,9 +756,9 @@ impl LidarLibrary {
 
     /// Admit one display read, or decline it when the budget is full.
     ///
-    /// The caller waits for a slot by polling [`DisplayTicket::try_activate`]
-    /// between short async sleeps, so a waiting display read never occupies a
-    /// Native Operation Executor permit behind another heavy job.
+    /// The caller waits for a slot with [`DisplayTicket::activate`], so a
+    /// waiting display read never occupies a Native Operation Executor permit
+    /// behind another heavy job.
     pub(crate) fn admit_display_request(&self, request_id: &str) -> Result<DisplayTicket, String> {
         if request_id.is_empty() {
             return Err("display request identity must not be empty".to_string());
@@ -758,8 +835,10 @@ impl LidarLibrary {
                 flag.store(true, Ordering::Relaxed);
             }
         }
+        self.inner.display_changed.notify_waiters();
     }
 
+    #[cfg(test)]
     pub fn get_import_job(&self, job_id: &str) -> Result<Option<LidarImportJob>, String> {
         let connection = self.catalogue()?;
         import_job_summary(&connection, job_id)
@@ -783,31 +862,6 @@ impl LidarLibrary {
         if let Err(error) = result {
             tracing::warn!(job_id, error, "LiDAR import progress update failed");
         }
-    }
-
-    pub fn analysis_job_status(
-        &self,
-        job_id: &str,
-    ) -> Result<Option<LidarAnalysisJobStatus>, String> {
-        let connection = self.catalogue()?;
-        connection
-            .query_row(
-                "SELECT id, definition_id, state, message FROM lidar_analysis_jobs WHERE id = ?1",
-                [job_id],
-                |row| {
-                    Ok(LidarAnalysisJobStatus {
-                        job_id: row.get(0)?,
-                        definition_id: row.get(1)?,
-                        state: parse_result_state(&row.get::<_, String>(2)?),
-                        message: row.get(3)?,
-                    })
-                },
-            )
-            .map(Some)
-            .or_else(|err| match err {
-                rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                other => Err(other.to_string()),
-            })
     }
 
     // ------------------------------------------------------------------
@@ -999,8 +1053,8 @@ impl LidarLibrary {
         transaction.commit().map_err(|e| e.to_string())?;
         drop(connection);
         for job_id in job_ids {
-            if let Err(error) = import::settle_job_root(self, &job_id) {
-                tracing::warn!(job_id, error = %error, "dismissed import kept its root for recovery");
+            if let Err(error) = import::remove_job_root(self, &job_id) {
+                tracing::warn!(job_id, error = %error, "dismissed import kept its root");
             }
         }
         Ok(())
@@ -1110,13 +1164,11 @@ impl LidarLibrary {
         let executor = self.executor()?;
         let flag = self.register_cancel(job_id);
         let library = self.clone();
-        let layer_id_for_work = layer_id.to_string();
-        let job_id_for_work = job_id.to_string();
+        let layer_for_stage = layer_id.to_string();
+        let job_id_for_stage = job_id.to_string();
         let job_id_clone = job_id.to_string();
         tauri::async_runtime::spawn(async move {
             let library_for_work = library.clone();
-            let job_id_for_stage = job_id_for_work.clone();
-            let layer_for_stage = layer_id_for_work.clone();
             let outcome = executor
                 .run(
                     crate::native_operation::NativeOperationClass::Local,
@@ -1152,25 +1204,25 @@ impl LidarLibrary {
                         library_for_work.prepare_staged_display(&staging, &flag)?;
                         // Publication refuses an item that already has a head:
                         // items are fixed once published.
-                        import::apply_import(&library_for_work, &staging, &flag)
-                            .map(|outcome| {
-                                tracing::info!(summary = outcome.summary(), message = ?outcome.message, "LiDAR import published");
-                            })
+                        import::apply_import(&library_for_work, &staging, &flag).map(|outcome| {
+                            tracing::info!(summary = outcome.summary(), "LiDAR import published");
+                        })
                     },
                 )
                 .await;
-            library.finish_import_sources(&job_id_clone, &layer_id_for_work, outcome);
+            library.finish_import_sources(&job_id_clone, outcome);
         });
         Ok(())
     }
 
     /// Record the outcome of a one-step import.
-    fn finish_import_sources(&self, job_id: &str, layer_id: &str, outcome: Result<(), String>) {
-        let mut published = false;
+    ///
+    /// Import publishes a new fixed item; it never touches another item or
+    /// enqueues analysis.
+    fn finish_import_sources(&self, job_id: &str, outcome: Result<(), String>) {
         if let Ok(connection) = self.catalogue() {
             match outcome {
                 Ok(()) => {
-                    published = true;
                     let _ = connection.execute(
                         "UPDATE lidar_import_jobs
                          SET state = 'complete', message = NULL,
@@ -1202,32 +1254,28 @@ impl LidarLibrary {
                         rusqlite::params![job_id, state, message, now_iso()],
                     );
                     drop(connection);
-                    if let Err(cleanup) = import::settle_job_root(self, job_id) {
+                    if let Err(cleanup) = import::remove_job_root(self, job_id) {
                         tracing::warn!(
                             job_id,
                             error = %cleanup,
-                            "failed import kept its root for recovery"
+                            "failed import kept its root until the next start"
                         );
                     }
                 }
             }
         }
         self.settle_cancel(job_id);
-        // Import publishes a new fixed item; it never touches another item or
-        // enqueues analysis.
-        let _ = (published, layer_id);
     }
 
     /// Wait for the library-wide heavy lease without holding an executor
-    /// permit: a queued refresh must never occupy a permit while another heavy
-    /// job runs, and a refresh superseded meanwhile simply stops waiting.
+    /// permit: a queued calculation must never occupy a permit while another
+    /// heavy job runs, and one cancelled or deleted meanwhile stops waiting.
     async fn await_heavy_lease(&self, job_id: &str) -> Option<HeavyJobLease> {
         loop {
             match HeavyJobLease::acquire(self, job_id) {
                 Ok(lease) => return Some(lease),
                 Err(_) => {
-                    // Only a queued refresh keeps waiting; one that was
-                    // cancelled or superseded meanwhile stops here.
+                    // Only a job still preparing keeps waiting.
                     let queued = self.catalogue().ok().is_some_and(|connection| {
                         connection
                             .query_row(
@@ -1246,7 +1294,8 @@ impl LidarLibrary {
         }
     }
 
-    async fn run_refresh(
+    /// Run one queued slope job to its settled state.
+    async fn run_analysis(
         self,
         job_id: String,
         definition_id: String,
@@ -1282,7 +1331,7 @@ impl LidarLibrary {
         let outcome = executor
             .run(
                 crate::native_operation::NativeOperationClass::Local,
-                "lidar analysis refresh",
+                "lidar analysis",
                 move || {
                     let _lease = lease;
                     analysis::run_slope_job(
@@ -1297,21 +1346,11 @@ impl LidarLibrary {
             )
             .await;
         match outcome {
-            Ok(analysis::AnalysisOutcome { stale: true, .. }) => {
-                // The pinned input is no longer the source head: nothing is
-                // published and nothing is re-targeted to the newer head.
-                if let Ok(connection) = self.catalogue() {
-                    let _ = connection.execute(
-                        "UPDATE lidar_analysis_jobs SET state = 'failed', message = 'the input changed before the result was published', updated_at = ?2 WHERE id = ?1",
-                        rusqlite::params![job_id, now_iso()],
-                    );
-                }
-            }
             Ok(outcome) => {
                 tracing::info!(
                     definition_id,
                     summary = outcome.summary(),
-                    "LiDAR analysis refresh settled"
+                    "LiDAR analysis published"
                 );
             }
             Err(error) => {
@@ -1366,9 +1405,9 @@ impl LidarLibrary {
         let input = catalogue::head_generation(&connection, layer_id)?
             .ok_or_else(|| "Layer has no accepted coverage to analyse yet".to_string())?;
         let definition_id = new_id("adef");
-        // The name rides with the definition's parameters, so a refresh
-        // publishes the same name instead of silently renaming the user's
-        // result, and a caller that sends no name simply publishes unnamed.
+        // The name rides with the definition's parameters, so a retry
+        // publishes the name the user gave, and a caller that sends no name
+        // simply publishes unnamed. The unit is always the caller's choice.
         let parameters = analysis::AnalysisParameters {
             slope_unit: parameters.slope_unit,
             name: result_name,
@@ -1404,7 +1443,7 @@ impl LidarLibrary {
             let source_generation_id = input.id.clone();
             tauri::async_runtime::spawn(async move {
                 library
-                    .run_refresh(job_id, definition_id, parameters_json, source_generation_id)
+                    .run_analysis(job_id, definition_id, parameters_json, source_generation_id)
                     .await;
             });
         }
@@ -1490,7 +1529,7 @@ impl LidarLibrary {
             let source_generation_id = source_generation_id.clone();
             tauri::async_runtime::spawn(async move {
                 library
-                    .run_refresh(job_id, definition_id, parameters_json, source_generation_id)
+                    .run_analysis(job_id, definition_id, parameters_json, source_generation_id)
                     .await;
             });
         }
@@ -1609,7 +1648,7 @@ mod tests {
             .execute(
                 "INSERT INTO lidar_analysis_definitions
              (id, layer_id, kind, version, parameters_json, created_at)
-             VALUES (?1, ?2, 'slope', 2, '{}', '0')",
+             VALUES (?1, ?2, 'slope', 2, '{\"slope_unit\":\"Degrees\",\"name\":null}', '0')",
                 rusqlite::params![definition_id, layer_id],
             )
             .unwrap();
@@ -2041,7 +2080,7 @@ mod tests {
         let staging = import::read_staged_import(&library, &job_id).expect("staged payload");
         import::ensure_whole_batch_compatible(&staging).expect("every source is compatible");
         import::apply_import(&library, &staging, &cancel).expect("apply publishes");
-        library.finish_import_sources(&job_id, &layer_id, Ok(()));
+        library.finish_import_sources(&job_id, Ok(()));
 
         let job = library
             .get_import_job(&job_id)
@@ -2214,6 +2253,200 @@ mod tests {
         drop(second);
         drop(queued);
         drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A waiting lookup is woken by a released slot or by its own cancel, not
+    /// by a timer.
+    #[test]
+    fn a_waiting_read_wakes_on_release_and_on_cancel() {
+        let root = std::env::temp_dir().join(new_id("lidar-display-wakeup-test"));
+        std::fs::create_dir_all(&root).unwrap();
+        let library = LidarLibrary::open(&root).unwrap();
+        let first = library.admit_sample_request("held-1").unwrap();
+        let _second = library.admit_sample_request("held-2").unwrap();
+        let waiting = library.admit_sample_request("waiting").unwrap();
+        let cancelled = library.admit_sample_request("abandoned").unwrap();
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            let mut waiting = waiting;
+            let mut cancelled = cancelled;
+            let activated =
+                tauri::async_runtime::block_on(async { waiting.activate().await.is_ok() });
+            sender.send(activated).unwrap();
+            let refused =
+                tauri::async_runtime::block_on(async { cancelled.activate().await.is_err() });
+            sender.send(refused).unwrap();
+        });
+        let deadline = std::time::Duration::from_secs(10);
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(200))
+                .is_err(),
+            "no slot is free yet"
+        );
+        drop(first);
+        assert!(
+            receiver.recv_timeout(deadline).unwrap(),
+            "a released slot wakes the waiter"
+        );
+        library.cancel_sample_request("abandoned");
+        assert!(
+            receiver.recv_timeout(deadline).unwrap(),
+            "a cancel wakes and stops the waiter"
+        );
+        waiter.join().unwrap();
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Startup removes slope scratch that no running job owns.
+    #[test]
+    fn startup_sweeps_settled_slope_scratch_and_keeps_a_running_jobs() {
+        let root = std::env::temp_dir().join(new_id("lidar-slope-scratch-sweep"));
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Scratch fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        {
+            let connection = library.catalogue().unwrap();
+            seed_analysis(&connection, &layer_id, "analysis-1");
+            connection
+                .execute(
+                    "INSERT INTO lidar_analysis_jobs
+                 (id, definition_id, source_generation_id, state, created_at, updated_at)
+                 VALUES ('ajob-running', 'analysis-1', 'source-gen', 'preparing', '0', '0')",
+                    [],
+                )
+                .unwrap();
+        }
+        let prepared = library.inner.paths.prepared_dir();
+        let scratch = |job: &str| prepared.join(format!("scratch-slope-{job}"));
+        for job in ["ajob-1", "ajob-running", "ajob-unknown"] {
+            std::fs::create_dir_all(scratch(job)).unwrap();
+            std::fs::write(scratch(job).join("window.tif"), b"partial").unwrap();
+        }
+        library.prune_transient_artifacts().unwrap();
+        assert!(
+            !scratch("ajob-1").exists(),
+            "a settled job's scratch is swept"
+        );
+        assert!(
+            !scratch("ajob-unknown").exists(),
+            "an unowned scratch is swept"
+        );
+        assert!(
+            scratch("ajob-running").exists(),
+            "a running job keeps its scratch"
+        );
+        drop(library);
+        // Reopening fails the interrupted job, so its scratch goes too.
+        let reopened = LidarLibrary::open(&root).unwrap();
+        assert!(!scratch("ajob-running").exists());
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Startup deletes asset directories no catalogue row references, never a
+    /// referenced one, and leaves the store alone while any job is in flight.
+    #[test]
+    fn startup_sweeps_unreferenced_assets_and_keeps_referenced_ones() {
+        let root = std::env::temp_dir().join(new_id("lidar-asset-sweep"));
+        let library = LidarLibrary::open(&root).unwrap();
+        let layer_id = library
+            .create_layer(
+                "Asset fixture",
+                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                None,
+                false,
+            )
+            .unwrap();
+        {
+            let connection = library.catalogue().unwrap();
+            seed_analysis(&connection, &layer_id, "analysis-1");
+            for sha in ["referenced", "orphan"] {
+                connection
+                    .execute(
+                        "INSERT INTO lidar_raster_assets(sha256, rel_path, bytes, profile,
+                            width, height, geotransform, crs_wkt, nodata, created_at)
+                         VALUES(?1, ?2, 1, 'test', 1, 1, '0,1,0,0,0,-1', '', NULL, '0')",
+                        rusqlite::params![sha, format!("assets/{sha}/cog.tif")],
+                    )
+                    .unwrap();
+            }
+            connection
+                .execute(
+                    "INSERT INTO lidar_generation_chunks(generation_id, role, chunk_x, chunk_y,
+                        asset_sha256, valid_cells, state)
+                     VALUES('agen-1', 'result', 0, 0, 'referenced', 1, 'published')",
+                    [],
+                )
+                .unwrap();
+        }
+        let asset = |sha: &str| library.inner.paths.asset_cog(sha);
+        for sha in ["referenced", "orphan", "unrecorded"] {
+            std::fs::create_dir_all(asset(sha).parent().unwrap()).unwrap();
+            std::fs::write(asset(sha), b"cog").unwrap();
+        }
+        let in_flight = library.record_import_job(&layer_id).unwrap();
+        library.prune_unreferenced_assets().unwrap();
+        for sha in ["referenced", "orphan", "unrecorded"] {
+            assert!(
+                asset(sha).exists(),
+                "nothing is swept while {in_flight} runs"
+            );
+        }
+        drop(library);
+        // Reopening fails the interrupted job, so the sweep runs.
+        let reopened = LidarLibrary::open(&root).unwrap();
+        let asset = |sha: &str| reopened.inner.paths.asset_cog(sha);
+        assert!(
+            asset("referenced").exists(),
+            "referenced data is never deleted"
+        );
+        assert!(!asset("orphan").exists(), "an unreferenced asset is swept");
+        assert!(!asset("unrecorded").exists(), "a file with no row is swept");
+        let connection = reopened.catalogue().unwrap();
+        let rows: Vec<String> = connection
+            .prepare("SELECT sha256 FROM lidar_raster_assets ORDER BY sha256")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec!["referenced".to_string()],
+            "orphan metadata goes too"
+        );
+        drop(connection);
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Engine output files live under the library root, and startup removes
+    /// the ones an earlier process left; this process's are never touched.
+    #[test]
+    fn startup_sweeps_engine_logs_left_by_an_earlier_process() {
+        let root = std::env::temp_dir().join(new_id("lidar-engine-log-sweep"));
+        let library = LidarLibrary::open(&root).unwrap();
+        let logs = library.inner.paths.engine_log_dir();
+        assert!(logs.starts_with(library.inner.paths.root()));
+        let stale = logs.join("0-0-1-out.log");
+        let own = logs.join(format!("{}-999999-err.log", engine::process_log_tag()));
+        std::fs::write(&stale, b"left by a crash").unwrap();
+        std::fs::write(&own, b"a live child").unwrap();
+        drop(library);
+        let reopened = LidarLibrary::open(&root).unwrap();
+        assert!(!stale.exists(), "an earlier process's output is swept");
+        assert!(own.exists(), "this process's output is never swept");
+        drop(reopened);
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -2410,14 +2643,6 @@ fn parse_import_progress_phase(raw: &str) -> Option<LidarImportProgressPhase> {
         "rendering_map" => Some(LidarImportProgressPhase::RenderingMap),
         "finalizing" => Some(LidarImportProgressPhase::Finalizing),
         _ => None,
-    }
-}
-
-fn parse_result_state(raw: &str) -> LidarResultState {
-    match raw {
-        "ready" | "complete" => LidarResultState::Ready,
-        "failed" | "cancelled" => LidarResultState::Failed,
-        _ => LidarResultState::Preparing,
     }
 }
 

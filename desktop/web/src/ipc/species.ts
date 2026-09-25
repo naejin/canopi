@@ -22,15 +22,7 @@ export async function searchSpecies(
   request: SpeciesSearchRequest,
 ): Promise<PaginatedResult<SpeciesListItem>> {
   if (isDegraded()) throw new Error(plantDbUnavailableMessage(plantDbStatus.value));
-  return invoke('search_species', {
-    text: request.text,
-    filters: request.filters,
-    cursor: request.cursor ?? null,
-    limit: request.limit,
-    sort: request.sort,
-    locale: request.locale,
-    includeTotal: request.include_total,
-  });
+  return invoke('search_species', { request });
 }
 
 export async function supersedeSpeciesSearch(): Promise<void> {

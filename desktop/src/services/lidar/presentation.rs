@@ -94,25 +94,32 @@ pub fn library_snapshot(
             (None, Some(_)) => (LidarResultState::Failed, Some(String::new())),
             (None, None) => (LidarResultState::Preparing, None),
         };
+        // This build wrote every definition row; unreadable parameters are a
+        // damaged catalogue, reported rather than shown with an invented unit.
         let parameters = serde_json::from_str::<super::analysis::AnalysisParameters>(
             &definition.parameters_json,
         )
-        .ok();
-        // A published result carries its own name (none for an unnamed or
-        // pre-v17 generation, and the UI then shows the kind). An operation
-        // without a result shows the name its author gave the calculation.
+        .map_err(|error| {
+            format!(
+                "LiDAR analysis {} has unreadable parameters: {error}",
+                definition.id
+            )
+        })?;
+        // A published result carries its own name (none for an unnamed one,
+        // and the UI then shows the kind). An operation without a result
+        // shows the name its author gave the calculation.
         let result_name = match &head_result {
             Some(result) => result.name.clone(),
             None => parameters
-                .as_ref()
-                .and_then(|parameters| parameters.name.as_deref())
+                .name
+                .as_deref()
                 .map(str::trim)
                 .filter(|name| !name.is_empty())
                 .map(str::to_string),
         };
         // The unit belongs to the definition's own parameters, so a percent
         // slope is never labelled with the input layer's elevation unit.
-        let slope_unit = parameters.and_then(|parameters| parameters.slope_unit);
+        let slope_unit = parameters.slope_unit;
         let (bounds, value_range) = match &head_result {
             Some(result) => {
                 let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)

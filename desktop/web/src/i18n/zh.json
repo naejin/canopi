@@ -988,7 +988,7 @@
     "intro": "创建可稍后分享的摘要和诊断包。",
     "descriptionLabel": "发生了什么？",
     "descriptionPlaceholder": "描述你当时在做什么、哪里出错，以及是否能复现。",
-    "privacyNote": "诊断包默认不包含你的设计、精确位置、截图和原始文件路径。",
+    "privacyNote": "诊断包默认不包含您的设计（包括其坐标）、屏幕截图和原始文件路径。",
     "create": "创建报告",
     "creating": "正在创建...",
     "cancel": "取消",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "无法显示文件夹。上方仍会显示确切的文件夹路径。",
     "optionalAttachments": "可选附件",
     "includeCurrentDesign": "包含当前设计",
-    "includeCurrentDesignDescription": "添加一个 .canopi 副本，其中包含画布内容、备注、时间线、预算和已保存的位置。",
+    "includeCurrentDesignDescription": "添加一个 .canopi 副本，包含画布内容及其坐标、备注、时间线和预算。",
     "currentDesignUnavailable": "没有可附加的当前设计。"
   },
   "pdf": {

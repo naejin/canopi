@@ -7,7 +7,6 @@ mod logging;
 #[cfg(test)]
 mod native_command_policy;
 mod native_operation;
-mod platform;
 mod services;
 
 use common_types::health::SubsystemHealth;
@@ -32,17 +31,25 @@ fn resolve_plant_db_path<R: tauri::Runtime>(
                 .ok()
                 .filter(|path| path.exists())
         })
-        .or_else(|| {
-            // Dev fallback: look in desktop/resources/ relative to the manifest dir
-            let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("resources")
-                .join("canopi-core.db");
-            if dev_path.exists() {
-                Some(dev_path)
-            } else {
-                None
-            }
-        })
+        .or_else(dev_plant_db_path)
+}
+
+/// Debug builds run from the repository, where `scripts/prepare-db.py` leaves
+/// the DB under `desktop/resources/`. A release build never looks outside its
+/// bundle.
+#[cfg(debug_assertions)]
+fn dev_plant_db_path() -> Option<std::path::PathBuf> {
+    Some(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("canopi-core.db"),
+    )
+    .filter(|path| path.exists())
+}
+
+#[cfg(not(debug_assertions))]
+fn dev_plant_db_path() -> Option<std::path::PathBuf> {
+    None
 }
 
 pub fn run() {
@@ -50,13 +57,13 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .plugin(tauri_plugin_dialog::init());
 
-    #[cfg(debug_assertions)]
-    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    // Localhost only: the bridge can execute script in the webview.
+    #[cfg(all(debug_assertions, feature = "mcp-bridge"))]
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init_with_config(
+        tauri_plugin_mcp_bridge::Config::localhost_only(),
+    ));
 
-    #[cfg(not(debug_assertions))]
-    let builder = builder;
-
-    builder
+    let result = builder
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
             commands::settings::set_settings,
@@ -69,7 +76,6 @@ pub fn run() {
             commands::species::get_filter_options,
             commands::species::get_dynamic_filter_options,
             commands::species::get_species_images,
-            commands::species::get_species_external_links,
             commands::species::get_locale_common_names,
             commands::species::get_cached_image_path,
             commands::favorites::toggle_favorite,
@@ -86,7 +92,6 @@ pub fn run() {
             commands::design::save_design,
             commands::design::load_design,
             commands::design::get_recent_files,
-            commands::design_notebook::get_design_notebook_entries,
             commands::design_notebook::get_design_notebook,
             commands::design_notebook::create_notebook_section,
             commands::design_notebook::add_design_reference_to_notebook,
@@ -103,21 +108,17 @@ pub fn run() {
             commands::export::export_file,
             commands::export::read_geojson_file,
             commands::export::save_canvas_pdf,
-            commands::export::export_native_png,
             commands::health::get_health,
             commands::problem_report::create_problem_report,
             commands::problem_report::show_problem_report_folder,
             commands::geocoding::geocode_address,
-            commands::lidar::lidar_engine_status,
             commands::lidar::lidar_list_library,
             commands::lidar::lidar_rename_layer,
             commands::lidar::lidar_delete_layer_impact,
             commands::lidar::lidar_delete_layer,
-            commands::lidar::lidar_get_import_job,
             commands::lidar::lidar_cancel_import,
             commands::lidar::lidar_create_analysis,
             commands::lidar::lidar_retry_analysis,
-            commands::lidar::lidar_get_analysis_job_status,
             commands::lidar::lidar_cancel_analysis_job,
             commands::lidar::lidar_delete_analysis,
             commands::lidar::lidar_sample_pixel,
@@ -144,11 +145,23 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let user_db_path = data_dir.join("user.db");
-            let user_db = db::UserDb::open(&user_db_path)
-                .map_err(|e| format!("Failed to initialize user DB: {e}"))?;
+            let user_db = match db::UserDb::open(&user_db_path) {
+                Ok(user_db) => user_db,
+                Err(error) => {
+                    // A user database this Canopi cannot own (written by a newer
+                    // version) is refused, never modified: tell the user and exit
+                    // instead of panicking or showing a half-working window.
+                    if let Some(message) = startup_refusal_message(&error) {
+                        tracing::error!("User DB refused at startup");
+                        refuse_startup(app, message);
+                        return Ok(());
+                    }
+                    return Err(format!("Failed to initialize user DB: {error}").into());
+                }
+            };
             app.manage(user_db);
 
-            tracing::info!("User DB initialized at {}", user_db_path.display());
+            tracing::info!("User DB initialized");
 
             // LiDAR library (dedicated catalogue, managed raster assets)
             let lidar_library = services::lidar::LidarLibrary::open(&data_dir)
@@ -158,18 +171,19 @@ pub fn run() {
             tracing::info!("LiDAR library initialized");
 
             // Image cache (disk-backed, in app data dir)
-            let image_cache = image_cache::ImageCache::new(&data_dir)
-                .unwrap_or_else(|e| {
-                    tracing::warn!("Image cache init failed: {e}, using temp dir fallback");
-                    image_cache::ImageCache::new(&std::env::temp_dir())
-                        .expect("temp dir should work")
-                });
+            let image_cache = match image_cache::ImageCache::new(&data_dir) {
+                Ok(cache) => cache,
+                Err(error) => {
+                    tracing::warn!("Image cache init failed: {error}, using temp dir fallback");
+                    image_cache::ImageCache::new(&std::env::temp_dir()).map_err(|fallback| {
+                        format!("Failed to initialize image cache: {error}; temp dir fallback: {fallback}")
+                    })?
+                }
+            };
             app.manage(image_cache);
             tracing::info!("Image cache initialized");
 
             // Plant DB (read-only, bundled resource)
-            // In dev mode, the resource resolver may not find bundled files,
-            // so fall back to the source path in the repo.
             let plant_db_path = resolve_plant_db_path(app.handle());
 
             let plant_db = match plant_db_path {
@@ -210,12 +224,81 @@ pub fn run() {
                 plant_db: plant_db_status,
             }));
 
-            // Note: db_ready event is not emitted here because the frontend
-            // JS listener hasn't registered yet during setup. The DB is ready
-            // synchronously before any IPC command can be invoked.
-
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error running canopi");
+        .run(tauri::generate_context!());
+    if let Err(error) = result {
+        tracing::error!("Canopi failed to run: {error}");
+        eprintln!("Canopi failed to run: {error}");
+        std::process::exit(1);
+    }
+}
+
+/// The message for a startup failure the user can act on, or `None` when the
+/// failure is an internal error.
+fn startup_refusal_message(error: &db::UserDbInitError) -> Option<String> {
+    match error {
+        db::UserDbInitError::NewerSchemaVersion { .. } => Some(
+            "Your Canopi data was saved by a newer version of Canopi. \
+             Install the latest Canopi to open it; this version will not change it."
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+fn refuse_startup(app: &tauri::App, message: String) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    for window in app.webview_windows().values() {
+        let _ = window.hide();
+    }
+    let handle = app.handle().clone();
+    app.dialog()
+        .message(message)
+        .title("Canopi")
+        .kind(MessageDialogKind::Error)
+        .show(move |_| handle.exit(1));
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_a_newer_user_database_is_refused_with_a_message() {
+        let newer = super::db::UserDbInitError::NewerSchemaVersion {
+            found: 99,
+            supported: 9,
+        };
+        let message = super::startup_refusal_message(&newer).expect("newer data is refused");
+        assert!(message.contains("newer version of Canopi"));
+        let older = super::db::UserDbInitError::OlderSchemaVersion {
+            found: 8,
+            supported: 9,
+        };
+        assert!(super::startup_refusal_message(&older).is_none());
+    }
+
+    #[test]
+    fn global_tauri_api_and_bridge_capability_exist_only_for_the_debug_bridge() {
+        let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let dev_bridge = cfg!(all(debug_assertions, feature = "mcp-bridge"));
+        assert_eq!(context.config().app.with_global_tauri, dev_bridge);
+        let capabilities = context
+            .config()
+            .app
+            .security
+            .capabilities
+            .iter()
+            .map(|capability| match capability {
+                tauri::utils::config::CapabilityEntry::Reference(identifier) => identifier.clone(),
+                tauri::utils::config::CapabilityEntry::Inlined(capability) => {
+                    capability.identifier.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut expected = vec!["main-window".to_owned()];
+        if dev_bridge {
+            expected.push("mcp-bridge-dev".to_owned());
+        }
+        assert_eq!(capabilities, expected);
+    }
 }

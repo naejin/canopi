@@ -37,9 +37,19 @@ export function resetFrontendDiagnosticsForTests(): void {
   diagnostics = []
 }
 
+// A path token may contain spaces, so it runs to a delimiter or to a `: `
+// separator; the error reason that usually follows a path stays readable.
+const PATH_TOKEN = String.raw`(?:[^\n\r"')\]},;:]|:(?!\s|$))+`
+const FILE_URL_PATH = new RegExp(String.raw`\bfile:\/\/\/${PATH_TOKEN}`, 'g')
+const UNIX_PATH = new RegExp(String.raw`(^|[\s"'([{=])\/${PATH_TOKEN}`, 'g')
+const WINDOWS_PATH = new RegExp(String.raw`(^|[\s"'([{=])[A-Za-z]:[\\/]${PATH_TOKEN}`, 'g')
+// Credential query parameters such as the Google Maps `key=`.
+const CREDENTIAL_QUERY_VALUE = /(^|[?&;\s])(key|api-key|api_key|apikey)=[^\s&#"')\]},;<>]+/gi
+
 function sanitizeDiagnosticText(text: string): string {
   return text
-    .replace(/\bfile:\/\/\/[^\n\r"')\]},;]+/g, 'file://<path>')
-    .replace(/(^|[\s"'([{=])\/[^\n\r"')\]},;]+/g, '$1<path>')
-    .replace(/(^|[\s"'([{=])[A-Za-z]:[\\/][^\n\r"')\]},;]+/g, '$1<path>')
+    .replace(CREDENTIAL_QUERY_VALUE, '$1$2=<redacted>')
+    .replace(FILE_URL_PATH, 'file://<path>')
+    .replace(UNIX_PATH, '$1<path>')
+    .replace(WINDOWS_PATH, '$1<path>')
 }

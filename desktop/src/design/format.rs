@@ -9,7 +9,7 @@ use std::path::Path;
 use super::new_design_defaults::NEW_DESIGN_LAYER_DEFAULTS;
 
 #[derive(Debug)]
-struct CanopiDesignIngestionError {
+pub(crate) struct CanopiDesignIngestionError {
     kind: CanopiDesignIngestionErrorKind,
     message: String,
 }
@@ -29,14 +29,56 @@ impl fmt::Display for CanopiDesignIngestionError {
     }
 }
 
-/// Save a `CanopiFile` to disk atomically.
+/// Largest `.canopi` file this build opens, matching the GeoJSON import limit.
+pub(crate) const MAX_CANOPI_FILE_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Why a `.canopi` file could not be opened.
+#[derive(Debug)]
+pub(crate) enum DesignLoadError {
+    Read {
+        path: String,
+        source: std::io::Error,
+    },
+    TooLarge {
+        path: String,
+    },
+    InvalidJson {
+        path: String,
+        source: serde_json::Error,
+    },
+    Ingestion {
+        path: String,
+        source: CanopiDesignIngestionError,
+    },
+}
+
+impl fmt::Display for DesignLoadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { path, source } => write!(formatter, "Failed to read {path}: {source}"),
+            Self::TooLarge { path } => write!(
+                formatter,
+                "Design file {path} exceeds the {} MiB limit",
+                MAX_CANOPI_FILE_BYTES / (1024 * 1024)
+            ),
+            Self::InvalidJson { path, source } => {
+                write!(formatter, "Invalid JSON in {path}: {source}")
+            }
+            Self::Ingestion { path, source } => {
+                write!(formatter, "Failed to parse design from {path}: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DesignLoadError {}
+
+/// Save a `CanopiFile` to disk durably.
 ///
 /// Steps:
 /// 1. If the target file already exists, copy it to `{path}.prev` as a backup.
-/// 2. Serialize and write to an operation-owned temporary sidecar.
-/// 3. Rename the temporary sidecar to `{path}`.
-///
-/// On any write/rename error the operation's sidecar is removed before returning.
+/// 2. Durably replace `{path}` through an operation-owned temporary
+///    ([`super::write_file_durably`]).
 pub fn save_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
     let json = serde_json::to_string_pretty(content)
         .map_err(|e| format!("Failed to serialize design: {e}"))?;
@@ -51,46 +93,75 @@ fn save_to_file_admitted(path: &Path, backup: &Path, json: &str) -> Result<(), S
     if path.exists()
         && let Err(e) = std::fs::copy(path, backup)
     {
-        tracing::warn!("Could not create backup at {}: {e}", backup.display());
+        tracing::warn!("Could not create the previous-version backup of a Design: {e}");
     }
 
-    let tmp_path = super::operation_sidecar_path(path, "tmp");
+    super::write_file_durably(path, json.as_bytes(), "tmp")
+        .map_err(|e| format!("Failed to save {}: {e}", path.display()))
+}
 
-    // Write to the operation's sidecar first.
-    if let Err(e) = std::fs::write(&tmp_path, json) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!("Failed to write {}: {e}", tmp_path.display()));
-    }
-
-    // Atomic replace .tmp → final path (cross-platform safe).
-    if let Err(e) = super::atomic_replace(&tmp_path, path) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!(
-            "Failed to finalise save at {}: {e}",
-            path.display()
-        ));
-    }
-
-    Ok(())
+/// Write a standalone `.canopi` export (a Saved Object Stamp file).
+///
+/// An export is derived output: it never gets a `.canopi.prev` backup and is
+/// not a Design save.
+pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(content)
+        .map_err(|e| format!("Failed to serialize design: {e}"))?;
+    super::write_derived_file(path, json.as_bytes())
+        .map_err(|e| format!("Failed to export {}: {e}", path.display()))
 }
 
 /// Load a `CanopiFile` from disk.
 ///
-/// Reads the file, deserializes as `serde_json::Value` first for strict
-/// version admission, then deserializes into `CanopiFile`.
-/// Unknown fields are preserved in `CanopiFile::extra` via `#[serde(flatten)]`.
-pub fn load_from_file(path: &Path) -> Result<CanopiFile, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+/// Refuses files over [`MAX_CANOPI_FILE_BYTES`], parses JSON to a value for
+/// strict version and root-key admission, then deserializes `CanopiFile`.
+/// Unknown root fields are preserved in `CanopiFile::extra`.
+pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError> {
+    use std::io::Read;
+    let display = || path.display().to_string();
+    let file = std::fs::File::open(path).map_err(|source| DesignLoadError::Read {
+        path: display(),
+        source,
+    })?;
+    let length = file
+        .metadata()
+        .map_err(|source| DesignLoadError::Read {
+            path: display(),
+            source,
+        })?
+        .len();
+    if length > MAX_CANOPI_FILE_BYTES {
+        return Err(DesignLoadError::TooLarge { path: display() });
+    }
+    let mut content = String::new();
+    // Read one byte past the limit so a file that grows while it is read is
+    // still refused without buffering it whole.
+    file.take(MAX_CANOPI_FILE_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|source| DesignLoadError::Read {
+            path: display(),
+            source,
+        })?;
+    if content.len() as u64 > MAX_CANOPI_FILE_BYTES {
+        return Err(DesignLoadError::TooLarge { path: display() });
+    }
 
-    // Parse to Value so we can inspect the version before full deserialization.
-    let value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Invalid JSON in {}: {e}", path.display()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(&content).map_err(|source| DesignLoadError::InvalidJson {
+            path: display(),
+            source,
+        })?;
 
-    decode_design_value(value)
-        .map_err(|error| format!("Failed to parse design from {}: {error}", path.display()))
+    decode_design_value(value).map_err(|source| DesignLoadError::Ingestion {
+        path: display(),
+        source,
+    })
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "version admission above has already required a JSON object"
+)]
 fn decode_design_value(
     mut value: serde_json::Value,
 ) -> Result<CanopiFile, CanopiDesignIngestionError> {
@@ -107,6 +178,14 @@ fn decode_design_value(
     let object = value
         .as_object()
         .expect("version admission requires an object");
+    // `extra` is the in-memory bag for unknown root fields, never a wire key:
+    // the canonical encoder writes unknown fields at the root.
+    if object.contains_key("extra") {
+        return Err(CanopiDesignIngestionError::new(
+            CanopiDesignIngestionErrorKind::InvalidDocument,
+            "$.extra: reserved root field; unknown fields are stored at the root",
+        ));
+    }
     if let Some(key) = OBSOLETE_CANOPI_ROOT_KEYS
         .iter()
         .find(|key| object.contains_key(**key))
@@ -118,7 +197,7 @@ fn decode_design_value(
     }
 
     value["version"] = serde_json::json!(version);
-    let mut file: CanopiFile = serde_json::from_value(value).map_err(|error| {
+    let file: CanopiFile = serde_json::from_value(value).map_err(|error| {
         CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
             format!("$: {error}"),
@@ -127,26 +206,7 @@ fn decode_design_value(
     validate_design_geometry(&file).map_err(|error| {
         CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
     })?;
-    normalize_loaded_extra(&mut file);
     Ok(file)
-}
-
-fn normalize_loaded_extra(file: &mut CanopiFile) {
-    let Some(serde_json::Value::Object(nested)) = file.extra.remove("extra") else {
-        return;
-    };
-    for (key, value) in nested {
-        if is_known_canopi_key(&key) {
-            continue;
-        }
-        file.extra.entry(key).or_insert(value);
-    }
-}
-
-fn is_known_canopi_key(key: &str) -> bool {
-    common_types::design::DESIGN_FILE_FIELDS
-        .iter()
-        .any(|field| field.key == key)
 }
 
 fn read_design_version(value: &serde_json::Value) -> Result<u64, CanopiDesignIngestionError> {
@@ -223,7 +283,7 @@ pub(crate) fn create_new_design(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::design::{MIN_SUPPORTED_CANOPI_FILE_VERSION, PanelTarget};
+    use common_types::design::PanelTarget;
     use std::path::PathBuf;
 
     fn create_default() -> CanopiFile {
@@ -243,7 +303,6 @@ mod tests {
             serde_json::json!({
                 "current_version": CURRENT_CANOPI_FILE_VERSION,
                 "missing_version": MISSING_CANOPI_FILE_VERSION,
-                "minimum_supported_version": MIN_SUPPORTED_CANOPI_FILE_VERSION,
                 "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
                 "error_kinds": CanopiDesignIngestionErrorKind::ALL
                     .iter()
@@ -302,13 +361,7 @@ mod tests {
             .collect::<Vec<_>>()
         {
             let value = object.remove(&key).expect("collected key should exist");
-            if key == "extra" {
-                if let Some(entries) = value.as_object() {
-                    extra.extend(entries.clone());
-                }
-            } else {
-                extra.insert(key, value);
-            }
+            extra.insert(key, value);
         }
         object.insert("extra".to_owned(), serde_json::Value::Object(extra));
         wire
@@ -782,13 +835,72 @@ mod tests {
         assert_eq!(loaded.budget_currency, "USD");
         assert!(!loaded.extra.contains_key("budget_currency"));
 
-        let mut legacy_value = serde_json::to_value(create_default()).expect("serialize");
-        legacy_value
+        let mut without_currency = serde_json::to_value(create_default()).expect("serialize");
+        without_currency
             .as_object_mut()
             .expect("default design serializes to object")
             .remove("budget_currency");
 
-        let legacy: CanopiFile = serde_json::from_value(legacy_value).expect("deserialize legacy");
-        assert_eq!(legacy.budget_currency, DEFAULT_BUDGET_CURRENCY);
+        let defaulted: CanopiFile =
+            serde_json::from_value(without_currency).expect("budget_currency is optional");
+        assert_eq!(defaulted.budget_currency, DEFAULT_BUDGET_CURRENCY);
+    }
+
+    fn unique_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "canopi_format_{label}_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_root_extra_key_is_refused_not_flattened() {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["extra"] = serde_json::json!({ "future_field": true });
+
+        let error = decode_design_value(value).expect_err("root extra must be refused");
+
+        assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
+        assert!(error.message.starts_with("$.extra:"), "{error}");
+    }
+
+    #[test]
+    fn opening_a_design_over_the_size_limit_is_refused() {
+        let dir = unique_dir("too_large");
+        let path = dir.join("huge.canopi");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_CANOPI_FILE_BYTES + 1).unwrap();
+        drop(file);
+
+        let error = load_from_file(&path).expect_err("oversized Design must be refused");
+
+        assert!(matches!(error, DesignLoadError::TooLarge { .. }), "{error}");
+        assert!(error.to_string().contains("64 MiB"), "{error}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn export_writes_a_loadable_design_without_a_previous_version_backup() {
+        let dir = unique_dir("export");
+        let path = dir.join("stamp.canopi");
+        std::fs::write(&path, "an earlier export").unwrap();
+
+        export_to_file(&path, &create_default()).expect("export should succeed");
+
+        assert_eq!(load_from_file(&path).unwrap().name, "Untitled");
+        assert!(
+            !path.with_extension("canopi.prev").exists(),
+            "an export must not leave a .canopi.prev next to the exported file"
+        );
+        assert!(owned_sidecars(&dir, "export").is_empty());
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

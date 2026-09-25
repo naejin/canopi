@@ -19,7 +19,6 @@ fn validate_canopi_design_conformance_value(
     let expected_facts = serde_json::json!({
         "current_version": common_types::design::CURRENT_CANOPI_FILE_VERSION,
         "missing_version": common_types::design::MISSING_CANOPI_FILE_VERSION,
-        "minimum_supported_version": common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
         "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
         "error_kinds": common_types::design::CanopiDesignIngestionErrorKind::ALL
             .iter()
@@ -150,11 +149,6 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
         file,
         "export const MISSING_CANOPI_FILE_VERSION = {}",
         common_types::design::MISSING_CANOPI_FILE_VERSION,
-    )?;
-    writeln!(
-        file,
-        "export const MIN_SUPPORTED_CANOPI_FILE_VERSION = {}",
-        common_types::design::MIN_SUPPORTED_CANOPI_FILE_VERSION,
     )?;
     writeln!(
         file,

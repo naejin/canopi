@@ -155,8 +155,9 @@ describe('browser Design Session lifecycle', () => {
       name: 'Loaded Garden',
       description: 'From disk',
       timeline: [{ id: 'future-action', action_type: 'other', description: 'Keep me', start_date: null, end_date: null, recurrence: null, targets: [], depends_on: null, completed: false, order: 0 }],
-      extra: { preserved: true },
-    }) as CanopiFile & { future_top_level: { keep: boolean } }
+    }) as CanopiFile & { preserved: boolean; future_top_level: { keep: boolean } }
+    // Unknown fields travel at the document root in a .canopi file.
+    openedFile.preserved = true
     openedFile.future_top_level = { keep: true }
     const adapter = testFileAdapter({
       openCanopiFile: vi.fn(async () => ({
@@ -2214,7 +2215,6 @@ function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-06-01T00:00:00.000Z',
     updated_at: '2026-06-02T00:00:00.000Z',
-    extra: {},
     ...overrides,
   }
 }

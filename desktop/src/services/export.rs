@@ -1,5 +1,3 @@
-use crate::platform::{CanvasSnapshot, Platform};
-
 pub fn save_canvas_pdf(data: Vec<u8>, path: String) -> Result<(), String> {
     // Bound the admitted binary payload independently of the frontend renderer.
     if data.len() > 64 * 1024 * 1024 || !data.starts_with(b"%PDF-") || !data.ends_with(b"%%EOF\n") {
@@ -16,8 +14,33 @@ pub fn save_canvas_pdf(data: Vec<u8>, path: String) -> Result<(), String> {
         .map_err(|error| format!("Could not save Canvas PDF: {error}"))
 }
 
+/// Extensions of the text exports that reach `export_file`: the budget CSV and
+/// GeoJSON (`.geojson`, or `.json` when the user picks it in the dialog).
+const TEXT_EXPORT_EXTENSIONS: &[&str] = &["csv", "geojson", "json"];
+/// Upper bound for one text export, matching the Canvas PDF and GeoJSON import caps.
+const MAX_TEXT_EXPORT_BYTES: usize = 64 * 1024 * 1024;
+
+/// Atomically write a text export chosen through the save dialog. Only the
+/// exported formats' extensions are accepted, so the boundary cannot replace a
+/// design, a library file or any other document.
 pub fn export_file(data: String, path: String) -> Result<String, String> {
-    write_bytes_to_path(path, data.as_bytes(), "text")
+    if data.len() > MAX_TEXT_EXPORT_BYTES {
+        return Err(format!(
+            "Export exceeds the {} MiB limit",
+            MAX_TEXT_EXPORT_BYTES / (1024 * 1024)
+        ));
+    }
+    let target = std::path::Path::new(&path);
+    if !target.extension().is_some_and(|extension| {
+        TEXT_EXPORT_EXTENSIONS
+            .iter()
+            .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+    }) {
+        return Err("Export destination must have a .csv, .geojson or .json extension".to_string());
+    }
+    crate::design::write_derived_file(target, data.as_bytes())
+        .map_err(|error| format!("Could not write export: {error}"))?;
+    Ok(path)
 }
 
 /// Upper bound for an imported GeoJSON file; the read stops one byte past it.
@@ -56,100 +79,13 @@ pub fn read_geojson_file(path: String) -> Result<String, String> {
         .unwrap_or(text))
 }
 
-pub fn export_native_png(
-    platform: &dyn Platform,
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-    dpi: u32,
-    path: String,
-) -> Result<String, String> {
-    let snapshot = decode_canvas_snapshot(snapshot_base64, width, height)?;
-    let rendered = platform
-        .export_png(&snapshot, dpi)
-        .map_err(|e| format!("Failed to export PNG at {dpi} DPI: {e}"))?;
-
-    let written_path = write_bytes_to_path(path, &rendered, "native PNG")?;
-    tracing::info!(
-        "Exported native PNG ({dpi} DPI, {} bytes) to {}",
-        rendered.len(),
-        written_path
-    );
-    Ok(written_path)
-}
-
-fn decode_canvas_snapshot(
-    snapshot_base64: String,
-    width: u32,
-    height: u32,
-) -> Result<CanvasSnapshot, String> {
-    use base64::Engine;
-
-    let png_data = base64::engine::general_purpose::STANDARD
-        .decode(&snapshot_base64)
-        .map_err(|e| format!("Failed to decode base64 snapshot: {e}"))?;
-
-    Ok(CanvasSnapshot {
-        width,
-        height,
-        png_data,
-    })
-}
-
-fn write_bytes_to_path(path: String, bytes: &[u8], kind: &str) -> Result<String, String> {
-    std::fs::write(&path, bytes)
-        .map_err(|e| format!("Failed to write {kind} file to {path}: {e}"))?;
-    tracing::info!("Exported {kind} file to {path}");
-    Ok(path)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{MAX_GEOJSON_IMPORT_BYTES, export_file, export_native_png, read_geojson_file};
-    use crate::platform::{CanvasSnapshot, Platform, PlatformError};
+    use super::{MAX_GEOJSON_IMPORT_BYTES, MAX_TEXT_EXPORT_BYTES, export_file, read_geojson_file};
     use std::path::PathBuf;
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-
-    #[derive(Debug, Clone, PartialEq)]
-    struct PngCall {
-        dpi: u32,
-        snapshot_width: u32,
-        snapshot_height: u32,
-        snapshot_png_data: Vec<u8>,
-    }
-
-    struct RecordingPlatform {
-        png_result: Vec<u8>,
-        png_calls: Mutex<Vec<PngCall>>,
-    }
-
-    impl RecordingPlatform {
-        fn new() -> Self {
-            Self {
-                png_result: b"png-output".to_vec(),
-                png_calls: Mutex::new(Vec::new()),
-            }
-        }
-    }
-
-    impl Platform for RecordingPlatform {
-        fn export_png(
-            &self,
-            snapshot: &CanvasSnapshot,
-            dpi: u32,
-        ) -> Result<Vec<u8>, PlatformError> {
-            self.png_calls.lock().unwrap().push(PngCall {
-                dpi,
-                snapshot_width: snapshot.width,
-                snapshot_height: snapshot.height,
-                snapshot_png_data: snapshot.png_data.clone(),
-            });
-            Ok(self.png_result.clone())
-        }
-    }
 
     struct TempTestDir {
         root: PathBuf,
@@ -211,13 +147,52 @@ mod tests {
     }
 
     #[test]
-    fn text_export_writes_to_disk() {
+    fn text_export_replaces_only_the_requested_export_file() {
         let temp_dir = TempTestDir::new("text");
-        let text_path = temp_dir.file("text.txt");
+        let csv = temp_dir.file("budget.csv");
+        let geojson = temp_dir.file("plan.GeoJSON");
+        let json = temp_dir.file("plan.json");
+        std::fs::write(&csv, b"previous").unwrap();
 
-        export_file("hello".to_string(), text_path.display().to_string()).unwrap();
+        for path in [&csv, &geojson, &json] {
+            let written = export_file("hello".to_string(), path.display().to_string()).unwrap();
+            assert_eq!(written, path.display().to_string());
+            assert_eq!(std::fs::read(path).unwrap(), b"hello");
+        }
+        // No temporary sidecar is left beside the published exports.
+        assert_eq!(std::fs::read_dir(&temp_dir.root).unwrap().count(), 3);
+    }
 
-        assert_eq!(std::fs::read(&text_path).unwrap(), b"hello");
+    #[test]
+    fn text_export_refuses_other_destinations_and_oversized_payloads() {
+        let temp_dir = TempTestDir::new("text-refuse");
+        let design = temp_dir.file("garden.canopi");
+        std::fs::write(&design, b"design").unwrap();
+        for name in ["garden.canopi", "notes.txt", "no-extension", "user.db"] {
+            let path = temp_dir.file(name);
+            assert!(
+                export_file("x".to_string(), path.display().to_string())
+                    .unwrap_err()
+                    .contains("extension"),
+                "{name}"
+            );
+        }
+        assert_eq!(std::fs::read(&design).unwrap(), b"design");
+
+        let directory = temp_dir.file("directory.csv");
+        std::fs::create_dir(&directory).unwrap();
+        assert!(export_file("x".to_string(), directory.display().to_string()).is_err());
+        assert!(directory.is_dir());
+
+        let oversized = temp_dir.file("oversized.csv");
+        let error = export_file(
+            "x".repeat(MAX_TEXT_EXPORT_BYTES + 1),
+            oversized.display().to_string(),
+        )
+        .unwrap_err();
+        assert!(error.contains("limit"), "{error}");
+        assert!(!oversized.exists());
+        assert_eq!(std::fs::read_dir(&temp_dir.root).unwrap().count(), 2);
     }
 
     #[test]
@@ -261,55 +236,5 @@ mod tests {
         );
 
         assert!(read_geojson_file(temp_dir.file("missing.geojson").display().to_string()).is_err());
-    }
-
-    #[test]
-    fn native_png_export_delegates_to_platform_and_writes_result() {
-        use base64::Engine;
-
-        let platform = RecordingPlatform::new();
-        let temp_dir = TempTestDir::new("png");
-        let output_path = temp_dir.file("snapshot.png");
-        let snapshot_base64 = base64::engine::general_purpose::STANDARD.encode(b"raw-png");
-
-        export_native_png(
-            &platform,
-            snapshot_base64,
-            640,
-            480,
-            300,
-            output_path.display().to_string(),
-        )
-        .unwrap();
-
-        let calls = platform.png_calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(
-            calls[0],
-            PngCall {
-                dpi: 300,
-                snapshot_width: 640,
-                snapshot_height: 480,
-                snapshot_png_data: b"raw-png".to_vec(),
-            }
-        );
-        assert_eq!(std::fs::read(&output_path).unwrap(), b"png-output");
-    }
-
-    #[test]
-    fn native_png_rejects_invalid_base64() {
-        let platform = RecordingPlatform::new();
-        let temp_dir = TempTestDir::new("invalid");
-
-        let png_err = export_native_png(
-            &platform,
-            "***".to_string(),
-            100,
-            100,
-            72,
-            temp_dir.file("bad.png").display().to_string(),
-        )
-        .unwrap_err();
-        assert!(png_err.contains("Failed to decode base64 snapshot"));
     }
 }

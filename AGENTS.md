@@ -21,7 +21,7 @@ Rules for AI agents working in this repository. Optimize for long-term project h
 
 ## Repository map
 
-- `desktop/src/`: Rust Tauri backend: IPC commands, services, DB access, platform code.
+- `desktop/src/`: Rust Tauri backend: IPC commands, services, DB access.
 - `desktop/web/src/`: Preact frontend: `app/` orchestration and workbenches, `canvas/` scene runtime, `maplibre/` map integration, `components/`, `web/` Web adapters, `__tests__/`.
 - `common-types/`: authored cross-language contracts; regenerate checked-in outputs when they change.
 - `bindings-gen/`: TypeScript transport codegen. `scripts/`: DB preparation, docs check, release tooling.
@@ -59,7 +59,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 
 | Change | Gates |
 |---|---|
-| Any Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace` |
+| Any Rust | `cargo fmt --all -- --check`; `CANOPI_SKIP_BUNDLED_DB=1 cargo clippy --workspace --all-targets -- -D warnings`; `CANOPI_SKIP_BUNDLED_DB=1 cargo test --workspace`; `CANOPI_SKIP_BUNDLED_DB=1 cargo cov` stays above the Rust coverage floor (raise it, never lower it) |
 | Native commands | `CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop native_command_policy::tests` |
 | Shared contracts | `cd desktop/web && npm run gen:types && npm run check:types` |
 | Frontend | `cd desktop/web && npx tsc --noEmit && npm test` (zero failures, zero unhandled errors); `npm run test:coverage` must stay above the ratchet in `vite.config.ts` (raise it, never lower it) |

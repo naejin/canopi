@@ -29,10 +29,25 @@ describe('browser app data store', () => {
       updatedAt: '2026-07-04T12:00:00.000Z',
     })
     expect(store.listDrafts()).toEqual([saved.value])
-    expect(store.loadDraft(saved.value.id)).toEqual(file)
+    expect(store.loadDraft(saved.value.id)).toEqual({ ...file, extra: {} })
     expect(saved.value).not.toHaveProperty('path')
     expect(saved.value).not.toHaveProperty('sectionId')
     expect([...storage.values.keys()]).toEqual([V2_KEYS.drafts])
+  })
+
+  it('stores Draft files in .canopi wire form, keeping unknown fields at the root', () => {
+    const storage = memoryStorage()
+    const store = createBrowserAppDataStore({ storage })
+    const file = { ...makeDesign({ name: 'Wire Draft' }), extra: { future_top_level: { keep: true } } }
+
+    const saved = store.saveDraft({ file, now: '2026-07-04T12:00:00.000Z' })
+    if (!saved.ok) throw new Error('draft should save')
+
+    const stored = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as { draftFiles: Record<string, Record<string, unknown>> }
+    const wire = stored.draftFiles[saved.value.id]!
+    expect(wire).not.toHaveProperty('extra')
+    expect(wire.future_top_level).toEqual({ keep: true })
+    expect(store.loadDraft(saved.value.id)?.extra).toEqual({ future_top_level: { keep: true } })
   })
 
   it('persists browser settings, Species app data, and Saved Object Stamps', () => {
@@ -294,7 +309,6 @@ function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
     budget_currency: 'EUR',
     created_at: '2026-07-04T00:00:00.000Z',
     updated_at: '2026-07-04T00:00:00.000Z',
-    extra: {},
     ...overrides,
   }
 }

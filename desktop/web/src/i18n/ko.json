@@ -988,7 +988,7 @@
     "intro": "나중에 공유할 수 있는 요약과 진단 번들을 만듭니다.",
     "descriptionLabel": "무슨 일이 있었나요?",
     "descriptionPlaceholder": "무엇을 하고 있었는지, 무엇이 잘못되었는지, 재현할 수 있는지 설명하세요.",
-    "privacyNote": "진단 번들은 기본적으로 디자인, 정확한 위치, 스크린샷, 원시 파일 경로를 제외합니다.",
+    "privacyNote": "진단 번들에는 기본적으로 디자인(좌표 포함), 스크린샷, 원시 파일 경로가 포함되지 않습니다.",
     "create": "보고서 만들기",
     "creating": "만드는 중...",
     "cancel": "취소",
@@ -1007,7 +1007,7 @@
     "showFolderFailed": "폴더를 표시할 수 없습니다. 정확한 폴더 경로는 위에 계속 표시됩니다.",
     "optionalAttachments": "선택 첨부",
     "includeCurrentDesign": "현재 디자인 포함",
-    "includeCurrentDesignDescription": "캔버스 내용, 메모, 일정, 예산, 저장된 위치가 포함된 .canopi 사본을 추가합니다.",
+    "includeCurrentDesignDescription": "캔버스 내용과 좌표, 메모, 일정, 예산이 담긴 .canopi 사본을 추가합니다.",
     "currentDesignUnavailable": "첨부할 현재 디자인이 없습니다."
   },
   "pdf": {

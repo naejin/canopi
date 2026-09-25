@@ -121,8 +121,7 @@ export interface LidarPresentationItem {
   /**
    * The unit a result was computed in.
    *
-   * `null` for a source layer, whose unit is read from the library summary, and
-   * for a definition written before the unit was recorded.
+   * `null` for a source layer, whose unit is read from the library summary.
    */
   slopeUnit: LidarAnalysisSummary['slope_unit'] | null
   state: LidarAnalysisSummary['state'] | 'unavailable'
@@ -198,7 +197,7 @@ export function readLidarPresentation(
               name: analysis.name ?? analysisName(source?.name, analysis.kind),
               detail: analysis.kind,
               // The result's own unit, never the input layer's.
-              slopeUnit: analysis.slope_unit ?? 'Degrees',
+              slopeUnit: analysis.slope_unit,
               state: analysis.state,
               visible: entry.visible,
               opacity: entry.opacity,

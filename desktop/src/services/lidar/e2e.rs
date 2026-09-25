@@ -223,7 +223,7 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     // 3. Publish it: one fixed generation.
     let outcome = import::apply_import(&library, &staging, &cancel).expect("apply publishes");
-    library.finish_import_sources(&job_id, &layer_id, Ok(()));
+    library.finish_import_sources(&job_id, Ok(()));
     let completed_job = library
         .get_import_job(&job_id)
         .unwrap()
@@ -261,7 +261,7 @@ fn e2e_import_publish_slope_restart_reuse() {
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
-                slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
                 name: None,
             },
             None,
@@ -309,7 +309,11 @@ fn e2e_import_publish_slope_restart_reuse() {
         &cancel,
     )
     .expect("slope job runs");
-    assert!(analysis_outcome.published, "slope result published");
+    assert!(
+        analysis_outcome.coverage_cells > 0,
+        "slope result published: {}",
+        analysis_outcome.summary()
+    );
 
     let snapshot = library.library_snapshot().expect("snapshot after analysis");
     assert_eq!(snapshot.analyses.len(), 1);
@@ -382,7 +386,7 @@ fn e2e_import_publish_slope_restart_reuse() {
         &cancel,
     )
     .expect("the second item publishes");
-    reopened.finish_import_sources(&second_job, &second_layer, Ok(()));
+    reopened.finish_import_sources(&second_job, Ok(()));
     let snapshot = reopened
         .library_snapshot()
         .expect("snapshot with two items");
@@ -464,7 +468,7 @@ fn e2e_sparse_generation_lifecycle() {
     let staged_cells = staging.sources[0].valid_cells;
     assert!(staged_cells > 3_000_000, "4M-cell tile: {staged_cells}");
     import::apply_import(&library, &staging, &cancel).expect("apply");
-    library.finish_import_sources(&job_id, &layer_id, Ok(()));
+    library.finish_import_sources(&job_id, Ok(()));
 
     let head = {
         let connection = library.catalogue().unwrap();
@@ -509,7 +513,7 @@ fn e2e_sparse_generation_lifecycle() {
             &layer_id,
             common_types::lidar::LidarAnalysisKind::Slope,
             common_types::lidar::LidarAnalysisParameters {
-                slope_unit: Some(common_types::lidar::LidarSlopeUnit::Degrees),
+                slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
                 name: None,
             },
             None,
@@ -543,7 +547,7 @@ fn e2e_sparse_generation_lifecycle() {
     )
     .expect("slope job runs");
     assert!(
-        outcome.published,
+        outcome.coverage_cells > 0,
         "slope result published: {}",
         outcome.summary()
     );
@@ -699,7 +703,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
         (8000, 6000)
     );
     import::apply_import(&library, &staging, &cancel).expect("apply");
-    library.finish_import_sources(&job_id, &layer_id, Ok(()));
+    library.finish_import_sources(&job_id, Ok(()));
 
     let head = {
         let connection = library.catalogue().unwrap();

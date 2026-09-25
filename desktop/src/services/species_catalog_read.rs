@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::db::PlantDbConnectionGuard;
 use common_types::species::{
     CommonNameEntry, DynamicFilterOptions, FilterOptions, FlowerColorResolution, PaginatedResult,
-    SpeciesDetail, SpeciesExternalLink, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
+    SpeciesDetail, SpeciesImage, SpeciesListItem, SpeciesSearchRequest,
 };
 
 mod common_names;
@@ -100,13 +100,6 @@ impl<'guard, 'connection> SpeciesCatalogRead<'guard, 'connection> {
         canonical_name: &str,
     ) -> Result<Vec<SpeciesImage>, String> {
         media::read_images_projection(self.conn, canonical_name)
-    }
-
-    pub(crate) fn external_links_for_canonical_name(
-        &self,
-        canonical_name: &str,
-    ) -> Result<Vec<SpeciesExternalLink>, String> {
-        media::read_external_links_projection(self.conn, canonical_name)
     }
 }
 
@@ -231,10 +224,6 @@ mod tests {
         let images = catalog.images_for_canonical_name("Apple").unwrap();
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].url, "https://example.test/apple.jpg");
-
-        let links = catalog.external_links_for_canonical_name("Apple").unwrap();
-        assert_eq!(links.len(), 1);
-        assert_eq!(links[0].link_type, "pfaf");
 
         let names = catalog
             .locale_common_names_for_canonical_name("Apple", "fr")

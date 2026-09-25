@@ -159,13 +159,6 @@ export type Layer = {
 	opacity: number,
 };
 
-export type LidarAnalysisJobStatus = {
-	job_id: string,
-	definition_id: string,
-	state: LidarResultState,
-	message: string | null,
-};
-
 /**
  *  Registered analysis capability. Slice 1 ships slope only; later slices add
  *  the remaining ground-elevation and height analyses.
@@ -184,7 +177,8 @@ export type LidarAnalysisMethod =
  *  the plan (§5); other parameters arrive with later slices.
  */
 export type LidarAnalysisParameters = {
-	slope_unit: LidarSlopeUnit | null,
+	// The slope output unit. Always chosen by the user; there is no default.
+	slope_unit: LidarSlopeUnit,
 	/**
 	 *  The name to publish this result under.
 	 *
@@ -234,11 +228,9 @@ export type LidarAnalysisSummary = {
 	 *
 	 *  Read from the definition's own parameters rather than from the input
 	 *  layer, so a slope in percent is never labelled with an elevation unit or
-	 *  with the other slope unit. `None` for a definition written before the
-	 *  unit was recorded, which the UI shows as degrees — the default the
-	 *  analysis path itself applies.
+	 *  with the other slope unit.
 	 */
-	slope_unit?: LidarSlopeUnit | null,
+	slope_unit: LidarSlopeUnit,
 	/**
 	 *  How this definition is computed, from its stored recipe version.
 	 *  `None` for a version this build does not know.
@@ -802,13 +794,6 @@ export type SpeciesDetail = {
 	data_quality_tier: string | null,
 	wood_density_g_cm3: number | null,
 	photosynthesis_pathway: string | null,
-};
-
-export type SpeciesExternalLink = {
-	id: string,
-	species_id: string,
-	link_type: string,
-	url: string,
 };
 
 export type SpeciesFilter = {

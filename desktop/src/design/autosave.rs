@@ -78,23 +78,10 @@ fn write_autosave_file_admitted(
     };
     let dest = dir.join(&filename);
 
-    // Write atomically through an operation-owned sidecar so overlapping
+    // Durable write through an operation-owned sidecar so overlapping
     // operations never claim or remove one another's temporary file.
-    let tmp = super::operation_sidecar_path(&dest, "tmp");
-    if let Err(e) = std::fs::write(&tmp, json) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!(
-            "Failed to write autosave tmp {}: {e}",
-            tmp.display()
-        ));
-    }
-    if let Err(e) = super::atomic_replace(&tmp, &dest) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!(
-            "Failed to commit autosave to {}: {e}",
-            dest.display()
-        ));
-    }
+    super::write_file_durably(&dest, json.as_bytes(), "tmp")
+        .map_err(|e| format!("Failed to write autosave {}: {e}", dest.display()))?;
 
     prune_autosaves(dir, 5);
 
@@ -181,7 +168,7 @@ fn list_autosaves_in_dir(dir: &std::path::Path) -> Result<Vec<AutosaveEntry>, St
 pub fn recover_autosave(app: &AppHandle, autosave_path: &str) -> Result<CanopiFile, String> {
     let dir = autosave_dir(app)?;
     let canonical_path = resolve_recover_path(&dir, autosave_path)?;
-    crate::design::format::load_from_file(&canonical_path)
+    crate::design::format::load_from_file(&canonical_path).map_err(|error| error.to_string())
 }
 
 fn resolve_recover_path(dir: &std::path::Path, autosave_path: &str) -> Result<PathBuf, String> {
@@ -286,6 +273,32 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "Autosave Demo");
         assert!(entries[0].path.ends_with(".canopi"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn autosave_round_trips_content_and_a_failed_write_leaves_no_temporary() {
+        let dir = temp_autosave_dir("durable");
+        std::fs::create_dir_all(&dir).unwrap();
+        let design_path = "/tmp/durable-autosave.canopi";
+
+        write_autosave_file(&dir, &test_design("Durable Autosave"), Some(design_path)).unwrap();
+        let written = dir.join(format!("{}.canopi", stem_for_path(design_path)));
+        assert_eq!(
+            crate::design::format::load_from_file(&written)
+                .unwrap()
+                .name,
+            "Durable Autosave"
+        );
+
+        let blocked_path = "/tmp/blocked-autosave.canopi";
+        std::fs::create_dir(dir.join(format!("{}.canopi", stem_for_path(blocked_path)))).unwrap();
+        assert!(write_autosave_file(&dir, &test_design("Blocked"), Some(blocked_path)).is_err());
+        assert!(
+            owned_sidecars(&dir, "tmp").is_empty(),
+            "a failed autosave must not leave its temporary behind"
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }

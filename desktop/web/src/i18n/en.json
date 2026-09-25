@@ -981,7 +981,7 @@
     "intro": "Create a summary and diagnostic bundle you can share later.",
     "descriptionLabel": "What happened?",
     "descriptionPlaceholder": "Describe what you were doing, what went wrong, and whether you can repeat it.",
-    "privacyNote": "The diagnostic bundle excludes your design, precise location, screenshots, and raw file paths by default.",
+    "privacyNote": "The diagnostic bundle excludes your design (including its coordinates), screenshots, and raw file paths by default.",
     "create": "Create Report",
     "creating": "Creating...",
     "cancel": "Cancel",
@@ -1000,7 +1000,7 @@
     "showFolderFailed": "Could not show the folder. The exact folder path is still shown above.",
     "optionalAttachments": "Optional attachments",
     "includeCurrentDesign": "Include current Design",
-    "includeCurrentDesignDescription": "Adds a .canopi copy with canvas contents, notes, timeline, budget, and saved location.",
+    "includeCurrentDesignDescription": "Adds a .canopi copy with canvas contents and their coordinates, notes, timeline, and budget.",
     "currentDesignUnavailable": "No current Design is available to attach."
   },
   "shared": {

@@ -74,7 +74,7 @@ export function libraryItems(snapshot: LidarLibrarySnapshot | null, slopeLabel =
   }
   for (const analysis of snapshot.analyses) {
     const source = snapshot.layers.find((layer) => layer.id === analysis.source_layer_id)
-    const unit = analysis.slope_unit ?? 'Degrees'
+    const unit = analysis.slope_unit
     items.push({
       kind: 'Analysis',
       id: analysis.id,
