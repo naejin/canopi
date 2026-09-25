@@ -1,7 +1,6 @@
 import { effect } from "@preact/signals";
 import { theme } from "../app/settings/state";
 import { primeThemeProjectionFromFirstPaintCache } from "../app/settings/projection";
-import { invalidateCssVarCache } from "../canvas/canvas2d-utils";
 
 function applyTheme(resolved: "light" | "dark") {
   document.documentElement.setAttribute("data-theme", resolved);
@@ -48,7 +47,6 @@ export function initTheme(): () => void {
   // Apply theme reactively whenever the signal changes, and sync the cache
   const installedEffect = effect(() => {
     applyTheme(theme.value);
-    invalidateCssVarCache();
     // Keep the sync cache up to date (settings bootstrap overwrites the signal,
     // which triggers this effect, which updates the cache for next startup)
     writeCachedTheme(theme.value);

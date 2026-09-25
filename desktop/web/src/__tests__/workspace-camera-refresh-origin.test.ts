@@ -136,7 +136,7 @@ describe('workspace runtime composition origin effect', () => {
       querySurface: surfaces.queries,
       documentSurface: surfaces.documents,
       init: vi.fn(async () => {}),
-      reportRendererFailure: vi.fn(async () => {}),
+      unmountRenderer: vi.fn(async () => {}),
       destroy: vi.fn(),
     }
     const camera = new MapLibreWorkspaceCameraOwner()
@@ -170,7 +170,6 @@ describe('workspace runtime composition origin effect', () => {
       createRendererComposition: () => ({
         renderer: { id: MAPLIBRE_SCENE_RENDERER_ID, initialize: vi.fn() },
         createLayer: vi.fn(),
-        failActiveLayer: vi.fn(),
       }) as unknown as SharedMapSceneRendererComposition,
       createCamera: () => camera,
       createRuntime: () => runtime,

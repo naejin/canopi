@@ -269,7 +269,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Basemap unavailable')
+    expect(status?.textContent).toContain('Map unavailable')
     expect(status?.textContent).toContain('style fetch failed')
   })
 

@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MEASUREMENT_GUIDE_LABEL_OFFSET_PX } from '../canvas/runtime/measurement-guides'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
-import { detectRendererCapabilities } from '../canvas/runtime/renderers/capabilities'
 import { LabelCollisionIndex } from '../canvas/label-collision'
+import { Container, Text } from 'pixi.js'
+import { createPixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 
 vi.mock('pixi.js', () => {
   const state = {
-    apps: [] as MockApplication[],
     containers: [] as MockContainer[],
     graphics: [] as MockGraphics[],
     graphicsContexts: [] as MockGraphicsContext[],
@@ -116,24 +116,11 @@ vi.mock('pixi.js', () => {
     }
   }
 
-  class MockApplication {
-    canvas = document.createElement('canvas')
-    stage = new MockContainer()
-    renderer = { resize: vi.fn() }
-    init = vi.fn(async () => {})
-    render = vi.fn()
-    destroy = vi.fn()
-    constructor() {
-      state.apps.push(this)
-    }
-  }
-
   class MockTextStyle {
     constructor(public readonly options: Record<string, unknown>) {}
   }
 
   return {
-    Application: MockApplication,
     Container: MockContainer,
     Graphics: MockGraphics,
     GraphicsContext: MockGraphicsContext,
@@ -143,15 +130,21 @@ vi.mock('pixi.js', () => {
   }
 })
 
-describe('createPixiSceneRenderer', () => {
+/** Mounts the presentation the way the MapLibre custom layer does: text at twice the density. */
+function mountPresentation(container: HTMLElement, dpr = 1) {
+  return createPixiScenePresentation({
+    stage: new Container(),
+    createText: () => new Text({ resolution: dpr * 2 }),
+    viewSize: { width: container.clientWidth, height: container.clientHeight },
+  })
+}
+
+describe('createPixiScenePresentation', () => {
   it('translates admitted names during pan without rebuilding collision layout', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; position: { set: ReturnType<typeof vi.fn> } }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const add = vi.spyOn(LabelCollisionIndex.prototype, 'add')
     try {
       renderer.renderScene(createTestSceneRendererSnapshot({ scene: { plants: [createPlant({ position: { x: 1, y: 1 } })] }, viewport: { x: 0, y: 0, scale: 100 } }))
@@ -170,13 +163,10 @@ describe('createPixiSceneRenderer', () => {
     }
   })
   it('keeps world geometry warm during pan and refreshes screen-weight strokes on zoom', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { graphics: Array<{ clear: ReturnType<typeof vi.fn> }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
       zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0, fillColor: '#eeeeee', notes: null,
         points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }],
@@ -191,15 +181,12 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
   it('skips offscreen plant paths and restores them with current appearance on re-entry', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { graphics: Array<{ visible: boolean; clear: ReturnType<typeof vi.fn>; bezierCurveTo: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn> }> }
     }
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
-    const renderer = await createPixiSceneRenderer().initialize({ container }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(container)
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
     ] }, viewport: { x: 0, y: 0, scale: 30 } })
@@ -219,13 +206,10 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
   it('retains annotation text style during pan and updates it after an authored font change', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ style: unknown }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: { annotations: [{
       kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
       position: { x: 1, y: 1 }, text: 'Orchard', fontSize: 16, rotationDeg: 0,
@@ -242,7 +226,6 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
   it('shares exact botanical geometry and refreshes it for zoom, colour, and interaction', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -254,9 +237,7 @@ describe('createPixiSceneRenderer', () => {
         graphicsContexts: Array<{ bezierCurveTo: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; ownerCount: number }>
       }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ id: 'a', symbol: 'shrub', position: { x: 1, y: 1 } }),
       createPlant({ id: 'b', symbol: 'shrub', position: { x: 5, y: 1 } }),
@@ -297,16 +278,13 @@ describe('createPixiSceneRenderer', () => {
     for (const context of plantContexts) expect(context.destroy).toHaveBeenCalledTimes(1)
   })
   it('detaches removed and disposed Plant graphics from externally shared contexts', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{ context: { ownerCount: number; destroy: ReturnType<typeof vi.fn> }; destroy: ReturnType<typeof vi.fn> }>
         graphicsContexts: Array<{ ownerCount: number; destroy: ReturnType<typeof vi.fn> }>
       }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ id: 'a', position: { x: 1, y: 1 } }),
       createPlant({ id: 'b', position: { x: 5, y: 1 } }),
@@ -330,15 +308,12 @@ describe('createPixiSceneRenderer', () => {
     }
   })
   it('reuses A/B/A exact zoom contexts, evicts only the third-oldest generation, and preserves the visible context', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{ context: { destroy: ReturnType<typeof vi.fn> }; bezierCurveTo: ReturnType<typeof vi.fn> }>
       }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: {
       plants: [createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } })],
     }, viewport: { x: 0, y: 0, scale: 20 } })
@@ -367,14 +342,12 @@ describe('createPixiSceneRenderer', () => {
   beforeEach(async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
-        apps: unknown[]
         containers: unknown[]
         graphics: unknown[]
         graphicsContexts: unknown[]
         texts: unknown[]
       }
     }
-    pixi.__pixiMockState.apps.length = 0
     pixi.__pixiMockState.containers.length = 0
     pixi.__pixiMockState.graphics.length = 0
     pixi.__pixiMockState.graphicsContexts.length = 0
@@ -382,13 +355,10 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('restores full opacity after clearing Species focus, including camera-only updates', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { graphics: Array<{ alpha: number; circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: detectRendererCapabilities({}),
-    })
+    const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ id: 'apple', position: { x: 0, y: 0 } }),
       createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } }),
@@ -406,14 +376,11 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
-  it.each([1, 1.5, 2])('rasterizes every text role at twice DPR %s without enlarging text during zoom', async (dpr) => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+  it.each([1, 1.5, 2])('keeps every text role at its CSS font size without scaling text during zoom at DPR %s', async (dpr) => {
     const pixi = await import('pixi.js') as unknown as {
-      __pixiMockState: { texts: Array<{ text: string; resolution: number; style: { options: { fontSize: number; fontFamily: string } }; scale: { set: ReturnType<typeof vi.fn> } }> }
+      __pixiMockState: { texts: Array<{ text: string; style: { options: { fontSize: number; fontFamily: string } }; scale: { set: ReturnType<typeof vi.fn> } }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: { ...detectRendererCapabilities({}), devicePixelRatio: dpr },
-    })
+    const renderer = mountPresentation(document.createElement('div'), dpr)
     try {
       renderer.renderScene(createTestSceneRendererSnapshot({
         scene: {
@@ -433,7 +400,6 @@ describe('createPixiSceneRenderer', () => {
       for (const scale of [0.1, 8, 14, 20, 63.75, 1000, 20]) {
         renderer.setViewport({ x: 0.35, y: 0.45, scale })
         for (const text of texts) {
-          expect(text.resolution).toBe(dpr * 2)
           expect(text.style.options.fontFamily).toBe('Inter, sans-serif')
           expect(text.scale.set).not.toHaveBeenCalled()
         }
@@ -445,14 +411,11 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('refreshes pinned-name fading on zoom reversal while retaining readable font size', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; alpha: number; style: { options: { fontSize: number } }; destroy: ReturnType<typeof vi.fn> }> }
     }
     const host = document.createElement('div')
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi', capabilities: { devicePixelRatio: 2 },
-    } as never)
+    const renderer = mountPresentation(host, 2)
     renderer.renderScene(createRendererSnapshot({ plants: [createPlant({ pinnedName: true })] }))
     for (const [scale, opacity] of [[20, 1], [14, 0.5], [8, 0], [14, 0.5], [20, 1]]) {
       renderer.setViewport({ x: 0, y: 0, scale: scale! })
@@ -467,13 +430,10 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('crossfades Annotation markers and text, and reveals only the direct selected note', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ text: string; alpha: number; visible: boolean; style: { options: { fontSize: number } } }>; graphics: Array<{ stroke: ReturnType<typeof vi.fn> }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: { devicePixelRatio: 2 },
-    } as never)
+    const renderer = mountPresentation(document.createElement('div'), 2)
     const snapshot = createTestSceneRendererSnapshot({ scene: {
       annotations: [{ kind: 'annotation', id: 'note', annotationType: 'text', locked: false,
         position: { x: 10, y: 20 }, text: 'First\nSecond', fontSize: 16, rotationDeg: 45 }],
@@ -492,19 +452,14 @@ describe('createPixiSceneRenderer', () => {
     renderer.dispose()
   })
 
-  it('renders precision glyphs and stack badges in CSS pixels at the detected density', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
+  it('renders precision glyphs and stack badges in CSS pixels', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
-        apps: Array<{ init: ReturnType<typeof vi.fn> }>;
         graphics: Array<{ circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> } }>;
         texts: Array<{ text: string; style: { options: { fontSize: number } } }>;
       }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: { devicePixelRatio: 1.5 },
-    } as never)
-    expect(pixi.__pixiMockState.apps[0]?.init).toHaveBeenCalledWith(expect.objectContaining({ resolution: 1.5, autoDensity: true }))
+    const renderer = mountPresentation(document.createElement('div'), 1.5)
     renderer.renderScene(createRendererSnapshot({
       plants: [createPlant({ id: 'a', symbol: 'round' }), createPlant({ id: 'b', symbol: 'round' })],
       viewport: { x: -9900, y: -9900, scale: 1000 },
@@ -517,13 +472,10 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('preserves CSS Zone fill alpha when composing Layer opacity', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { graphics: Array<{ fill: ReturnType<typeof vi.fn> }>; containers: Array<{ alpha: number }> }
     }
-    const renderer = await createPixiSceneRenderer().initialize({ container: document.createElement('div') }, {
-      backendId: 'pixi', capabilities: { devicePixelRatio: 1 },
-    } as never)
+    const renderer = mountPresentation(document.createElement('div'))
     renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
       zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: 'rgba(45, 95, 63, 0.1)', notes: null }],
@@ -536,7 +488,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -552,23 +503,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createRendererSnapshot({
       plants: [
@@ -597,7 +532,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('draws curved plant symbol recipes with native Pixi curves', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -612,23 +546,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     renderer.renderScene(createRendererSnapshot({
       plants: [
@@ -645,7 +563,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('renders Measurement Guides with screen-space distance labels and layer visibility', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -665,23 +582,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createRendererSnapshot({
       measurementGuides: [{
@@ -727,10 +628,8 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('retains plant and annotation display objects across viewport updates', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
-        apps: Array<{ render: ReturnType<typeof vi.fn> }>
         containers: Array<{ removeChildren: ReturnType<typeof vi.fn> }>
         graphics: unknown[]
         texts: unknown[]
@@ -741,23 +640,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -806,13 +689,11 @@ describe('createPixiSceneRenderer', () => {
       pixi.__pixiMockState.containers
         .reduce((count, container) => count + container.removeChildren.mock.calls.length, 0),
     ).toBe(removeChildrenCallsAfterSceneRender)
-    expect(pixi.__pixiMockState.apps[0]?.render).toHaveBeenCalledTimes(2)
 
     renderer.dispose()
   })
 
   it('applies text annotation rotation in screen space', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         texts: Array<{
@@ -827,23 +708,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -870,7 +735,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('renders elliptical zones from center and radii geometry', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{ ellipse: ReturnType<typeof vi.fn> }>
@@ -881,23 +745,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -925,7 +773,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('renders rotated rectangular zones as oriented paths', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -940,23 +787,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -993,7 +824,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('uses interaction stroke alpha for rotated Pixi zones', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -1007,23 +837,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -1073,7 +887,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('keeps colliding Zone and Plant selection strokes typed and screen-readable', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -1088,23 +901,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {
@@ -1175,7 +972,6 @@ describe('createPixiSceneRenderer', () => {
   })
 
   it('renders selected zones with stronger ochre strokes than hover highlights', async () => {
-    const { createPixiSceneRenderer } = await import('../canvas/runtime/renderers/pixi-scene')
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -1189,23 +985,7 @@ describe('createPixiSceneRenderer', () => {
     Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
 
-    const renderer = await createPixiSceneRenderer().initialize({ container: host }, {
-      backendId: 'pixi',
-      capabilities: {
-        domCanvas: true,
-        canvas2d: true,
-        offscreenCanvas: false,
-        offscreenCanvas2d: false,
-        webgl: true,
-        webgl2: true,
-        webgpu: false,
-        imageBitmap: false,
-        createImageBitmap: false,
-        worker: false,
-        devicePixelRatio: 1,
-        prefersReducedMotion: null,
-      },
-    } as never)
+    const renderer = mountPresentation(host)
 
     const snapshot = createTestSceneRendererSnapshot({
       scene: {

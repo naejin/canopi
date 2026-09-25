@@ -3,7 +3,12 @@ import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
 import type { WorkspaceCameraFrameReader } from './camera'
-import type { CanvasDesignObjectSelectionModel, CanvasQueryRevision, CanvasQuerySurface } from './runtime'
+import type {
+  CanvasDesignObjects,
+  CanvasDesignObjectSelectionModel,
+  CanvasQueryRevision,
+  CanvasQuerySurface,
+} from './runtime'
 import type {
   SceneDocumentReader,
   SceneDesignObjectTarget,
@@ -91,6 +96,18 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
       () => this.options.sceneStore.toCanopiFile().plants,
       null,
     )
+  }
+  getSettledDesignObjects(): CanvasDesignObjects | null {
+    return this.options.settledReader.readWhenSettled(() => {
+      const file = this.options.sceneStore.toCanopiFile()
+      return {
+        plants: file.plants,
+        zones: file.zones,
+        annotations: file.annotations,
+        measurementGuides: file.measurement_guides ?? [],
+        groups: file.groups,
+      }
+    }, null)
   }
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
     return this.options.presentation.getLocalizedCommonNames()

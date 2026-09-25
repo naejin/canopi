@@ -1,42 +1,39 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  RendererHost,
-  RendererHostInitializationCancelledError,
-} from '../renderers'
 import type { SceneRendererDefinition, SceneRendererInstance } from '../renderers/scene-types'
 import { createTestSceneRendererSnapshot } from '../../../__tests__/support/scene-renderer-snapshot'
 import {
+  SceneRendererMountCancelledError,
   SceneRuntimeRenderScheduler,
-  type SceneRuntimePreparedRender,
 } from './render-scheduler'
 
-function createRenderer(id: string): SceneRendererInstance {
+function createRenderer(id = 'maplibre-pixi'): SceneRendererInstance {
   return {
     id,
-    resize: vi.fn(),
     renderScene: vi.fn(),
     setViewport: vi.fn(),
     dispose: vi.fn(),
   }
 }
 
-function createBackend(id: string): SceneRendererDefinition {
-  return {
-    id,
-    initialize: async () => createRenderer(id),
-  }
+function definitionFor(
+  renderer: SceneRendererInstance,
+  initialize: SceneRendererDefinition['initialize'] = () => renderer,
+): SceneRendererDefinition {
+  return { id: renderer.id, initialize: vi.fn(initialize) }
 }
 
 function createScheduler(
-  host: RendererHost<{ container: HTMLElement }, SceneRendererInstance>,
+  definition: SceneRendererDefinition | null,
+  overrides: Partial<ConstructorParameters<typeof SceneRuntimeRenderScheduler>[0]> = {},
 ): SceneRuntimeRenderScheduler {
   return new SceneRuntimeRenderScheduler({
-    getRendererHost: () => host,
+    getRenderer: () => definition,
     getViewport: () => ({ x: 0, y: 0, scale: 1 }),
     prepareSceneRender: async () => ({
       publish: () => createTestSceneRendererSnapshot(),
     }),
     renderChrome: vi.fn(),
+    ...overrides,
   })
 }
 
@@ -57,21 +54,48 @@ describe('SceneRuntimeRenderScheduler', () => {
     vi.restoreAllMocks()
   })
 
+  it('mounts the one supplied renderer and never selects another', async () => {
+    const renderer = createRenderer()
+    const definition = definitionFor(renderer)
+    const scheduler = createScheduler(definition)
+    const container = document.createElement('div')
+
+    await scheduler.initialize(container)
+    await scheduler.renderScene()
+
+    expect(definition.initialize).toHaveBeenCalledExactlyOnceWith({ container })
+    expect(scheduler.container).toBe(container)
+    expect(renderer.renderScene).toHaveBeenCalledOnce()
+    scheduler.dispose()
+  })
+
+  it('refuses to mount when the runtime has no renderer', async () => {
+    const scheduler = createScheduler(null)
+
+    await expect(scheduler.initialize(document.createElement('div')))
+      .rejects.toThrow('no renderer to mount')
+    expect(scheduler.container).toBeNull()
+  })
+
+  it('surfaces a renderer mount failure instead of falling back', async () => {
+    const failure = new Error('WebGL2 unavailable')
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer, () => { throw failure }))
+
+    await expect(scheduler.initialize(document.createElement('div'))).rejects.toBe(failure)
+    expect(scheduler.container).toBeNull()
+    await scheduler.renderScene()
+    expect(renderer.renderScene).not.toHaveBeenCalled()
+  })
+
   it('coalesces a burst of camera changes into one frame using the latest viewport', async () => {
     let frame!: FrameRequestCallback
     const request = vi.fn((callback: FrameRequestCallback) => { frame = callback; return 1 })
     vi.stubGlobal('requestAnimationFrame', request)
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    const renderer = createRenderer('pixi')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
-    })
+    const renderer = createRenderer()
     let viewport = { x: 0, y: 0, scale: 20 }
-    const scheduler = new SceneRuntimeRenderScheduler({
-      getRendererHost: () => host, getViewport: () => viewport,
-      prepareSceneRender: async () => ({ publish: () => createTestSceneRendererSnapshot() }),
-      renderChrome: vi.fn(),
-    })
+    const scheduler = createScheduler(definitionFor(renderer), { getViewport: () => viewport })
     await scheduler.initialize(document.createElement('div'))
     for (let i = 0; i < 10; i++) {
       viewport = { x: i, y: i, scale: 20 + i }
@@ -84,50 +108,17 @@ describe('SceneRuntimeRenderScheduler', () => {
     scheduler.dispose()
   })
 
-  it('does not resize an unchanged surface before every selection or scene render', async () => {
-    const renderer = createRenderer('pixi')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
+  it('treats a resize as a camera-only update because MapLibre owns the surface size', async () => {
+    const renderer = createRenderer()
+    const renderChrome = vi.fn()
+    const scheduler = createScheduler(definitionFor(renderer), { renderChrome })
     await scheduler.initialize(document.createElement('div'))
-    await scheduler.renderScene()
-    await scheduler.renderScene()
-    expect(renderer.resize).toHaveBeenCalledTimes(1)
-    expect(renderer.renderScene).toHaveBeenCalledTimes(2)
-    scheduler.dispose()
-  })
 
-  it('replays the complete current snapshot after a named backend fails outside rendering', async () => {
-    const shared = createRenderer('maplibre-pixi')
-    const fallback = createRenderer('canvas2d')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [
-        { id: 'maplibre-pixi', initialize: async () => shared },
-        { id: 'canvas2d', initialize: async () => fallback },
-      ],
-    })
-    const snapshot = createTestSceneRendererSnapshot({
-      scene: {
-        annotations: [{} as never], measurementGuides: [{} as never],
-        groups: [{} as never], guides: [{} as never],
-      },
-      pinnedPlantNameLabels: [{} as never],
-      selectionLabels: [{} as never],
-    })
-    const scheduler = new SceneRuntimeRenderScheduler({
-      getRendererHost: () => host,
-      getViewport: () => snapshot.viewport,
-      prepareSceneRender: async () => ({ publish: () => snapshot }),
-      renderChrome: vi.fn(),
-    })
+    scheduler.resize(400, 300)
 
-    await scheduler.initialize(document.createElement('div'))
-    await scheduler.renderScene()
-    await scheduler.reportRendererFailure('maplibre-pixi', new Error('context lost'))
-
-    expect(host.snapshot.activeBackendId).toBe('canvas2d')
-    expect(fallback.renderScene).toHaveBeenLastCalledWith(snapshot)
+    expect(renderer.setViewport).toHaveBeenCalledExactlyOnceWith({ x: 0, y: 0, scale: 1 })
+    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderChrome).toHaveBeenCalledOnce()
     scheduler.dispose()
   })
 
@@ -137,11 +128,8 @@ describe('SceneRuntimeRenderScheduler', () => {
     const cancel = vi.fn()
     vi.stubGlobal('requestAnimationFrame', request)
     vi.stubGlobal('cancelAnimationFrame', cancel)
-    const renderer = createRenderer('pixi')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{ id: 'pixi', initialize: async () => renderer }, createBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer))
     await scheduler.initialize(document.createElement('div'))
     scheduler.invalidate('viewport')
     scheduler.invalidate('scene')
@@ -158,180 +146,86 @@ describe('SceneRuntimeRenderScheduler', () => {
     expect(cancel).toHaveBeenCalledWith(7)
   })
 
-  it('contains expected viewport cancellation when teardown overtakes invalidation', async () => {
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const host = new RendererHost({
-      backends: [createBackend('pixi'), createBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
+  it('unmounts the renderer so later invalidations draw nothing', async () => {
+    const request = vi.fn(() => 1)
+    vi.stubGlobal('requestAnimationFrame', request)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer))
     await scheduler.initialize(document.createElement('div'))
 
-    scheduler.invalidate('viewport')
-    scheduler.dispose()
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await scheduler.unmount()
+    scheduler.invalidate('scene')
+    scheduler.resize(400, 300)
+    await scheduler.renderScene()
 
-    expect(host.snapshot.initialized).toBe(false)
-    expect(logError).not.toHaveBeenCalled()
+    expect(renderer.dispose).toHaveBeenCalledOnce()
+    expect(scheduler.container).toBeNull()
+    expect(request).not.toHaveBeenCalled()
+    expect(renderer.renderScene).not.toHaveBeenCalled()
+    expect(renderer.setViewport).not.toHaveBeenCalled()
   })
 
-  it('publishes only the container whose renderer initialization succeeds', async () => {
-    const pendingRenderer = deferred<SceneRendererInstance>()
-    const renderer = createRenderer('pixi')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{
-        id: 'pixi',
-        initialize: () => pendingRenderer.promise,
-      }, createBackend('canvas2d')],
+  it('does not draw a prepared scene after unmount overtakes its preparation', async () => {
+    const preparation = deferred<{ publish(): ReturnType<typeof createTestSceneRendererSnapshot> }>()
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer), {
+      prepareSceneRender: () => preparation.promise,
     })
-    const scheduler = createScheduler(host)
+    await scheduler.initialize(document.createElement('div'))
+
+    const render = scheduler.renderScene()
+    await scheduler.unmount()
+    preparation.resolve({ publish: () => createTestSceneRendererSnapshot() })
+    await render
+
+    expect(renderer.renderScene).not.toHaveBeenCalled()
+  })
+
+  it('rejects a second mount while one is pending or active', async () => {
+    const pendingRenderer = deferred<SceneRendererInstance>()
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer, () => pendingRenderer.promise))
     const acceptedContainer = document.createElement('div')
-    const rejectedContainer = document.createElement('div')
 
     const acceptedInitialization = scheduler.initialize(acceptedContainer)
-    await expect(scheduler.initialize(rejectedContainer)).rejects.toThrow(
-      'already has an active or pending backend',
-    )
+    await expect(scheduler.initialize(document.createElement('div'))).rejects.toThrow('already mounted')
     pendingRenderer.resolve(renderer)
     await acceptedInitialization
 
     expect(scheduler.container).toBe(acceptedContainer)
-    await scheduler.renderScene()
-    expect(renderer.renderScene).toHaveBeenCalledOnce()
+    await expect(scheduler.initialize(document.createElement('div'))).rejects.toThrow('already mounted')
     scheduler.dispose()
   })
 
-  it('does not publish a container after post-selection disposal wins initialization', async () => {
-    const renderer = createRenderer('pixi')
-    let scheduler!: SceneRuntimeRenderScheduler
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{
-        id: 'pixi',
-        initialize: async () => renderer,
-      }, createBackend('canvas2d')],
-      onBackendChange: () => {
-        queueMicrotask(() => scheduler.dispose())
-      },
-    })
-    scheduler = createScheduler(host)
+  it('disposes a renderer whose mount settles after disposal', async () => {
+    const pendingRenderer = deferred<SceneRendererInstance>()
+    const renderer = createRenderer()
+    const scheduler = createScheduler(definitionFor(renderer, () => pendingRenderer.promise))
 
-    await expect(scheduler.initialize(document.createElement('div')))
-      .rejects.toBeInstanceOf(RendererHostInitializationCancelledError)
+    const initialization = scheduler.initialize(document.createElement('div'))
+    scheduler.dispose()
+    pendingRenderer.resolve(renderer)
 
+    await expect(initialization).rejects.toBeInstanceOf(SceneRendererMountCancelledError)
     expect(scheduler.container).toBeNull()
     expect(renderer.dispose).toHaveBeenCalledOnce()
-    expect(host.snapshot.activeBackendId).toBeNull()
-  })
-
-  it('contains expected scene-render cancellation when teardown overtakes invalidation', async () => {
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const host = new RendererHost({
-      backends: [createBackend('pixi'), createBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
-    await scheduler.initialize(document.createElement('div'))
-
-    scheduler.invalidate('scene')
-    await Promise.resolve()
-    scheduler.dispose()
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(host.snapshot.initialized).toBe(false)
-    expect(logError).not.toHaveBeenCalled()
-  })
-
-  it('contains expected resize cancellation when teardown overtakes the resize', async () => {
-    const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const host = new RendererHost({
-      backends: [createBackend('pixi'), createBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
-    await scheduler.initialize(document.createElement('div'))
-
-    scheduler.resize(400, 300)
-    scheduler.dispose()
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(host.snapshot.initialized).toBe(false)
-    expect(logError).not.toHaveBeenCalled()
   })
 
   it('reports a real failure from a detached resize', async () => {
-    const resizeError = new Error('renderer resize failed')
+    const resizeError = new Error('renderer viewport failed')
     const logError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const failingBackend = (id: string): SceneRendererDefinition => ({
-      id,
-      initialize: async () => ({
-        ...createRenderer(id),
-        resize: () => {
-          throw resizeError
-        },
-      }),
-    })
-    const host = new RendererHost({
-      backends: [failingBackend('pixi'), failingBackend('canvas2d')],
-    })
-    const scheduler = createScheduler(host)
+    const renderer = {
+      ...createRenderer(),
+      setViewport: () => { throw resizeError },
+    }
+    const scheduler = createScheduler(definitionFor(renderer))
     await scheduler.initialize(document.createElement('div'))
 
     scheduler.resize(400, 300)
 
-    await vi.waitFor(() => {
-      expect(logError).toHaveBeenCalledOnce()
-    })
-    expect(logError).toHaveBeenCalledWith(
-      'Scene Canvas resize failed:',
-      expect.objectContaining({ name: 'RendererHostInitializationError' }),
-    )
+    await vi.waitFor(() => expect(logError).toHaveBeenCalledOnce())
+    expect(logError).toHaveBeenCalledWith('Scene Canvas resize failed:', resizeError)
     scheduler.dispose()
-  })
-
-  it('does not publish an older snapshot after a newer render starts during acquisition', async () => {
-    const renderer = createRenderer('pixi')
-    const host = new RendererHost<{ container: HTMLElement }, SceneRendererInstance>({
-      backends: [{
-        id: 'pixi',
-        initialize: async () => renderer,
-      }, createBackend('canvas2d')],
-    })
-    const secondPreparation = deferred<SceneRuntimePreparedRender>()
-    const firstSnapshot = createTestSceneRendererSnapshot()
-    const renderChrome = vi.fn()
-    let scheduler!: SceneRuntimeRenderScheduler
-    let preparationCount = 0
-    scheduler = new SceneRuntimeRenderScheduler({
-      getRendererHost: () => host,
-      getViewport: () => ({ x: 0, y: 0, scale: 1 }),
-      prepareSceneRender: vi.fn(async () => {
-        preparationCount += 1
-        if (preparationCount === 1) {
-          return {
-            publish: () => {
-              queueMicrotask(() => scheduler.invalidate('scene'))
-              return firstSnapshot
-            },
-          }
-        }
-        return secondPreparation.promise
-      }),
-      renderChrome,
-    })
-    await scheduler.initialize(document.createElement('div'))
-
-    await scheduler.renderScene()
-
-    expect(renderer.renderScene).not.toHaveBeenCalled()
-    expect(renderChrome).not.toHaveBeenCalled()
-    scheduler.dispose()
-    secondPreparation.resolve({
-      publish: () => createTestSceneRendererSnapshot(),
-    })
-    await Promise.resolve()
-    await Promise.resolve()
   })
 })

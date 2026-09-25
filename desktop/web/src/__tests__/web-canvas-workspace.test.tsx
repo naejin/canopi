@@ -51,7 +51,7 @@ describe('Web Edition canvas workspace', () => {
     layerVisibility.value = createDefaultLayerVisibility()
   })
 
-  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'fallback-ready'])(
+  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable'])(
     'mounts the shared canvas runtime surface after %s without deferred desktop panels',
     async (outcome) => {
       container = document.createElement('div')
@@ -845,6 +845,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: vi.fn(),
+      importDesignObjects: vi.fn(() => ({ committed: false, createdCount: 0 })),
       copy: vi.fn(),
       paste: vi.fn(),
       pasteAt: vi.fn(),
@@ -933,6 +934,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     })),
     getPlacedPlants: vi.fn(() => []),
     getSettledPlacedPlants: vi.fn(() => []),
+    getSettledDesignObjects: vi.fn(() => null),
     getLocalizedCommonNames: vi.fn(() => new Map()),
   }
 }

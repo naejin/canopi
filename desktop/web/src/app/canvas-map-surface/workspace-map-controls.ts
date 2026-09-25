@@ -13,6 +13,8 @@ import {
 } from '../../maplibre/map-background'
 import { OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
+import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
+import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
 import {
   createWorkspaceMapLibreMap,
   type WorkspaceMapSnapshot,
@@ -91,7 +93,10 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       this.releaseAttempt(previous)
     }
     if (!(this.options.canCreateWebGL2Context ?? canCreateWebGL2Context)()) {
-      return Promise.reject(new Error('WebGL2 is unavailable for the shared workspace map.'))
+      const error = new Error('WebGL2 is unavailable for the shared workspace map.')
+      // No map attempt exists to publish its failure, so publish it here.
+      this.publishUnavailable(error)
+      return Promise.reject(error)
     }
     this.surface.attach(this.options.container)
 
@@ -301,6 +306,18 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       if (attempt.styleRestorer === restoreCurrentStyle) {
         attempt.styleRestorer = null
       }
+    }
+  }
+
+  private publishUnavailable(error: Error): void {
+    try {
+      this.options.contributions?.onStateChange?.({
+        ...IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
+        status: 'error',
+        errorMessage: toMapLibreSurfaceErrorMessage(error),
+      })
+    } catch (observerError) {
+      this.logError('Map state observer failed:', observerError)
     }
   }
 

@@ -10,7 +10,8 @@
     "panels": "Webeditie-panelen",
     "workspace": "Webeditie-werkruimte",
     "openCanopi": ".canopi openen",
-    "downloadCanopi": ".canopi downloaden"
+    "downloadCanopi": ".canopi downloaden",
+    "dismissNotice": "Sluiten"
   },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",
@@ -250,7 +251,7 @@
       "mapSection": "Kaartlagen",
       "basemap": "Basiskaart",
       "basemapLoading": "Basiskaart laden...",
-      "basemapError": "Basiskaart niet beschikbaar",
+      "mapUnavailable": "Kaart niet beschikbaar",
       "references": "Terreinreferenties",
       "sceneStack": "Tekenlagen",
       "topToBottom": "Van boven naar beneden",
@@ -1093,5 +1094,25 @@
     "empty": "Plaats planten om de soortensleutel te maken.",
     "clearSearch": "Zoekopdracht wissen",
     "details": "Details van {{name}}"
+  },
+  "geojson": {
+    "import": "GeoJSON importeren",
+    "export": "GeoJSON exporteren",
+    "importTitle": "GeoJSON-import",
+    "exportTitle": "GeoJSON-export",
+    "importSummary": "{{plants}} planten, {{zones}} zones, {{annotations}} notities en {{guides}} meethulplijnen geïmporteerd.",
+    "importSkipped": "{{count}} objecten met niet-ondersteunde geometrie zijn overgeslagen.",
+    "importNothing": "Het bestand bevat geen ontwerpobjecten om te importeren.",
+    "busy": "Het canvas is bezig. Probeer het zo opnieuw.",
+    "readFailed": "Het bestand kon niet worden gelezen.",
+    "writeFailed": "Het GeoJSON-bestand kon niet worden geschreven.",
+    "errors": {
+      "invalid_json": "Het bestand is geen geldige JSON.",
+      "unsupported_root": "Het bestand is geen GeoJSON-Feature of FeatureCollection.",
+      "too_many_features": "Het bestand bevat meer dan {{max}} objecten.",
+      "invalid_feature": "Object {{feature}} is geen geldig GeoJSON-object.",
+      "invalid_geometry": "Object {{feature}} heeft een ongeldige geometrie.",
+      "invalid_coordinates": "Object {{feature}} heeft coördinaten buiten het WGS84-lengte-/breedtebereik."
+    }
   }
 }

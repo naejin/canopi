@@ -9,9 +9,7 @@ import {
   type WorkspaceActivationRuntime,
 } from './workspace-activation'
 import { MapLibreWorkspaceCameraOwner } from '../../maplibre/workspace-camera'
-import { createCanvas2DSceneRenderer } from '../../canvas/runtime/renderers/canvas2d-scene'
 import { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
-import type { RendererCapabilities } from '../../canvas/runtime/renderers/types'
 import {
   MAPLIBRE_SHARED_SCENE_LAYER_ID,
   type SharedMapSceneLayer,
@@ -20,12 +18,6 @@ import {
 import { createSharedMapSceneRendererComposition, type SharedMapSceneRendererComposition } from '../../maplibre/shared-scene-renderer'
 import { WorkspaceGenerationReconciler } from './workspace-generation-reconciler'
 import type { MapBackgroundPresentation } from '../../maplibre/map-background'
-
-const TEST_CAPABILITIES: RendererCapabilities = {
-  domCanvas: true, canvas2d: true, offscreenCanvas: false, offscreenCanvas2d: false,
-  webgl: true, webgl2: true, webgpu: false, imageBitmap: false, createImageBitmap: false,
-  worker: false, devicePixelRatio: 2, prefersReducedMotion: false,
-}
 
 function background(
   basemap: Partial<MapBackgroundPresentation['basemap']> = {},
@@ -132,7 +124,7 @@ class FakeMap {
 function createRuntime(): WorkspaceActivationRuntime {
   return {
     init: vi.fn(async () => {}),
-    reportRendererFailure: vi.fn(async () => {}),
+    unmountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
   }
 }
@@ -176,7 +168,6 @@ function createComposition(options: {
   const composition = {
     renderer: {} as never,
     createLayer: vi.fn(() => layer),
-    failActiveLayer: vi.fn(),
   } satisfies SharedMapSceneRendererComposition
   return { composition, layer, dispose }
 }
@@ -223,7 +214,7 @@ describe('WorkspaceActivationCoordinator', () => {
   it.each([new Error('shared renderer failed'), new DOMException('renderer cancelled internally', 'AbortError')])('passes the original terminal renderer failure through map release: %s', async (error) => {
     const f = createCoordinator()
     await f.coordinator.activate(createActivationSnapshot())
-    await expect(f.coordinator.reportFailure(error)).resolves.toBe('fallback-ready')
+    await expect(f.coordinator.reportFailure(error)).resolves.toBe('map-unavailable')
     expect(f.mapControls.releaseMap).toHaveBeenCalledExactlyOnceWith(f.map, error)
     await f.coordinator.teardown()
     expect(f.mapControls.releaseMap).toHaveBeenCalledOnce()
@@ -416,13 +407,13 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(updateBackgroundPresentation).not.toHaveBeenCalled()
   })
 
-  it('fences presentation updates after shared-backend fallback becomes terminal', async () => {
+  it('fences presentation updates after the map becomes terminally unavailable', async () => {
     const { coordinator, mapControls } = createCoordinator()
     const updateBackgroundPresentation = vi.fn()
     mapControls.updateBackgroundPresentation = updateBackgroundPresentation
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
-    await expect(coordinator.reportFailure(new Error('shared layer failed'))).resolves.toBe('fallback-ready')
+    await expect(coordinator.reportFailure(new Error('shared layer failed'))).resolves.toBe('map-unavailable')
     coordinator.updateBackgroundPresentation(background({ visible: false, opacity: 0.2 }))
 
     expect(updateBackgroundPresentation).not.toHaveBeenCalled()
@@ -438,7 +429,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValue(second.layer),
-      failActiveLayer: vi.fn(),
     }
     const firstMap = new FakeMap()
     const secondMap = new FakeMap()
@@ -568,10 +558,7 @@ describe('WorkspaceActivationCoordinator', () => {
     map.addLayer.mockImplementation(() => { throw failure })
     restore!()
 
-    await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledWith(
-      'maplibre-pixi',
-      failure,
-    ))
+    await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
@@ -633,7 +620,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
-      failActiveLayer: vi.fn(),
     }
     const snapshots: WorkspaceActivationSnapshot['map'][] = []
     const createMap = vi.fn(async (
@@ -703,7 +689,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
-      failActiveLayer: vi.fn(),
     }
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
     const { coordinator, runtime } = createCoordinator({ createMap, composition })
@@ -728,7 +713,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(second.layer),
-      failActiveLayer: vi.fn(),
     }
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
     const { coordinator, runtime } = createCoordinator({
@@ -745,12 +729,11 @@ describe('WorkspaceActivationCoordinator', () => {
     reports[0]!(new Error('stale A failure'))
     await Promise.resolve()
 
-    expect(composition.failActiveLayer).not.toHaveBeenCalled()
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     expect(maps[1]!.remove).not.toHaveBeenCalled()
   })
 
-  it('waits for a pending runtime initialization before publishing fallback-ready', async () => {
+  it('waits for a pending runtime initialization before unmounting its renderer', async () => {
     const initialized = deferred<void>()
     const runtime = createRuntime()
     runtime.init = vi.fn(() => initialized.promise)
@@ -760,13 +743,13 @@ describe('WorkspaceActivationCoordinator', () => {
 
     const failure = coordinator.reportFailure(new Error('map context lost during initialization'))
     await Promise.resolve()
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(map.remove).toHaveBeenCalledOnce())
 
     initialized.resolve()
-    await expect(failure).resolves.toBe('fallback-ready')
-    await expect(activation).resolves.toBe('fallback-ready')
-    expect(runtime.reportRendererFailure).toHaveBeenCalledOnce()
+    await expect(failure).resolves.toBe('map-unavailable')
+    await expect(activation).resolves.toBe('map-unavailable')
+    expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
   })
 
   it('installs failure and cleanup fences before a watcher can report synchronously', async () => {
@@ -784,16 +767,16 @@ describe('WorkspaceActivationCoordinator', () => {
       watchFailure,
     })
 
-    await expect(coordinator.activate()).resolves.toBe('fallback-ready')
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
     expect(watchFailure).toHaveBeenCalledOnce()
     expect(unwatchFailure).toHaveBeenCalledOnce()
     expect(composed.dispose).not.toHaveBeenCalled()
     expect(map.remove).toHaveBeenCalledOnce()
-    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('propagates a concurrent runtime initialization rejection instead of masking it as fallback-ready', async () => {
+  it('propagates a concurrent runtime initialization rejection instead of masking it as map-unavailable', async () => {
     const initialized = deferred<void>()
     const runtime = createRuntime()
     runtime.init = vi.fn(() => initialized.promise)
@@ -807,22 +790,21 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(reportedFailure).rejects.toBe(failure)
     await expect(activation).rejects.toBe(failure)
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
-  it('removes the failed map and initializes the visible fallback before resolving', async () => {
+  it('removes the failed map and mounts no renderer before resolving', async () => {
     const map = new FakeMap()
     map.addLayer.mockImplementation(() => { throw new Error('add layer failed') })
     const composed = createComposition()
-    const { coordinator, runtime, composition } = createCoordinator({ map, composition: composed.composition })
+    const { coordinator, runtime } = createCoordinator({ map, composition: composed.composition })
 
-    await expect(coordinator.activate()).resolves.toBe('fallback-ready')
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
-    expect(composition.failActiveLayer).toHaveBeenCalledWith(expect.any(Error))
     expect(composed.dispose).toHaveBeenCalledWith({ mapWillBeRemoved: true })
     expect(map.remove).toHaveBeenCalledOnce()
-    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.init).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -835,55 +817,53 @@ describe('WorkspaceActivationCoordinator', () => {
       vi.spyOn(map, 'getPitch').mockReturnValue(1)
       return { map }
     }],
-  ])('falls back when %s', async (_reason, setup) => {
+  ])('reports the map unavailable without mounting a renderer when %s', async (_reason, setup) => {
     const configured = setup()
     const { coordinator, runtime, map } = createCoordinator(configured)
 
-    await expect(coordinator.activate()).resolves.toBe('fallback-ready')
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
     expect(map.remove).toHaveBeenCalledOnce()
-    expect(runtime.init).toHaveBeenCalledOnce()
+    expect(runtime.init).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
   })
 
-  it('falls back when map acquisition rejects before a map is admitted', async () => {
+  it('reports the map unavailable when map acquisition rejects before a map is admitted', async () => {
     const failure = new Error('MapLibre loader failed')
-    const { coordinator, runtime, composition } = createCoordinator({
+    const { coordinator, runtime } = createCoordinator({
       createMap: async () => { throw failure },
     })
 
-    await expect(coordinator.activate()).resolves.toBe('fallback-ready')
-    expect(composition.failActiveLayer).toHaveBeenCalledWith(failure)
-    expect(runtime.init).toHaveBeenCalledOnce()
+    await expect(coordinator.activate()).resolves.toBe('map-unavailable')
+    expect(runtime.init).not.toHaveBeenCalled()
   })
 
-  it('fails over once when replacement admission fails and never restarts the shared backend', async () => {
+  it('unmounts once when replacement admission fails and never restarts the map', async () => {
     const map = new FakeMap()
     const replacementFailure = new Error('replacement map failed')
     const createMap = vi.fn()
       .mockResolvedValueOnce(map as unknown as WorkspaceActivationMap)
       .mockRejectedValueOnce(replacementFailure)
-    const { coordinator, runtime, composition } = createCoordinator({ createMap })
+    const { coordinator, runtime } = createCoordinator({ createMap })
 
     await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('shared-ready')
-    await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('fallback-ready')
-    await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('fallback-ready')
+    await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('map-unavailable')
+    await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('map-unavailable')
 
     expect(createMap).toHaveBeenCalledTimes(2)
-    expect(composition.failActiveLayer).toHaveBeenCalledOnce()
-    expect(composition.failActiveLayer).toHaveBeenCalledWith(replacementFailure)
     expect(runtime.init).toHaveBeenCalledOnce()
-    expect(runtime.reportRendererFailure).toHaveBeenCalledOnce()
+    expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
     expect(runtime.destroy).not.toHaveBeenCalled()
   })
 
-  it('eagerly fails only the active shared backend and retains the spatial camera frame', async () => {
+  it('unmounts the renderer on map failure and retains the spatial camera frame', async () => {
     const { coordinator, runtime, camera, map } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     const attachedFrame = camera.snapshot.value
 
-    await expect(coordinator.reportFailure(new Error('context lost'))).resolves.toBe('fallback-ready')
+    await expect(coordinator.reportFailure(new Error('context lost'))).resolves.toBe('map-unavailable')
 
-    expect(runtime.reportRendererFailure).toHaveBeenCalledWith('maplibre-pixi', expect.any(Error))
+    expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
     expect(camera.snapshot.value).toEqual({
       ...attachedFrame,
       groundMetersPerCssPixel: null,
@@ -895,15 +875,15 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
-  it('observes a later camera projection failure and falls back eagerly', async () => {
+  it('observes a later camera projection failure and unmounts the renderer', async () => {
     const { coordinator, runtime, map } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
     map.pitch = 1
     map.emit('move')
 
-    await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledOnce())
-    expect(runtime.reportRendererFailure).toHaveBeenCalledWith('maplibre-pixi', expect.any(Error))
+    await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
+    expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
@@ -944,11 +924,11 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(events).toContain('layer-dispose')
     expect(events).not.toContain('map-release')
     expect(runtime.destroy).not.toHaveBeenCalled()
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     restore!()
     reportFailure!(new Error('stale callback'))
     expect(map.addLayer).toHaveBeenCalledOnce()
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
 
     layerDisposal.resolve()
     await expect(disconnected).resolves.toBeUndefined()
@@ -1043,7 +1023,6 @@ describe('WorkspaceActivationCoordinator', () => {
     const composition: SharedMapSceneRendererComposition = {
       renderer: {} as never,
       createLayer: vi.fn().mockReturnValueOnce(first.layer).mockReturnValueOnce(successor.layer),
-      failActiveLayer: vi.fn(),
     }
     const maps = [new FakeMap(), new FakeMap()]
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
@@ -1113,21 +1092,21 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
-  it('joins an already-started renderer failover before disconnect and terminal teardown settle', async () => {
-    const rendererReplacement = deferred<void>()
+  it('joins an already-started renderer unmount before disconnect and terminal teardown settle', async () => {
+    const rendererUnmount = deferred<void>()
     const runtime = createRuntime()
-    runtime.reportRendererFailure = vi.fn(() => rendererReplacement.promise)
+    runtime.unmountRenderer = vi.fn(() => rendererUnmount.promise)
     const { coordinator } = createCoordinator({ runtime })
     await coordinator.activate()
 
     const failure = coordinator.reportFailure(new Error('context lost'))
-    await vi.waitFor(() => expect(runtime.reportRendererFailure).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
     const disconnected = coordinator.requestGenerationDisconnect()
     const teardown = coordinator.teardown()
     await Promise.resolve()
 
     expect(runtime.destroy).not.toHaveBeenCalled()
-    rendererReplacement.resolve()
+    rendererUnmount.resolve()
 
     await expect(failure).resolves.toBe('cancelled')
     await expect(disconnected).resolves.toBeUndefined()
@@ -1300,11 +1279,11 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
-  it('rejects renderer failover that directly returns terminal teardown', async () => {
+  it('rejects a renderer unmount that directly returns terminal teardown', async () => {
     let coordinator!: TestWorkspaceActivationCoordinator
     let nestedTeardown!: Promise<void>
     const runtime = createRuntime()
-    runtime.reportRendererFailure = vi.fn(() => {
+    runtime.unmountRenderer = vi.fn(() => {
       nestedTeardown = coordinator.teardown()
       return nestedTeardown
     })
@@ -1315,10 +1294,10 @@ describe('WorkspaceActivationCoordinator', () => {
     const failure = coordinator.reportFailure(new Error('context lost'))
 
     await expect(failure).rejects.toThrow(
-      'Shared workspace renderer failover must not return a coordinator lifecycle operation.',
+      'Shared workspace renderer unmount must not return a coordinator lifecycle operation.',
     )
     await expect(nestedTeardown).rejects.toThrow(
-      'Shared workspace renderer failover must not return a coordinator lifecycle operation.',
+      'Shared workspace renderer unmount must not return a coordinator lifecycle operation.',
     )
     expect(map.remove).toHaveBeenCalledOnce()
     expect(runtime.destroy).toHaveBeenCalledOnce()
@@ -1357,7 +1336,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValue(newest.layer),
-      failActiveLayer: vi.fn(),
     }
     const firstMap = new FakeMap()
     const newestMap = new FakeMap()
@@ -1465,7 +1443,6 @@ describe('WorkspaceActivationCoordinator', () => {
       createLayer: vi.fn()
         .mockReturnValueOnce(first.layer)
         .mockReturnValueOnce(recovered.layer),
-      failActiveLayer: vi.fn(),
     }
     const createMap = vi.fn(async () => maps[createMap.mock.calls.length - 1] as unknown as WorkspaceActivationMap)
     const { coordinator, runtime } = createCoordinator({ createMap, composition })
@@ -1548,7 +1525,7 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(coordinator.activate()).rejects.toBe(failure)
 
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     expect(map.remove).toHaveBeenCalledOnce()
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
@@ -1566,16 +1543,16 @@ describe('WorkspaceActivationCoordinator', () => {
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
-  it('retains cleanup and destroy failures when fallback initialization rejects', async () => {
+  it('retains cleanup and destroy failures when runtime initialization rejects', async () => {
     const runtime = createRuntime()
-    const initializationError = new Error('fallback init failed')
+    const initializationError = new Error('runtime init failed')
     runtime.init = vi.fn(async () => { throw initializationError })
-    const destroyError = new Error('fallback destroy failed')
+    const destroyError = new Error('runtime destroy failed')
     runtime.destroy = vi.fn(() => { throw destroyError })
     const map = new FakeMap()
     const cleanupError = new Error('map removal failed')
     map.remove.mockImplementation(() => { throw cleanupError })
-    const { coordinator } = createCoordinator({ map, runtime, context: null })
+    const { coordinator } = createCoordinator({ map, runtime })
 
     await expect(coordinator.activate()).rejects.toMatchObject({
       name: 'CanvasRuntimeCleanupError',
@@ -1588,7 +1565,7 @@ describe('WorkspaceActivationCoordinator', () => {
   it('turns a renderer cancellation during teardown into a cancelled activation result', async () => {
     const rendererFailure = deferred<void>()
     const runtime = createRuntime()
-    runtime.reportRendererFailure = vi.fn(() => rendererFailure.promise)
+    runtime.unmountRenderer = vi.fn(() => rendererFailure.promise)
     const { coordinator } = createCoordinator({ runtime })
     await coordinator.activate()
 
@@ -1601,7 +1578,7 @@ describe('WorkspaceActivationCoordinator', () => {
     await expect(teardown).resolves.toBeUndefined()
   })
 
-  it('does not start a deferred renderer failover after same-turn teardown', async () => {
+  it('does not start a deferred renderer unmount after same-turn teardown', async () => {
     const { coordinator, runtime } = createCoordinator()
     await coordinator.activate()
 
@@ -1610,14 +1587,14 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(failure).resolves.toBe('cancelled')
     await expect(teardown).resolves.toBeUndefined()
-    expect(runtime.reportRendererFailure).not.toHaveBeenCalled()
+    expect(runtime.unmountRenderer).not.toHaveBeenCalled()
     expect(runtime.destroy).toHaveBeenCalledOnce()
   })
 
-  it('sinks a rejected camera callback failover while public failure reports still reject', async () => {
+  it('sinks a rejected camera callback unmount while public failure reports still reject', async () => {
     const runtime = createRuntime()
-    const failure = new Error('fallback renderer failed')
-    runtime.reportRendererFailure = vi.fn(async () => { throw failure })
+    const failure = new Error('renderer unmount failed')
+    runtime.unmountRenderer = vi.fn(async () => { throw failure })
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { coordinator, map } = createCoordinator({ runtime })
     await coordinator.activate()
@@ -1625,7 +1602,7 @@ describe('WorkspaceActivationCoordinator', () => {
     map.pitch = 1
     map.emit('move')
     await vi.waitFor(() => expect(consoleError).toHaveBeenCalledWith(
-      'Shared workspace callback failover failed:', failure,
+      'Shared workspace map failure handling failed:', failure,
     ))
     await expect(coordinator.reportFailure(failure)).rejects.toBe(failure)
     consoleError.mockRestore()
@@ -1636,13 +1613,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const camera = new MapLibreWorkspaceCameraOwner()
     camera.initialize({ width: 400, height: 300 })
     const composition = createSharedMapSceneRendererComposition()
-    const runtime = new SceneCanvasRuntime({
-      camera,
-      renderer: {
-        capabilities: TEST_CAPABILITIES,
-        backends: [composition.renderer, createCanvas2DSceneRenderer()],
-      },
-    })
+    const runtime = new SceneCanvasRuntime({ camera, renderer: composition.renderer })
     const container = document.createElement('div')
     Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
     const renderer: SharedPixiRenderer = {
@@ -1669,7 +1640,7 @@ describe('WorkspaceActivationCoordinator', () => {
 
     await expect(coordinator.activate(createActivationSnapshot())).resolves.toBe('shared-ready')
     expect(map.addLayer).toHaveBeenCalledOnce()
-    expect(container.querySelector('[data-canopi-renderer]')).toBeNull()
+    expect(container.querySelector('canvas')).toBeNull()
 
     await coordinator.teardown()
   })

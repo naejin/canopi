@@ -1,5 +1,4 @@
 import type { SpeciesFocus } from '../species-key'
-import type { RendererBackendDefinition, RendererBackendInstance } from './types'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
@@ -40,13 +39,22 @@ export interface SceneRendererContext {
   readonly container: HTMLElement
 }
 
-export interface SceneRendererInstance extends RendererBackendInstance {
-  // Resize the backing surface only; the caller follows with a scene or viewport render.
-  resize(width: number, height: number): void
+/**
+ * The mounted scene renderer. MapLibre owns the drawing surface, its size and
+ * its frame loop, so the renderer only receives retained scene state and
+ * camera-only updates.
+ */
+export interface SceneRendererInstance {
+  readonly id: string
   // Full scene/content refresh. Retain unchanged graphics across selection/presentation changes.
   renderScene(snapshot: SceneRendererSnapshot): void
   // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
   setViewport(viewport: SceneViewportState): void
+  dispose(): void | PromiseLike<void>
 }
 
-export type SceneRendererDefinition = RendererBackendDefinition<SceneRendererContext, SceneRendererInstance>
+/** The one scene renderer the runtime mounts (ADR 0004): there is no selection or fallback. */
+export interface SceneRendererDefinition {
+  readonly id: string
+  initialize(context: SceneRendererContext): SceneRendererInstance | PromiseLike<SceneRendererInstance>
+}

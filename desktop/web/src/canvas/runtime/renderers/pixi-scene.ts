@@ -1,8 +1,7 @@
 import { speciesFocusOpacity } from '../species-key'
-import { instrumentSceneRenderer } from './profile'
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import 'pixi.js/unsafe-eval'
-import { Application, Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
+import { Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
   getAnnotationPresentation,
@@ -42,12 +41,11 @@ import {
   resolveZoneVisual,
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
-import type { SceneRendererDefinition, SceneRendererHoverState, SceneRendererInstance, SceneRendererSnapshot } from './scene-types'
+import type { SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 
-const BACKGROUND_COLOR = 0x000000
 const ZONE_STROKE_PX = 2
 const PLANT_STROKE_PX = 1.5
 const graphicsKeys = new WeakMap<Graphics, string>()
@@ -160,9 +158,9 @@ function samePlantSelection(left: ReadonlySet<string>, right: ReadonlySet<string
 }
 
 /**
- * Retained botanical presentation. The render-surface owner supplies the
- * stage and frame submission, which lets an Application and a shared WebGL
- * context use the same scene graph without sharing lifecycle ownership.
+ * Retained botanical presentation. The MapLibre custom layer owns the stage,
+ * the shared WebGL context and frame submission; this graph only syncs scene
+ * content into it.
  */
 export interface PixiScenePresentation {
   dispose(): void
@@ -174,78 +172,11 @@ export interface PixiScenePresentation {
 export interface PixiScenePresentationOptions {
   readonly stage: Container
   readonly createText: () => Text
-  readonly requestDraw: () => void
   readonly viewSize: { width: number; height: number }
 }
 
-export function createPixiSceneRenderer(): SceneRendererDefinition {
-  return {
-    id: 'pixi',
-    supports(capabilities) {
-      return capabilities.webgl || capabilities.webgl2
-    },
-    async initialize(context, backendContext) {
-      const app = new Application()
-      const resolution = Math.max(1, backendContext.capabilities.devicePixelRatio ?? 1)
-      // Textures need extra samples to retain glyph edges at fractional screen
-      // positions. Keep this text-only density independent of camera zoom.
-      const createText = () => new Text({ resolution: resolution * 2 })
-      await app.init({
-        width: Math.max(1, context.container.clientWidth),
-        height: Math.max(1, context.container.clientHeight),
-        antialias: true,
-        resolution,
-        autoDensity: true,
-        autoStart: false,
-        backgroundAlpha: 0,
-        clearBeforeRender: true,
-        backgroundColor: BACKGROUND_COLOR,
-        preference: 'webgl',
-      })
-
-      const canvas = app.canvas as HTMLCanvasElement
-      canvas.dataset.canopiRenderer = 'pixi'
-      canvas.style.position = 'absolute'
-      canvas.style.inset = '0'
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
-      canvas.style.background = 'transparent'
-      canvas.style.zIndex = '1'
-      context.container.appendChild(canvas)
-
-      const presentation = createPixiScenePresentation({
-        stage: app.stage,
-        createText,
-        requestDraw: () => app.render(),
-        viewSize: { width: context.container.clientWidth, height: context.container.clientHeight },
-      })
-
-      const instance: SceneRendererInstance = {
-        id: 'pixi',
-        dispose() {
-          presentation.dispose()
-          app.destroy({ removeView: false })
-          canvas.remove()
-        },
-        resize(width, height) {
-          presentation.resize(width, height)
-          app.renderer.resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
-        },
-        renderScene(snapshot) {
-          presentation.renderScene(snapshot)
-        },
-        setViewport(viewport) {
-          presentation.setViewport(viewport)
-        },
-      }
-
-      return import.meta.env.DEV ? instrumentSceneRenderer(canvas, instance) : instance
-    },
-  }
-}
-
 export function createPixiScenePresentation(options: PixiScenePresentationOptions): PixiScenePresentation {
-  const { stage, createText, requestDraw, viewSize } = options
+  const { stage, createText, viewSize } = options
   const world = new Container()
   const zonesLayer = new Container()
   const measurementGuideLayer = new Container()
@@ -346,7 +277,6 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
       world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
       world.scale.set(nextSnapshot.viewport.scale)
-      requestDraw()
     },
     setViewport(viewport) {
       const current = presentation.setViewport(viewport)
@@ -390,7 +320,6 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
       world.position.set(viewport.x, viewport.y)
       world.scale.set(viewport.scale)
-      requestDraw()
     },
   }
 }

@@ -8,7 +8,7 @@ Use the [frontend guide](frontend-patterns.md) to select the relevant reference.
 - Add keys to all 11 locale files: en, fr, es, pt, it, zh, de, ja, ko, nl, ru.
 - `t()` is the application translation authority: every call observes `locale` and resolves through a fixed translator for that exact locale. Components must not read `locale.value` only to force translated text to rerender; keep explicit locale reads when they select localized data, drive searches, format dates, or notify imperative runtime adapters.
 - Imperative Canvas Runtime chrome receives that authority through `CanvasRuntimeAppAdapter.translate`; runtime modules must not import `i18n` directly. The adapter locale subscription asks the mounted interaction session to refresh existing translated nodes in place.
-- Canvas2D renderers receive `t` as a parameter; do not hardcode user-visible strings.
+- Canvas drawing code (rulers, Inspection Lens preview, PDF) receives `t` as a parameter; do not hardcode user-visible strings.
 - Unit strings such as "yr", "d", and "in" need i18n keys. Scientific units such as mg, mm, cm, and g/g do not need translation.
 - CSV and file export headers must reuse the same i18n keys as UI table headers.
 - Translations should use proper diacritics; do not use ASCII approximations in locale JSON.

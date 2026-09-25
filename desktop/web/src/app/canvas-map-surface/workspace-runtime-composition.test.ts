@@ -34,7 +34,7 @@ import {
 } from './workspace-runtime-composition'
 
 describe('createWorkspaceRuntimeComposition', () => {
-  it('assembles one camera and ordered shared/fallback backends before awaiting existing-Design readiness', async () => {
+  it('assembles one camera and the one MapLibre renderer before awaiting existing-Design readiness', async () => {
     const activation = deferred<WorkspaceActivationOutcome>()
     const snapshot = workspaceSnapshot()
     const fixture = compositionFixture({
@@ -47,8 +47,9 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.createRuntime).toHaveBeenCalledOnce()
     const runtimeOptions = fixture.createRuntime.mock.calls[0]![0]
     expect(runtimeOptions.camera).toBe(fixture.camera)
-    expect(runtimeOptions.renderer?.backends.map((backend) => backend.id))
-      .toEqual([MAPLIBRE_SCENE_RENDERER_ID, 'canvas2d'])
+    // Renderer selection has one outcome: the composition's MapLibre renderer.
+    expect(runtimeOptions.renderer).toBe(fixture.rendererComposition.renderer)
+    expect(runtimeOptions.renderer?.id).toBe(MAPLIBRE_SCENE_RENDERER_ID)
     const workspaceOptions = fixture.createWorkspace.mock.calls[0]![0]
     expect(workspaceOptions.runtime).toBe(fixture.runtime)
     expect(workspaceOptions.camera).toBe(fixture.camera)
@@ -77,7 +78,7 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.runtime.init).not.toHaveBeenCalled()
   })
 
-  it.each<WorkspaceActivationOutcome>(['shared-ready', 'fallback-ready'])(
+  it.each<WorkspaceActivationOutcome>(['shared-ready', 'map-unavailable'])(
     'initializes and fits hydrated content once for %s',
     async (outcome) => {
       const fixture = compositionFixture({
@@ -371,7 +372,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     querySurface: surfaces.queries,
     documentSurface: surfaces.documents,
     init: vi.fn(async () => {}),
-    reportRendererFailure: vi.fn(async () => {}),
+    unmountRenderer: vi.fn(async () => {}),
     destroy: vi.fn(),
   }
   const camera = new MapLibreWorkspaceCameraOwner()
@@ -381,7 +382,6 @@ function compositionFixture(options: CompositionFixtureOptions) {
       initialize: vi.fn(),
     },
     createLayer: vi.fn(),
-    failActiveLayer: vi.fn(),
   } as unknown as SharedMapSceneRendererComposition
   const controls = {
     createMap: vi.fn(),

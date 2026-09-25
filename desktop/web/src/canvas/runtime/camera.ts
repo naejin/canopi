@@ -42,7 +42,7 @@ export interface CameraViewportSnapshot {
   readonly scaleBounds: Readonly<WorkspaceCameraScaleBounds>
   readonly overviewScaleThreshold: number
   readonly mode: WorkspaceCameraMode
-  /** Geographic ground resolution for map overview chrome; absent in local fallback. */
+  /** Geographic ground resolution for map overview chrome; absent while no map is attached. */
   readonly groundMetersPerCssPixel: number | null
   readonly revision: number
 }
@@ -459,7 +459,7 @@ function zoomCameraViewportToScale(
   }
 }
 
-/** Derives the fit viewport using the same scale-dependent bounds policy as Canvas2D. */
+/** Derives the fit viewport using the scale-dependent Scene bounds policy. */
 export function fitCameraViewport(
   snapshot: CameraViewportSnapshot,
   scene: ScenePersistedState,

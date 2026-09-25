@@ -118,14 +118,13 @@ describe('createWorkspaceDocumentSurface', () => {
       container: document.createElement('div'),
       runtime: {
         init: async () => {},
-        reportRendererFailure: async () => {},
+        unmountRenderer: async () => {},
         destroy: () => {},
       },
       camera,
       composition: {
         renderer: {} as never,
         createLayer: vi.fn(),
-        failActiveLayer: vi.fn(),
       },
       map: {
         createMap: (candidateSignal) => {

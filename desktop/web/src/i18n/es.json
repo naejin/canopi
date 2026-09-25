@@ -10,7 +10,8 @@
     "panels": "Paneles de la edición web",
     "workspace": "Espacio de trabajo web",
     "openCanopi": "Abrir .canopi",
-    "downloadCanopi": "Descargar .canopi"
+    "downloadCanopi": "Descargar .canopi",
+    "dismissNotice": "Cerrar"
   },
   "designNotebook": {
     "title": "Cuaderno de diseños",
@@ -250,7 +251,7 @@
       "mapSection": "Capas de mapa",
       "basemap": "Mapa base",
       "basemapLoading": "Cargando mapa base...",
-      "basemapError": "Mapa base no disponible",
+      "mapUnavailable": "Mapa no disponible",
       "references": "Referencias del lugar",
       "sceneStack": "Capas del diseño",
       "topToBottom": "De arriba abajo",
@@ -1093,5 +1094,25 @@
     "empty": "Coloca plantas para crear la clave de especies.",
     "clearSearch": "Borrar búsqueda",
     "details": "Detalles de {{name}}"
+  },
+  "geojson": {
+    "import": "Importar GeoJSON",
+    "export": "Exportar GeoJSON",
+    "importTitle": "Importación GeoJSON",
+    "exportTitle": "Exportación GeoJSON",
+    "importSummary": "Se importaron {{plants}} plantas, {{zones}} zonas, {{annotations}} anotaciones y {{guides}} guías de medición.",
+    "importSkipped": "Se omitieron {{count}} entidades con geometría no compatible.",
+    "importNothing": "El archivo no contiene objetos de diseño para importar.",
+    "busy": "El lienzo está ocupado. Inténtalo de nuevo en un momento.",
+    "readFailed": "No se pudo leer el archivo.",
+    "writeFailed": "No se pudo escribir el archivo GeoJSON.",
+    "errors": {
+      "invalid_json": "El archivo no es un JSON válido.",
+      "unsupported_root": "El archivo no es una Feature ni una FeatureCollection GeoJSON.",
+      "too_many_features": "El archivo tiene más de {{max}} entidades.",
+      "invalid_feature": "La entidad {{feature}} no es una entidad GeoJSON válida.",
+      "invalid_geometry": "La entidad {{feature}} tiene una geometría no válida.",
+      "invalid_coordinates": "La entidad {{feature}} tiene coordenadas fuera del rango de longitud/latitud WGS84."
+    }
   }
 }

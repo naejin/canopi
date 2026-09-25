@@ -98,11 +98,14 @@ function shellCommandProjection({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled,
+    geoJsonEnabled: downloadCanopiEnabled,
     templatesEnabled,
     capabilities: {
       newDesign: () => undefined,
       openCanopi: () => undefined,
       downloadCanopi: () => undefined,
+      importGeoJson: () => undefined,
+      exportGeoJson: () => undefined,
       navigate: navigateTo,
       toggleTheme: () => {
         mutateSettingsProjection((settings) => {
@@ -148,6 +151,8 @@ describe('Web Edition Browser App Shell', () => {
       'file.openCanopi',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
+      'file.importGeoJson',
+      'file.exportGeoJson',
     ])
     expect(container.textContent).toContain('Open .canopi')
     expect(container.textContent).toContain('Download .canopi')
@@ -201,6 +206,8 @@ describe('Web Edition Browser App Shell', () => {
       'file.openCanopi',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
+      'file.importGeoJson',
+      'file.exportGeoJson',
     ])
   })
 
@@ -217,6 +224,8 @@ describe('Web Edition Browser App Shell', () => {
       'file.openCanopi',
       'file.downloadCanopi',
       'file.exportCanvasPdf',
+      'file.importGeoJson',
+      'file.exportGeoJson',
     ])
 
     await act(async () => {
@@ -423,6 +432,8 @@ describe('Web Edition Browser App Shell', () => {
       newDesign: vi.fn(),
       openCanopi: vi.fn(),
       downloadCanopi: vi.fn(),
+      importGeoJson: vi.fn(),
+      exportGeoJson: vi.fn(),
       navigate: vi.fn(),
       toggleTheme: vi.fn(),
     }
@@ -430,6 +441,7 @@ describe('Web Edition Browser App Shell', () => {
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
+      geoJsonEnabled: true,
       templatesEnabled: false,
       capabilities,
     })
@@ -440,6 +452,8 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
     await clickShellCommand(container, 'file.openCanopi')
     await clickShellCommand(container, 'file.downloadCanopi')
+    await clickShellCommand(container, 'file.importGeoJson')
+    await clickShellCommand(container, 'file.exportGeoJson')
     await clickThemeControl(container)
     await selectLocale(container, 'fr')
     await act(async () => {
@@ -451,6 +465,8 @@ describe('Web Edition Browser App Shell', () => {
     expect(capabilities.newDesign).toHaveBeenCalledOnce()
     expect(capabilities.openCanopi).toHaveBeenCalledOnce()
     expect(capabilities.downloadCanopi).toHaveBeenCalledOnce()
+    expect(capabilities.importGeoJson).toHaveBeenCalledOnce()
+    expect(capabilities.exportGeoJson).toHaveBeenCalledOnce()
     expect(capabilities.toggleTheme).toHaveBeenCalledOnce()
     expect(capabilities.navigate.mock.calls).toEqual([
       ['plant-db'],

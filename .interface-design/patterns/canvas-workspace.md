@@ -95,7 +95,7 @@ All canvas tools must follow these behaviors. They are not optional — they are
 
 ## Selection Highlights
 
-Visual feedback is renderer-neutral. `runtime/scene-visuals.ts` defines screen-pixel stroke styles and both Pixi and Canvas2D renderers apply them to plants, zones, annotations, and Measurement Guides.
+Visual feedback is renderer-neutral. `runtime/scene-visuals.ts` defines screen-pixel stroke styles; the Pixi scene applies them to plants, zones, annotations, and Measurement Guides, and the Inspection Lens preview to plants.
 
 | State | Visual | When |
 |-------|--------|------|

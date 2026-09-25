@@ -114,6 +114,12 @@ export function createTestCanvasQuerySurface({
       void admissionRevision.value
       return settled ? [...currentPlants] : null
     },
+    getSettledDesignObjects: () => {
+      void admissionRevision.value
+      return settled
+        ? { plants: [...currentPlants], zones: [], annotations: [], measurementGuides: [], groups: [] }
+        : null
+    },
     getLocalizedCommonNames: () => currentLocalizedNames,
     bumpSceneRevision: () => {
       sceneRevision.value += 1

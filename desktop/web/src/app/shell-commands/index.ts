@@ -8,6 +8,8 @@ export type ShellCommandIdByCapability = {
   readonly saveDesignAs: 'file.saveAs'
   readonly downloadCanopi: 'file.downloadCanopi'
   readonly exportCanvasPdf: 'file.exportCanvasPdf'
+  readonly importGeoJson: 'file.importGeoJson'
+  readonly exportGeoJson: 'file.exportGeoJson'
   readonly exitApp: 'file.exit'
   readonly navigateCanvas: 'nav.canvas'
   readonly navigateTemplates: 'nav.templates'
@@ -203,6 +205,14 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   {
     capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', family: 'file',
     labelKey: 'pdf.title', chromeLabelKey: 'pdf.title', palette: true, menu: { id: 'file', section: 1 },
+  },
+  {
+    capabilityId: 'importGeoJson', id: 'file.importGeoJson', family: 'file',
+    labelKey: 'geojson.import', chromeLabelKey: 'geojson.import', palette: true, menu: { id: 'file', section: 1 },
+  },
+  {
+    capabilityId: 'exportGeoJson', id: 'file.exportGeoJson', family: 'file',
+    labelKey: 'geojson.export', chromeLabelKey: 'geojson.export', palette: true, menu: { id: 'file', section: 1 },
   },
   {
     capabilityId: 'exitApp',

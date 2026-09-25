@@ -10,7 +10,8 @@
     "panels": "Web Edition panels",
     "workspace": "Web Edition workspace",
     "openCanopi": "Open .canopi",
-    "downloadCanopi": "Download .canopi"
+    "downloadCanopi": "Download .canopi",
+    "dismissNotice": "Dismiss"
   },
   "designNotebook": {
     "title": "Design notebook",
@@ -250,7 +251,7 @@
       "mapSection": "Map Layers",
       "basemap": "Basemap",
       "basemapLoading": "Loading basemap...",
-      "basemapError": "Basemap unavailable",
+      "mapUnavailable": "Map unavailable",
       "references": "Site references",
       "sceneStack": "Scene stack",
       "topToBottom": "Top to bottom",
@@ -1093,5 +1094,25 @@
     "empty": "Place plants to build your species key.",
     "clearSearch": "Clear search",
     "details": "Details for {{name}}"
+  },
+  "geojson": {
+    "import": "Import GeoJSON",
+    "export": "Export GeoJSON",
+    "importTitle": "GeoJSON import",
+    "exportTitle": "GeoJSON export",
+    "importSummary": "Imported {{plants}} plants, {{zones}} zones, {{annotations}} annotations and {{guides}} measurement guides.",
+    "importSkipped": "Skipped {{count}} features with unsupported geometry.",
+    "importNothing": "The file contains no design objects to import.",
+    "busy": "The canvas is busy. Try again in a moment.",
+    "readFailed": "The file could not be read.",
+    "writeFailed": "The GeoJSON file could not be written.",
+    "errors": {
+      "invalid_json": "The file is not valid JSON.",
+      "unsupported_root": "The file is not a GeoJSON Feature or FeatureCollection.",
+      "too_many_features": "The file has more than {{max}} features.",
+      "invalid_feature": "Feature {{feature}} is not a valid GeoJSON feature.",
+      "invalid_geometry": "Feature {{feature}} has invalid geometry.",
+      "invalid_coordinates": "Feature {{feature}} has coordinates outside the WGS84 longitude/latitude range."
+    }
   }
 }

@@ -1245,6 +1245,22 @@ describe('WorkspaceMapControls', () => {
     expect(observers).toEqual([])
   })
 
+  it('publishes the map-unavailable error state when WebGL2 is unavailable', async () => {
+    const states = vi.fn()
+    const { controls, maps } = createControls({
+      canCreateWebGL2Context: () => false,
+      contributions: { onStateChange: states },
+    })
+
+    await expect(controls.createMap(new AbortController().signal)).rejects.toThrow('WebGL2 is unavailable')
+
+    expect(maps).toEqual([])
+    expect(states).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      status: 'error',
+      errorMessage: expect.stringContaining('WebGL2 is unavailable'),
+    }))
+  })
+
   it('does not ask a browser without the WebGL2 interface to create a context', async () => {
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
     const loadMapLibre = vi.fn<() => Promise<MapLibreApi>>()

@@ -103,7 +103,7 @@ and lens attachment rollback, mouse-following, control exclusion, recentering, r
 disposal. Run TypeScript, the full frontend suite, and both edition builds.
 
 For visual review, import a local reference into the normal Web route and sweep
-those six zooms. Compare actual Canvas2D and Pixi at DPR 1, 1.5, and 2 in both
+those six zooms. Compare actual Pixi output at DPR 1, 1.5, and 2 in both
 themes, including viewport reversal and disposal. Headless software WebGL checks
 do not establish physical GPU, native WebView, or mouse/trackpad performance.
 

@@ -11,7 +11,7 @@ const READY_MAP_STATE: MapLibreCanvasSurfaceState = {
 
 function translate(key: string): string {
   return {
-    'canvas.layers.basemapError': 'Basemap unavailable',
+    'canvas.layers.mapUnavailable': 'Map unavailable',
     'canvas.layers.basemapLoading': 'Loading',
     'canvas.layers.mapSection': 'Map Layers',
   }[key] ?? key
@@ -42,7 +42,7 @@ describe('Map Notice read model', () => {
       visible: true,
       mapSurfaceVisible: true,
       tone: 'error',
-      statusText: 'Basemap unavailable: style fetch failed',
+      statusText: 'Map unavailable: style fetch failed',
     })
   })
 

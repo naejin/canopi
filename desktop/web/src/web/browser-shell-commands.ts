@@ -9,12 +9,15 @@ import {
   type ShellCommandIdForCapability,
 } from '../app/shell-commands'
 import { t } from '../i18n'
+import type { GeoJsonWorkflow } from '../app/geojson/workflow'
 
 type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
   | 'downloadCanopi'
   | 'exportCanvasPdf'
+  | 'importGeoJson'
+  | 'exportGeoJson'
   | 'navigateCanvas'
   | 'navigateTemplates'
   | 'navigatePlantDatabase'
@@ -43,6 +46,8 @@ export interface BrowserShellCapabilities {
   newDesign(): void
   openCanopi(): void
   downloadCanopi(): void
+  importGeoJson(): void
+  exportGeoJson(): void
   navigate(panel: Panel): void
   toggleTheme(): void
 }
@@ -56,11 +61,14 @@ export interface BrowserDesignShellCommands {
 export function createBrowserShellCapabilities(
   commands: BrowserDesignShellCommands,
   onError: (error: unknown) => void,
+  geoJson: Pick<GeoJsonWorkflow, 'importGeoJson' | 'exportGeoJson'>,
 ): BrowserShellCapabilities {
   return {
     newDesign: () => runBrowserDesignCommand(() => commands.newDesign(), onError),
     openCanopi: () => runBrowserDesignCommand(() => commands.openCanopi(), onError),
     downloadCanopi: () => runBrowserDesignCommand(() => commands.downloadCanopi(), onError),
+    importGeoJson: () => runBrowserDesignCommand(() => geoJson.importGeoJson(), onError),
+    exportGeoJson: () => runBrowserDesignCommand(() => geoJson.exportGeoJson(), onError),
     navigate: navigateTo,
     toggleTheme: () => {
       mutateSettingsProjection((settings) => {
@@ -74,6 +82,8 @@ export interface BrowserShellProjectionInput {
   readonly currentPanel: Panel
   readonly currentSidePanel: SidePanel | null
   readonly downloadCanopiEnabled: boolean
+  /** A Design is open in a mounted canvas runtime. */
+  readonly geoJsonEnabled: boolean
   readonly templatesEnabled: boolean
   readonly capabilities: BrowserShellCapabilities
 }
@@ -82,6 +92,7 @@ export function createBrowserShellCommandProjection({
   currentPanel,
   currentSidePanel,
   downloadCanopiEnabled,
+  geoJsonEnabled,
   templatesEnabled,
   capabilities,
 }: BrowserShellProjectionInput): BrowserShellChromeProjection {
@@ -93,6 +104,14 @@ export function createBrowserShellCommandProjection({
       execute: () => capabilities.downloadCanopi(),
       isExecutionDisabled: () => !downloadCanopiEnabled,
       isProjectionDisabled: () => !downloadCanopiEnabled,
+    },
+    importGeoJson: {
+      execute: () => capabilities.importGeoJson(),
+      isExecutionDisabled: () => !geoJsonEnabled,
+    },
+    exportGeoJson: {
+      execute: () => capabilities.exportGeoJson(),
+      isExecutionDisabled: () => !geoJsonEnabled,
     },
     navigateCanvas: { execute: () => capabilities.navigate('canvas') },
     ...(templatesEnabled

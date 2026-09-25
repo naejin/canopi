@@ -42,6 +42,7 @@ import {
   type BrowserDraftSummary,
 } from "./browser-app-data";
 import type { BrowserShellDesignIdentity } from "./browser-shell-commands";
+import { downloadBrowserTextFile, pickBrowserTextFile } from "./browser-text-files";
 
 export interface BrowserOpenedCanopiFile {
   readonly fileName: string;
@@ -524,59 +525,11 @@ function parseCanopiJson(text: string): CanopiFile {
 }
 
 async function openCanopiFile(): Promise<BrowserOpenedCanopiFile | null> {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".canopi,application/json";
-  input.multiple = false;
-  input.style.display = "none";
-  document.body.appendChild(input);
-
-  try {
-    return await new Promise<BrowserOpenedCanopiFile | null>((resolve, reject) => {
-      let settled = false;
-      const finish = (value: BrowserOpenedCanopiFile | null) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      const fail = (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-      };
-      input.addEventListener("change", () => {
-        const file = input.files?.[0] ?? null;
-        if (!file) {
-          finish(null);
-          return;
-        }
-        file.text()
-          .then((text) => finish({ fileName: file.name, text }))
-          .catch(fail);
-      }, { once: true });
-      input.addEventListener("cancel", () => finish(null), { once: true });
-      input.click();
-    });
-  } finally {
-    input.remove();
-  }
+  return pickBrowserTextFile(".canopi,application/json");
 }
 
 async function downloadCanopiFile({ fileName, text }: BrowserCanopiDownload): Promise<void> {
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.style.display = "none";
-  document.body.appendChild(link);
-
-  try {
-    link.click();
-  } finally {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
+  downloadBrowserTextFile(fileName, text, "application/json");
 }
 
 function nameFromFileName(fileName: string): string {

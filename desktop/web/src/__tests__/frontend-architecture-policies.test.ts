@@ -1200,7 +1200,7 @@ const FORBIDDEN_EXPORT_POLICIES = [
   {
     kind: 'forbid-exports',
     name: 'Renderer contracts omit retired priority and probe aliases',
-    from: ['src/canvas/runtime/renderers/types.ts'],
+    from: ['src/canvas/runtime/renderers/scene-types.ts'],
     names: ['RendererBackendPriority', 'RendererBackendProbe'],
   },
   {
@@ -1310,6 +1310,15 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/app/location/search-controller.ts',
       'src/components/canvas/LocationTab.tsx',
       'src/components/panels/LocationPanel.tsx',
+      // Canopi v2 (ADR 0004): one renderer; the Canvas2D and standalone Pixi
+      // backends, renderer selection, probing and profiling are gone.
+      'src/canvas/runtime/renderers/canvas2d-scene.ts',
+      'src/canvas/runtime/renderers/capabilities.ts',
+      'src/canvas/runtime/renderers/host.ts',
+      'src/canvas/runtime/renderers/profile.ts',
+      'src/canvas/runtime/renderers/types.ts',
+      'src/canvas/runtime/renderers/index.ts',
+      'src/canvas/canvas2d-utils.ts',
     ],
   },
 ] satisfies readonly ArchitecturePolicy[]
@@ -1363,8 +1372,32 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Renderer definitions keep retired priority metadata deleted',
-    from: ['src/canvas/runtime/renderers/types.ts'],
+    from: ['src/canvas/runtime/renderers/scene-types.ts'],
     names: ['RendererBackendPriority', 'RendererBackendProbe', 'priority'],
+  },
+  {
+    // ADR 0004: one renderer (Pixi inside MapLibre); no selection, probing or fallback.
+    kind: 'forbid-source-symbols',
+    name: 'Scene rendering keeps renderer selection and fallback deleted',
+    from: [
+      'src/canvas/**',
+      'src/maplibre/**',
+      'src/app/canvas-map-surface/**',
+      'src/app/document-session/**',
+      'src/web/**',
+    ],
+    names: [
+      'RendererHost',
+      'RendererCapabilities',
+      'detectRendererCapabilities',
+      'createCanvas2DSceneRenderer',
+      'createPixiSceneRenderer',
+      'renderCanvas2DSceneSnapshot',
+      'instrumentSceneRenderer',
+      'reportRendererFailure',
+      'failActiveLayer',
+      'failActiveBackend',
+    ],
   },
   {
     kind: 'forbid-source-symbols',

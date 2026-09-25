@@ -10,7 +10,8 @@
     "panels": "Panneaux de l'édition web",
     "workspace": "Espace de travail web",
     "openCanopi": "Ouvrir .canopi",
-    "downloadCanopi": "Télécharger .canopi"
+    "downloadCanopi": "Télécharger .canopi",
+    "dismissNotice": "Fermer"
   },
   "designNotebook": {
     "title": "Carnet de designs",
@@ -250,7 +251,7 @@
       "mapSection": "Couches de carte",
       "basemap": "Fond de carte",
       "basemapLoading": "Chargement du fond de carte...",
-      "basemapError": "Fond de carte indisponible",
+      "mapUnavailable": "Carte indisponible",
       "references": "Repères du site",
       "sceneStack": "Calques du dessin",
       "topToBottom": "De haut en bas",
@@ -1093,5 +1094,25 @@
     "empty": "Placez des plantes pour créer votre clé des espèces.",
     "clearSearch": "Effacer la recherche",
     "details": "Détails de {{name}}"
+  },
+  "geojson": {
+    "import": "Importer du GeoJSON",
+    "export": "Exporter en GeoJSON",
+    "importTitle": "Import GeoJSON",
+    "exportTitle": "Export GeoJSON",
+    "importSummary": "{{plants}} plantes, {{zones}} zones, {{annotations}} annotations et {{guides}} guides de mesure importés.",
+    "importSkipped": "{{count}} entités à la géométrie non prise en charge ont été ignorées.",
+    "importNothing": "Le fichier ne contient aucun objet de conception à importer.",
+    "busy": "Le canevas est occupé. Réessayez dans un instant.",
+    "readFailed": "Le fichier n’a pas pu être lu.",
+    "writeFailed": "Le fichier GeoJSON n’a pas pu être écrit.",
+    "errors": {
+      "invalid_json": "Le fichier n’est pas un JSON valide.",
+      "unsupported_root": "Le fichier n’est pas une Feature ou une FeatureCollection GeoJSON.",
+      "too_many_features": "Le fichier contient plus de {{max}} entités.",
+      "invalid_feature": "L’entité {{feature}} n’est pas une entité GeoJSON valide.",
+      "invalid_geometry": "L’entité {{feature}} a une géométrie invalide.",
+      "invalid_coordinates": "L’entité {{feature}} a des coordonnées hors des limites de longitude/latitude WGS84."
+    }
   }
 }

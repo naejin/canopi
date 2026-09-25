@@ -10,7 +10,8 @@
     "panels": "Web 版パネル",
     "workspace": "Web 版ワークスペース",
     "openCanopi": ".canopi を開く",
-    "downloadCanopi": ".canopi をダウンロード"
+    "downloadCanopi": ".canopi をダウンロード",
+    "dismissNotice": "閉じる"
   },
   "designNotebook": {
     "title": "デザインノート",
@@ -250,7 +251,7 @@
       "mapSection": "地図レイヤー",
       "basemap": "ベースマップ",
       "basemapLoading": "ベースマップを読み込み中...",
-      "basemapError": "ベースマップを利用できません",
+      "mapUnavailable": "地図を利用できません",
       "references": "敷地の参照情報",
       "sceneStack": "設計レイヤー",
       "topToBottom": "上から下へ",
@@ -1093,5 +1094,25 @@
     "empty": "植物を配置すると凡例が作成されます。",
     "clearSearch": "検索をクリア",
     "details": "{{name}}の詳細"
+  },
+  "geojson": {
+    "import": "GeoJSON をインポート",
+    "export": "GeoJSON をエクスポート",
+    "importTitle": "GeoJSON のインポート",
+    "exportTitle": "GeoJSON のエクスポート",
+    "importSummary": "植物 {{plants}} 件、ゾーン {{zones}} 件、注記 {{annotations}} 件、計測ガイド {{guides}} 件をインポートしました。",
+    "importSkipped": "未対応のジオメトリを持つ {{count}} 件のフィーチャをスキップしました。",
+    "importNothing": "このファイルにはインポートできるデザインオブジェクトがありません。",
+    "busy": "キャンバスが処理中です。しばらくしてからもう一度お試しください。",
+    "readFailed": "ファイルを読み込めませんでした。",
+    "writeFailed": "GeoJSON ファイルを書き込めませんでした。",
+    "errors": {
+      "invalid_json": "このファイルは有効な JSON ではありません。",
+      "unsupported_root": "このファイルは GeoJSON の Feature または FeatureCollection ではありません。",
+      "too_many_features": "このファイルには {{max}} 件を超えるフィーチャがあります。",
+      "invalid_feature": "フィーチャ {{feature}} は有効な GeoJSON フィーチャではありません。",
+      "invalid_geometry": "フィーチャ {{feature}} のジオメトリが無効です。",
+      "invalid_coordinates": "フィーチャ {{feature}} の座標が WGS84 の経度・緯度の範囲外です。"
+    }
   }
 }

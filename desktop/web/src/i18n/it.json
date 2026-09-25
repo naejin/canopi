@@ -10,7 +10,8 @@
     "panels": "Pannelli dell'edizione web",
     "workspace": "Area di lavoro web",
     "openCanopi": "Apri .canopi",
-    "downloadCanopi": "Scarica .canopi"
+    "downloadCanopi": "Scarica .canopi",
+    "dismissNotice": "Chiudi"
   },
   "designNotebook": {
     "title": "Quaderno dei design",
@@ -250,7 +251,7 @@
       "mapSection": "Livelli mappa",
       "basemap": "Mappa base",
       "basemapLoading": "Caricamento mappa base...",
-      "basemapError": "Mappa base non disponibile",
+      "mapUnavailable": "Mappa non disponibile",
       "references": "Riferimenti del sito",
       "sceneStack": "Livelli del disegno",
       "topToBottom": "Dall’alto in basso",
@@ -1093,5 +1094,25 @@
     "empty": "Inserisci piante per creare la legenda delle specie.",
     "clearSearch": "Cancella ricerca",
     "details": "Dettagli di {{name}}"
+  },
+  "geojson": {
+    "import": "Importa GeoJSON",
+    "export": "Esporta GeoJSON",
+    "importTitle": "Importazione GeoJSON",
+    "exportTitle": "Esportazione GeoJSON",
+    "importSummary": "Importate {{plants}} piante, {{zones}} zone, {{annotations}} annotazioni e {{guides}} guide di misura.",
+    "importSkipped": "Ignorati {{count}} elementi con geometria non supportata.",
+    "importNothing": "Il file non contiene oggetti di progetto da importare.",
+    "busy": "La tela è occupata. Riprova tra un momento.",
+    "readFailed": "Impossibile leggere il file.",
+    "writeFailed": "Impossibile scrivere il file GeoJSON.",
+    "errors": {
+      "invalid_json": "Il file non è un JSON valido.",
+      "unsupported_root": "Il file non è una Feature o una FeatureCollection GeoJSON.",
+      "too_many_features": "Il file ha più di {{max}} elementi.",
+      "invalid_feature": "L’elemento {{feature}} non è un elemento GeoJSON valido.",
+      "invalid_geometry": "L’elemento {{feature}} ha una geometria non valida.",
+      "invalid_coordinates": "L’elemento {{feature}} ha coordinate fuori dall’intervallo di longitudine/latitudine WGS84."
+    }
   }
 }

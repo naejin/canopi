@@ -10,7 +10,8 @@
     "panels": "网页版面板",
     "workspace": "网页版工作区",
     "openCanopi": "打开 .canopi",
-    "downloadCanopi": "下载 .canopi"
+    "downloadCanopi": "下载 .canopi",
+    "dismissNotice": "关闭"
   },
   "designNotebook": {
     "title": "设计笔记本",
@@ -250,7 +251,7 @@
       "mapSection": "地图图层",
       "basemap": "底图",
       "basemapLoading": "正在加载底图...",
-      "basemapError": "底图不可用",
+      "mapUnavailable": "地图不可用",
       "references": "场地参考",
       "sceneStack": "设计图层",
       "topToBottom": "从上到下",
@@ -1093,5 +1094,25 @@
     "empty": "放置植物以创建物种图例。",
     "clearSearch": "清除搜索",
     "details": "{{name}} 的详情"
+  },
+  "geojson": {
+    "import": "导入 GeoJSON",
+    "export": "导出 GeoJSON",
+    "importTitle": "GeoJSON 导入",
+    "exportTitle": "GeoJSON 导出",
+    "importSummary": "已导入 {{plants}} 株植物、{{zones}} 个区域、{{annotations}} 条注释和 {{guides}} 条测量辅助线。",
+    "importSkipped": "已跳过 {{count}} 个几何类型不受支持的要素。",
+    "importNothing": "该文件不包含可导入的设计对象。",
+    "busy": "画布正忙，请稍后重试。",
+    "readFailed": "无法读取该文件。",
+    "writeFailed": "无法写入 GeoJSON 文件。",
+    "errors": {
+      "invalid_json": "该文件不是有效的 JSON。",
+      "unsupported_root": "该文件不是 GeoJSON Feature 或 FeatureCollection。",
+      "too_many_features": "该文件的要素超过 {{max}} 个。",
+      "invalid_feature": "要素 {{feature}} 不是有效的 GeoJSON 要素。",
+      "invalid_geometry": "要素 {{feature}} 的几何无效。",
+      "invalid_coordinates": "要素 {{feature}} 的坐标超出 WGS84 经纬度范围。"
+    }
   }
 }

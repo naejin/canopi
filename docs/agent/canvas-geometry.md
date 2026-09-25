@@ -28,7 +28,7 @@ Part of the [Canvas runtime guide](canvas-runtime.md). Read this guide for zone 
 ## Zone Measurements
 
 - Zone Measurements are derived presentation for zone geometry, not persisted design objects or annotations.
-- Render Zone Measurement labels through a renderer-independent, screen-space overlay so Pixi and Canvas2D backends do not duplicate measurement UI.
+- Render Zone Measurement labels through a renderer-independent, screen-space overlay so the Pixi scene does not duplicate measurement UI.
 - Show Zone Measurements while drawing a zone and for a single selected top-level Zone; suppress them for multi-selection and group selection.
 - Zone Measurements update live during Zone Control Point drags and describe the snapped preview geometry, not only the final committed Zone geometry.
 - Linear Zones use one edge-length measurement and never show area, width, or height labels.

@@ -71,6 +71,7 @@ function createQuerySurface() {
     }),
     getPlacedPlants: () => [],
     getSettledPlacedPlants: () => [],
+    getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
   } satisfies CanvasQuerySurface
 }
@@ -98,6 +99,7 @@ function createCommandSurface() {
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: () => {},
+      importDesignObjects: () => ({ committed: false, createdCount: 0 }),
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},

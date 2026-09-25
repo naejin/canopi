@@ -14,11 +14,7 @@ import { createSceneCanvasCommandSurface } from '../command-surface'
 import { createSceneCanvasDocumentSurface } from '../document-surface'
 import { createSceneCanvasQuerySurface } from '../query-surface'
 import { SceneCanvasInspectionOwner } from '../inspection-lens'
-import { RendererHost } from '../renderers'
-import { createCanvas2DSceneRenderer } from '../renderers/canvas2d-scene'
-import { createPixiSceneRenderer } from '../renderers/pixi-scene'
-import type { SceneRendererContext, SceneRendererInstance } from '../renderers/scene-types'
-import type { RendererHostOptions } from '../renderers/types'
+import type { SceneRendererDefinition } from '../renderers/scene-types'
 import type {
   CanvasPlantLabelSource,
   CanvasSpeciesPresentationCache,
@@ -68,10 +64,8 @@ export interface SceneRuntimeConstructionOptions {
   targetPresentation?: SceneRuntimePanelTargetAdapter
   speciesCache?: CanvasSpeciesPresentationCache
   plantLabels?: CanvasPlantLabelSource
-  renderer?: Pick<
-    RendererHostOptions<SceneRendererContext, SceneRendererInstance>,
-    'backends' | 'capabilities' | 'onBackendFailure' | 'onBackendChange'
-  >
+  /** The one scene renderer (ADR 0004). A runtime without one keeps its Scene but cannot mount. */
+  renderer?: SceneRendererDefinition
 }
 
 export interface SceneRuntimeConstructionCallbacks {
@@ -109,10 +103,8 @@ export interface SceneRuntimeConstruction {
   readonly plantNamesQueryRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
   readonly revision: CanvasQueryRevision
-  readonly rendererHost: RendererHost<SceneRendererContext, SceneRendererInstance>
-  readonly replaceRendererHost: (
-    rendererHost: RendererHost<SceneRendererContext, SceneRendererInstance>,
-  ) => void
+  /** Test seam: supplies the renderer the next mount uses. */
+  readonly replaceRenderer: (renderer: SceneRendererDefinition) => void
   readonly rendering: SceneRuntimeRenderScheduler
   readonly presentation: SceneRuntimePresentationController
   readonly inspection: SceneCanvasInspectionOwner
@@ -153,14 +145,7 @@ export function createSceneRuntimeConstruction(
     scene: sceneRevision,
     plantNames: plantNamesQueryRevision,
   }
-  let rendererHost = new RendererHost<SceneRendererContext, SceneRendererInstance>(
-    options.renderer ?? {
-      backends: [
-        createPixiSceneRenderer(),
-        createCanvas2DSceneRenderer(),
-      ],
-    },
-  )
+  let renderer: SceneRendererDefinition | null = options.renderer ?? null
   const history = new SceneHistory({
     reportCleanState: (clean) => appAdapter.cleanState.setCanvasClean(clean),
   })
@@ -189,7 +174,7 @@ export function createSceneRuntimeConstruction(
   const disposeEffects: Array<() => void> = []
   disposeEffects.push(() => history.dispose())
   const rendering = new SceneRuntimeRenderScheduler({
-    getRendererHost: () => rendererHost,
+    getRenderer: () => renderer,
     getViewport: () => camera.viewport,
     prepareSceneRender: async () => {
       if (camera.snapshot.peek().mode === 'overview') {
@@ -337,11 +322,8 @@ export function createSceneRuntimeConstruction(
     plantNamesQueryRevision,
     transientHistoryRevision,
     revision,
-    get rendererHost() {
-      return rendererHost
-    },
-    replaceRendererHost(nextRendererHost) {
-      rendererHost = nextRendererHost
+    replaceRenderer(nextRenderer) {
+      renderer = nextRenderer
     },
     rendering,
     presentation,

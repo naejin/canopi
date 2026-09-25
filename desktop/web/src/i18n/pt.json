@@ -10,7 +10,8 @@
     "panels": "Painéis da edição web",
     "workspace": "Área de trabalho web",
     "openCanopi": "Abrir .canopi",
-    "downloadCanopi": "Baixar .canopi"
+    "downloadCanopi": "Baixar .canopi",
+    "dismissNotice": "Fechar"
   },
   "designNotebook": {
     "title": "Caderno de designs",
@@ -250,7 +251,7 @@
       "mapSection": "Camadas do mapa",
       "basemap": "Mapa base",
       "basemapLoading": "Carregando mapa base...",
-      "basemapError": "Mapa base indisponível",
+      "mapUnavailable": "Mapa indisponível",
       "references": "Referências do local",
       "sceneStack": "Camadas do desenho",
       "topToBottom": "De cima para baixo",
@@ -1093,5 +1094,25 @@
     "empty": "Coloque plantas para criar a legenda de espécies.",
     "clearSearch": "Limpar pesquisa",
     "details": "Detalhes de {{name}}"
+  },
+  "geojson": {
+    "import": "Importar GeoJSON",
+    "export": "Exportar GeoJSON",
+    "importTitle": "Importação GeoJSON",
+    "exportTitle": "Exportação GeoJSON",
+    "importSummary": "Foram importadas {{plants}} plantas, {{zones}} zonas, {{annotations}} anotações e {{guides}} guias de medição.",
+    "importSkipped": "{{count}} elementos com geometria não suportada foram ignorados.",
+    "importNothing": "O arquivo não contém objetos de design para importar.",
+    "busy": "A tela está ocupada. Tente novamente em instantes.",
+    "readFailed": "Não foi possível ler o arquivo.",
+    "writeFailed": "Não foi possível gravar o arquivo GeoJSON.",
+    "errors": {
+      "invalid_json": "O arquivo não é um JSON válido.",
+      "unsupported_root": "O arquivo não é uma Feature nem uma FeatureCollection GeoJSON.",
+      "too_many_features": "O arquivo tem mais de {{max}} elementos.",
+      "invalid_feature": "O elemento {{feature}} não é um elemento GeoJSON válido.",
+      "invalid_geometry": "O elemento {{feature}} tem geometria inválida.",
+      "invalid_coordinates": "O elemento {{feature}} tem coordenadas fora do intervalo de longitude/latitude WGS84."
+    }
   }
 }

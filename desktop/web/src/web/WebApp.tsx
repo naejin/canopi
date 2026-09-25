@@ -15,28 +15,35 @@ import {
 import { hasConfiguredStaticDesignTemplates } from "../app/community/catalog.browser";
 import { WorkspaceDialogs } from "../components/workspace/WorkspaceComposition";
 import { WebWorkspace } from "./WebWorkspace";
+import { createBrowserGeoJsonWorkflow } from "./browser-geojson";
+import { currentCanvasSession } from "../canvas/session";
+import type { GeoJsonWorkflow } from "../app/geojson/workflow";
 
 interface WebAppProps {
   readonly controller?: BrowserDesignSessionController;
   readonly templatesEnabled?: boolean;
   readonly workspace?: ComponentChildren;
+  readonly geoJson?: GeoJsonWorkflow;
 }
 
 export function WebApp({
   controller = browserDesignSessionController,
   templatesEnabled = hasConfiguredStaticDesignTemplates(),
   workspace,
+  geoJson,
 }: WebAppProps) {
   const hasDesign = controller.hasCurrentDesign();
   const designIdentity = controller.readDesignIdentity();
+  const geoJsonWorkflow = useMemo(() => geoJson ?? createBrowserGeoJsonWorkflow(), [geoJson]);
   const shellCapabilities = useMemo<BrowserShellCapabilities>(
-    () => createBrowserShellCapabilities(controller, logWebAppCommandError),
-    [controller],
+    () => createBrowserShellCapabilities(controller, logWebAppCommandError, geoJsonWorkflow),
+    [controller, geoJsonWorkflow],
   );
   const commandProjection = createBrowserShellCommandProjection({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled: hasDesign,
+    geoJsonEnabled: hasDesign && currentCanvasSession.value !== null,
     templatesEnabled,
     capabilities: shellCapabilities,
   });

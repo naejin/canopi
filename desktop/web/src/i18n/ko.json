@@ -10,7 +10,8 @@
     "panels": "웹 에디션 패널",
     "workspace": "웹 에디션 작업 공간",
     "openCanopi": ".canopi 열기",
-    "downloadCanopi": ".canopi 다운로드"
+    "downloadCanopi": ".canopi 다운로드",
+    "dismissNotice": "닫기"
   },
   "designNotebook": {
     "title": "디자인 노트북",
@@ -250,7 +251,7 @@
       "mapSection": "지도 레이어",
       "basemap": "기본 지도",
       "basemapLoading": "기본 지도를 불러오는 중...",
-      "basemapError": "기본 지도를 사용할 수 없습니다",
+      "mapUnavailable": "지도를 사용할 수 없음",
       "references": "부지 참조",
       "sceneStack": "설계 레이어",
       "topToBottom": "위에서 아래로",
@@ -1093,5 +1094,25 @@
     "empty": "식물을 배치하면 범례가 만들어집니다.",
     "clearSearch": "검색 지우기",
     "details": "{{name}} 상세 정보"
+  },
+  "geojson": {
+    "import": "GeoJSON 가져오기",
+    "export": "GeoJSON 내보내기",
+    "importTitle": "GeoJSON 가져오기",
+    "exportTitle": "GeoJSON 내보내기",
+    "importSummary": "식물 {{plants}}개, 구역 {{zones}}개, 주석 {{annotations}}개, 측정 가이드 {{guides}}개를 가져왔습니다.",
+    "importSkipped": "지원하지 않는 지오메트리의 피처 {{count}}개를 건너뛰었습니다.",
+    "importNothing": "파일에 가져올 디자인 개체가 없습니다.",
+    "busy": "캔버스가 사용 중입니다. 잠시 후 다시 시도하세요.",
+    "readFailed": "파일을 읽을 수 없습니다.",
+    "writeFailed": "GeoJSON 파일을 쓸 수 없습니다.",
+    "errors": {
+      "invalid_json": "파일이 올바른 JSON이 아닙니다.",
+      "unsupported_root": "파일이 GeoJSON Feature 또는 FeatureCollection이 아닙니다.",
+      "too_many_features": "파일의 피처가 {{max}}개를 넘습니다.",
+      "invalid_feature": "피처 {{feature}}은(는) 올바른 GeoJSON 피처가 아닙니다.",
+      "invalid_geometry": "피처 {{feature}}의 지오메트리가 올바르지 않습니다.",
+      "invalid_coordinates": "피처 {{feature}}의 좌표가 WGS84 경도/위도 범위를 벗어났습니다."
+    }
   }
 }

@@ -40,10 +40,19 @@ Part of the [Document lifecycle guide](document-lifecycle.md). For Scene transac
 
 ## Export Boundaries
 
+- GeoJSON import and export are covered in [GeoJSON Import And Export](#geojson-import-and-export).
 - [ADR 0008](../adr/0008-canvas-pdf-export.md) defines Canvas PDF scope; the [Canvas PDF guide](canvas-pdf.md) owns implementation and validation guidance for its shared pipeline and desktop/Web delivery.
 - Canvas PDF is derived output. Capture settled canvas state through the query role without requesting or acknowledging Design persistence. Export must not clear dirty state, change Scene content/history, or modify the Design to make it printable.
 - Print setup belongs to the current opaque Design Session identity. It survives preview closure and editing, rebuilds from current content on reopen, and is discarded on replacement. Keep it out of `.canopi` and persistent settings.
 - All map backgrounds and Timeline/Budget/Consortium PDF sections remain deferred. The old structured Design Report and Rust `printpdf` implementation stay retired under [ADR 0008](../adr/0008-canvas-pdf-export.md); the native snapshot-PDF command/renderers are also removed. PNG snapshot export remains separate.
+
+## GeoJSON Import And Export
+
+- GeoJSON is a derived exchange format ([ADR 0005](../adr/0005-web-edition-scope.md)); it never replaces `.canopi` persistence. `app/geojson/codec.ts` is the pure RFC 7946 codec (no DOM, IPC or runtime imports); `app/geojson/workflow.ts` orchestrates both editions through a `GeoJsonFileAdapter` and a notice sink. Desktop supplies `ipc/geojson.ts` (native dialogs, `read_geojson_file`, `export_file`, native message); Web supplies `web/browser-geojson.ts` (file picker, download, shell notice). Commands are `file.importGeoJson` and `file.exportGeoJson` in the shared shell catalog.
+- Export reads the runtime's canonical lon/lat objects through `CanvasQuerySurface.getSettledDesignObjects()`, so unedited objects export exactly what a save would write; it never reads session-plane metres and never changes dirty state or history. Output is a FeatureCollection in WGS84 without `crs`; every feature has `canopi_kind` (`plant`, `zone`, `annotation`, `measurement_guide`) and its domain properties, members list `group_ids`, and the collection carries `canopi_groups` names. Rectangle and ellipse zones export their drawn outline as the Polygon plus their stored frame in `canopi_points`.
+- Import decodes the whole file first and rejects malformed input with `GeoJsonImportError` (`invalid_json`, `unsupported_root`, `too_many_features`, `invalid_feature`, `invalid_geometry`, `invalid_coordinates`) before any mutation. Point with `species`/`canonical_name` becomes a plant, other Point an annotation, Polygon a zone (outer ring), two-position LineString a measurement guide, longer LineString a line zone; Multi* geometries, collections and null geometry are skipped and counted in the summary.
+- Decoded objects stay lon/lat until `CanvasSceneEditCommandSurface.importDesignObjects()`, which hydrates them in the runtime's session plane and adds them as one undoable arrangement placement: identities are re-allocated, locks are cleared and the new objects are selected. Imported positions save rounded to 1e-9°.
+- Desktop reads through the executor-backed `read_geojson_file` command (64 MiB limit, UTF-8, BOM dropped) and writes through `export_file`; frontend code owns the dialogs.
 
 ## Adding Document Fields
 

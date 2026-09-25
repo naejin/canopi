@@ -51,6 +51,7 @@ export function createTestCanvasCommandSurface(
     },
     sceneEdits: {
       saveSelectionAsObjectStamp: () => {},
+      importDesignObjects: () => ({ committed: false, createdCount: 0 }),
       copy: () => {},
       paste: () => {},
       pasteAt: () => {},

@@ -1,8 +1,8 @@
-import {
-  RendererHost,
-  RendererHostInitializationCancelledError,
-} from '../renderers'
-import type { SceneRendererContext, SceneRendererInstance, SceneRendererSnapshot } from '../renderers/scene-types'
+import type {
+  SceneRendererDefinition,
+  SceneRendererInstance,
+  SceneRendererSnapshot,
+} from '../renderers/scene-types'
 import type { SceneViewportState } from '../scene'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
@@ -12,18 +12,35 @@ export interface SceneRuntimePreparedRender {
 }
 
 interface SceneRuntimeRenderSchedulerOptions {
-  getRendererHost(): RendererHost<SceneRendererContext, SceneRendererInstance>
+  getRenderer(): SceneRendererDefinition | null
   getViewport(): SceneViewportState
   prepareSceneRender(): Promise<SceneRuntimePreparedRender>
   renderChrome(): void
 }
 
+/** Unmount or disposal won the race against a pending renderer mount. */
+export class SceneRendererMountCancelledError extends Error {
+  override readonly name = 'SceneRendererMountCancelledError'
+
+  constructor() {
+    super('The Scene Canvas renderer mount was cancelled because the renderer was unmounted.')
+  }
+}
+
+/**
+ * Sole lifecycle owner of the one mounted scene renderer (ADR 0004). It mounts
+ * the renderer once, coalesces scene and camera invalidations into frames, and
+ * unmounts it on disposal or when the map becomes unavailable. There is no
+ * renderer selection and no fallback.
+ */
 export class SceneRuntimeRenderScheduler {
   private _container: HTMLElement | null = null
+  private _renderer: SceneRendererInstance | null = null
+  private _mounting = false
+  private _mountEpoch = 0
   private _renderEpoch = 0
   private _frame: number | null = null
   private _pendingKind: 'scene' | 'viewport' | null = null
-  private readonly _sizes = new WeakMap<SceneRendererInstance, { width: number; height: number }>()
 
   constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
 
@@ -32,7 +49,24 @@ export class SceneRuntimeRenderScheduler {
   }
 
   async initialize(container: HTMLElement): Promise<void> {
-    await this._options.getRendererHost().initialize({ container })
+    const definition = this._options.getRenderer()
+    if (!definition) throw new Error('The Scene Canvas runtime has no renderer to mount.')
+    if (this._mounting || this._renderer) {
+      throw new Error('The Scene Canvas renderer is already mounted. Unmount it before mounting again.')
+    }
+    this._mounting = true
+    const mountEpoch = ++this._mountEpoch
+    let renderer: SceneRendererInstance
+    try {
+      renderer = await definition.initialize({ container })
+    } finally {
+      if (mountEpoch === this._mountEpoch) this._mounting = false
+    }
+    if (mountEpoch !== this._mountEpoch) {
+      await disposeRenderer(renderer)
+      throw new SceneRendererMountCancelledError()
+    }
+    this._renderer = renderer
     this._container = container
   }
 
@@ -41,7 +75,7 @@ export class SceneRuntimeRenderScheduler {
       this._options.renderChrome()
       return
     }
-    if (!this._container) return
+    if (!this._renderer) return
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     if (kind === 'scene') this._renderEpoch += 1
     if (this._pendingKind !== 'scene') this._pendingKind = kind
@@ -56,72 +90,48 @@ export class SceneRuntimeRenderScheduler {
   }
 
   async renderScene(): Promise<void> {
-    const container = this._container
-    if (!container) return
+    const renderer = this._renderer
+    if (!renderer) return
 
     this._cancelFrame()
     const renderEpoch = ++this._renderEpoch
     const prepared = await this._options.prepareSceneRender()
-    if (renderEpoch !== this._renderEpoch || container !== this._container) return
+    if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
     const snapshot = prepared.publish()
-    if (renderEpoch !== this._renderEpoch || container !== this._container) return
-
-    await this._options.getRendererHost().run((renderer) => {
-      if (renderEpoch !== this._renderEpoch || container !== this._container) return
-      this._resizeRenderer(renderer,
-        Math.max(1, container.clientWidth),
-        Math.max(1, container.clientHeight),
-      )
-      renderer.renderScene(snapshot)
-    }, {
-      operationName: 'render scene',
-    })
-    if (renderEpoch !== this._renderEpoch || container !== this._container) return
+    if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
+    renderer.renderScene(snapshot)
     this._options.renderChrome()
   }
 
   async renderViewport(): Promise<void> {
-    if (!this._container) return
-    await this._options.getRendererHost().run((renderer) => {
-      renderer.setViewport(this._options.getViewport())
-    }, {
-      operationName: 'update viewport',
-    })
+    const renderer = this._renderer
+    if (!renderer) return
+    renderer.setViewport(this._options.getViewport())
     this._options.renderChrome()
+  }
+
+  /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
+  resize(_width: number, _height: number): void {
+    this._runDetached(this.renderViewport(), 'Scene Canvas resize failed:')
   }
 
   /**
-   * A map-owned renderer can fail outside a normal renderer operation. Force
-   * the named active backend through RendererHost's existing runtime-failure
-   * path, then publish the latest authoritative Scene to its replacement.
+   * Releases the mounted renderer and fences pending work. The runtime keeps
+   * its Scene; nothing draws until a renderer is mounted again.
    */
-  async reportRendererFailure(id: string, error: unknown): Promise<void> {
-    const container = this._container
-    if (!container) return
-
-    await this._options.getRendererHost().run((renderer) => {
-      if (renderer.id === id) throw error
-    }, {
-      operationName: `reported ${id} failure`,
-    })
-    if (container !== this._container) return
-    await this.renderScene()
-  }
-
-  resize(width: number, height: number): void {
-    if (!this._container) return
-    this._runDetached(this._options.getRendererHost().run((renderer) => {
-      this._resizeRenderer(renderer, width, height)
-      renderer.setViewport(this._options.getViewport())
-    }), 'Scene Canvas resize failed:')
-    this._options.renderChrome()
-  }
-
-  dispose(): void {
+  async unmount(): Promise<void> {
     this._cancelFrame()
     this._container = null
     this._renderEpoch += 1
-    void this._options.getRendererHost().dispose()
+    this._mountEpoch += 1
+    this._mounting = false
+    const renderer = this._renderer
+    this._renderer = null
+    if (renderer) await disposeRenderer(renderer)
+  }
+
+  dispose(): void {
+    void this.unmount()
   }
 
   private _cancelFrame(): void {
@@ -130,17 +140,17 @@ export class SceneRuntimeRenderScheduler {
     this._pendingKind = null
   }
 
-  private _resizeRenderer(renderer: SceneRendererInstance, width: number, height: number): void {
-    const previous = this._sizes.get(renderer)
-    if (previous?.width === width && previous.height === height) return
-    renderer.resize(width, height)
-    this._sizes.set(renderer, { width, height })
-  }
-
   private _runDetached(operation: Promise<void>, failureMessage: string): void {
     void operation.catch((error) => {
-      if (error instanceof RendererHostInitializationCancelledError) return
       console.error(failureMessage, error)
     })
+  }
+}
+
+async function disposeRenderer(renderer: SceneRendererInstance): Promise<void> {
+  try {
+    await renderer.dispose()
+  } catch (error) {
+    console.error('Scene Canvas renderer disposal failed:', error)
   }
 }

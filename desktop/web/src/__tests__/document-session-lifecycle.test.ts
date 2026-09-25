@@ -75,7 +75,7 @@ describe('document session lifecycle', () => {
     rulerOverlay = document.createElement('div')
   })
 
-  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'fallback-ready', 'no-design'])(
+  it.each<WorkspaceRuntimeStartOutcome>(['shared-ready', 'map-unavailable', 'no-design'])(
     'publishes Canvas Runtime Surfaces after the workspace reports %s',
     async (outcome) => {
       const initializeViewport = vi.fn<() => void>()

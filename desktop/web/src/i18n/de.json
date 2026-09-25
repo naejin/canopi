@@ -10,7 +10,8 @@
     "panels": "Panels der Web Edition",
     "workspace": "Arbeitsbereich der Web Edition",
     "openCanopi": ".canopi öffnen",
-    "downloadCanopi": ".canopi herunterladen"
+    "downloadCanopi": ".canopi herunterladen",
+    "dismissNotice": "Schließen"
   },
   "designNotebook": {
     "title": "Design-Notizbuch",
@@ -250,7 +251,7 @@
       "mapSection": "Kartenebenen",
       "basemap": "Basiskarte",
       "basemapLoading": "Basiskarte wird geladen...",
-      "basemapError": "Basiskarte nicht verfügbar",
+      "mapUnavailable": "Karte nicht verfügbar",
       "references": "Standortreferenzen",
       "sceneStack": "Zeichenebenen",
       "topToBottom": "Von oben nach unten",
@@ -1093,5 +1094,25 @@
     "empty": "Platzieren Sie Pflanzen, um den Artenschlüssel zu erstellen.",
     "clearSearch": "Suche löschen",
     "details": "Details zu {{name}}"
+  },
+  "geojson": {
+    "import": "GeoJSON importieren",
+    "export": "GeoJSON exportieren",
+    "importTitle": "GeoJSON-Import",
+    "exportTitle": "GeoJSON-Export",
+    "importSummary": "{{plants}} Pflanzen, {{zones}} Zonen, {{annotations}} Anmerkungen und {{guides}} Messhilfslinien importiert.",
+    "importSkipped": "{{count}} Objekte mit nicht unterstützter Geometrie wurden übersprungen.",
+    "importNothing": "Die Datei enthält keine Designobjekte zum Importieren.",
+    "busy": "Die Zeichenfläche ist beschäftigt. Versuchen Sie es gleich noch einmal.",
+    "readFailed": "Die Datei konnte nicht gelesen werden.",
+    "writeFailed": "Die GeoJSON-Datei konnte nicht geschrieben werden.",
+    "errors": {
+      "invalid_json": "Die Datei ist kein gültiges JSON.",
+      "unsupported_root": "Die Datei ist weder ein GeoJSON-Feature noch eine FeatureCollection.",
+      "too_many_features": "Die Datei enthält mehr als {{max}} Objekte.",
+      "invalid_feature": "Objekt {{feature}} ist kein gültiges GeoJSON-Feature.",
+      "invalid_geometry": "Objekt {{feature}} hat eine ungültige Geometrie.",
+      "invalid_coordinates": "Objekt {{feature}} hat Koordinaten außerhalb des WGS84-Längen-/Breitenbereichs."
+    }
   }
 }

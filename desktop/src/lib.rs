@@ -101,6 +101,7 @@ pub fn run() {
             commands::design::list_autosaves,
             commands::design::recover_autosave,
             commands::export::export_file,
+            commands::export::read_geojson_file,
             commands::export::save_canvas_pdf,
             commands::export::export_native_png,
             commands::health::get_health,

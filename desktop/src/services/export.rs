@@ -20,6 +20,42 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
     write_bytes_to_path(path, data.as_bytes(), "text")
 }
 
+/// Upper bound for an imported GeoJSON file; the read stops one byte past it.
+const MAX_GEOJSON_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Read a user-chosen GeoJSON file as UTF-8 text. Decoding and validation
+/// happen in the shared frontend codec; a leading UTF-8 BOM is dropped so both
+/// editions hand it the same text.
+pub fn read_geojson_file(path: String) -> Result<String, String> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(&path)
+        .map_err(|e| format!("Failed to open GeoJSON file {path}: {e}"))?;
+    if !file
+        .metadata()
+        .map_err(|e| format!("Failed to inspect GeoJSON file {path}: {e}"))?
+        .is_file()
+    {
+        return Err(format!("GeoJSON source {path} is not a file"));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_GEOJSON_IMPORT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Failed to read GeoJSON file {path}: {e}"))?;
+    if bytes.len() as u64 > MAX_GEOJSON_IMPORT_BYTES {
+        return Err(format!(
+            "GeoJSON file {path} exceeds the {} MiB import limit",
+            MAX_GEOJSON_IMPORT_BYTES / (1024 * 1024)
+        ));
+    }
+    let text =
+        String::from_utf8(bytes).map_err(|_| format!("GeoJSON file {path} is not UTF-8 text"))?;
+    Ok(text
+        .strip_prefix('\u{feff}')
+        .map(str::to_owned)
+        .unwrap_or(text))
+}
+
 pub fn export_native_png(
     platform: &dyn Platform,
     snapshot_base64: String,
@@ -69,7 +105,7 @@ fn write_bytes_to_path(path: String, bytes: &[u8], kind: &str) -> Result<String,
 
 #[cfg(test)]
 mod tests {
-    use super::{export_file, export_native_png};
+    use super::{MAX_GEOJSON_IMPORT_BYTES, export_file, export_native_png, read_geojson_file};
     use crate::platform::{CanvasSnapshot, Platform, PlatformError};
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -182,6 +218,49 @@ mod tests {
         export_file("hello".to_string(), text_path.display().to_string()).unwrap();
 
         assert_eq!(std::fs::read(&text_path).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn geojson_import_reads_utf8_text_without_a_byte_order_mark() {
+        let temp_dir = TempTestDir::new("geojson-read");
+        let plain = temp_dir.file("plain.geojson");
+        let marked = temp_dir.file("marked.geojson");
+        std::fs::write(&plain, "{\"type\":\"FeatureCollection\",\"features\":[]}").unwrap();
+        std::fs::write(&marked, "\u{feff}{\"type\":\"Feature\"}").unwrap();
+
+        assert_eq!(
+            read_geojson_file(plain.display().to_string()).unwrap(),
+            "{\"type\":\"FeatureCollection\",\"features\":[]}"
+        );
+        assert_eq!(
+            read_geojson_file(marked.display().to_string()).unwrap(),
+            "{\"type\":\"Feature\"}"
+        );
+    }
+
+    #[test]
+    fn geojson_import_refuses_non_text_directories_and_oversized_files() {
+        let temp_dir = TempTestDir::new("geojson-refuse");
+        let binary = temp_dir.file("binary.geojson");
+        std::fs::write(&binary, [0xff, 0xfe, 0x00]).unwrap();
+        assert!(read_geojson_file(binary.display().to_string()).is_err());
+
+        let directory = temp_dir.file("directory.geojson");
+        std::fs::create_dir(&directory).unwrap();
+        assert!(read_geojson_file(directory.display().to_string()).is_err());
+
+        let oversized = temp_dir.file("oversized.geojson");
+        std::fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_GEOJSON_IMPORT_BYTES + 1)
+            .unwrap();
+        assert!(
+            read_geojson_file(oversized.display().to_string())
+                .unwrap_err()
+                .contains("import limit")
+        );
+
+        assert!(read_geojson_file(temp_dir.file("missing.geojson").display().to_string()).is_err());
     }
 
     #[test]

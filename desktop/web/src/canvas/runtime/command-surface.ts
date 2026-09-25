@@ -17,6 +17,8 @@ import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type {
   CanvasChromeCommandSurface,
   CanvasCommandSurface,
+  CanvasDesignObjectImportReceipt,
+  CanvasDesignObjects,
   CanvasHistoryCommandSurface,
   CanvasLayerCommandSurface,
   CanvasPlantPresentationCommandSurface,
@@ -24,7 +26,15 @@ import type {
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
 } from './runtime'
-import type { SceneLayerEntity, SceneStateReader } from './scene'
+import {
+  createSceneGeoFrame,
+  hydrateScenePersistedStateInFrame,
+  type SceneLayerEntity,
+  type SceneStateReader,
+} from './scene'
+import { createSceneArrangementPlacement } from './scene-runtime/arrangement-placement'
+import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
+import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
 import type {
   SceneCommandAdmission,
@@ -35,6 +45,11 @@ import type {
 } from './scene-runtime/transactions'
 
 type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
+
+const DESIGN_OBJECTS_NOT_IMPORTED: CanvasDesignObjectImportReceipt = Object.freeze({
+  committed: false,
+  createdCount: 0,
+})
 type SceneLayerEdit = Partial<Pick<SceneLayerEntity, 'visible' | 'locked' | 'opacity'>>
 
 interface SceneCanvasCommandSurfaceOptions {
@@ -157,6 +172,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     }
     this.sceneEdits = {
       saveSelectionAsObjectStamp: () => this.saveSelectionAsObjectStamp(),
+      importDesignObjects: (objects) => this.importDesignObjects(objects),
       copy: () => this.options.mutations.copy(),
       paste: () => this.runSpatialEdit(() => this.options.mutations.paste()),
       pasteAt: (point) => this.runSpatialEdit(() => this.options.mutations.pasteAt(point)),
@@ -223,6 +239,46 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
         localizedCommonNames: new Map(this.options.presentation.getLocalizedCommonNames()),
       })
     }, undefined, { resumePending: true })
+  }
+
+  // Hydrates through a frame at the runtime's own plane origin, so imported
+  // lon/lat land in the same session-plane metres as the open Design.
+  private importDesignObjects(objects: CanvasDesignObjects): CanvasDesignObjectImportReceipt {
+    return this.options.commandAdmission.runWhenSettled(() => {
+      const scene = hydrateScenePersistedStateInFrame(
+        {
+          version: CURRENT_CANOPI_FILE_VERSION,
+          name: '',
+          description: null,
+          plant_species_colors: {},
+          layers: [],
+          plants: [...objects.plants],
+          zones: [...objects.zones],
+          annotations: [...objects.annotations],
+          measurement_guides: [...objects.measurementGuides],
+          consortiums: [],
+          groups: [...objects.groups],
+          timeline: [],
+          budget: [],
+          budget_currency: DEFAULT_BUDGET_CURRENCY,
+          created_at: '',
+          updated_at: '',
+        },
+        createSceneGeoFrame(this.options.sceneStore.sessionPlane.origin),
+      )
+      const receipt = createSceneArrangementPlacement({ sceneEdits: this.options.sceneEdits }).place({
+        template: {
+          plants: scene.plants.map((entity) => ({ sourceId: entity.id, entity })),
+          zones: scene.zones.map((entity) => ({ sourceId: entity.name, entity })),
+          annotations: scene.annotations.map((entity) => ({ sourceId: entity.id, entity })),
+          measurementGuides: scene.measurementGuides.map((entity) => ({ sourceId: entity.id, entity })),
+          groups: scene.groups.map((entity) => ({ sourceId: entity.id, entity })),
+        },
+        translateBy: { x: 0, y: 0 },
+        historyType: 'import-design-objects',
+      })
+      return { committed: receipt.committed, createdCount: receipt.createdCount }
+    }, DESIGN_OBJECTS_NOT_IMPORTED, { resumePending: true })
   }
 
   private zoomIn(): void {

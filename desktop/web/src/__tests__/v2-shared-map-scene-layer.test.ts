@@ -73,6 +73,26 @@ describe('createSharedMapSceneLayer', () => {
     })
   })
 
+  it('rasterizes scene text at twice the MapLibre canvas density', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    let createText: (() => { resolution: number }) | null = null
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => createRenderer(),
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: (input) => {
+        createText = input.createText
+        return { dispose() {}, resize() {}, renderScene() {}, setViewport() {} }
+      },
+    })
+
+    await adapter.initialize(map, {} as WebGL2RenderingContext)
+
+    // 400×200 backing pixels for a 200×100 CSS canvas is a density of 2.
+    expect(createText!().resolution).toBe(4)
+    await adapter.dispose({ mapWillBeRemoved: true })
+  })
+
   it('resynchronizes presentation after a MapLibre-owned resize even when the camera is unchanged', async () => {
     const canvas = createCanvas()
     const map = createMap(canvas)

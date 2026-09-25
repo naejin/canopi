@@ -76,9 +76,9 @@ interface ActiveAttachment {
 }
 
 /**
- * A renderer-neutral owner that begins as Canvas2D and transfers ownership to
- * one attached MapLibre map. Extending CameraController keeps frame identity,
- * no-op semantics, and fallback navigation in one place.
+ * The workspace camera: the session-plane viewport while detached, and one
+ * attached MapLibre map's camera once admitted. Extending CameraController
+ * keeps frame identity, no-op semantics and detached navigation in one place.
  */
 export class MapLibreWorkspaceCameraOwner extends CameraController
   implements WorkspaceCameraOwner {
@@ -364,8 +364,8 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     try {
       this.deactivate(active)
     } catch {
-      // Failure observers still own the workspace fallback even when MapLibre
-      // listener cleanup itself fails. Explicit detach retains that error.
+      // Failure observers still own the map-unavailable transition even when
+      // MapLibre listener cleanup itself fails. Explicit detach retains that error.
     }
     if (active.failureReported) return
     active.failureReported = true
@@ -373,7 +373,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   }
 
   private deactivate(active: ActiveAttachment): void {
-    // Fence events before restoring the fallback frame. MapLibre can emit while
+    // Fence events before restoring the last valid frame. MapLibre can emit while
     // listeners are being removed, so both cleanup order and generation matter.
     if (this.active === active) this.active = null
     this.generation += 1

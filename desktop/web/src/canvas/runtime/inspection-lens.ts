@@ -4,7 +4,7 @@ import type { CanvasQueryRevision } from './runtime'
 import type { WorkspaceCameraFrameReader } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
-import { renderCanvas2DSceneSnapshot } from './renderers/canvas2d-scene'
+import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
 import { inspectionLayout } from './inspection-layout'
 import { runCanvasRuntimeCleanups } from './cleanup'
@@ -75,7 +75,7 @@ export class SceneCanvasInspectionOwner {
           revealedAnnotationId: null, selectionLabelPlantIds: new Set(), pinnedPlantNameLabels: [], selectionLabels: [],
         }
         try {
-          renderCanvas2DSceneSnapshot(ctx, lensSnapshot, { widthPx: width, heightPx: height, dpr, showPlantNames: false })
+          drawInspectionLensScene(ctx, lensSnapshot, { widthPx: width, heightPx: height, dpr })
         } catch (error) {
           console.error('Canvas inspection preview unavailable:', error)
           ctx = null

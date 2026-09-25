@@ -57,7 +57,7 @@ interaction overlays
 - **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Providers: EOX Sentinel-2 cloudless 2017 (keyless, CC BY 4.0, ~10 m/pixel; Esri World Imagery was rejected on its licence terms) and Google only with a device key through the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary. The key never enters a Design, export, snapshot, diagnostic bundle or log.
 - **Site references** group in Layers: Basemap, Satellite, LiDAR items, Contours, Hillshade.
 - **Place search.** A pin button under the inspection lens (loupe) button opens a search field for a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
-- **Failure.** If WebGL2 or MapLibre cannot start, the workspace shows an explicit "map unavailable" state. There is no fallback renderer.
+- **Failure.** If WebGL2 or MapLibre cannot start, or the map fails later, the workspace shows an explicit "map unavailable" state: the map surface publishes its error status, no renderer or editing session is mounted, and the Design stays loaded so it can still be saved. There is no fallback renderer.
 
 ## GeoLibre reuse boundary
 
@@ -82,7 +82,7 @@ Every copied file keeps an MIT header naming its source path and commit and gets
 - **Species catalog:** Desktop reads SQLite through Rust; Web reads generated Parquet through DuckDB-WASM. See [ADR 0006](adr/0006-species-catalog-storage.md).
 - **Personal libraries:** saved object stamps and the Design Notebook live in the Desktop user DB; Web keeps stamps browser-local. See [ADR 0007](adr/0007-design-objects-and-personal-libraries.md).
 - **PDF:** one browser-compatible layout and encoder for every edition, without map backgrounds in v2.0. See [ADR 0008](adr/0008-canvas-pdf-export.md).
-- **GeoJSON:** RFC 7946 import and export of design objects in both editions.
+- **GeoJSON:** RFC 7946 import and export of design objects in both editions through one pure codec (`app/geojson/`). Export reads canonical lon/lat; import rejects malformed files before mutation and adds objects as one undoable runtime transaction.
 
 ## Native execution
 

@@ -24,7 +24,9 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
-import { currentDesign, designDirty } from '../../app/document-session/store'
+import { currentDesign, designDirty, designName } from '../../app/document-session/store'
+import { createGeoJsonWorkflow } from '../../app/geojson/workflow'
+import { desktopGeoJsonFiles, presentDesktopGeoJsonNotice } from '../../ipc/geojson'
 import {
   newDesignAction,
   openDesign,
@@ -75,6 +77,8 @@ type DesktopShellCapabilityId =
   | 'saveDesign'
   | 'saveDesignAs'
   | 'exportCanvasPdf'
+  | 'importGeoJson'
+  | 'exportGeoJson'
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigatePlantDatabase'
@@ -243,8 +247,26 @@ function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
   void action().catch((error) => logCommandFailure(label, error))
 }
 
+const desktopGeoJson = createGeoJsonWorkflow({
+  files: desktopGeoJsonFiles,
+  notify: presentDesktopGeoJsonNotice,
+  designName: () => designName.value,
+})
+
+function isGeoJsonTransferDisabled(state: { readonly hasDesign: boolean }): boolean {
+  return !state.hasDesign || !desktopGeoJson.isAvailable()
+}
+
 export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
+  importGeoJson: {
+    execute: () => runAsyncCommand('Import GeoJSON', desktopGeoJson.importGeoJson),
+    isExecutionDisabled: isGeoJsonTransferDisabled,
+  },
+  exportGeoJson: {
+    execute: () => runAsyncCommand('Export GeoJSON', desktopGeoJson.exportGeoJson),
+    isExecutionDisabled: isGeoJsonTransferDisabled,
+  },
   newDesign: {
     execute: () => runAsyncCommand('New design', newDesignAction),
   },

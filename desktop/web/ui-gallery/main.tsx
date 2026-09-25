@@ -28,7 +28,6 @@ import { plantSymbolMenuOpen } from '../src/canvas/plant-symbol-menu-state'
 import { plantDbStatus } from '../src/app/health/state'
 import { theme, locale } from '../src/app/settings/state'
 import { t } from '../src/i18n'
-import { invalidateCssVarCache } from '../src/canvas/canvas2d-utils'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
@@ -73,7 +72,7 @@ if (Number.isFinite(requestedPanelWidth) && requestedPanelWidth >= 320) {
 }
 locale.value = (params.get('locale') ?? 'en') as typeof locale.value
 theme.value = params.get('theme') === 'dark' ? 'dark' : 'light'
-const disposeTheme = effect(() => { document.documentElement.dataset.theme = theme.value; invalidateCssVarCache() })
+const disposeTheme = effect(() => { document.documentElement.dataset.theme = theme.value })
 plantDbStatus.value = 'available'
 
 const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
@@ -171,11 +170,14 @@ function galleryPanelProjection(): WorkspacePanelProjection {
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled: true,
+    geoJsonEnabled: true,
     templatesEnabled: false,
     capabilities: {
       newDesign: () => { activity.value = 'New Design stays in memory.' },
       openCanopi: () => { activity.value = 'Opened the sample Design in memory.' },
       downloadCanopi: () => { activity.value = 'Download completed in memory.' },
+      importGeoJson: () => { activity.value = 'GeoJSON import stays in memory.' },
+      exportGeoJson: () => { activity.value = 'GeoJSON export completed in memory.' },
       navigate: navigateTo,
       toggleTheme: () => { theme.value = theme.value === 'light' ? 'dark' : 'light' },
     },

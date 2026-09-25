@@ -268,7 +268,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
         rendererSize = size
         if (disposeRequested) return
         stage = (options.createStage ?? (() => new Container()))()
-        presentation = (options.createPresentation ?? createDefaultPresentation)(
+        presentation = (options.createPresentation ?? createPixiScenePresentation)(
           { stage, createText: () => new Text({ resolution: size.resolution * 2 }), viewSize: { width: size.width, height: size.height } },
         )
         phase = 'initialized'
@@ -372,13 +372,7 @@ function sameViewport(
   return left?.x === right.x && left.y === right.y && left.scale === right.scale
 }
 
-function createDefaultPresentation(input: {
-  readonly stage: Container
-  readonly createText: () => Text
-  readonly viewSize: { width: number; height: number }
-}): PixiScenePresentation {
-  return createPixiScenePresentation({ ...input, requestDraw: () => {} })
-}
+
 
 function getMapLibreCanvasSize(canvas: HTMLCanvasElement): { width: number; height: number; resolution: number } | null {
   const width = canvas.clientWidth

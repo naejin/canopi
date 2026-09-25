@@ -60,4 +60,4 @@ See [Canvas plant and Target presentation](canvas-presentation.md#target-project
 
 - [MapLibre](maplibre.md): map resources, camera integration, and geographic contributions.
 - [Canvas PDF](canvas-pdf.md): settled print capture and renderer-neutral output.
-- [Canvas performance](canvas-performance.md): reproducible qualification commands and evidence limits.
+- [Canvas performance](canvas-performance.md): native profiling and rendering invariants.

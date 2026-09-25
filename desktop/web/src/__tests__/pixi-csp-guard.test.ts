@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 // Packaged Desktop builds enforce `script-src 'self'`. Pixi v8 otherwise
 // compiles uniform sync with `new Function`, which that policy rejects, so the
-// shared map scene fails with "Basemap unavailable". Pixi's documented route is
+// shared map scene fails with "Map unavailable". Pixi's documented route is
 // its `unsafe-eval` shim module, which must load before any Pixi renderer.
 const SRC = join(__dirname, '..')
 

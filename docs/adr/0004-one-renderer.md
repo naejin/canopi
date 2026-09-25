@@ -10,7 +10,7 @@ Canopi v1 drew the scene with PixiJS as a MapLibre custom layer (`maplibre-pixi`
 
 - The only interactive renderer is the PixiJS scene inside a MapLibre custom layer (`canvas/runtime/renderers/maplibre-scene.ts`, id `maplibre-pixi`).
 - The Canvas2D renderer, the standalone Pixi canvas backend, renderer fallback selection and camera code that only aligned a metre canvas with the map are deleted.
-- If WebGL2 or MapLibre cannot start, the workspace shows an explicit "map unavailable" state.
+- If WebGL2 or MapLibre cannot start, the workspace shows an explicit "map unavailable" state. A later map, layer or camera failure unmounts the renderer and the editing session; the Design stays loaded and can still be saved.
 - MapLibre owns the WebGL2 context, framebuffer, camera, frame scheduling, resize and context lifecycle. The adapter owns only its scene subscriptions and graphics resources. It never clears or loses the shared context, starts an application ticker, resizes the canvas or renders outside MapLibre's custom-layer callback. Scene edits request `triggerRepaint`.
 - Pixi's normal renderer destroy path loses the WebGL context, so the adapter uses a direct `WebGLRenderer`, explicit state reset, MapLibre-frame-only submission and resource-only teardown.
 - One pointer sequence picks its owner at gesture start. Canopi tools keep scene mutation, hit testing, locks, grouping and history; a tool-owned gesture disables map navigation until it ends, is cancelled or the tool changes.

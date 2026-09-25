@@ -2,7 +2,14 @@ import type { SpeciesFocus, SpeciesFocusCommands } from './species-key'
 import type { CanvasPrintSnapshot } from '../print'
 import type { CanvasInspectionHandle } from '../inspection'
 import type { ReadonlySignal } from '@preact/signals'
-import type { CanopiFile, PlacedPlant } from '../../types/design'
+import type {
+  Annotation,
+  CanopiFile,
+  MeasurementGuide,
+  ObjectGroup,
+  PlacedPlant,
+  Zone,
+} from '../../types/design'
 import type { SessionPlane } from '../session-plane'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
@@ -74,8 +81,28 @@ export interface CanvasHistoryCommandSurface {
   redo(): void
 }
 
+/** Design objects in their persisted lon/lat form (no metres). */
+export interface CanvasDesignObjects {
+  readonly plants: readonly PlacedPlant[]
+  readonly zones: readonly Zone[]
+  readonly annotations: readonly Annotation[]
+  readonly measurementGuides: readonly MeasurementGuide[]
+  readonly groups: readonly ObjectGroup[]
+}
+
+export interface CanvasDesignObjectImportReceipt {
+  readonly committed: boolean
+  readonly createdCount: number
+}
+
 export interface CanvasSceneEditCommandSurface {
   saveSelectionAsObjectStamp(): void
+  /**
+   * Adds lon/lat design objects as one undoable edit: positions enter the
+   * session plane, identities are re-allocated, locks are cleared and the new
+   * objects become the selection. Group members refer to the given ids.
+   */
+  importDesignObjects(objects: CanvasDesignObjects): CanvasDesignObjectImportReceipt
   copy(): void
   paste(): void
   pasteAt(point: ScenePoint): void
@@ -141,6 +168,8 @@ export interface CanvasQuerySurface {
   getSelectedPlantSymbolContext(): SelectedPlantSymbolContext
   getPlacedPlants(): PlacedPlant[]
   getSettledPlacedPlants(): PlacedPlant[] | null
+  /** Canonical lon/lat design objects, as a save would write them; null while busy. */
+  getSettledDesignObjects(): CanvasDesignObjects | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
 }
 

@@ -229,9 +229,21 @@ export class SceneCanvasRuntime {
     return this._querySurface
   }
 
-  /** Internal workspace-lifecycle control; intentionally excluded from CanvasRuntimeSurfaces. */
-  async reportRendererFailure(id: string, error: unknown): Promise<void> {
-    await this._rendering.reportRendererFailure(id, error)
+  /**
+   * Internal workspace-lifecycle control, excluded from CanvasRuntimeSurfaces.
+   * The map became unavailable: release the renderer and the interaction
+   * session so nothing draws or edits blind. The Scene stays loaded, so the
+   * Design can still be saved.
+   */
+  async unmountRenderer(): Promise<void> {
+    const interaction = this._interaction
+    this._interaction = null
+    try {
+      interaction?.dispose()
+    } finally {
+      this._notifyTransientHistoryChanged()
+      await this._rendering.unmount()
+    }
   }
 
   destroy(): void {

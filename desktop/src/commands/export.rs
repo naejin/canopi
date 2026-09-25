@@ -19,7 +19,7 @@ pub async fn save_canvas_pdf(
         .await
 }
 
-/// Write `data` (UTF-8 text) to `path`. Used for SVG and CSV export.
+/// Write `data` (UTF-8 text) to `path`. Used for CSV and GeoJSON export.
 #[tauri::command]
 pub async fn export_file(
     executor: State<'_, NativeOperationExecutor>,
@@ -37,6 +37,19 @@ async fn export_file_with_executor(
     executor
         .run(NativeOperationClass::Local, "text export", move || {
             crate::services::export::export_file(data, path)
+        })
+        .await
+}
+
+/// Read a user-chosen GeoJSON file as text for the shared frontend codec.
+#[tauri::command]
+pub async fn read_geojson_file(
+    executor: State<'_, NativeOperationExecutor>,
+    path: String,
+) -> Result<String, String> {
+    executor
+        .run(NativeOperationClass::Local, "GeoJSON import", move || {
+            crate::services::export::read_geojson_file(path)
         })
         .await
 }

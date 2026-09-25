@@ -1,6 +1,5 @@
 import { effect } from '@preact/signals'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
-import { createCanvas2DSceneRenderer } from '../../canvas/runtime/renderers/canvas2d-scene'
 import type { CanvasRuntimeAppAdapter } from '../../canvas/runtime/app-adapter'
 import type { SceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-runtime/panel-target-adapter'
 import type {
@@ -124,9 +123,7 @@ export function createWorkspaceRuntimeComposition(
     camera,
     appAdapter: options.appAdapter,
     targetPresentation: options.targetPresentation,
-    renderer: {
-      backends: [rendererComposition.renderer, createCanvas2DSceneRenderer()],
-    },
+    renderer: rendererComposition.renderer,
   })
   const controls = dependencies.createControls({
     container: options.container,

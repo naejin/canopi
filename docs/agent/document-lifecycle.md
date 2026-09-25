@@ -8,7 +8,7 @@ Use this routing guide for Design Session ownership, replacement, save/load, dir
 | Non-canvas edits, previews, document history | [Design Edit](document-edits.md) |
 | Open/New, replacement guards, teardown and retry | [Replacement](document-replacement.md) |
 | Save, autosave, write ordering, acknowledgement | [Persistence](document-persistence.md) |
-| Fields, ingestion, serialization, derived exports | [Format](document-format.md) |
+| Fields, ingestion, serialization, derived exports (PDF, GeoJSON) | [Format](document-format.md) |
 | Preferences, bootstrap, flush, platform adapters | [Settings](settings.md) |
 
 The headings below preserve incoming links. Read only the destinations relevant to the task.
@@ -44,6 +44,10 @@ See [Design format and export](document-format.md#saved-object-stamp-import-and-
 ## Export Boundaries
 
 See [Design format and export](document-format.md#export-boundaries).
+
+## GeoJSON Import And Export
+
+See [Design format and export](document-format.md#geojson-import-and-export).
 
 ## Adding Document Fields
 

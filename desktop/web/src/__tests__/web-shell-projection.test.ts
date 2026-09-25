@@ -10,11 +10,14 @@ describe('Web Edition shell projection', () => {
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: false,
+      geoJsonEnabled: false,
       templatesEnabled: false,
       capabilities: {
         newDesign: () => undefined,
         openCanopi: () => undefined,
         downloadCanopi: () => undefined,
+        importGeoJson: () => undefined,
+        exportGeoJson: () => undefined,
         navigate: () => undefined,
         toggleTheme: () => undefined,
       },
@@ -26,7 +29,14 @@ describe('Web Edition shell projection', () => {
     }))).toEqual([
       {
         id: 'file',
-        commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi', 'file.exportCanvasPdf'],
+        commandIds: [
+          'file.new',
+          'file.openCanopi',
+          'file.downloadCanopi',
+          'file.exportCanvasPdf',
+          'file.importGeoJson',
+          'file.exportGeoJson',
+        ],
       },
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual([
@@ -38,6 +48,34 @@ describe('Web Edition shell projection', () => {
     ])
 
     expect(projection.menus[0]?.items.find((item) => item.id === 'file.downloadCanopi')?.disabled).toBe(true)
+    expect(projection.menus[0]?.items.find((item) => item.id === 'file.importGeoJson')?.disabled).toBe(true)
+    expect(projection.menus[0]?.items.find((item) => item.id === 'file.exportGeoJson')?.disabled).toBe(true)
+  })
+
+  it('routes GeoJSON commands to the shared GeoJSON workflow', async () => {
+    const geoJson = {
+      importGeoJson: vi.fn(async () => ({ status: 'cancelled' as const })),
+      exportGeoJson: vi.fn(async () => ({ status: 'cancelled' as const })),
+    }
+    const capabilities = createBrowserShellCapabilities({
+      newDesign: vi.fn(async () => undefined),
+      openCanopi: vi.fn(async () => true),
+      downloadCanopi: vi.fn(async () => undefined),
+    }, vi.fn(), geoJson)
+    const projection = createBrowserShellCommandProjection({
+      currentPanel: 'canvas',
+      currentSidePanel: null,
+      downloadCanopiEnabled: true,
+      geoJsonEnabled: true,
+      templatesEnabled: false,
+      capabilities: { ...capabilities, navigate: () => undefined, toggleTheme: () => undefined },
+    })
+
+    projection.commands.get('file.importGeoJson')?.action()
+    projection.commands.get('file.exportGeoJson')?.action()
+
+    expect(geoJson.importGeoJson).toHaveBeenCalledOnce()
+    expect(geoJson.exportGeoJson).toHaveBeenCalledOnce()
   })
 
   it('contains rejected browser Design commands through the capability error sink', async () => {
@@ -47,7 +85,7 @@ describe('Web Edition shell projection', () => {
       newDesign: vi.fn(async () => undefined),
       openCanopi: vi.fn(async () => { throw failure }),
       downloadCanopi: vi.fn(async () => undefined),
-    }, onError)
+    }, onError, { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
 
     capabilities.openCanopi()
     await Promise.resolve()

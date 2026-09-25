@@ -10,7 +10,8 @@
     "panels": "Панели веб-версии",
     "workspace": "Рабочая область веб-версии",
     "openCanopi": "Открыть .canopi",
-    "downloadCanopi": "Скачать .canopi"
+    "downloadCanopi": "Скачать .canopi",
+    "dismissNotice": "Закрыть"
   },
   "designNotebook": {
     "title": "Блокнот дизайнов",
@@ -250,7 +251,7 @@
       "mapSection": "Слои карты",
       "basemap": "Базовая карта",
       "basemapLoading": "Загрузка базовой карты...",
-      "basemapError": "Базовая карта недоступна",
+      "mapUnavailable": "Карта недоступна",
       "references": "Данные участка",
       "sceneStack": "Слои проекта",
       "topToBottom": "Сверху вниз",
@@ -1093,5 +1094,25 @@
     "empty": "Разместите растения, чтобы создать указатель видов.",
     "clearSearch": "Очистить поиск",
     "details": "Сведения: {{name}}"
+  },
+  "geojson": {
+    "import": "Импорт GeoJSON",
+    "export": "Экспорт GeoJSON",
+    "importTitle": "Импорт GeoJSON",
+    "exportTitle": "Экспорт GeoJSON",
+    "importSummary": "Импортировано: растения — {{plants}}, зоны — {{zones}}, заметки — {{annotations}}, измерительные линии — {{guides}}.",
+    "importSkipped": "Пропущено объектов с неподдерживаемой геометрией: {{count}}.",
+    "importNothing": "В файле нет объектов проекта для импорта.",
+    "busy": "Холст занят. Повторите попытку через мгновение.",
+    "readFailed": "Не удалось прочитать файл.",
+    "writeFailed": "Не удалось записать файл GeoJSON.",
+    "errors": {
+      "invalid_json": "Файл не является корректным JSON.",
+      "unsupported_root": "Файл не является GeoJSON Feature или FeatureCollection.",
+      "too_many_features": "В файле больше {{max}} объектов.",
+      "invalid_feature": "Объект {{feature}} не является корректным объектом GeoJSON.",
+      "invalid_geometry": "У объекта {{feature}} некорректная геометрия.",
+      "invalid_coordinates": "У объекта {{feature}} координаты вне диапазона долготы/широты WGS84."
+    }
   }
 }

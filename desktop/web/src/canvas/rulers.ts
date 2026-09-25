@@ -7,10 +7,10 @@ import {
   getScaleBarDisplay,
 } from './scale-bar'
 import { CANVAS_RULER_SIZE_PX } from './canvas-notice-layout'
-import { FONT_SANS_FALLBACK } from './canvas2d-utils'
 import { NICE_DISTANCES } from './grid'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
+const FONT_SANS_FALLBACK = 'Inter, system-ui, sans-serif'
 
 export type RulerAxis = 'h' | 'v'
 

@@ -1,41 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SceneCanvasRuntime } from './scene-runtime'
-import { createCanvas2DSceneRenderer } from './renderers/canvas2d-scene'
 import {
   MapLibreSceneRendererBridge,
   type MapLibreSceneRenderTarget,
 } from './renderers/maplibre-scene'
-import type { RendererCapabilities } from './renderers/types'
 
-const TEST_CAPABILITIES: RendererCapabilities = {
-  domCanvas: true,
-  canvas2d: true,
-  offscreenCanvas: false,
-  offscreenCanvas2d: false,
-  webgl: true,
-  webgl2: true,
-  webgpu: false,
-  imageBitmap: false,
-  createImageBitmap: false,
-  worker: false,
-  devicePixelRatio: 2,
-  prefersReducedMotion: false,
+function createContainer(): HTMLElement {
+  const container = document.createElement('div')
+  Object.defineProperties(container, {
+    clientWidth: { value: 800 },
+    clientHeight: { value: 600 },
+  })
+  return container
 }
 
 describe('SceneCanvasRuntime MapLibre renderer composition', () => {
   it('publishes its initial scene without adding an independent render surface', async () => {
     const bridge = new MapLibreSceneRendererBridge()
-    const runtime = new SceneCanvasRuntime({
-      renderer: {
-        capabilities: TEST_CAPABILITIES,
-        backends: [bridge.createRenderer(), createCanvas2DSceneRenderer()],
-      },
-    })
-    const container = document.createElement('div')
-    Object.defineProperties(container, {
-      clientWidth: { value: 800 },
-      clientHeight: { value: 600 },
-    })
+    const runtime = new SceneCanvasRuntime({ renderer: bridge.createRenderer() })
+    const container = createContainer()
 
     await runtime.init(container)
     expect(container.querySelector('canvas')).toBeNull()
@@ -50,27 +33,26 @@ describe('SceneCanvasRuntime MapLibre renderer composition', () => {
     runtime.destroy()
   })
 
-  it('eagerly replaces an externally failed shared backend with Canvas2D', async () => {
+  it('unmounts after a map failure without mounting a replacement renderer', async () => {
     const bridge = new MapLibreSceneRendererBridge()
-    const runtime = new SceneCanvasRuntime({
-      renderer: {
-        capabilities: TEST_CAPABILITIES,
-        backends: [bridge.createRenderer(), createCanvas2DSceneRenderer()],
-      },
-    })
-    const container = document.createElement('div')
-    Object.defineProperties(container, {
-      clientWidth: { value: 800 },
-      clientHeight: { value: 600 },
-    })
-    bridge.connect({ setSnapshot: vi.fn(), requestRender: vi.fn() })
-    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const runtime = new SceneCanvasRuntime({ renderer: bridge.createRenderer() })
+    const container = createContainer()
+    const target = { setSnapshot: vi.fn(), requestRender: vi.fn() } satisfies MapLibreSceneRenderTarget
+    bridge.connect(target)
 
     await runtime.init(container)
-    await runtime.reportRendererFailure('maplibre-pixi', new Error('map context lost'))
+    target.setSnapshot.mockClear()
+    await runtime.unmountRenderer()
+    runtime.commandSurface.viewport.zoomIn()
+    await new Promise((resolve) => requestAnimationFrame(resolve))
 
-    expect(container.querySelector('[data-canopi-renderer="canvas2d"]')).not.toBeNull()
-    getContext.mockRestore()
+    expect(container.querySelector('canvas')).toBeNull()
+    expect(target.setSnapshot).not.toHaveBeenCalled()
+    expect(target.requestRender).not.toHaveBeenCalled()
+    // A later map may connect, but the unmounted renderer publishes nothing to it.
+    const nextTarget = { setSnapshot: vi.fn(), requestRender: vi.fn() } satisfies MapLibreSceneRenderTarget
+    bridge.connect(nextTarget)
+    expect(nextTarget.setSnapshot).not.toHaveBeenCalled()
     runtime.destroy()
   })
 })

@@ -10,10 +10,6 @@ export type MapLibreSurfaceCameraRuntime = Pick<
   'viewport'
 >
 
-export interface MapLibreSurfaceCameraMap {
-  jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
-}
-
 export function resolveMapLibreSurfaceFrame(
   runtime: MapLibreSurfaceCameraRuntime | null,
   location: MapLibreCameraLocation | null,
@@ -26,20 +22,4 @@ export function resolveMapLibreSurfaceFrame(
     snapshot.screenSize,
     location,
   )
-}
-
-export function applyMapLibreSurfaceCamera(
-  map: MapLibreSurfaceCameraMap,
-  runtime: MapLibreSurfaceCameraRuntime | null,
-  location: MapLibreCameraLocation | null,
-): MapFrame | null {
-  const frame = resolveMapLibreSurfaceFrame(runtime, location)
-  if (!frame) return null
-
-  map.jumpTo({
-    center: [frame.center[0], frame.center[1]],
-    zoom: frame.zoom,
-    bearing: frame.bearing,
-  })
-  return frame
 }

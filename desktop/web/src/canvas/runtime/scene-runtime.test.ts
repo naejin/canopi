@@ -224,7 +224,6 @@ function fileWithGroupedPair(): CanopiFile {
 function createRendererStub() {
   return {
     id: 'test',
-    resize: vi.fn(),
     renderScene: vi.fn(),
     setViewport: vi.fn(),
     dispose: vi.fn(),
@@ -242,11 +241,7 @@ async function initRuntimeWithStubbedRenderer(runtime: SceneCanvasRuntime) {
   const container = createRuntimeContainer()
 
   const renderer = createRendererStub()
-  ;(runtime as any)._construction.replaceRendererHost({
-    initialize: async () => renderer,
-    run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-    dispose: async () => {},
-  })
+  ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
 
   await runtime.init(container)
   return { container, renderer }
@@ -1591,12 +1586,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const container = createRuntimeContainer()
     const renderer = createRendererStub()
-    const disposeRenderer = vi.fn(async () => {})
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: disposeRenderer,
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(() => {
       throw new Error('interaction construction failed')
     })
@@ -1607,7 +1597,7 @@ describe('scene canvas runtime', () => {
       appendChild.mockRestore()
     }
 
-    expect(disposeRenderer).toHaveBeenCalledTimes(1)
+    expect(renderer.dispose).toHaveBeenCalledTimes(1)
     expect((runtime as any)._rendering.container).toBeNull()
     runtime.destroy()
   })
@@ -1620,16 +1610,11 @@ describe('scene canvas runtime', () => {
     renderer.renderScene.mockImplementation(() => {
       throw new Error('initial render failed')
     })
-    const disposeRenderer = vi.fn(async () => {})
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: disposeRenderer,
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
 
     await expect(runtime.init(container)).rejects.toThrow('initial render failed')
 
-    expect(disposeRenderer).toHaveBeenCalledTimes(1)
+    expect(renderer.dispose).toHaveBeenCalledTimes(1)
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
     expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
@@ -1661,11 +1646,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     const container = createRuntimeContainer()
     const renderer = createRendererStub()
-    ;(runtime as any)._construction.replaceRendererHost({
-      initialize: async () => renderer,
-      run: async (operation: (instance: typeof renderer) => unknown) => operation(renderer),
-      dispose: async () => {},
-    })
+    ;(runtime as any)._construction.replaceRenderer({ id: 'test', initialize: () => renderer })
     const initialize = runtime.init(container)
     await vi.waitFor(() => expect(ensureEntries).toHaveBeenCalledOnce())
     const sceneRevision = runtime.querySurface.revision.scene.value

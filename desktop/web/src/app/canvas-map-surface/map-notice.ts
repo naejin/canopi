@@ -41,7 +41,7 @@ function getMapNoticeTone(mapSurface: MapLibreCanvasSurfaceState): MapNoticeTone
 
 function getMapNoticeStatusText(mapSurface: MapLibreCanvasSurfaceState, t: (key: string) => string): string {
   if (mapSurface.status === 'error') {
-    return `${t('canvas.layers.basemapError')}: ${mapSurface.errorMessage ?? ''}`.trim()
+    return `${t('canvas.layers.mapUnavailable')}: ${mapSurface.errorMessage ?? ''}`.trim()
   }
   if (mapSurface.status !== 'ready') return t('canvas.layers.basemapLoading')
   return mapSurface.terrainStatus === 'error'

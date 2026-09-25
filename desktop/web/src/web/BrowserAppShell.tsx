@@ -12,6 +12,7 @@ import {
   type BrowserShellDesignIdentity,
   type BrowserShellProjectedCommand,
 } from "./browser-shell-commands";
+import { browserShellNotice, dismissBrowserShellNotice } from "./browser-shell-notice";
 import styles from "./BrowserAppShell.module.css";
 
 const LOCALES: readonly Locale[] = ["en", "fr", "es", "pt", "it", "zh", "de", "ja", "ko", "nl", "ru"];
@@ -34,6 +35,7 @@ export function BrowserAppShell({
 }: BrowserAppShellProps) {
   const currentLocale = locale.value;
   const currentTheme = theme.value;
+  const notice = browserShellNotice.value;
   const visibleTitle = designIdentity ? visibleDesignName(designIdentity.name) : "Canopi";
   const projection = commandProjection;
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -221,6 +223,27 @@ export function BrowserAppShell({
           </button>
         </div>
       </header>
+      {notice ? (
+        <div
+          className={styles.notice}
+          role={notice.tone === "error" ? "alert" : "status"}
+          data-tone={notice.tone}
+          data-web-shell-notice
+        >
+          <span className={styles.noticeTitle}>{notice.title}</span>
+          <span className={styles.noticeMessage}>{notice.message}</span>
+          <button
+            type="button"
+            className={styles.noticeDismiss}
+            aria-label={t("webShell.dismissNotice")}
+            onClick={dismissBrowserShellNotice}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
       <div className={styles.workspaceShell}>
         <main className={styles.workspace} aria-label={t("webShell.workspace")}>
           {children}
