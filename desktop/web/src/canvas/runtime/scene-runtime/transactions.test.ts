@@ -1048,7 +1048,6 @@ const appleBackfill = [{
   canonicalName: 'Malus domestica',
   stratum: 'canopy',
   canopySpreadM: 4,
-  scale: 4,
 }] as const
 
 describe('Settled Scene presentation maintenance', () => {
@@ -1069,7 +1068,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     const admitted = vi.fn()
     coordinator.runWhenSettled(admitted, undefined)
@@ -1095,7 +1093,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     const admitted = vi.fn()
     coordinator.runWhenSettled(admitted, undefined)
@@ -1129,7 +1126,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     expect(coordinator.canUndo.value).toBe(true)
   })
@@ -1154,7 +1150,6 @@ describe('Settled Scene presentation maintenance', () => {
       position: { x: 10, y: 10 },
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     expect(coordinator.canUndo.value).toBe(false)
   })
@@ -1224,7 +1219,6 @@ describe('Settled Scene presentation maintenance', () => {
       canonicalName: 'Malus domestica',
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1249,7 +1243,6 @@ describe('Settled Scene presentation maintenance', () => {
       canonicalName: 'Malus domestica',
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1283,7 +1276,6 @@ describe('Settled Scene presentation maintenance', () => {
       position: { x: 10, y: 10 },
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
 
     expect(coordinator.redo()).toBe(true)
@@ -1291,7 +1283,6 @@ describe('Settled Scene presentation maintenance', () => {
       position: { x: 44, y: 55 },
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1304,7 +1295,6 @@ describe('Settled Scene presentation maintenance', () => {
           id: 'plant-3',
           stratum: null,
           canopySpreadM: null,
-          scale: null,
         })
       })
     })).toBe(true)
@@ -1321,7 +1311,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(store.persisted.plants.find((plant) => plant.id === 'plant-3')).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1336,7 +1325,6 @@ describe('Settled Scene presentation maintenance', () => {
       canonicalName: 'Pyrus communis',
       stratum: 'understory',
       canopySpreadM: 2,
-      scale: 2,
     }])).toBe('applied')
 
     expect(store.persisted.plants[0]).toMatchObject({ stratum: 'canopy', canopySpreadM: 4 })
@@ -1352,13 +1340,11 @@ describe('Settled Scene presentation maintenance', () => {
     expect(coordinator.applyBackfills(overlappingTicket, [{
       ...appleBackfill[0],
       canopySpreadM: 2,
-      scale: 2,
     }])).toBe('stale')
 
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1372,13 +1358,11 @@ describe('Settled Scene presentation maintenance', () => {
     expect(coordinator.applyBackfills(overlappingTicket, [{
       ...appleBackfill[0],
       canopySpreadM: 2,
-      scale: 2,
     }])).toBe('stale')
     active.abort()
 
     expect(store.persisted.plants[0]).toMatchObject({
       canopySpreadM: 4,
-      scale: 4,
     })
   })
 
@@ -1558,7 +1542,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
 
     coordinator.replaceDocument(next, { token: replacementToken, prepare })
@@ -1591,7 +1574,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(harness.store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     const admittedAfterSettlement = vi.fn()
     expect(coordinator.run('after-settlement', admittedAfterSettlement)).toBe(false)
@@ -1624,7 +1606,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(harness.store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     const admittedAfterSettlement = vi.fn()
     expect(coordinator.run('after-history-settlement', admittedAfterSettlement)).toBe(false)
@@ -1639,7 +1620,6 @@ describe('Settled Scene presentation maintenance', () => {
       canonicalName: 'Pyrus communis',
       stratum: 'understory',
       canopySpreadM: 2,
-      scale: 2,
     }] as const
     const harness = createAdmissionHarness({
       invalidate: () => {
@@ -2186,7 +2166,6 @@ describe('Settled Scene presentation maintenance', () => {
     expect(harness.store.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     })
     const admittedAfterSettlement = vi.fn()
     expect(coordinator.run('after-hydration-backfill', admittedAfterSettlement)).toBe(false)

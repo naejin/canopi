@@ -761,7 +761,6 @@ function createPlant(
     canopySpreadM: null,
     position: { x: 10, y: 10 },
     rotationDeg: null,
-    scale: null,
     notes: null,
     plantedDate: null,
     quantity: 1,

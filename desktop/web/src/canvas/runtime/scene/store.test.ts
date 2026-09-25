@@ -181,7 +181,6 @@ describe('scene store', () => {
     expect(store.persisted.plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: 1.2,
-      scale: 1.2,
     })
 
     store.updateSession((draft) => {

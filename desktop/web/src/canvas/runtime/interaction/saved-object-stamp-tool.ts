@@ -458,7 +458,6 @@ function scenePlantFromSavedPlant(
     canopySpreadM: plant.scale,
     position: translatePoint(plant.position, delta),
     rotationDeg: plant.rotationDeg,
-    scale: plant.scale,
     notes: null,
     plantedDate: null,
     quantity: null,

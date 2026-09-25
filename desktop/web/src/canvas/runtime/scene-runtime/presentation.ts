@@ -48,7 +48,6 @@ export interface PlantPresentationBackfill {
   canonicalName: string
   stratum: string | null
   canopySpreadM: number | null
-  scale: number | null
 }
 
 export class SceneRuntimePresentationController {
@@ -221,12 +220,11 @@ export class SceneRuntimePresentationController {
     const backfills: PlantPresentationBackfill[] = []
     for (const plant of this._sceneStore.persisted.plants) {
       const nextStratum = resolvePlantStratum(plant, speciesCache)
-      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache)
-      const nextScale = nextCanopySpreadM ?? plant.scale
+      // A spread the species data cannot resolve keeps the saved value.
+      const nextCanopySpreadM = resolvePlantCanopySpreadM(plant, speciesCache) ?? plant.canopySpreadM
       if (
         nextStratum === plant.stratum
         && nextCanopySpreadM === plant.canopySpreadM
-        && nextScale === plant.scale
       ) {
         continue
       }
@@ -235,7 +233,6 @@ export class SceneRuntimePresentationController {
         canonicalName: plant.canonicalName,
         stratum: nextStratum,
         canopySpreadM: nextCanopySpreadM,
-        scale: nextScale,
       })
     }
     return backfills.length > 0 ? backfills : null

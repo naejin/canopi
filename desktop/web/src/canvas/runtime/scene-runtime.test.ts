@@ -1338,7 +1338,6 @@ describe('scene canvas runtime', () => {
         canonicalName: 'Malus domestica',
         stratum: 'canopy',
         canopySpreadM: 4,
-        scale: 4,
       }],
       failure: null,
     })
@@ -1613,7 +1612,6 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: null,
-      scale: null,
     })
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
     expect(invalidate).not.toHaveBeenCalled()
@@ -1656,7 +1654,6 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSceneSnapshot().plants[0]).toMatchObject({
       stratum: null,
       canopySpreadM: null,
-      scale: null,
     })
     expect(runtime.querySurface.revision.scene.value).toBe(sceneRevision)
     expect(invalidate).not.toHaveBeenCalled()

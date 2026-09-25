@@ -31,8 +31,6 @@ export interface ScenePlantEntity {
   canopySpreadM: number | null
   position: ScenePoint
   rotationDeg: number | null
-  // Deprecated persisted compatibility mirror for canopySpreadM.
-  scale: number | null
   notes: string | null
   plantedDate: string | null
   quantity: number | null

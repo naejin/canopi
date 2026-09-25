@@ -158,7 +158,7 @@ interface DeferredBackfill {
 
 type MaintainedPlantPresentation = Pick<
   ScenePlantEntity,
-  'canonicalName' | 'stratum' | 'canopySpreadM' | 'scale'
+  'canonicalName' | 'stratum' | 'canopySpreadM'
 >
 
 interface SceneAuthorityOperation {
@@ -764,7 +764,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
         if (
           next.stratum === plant.stratum
           && next.canopySpreadM === plant.canopySpreadM
-          && next.scale === plant.scale
         ) {
           return plant
         }
@@ -773,7 +772,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
           ...plant,
           stratum: next.stratum,
           canopySpreadM: next.canopySpreadM,
-          scale: next.scale,
         }
       })
     })
@@ -797,7 +795,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
           canonicalName: presentation.canonicalName,
           stratum: presentation.stratum,
           canopySpreadM: presentation.canopySpreadM,
-          scale: presentation.scale,
         },
       )
     }
@@ -1381,7 +1378,6 @@ function preserveCurrentPlantPresentation(
       ...plant,
       stratum: presentation.stratum,
       canopySpreadM: presentation.canopySpreadM,
-      scale: presentation.scale,
     }
   })
 }

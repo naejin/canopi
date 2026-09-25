@@ -471,7 +471,6 @@ describe("Design Session replacement", () => {
             canonicalName: "Malus domestica",
             stratum: "canopy",
             canopySpreadM: 4,
-            scale: 4,
           }])).toBe("deferred");
         },
       });
@@ -509,7 +508,6 @@ describe("Design Session replacement", () => {
     expect(sceneStore.persisted.plants[0]).toMatchObject({
       stratum: "canopy",
       canopySpreadM: 4,
-      scale: 4,
     });
   });
 

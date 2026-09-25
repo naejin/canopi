@@ -1,15 +1,8 @@
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
 import type { CanopiFile } from "../types/design";
-import {
-  createBrowserPartitionStorage,
-  type BrowserPartitionWriteResult,
-  type BrowserStorageAdapter as StorageAdapter,
-} from "./browser-partition-storage";
 
-const LEGACY_STORAGE_KEY = "canopi:web-app-data:v1";
-const V2_COMMITTED_AUTHORITY_STORAGE_KEY = "canopi:web-app-data:v2:authority";
-const V2_MIGRATION_PROGRESS_STORAGE_KEY = "canopi:web-app-data:v2:migration-progress";
-const V2_AUTHORITY_RESERVATION_STORAGE_KEY = "canopi:web-app-data:v2:authority-reservation";
+// Canopi v2 reads only these records. Browser data written by an older Canopi
+// (the single `canopi:web-app-data:v1` document) is not migrated and is ignored.
 const RECORD_VERSION = 2 as const;
 const STORAGE_KEYS = {
   drafts: "canopi:web-app-data:v2:drafts",
@@ -18,7 +11,15 @@ const STORAGE_KEYS = {
   stamps: "canopi:web-app-data:v2:saved-object-stamps",
 } as const;
 
-export type BrowserStorageAdapter = StorageAdapter;
+export interface BrowserStorageAdapter {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export type BrowserAppDataWriteResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: unknown };
 
 export interface BrowserDraftSummary {
   readonly id: string;
@@ -32,16 +33,6 @@ export interface BrowserSavedObjectStampRecord {
   readonly payload: unknown;
 }
 
-export type BrowserAppDataWriteResult<T> = BrowserPartitionWriteResult<T>;
-
-interface LegacyBrowserAppDataDocument {
-  readonly drafts: readonly BrowserDraftSummary[];
-  readonly draftFiles: Record<string, unknown>;
-  readonly settings: Record<string, unknown> | null;
-  readonly favoriteSpecies: readonly string[];
-  readonly recentlyViewedSpecies: readonly string[];
-  readonly savedObjectStamps: readonly BrowserSavedObjectStampRecord[];
-}
 
 interface BrowserDraftsRecord {
   readonly version: 2;
@@ -65,38 +56,33 @@ interface BrowserSavedObjectStampsRecord {
   readonly savedObjectStamps: readonly BrowserSavedObjectStampRecord[];
 }
 
+/** One independently stored record. A missing or unreadable record reads as empty. */
+interface BrowserStoragePartition<TRecord> {
+  readonly key: string;
+  accepts(value: unknown): boolean;
+  normalize(value: unknown): TRecord;
+}
+
 const PARTITIONS = {
   drafts: {
     key: STORAGE_KEYS.drafts,
-    slot: 0,
     accepts: isSupportedDraftsRecord,
     normalize: normalizeDraftsRecord,
-    fromLegacy: draftsRecordFromLegacy,
-    toLegacy: legacyDocumentWithDrafts,
   },
   settings: {
     key: STORAGE_KEYS.settings,
-    slot: 1,
     accepts: isSupportedSettingsRecord,
     normalize: normalizeSettingsRecord,
-    fromLegacy: settingsRecordFromLegacy,
-    toLegacy: legacyDocumentWithSettings,
   },
   species: {
     key: STORAGE_KEYS.species,
-    slot: 2,
     accepts: isSupportedSpeciesRecord,
     normalize: normalizeSpeciesRecord,
-    fromLegacy: speciesRecordFromLegacy,
-    toLegacy: legacyDocumentWithSpecies,
   },
   stamps: {
     key: STORAGE_KEYS.stamps,
-    slot: 3,
     accepts: isSupportedStampsRecord,
     normalize: normalizeStampsRecord,
-    fromLegacy: stampsRecordFromLegacy,
-    toLegacy: legacyDocumentWithStamps,
   },
 } as const;
 
@@ -128,22 +114,29 @@ export interface BrowserAppDataStore {
 export function createBrowserAppDataStore({
   storage = browserLocalStorageAdapter(),
 }: BrowserAppDataStoreOptions = {}): BrowserAppDataStore {
-  const { readPartition, writePartition } = createBrowserPartitionStorage({
-    storage,
-    legacyKey: LEGACY_STORAGE_KEY,
-    committedAuthorityKey: V2_COMMITTED_AUTHORITY_STORAGE_KEY,
-    migrationProgressKey: V2_MIGRATION_PROGRESS_STORAGE_KEY,
-    authorityReservationKey: V2_AUTHORITY_RESERVATION_STORAGE_KEY,
-    recordVersion: RECORD_VERSION,
-    partitions: Object.values(PARTITIONS),
-    decodeLegacy(raw) {
-      try {
-        return normalizeLegacyAppDataDocument(JSON.parse(raw));
-      } catch {
-        return emptyLegacyDocument();
-      }
-    },
-  });
+  function readPartition<TRecord>(partition: BrowserStoragePartition<TRecord>): TRecord {
+    try {
+      const raw = storage.getItem(partition.key);
+      if (raw === null) return partition.normalize(null);
+      const parsed: unknown = JSON.parse(raw);
+      return partition.normalize(partition.accepts(parsed) ? parsed : null);
+    } catch {
+      return partition.normalize(null);
+    }
+  }
+
+  function writePartition<TRecord, TValue>(
+    partition: BrowserStoragePartition<TRecord>,
+    mutate: (current: TRecord) => { next: TRecord; value: TValue },
+  ): BrowserAppDataWriteResult<TValue> {
+    try {
+      const mutation = mutate(readPartition(partition));
+      storage.setItem(partition.key, JSON.stringify(mutation.next));
+      return { ok: true, value: mutation.value };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
 
   return {
     saveDraft({ id: requestedId, file, now }) {
@@ -292,78 +285,6 @@ function browserLocalStorageAdapter(): BrowserStorageAdapter {
   };
 }
 
-function draftsRecordFromLegacy(document: LegacyBrowserAppDataDocument): BrowserDraftsRecord {
-  return {
-    version: RECORD_VERSION,
-    drafts: document.drafts.map((draft) => ({ ...draft })),
-    draftFiles: decodeDraftFiles(document.draftFiles),
-  };
-}
-
-function settingsRecordFromLegacy(document: LegacyBrowserAppDataDocument): BrowserSettingsRecord {
-  return {
-    version: RECORD_VERSION,
-    settings: document.settings ? { ...document.settings } : null,
-  };
-}
-
-function speciesRecordFromLegacy(document: LegacyBrowserAppDataDocument): BrowserSpeciesRecord {
-  return {
-    version: RECORD_VERSION,
-    favoriteSpecies: [...document.favoriteSpecies],
-    recentlyViewedSpecies: [...document.recentlyViewedSpecies],
-  };
-}
-
-function stampsRecordFromLegacy(document: LegacyBrowserAppDataDocument): BrowserSavedObjectStampsRecord {
-  return {
-    version: RECORD_VERSION,
-    savedObjectStamps: document.savedObjectStamps.map((record) => ({ ...record })),
-  };
-}
-
-function legacyDocumentWithDrafts(
-  document: LegacyBrowserAppDataDocument,
-  record: BrowserDraftsRecord,
-): LegacyBrowserAppDataDocument {
-  return {
-    ...document,
-    drafts: record.drafts.map((draft) => ({ ...draft })),
-    draftFiles: { ...record.draftFiles },
-  };
-}
-
-function legacyDocumentWithSettings(
-  document: LegacyBrowserAppDataDocument,
-  record: BrowserSettingsRecord,
-): LegacyBrowserAppDataDocument {
-  return {
-    ...document,
-    settings: record.settings ? { ...record.settings } : null,
-  };
-}
-
-function legacyDocumentWithSpecies(
-  document: LegacyBrowserAppDataDocument,
-  record: BrowserSpeciesRecord,
-): LegacyBrowserAppDataDocument {
-  return {
-    ...document,
-    favoriteSpecies: [...record.favoriteSpecies],
-    recentlyViewedSpecies: [...record.recentlyViewedSpecies],
-  };
-}
-
-function legacyDocumentWithStamps(
-  document: LegacyBrowserAppDataDocument,
-  record: BrowserSavedObjectStampsRecord,
-): LegacyBrowserAppDataDocument {
-  return {
-    ...document,
-    savedObjectStamps: record.savedObjectStamps.map((stamp) => ({ ...stamp })),
-  };
-}
-
 function isSupportedDraftsRecord(value: unknown): boolean {
   return isV2Record(value)
     && Array.isArray(value.drafts)
@@ -453,41 +374,6 @@ function emptyStampsRecord(): BrowserSavedObjectStampsRecord {
 
 function isV2Record(value: unknown): value is Record<string, unknown> & { version: 2 } {
   return isRecord(value) && value.version === RECORD_VERSION;
-}
-
-function emptyLegacyDocument(): LegacyBrowserAppDataDocument {
-  return {
-    drafts: [],
-    draftFiles: {},
-    settings: null,
-    favoriteSpecies: [],
-    recentlyViewedSpecies: [],
-    savedObjectStamps: [],
-  };
-}
-
-function normalizeLegacyAppDataDocument(value: unknown): LegacyBrowserAppDataDocument {
-  if (!isRecord(value)) return emptyLegacyDocument();
-  const decodedDraftFiles = decodeDraftFiles(value.draftFiles);
-  const rawDraftFiles = isRecord(value.draftFiles) ? value.draftFiles : {};
-  // Unrelated v1 partition writes must not grow Drafts by adding new schema
-  // defaults. Draft readers still receive fully decoded documents.
-  const draftFiles = Object.fromEntries(Object.keys(decodedDraftFiles).map((id) => [id, rawDraftFiles[id]]));
-  const validDraftIds = new Set(Object.keys(draftFiles));
-  return {
-    drafts: Array.isArray(value.drafts)
-      ? value.drafts.filter((draft): draft is BrowserDraftSummary => (
-        isDraftSummary(draft) && validDraftIds.has(draft.id)
-      ))
-      : [],
-    draftFiles,
-    settings: isRecord(value.settings) ? { ...value.settings } : null,
-    favoriteSpecies: Array.isArray(value.favoriteSpecies) ? uniqueStrings(value.favoriteSpecies) : [],
-    recentlyViewedSpecies: Array.isArray(value.recentlyViewedSpecies) ? uniqueStrings(value.recentlyViewedSpecies) : [],
-    savedObjectStamps: Array.isArray(value.savedObjectStamps)
-      ? value.savedObjectStamps.filter(isSavedObjectStampRecord)
-      : [],
-  };
 }
 
 function decodeDraftFiles(value: unknown): Record<string, CanopiFile> {

@@ -134,7 +134,6 @@ describe('scene runtime presentation controller', () => {
             ...plant,
             stratum: next.stratum,
             canopySpreadM: next.canopySpreadM,
-            scale: next.scale,
           }
         })
       })
@@ -146,7 +145,6 @@ describe('scene runtime presentation controller', () => {
     expect(sceneStore.persisted.plants[0]).toMatchObject({
       stratum: 'canopy',
       canopySpreadM: 4.5,
-      scale: 4.5,
     })
     expect(controller.getSpeciesCache().get('Malus domestica')).toMatchObject({
       resolved_flower_color: 'white',
@@ -289,7 +287,6 @@ describe('scene runtime presentation controller', () => {
     sceneStore.updatePersisted((draft) => {
       draft.plants[0]!.stratum = 'canopy'
       draft.plants[0]!.canopySpreadM = 4
-      draft.plants[0]!.scale = 4
     })
 
     const staleRefresh = await controller.refreshCurrentPresentationData()

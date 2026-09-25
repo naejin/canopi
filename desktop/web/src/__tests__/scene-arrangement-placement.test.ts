@@ -355,7 +355,6 @@ function plant(id: string, x: number, y: number): ScenePlantEntity {
     canopySpreadM: null,
     position: { x, y },
     rotationDeg: null,
-    scale: null,
     notes: null,
     plantedDate: null,
     quantity: null,

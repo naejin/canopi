@@ -38,12 +38,7 @@ fn get_settings_with_locale(
 }
 
 fn deserialize_settings(serialized: &str) -> Result<Settings, String> {
-    let mut value: serde_json::Value =
-        serde_json::from_str(serialized).map_err(|e| format!("Failed to parse settings: {e}"))?;
-    if value.get("theme").and_then(|theme| theme.as_str()) == Some("system") {
-        value["theme"] = serde_json::json!("light");
-    }
-    serde_json::from_value(value).map_err(|e| format!("Failed to parse settings: {e}"))
+    serde_json::from_str(serialized).map_err(|e| format!("Failed to parse settings: {e}"))
 }
 
 fn detect_initial_locale(os_locale: Option<&str>) -> Option<Locale> {
@@ -78,25 +73,6 @@ mod tests {
     fn test_user_db() -> UserDb {
         let conn = Connection::open_in_memory().unwrap();
         UserDb::initialize(conn).unwrap()
-    }
-
-    #[test]
-    fn migrates_removed_system_theme_before_deserializing() {
-        let user_db = test_user_db();
-        {
-            let conn = user_db.acquire();
-            crate::db::user_db::set_setting(
-                &conn,
-                "settings",
-                r#"{"locale":"en","theme":"system","snap_to_grid":true}"#,
-            )
-            .unwrap();
-        }
-
-        let settings = get_settings_with_locale(&user_db, Some("en_US")).unwrap();
-
-        assert_eq!(settings.theme, Theme::Light);
-        assert_eq!(settings.locale, Locale::En);
     }
 
     #[test]

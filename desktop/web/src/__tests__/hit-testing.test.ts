@@ -24,7 +24,6 @@ function createScene(): ScenePersistedState {
       canopySpreadM: null,
       position: { x: 10, y: 20 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,

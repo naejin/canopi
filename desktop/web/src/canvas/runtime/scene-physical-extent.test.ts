@@ -21,7 +21,6 @@ describe('Scene physical extent', () => {
       canopySpreadM: null,
       position: { x: 30, y: 40 },
       rotationDeg: null,
-      scale: null,
       notes: null,
       plantedDate: null,
       quantity: null,

@@ -146,7 +146,6 @@ function hydratePlantEntity(plant: PlacedPlant): ScenePlantEntity {
       y: plant.position.y,
     },
     rotationDeg: plant.rotation,
-    scale: plant.scale,
     notes: plant.notes,
     plantedDate: plant.planted_date,
     quantity: plant.quantity,
@@ -166,7 +165,8 @@ function serializePlantEntity(plant: ScenePlantEntity): PlacedPlant {
       y: plant.position.y,
     },
     rotation: plant.rotationDeg,
-    scale: plant.canopySpreadM ?? plant.scale,
+    // The file's `scale` field is the plant's canopy spread in metres.
+    scale: plant.canopySpreadM,
     notes: plant.notes,
     planted_date: plant.plantedDate,
     quantity: plant.quantity,

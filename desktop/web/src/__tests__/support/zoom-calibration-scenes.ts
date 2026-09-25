@@ -19,7 +19,7 @@ export function createZoomCalibrationScene(name: ZoomCalibrationScene): ScenePer
         color: null, symbol: symbols[index % symbols.length], pinnedName: index % 3 !== 0,
         stratum: 'medium', canopySpreadM: null,
         position: { x: 5 + column * spacing, y: 7 + row * spacing },
-        rotationDeg: null, scale: null, notes: null, plantedDate: null, quantity: null,
+        rotationDeg: null, notes: null, plantedDate: null, quantity: null,
       })
     }
   }

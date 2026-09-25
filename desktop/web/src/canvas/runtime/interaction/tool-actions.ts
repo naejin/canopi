@@ -168,7 +168,6 @@ export function appendPlantStampSourceToDraft(
       canopySpreadM: source.width_max_m,
       position: world,
       rotationDeg: null,
-      scale: source.width_max_m,
       notes: null,
       plantedDate: null,
       quantity: 1,

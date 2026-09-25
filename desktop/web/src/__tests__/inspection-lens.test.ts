@@ -81,7 +81,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     let snapshot = createTestSceneRendererSnapshot({ scene: { layers: [{ kind: 'layer', name: 'plants', visible: true, opacity: 1, locked: false }], plants: [{
       kind: 'plant', id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 0, y: 0 },
-      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, scale: null, notes: null,
+      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const revision = { scene: signal(0), plantNames: signal(0) }, setHoveredTarget = vi.fn(target => { snapshot = { ...snapshot, hoverTarget: target } })
@@ -179,7 +179,7 @@ describe('Inspection Lens ownership', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [{
       kind: 'plant', id: 'mint', canonicalName: 'Mentha spicata', commonName: 'Menthe verte', position: { x: 1, y: 2 },
-      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, scale: null, notes: null,
+      color: null, stratum: null, canopySpreadM: null, rotationDeg: null, notes: null,
       plantedDate: null, quantity: null, locked: false,
     }] } })
     const before = JSON.stringify(snapshot.scene)

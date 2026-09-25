@@ -237,7 +237,6 @@ describe('Settled Scene persistence authority', () => {
       canonicalName: 'Malus domestica',
       stratum: 'canopy',
       canopySpreadM: 4,
-      scale: 4,
     }])).toBe('applied')
 
     expect(capture.isCurrent()).toBe(false)

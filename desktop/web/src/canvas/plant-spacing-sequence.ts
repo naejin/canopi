@@ -77,7 +77,6 @@ export function createPlantSpacingGeneratedPlants(
     canopySpreadM: source.canopySpreadM,
     position: { ...position },
     rotationDeg: source.rotationDeg,
-    scale: source.scale,
     notes: null,
     plantedDate: null,
     quantity: 1,

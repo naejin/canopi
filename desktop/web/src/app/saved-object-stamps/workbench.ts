@@ -479,7 +479,7 @@ function savedPlantFromScene(
     symbol: resolvePlantSymbolForPlant(plant, plantSpeciesSymbols),
     position: { ...plant.position },
     rotationDeg: plant.rotationDeg,
-    scale: plant.scale,
+    scale: plant.canopySpreadM,
   }
 }
 

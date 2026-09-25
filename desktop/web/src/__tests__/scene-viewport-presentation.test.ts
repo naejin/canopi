@@ -6,7 +6,7 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 const plant: ScenePlantEntity = {
   kind: 'plant', id: 'mint', position: { x: 2, y: 3 }, canonicalName: 'Mentha spicata',
   commonName: 'Mint', color: null, stratum: null, canopySpreadM: 1, rotationDeg: null,
-  scale: null, notes: null, plantedDate: null, quantity: null, locked: false, pinnedName: true,
+  notes: null, plantedDate: null, quantity: null, locked: false, pinnedName: true,
 }
 
 function snapshot(pinnedName = true) {

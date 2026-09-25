@@ -19,4 +19,4 @@ Part of the [Document lifecycle guide](document-lifecycle.md). For Scene transac
 - Canvas runtime settings-backed commands such as snap-to-grid toggling and Plant Spacing interval commits cross the one shared factory in `app/canvas-runtime/app-adapter.ts`. Desktop and Web composition roots supply only their actual runtime capabilities; they must not rebuild settings policy. Runtime core should not import settings projection modules directly.
 - Calendar, Budget, and Consortium view preferences belong to the session-scoped Planning View owner. They are not Design data or persisted Settings. Legacy `bottom_panel_*` settings are accepted as unknown fields when old settings load and are omitted on the next save.
 - The `canopi-theme` localStorage key is a best-effort first-paint cache; a guarded inline script in both HTML entries applies it before module loading, then the active platform settings adapter overwrites it during bootstrap. Cache read/write failure must not prevent parsing, DOM theme application, or settings hydration.
-- Theme is light/dark only. Stale `"system"` values are migrated by settings deserialization.
+- Theme is light/dark only.

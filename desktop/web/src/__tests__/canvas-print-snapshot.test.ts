@@ -32,7 +32,7 @@ describe('Canvas print capture', () => {
     scene.plantSpeciesSymbols['Malus domestica'] = 'canopy'
     scene.plants.push({ kind: 'plant', id: 'apple', canonicalName: 'Malus domestica', commonName: 'Apple',
       color: '#123456', pinnedName: true, locked: true, stratum: null, canopySpreadM: null,
-      position: { x: 12, y: -4 }, rotationDeg: 90, scale: null, notes: null, plantedDate: null, quantity: 1 })
+      position: { x: 12, y: -4 }, rotationDeg: 90, notes: null, plantedDate: null, quantity: 1 })
     const before = structuredClone(scene)
     const result = buildCanvasPrintSnapshot(scene, { viewport: { x: 500, y: 700, scale: 0.001 }, speciesCache: new Map() })
     expect(result.plants).toEqual([expect.objectContaining({ id: 'apple', canonicalName: 'Malus domestica',

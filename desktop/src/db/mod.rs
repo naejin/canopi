@@ -88,7 +88,36 @@ impl Deref for PlantDbConnectionGuard<'_> {
 pub struct UserDb(Arc<Mutex<Connection>>);
 
 impl UserDb {
+    /// Open the user database at `path`.
+    ///
+    /// Canopi v2 does not upgrade older user databases: one written by an older
+    /// Canopi is renamed to `<file>.v<version>-set-aside` and an empty current
+    /// database is created in its place. A newer database is refused as-is.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, UserDbInitError> {
+        let path = path.as_ref();
+        let connection = Connection::open(path).map_err(UserDbInitError::Open)?;
+        let found = user_db::schema_version(&connection)?;
+        if found == 0 || found >= user_db::CURRENT_USER_DB_VERSION {
+            return Self::initialize(connection);
+        }
+        drop(connection);
+        let file_name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "user.db".to_string());
+        let aside = path.with_file_name(format!("{file_name}.v{found}-set-aside"));
+        std::fs::rename(path, &aside)
+            .map_err(|source| UserDbInitError::SetAside { found, source })?;
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = path.with_file_name(format!("{file_name}{suffix}"));
+            if sidecar.exists() {
+                let _ = std::fs::rename(&sidecar, format!("{}{suffix}", aside.display()));
+            }
+        }
+        tracing::warn!(
+            "set aside user database from an older Canopi (schema v{found}) at {}",
+            aside.display()
+        );
         let connection = Connection::open(path).map_err(UserDbInitError::Open)?;
         Self::initialize(connection)
     }

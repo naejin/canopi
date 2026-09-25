@@ -88,7 +88,6 @@ function plantFixture(id = 'plant-1'): ScenePlantEntity {
     canopySpreadM: 2,
     position: { x: 20, y: 30 },
     rotationDeg: null,
-    scale: 2,
     notes: null,
     plantedDate: null,
     quantity: 1,
