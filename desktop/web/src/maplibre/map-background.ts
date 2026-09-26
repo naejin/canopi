@@ -78,7 +78,7 @@ export interface MapBackgroundOptions {
   readonly tileAuth: BasemapTileAuth | null
   readonly lifetime: {
     on(type: string, listener: (event?: unknown) => void): void
-    off?(type: string, listener: (event?: unknown) => void): void
+    off(type: string, listener: (event?: unknown) => void): void
   }
   readonly loadStyle?: (url: string) => Promise<VectorStyleDocument>
   readonly onError?: (error: unknown) => void
@@ -151,16 +151,19 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     applySatelliteOpacity()
   }
 
-  let waiting = false
+  // At most one pending style-ready wait: it applies whatever presentation is
+  // latest when it fires, so later updates need no wait of their own.
+  let cancelReadyWait: (() => void) | null = null
   const schedule = () => {
     if (readiness.isReady()) {
+      cancelReadyWait?.()
+      cancelReadyWait = null
       apply()
       return
     }
-    if (waiting) return
-    waiting = true
-    readiness.whenReady(() => {
-      waiting = false
+    if (cancelReadyWait) return
+    cancelReadyWait = readiness.whenReady(() => {
+      cancelReadyWait = null
       apply()
     })
   }
@@ -179,6 +182,8 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
     dispose() {
       if (disposed) return
       disposed = true
+      cancelReadyWait?.()
+      cancelReadyWait = null
       releaseSatellite()
       vector.dispose()
       attribution.dispose()

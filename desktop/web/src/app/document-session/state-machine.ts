@@ -323,13 +323,16 @@ export class DesignSessionStateMachine {
     options: SaveCurrentDesignOptions = {},
   ): Promise<DocumentTransitionResult | null> {
     const conflict = this.continuousSave.conflict.peek();
-    if (!conflict) return null;
+    const token = this.continuousSave.sessionToken();
+    if (!conflict || !token) return null;
     const choice = await this.deps.requestSaveDecision({
       kind: "conflict",
       fileGone: conflict.fileGone,
     });
+    // The answer belongs to the Design that asked; a replacement during the dialog voids it.
+    if (this.continuousSave.sessionToken() !== token) return null;
     if (choice === "keep-mine") {
-      await this.continuousSave.overwriteHome();
+      await this.continuousSave.overwriteHome(token);
       return null;
     }
     if (choice === "save-copy") {
@@ -358,12 +361,23 @@ export class DesignSessionStateMachine {
   revertToOpenedVersion(
     options: SaveCurrentDesignOptions = {},
   ): Promise<DocumentTransitionResult> {
-    const snapshot = this.continuousSave.readSnapshot();
-    const home = this.continuousSave.readHome();
+    const token = this.continuousSave.sessionToken();
     const session = this.sessionForOption(options.session);
-    if (!snapshot || !home) return Promise.resolve(cancelledResult(session));
+    if (!token || !this.continuousSave.readSnapshot() || !this.continuousSave.readHome()) {
+      return Promise.resolve(cancelledResult(session));
+    }
     return this.deps.requestSaveDecision({ kind: "revert" }).then((choice) => {
-      if (choice !== "revert") return cancelledResult(session);
+      // Read after the answer: the confirmation only covers the session that asked.
+      const snapshot = this.continuousSave.readSnapshot();
+      const home = this.continuousSave.readHome();
+      if (
+        choice !== "revert"
+        || this.continuousSave.sessionToken() !== token
+        || !snapshot
+        || !home
+      ) {
+        return cancelledResult(session);
+      }
       return this.revertTo(snapshot, home, options);
     });
   }

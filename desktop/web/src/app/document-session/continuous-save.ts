@@ -75,8 +75,8 @@ export interface ContinuousSave {
   hasPendingChanges(): boolean
   /** Write now; true when the home holds every committed change. */
   flush(): Promise<boolean>
-  /** Resolve a conflict by overwriting the file with this session's Design. */
-  overwriteHome(): Promise<boolean>
+  /** Resolve a conflict by overwriting the file with the Design of the session `token` names. */
+  overwriteHome(token: object | null): Promise<boolean>
   /** Resolves when no write is in flight or queued. */
   idle(): Promise<void>
   install(): () => void
@@ -101,7 +101,8 @@ export function createContinuousSave({
   const changed = signal(false)
   const failed = signal(false)
   const conflict = signal<ContinuousSaveConflict | null>(null)
-  const writing = signal(false)
+  // The session whose write is in flight; another session's write never shows as its "Saving…".
+  const writingSession = signal<object | null>(null)
   let timer: ReturnType<typeof setTimeout> | null = null
   let active: Promise<boolean> | null = null
   let queued: Promise<boolean> | null = null
@@ -127,7 +128,8 @@ export function createContinuousSave({
     if (homeless.value) return pending.value ? 'error' : 'saved'
     if (conflict.value) return 'conflict'
     if (failed.value) return 'error'
-    return writing.value || pending.value ? 'saving' : 'saved'
+    const writing = writingSession.value !== null && writingSession.value === currentRecord()?.identity
+    return writing || pending.value ? 'saving' : 'saved'
   })
 
   // Changed since opened: unwritten edits now, or edits already written.
@@ -200,12 +202,12 @@ export function createContinuousSave({
       return settleFailure(session, error)
     }
     if (!isPromise(outcome)) return settleOutcome(session, outcome, pendingAtStart)
-    writing.value = true
+    writingSession.value = session.identity
     return outcome.then(
       (settled) => settleOutcome(session, settled, pendingAtStart),
       (error: unknown) => settleFailure(session, error),
     ).finally(() => {
-      writing.value = false
+      if (writingSession.peek() === session.identity) writingSession.value = null
     })
   }
 
@@ -307,10 +309,10 @@ export function createContinuousSave({
 
     flush,
 
-    async overwriteHome() {
+    async overwriteHome(token) {
       const current = peekRecord()
       const path = store.readDesignPath()
-      if (!current) return false
+      if (!current || current.identity !== token) return false
       if (path) current.fingerprints.set(path, null)
       batch(() => {
         conflict.value = null

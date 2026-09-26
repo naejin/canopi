@@ -37,8 +37,12 @@ import {
  */
 export interface MapStyleReadiness {
   isReady(): boolean
-  /** Register a one-shot style-ready callback on the map's lifetime. */
-  whenReady(listener: () => void): void
+  /**
+   * Wait for the style once. The callback runs at most once, and firing or
+   * disposing removes every listener the wait registered. Returns the disposer;
+   * the caller owns it and keeps at most one pending wait.
+   */
+  whenReady(listener: () => void): () => void
 }
 
 export interface SatelliteBindingDeps {
@@ -102,6 +106,7 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
   let pending: SatelliteState | null = null
   let ownedAttribution: unknown = null
   let ownedCredit: string | null = null
+  let cancelReadyWait: (() => void) | null = null
 
   const target: SatelliteReconcileTarget = {
     getSource: (id) => map.getSource(id),
@@ -167,7 +172,8 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
 
   const unsubscribe = provider.subscribe(apply)
   if (deps.styleReady && !deps.styleReady.isReady()) {
-    deps.styleReady.whenReady(() => {
+    cancelReadyWait = deps.styleReady.whenReady(() => {
+      cancelReadyWait = null
       if (disposed) return
       const state = pending ?? provider.snapshot()
       pending = null
@@ -186,6 +192,8 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
   return () => {
     disposed = true
     pending = null
+    cancelReadyWait?.()
+    cancelReadyWait = null
     unsubscribe()
     if (ownedAttribution) {
       deps.attributionControls?.remove(ownedAttribution)
@@ -311,7 +319,10 @@ export function installSatelliteConfigObserver(
  */
 export function mapStyleReadiness(
   map: { isStyleLoaded?(): boolean; loaded?(): boolean },
-  lifetime: { on(type: string, listener: (event?: unknown) => void): void },
+  lifetime: {
+    on(type: string, listener: (event?: unknown) => void): void
+    off(type: string, listener: (event?: unknown) => void): void
+  },
 ): MapStyleReadiness {
   const read = (): boolean | null => {
     for (const probe of [map.isStyleLoaded, map.loaded]) {
@@ -327,8 +338,23 @@ export function mapStyleReadiness(
   return {
     isReady: () => read() ?? true,
     whenReady: (listener) => {
-      lifetime.on('load', listener)
-      lifetime.on('style.load', listener)
+      let settled = false
+      const release = () => {
+        if (settled) return
+        settled = true
+        lifetime.off('load', onReady)
+        lifetime.off('style.load', onReady)
+      }
+      // `load` and `style.load` both signal readiness; whichever comes first
+      // wins and a later style reload is not this wait's business.
+      const onReady = () => {
+        if (settled) return
+        release()
+        listener()
+      }
+      lifetime.on('load', onReady)
+      lifetime.on('style.load', onReady)
+      return release
     },
   }
 }

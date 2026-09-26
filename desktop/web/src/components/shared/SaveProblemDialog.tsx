@@ -29,7 +29,15 @@ function SaveProblemDialogContent({ request }: { readonly request: SaveProblemRe
   const { title, message, actions } = describe(request)
 
   return (
-    <div className={styles.overlay}>
+    <div
+      className={styles.overlay}
+      data-save-problem-overlay
+      // The dialog is modal: pressing the backdrop must not move focus to
+      // the canvas, where keys would edit the Design behind it.
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) event.preventDefault()
+      }}
+    >
       <section
         className={styles.dialog}
         role="alertdialog"
@@ -39,6 +47,10 @@ function SaveProblemDialogContent({ request }: { readonly request: SaveProblemRe
         data-preserve-overlays="true"
         data-save-problem={request.kind}
         onKeyDown={(event) => {
+          if (event.key === 'Tab') {
+            trapTab(event)
+            return
+          }
           if (event.key !== 'Escape') return
           event.preventDefault()
           event.stopPropagation()
@@ -122,4 +134,17 @@ function describe(request: SaveProblemRequest): {
       cancel,
     ],
   }
+}
+
+/** Tab and Shift+Tab cycle through the dialog's own buttons. */
+function trapTab(event: KeyboardEvent): void {
+  const dialog = event.currentTarget as HTMLElement
+  const focusable = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))
+  if (focusable.length === 0) return
+  const index = focusable.indexOf(document.activeElement as HTMLButtonElement)
+  const next = event.shiftKey
+    ? (index <= 0 ? focusable.length - 1 : index - 1)
+    : (index === focusable.length - 1 ? 0 : index + 1)
+  event.preventDefault()
+  focusable[next]!.focus()
 }

@@ -10,6 +10,8 @@ import { createDesignDraftsController } from '../app/design-drafts'
 import { locale } from '../app/settings/state'
 import { DraftList } from '../components/shared/DraftList'
 import { SaveProblemDialog } from '../components/shared/SaveProblemDialog'
+import { CommandPalette } from '../components/shared/CommandPalette'
+import { commandPaletteOpen } from '../commands/registry'
 import { SaveStatusLabel } from '../components/shared/SaveStatusLabel'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { createBrowserAppDataStore } from '../web/browser-app-data'
@@ -147,12 +149,61 @@ describe('SaveProblemDialog', () => {
     await expect(decision).resolves.toBe('keep-mine')
   })
 
+  it('keeps focus inside the dialog: Tab wraps and a backdrop press does not take focus away', async () => {
+    await act(async () => {
+      render(<SaveProblemDialog />, container)
+    })
+    await act(async () => {
+      void requestSaveProblemDecision({ kind: 'flush-failed', purpose: 'replace', conflict: false })
+    })
+    const [retry, , cancel] = buttons()
+    expect(document.activeElement).toBe(retry)
+
+    cancel!.focus()
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    cancel!.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(retry)
+
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    retry!.dispatchEvent(shiftTab)
+    expect(document.activeElement).toBe(cancel)
+
+    const overlay = container.querySelector('[data-save-problem-overlay]')!
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    overlay.dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+  })
+
   it('cancels an older request when a newer one arrives', async () => {
     const older = requestSaveProblemDecision({ kind: 'conflict', fileGone: false })
     const newer = requestSaveProblemDecision({ kind: 'flush-failed', purpose: 'close', conflict: false })
     await expect(older).resolves.toBe('cancel')
     answerSaveProblem('retry')
     await expect(newer).resolves.toBe('retry')
+  })
+})
+
+describe('save dialog modality', () => {
+  it('hides the command palette while the save dialog asks', async () => {
+    commandPaletteOpen.value = true
+    await act(async () => {
+      render(<><CommandPalette /><SaveProblemDialog /></>, container)
+    })
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+
+    let decision!: Promise<unknown>
+    await act(async () => {
+      decision = requestSaveProblemDecision({ kind: 'revert' })
+    })
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
+
+    await act(async () => {
+      answerSaveProblem('cancel')
+      await decision
+    })
+    commandPaletteOpen.value = false
   })
 })
 

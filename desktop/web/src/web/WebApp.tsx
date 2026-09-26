@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useMemo } from "preact/hooks";
+import { useMemo } from "preact/hooks";
 import { activePanel, sidePanel } from "../app/shell/state";
 import styles from "./WebApp.module.css";
 import { BrowserAppShell } from "./BrowserAppShell";
@@ -49,15 +49,6 @@ export function WebApp({
     templatesEnabled,
     capabilities: shellCapabilities,
   });
-
-  useEffect(() => {
-    try {
-      controller.restoreLatestDraft();
-    } catch (error) {
-      logWebAppCommandError(error);
-    }
-    return controller.installContinuousSave();
-  }, [controller]);
 
   return (
     <div className={styles.root} data-canopi-web-root>

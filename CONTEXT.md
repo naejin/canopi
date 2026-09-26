@@ -36,7 +36,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Notebook Section**: A user-named, manually ordered grouping inside the Design Notebook. A notebook section organizes saved Design references one-to-many: a saved Design reference belongs to at most one notebook section, and section membership is personal app organization rather than saved Design content. _Avoid:_ Folder, tag, category
 
-**Design Edit**: A non-canvas change to Design-owned state, including Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, preview/commit/abort transaction behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state. _Avoid:_ Document mutation, panel action, direct currentDesign write
+**Design Edit**: A non-canvas change to Design-owned state, including Budget Items, Timeline Actions, Consortiums, description, and extra fields. Design Edit owns no-op detection, committed edit behavior, and non-canvas dirty-state marking behind the Design Session seam. It does not own canvas scene state, save/load lifecycle, or UI draft state. _Avoid:_ Document mutation, panel action, direct currentDesign write
 
 **App Command Graph**: The app runtime seam for user command identity, labels, availability, shortcuts, dispatch, and chrome projections such as menus, palettes, toolbars, and panel navigation. The app command graph coordinates command access to Design Session, canvas, settings, and shell state without owning those domain states. _Avoid:_ Menu registry, shortcut map, toolbar state
 

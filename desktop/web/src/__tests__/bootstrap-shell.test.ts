@@ -17,6 +17,22 @@ const mocks = vi.hoisted(() => ({
     load: vi.fn(),
     save: vi.fn(),
   },
+  restoreLatestDraft: vi.fn(),
+  installContinuousSave: vi.fn(),
+  uninstallContinuousSave: vi.fn(),
+  installPlaceSearchSession: vi.fn(),
+  disposePlaceSearchSession: vi.fn(),
+}));
+
+vi.mock("../web/browser-design-session", () => ({
+  browserDesignSessionController: {
+    restoreLatestDraft: mocks.restoreLatestDraft,
+    installContinuousSave: mocks.installContinuousSave,
+  },
+}));
+
+vi.mock("../app/geocoding/place-search-session", () => ({
+  installPlaceSearchSession: mocks.installPlaceSearchSession,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -63,6 +79,11 @@ describe("settings platform bootstrap", () => {
     mocks.registerCloseGuard.mockReset().mockReturnValue({
       dispose: mocks.disposeCloseGuard,
     });
+    mocks.restoreLatestDraft.mockReset().mockReturnValue(true);
+    mocks.uninstallContinuousSave.mockReset();
+    mocks.installContinuousSave.mockReset().mockReturnValue(mocks.uninstallContinuousSave);
+    mocks.disposePlaceSearchSession.mockReset();
+    mocks.installPlaceSearchSession.mockReset().mockReturnValue(mocks.disposePlaceSearchSession);
   });
 
   afterEach(() => {
@@ -86,6 +107,42 @@ describe("settings platform bootstrap", () => {
     );
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
+  });
+
+  it("owns the Web Design Session lifetime: restores the newest Draft, then saves continuously", async () => {
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+
+    expect(mocks.restoreLatestDraft).toHaveBeenCalledOnce();
+    expect(mocks.installContinuousSave).toHaveBeenCalledOnce();
+    expect(mocks.installPlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installSettingsProjection.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreLatestDraft.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.restoreLatestDraft.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.installContinuousSave.mock.invocationCallOrder[0]!,
+    );
+
+    bootstrapPlatform();
+
+    expect(mocks.uninstallContinuousSave).toHaveBeenCalledOnce();
+    expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installContinuousSave).toHaveBeenCalledTimes(2);
+  });
+
+  it("still saves continuously when restoring the newest Draft fails", async () => {
+    const error = new Error("storage unavailable");
+    mocks.restoreLatestDraft.mockImplementation(() => {
+      throw error;
+    });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { bootstrapPlatform } = await import("../platform/browser");
+
+    bootstrapPlatform();
+
+    expect(logError).toHaveBeenCalledWith("Failed to restore the latest Design Draft:", error);
+    expect(mocks.installContinuousSave).toHaveBeenCalledOnce();
   });
 
   it("does not report a Browser settings failure from a replaced bootstrap", async () => {
@@ -120,6 +177,8 @@ describe("settings platform bootstrap", () => {
     );
     expect(mocks.registerCloseGuard).toHaveBeenCalledTimes(2);
     expect(mocks.disposeCloseGuard).toHaveBeenCalledOnce();
+    expect(mocks.installPlaceSearchSession).toHaveBeenCalledTimes(2);
+    expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });

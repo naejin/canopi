@@ -397,6 +397,74 @@ describe("continuous save conflicts", () => {
   });
 });
 
+describe("save decisions stay bound to the session that asked", () => {
+  async function openNextDuringDecision(): Promise<void> {
+    await expect(machine.transitionDocument({
+      source: "open-path",
+      dirtyGuard: "flush",
+      session: null,
+      load: async () => ({
+        file: { ...makeFile("Next"), description: "next" },
+        path: "/designs/next.canopi",
+        name: "Next",
+        fingerprint: "fp-next",
+      }),
+    })).resolves.toMatchObject({ status: "applied" });
+    expect(store.readDesignPath()).toBe("/designs/next.canopi");
+  }
+
+  it("does not overwrite a Design opened while the conflict dialog was open", async () => {
+    markDesignSessionDirtyForTest(store);
+    mocks.saveDesign.mockRejectedValueOnce(new DesignHomeConflictError(false));
+    await machine.continuousSave.flush();
+    const decision = deferred<string>();
+    mocks.requestSaveDecision.mockReturnValueOnce(decision.promise);
+    mocks.requestSaveDecision.mockResolvedValueOnce("discard");
+
+    const resolving = machine.resolveSaveConflict();
+    await openNextDuringDecision();
+    markDesignSessionDirtyForTest(store);
+    mocks.saveDesign.mockClear();
+    mocks.expectedFingerprints.length = 0;
+    decision.resolve("keep-mine");
+
+    await expect(resolving).resolves.toBeNull();
+    expect(mocks.saveDesign).not.toHaveBeenCalled();
+    expect(machine.continuousSave.readHome()).toMatchObject({ fingerprint: "fp-next" });
+  });
+
+  it("does not reload over a Design opened while the conflict dialog was open", async () => {
+    markDesignSessionDirtyForTest(store);
+    mocks.saveDesign.mockRejectedValueOnce(new DesignHomeConflictError(false));
+    await machine.continuousSave.flush();
+    const decision = deferred<string>();
+    mocks.requestSaveDecision.mockReturnValueOnce(decision.promise);
+    mocks.requestSaveDecision.mockResolvedValueOnce("discard");
+
+    const resolving = machine.resolveSaveConflict();
+    await openNextDuringDecision();
+    decision.resolve("use-file");
+
+    await expect(resolving).resolves.toBeNull();
+    expect(mocks.loadDesign).not.toHaveBeenCalled();
+    expect(store.readCurrentDesign()?.description).toBe("next");
+  });
+
+  it("does not revert a Design opened while the revert confirmation was open", async () => {
+    editDesignSessionForTest(store, (design) => ({ ...design, description: "edited" }));
+    const decision = deferred<string>();
+    mocks.requestSaveDecision.mockReturnValueOnce(decision.promise);
+
+    const reverting = machine.revertToOpenedVersion();
+    await openNextDuringDecision();
+    decision.resolve("revert");
+
+    await expect(reverting).resolves.toMatchObject({ status: "cancelled" });
+    expect(store.readDesignPath()).toBe("/designs/next.canopi");
+    expect(store.readCurrentDesign()?.description).toBe("next");
+  });
+});
+
 describe("continuous save homes", () => {
   it("turns Save on a Draft home into Save As and deletes the Draft", async () => {
     resetMachine({ file: makeFile("Draft Garden"), path: null, name: "Draft Garden" });

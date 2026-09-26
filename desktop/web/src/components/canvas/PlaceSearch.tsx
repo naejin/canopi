@@ -1,7 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { geocodingTransport } from '#geocoding-transport'
-import { createPlaceSearchController, type PlaceSearchResult } from '../../app/geocoding/place-search'
-import { closePlaceSearch, openPlaceSearch, placeSearchOpen, PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  dismissPlaceSearch,
+  placeSearch as search,
+  type PlaceSearchResult,
+} from '../../app/geocoding/place-search-session'
+import { openPlaceSearch, placeSearchOpen, PLACE_SEARCH_ZOOM } from '../../app/geocoding/place-search-ui'
 import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '../../canvas/session'
 import { DEFAULT_NEW_DESIGN_VIEW } from '../../canvas/session-plane'
 import { VIEW_SHORTCUTS } from '../../shortcuts/definitions'
@@ -20,18 +23,13 @@ export function PlaceSearch() {
   const input = useRef<HTMLInputElement>(null)
   const wasOpen = useRef(false)
   const [query, setQuery] = useState('')
-  const search = useMemo(() => createPlaceSearchController({ transport: geocodingTransport }), [])
-  useEffect(() => () => search.dispose(), [search])
   useLayoutEffect(() => {
     if (open) input.current?.focus()
     else if (wasOpen.current) launcher.current?.focus()
     wasOpen.current = open
   }, [open])
 
-  const close = () => {
-    search.clear()
-    closePlaceSearch()
-  }
+  const close = dismissPlaceSearch
   const choose = (result: PlaceSearchResult) => {
     currentCanvasViewportCommandSurface.value?.showPlace(result, PLACE_SEARCH_ZOOM)
     close()

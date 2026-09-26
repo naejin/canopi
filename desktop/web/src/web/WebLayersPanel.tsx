@@ -1,5 +1,5 @@
 import { LayerPanel } from '../components/canvas/LayerPanel'
-import { LAYER_PANEL_ACTIONS } from '../components/panels/LayersPanel'
+import { LAYER_PANEL_ACTIONS } from '../app/canvas-layer-presentation/panel-actions'
 import { readCanvasLayerPresentation } from '../app/canvas-layer-presentation/presentation'
 
 /** Web has no local terrain or LiDAR, so its Site references are Basemap and Satellite. */

@@ -27,8 +27,12 @@ import {
 } from '../../../app/lidar/library-items'
 import { installLidarLibraryObserver, lidarLibrary, lidarStatusMessage } from '../../../app/lidar/library-store'
 import { libraryCalculateRequest, libraryFocusRequest } from '../../../app/lidar/library-navigation'
-import type { LidarDeleteImpact, LidarMeasurementKind } from '../../../ipc/lidar'
-import type { LidarAnalysisMethod, LidarSlopeUnit } from '../../../generated/contracts'
+import type {
+  LidarAnalysisMethod,
+  LidarDeleteImpact,
+  LidarMeasurementKind,
+  LidarSlopeUnit,
+} from '../../../generated/contracts'
 import { t } from '../../../i18n'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'

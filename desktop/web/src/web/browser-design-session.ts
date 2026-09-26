@@ -336,8 +336,14 @@ export function createBrowserDesignSessionController({
   }
 
   async function revertDesign(): Promise<boolean> {
-    if (!continuousSave.readSnapshot() || continuousSave.readHome()?.kind !== "draft") return false;
+    const token = continuousSave.sessionToken();
+    if (!token || !continuousSave.readSnapshot() || continuousSave.readHome()?.kind !== "draft") {
+      return false;
+    }
+    const intent = replacementIntent;
     if (await requestSaveDecision({ kind: "revert" }) !== "revert") return false;
+    // The confirmation covers only the session that asked: another replacement voids it.
+    if (continuousSave.sessionToken() !== token || replacementIntent !== intent) return false;
     replacementIntent += 1;
     const snapshot = continuousSave.readSnapshot();
     const home = continuousSave.readHome();

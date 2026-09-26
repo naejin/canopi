@@ -10,12 +10,8 @@ import {
   createDesignSessionPersistence,
   DesignPersistenceBusyError,
   DesignPersistenceSettlementError,
-  type DesignSessionPersistence,
 } from '../app/document-session/persistence'
-import {
-  designEditAuthorityCapability,
-  disposeDesignEditAuthority,
-} from '../app/design-edit/authority-capability'
+import { disposeDesignEditAuthority } from '../app/design-edit/authority-capability'
 import {
   prepareDesignWriteDestination,
   prepareSynchronousDesignWriteDestination,
@@ -80,13 +76,6 @@ function downloadDestination(write: TestWrite = () => undefined) {
   })
 }
 
-function draftHomeDestination(write: TestWrite = () => undefined) {
-  return prepareDesignWriteDestination({
-    resource: 'native-draft:test',
-    write,
-  })
-}
-
 function draftDestination(
   write: (content: CanopiFile) => undefined = () => undefined,
 ) {
@@ -132,75 +121,6 @@ describe('purpose-aware Design persistence operations', () => {
     }
     return { session, acknowledgeSaved }
   }
-
-  const committedCaptureCases: ReadonlyArray<readonly [
-    string,
-    (persistence: DesignSessionPersistence) => Promise<CanopiFile | null>,
-  ]> = [
-    ['Save', async (persistence) => {
-      let written: CanopiFile | null = null
-      await persistence.beginSave().execute(designDestination(
-        '/designs/original.canopi',
-        (content) => { written = content },
-      ))
-      return written
-    }],
-    ['Save As', async (persistence) => {
-      let written: CanopiFile | null = null
-      await persistence.beginSaveAs().execute(designDestination(
-        '/designs/saved-as.canopi',
-        (content) => { written = content },
-      ))
-      return written
-    }],
-    ['Design Draft', async (persistence) => {
-      let written: CanopiFile | null = null
-      await persistence.beginSnapshotSave().execute(draftHomeDestination(
-        (content) => { written = content },
-      ))
-      return written
-    }],
-    ['browser download', async (persistence) => {
-      let written: CanopiFile | null = null
-      await persistence.beginSnapshotSave().execute(downloadDestination(
-        (content) => { written = content },
-      ))
-      return written
-    }],
-    ['Browser Draft', async (persistence) => {
-      let written: CanopiFile | null = null
-      persistence.beginBrowserDraft().executeImmediately(draftDestination(
-        (content) => { written = content },
-      ))
-      return written
-    }],
-    ['observation', async (persistence) => persistence.captureObservation(null)],
-  ]
-
-  it.each(committedCaptureCases)(
-    '%s captures committed content while a preview is visible',
-    async (_intent, captureContent) => {
-      const original = makeDesign('Original')
-      const operationStore = createMemoryDesignSessionStore({
-        file: original,
-        path: '/designs/original.canopi',
-        name: original.name,
-      })
-      const persistence = createDesignSessionPersistence({ store: operationStore })
-      const edit = designEditAuthorityCapability(operationStore).beginPreview('test preview')
-      try {
-        edit.preview((design) => ({ ...design, description: 'preview-only' }))
-
-        expect(operationStore.readCurrentDesign()?.description).toBe('preview-only')
-        await expect(captureContent(persistence)).resolves.toMatchObject({
-          description: null,
-        })
-      } finally {
-        edit.abort()
-        persistence.dispose()
-      }
-    },
-  )
 
   it('invalidates an empty-session replacement guard across authority rollover', () => {
     const operationStore = createMemoryDesignSessionStore()

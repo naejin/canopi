@@ -2,6 +2,7 @@ import {
   canvasCommandIntentForShortcut,
   type CanvasCommandShortcutInput,
 } from '../app/canvas-commands'
+import { saveProblem } from '../app/document-session/save-problem'
 import { isPlaceSearchShortcut, openPlaceSearch } from '../app/geocoding/place-search-ui'
 import { getCurrentCanvasSession } from '../canvas/session'
 import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
@@ -19,7 +20,8 @@ export function installWebCanvasShortcuts(target: Window = window): () => void {
   activeInstallation?.dispose()
 
   const handler = (event: KeyboardEvent): void => {
-    if (isEditableTarget(event.target)) return
+    // The save dialog is modal: no shortcut may change the Design under it.
+    if (saveProblem.peek() !== null || isEditableTarget(event.target)) return
     if (isPlaceSearchShortcut(event)) {
       if (!getCurrentCanvasSession()) return
       openPlaceSearch()

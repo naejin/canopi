@@ -16,7 +16,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   message: tauri.message,
 }))
 
-import { desktopGeoJsonFiles, presentDesktopGeoJsonNotice } from '../ipc/geojson'
+import { desktopGeoJsonFiles } from '../ipc/geojson'
+import { presentDesktopGeoJsonNotice } from '../platform/geojson.desktop'
 import { browserGeoJsonFiles } from '../web/browser-geojson'
 import {
   browserShellNotice,

@@ -12,6 +12,7 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture, resetDirtyBaselines } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
 import { problemReportDialogOpen } from '../app/problem-report/state'
+import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import {
   recentFrontendDiagnostics,
   resetFrontendDiagnosticsForTests,
@@ -21,6 +22,7 @@ import {
   appCommandGraphChromeProjection,
   appCommandGraphPanelProjection,
   appCommandGraphToolbarProjection,
+  commandPaletteOpen,
   handleAppCommandKeyDown,
 } from '../commands/registry'
 import type { AppCommandId } from '../commands/graph/catalog'
@@ -573,6 +575,29 @@ describe('command registry canvas tool switching', () => {
     expect(event.defaultPrevented).toBe(false)
     expect(undo).not.toHaveBeenCalled()
     input.remove()
+  })
+
+  it('ignores app shortcuts and the palette while the save dialog is open', async () => {
+    const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
+    const keyDown = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      return { handled: handleAppCommandKeyDown(event), event }
+    }
+    const decision = requestSaveProblemDecision({ kind: 'revert' })
+
+    const open = keyDown({ key: 'o', ctrlKey: true })
+    const palette = keyDown({ key: 'P', ctrlKey: true, shiftKey: true })
+
+    expect(open.handled).toBe(false)
+    expect(open.event.defaultPrevented).toBe(false)
+    expect(palette.handled).toBe(false)
+    expect(commandPaletteOpen.value).toBe(false)
+    expect(openSpy).not.toHaveBeenCalled()
+
+    answerSaveProblem('cancel')
+    await expect(decision).resolves.toBe('cancel')
+    expect(keyDown({ key: 'o', ctrlKey: true }).handled).toBe(true)
+    expect(openSpy).toHaveBeenCalledOnce()
   })
 
   it('toggles theme through the settings projection seam', () => {

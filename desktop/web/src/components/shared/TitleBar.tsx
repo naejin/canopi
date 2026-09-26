@@ -1,4 +1,3 @@
-import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { setDesignName } from '../../app/design-edit'
 import { currentDesign, designName } from '../../app/document-session/store'
@@ -8,6 +7,12 @@ import {
   retryDesignSave,
 } from '../../app/document-session/actions'
 import { activePanel } from '../../app/shell/state'
+import {
+  closeAppWindow,
+  minimizeAppWindow,
+  startDraggingAppWindow,
+  toggleMaximizeAppWindow,
+} from '../../app/shell/window-actions'
 import { locale, theme } from '../../app/settings/state'
 import { mutateSettingsProjection } from '../../app/settings/projection'
 import { t } from '../../i18n'
@@ -23,7 +28,6 @@ const LOCALE_ITEMS: DropdownItem<string>[] = LOCALES.map((code) => ({
   label: code.toUpperCase(),
 }))
 
-const appWindow = getCurrentWindow()
 const FALLBACK_DESIGN_NAME = 'Untitled'
 
 function LocalePicker() {
@@ -88,9 +92,9 @@ export function TitleBar() {
     if (target.closest('button, input, [role="menu"], [role="menubar"], [role="menuitem"]')) return
 
     if (e.detail === 2) {
-      void appWindow.toggleMaximize()
+      void toggleMaximizeAppWindow()
     } else {
-      void appWindow.startDragging()
+      void startDraggingAppWindow()
     }
   }
 
@@ -205,7 +209,7 @@ export function TitleBar() {
       <div className={styles.controls}>
         <button
           className={styles.controlBtn}
-          onClick={() => void appWindow.minimize()}
+          onClick={() => void minimizeAppWindow()}
           aria-label={t('window.minimize')}
           tabIndex={-1}
         >
@@ -215,7 +219,7 @@ export function TitleBar() {
         </button>
         <button
           className={styles.controlBtn}
-          onClick={() => void appWindow.toggleMaximize()}
+          onClick={() => void toggleMaximizeAppWindow()}
           aria-label={t('window.maximize')}
           tabIndex={-1}
         >
@@ -225,7 +229,7 @@ export function TitleBar() {
         </button>
         <button
           className={`${styles.controlBtn} ${styles.closeBtn}`}
-          onClick={() => void appWindow.close()}
+          onClick={() => void closeAppWindow()}
           aria-label={t('window.close')}
           tabIndex={-1}
         >

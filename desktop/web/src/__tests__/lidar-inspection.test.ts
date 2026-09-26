@@ -22,7 +22,7 @@ vi.mock('../ipc/lidar', async (importOriginal) => {
 })
 
 const { currentDesign, replaceCurrentDesignState } = await import(
-  '../app/document-session/store'
+  './support/design-session-state'
 )
 const { lidarLibrary } = await import('../app/lidar/library-store')
 const {

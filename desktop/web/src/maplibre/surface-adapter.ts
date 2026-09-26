@@ -20,7 +20,7 @@ interface EventCapableMap {
 export interface MapLibreSurfaceLifetime {
   on(type: string, listener: MapLibreSurfaceEventListener): void
   /** Unregister a listener registered through `on` before lifetime clear. */
-  off?(type: string, listener: MapLibreSurfaceEventListener): void
+  off(type: string, listener: MapLibreSurfaceEventListener): void
   addCleanup(cleanup: () => void): void
   clear(): void
 }
@@ -257,6 +257,7 @@ class MapLibreSurfaceLifetimeRegistry implements MapLibreSurfaceLifetime {
 
 const DETACHED_SURFACE_LIFETIME: MapLibreSurfaceLifetime = {
   on: () => {},
+  off: () => {},
   addCleanup: () => {},
   clear: () => {},
 }

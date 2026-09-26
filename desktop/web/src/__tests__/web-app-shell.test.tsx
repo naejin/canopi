@@ -567,46 +567,6 @@ describe('Web Edition Browser App Shell', () => {
     expect(appDataStore.listDrafts()[0]?.name).toBe('Terrace Garden')
   })
 
-  it('restores the newest browser Draft when the Web app mounts', async () => {
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    const seedStore = createMemoryDesignSessionStore()
-    const seedController = createBrowserDesignSessionController({
-      store: seedStore,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => new Date('2026-07-04T12:00:00.000Z'),
-      createDraftId: () => 'draft-reload-recovery',
-    })
-    await seedController.newDesign()
-    seedController.renameDesign('Recovered Garden')
-    editDesignSessionForTest(seedStore, (design) => ({
-      ...design,
-      description: 'Recovered after reload',
-    }))
-    await seedController.continuousSave.flush()
-
-    const store = createMemoryDesignSessionStore()
-    const controller = createBrowserDesignSessionController({
-      store,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => new Date('2026-07-04T13:00:00.000Z'),
-    })
-
-    await act(async () => {
-      render(
-        <WebApp
-          controller={controller}
-          workspace={<div data-testid="stub-workspace" />}
-        />,
-        container,
-      )
-    })
-
-    expect(store.readDesignName()).toBe('Recovered Garden')
-    expect(store.readCurrentDesign()?.description).toBe('Recovered after reload')
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Recovered Garden')
-  })
 
   it('enables Download .canopi only after a Browser Design is active', async () => {
     const store = createMemoryDesignSessionStore()

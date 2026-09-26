@@ -92,7 +92,7 @@ function fixture(loadTerrainSupport = vi.fn(async () => terrainSupport)) {
     sessionIdentity: identity, onFailure: failure, loadTerrainSupport, onStateChange: (state) => states.push(state), publishViewBounds: bounds, publishDiagnostics: diagnostics, logError,
     createRasterDisplay: (_map, options) => { raster = new FakeRasterDisplay(map, options.onLayersChanged!); return raster },
   })
-  manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
+  manager.attach({ key: 'test', map, maplibre: {} as MapLibreApi, preservedViewState: null, lifetime: { on() {}, off() {}, addCleanup() {}, clear() {} }, isCurrent: () => active })
   return { identity, map, states, failure, bounds, diagnostics, manager, loadTerrainSupport, logError, raster, expire: () => { active = false } }
 }
 

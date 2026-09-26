@@ -6,6 +6,7 @@
 
 import type { CanvasCommandSurface, CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { getCurrentCanvasSession } from '../../canvas/session'
+import { designSessionStore } from '../document-session/store'
 import { t } from '../../i18n'
 import {
   GEOJSON_MAX_FEATURES,
@@ -55,6 +56,8 @@ export interface GeoJsonWorkflowDeps {
   readonly notify: (notice: GeoJsonNotice) => void | Promise<void>
   readonly designName: () => string
   readonly canvas?: () => GeoJsonCanvas | null
+  /** Identity of the open Design Session; an import applies only to the session it began in. */
+  readonly sessionIdentity?: () => object | null
   readonly translate?: (key: string, options?: Record<string, unknown>) => string
 }
 
@@ -74,6 +77,7 @@ export function createGeoJsonWorkflow({
   notify,
   designName,
   canvas = readCurrentGeoJsonCanvas,
+  sessionIdentity = () => designSessionStore.sessionIdentity.peek(),
   translate = t,
 }: GeoJsonWorkflowDeps): GeoJsonWorkflow {
   const importTitle = () => translate('geojson.importTitle')
@@ -82,6 +86,7 @@ export function createGeoJsonWorkflow({
 
   async function importGeoJson(): Promise<GeoJsonImportOutcome> {
     if (!canvas()) return { status: 'unavailable' }
+    const session = sessionIdentity()
     let file: GeoJsonSourceFile | null
     try {
       file = await files.pickGeoJsonFile()
@@ -109,7 +114,7 @@ export function createGeoJsonWorkflow({
 
     // The Design may have been replaced while the picker was open.
     const target = canvas()
-    if (!target) return { status: 'unavailable' }
+    if (!target || sessionIdentity() !== session) return { status: 'unavailable' }
     const receipt = target.commands.sceneEdits.importDesignObjects(objects)
     if (!receipt.committed) {
       await error(importTitle(), translate('geojson.busy'))

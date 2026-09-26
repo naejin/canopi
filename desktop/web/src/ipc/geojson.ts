@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
-import { message, open, save } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import type {
   GeoJsonFileAdapter,
-  GeoJsonNotice,
   GeoJsonSourceFile,
   GeoJsonWriteOutcome,
 } from '../app/geojson/workflow'
@@ -29,11 +28,4 @@ export const desktopGeoJsonFiles: GeoJsonFileAdapter = {
     })
     return 'written'
   },
-}
-
-export async function presentDesktopGeoJsonNotice(notice: GeoJsonNotice): Promise<void> {
-  await message(notice.message, {
-    title: notice.title,
-    kind: notice.tone === 'error' ? 'error' : 'info',
-  })
 }

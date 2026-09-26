@@ -1,13 +1,8 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
-import { designEditAuthorityCapability } from '../app/design-edit/authority-capability'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
-import {
-  createDesignSessionStoreTestFixture,
-  createMemoryDesignSessionStore,
-  designSessionStore,
-} from '../app/document-session/store'
+import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { CONTINUOUS_SAVE_DELAY_MS } from '../app/document-session/continuous-save'
 import {
   createDesignSessionWorkflowRunner,
@@ -766,6 +761,34 @@ describe('browser Design Session lifecycle', () => {
     expect(appDataStore.loadDraft('draft-revert')?.description).toBe('as opened')
   })
 
+  it('does not revert a Draft opened while the revert confirmation was open', async () => {
+    const store = createMemoryDesignSessionStore()
+    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
+    for (const [id, description] of [['draft-first', 'first'], ['draft-second', 'second']]) {
+      appDataStore.saveDraft({ id, file: makeCanopiFile({ name: id, description }), now: NOW.toISOString() })
+    }
+    const decision = deferred<'revert' | 'cancel'>()
+    const requestSaveDecision = vi.fn(() => decision.promise)
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+      requestSaveDecision: requestSaveDecision as never,
+    })
+    await expect(controller.openDraft('draft-first')).resolves.toBe(true)
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'changed' }))
+
+    const reverting = controller.revertDesign()
+    await expect(controller.openDraft('draft-second')).resolves.toBe(true)
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'second edited' }))
+    decision.resolve('revert')
+
+    await expect(reverting).resolves.toBe(false)
+    expect(store.readDesignName()).toBe('draft-second')
+    expect(store.readCurrentDesign()?.description).toBe('second edited')
+  })
+
   it('deletes a Draft other than the open one', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
@@ -831,71 +854,6 @@ describe('browser Design Session lifecycle', () => {
 
     expect(controller.restoreLatestDraft()).toBe(false)
     expect(store.readDesignName()).toBe('Untitled')
-  })
-
-  it('does not save visible Timeline previews until they commit', async () => {
-    vi.useFakeTimers()
-    const initial = makeCanopiFile({
-      name: 'Preview Garden',
-      timeline: [{
-        id: 'timeline-preview',
-        action_type: 'planting',
-        description: 'Plant canopy',
-        start_date: '2026-04-01',
-        end_date: '2026-04-03',
-        recurrence: null,
-        targets: [],
-        depends_on: null,
-        completed: false,
-        order: 0,
-      }],
-    })
-    createDesignSessionStoreTestFixture(designSessionStore).reset()
-    const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
-    appDataStore.saveDraft({ id: 'draft-timeline-preview', file: initial, now: NOW.toISOString() })
-    const saveDraft = vi.spyOn(appDataStore, 'saveDraft')
-    const controller = createBrowserDesignSessionController({
-      store: designSessionStore,
-      appDataStore,
-      fileAdapter: testFileAdapter(),
-      now: () => NOW,
-    })
-    expect(controller.restoreLatestDraft()).toBe(true)
-    const uninstall = controller.installContinuousSave(testPage())
-    const edit = designEditAuthorityCapability(designSessionStore).beginPreview('Timeline move')
-    const previewDates = (start_date: string, end_date: string) => edit.preview((design) => ({
-      ...design,
-      timeline: design.timeline.map((action) => ({ ...action, start_date, end_date })),
-    }))
-
-    try {
-      previewDates('2026-04-02', '2026-04-04')
-      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
-
-      expect(designSessionStore.readCurrentDesign()?.timeline[0]).toMatchObject({
-        start_date: '2026-04-02',
-        end_date: '2026-04-04',
-      })
-      expect(saveDraft).not.toHaveBeenCalled()
-
-      previewDates('2026-04-03', '2026-04-05')
-      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
-      expect(saveDraft).not.toHaveBeenCalled()
-
-      edit.commit()
-      await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
-
-      expect(saveDraft).toHaveBeenCalledOnce()
-      expect(appDataStore.loadDraft('draft-timeline-preview')?.timeline[0]).toMatchObject({
-        start_date: '2026-04-03',
-        end_date: '2026-04-05',
-      })
-    } finally {
-      edit.abort()
-      uninstall()
-      createDesignSessionStoreTestFixture(designSessionStore).reset()
-      vi.useRealTimers()
-    }
   })
 
   it('does not let an older pending Open overwrite a later Draft replacement', async () => {

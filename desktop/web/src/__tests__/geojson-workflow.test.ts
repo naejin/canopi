@@ -290,6 +290,32 @@ describe('GeoJSON workflow through the scene runtime', () => {
     expect(notices).toEqual([])
   })
 
+  it('does not import into a Design that replaced the one the picker was opened for', async () => {
+    const text = await exportText(sourceDesign())
+    const target = mountDesign(designFile())
+    const before = target.queries.getSettledDesignObjects()
+    let identity: object = {}
+    const { files } = memoryFiles(text)
+    vi.mocked(files.pickGeoJsonFile).mockImplementationOnce(async () => {
+      // Another Design opens on the same canvas while the picker is up.
+      identity = {}
+      return { name: 'input.geojson', text }
+    })
+    const notices: GeoJsonNotice[] = []
+    const workflow = createGeoJsonWorkflow({
+      files,
+      notify: (notice) => { notices.push(notice) },
+      designName: () => 'Replaced',
+      canvas: () => target,
+      sessionIdentity: () => identity,
+    })
+
+    await expect(workflow.importGeoJson()).resolves.toEqual({ status: 'unavailable' })
+    expect(target.queries.getSettledDesignObjects()).toEqual(before)
+    expect(target.commands.history.canUndo.value).toBe(false)
+    expect(notices).toEqual([])
+  })
+
   it('is unavailable without a mounted canvas runtime', async () => {
     const { files } = memoryFiles('{}')
     const workflow = createGeoJsonWorkflow({

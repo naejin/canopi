@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
 import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
+import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import {
   disposeWebCanvasShortcuts,
   installWebCanvasShortcuts,
@@ -37,6 +38,25 @@ describe('Web Canvas shortcuts', () => {
     expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(true)
     expect(placeSearchOpen.value).toBe(true)
     closePlaceSearch()
+  })
+
+  it('ignores canvas shortcuts while the save dialog is open', async () => {
+    const undo = vi.fn()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ history: { canUndo: signal(true), undo } }),
+    }))
+    installWebCanvasShortcuts()
+    const decision = requestSaveProblemDecision({ kind: 'revert' })
+
+    expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(undo).not.toHaveBeenCalled()
+    expect(placeSearchOpen.value).toBe(false)
+
+    answerSaveProblem('cancel')
+    await decision
+    expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(undo).toHaveBeenCalledOnce()
   })
 
   it('dispatches tool and history shortcuts with exact Ctrl, Meta, Shift, and Alt semantics', () => {

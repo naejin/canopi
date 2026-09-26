@@ -5,11 +5,8 @@ import {
   removeLidarEntries,
   moveLidarEntry,
 } from '../app/design-edit/lidar'
-import {
-  replaceCurrentDesignState,
-  currentDesign,
-  designSessionStore,
-} from '../app/document-session/store'
+import { currentDesign, designSessionStore } from '../app/document-session/store'
+import { replaceCurrentDesignState } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 
 function design(name: string): CanopiFile {

@@ -6,7 +6,7 @@ import {
   openProblemReportDialog,
   problemReportSubmission,
 } from '../app/problem-report/submission'
-import { replaceCurrentDesignState } from '../app/document-session/store'
+import { replaceCurrentDesignState } from './support/design-session-state'
 import { ProblemReportDialog } from '../components/shared/ProblemReportDialog'
 import type { CanopiFile } from '../types/design'
 

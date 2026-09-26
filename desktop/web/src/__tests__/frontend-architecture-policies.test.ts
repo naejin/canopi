@@ -63,6 +63,38 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Components reach native capabilities through app actions',
+    from: ['src/components/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'App controllers stay leaves',
+    from: ['src/app/*/controller.ts'],
+    targets: ['src/app/*/controller.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'App modules do not import components',
+    from: ['src/app/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/components/**'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'Place Search consumes geocoding through its session owner',
+    from: ['src/components/canvas/PlaceSearch.tsx'],
+    targets: [
+      '#geocoding-transport',
+      'src/app/geocoding/transport.*.ts',
+      'src/app/geocoding/place-search.ts',
+      '@tauri-apps/**',
+      'src/ipc/**',
+    ],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Settings Projection stays platform-neutral',
     from: ['src/app/settings/projection.ts'],
     targets: ['src/ipc/settings.ts', 'src/web/browser-app-data.ts'],
@@ -1162,7 +1194,6 @@ const FORBIDDEN_EXPORT_POLICIES = [
     name: 'Public Design Edit surface does not expose authority capabilities',
     from: ['src/app/design-edit/index.ts'],
     names: [
-      'DesignPreviewTransaction',
       'designEditAuthorityCapability',
       'disposeDesignEditAuthority',
     ],
@@ -1393,7 +1424,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Design Edit public barrel does not mention authority capabilities',
     from: ['src/app/design-edit/index.ts'],
     names: [
-      'DesignPreviewTransaction',
       'designEditAuthorityCapability',
       'disposeDesignEditAuthority',
     ],
@@ -1731,6 +1761,69 @@ const FRONTEND_ARCHITECTURE_POLICIES = [
   ...SYMBOL_OWNERSHIP_POLICIES,
 ] satisfies readonly ArchitecturePolicy[]
 
+/**
+ * Runtime-graph policies ignore type-only edges (they enter no bundle) and
+ * leave `#edition` aliases unresolved, so an alias is the only permitted seam
+ * from shared code to edition-specific platform code.
+ */
+const SHARED_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'GeoJSON, continuous save and map layers stay free of Desktop capabilities',
+    from: [
+      'src/app/geojson/**',
+      'src/app/document-session/continuous-save.ts',
+      'src/app/map-layers/**',
+    ],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Place Search reaches native geocoding only through the edition transport',
+    from: ['src/components/canvas/PlaceSearch.tsx'],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/** Checked on the runtime graph with `#edition` aliases resolved to their Web targets. */
+const WEB_EDITION_RUNTIME_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Web entry graph stays free of Desktop capabilities',
+    from: ['src/main.web.tsx'],
+    targets: ['@tauri-apps/**', 'src/ipc/**'],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
+/** Mirrors the `isWebEdition` branch of vite.config.ts `resolve.alias`. */
+const WEB_EDITION_ALIAS_TARGETS: Readonly<Record<string, string>> = {
+  '#platform': 'src/platform/browser.ts',
+  '#canvas-pdf-platform': 'src/app/canvas-pdf/platform.browser.ts',
+  '#budget-export-platform': 'src/app/budget/platform.browser.ts',
+  '#geocoding-transport': 'src/app/geocoding/transport.browser.ts',
+  '#species-catalog-live': 'src/app/plant-browser/live.browser.ts',
+}
+
+type SourceGraph = ReturnType<typeof discoverTypeScriptSourceGraph>
+
+function runtimeGraph(graph: SourceGraph): SourceGraph {
+  return graph.map((source) => ({
+    ...source,
+    imports: source.imports.filter((edge) => !edge.typeOnly),
+  }))
+}
+
+function resolveWebEditionAliases(graph: SourceGraph): SourceGraph {
+  return graph.map((source) => ({
+    ...source,
+    imports: source.imports.map((edge) => {
+      const target = WEB_EDITION_ALIAS_TARGETS[edge.target]
+      return target ? { ...edge, target } : edge
+    }),
+  }))
+}
+
 const DESIGN_SESSION_TEST_BOUNDARY_POLICY_NAMES = new Set([
   'Production code cannot acquire the Design Session test fixture',
   'Production code cannot import frontend test support',
@@ -1905,6 +1998,75 @@ describe('declarative frontend architecture policies', () => {
       },
     ])).toEqual([])
   }, 20_000)
+
+  it('keeps shared modules and the Web entry graph free of Desktop runtime dependencies', () => {
+    const graph = runtimeGraph(discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src'))
+    expect(collectArchitecturePolicyViolations(graph, SHARED_RUNTIME_GRAPH_POLICIES)).toEqual([])
+    expect(collectArchitecturePolicyViolations(
+      resolveWebEditionAliases(graph),
+      WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+    )).toEqual([])
+  }, 20_000)
+
+  it('resolves every edition alias to the Web target Vite uses', () => {
+    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+    const paths = new Set(graph.map(({ path }) => path))
+    const aliases = new Set(graph.flatMap(({ imports }) =>
+      imports.map(({ target }) => target).filter((target) => target.startsWith('#'))))
+    const viteConfig = readFileSync(new URL('../../vite.config.ts', import.meta.url), 'utf8')
+    const tsconfig = readFileSync(new URL('../../tsconfig.json', import.meta.url), 'utf8')
+    const tsconfigAliases = [...tsconfig.matchAll(/"(#[\w-]+)"\s*:/g)].map(([, alias]) => alias)
+
+    expect([...aliases].sort()).toEqual(Object.keys(WEB_EDITION_ALIAS_TARGETS).sort())
+    expect(tsconfigAliases.sort()).toEqual(Object.keys(WEB_EDITION_ALIAS_TARGETS).sort())
+    for (const [alias, target] of Object.entries(WEB_EDITION_ALIAS_TARGETS)) {
+      expect(paths.has(target), `${alias} -> ${target}`).toBe(true)
+      expect(viteConfig).toContain(`'${alias}'`)
+      expect(viteConfig).toContain(`'./${target}'`)
+    }
+  }, 20_000)
+
+  it('rejects planted native, controller, component and Web entry dependencies', () => {
+    const graph = createTypeScriptSourceGraph([
+      { path: 'src/components/shared/Chrome.tsx', source: `import { getCurrentWindow } from '@tauri-apps/api/window'\nvoid getCurrentWindow` },
+      { path: 'src/components/panels/Lidar.tsx', source: `import type { LidarLayer } from '../../ipc/lidar'\nexport type Layer = LidarLayer` },
+      { path: 'src/ipc/lidar.ts', source: `import { invoke } from '@tauri-apps/api/core'\nexport type LidarLayer = string\nvoid invoke` },
+      { path: 'src/app/one/controller.ts', source: `import { two } from '../two/controller'\nvoid two` },
+      { path: 'src/app/two/controller.ts', source: `export const two = 2` },
+      { path: 'src/app/panel/actions.ts', source: `import { Chrome } from '../../components/shared/Chrome'\nvoid Chrome` },
+      { path: 'src/app/map-layers/state.ts', source: `import { bridge } from '../bridge'\nvoid bridge` },
+      { path: 'src/app/document-session/continuous-save.ts', source: `export const save = 1` },
+      { path: 'src/app/bridge.ts', source: `import { invoke } from '@tauri-apps/api/core'\nexport const bridge = invoke` },
+      { path: 'src/components/canvas/PlaceSearch.tsx', source: `import { bridge } from '../../app/geo'\nimport { transport } from '#geocoding-transport'\nvoid bridge\nvoid transport` },
+      { path: 'src/app/geo.ts', source: `export { lidar as bridge } from '../ipc/lidar'` },
+      { path: 'src/main.web.tsx', source: `import { place } from '#geocoding-transport'\nvoid place` },
+      { path: 'src/app/geocoding/transport.browser.ts', source: `import { bridge } from '../bridge'\nexport const place = bridge` },
+    ])
+    const violations = [
+      ...collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES.filter(({ name }) => [
+        'Components reach native capabilities through app actions',
+        'App controllers stay leaves',
+        'App modules do not import components',
+        'Place Search consumes geocoding through its session owner',
+      ].includes(name))),
+      ...collectArchitecturePolicyViolations(runtimeGraph(graph), SHARED_RUNTIME_GRAPH_POLICIES),
+      ...collectArchitecturePolicyViolations(
+        resolveWebEditionAliases(runtimeGraph(graph)),
+        WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+      ),
+    ]
+
+    expect(violations).toEqual([
+      expect.stringContaining('[Components reach native capabilities through app actions] src/components/shared/Chrome.tsx'),
+      expect.stringContaining('[Components reach native capabilities through app actions] src/components/panels/Lidar.tsx'),
+      expect.stringContaining('[App controllers stay leaves] src/app/one/controller.ts'),
+      expect.stringContaining('[App modules do not import components] src/app/panel/actions.ts'),
+      expect.stringContaining('[Place Search consumes geocoding through its session owner] src/components/canvas/PlaceSearch.tsx:2:1 imports #geocoding-transport'),
+      expect.stringContaining('[GeoJSON, continuous save and map layers stay free of Desktop capabilities] src/app/map-layers/state.ts transitively imports @tauri-apps/api/core'),
+      expect.stringContaining('[Place Search reaches native geocoding only through the edition transport] src/components/canvas/PlaceSearch.tsx transitively imports src/ipc/lidar.ts'),
+      expect.stringContaining('[Web entry graph stays free of Desktop capabilities] src/main.web.tsx transitively imports @tauri-apps/api/core via src/main.web.tsx -> src/app/geocoding/transport.browser.ts'),
+    ])
+  })
 
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
     const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')

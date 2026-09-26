@@ -206,7 +206,9 @@ describe('continuous save', () => {
     await expect(save.flush()).resolves.toBe(false)
     expect(writeHome).toHaveBeenCalledTimes(1)
 
-    await expect(save.overwriteHome()).resolves.toBe(true)
+    await expect(save.overwriteHome({})).resolves.toBe(false)
+    expect(writeHome).toHaveBeenCalledTimes(1)
+    await expect(save.overwriteHome(save.sessionToken())).resolves.toBe(true)
     expect(writes.at(-1)).toEqual({
       kind: 'file',
       path: '/designs/garden.canopi',
@@ -240,6 +242,24 @@ describe('continuous save', () => {
     openSession({ draftId: 'draft-2' })
     rejectFirst(new Error('late failure'))
     await expect(flushed).resolves.toBe(false)
+    expect(save.status.value).toBe('saved')
+  })
+
+  it("does not show a replaced session's write in flight as saving the new Design", async () => {
+    openSession()
+    let resolveFirst!: (outcome: HomeWriteOutcome) => void
+    writeHome.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFirst = resolve
+    }))
+    edit('a')
+    const flushed = save.flush()
+    expect(save.status.value).toBe('saving')
+
+    openSession({ draftId: 'draft-2' })
+
+    expect(save.status.value).toBe('saved')
+    resolveFirst({ kind: 'written' })
+    await flushed
     expect(save.status.value).toBe('saved')
   })
 

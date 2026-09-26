@@ -7,6 +7,10 @@ vi.mock('#geocoding-transport', () => ({ geocodingTransport: transport }))
 
 import { closePlaceSearch, placeSearchOpen, PLACE_SEARCH_ZOOM } from '../app/geocoding/place-search-ui'
 import { resetPlaceSearchPacingForTests } from '../app/geocoding/place-search'
+import { installPlaceSearchSession, placeSearch } from '../app/geocoding/place-search-session'
+import { designSessionStore } from '../app/document-session/store'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
+import type { CanopiFile } from '../types/design'
 import { lastView } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { PlaceSearch } from '../components/canvas/PlaceSearch'
@@ -90,6 +94,36 @@ describe('PlaceSearch', () => {
     expect(document.activeElement).toBe(launcher())
   })
 
+  it('closes and forgets the search when another Design replaces the open one', async () => {
+    const uninstall = installPlaceSearchSession()
+    try {
+      await act(async () => { render(<PlaceSearch />, container) })
+      await act(async () => { launcher().click() })
+      await submit('47.39, 0.69')
+      expect(placeSearch.results.value).toHaveLength(1)
+
+      await act(async () => {
+        designSessionStore.replaceCurrentDesignState(emptyDesign('Next'), null, 'Next')
+      })
+
+      expect(placeSearchOpen.value).toBe(false)
+      expect(placeSearch.results.value).toEqual([])
+      expect(container.querySelector('form')).toBeNull()
+    } finally {
+      uninstall()
+    }
+  })
+
+  it('leaves the search alone after its Design session owner is disposed', async () => {
+    installPlaceSearchSession()()
+    await act(async () => { render(<PlaceSearch />, container) })
+    await act(async () => { launcher().click() })
+    await act(async () => {
+      designSessionStore.replaceCurrentDesignState(emptyDesign('Other'), null, 'Other')
+    })
+    expect(placeSearchOpen.value).toBe(true)
+  })
+
   it('invites a site search for an empty Design opened at the default world view, even after the view is remembered', async () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ viewport: { showPlace } }),
@@ -111,3 +145,25 @@ describe('PlaceSearch', () => {
     expect(container.textContent).not.toContain('Search your site')
   })
 })
+
+function emptyDesign(name: string): CanopiFile {
+  return {
+    version: CURRENT_CANOPI_FILE_VERSION,
+    name,
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    measurement_guides: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '',
+    updated_at: '',
+    extra: {},
+  }
+}

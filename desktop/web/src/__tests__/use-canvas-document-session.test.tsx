@@ -20,11 +20,6 @@ const mocks = vi.hoisted(() => ({
   }>,
   teardownAttachedDesignSession: vi.fn(),
   startAttachedDesignSession: vi.fn(),
-  transitionDocument: vi.fn((request: any) => {
-    request.session.loadDocument({ name: "Mounted" });
-    request.session.showCanvasChrome();
-    return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
-  }),
 }));
 
 vi.mock("../app/canvas-map-surface/desktop-workspace-runtime", () => ({
@@ -84,7 +79,6 @@ vi.mock("../app/document-session/transition", async (importOriginal) => {
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
     startAttachedDesignSession: mocks.startAttachedDesignSession,
     teardownAttachedDesignSession: mocks.teardownAttachedDesignSession,
-    transitionDocument: mocks.transitionDocument,
   };
 });
 
@@ -185,12 +179,6 @@ describe("useCanvasDocumentSession", () => {
       }
       mocks.beginEmptyDocumentSession(session);
       return Promise.resolve(null);
-    });
-    mocks.transitionDocument.mockClear();
-    mocks.transitionDocument.mockImplementation((request: any) => {
-      request.session.loadDocument({ name: "Mounted" });
-      request.session.showCanvasChrome();
-      return Promise.resolve({ status: "applied", documentLoaded: request.session.hasLoadedDocument() });
     });
     (globalThis as Record<string, unknown>).ResizeObserver = class {
       observe() {}
@@ -313,6 +301,9 @@ describe("useCanvasDocumentSession", () => {
     });
 
     expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: true }),
+    );
     expect(mocks.cancelQueuedLoad).toHaveBeenCalledTimes(1);
     expect(mocks.flushSettingsProjection).toHaveBeenCalledTimes(1);
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
@@ -432,10 +423,15 @@ describe("useCanvasDocumentSession", () => {
 
     const failedInstance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
+      documents: { loadDocument: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.startAttachedDesignSession).not.toHaveBeenCalled();
+    expect(failedInstance.documents.loadDocument).not.toHaveBeenCalled();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledOnce();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: false }),
+    );
     expect(failedInstance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
 
@@ -471,10 +467,15 @@ describe("useCanvasDocumentSession", () => {
 
     const instance = mocks.runtimeInstances[0] as unknown as {
       host: { destroy: ReturnType<typeof vi.fn> };
+      documents: { loadDocument: ReturnType<typeof vi.fn> };
     };
 
-    expect(mocks.transitionDocument).not.toHaveBeenCalled();
-    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledTimes(1);
+    expect(mocks.startAttachedDesignSession).not.toHaveBeenCalled();
+    expect(instance.documents.loadDocument).not.toHaveBeenCalled();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledOnce();
+    expect(mocks.teardownAttachedDesignSession).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeInitialized: false }),
+    );
     expect(instance.host.destroy).toHaveBeenCalledTimes(1);
     expect(currentCanvasSession.value).toBe(null);
   });

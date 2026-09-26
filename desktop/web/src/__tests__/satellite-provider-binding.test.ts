@@ -302,7 +302,10 @@ describe('Google official provider drives the live map', () => {
       tileAuth,
       styleReady: {
         isReady: () => ready,
-        whenReady: (listener) => readyListeners.push(listener),
+        whenReady: (listener) => {
+          readyListeners.push(listener)
+          return () => {}
+        },
       },
     })
 

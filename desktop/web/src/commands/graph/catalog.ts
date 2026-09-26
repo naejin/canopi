@@ -24,9 +24,8 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
-import { currentDesign, designName } from '../../app/document-session/store'
-import { createGeoJsonWorkflow } from '../../app/geojson/workflow'
-import { desktopGeoJsonFiles, presentDesktopGeoJsonNotice } from '../../ipc/geojson'
+import { currentDesign } from '../../app/document-session/store'
+import { desktopGeoJsonWorkflow as desktopGeoJson } from '../../platform/geojson.desktop'
 import {
   designRevertAvailable,
   newDesignAction,
@@ -249,12 +248,6 @@ function logCommandFailure(label: string, error: unknown): void {
 function runAsyncCommand(label: string, action: () => Promise<unknown>): void {
   void action().catch((error) => logCommandFailure(label, error))
 }
-
-const desktopGeoJson = createGeoJsonWorkflow({
-  files: desktopGeoJsonFiles,
-  notify: presentDesktopGeoJsonNotice,
-  designName: () => designName.value,
-})
 
 function isGeoJsonTransferDisabled(state: { readonly hasDesign: boolean }): boolean {
   return !state.hasDesign || !desktopGeoJson.isAvailable()
