@@ -111,6 +111,8 @@ cargo build --release
 5. Promote: `scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>" [--artifact-dir <downloaded-root>]`. It admits only a successful candidate run with matching repository, version and commit, verifies every checksum, stages bytes privately and creates a draft targeting the manifest commit. Published releases are never replaced. `docs/release-notes/v<version>.md` becomes the release body when present ([release notes](../release-notes/)). Test changes with `python3 -m unittest scripts.test_promote_release`.
 6. Publish: `gh release edit v<version> --draft=false --latest`. Never mark DB-only releases or prereleases as latest.
 
+The release notes offer the Corresponding Source of the AGPL components the build ships: Canopi's own tagged source, and the `geolibre-rust` and `whitebox-wasm` revisions named in `desktop/THIRD_PARTY_NOTICES.md` (the GeoLibre CLI and `whitebox-wasm` link `wbspatialstats`, AGPL-3.0-or-later).
+
 Promotion also creates six byte-identical stable copies from `STABLE_PACKAGES` in `scripts/release_candidate_artifacts.py`: `canopi-linux-x64.deb`, `canopi-linux-x64.AppImage`, `canopi-macos-arm64.dmg`, `canopi-macos-x64.dmg`, `canopi-windows-x64.exe` and `canopi-windows-x64.msi`. It also writes `RELEASE-SHA256SUMS.txt` (public basenames). Website buttons use `https://github.com/naejin/canopi/releases/latest/download/<stable-name>`. Change the target matrix, `STABLE_PACKAGES` and the promotion tests together.
 
 Failure triage: on a version mismatch, fix `tauri.conf.json` or the input. When the DB asset is missing or mismatched, republish from the candidate's contract. On a promotion checksum failure, do not publish; re-download and investigate.

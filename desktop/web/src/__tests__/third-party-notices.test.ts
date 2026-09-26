@@ -29,4 +29,12 @@ describe('third-party notices', () => {
     expect(revision).toBeDefined()
     expect(notices).toContain(revision!)
   })
+
+  // wbspatialstats declares AGPL-3.0-or-later in its own Cargo.toml and is linked into
+  // both the whitebox-wasm module and the GeoLibre CLI, whatever the package-level labels say.
+  it('names the AGPL-3.0-or-later component and where its source is offered', () => {
+    expect(notices).toMatch(/\| wbspatialstats \| [^|]+ \| https:\/\/github\.com\/opengeos\/whitebox-wasm \| AGPL-3\.0-or-later \|/)
+    expect(notices).toContain('9c0ff4fdf3513f27b89c78e294610c3b418b3a4f')
+    expect(notices).toMatch(/Corresponding Source/)
+  })
 })
