@@ -526,7 +526,8 @@
           "OtherContinuous": "기타 값",
           "Slope": "경사"
         },
-        "analyze": "분석…"
+        "analyze": "분석…",
+        "runAgainWithChanges": "설정을 바꿔 다시 계산…"
       },
       "layers": {
         "title": "데이터",

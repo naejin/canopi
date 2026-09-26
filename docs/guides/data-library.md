@@ -54,7 +54,7 @@ Two surfaces manage data: the **Data Library** side panel (`DataLibraryPanel.tsx
 - Run (`runAnalysis`) creates a new definition with one derived item per selected output. Started from Layers, the finished presentable outputs attach only to the Design session that asked (`settleResultAttachments`); a Design switch or failure drops the attachment. Started from the library, they stay in the library.
 - **Retry and Refresh** are one native operation (`rerunAnalysis` → `lidar_rerun_analysis`): the saved parameters are revalidated against the current recipe and the inputs pinned to their current generations. Without a result it retries; with one it refreshes the items **in place**: same item ids, a new generation, every Design that references them sees the new result, and the earlier run stays in the processing history. Refresh is always explicit.
 - A derived item is **out of date** when an input's generation moved (`InputUpdated`), an input is itself out of date (`InputStale`), the registry recipe version moved (`RecipeUpdated`) or a different GeoLibre build is installed (`ToolUpdated`). The list, details and Layers row show an "Out of date" badge with the reasons and Refresh. A refresh that is still running keeps the published result Ready and shows the run.
-- "Run again with changes" is a new analysis prefilled from the provenance: a new definition with new items.
+- **Run again with changes** (a derived item's menu, while its first input is ready) opens Analyze on that input prefilled from the provenance: the run's parameters and outputs (`formFromProvenance`). Running it creates a new definition with new items; it never refreshes the original.
 
 ### Delete
 

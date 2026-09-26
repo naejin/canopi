@@ -526,7 +526,8 @@
           "OtherContinuous": "其他数值",
           "Slope": "坡度"
         },
-        "analyze": "分析…"
+        "analyze": "分析…",
+        "runAgainWithChanges": "修改设置后重新计算…"
       },
       "layers": {
         "title": "数据",

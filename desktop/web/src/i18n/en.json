@@ -526,7 +526,8 @@
           "OtherContinuous": "Other values",
           "Slope": "Slope"
         },
-        "analyze": "Analyze…"
+        "analyze": "Analyze…",
+        "runAgainWithChanges": "Run again with changes…"
       },
       "layers": {
         "title": "Data",

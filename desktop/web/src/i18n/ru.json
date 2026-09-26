@@ -526,7 +526,8 @@
           "OtherContinuous": "Другие значения",
           "Slope": "Уклон"
         },
-        "analyze": "Анализ…"
+        "analyze": "Анализ…",
+        "runAgainWithChanges": "Пересчитать с изменениями…"
       },
       "layers": {
         "title": "Данные",

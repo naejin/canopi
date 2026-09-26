@@ -149,6 +149,40 @@ export function initialForm(entry: AnalysisEntry, subjectName: string, title: st
   return { values, outputs, name: title ? suggestedResultName(subjectName, title) : '' }
 }
 
+/**
+ * The form "Run again with changes" opens with: an earlier run's parameters
+ * and outputs, so the user edits them rather than starting over. Parameters
+ * the current recipe no longer has are dropped and unrecorded ones take their
+ * default; the request it builds is a new definition, never a refresh.
+ */
+export function formFromProvenance(
+  entry: AnalysisEntry,
+  provenance: Pick<Provenance, 'parameters'>,
+  outputKeys: readonly string[],
+  subjectName: string,
+  title: string,
+  locale: string,
+): AnalysisForm {
+  const form = initialForm(entry, subjectName, title, locale)
+  const values: Record<string, FormValue> = { ...form.values }
+  for (const param of entry.params) {
+    const recorded = provenance.parameters.find((candidate) => candidate.key === param.key)?.value
+    if (recorded) values[param.key] = formValue(recorded, locale)
+  }
+  const outputs: Record<string, boolean> = {}
+  for (const output of entry.outputs) {
+    if (output.optional) outputs[output.key] = outputKeys.includes(output.key)
+  }
+  return { ...form, values, outputs }
+}
+
+function formValue(value: ParamValue, locale: string): FormValue {
+  if ('Choice' in value) return value.Choice
+  if ('Boolean' in value) return value.Boolean
+  if ('Number' in value) return formatLocaleNumber(value.Number, locale)
+  return formatLocaleNumber(value.Integer, locale)
+}
+
 function defaultValue(param: AnalysisParamSpec, locale: string): FormValue {
   const value = param.default
   switch (param.kind.type) {

@@ -526,7 +526,8 @@
           "OtherContinuous": "Otros valores",
           "Slope": "Pendiente"
         },
-        "analyze": "Analizar…"
+        "analyze": "Analizar…",
+        "runAgainWithChanges": "Volver a calcular con cambios…"
       },
       "layers": {
         "title": "Datos",

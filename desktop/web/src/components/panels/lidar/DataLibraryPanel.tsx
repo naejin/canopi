@@ -16,7 +16,7 @@ import {
   retryLibraryImport,
   runAnalysis,
 } from '../../../app/lidar/actions'
-import type { AnalysisContext } from '../../../app/analyses/model'
+import { formFromProvenance, type AnalysisContext, type AnalysisForm } from '../../../app/analyses/model'
 import { analysisTitle, findAnalysis } from '../../../app/analyses/registry'
 import { IMPORTABLE_QUANTITIES, RASTER_QUANTITIES, itemTypeLabel } from '../../../app/lidar/item-types'
 import {
@@ -50,7 +50,14 @@ type View =
   | { readonly kind: 'list' }
   | { readonly kind: 'import'; readonly paths: readonly string[] }
   | { readonly kind: 'details' | 'rename' | 'delete'; readonly id: string }
-  | { readonly kind: 'analyze'; readonly id: string; readonly attach: boolean; readonly analysisId: string | null }
+  | {
+    readonly kind: 'analyze'
+    readonly id: string
+    readonly attach: boolean
+    readonly analysisId: string | null
+    /** A derived item whose run the dialog starts from ("Run again with changes"). */
+    readonly from?: string
+  }
 
 /**
  * The Data Library: reusable terrain data shared by every Design.
@@ -150,6 +157,25 @@ export function DataLibraryPanel() {
     if (definitionId) void run(() => rerunAnalysis(definitionId))
   }
 
+  // "Run again with changes" analyzes the result's first input again, starting
+  // from the settings and outputs of the run that produced it.
+  const rerunSubject = (row: LibraryItem) => {
+    const inputId = row.provenance?.inputs[0]?.item_id
+    const input = inputId ? items.find((candidate) => candidate.id === inputId) : undefined
+    return input?.status === 'ready' && row.provenance && findAnalysis(row.provenance.analysis_id) ? input : null
+  }
+  const prefillFrom = (fromId: string | undefined): AnalysisForm | null => {
+    const from = fromId ? items.find((candidate) => candidate.id === fromId) : undefined
+    const provenance = from?.provenance
+    const entry = provenance ? findAnalysis(provenance.analysis_id) : null
+    const input = from ? rerunSubject(from) : null
+    if (!provenance || !entry || !input) return null
+    const outputs = items
+      .filter((candidate) => candidate.provenance?.definition_id === provenance.definition_id)
+      .map((candidate) => candidate.provenance!.output_key)
+    return formFromProvenance(entry, provenance, outputs, input.name, t(entry.titleKey), locale.value)
+  }
+
   const addButton = (row: LibraryItem) => {
     const added = isAdded(row)
     return (
@@ -183,6 +209,12 @@ export function DataLibraryPanel() {
             { label: t('canvas.lidar.library.analyze'), run: () => open({ kind: 'analyze', id: row.id, attach: false, analysisId: null }) },
             { label: t('canvas.lidar.library.rename'), run: () => open({ kind: 'rename', id: row.id }) },
           ]
+        : []),
+      ...(rerunSubject(row)
+        ? [{
+            label: t('canvas.lidar.library.runAgainWithChanges'),
+            run: () => open({ kind: 'analyze', id: rerunSubject(row)!.id, attach: false, analysisId: row.provenance!.analysis_id, from: row.id }),
+          }]
         : []),
       ...(row.status === 'ready' || row.role === 'Derived'
         ? [{ label: t('canvas.lidar.library.deleteFromLibrary'), danger: true, run: () => open({ kind: 'delete', id: row.id }) }]
@@ -363,6 +395,7 @@ export function DataLibraryPanel() {
             attach={view.attach}
             canAddToDesign={currentDesign.value !== null}
             initialAnalysisId={view.analysisId}
+            prefill={prefillFrom(view.from)}
             busy={busy}
             error={error}
             onCancel={back}

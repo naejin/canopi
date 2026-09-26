@@ -7,6 +7,7 @@ import {
   buildAnalysisRequest,
   entryAvailability,
   findExistingResult,
+  formFromProvenance,
   initialForm,
   isParamVisible,
   paramUnitSuffix,
@@ -214,5 +215,33 @@ describe('Analyze dialog model', () => {
     expect(findExistingResult(FLOW, 'ground', form, inDesign, 'en')).toEqual({ id: 'flow-1', inDesign: true })
     expect(analysisOptions(subject(), inDesign, 'en', REGISTRY, GROUPS)[1]!.options[0]!.unavailable).toBeNull()
     expect(findExistingResult(FLOW, 'ground', withValues(form, { passes: '3' }), inDesign, 'en')).toBeNull()
+  })
+
+  it('prefills "run again with changes" from an earlier run, in the user locale', () => {
+    const earlier = provenance({
+      analysis_id: 'hydrology.flow',
+      parameters: [
+        { key: 'depressions', value: { Choice: 'fill' } },
+        { key: 'max_breach_m', value: { Number: 2.5 } },
+        { key: 'passes', value: { Integer: 4 } },
+        { key: 'log', value: { Boolean: true } },
+        // A parameter a later recipe dropped is not carried over.
+        { key: 'retired', value: { Number: 1 } },
+      ],
+    })
+    expect(formFromProvenance(FLOW, earlier, ['wetness'], 'Ground', 'Water flow', 'de')).toEqual({
+      values: { depressions: 'fill', max_breach_m: '2,5', passes: '4', log: true },
+      outputs: { area: false, wetness: true },
+      name: 'Ground · Water flow',
+    })
+
+    // A parameter the run did not record takes its registry default.
+    const partial = provenance({ analysis_id: 'hydrology.flow', parameters: [{ key: 'depressions', value: { Choice: 'fill' } }] })
+    expect(formFromProvenance(FLOW, partial, ['area'], 'Ground', 'Flow', 'en').values)
+      .toEqual({ depressions: 'fill', max_breach_m: '50', passes: '2', log: false })
+
+    const slope = formFromProvenance(SLOPE, provenance(), ['slope'], 'Ground', 'Slope', 'en')
+    expect(buildAnalysisRequest(SLOPE, { id: 'ground' }, slope, 'en')?.parameters)
+      .toEqual([{ key: 'unit', value: { Choice: 'degrees' } }])
   })
 })

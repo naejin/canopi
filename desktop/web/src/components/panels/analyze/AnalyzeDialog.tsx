@@ -42,6 +42,7 @@ export function AnalyzeDialog({
   attach,
   canAddToDesign,
   initialAnalysisId = null,
+  prefill = null,
   busy,
   error,
   onCancel,
@@ -58,6 +59,8 @@ export function AnalyzeDialog({
   /** Whether a Design is open to add an existing result to. */
   canAddToDesign: boolean
   initialAnalysisId?: string | null
+  /** The opening form of `initialAnalysisId`, e.g. an earlier run's settings. */
+  prefill?: AnalysisForm | null
   busy: boolean
   error: string | null
   onCancel(): void
@@ -80,7 +83,8 @@ export function AnalyzeDialog({
     ?? flat.find((option) => option.unavailable === null)?.entry.id
     ?? flat[0]?.entry.id
     ?? null)
-  const [forms, setForms] = useState<Readonly<Record<string, AnalysisForm>>>({})
+  const [forms, setForms] = useState<Readonly<Record<string, AnalysisForm>>>(() =>
+    initialAnalysisId && prefill ? { [initialAnalysisId]: prefill } : {})
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set())
   const [attempted, setAttempted] = useState(false)
 

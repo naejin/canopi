@@ -526,7 +526,8 @@
           "OtherContinuous": "その他の値",
           "Slope": "傾斜"
         },
-        "analyze": "解析…"
+        "analyze": "解析…",
+        "runAgainWithChanges": "設定を変えて再計算…"
       },
       "layers": {
         "title": "データ",

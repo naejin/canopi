@@ -526,7 +526,8 @@
           "OtherContinuous": "Andere waarden",
           "Slope": "Helling"
         },
-        "analyze": "Analyseren…"
+        "analyze": "Analyseren…",
+        "runAgainWithChanges": "Opnieuw berekenen met wijzigingen…"
       },
       "layers": {
         "title": "Data",

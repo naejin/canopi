@@ -321,6 +321,36 @@ describe('Data Library panel', () => {
     expect(actions.runAnalysis).not.toHaveBeenCalled()
   })
 
+  it('runs a result again with changes as a new analysis prefilled from its provenance', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+    mount()
+    await click(button('Actions for Steepness'))
+    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Run again with changes…"]')!)
+
+    expect(container.querySelector('h3')?.textContent).toBe('Analyze Ground')
+    const degrees = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+      .find((candidate) => candidate.closest('label')?.textContent === 'Degrees')!
+    expect(degrees.checked).toBe(true)
+    // The same settings are still a new calculation, never a refresh.
+    await choose('Percent')
+    await submit()
+    expect(actions.runAnalysis).toHaveBeenCalledWith({
+      analysis_id: 'terrain.slope',
+      inputs: [{ key: 'dem', item_id: 'a' }],
+      parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
+      outputs: ['slope'],
+      name: 'Ground · Slope',
+    }, false)
+    expect(actions.rerunAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('offers no run with changes once the input is gone', async () => {
+    lidarLibrary.value = library([], [slope('s', 'a', { name: 'Steepness' })])
+    mount()
+    await click(button('Actions for Steepness'))
+    expect(document.querySelector('[role="menu"] [aria-label="Run again with changes…"]')).toBeNull()
+  })
+
   it('describes a result by its provenance', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('new', 'a', { name: 'New' })])
     mount()
