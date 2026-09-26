@@ -67,7 +67,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 |---|---|---|
 | COG display | `maplibre-gl-raster`, `cog-tiler-wasm` (npm, pinned in `desktop/web/package.json`) | Dependency |
 | Native GeoTIFF/COG reader | `wbgeotiff` from `opengeos/whitebox-wasm` (pinned git rev in `desktop/Cargo.toml`) | Dependency |
-| Slope | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
+| Analyses (slope) | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
 | Geocoding registry | `packages/core/src/geocoding.ts` | Copy into `app/geocoding/` |
 | Basemap presets | `packages/core/src/types.ts` (`OPENFREEMAP_BASEMAPS`) | Copy |
 | Layer sync pattern | `packages/map/src/layer-sync.ts` | Pattern only (store-driven, idempotent sync); no code copied |
@@ -84,7 +84,7 @@ Every copied file keeps an MIT header naming its source path and commit and gets
 - **PDF:** one browser-compatible layout and encoder for every edition, without map backgrounds in v2.0. See [ADR 0008](adr/0008-canvas-pdf-export.md).
 - **Saving:** always-on continuous save to each Design's home (a file or a Design Draft), with conflict detection and no unsaved-changes prompts. See [ADR 0009](adr/0009-continuous-save.md).
 - **Interface:** a map-first Field Atlas interface with floating chrome, menus for every command, one plant finder and one species row everywhere. See [ADR 0010](adr/0010-map-first-interface.md).
-- **Analyses and stories:** analyses come from a registry over typed library items with recorded provenance; Designs hold saved views and stories presented inside Canopi. See [ADR 0011](adr/0011-analyses-provenance-and-stories.md).
+- **Analyses and stories:** analyses come from a registry over typed library items with recorded provenance; Designs hold saved views and stories presented inside Canopi. See [ADR 0011](adr/0011-analyses-provenance-and-stories.md). The registry is an authored contract (`common-types/analysis-registry.json`) generated into Rust and TypeScript; what each analysis is lives there, how it runs is a handwritten executor in `desktop/src/services/lidar/analyses/`, and the Analyze dialog is generated from it. Eligibility has one authority, the native offers in the library snapshot. See [data library](guides/data-library.md#analyze).
 - **Vegetation analysis:** canopy gaps, tree tops, crowns and terrain from points are ported from the ONF Computree plugin or written by Canopi from published methods, in the LGPL `vegetation/` crate, and run in the registry's in-process `native` lane. See [ADR 0012](adr/0012-vegetation-analysis.md).
 - **GeoJSON:** RFC 7946 import and export of design objects in both editions through one pure codec (`app/geojson/`). Export reads canonical lon/lat; import rejects malformed files before mutation and adds objects as one undoable runtime transaction.
 
@@ -95,5 +95,5 @@ Every `#[tauri::command]` is registered once and is either executor-backed async
 ## Persistence of app data
 
 - Desktop user DB: one schema, no migrations. An older database is renamed `user.db.v<N>-set-aside`, an unreadable or damaged one `user.db.corrupt-<unix-seconds>`, and an empty one is created. A newer database is refused with a typed error.
-- LiDAR library: catalogue v20. A library written by an older Canopi is deleted on first open; a newer one is refused.
+- LiDAR library: catalogue v21 (typed items, analysis definitions, derived items, runs). A library written by an older Canopi is deleted on first open; a newer one is refused.
 - Web: independent browser-local records for drafts, settings, species activity and stamps. Web v1 storage is ignored.

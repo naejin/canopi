@@ -1,3 +1,5 @@
+import { unitSuffix } from './item-types'
+
 /**
  * Legend ramps for the upstream renderer's built-in colormaps.
  *
@@ -19,6 +21,5 @@ export function legendGradient(colormap: string, reversed: boolean): string {
 
 export function formatLegendValue(value: number, units: string): string {
   const digits = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2
-  const unit = units === '°' || units === '%' ? units : units ? ` ${units}` : ''
-  return `${value.toFixed(digits)}${unit}`
+  return `${value.toFixed(digits)}${unitSuffix(units)}`
 }

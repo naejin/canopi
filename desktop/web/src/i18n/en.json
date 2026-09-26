@@ -460,7 +460,6 @@
         "typeLabel": "Type",
         "typeAll": "All types",
         "typeSources": "Imported data",
-        "typeSlope": "Slope",
         "showAll": "Show all data",
         "emptyTitle": "No data yet",
         "emptyBody": "Import elevation or height rasters once, then add them to any Design.",
@@ -488,8 +487,6 @@
         "ready": "Ready",
         "importTitle": "Import data",
         "name": "Name",
-        "measurementLabel": "What the values measure",
-        "chooseMeasurement": "Choose a measurement",
         "unit": "Unit",
         "unitUnknown": "Unknown unit",
         "files": "Files: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Resolution",
         "factRange": "Value range",
         "factStatus": "Status",
-        "factInput": "Calculated from",
-        "factMethod": "Method",
         "factResults": "Saved results",
         "dataUnavailable": "Data unavailable",
         "unavailableItem": "Unavailable data",
@@ -521,29 +516,17 @@
         "previewPreparing": "Preparing preview",
         "previewUnavailable": "Preview unavailable",
         "displayFailed": "Display failed",
-        "measurement": {
+        "calculating": "Calculating",
+        "quantityLabel": "What the values measure",
+        "chooseQuantity": "Choose a measurement",
+        "quantity": {
           "GroundElevation": "Ground elevation",
           "SurfaceElevation": "Surface elevation",
           "AboveGroundHeight": "Height above ground",
-          "OtherContinuous": "Other values"
+          "OtherContinuous": "Other values",
+          "Slope": "Slope"
         },
-        "calculateSlope": "Calculate slope",
-        "calculating": "Calculating",
-        "calculateTitle": "Calculate slope",
-        "calculateFrom": "From {{name}}",
-        "resultName": "Result name",
-        "unitDegrees": "Degrees",
-        "unitPercent": "Percent",
-        "run": "Run",
-        "calculateAttachNote": "The result is added to this Design when it is ready.",
-        "calculateLibraryNote": "The result is saved to the library; add it to any Design.",
-        "slopeNeedsSource": "Slope is calculated from an imported source that is ready.",
-        "slopeNeedsGround": "Slope needs ground elevation.",
-        "slopeNeedsMetres": "Slope needs elevations in metres.",
-        "slopeEngineMissing": "Slope calculation is unavailable: the GeoLibre engine is missing.",
-        "methodGeolibre": "GeoLibre projected slope (5×5)",
-        "methodUnknown": "Unknown method",
-        "factEngine": "Engine"
+        "analyze": "Analyze…"
       },
       "layers": {
         "title": "Data",
@@ -1210,5 +1193,94 @@
     "noMatches": "No plants match “{{query}}”.",
     "noneSelected": "Select plants on the map to list their species here.",
     "searchHint": "Search matches common names in every language Canopi knows, scientific names and codes. Accents, capitals and small typos don’t matter."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Terrain"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Slope",
+        "summary": "Steepness of the ground, from ground elevation.",
+        "params": {
+          "unit": {
+            "label": "Unit",
+            "help": "Degrees from level (0–90°), or rise over run in percent.",
+            "options": {
+              "degrees": "Degrees",
+              "percent": "Percent"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Slope"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Needs {{expected}}.",
+      "NotReady": "Needs data that has finished importing.",
+      "ValuesNotMetres": "Needs values in metres; this data is in {{units}}.",
+      "GridNotProjectedMetres": "Needs a projected grid in metres.",
+      "EngineMissing": "Unavailable: the GeoLibre engine is missing.",
+      "NeedsDesktop": "Needs Canopi Desktop.",
+      "AlreadyInLayers": "Already in Layers."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} has changed since this was calculated.",
+      "InputStale": "{{input}} is itself out of date.",
+      "RecipeUpdated": "The method has been updated (version {{from}} → {{to}}).",
+      "ToolUpdated": "A different engine build is installed ({{to}})."
+    },
+    "dialog": {
+      "title": "Analyze {{name}}",
+      "advanced": "Advanced settings",
+      "outputs": "Results",
+      "name": "Result name",
+      "attachNote": "The result is added to this Design when it is ready.",
+      "libraryNote": "The result is saved to the library; add it to any Design.",
+      "run": "Run",
+      "runAgain": "Calculate again",
+      "showInLayers": "Show in Layers",
+      "addExisting": "Add existing",
+      "existingInLibrary": "A result with these settings is already in the library.",
+      "yes": "Yes",
+      "no": "No",
+      "errors": {
+        "required": "Choose an option.",
+        "number": "Enter a number.",
+        "integer": "Enter a whole number.",
+        "range": "Enter a value from {{min}} to {{max}}.",
+        "step": "Use steps of {{step}}.",
+        "noOutputs": "Choose at least one result."
+      }
+    },
+    "details": {
+      "analysis": "Analysis",
+      "method": "Method",
+      "methodVersion": "Version {{version}}",
+      "inputs": "Calculated from",
+      "engine": "Engine",
+      "revision": "GeoLibre revision",
+      "created": "Created",
+      "outOfDate": "Out of date",
+      "refresh": "Refresh",
+      "refreshAria": "Refresh {{name}}",
+      "refreshing": "Refreshing",
+      "refreshFailed": "Last refresh failed. {{message}}",
+      "history": "Processing history",
+      "historyEmpty": "No runs recorded.",
+      "historyLoading": "Loading history",
+      "historyFailed": "The history could not be read.",
+      "showMore": "Show more",
+      "runState": {
+        "Preparing": "Running",
+        "Complete": "Completed",
+        "Failed": "Failed",
+        "Cancelled": "Cancelled"
+      },
+      "coverage": "{{cells}} cells published",
+      "noOutputs": "Nothing published"
+    }
   }
 }

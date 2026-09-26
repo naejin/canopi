@@ -31,7 +31,7 @@ Rules for AI agents working in this repository. Optimize for long-term project h
 
 - [Map workspace](docs/guides/map-workspace.md): map canvas, map layers, place search, scene runtime, renderer, interaction.
 - [Design document](docs/guides/design-document.md): `.canopi` format, lifecycle, dirty state, GeoJSON, Design Edit, settings.
-- [Data library](docs/guides/data-library.md): LiDAR import, display, slope, native lanes.
+- [Data library](docs/guides/data-library.md): LiDAR import, display, analysis registry and runs, native lanes.
 - [Frontend](docs/guides/frontend.md): structure, action layer, commands, chrome, localization, tests.
 - [Editions](docs/guides/editions.md): Desktop/Web/gallery setup, ports, fixtures, Web publishing.
 - [Species catalog](docs/guides/species-catalog.md): plant DB, query builder, FTS, translations, Web catalog.
@@ -80,6 +80,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 - **Resource ownership.** Every resource (runtime, renderer, MapLibre instance, timer, listener, cancellation token, DOM overlay) has one lifecycle owner for setup, update and teardown. Module-level `effect()` and listeners store disposers and clean up under `import.meta.hot.dispose()`.
 - **Native execution.** Every `#[tauri::command]` is registered once and is executor-backed async or a reviewed bounded synchronous command in `desktop/src/native_command_policy.rs`. No synchronous filesystem, SQLite, network, rendering, encoding, compression, process, sleeping or unbounded CPU work. Global blocking-pool calls only in `desktop/src/native_operation.rs`.
 - **Species fields.** A new filterable field updates `common-types/plant-filter-fields.json`, regenerated bindings, all 11 locale files and the detail UI if shown.
+- **Analyses.** A new analysis is an entry in `common-types/analysis-registry.json` (regenerated bindings), one executor in `desktop/src/services/lidar/analyses/` and its registry i18n keys in all 11 locales.
 
 ## Banned patterns
 

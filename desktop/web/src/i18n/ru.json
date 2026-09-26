@@ -460,7 +460,6 @@
         "typeLabel": "Тип",
         "typeAll": "Все типы",
         "typeSources": "Импортированные данные",
-        "typeSlope": "Уклон",
         "showAll": "Показать все данные",
         "emptyTitle": "Данных пока нет",
         "emptyBody": "Импортируйте растры высот один раз, затем добавляйте их в любой проект.",
@@ -488,8 +487,6 @@
         "ready": "Готово",
         "importTitle": "Импорт данных",
         "name": "Название",
-        "measurementLabel": "Что измеряют значения",
-        "chooseMeasurement": "Выберите величину",
         "unit": "Единица",
         "unitUnknown": "Неизвестная единица",
         "files": "Файлы: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Разрешение",
         "factRange": "Диапазон значений",
         "factStatus": "Состояние",
-        "factInput": "Рассчитано по",
-        "factMethod": "Метод",
         "factResults": "Сохранённые результаты",
         "dataUnavailable": "Данные недоступны",
         "unavailableItem": "Недоступные данные",
@@ -521,29 +516,17 @@
         "previewPreparing": "Подготовка превью",
         "previewUnavailable": "Превью недоступно",
         "displayFailed": "Ошибка отображения",
-        "measurement": {
+        "calculating": "Идёт расчёт",
+        "quantityLabel": "Что измеряют значения",
+        "chooseQuantity": "Выберите величину",
+        "quantity": {
           "GroundElevation": "Высота рельефа",
           "SurfaceElevation": "Высота поверхности",
           "AboveGroundHeight": "Высота над землёй",
-          "OtherContinuous": "Другие значения"
+          "OtherContinuous": "Другие значения",
+          "Slope": "Уклон"
         },
-        "calculateSlope": "Рассчитать уклон",
-        "calculating": "Идёт расчёт",
-        "calculateTitle": "Рассчитать уклон",
-        "calculateFrom": "Из {{name}}",
-        "resultName": "Название результата",
-        "unitDegrees": "Градусы",
-        "unitPercent": "Проценты",
-        "run": "Запустить",
-        "calculateAttachNote": "Результат будет добавлен в этот проект, когда будет готов.",
-        "calculateLibraryNote": "Результат сохраняется в библиотеке; добавьте его в любой проект.",
-        "slopeNeedsSource": "Уклон рассчитывается по готовому импортированному источнику.",
-        "slopeNeedsGround": "Для уклона нужна высота рельефа.",
-        "slopeNeedsMetres": "Для уклона нужны высоты в метрах.",
-        "slopeEngineMissing": "Расчёт уклона недоступен: отсутствует движок GeoLibre.",
-        "methodGeolibre": "Проекционный уклон GeoLibre (5×5)",
-        "methodUnknown": "Неизвестный метод",
-        "factEngine": "Движок"
+        "analyze": "Анализ…"
       },
       "layers": {
         "title": "Данные",
@@ -1210,5 +1193,94 @@
     "noMatches": "Нет растений, соответствующих «{{query}}».",
     "noneSelected": "Выделите растения на карте, чтобы увидеть здесь их виды.",
     "searchHint": "Поиск учитывает народные названия на всех языках, известных Canopi, научные названия и коды. Диакритика, регистр и мелкие опечатки не важны."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Рельеф"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Уклон",
+        "summary": "Крутизна рельефа, рассчитанная по высоте рельефа.",
+        "params": {
+          "unit": {
+            "label": "Единица",
+            "help": "Градусы от горизонтали (0–90°) или перепад высоты на расстояние в процентах.",
+            "options": {
+              "degrees": "Градусы",
+              "percent": "Проценты"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Уклон"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Требуется: {{expected}}.",
+      "NotReady": "Требуются данные с завершённым импортом.",
+      "ValuesNotMetres": "Требуются значения в метрах; эти данные в {{units}}.",
+      "GridNotProjectedMetres": "Требуется проецированная сетка в метрах.",
+      "EngineMissing": "Недоступно: отсутствует движок GeoLibre.",
+      "NeedsDesktop": "Требуется Canopi Desktop.",
+      "AlreadyInLayers": "Уже в слоях."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} изменился после этого расчёта.",
+      "InputStale": "{{input}} сам устарел.",
+      "RecipeUpdated": "Метод обновлён (версия {{from}} → {{to}}).",
+      "ToolUpdated": "Установлена другая сборка движка ({{to}})."
+    },
+    "dialog": {
+      "title": "Анализ: {{name}}",
+      "advanced": "Дополнительные параметры",
+      "outputs": "Результаты",
+      "name": "Название результата",
+      "attachNote": "Результат будет добавлен в этот проект, когда будет готов.",
+      "libraryNote": "Результат сохраняется в библиотеке; добавьте его в любой проект.",
+      "run": "Запустить",
+      "runAgain": "Рассчитать заново",
+      "showInLayers": "Показать в слоях",
+      "addExisting": "Добавить существующий",
+      "existingInLibrary": "Результат с этими параметрами уже есть в библиотеке.",
+      "yes": "Да",
+      "no": "Нет",
+      "errors": {
+        "required": "Выберите вариант.",
+        "number": "Введите число.",
+        "integer": "Введите целое число.",
+        "range": "Введите значение от {{min}} до {{max}}.",
+        "step": "Используйте шаг {{step}}.",
+        "noOutputs": "Выберите хотя бы один результат."
+      }
+    },
+    "details": {
+      "analysis": "Анализ",
+      "method": "Метод",
+      "methodVersion": "Версия {{version}}",
+      "inputs": "Рассчитано по",
+      "engine": "Движок",
+      "revision": "Ревизия GeoLibre",
+      "created": "Создано",
+      "outOfDate": "Устарело",
+      "refresh": "Обновить",
+      "refreshAria": "Обновить {{name}}",
+      "refreshing": "Обновление",
+      "refreshFailed": "Последнее обновление не удалось. {{message}}",
+      "history": "История обработки",
+      "historyEmpty": "Запусков не записано.",
+      "historyLoading": "Загрузка истории",
+      "historyFailed": "Не удалось прочитать историю.",
+      "showMore": "Показать ещё",
+      "runState": {
+        "Preparing": "Выполняется",
+        "Complete": "Завершено",
+        "Failed": "Ошибка",
+        "Cancelled": "Отменено"
+      },
+      "coverage": "Опубликовано ячеек: {{cells}}",
+      "noOutputs": "Ничего не опубликовано"
+    }
   }
 }

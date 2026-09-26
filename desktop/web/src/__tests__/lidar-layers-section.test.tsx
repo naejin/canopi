@@ -1,11 +1,12 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LidarLayerSummary, LidarLibrarySnapshot } from '../generated/contracts'
+import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
 const actions = vi.hoisted(() => ({
   moveReference: vi.fn(),
   removeFromDesign: vi.fn(),
+  rerunAnalysis: vi.fn().mockResolvedValue(undefined),
   setLidarEntryOpacity: vi.fn(),
   setLidarEntryVisibility: vi.fn(),
 }))
@@ -28,20 +29,15 @@ vi.mock('../app/document-session/store', async () => {
 import { LidarLayersSection } from '../components/panels/lidar/LidarLayersSection'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { libraryCalculateRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
+import { layersFocusRequest, libraryAnalyzeRequest, libraryFocusRequest, showInLayers } from '../app/lidar/library-navigation'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 
-function layer(id: string, name: string): LidarLayerSummary {
-  return {
-    id, name, generation_id: `${id}-g1`, measurement_kind: 'GroundElevation', units: 'm', state: 'Ready',
-    resolution_m: 1, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [100, 200], display_range: null, analysis_count: 0, import_job: null,
-  }
+function layer(id: string, name: string) {
+  return sourceItem(id, name, { value_range: [100, 200] })
 }
 
-function library(layers: LidarLayerSummary[]): LidarLibrarySnapshot {
-  return { layers, analyses: [], engine: { available: true, version: null, detail: null } }
-}
+const library = librarySnapshot
 
 let container: HTMLDivElement
 
@@ -112,8 +108,8 @@ describe('Layers data band', () => {
     await click(button('Open in Data Library'))
     expect(libraryFocusRequest.value).toBe('a')
     expect(sidePanel.value).toBe('data')
-    await click(button('Calculate slope'))
-    expect(libraryCalculateRequest.value).toBe('a')
+    await click(button('Analyze…'))
+    expect(libraryAnalyzeRequest.value).toEqual({ itemId: 'a', analysisId: null })
     expect(sidePanel.value).toBe('data')
     await click(button('Remove from Design'))
     expect(actions.removeFromDesign).toHaveBeenCalledWith('a')
@@ -124,5 +120,47 @@ describe('Layers data band', () => {
     act(() => { render(<LidarLayersSection />, container) })
     expect(container.textContent).toContain('Unavailable data')
     expect(container.textContent).toContain('Data unavailable')
+  })
+
+  it('marks an out-of-date result, says why, and refreshes it in place', async () => {
+    lidarLibrary.value = library([
+      layer('a', 'Ground'),
+      slopeItem('s', 'a', { freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'a' }] } }),
+    ])
+    setDesign({ lidar: { entries: [{ kind: 'Analysis', id: 's', order: 0, visible: true, opacity: 1 }] } })
+    act(() => { render(<LidarLayersSection />, container) })
+
+    const row = container.querySelector('li')!
+    expect(row.textContent).toContain('Out of date')
+    await click(button('Refresh Ground · Slope'))
+    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
+
+    await click(container.querySelector('li strong')!.closest('button')!)
+    expect(container.textContent).toContain('Ground has changed since this was calculated.')
+    expect(container.querySelector('[aria-label="Legend"]')?.textContent).toContain('60.0°')
+  })
+
+  it('shows a refresh in progress instead of offering another', () => {
+    lidarLibrary.value = library([
+      layer('a', 'Ground'),
+      slopeItem('s', 'a', {
+        freshness: { state: 'Stale', reasons: [{ reason: 'RecipeUpdated', from: 1, to: 2 }] },
+        run: { job_id: 'j', state: 'Preparing', message: null },
+      }),
+    ])
+    setDesign({ lidar: { entries: [{ kind: 'Analysis', id: 's', order: 0, visible: true, opacity: 1 }] } })
+    act(() => { render(<LidarLayersSection />, container) })
+    expect(container.textContent).toContain('Refreshing')
+    expect(() => button('Refresh Ground · Slope')).toThrow()
+  })
+
+  it('selects the reference the Analyze dialog asked to show', async () => {
+    setDesign({ lidar: { entries: [{ kind: 'Source', id: 'a', order: 0, visible: true, opacity: 1 }] } })
+    act(() => { render(<LidarLayersSection />, container) })
+    expect(container.querySelector('h4')).toBeNull()
+    await act(async () => { showInLayers('a') })
+    expect(sidePanel.value).toBe('layers')
+    expect(layersFocusRequest.value).toBeNull()
+    expect(container.querySelector('h4')?.textContent).toBe('Ground')
   })
 })

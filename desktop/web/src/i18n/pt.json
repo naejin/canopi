@@ -460,7 +460,6 @@
         "typeLabel": "Tipo",
         "typeAll": "Todos os tipos",
         "typeSources": "Dados importados",
-        "typeSlope": "Declividade",
         "showAll": "Mostrar todos os dados",
         "emptyTitle": "Ainda não há dados",
         "emptyBody": "Importe rasters de elevação ou altura uma vez e adicione-os a qualquer Projeto.",
@@ -488,8 +487,6 @@
         "ready": "Pronto",
         "importTitle": "Importar dados",
         "name": "Nome",
-        "measurementLabel": "O que os valores medem",
-        "chooseMeasurement": "Escolha uma medida",
         "unit": "Unidade",
         "unitUnknown": "Unidade desconhecida",
         "files": "Arquivos: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Resolução",
         "factRange": "Intervalo de valores",
         "factStatus": "Estado",
-        "factInput": "Calculado a partir de",
-        "factMethod": "Método",
         "factResults": "Resultados salvos",
         "dataUnavailable": "Dados indisponíveis",
         "unavailableItem": "Dados indisponíveis",
@@ -521,29 +516,17 @@
         "previewPreparing": "Preparando pré-visualização",
         "previewUnavailable": "Pré-visualização indisponível",
         "displayFailed": "Falha na exibição",
-        "measurement": {
+        "calculating": "Calculando",
+        "quantityLabel": "O que os valores medem",
+        "chooseQuantity": "Escolha uma medida",
+        "quantity": {
           "GroundElevation": "Elevação do terreno",
           "SurfaceElevation": "Elevação da superfície",
           "AboveGroundHeight": "Altura acima do solo",
-          "OtherContinuous": "Outros valores"
+          "OtherContinuous": "Outros valores",
+          "Slope": "Declividade"
         },
-        "calculateSlope": "Calcular declividade",
-        "calculating": "Calculando",
-        "calculateTitle": "Calcular declividade",
-        "calculateFrom": "A partir de {{name}}",
-        "resultName": "Nome do resultado",
-        "unitDegrees": "Graus",
-        "unitPercent": "Porcentagem",
-        "run": "Executar",
-        "calculateAttachNote": "O resultado é adicionado a este Projeto quando estiver pronto.",
-        "calculateLibraryNote": "O resultado é salvo na biblioteca; adicione-o a qualquer Projeto.",
-        "slopeNeedsSource": "A declividade é calculada a partir de uma fonte importada pronta.",
-        "slopeNeedsGround": "A declividade precisa da elevação do terreno.",
-        "slopeNeedsMetres": "A declividade precisa de elevações em metros.",
-        "slopeEngineMissing": "O cálculo de declividade está indisponível: o motor GeoLibre está ausente.",
-        "methodGeolibre": "Declividade projetada GeoLibre (5×5)",
-        "methodUnknown": "Método desconhecido",
-        "factEngine": "Motor"
+        "analyze": "Analisar…"
       },
       "layers": {
         "title": "Dados",
@@ -1210,5 +1193,94 @@
     "noMatches": "Nenhuma planta corresponde a “{{query}}”.",
     "noneSelected": "Selecione plantas no mapa para listar as espécies delas aqui.",
     "searchHint": "A pesquisa abrange nomes populares em todos os idiomas que o Canopi conhece, nomes científicos e códigos. Acentos, maiúsculas e pequenos erros de digitação não importam."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Terreno"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Declividade",
+        "summary": "Inclinação do terreno, a partir da elevação do terreno.",
+        "params": {
+          "unit": {
+            "label": "Unidade",
+            "help": "Graus em relação à horizontal (0–90°), ou desnível sobre distância em porcentagem.",
+            "options": {
+              "degrees": "Graus",
+              "percent": "Porcentagem"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Declividade"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Precisa de: {{expected}}.",
+      "NotReady": "Precisa de dados com a importação concluída.",
+      "ValuesNotMetres": "Precisa de valores em metros; estes dados estão em {{units}}.",
+      "GridNotProjectedMetres": "Precisa de uma grade projetada em metros.",
+      "EngineMissing": "Indisponível: o motor GeoLibre está ausente.",
+      "NeedsDesktop": "Precisa do Canopi Desktop.",
+      "AlreadyInLayers": "Já está em Camadas."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} mudou desde este cálculo.",
+      "InputStale": "{{input}} também está desatualizado.",
+      "RecipeUpdated": "O método foi atualizado (versão {{from}} → {{to}}).",
+      "ToolUpdated": "Outra versão do motor está instalada ({{to}})."
+    },
+    "dialog": {
+      "title": "Analisar {{name}}",
+      "advanced": "Configurações avançadas",
+      "outputs": "Resultados",
+      "name": "Nome do resultado",
+      "attachNote": "O resultado é adicionado a este Projeto quando estiver pronto.",
+      "libraryNote": "O resultado é salvo na biblioteca; adicione-o a qualquer Projeto.",
+      "run": "Executar",
+      "runAgain": "Calcular novamente",
+      "showInLayers": "Mostrar em Camadas",
+      "addExisting": "Adicionar o existente",
+      "existingInLibrary": "Já existe um resultado com estas configurações na biblioteca.",
+      "yes": "Sim",
+      "no": "Não",
+      "errors": {
+        "required": "Escolha uma opção.",
+        "number": "Digite um número.",
+        "integer": "Digite um número inteiro.",
+        "range": "Digite um valor de {{min}} a {{max}}.",
+        "step": "Use passos de {{step}}.",
+        "noOutputs": "Escolha pelo menos um resultado."
+      }
+    },
+    "details": {
+      "analysis": "Análise",
+      "method": "Método",
+      "methodVersion": "Versão {{version}}",
+      "inputs": "Calculado a partir de",
+      "engine": "Motor",
+      "revision": "Revisão do GeoLibre",
+      "created": "Criado",
+      "outOfDate": "Desatualizado",
+      "refresh": "Atualizar",
+      "refreshAria": "Atualizar {{name}}",
+      "refreshing": "Atualizando",
+      "refreshFailed": "A última atualização falhou. {{message}}",
+      "history": "Histórico de processamento",
+      "historyEmpty": "Nenhuma execução registrada.",
+      "historyLoading": "Carregando histórico",
+      "historyFailed": "Não foi possível ler o histórico.",
+      "showMore": "Mostrar mais",
+      "runState": {
+        "Preparing": "Em andamento",
+        "Complete": "Concluído",
+        "Failed": "Falhou",
+        "Cancelled": "Cancelado"
+      },
+      "coverage": "{{cells}} células publicadas",
+      "noOutputs": "Nada publicado"
+    }
   }
 }

@@ -1,20 +1,24 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { currentDesign } from '../../../app/document-session/store'
 import {
   moveReference,
   removeFromDesign,
+  rerunAnalysis,
   setLidarEntryOpacity,
   setLidarEntryVisibility,
 } from '../../../app/lidar/actions'
-import { lidarDisplayStyle, readLidarDisplay, entityKind } from '../../../app/lidar/display'
+import { lidarDisplayStyle, readLidarDisplay } from '../../../app/lidar/display'
 import { formatLegendValue, legendGradient } from '../../../app/lidar/display-legend'
-import { lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
-import { calculateSlopeInLibrary, openDataLibrary, openInDataLibrary } from '../../../app/lidar/library-navigation'
+import { itemTypeLabel } from '../../../app/lidar/item-types'
+import { libraryItemName, lidarLibrary, readLidarPresentation, type LidarPresentationItem } from '../../../app/lidar/library-store'
+import { analyzeInLibrary, layersFocusRequest, openDataLibrary, openInDataLibrary } from '../../../app/lidar/library-navigation'
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
 import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { t } from '../../../i18n'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
+import { Notice } from '../../shared/Notice'
+import { staleReasonText } from '../analyze/analysis-text'
 import styles from './lidar-layers-section.module.css'
 
 /**
@@ -33,6 +37,21 @@ export function LidarLayersSection() {
   const [focused, setFocused] = useState(false)
   const selected = items.find((item) => item.id === selectedId) ?? null
   const inspecting = inspectionTarget.value
+  const nameOf = (id: string) => {
+    const item = library?.items.find((candidate) => candidate.id === id)
+    return item ? libraryItemName(item, library) : t('canvas.lidar.library.dataUnavailable')
+  }
+  const refresh = (item: LidarPresentationItem) => {
+    if (item.definitionId) void rerunAnalysis(item.definitionId).catch(() => {})
+  }
+
+  // The Analyze dialog can ask to show an existing result here.
+  useEffect(() => {
+    const request = layersFocusRequest.value
+    if (!request) return
+    layersFocusRequest.value = null
+    setSelectedId(request)
+  }, [layersFocusRequest.value])
 
   return (
     <section className={styles.section} aria-label={t('canvas.lidar.layers.title')}>
@@ -72,7 +91,14 @@ export function LidarLayersSection() {
                 <button type="button" className={styles.layerName} onClick={() => setSelectedId(item.id)}>
                   <strong>{label}</strong>
                   <small>{referenceStatus(item)}</small>
+                  {isStale(item) && <small className={styles.stale}>{t('analyses.details.outOfDate')}</small>}
                 </button>
+                {isStale(item) && !isRefreshing(item) && (
+                  <button type="button" className={styles.refresh} aria-label={t('analyses.details.refreshAria', { name: label })}
+                    onClick={() => refresh(item)}>
+                    {t('analyses.details.refresh')}
+                  </button>
+                )}
                 <div className={styles.order}>
                   <button type="button" disabled={index === 0} aria-label={moveUpLabel}
                     onClick={() => moveReference(item.id, 'front')}>
@@ -93,9 +119,7 @@ export function LidarLayersSection() {
       {selected && (
         <ReferenceSettings
           item={selected}
-          units={selected.kind === 'Source'
-            ? library?.layers.find((layer) => layer.id === selected.id)?.units ?? ''
-            : ''}
+          nameOf={nameOf}
           inspecting={inspecting?.id === selected.id}
           focused={focused}
           onFit={() => {
@@ -107,40 +131,60 @@ export function LidarLayersSection() {
             else beginInspection({ kind: selected.kind, id: selected.id, name: selected.name })
           }}
           onRemove={() => { removeFromDesign(selected.id); setSelectedId(null) }}
+          onRefresh={() => refresh(selected)}
         />
       )}
     </section>
   )
 }
 
+function isStale(item: LidarPresentationItem): boolean {
+  return item.state === 'Ready' && item.freshness.state === 'Stale'
+}
+
+function isRefreshing(item: LidarPresentationItem): boolean {
+  return item.run?.state === 'Preparing'
+}
+
 function referenceStatus(item: LidarPresentationItem): string {
-  if (item.state === 'unavailable') return t('canvas.lidar.library.dataUnavailable')
-  const type = item.kind === 'Analysis'
-    ? t('canvas.lidar.library.typeSlope')
-    : t(`canvas.lidar.library.measurement.${item.detail}`)
+  if (item.state === 'unavailable' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
+  const type = itemTypeLabel(item.itemType)
   if (item.state !== 'Ready') return `${type} · ${t('canvas.lidar.library.preparing')}`
-  const display = item.generationId ? readLidarDisplay(entityKind(item), item.id, item.generationId) : null
+  if (isRefreshing(item)) return `${type} · ${t('analyses.details.refreshing')}`
+  const display = item.generationId ? readLidarDisplay(item.role, item.id, item.generationId) : null
   if (item.visible && display?.state === 'Preparing') return `${type} · ${t('canvas.lidar.layers.preparingDisplay')}`
   if (item.visible && display?.state === 'Failed') return `${type} · ${t('canvas.lidar.library.displayFailed')}`
   return type
 }
 
-function ReferenceSettings({ item, units, inspecting, focused, onFit, onReturn, onInspect, onRemove }: {
+function ReferenceSettings({ item, nameOf, inspecting, focused, onFit, onReturn, onInspect, onRemove, onRefresh }: {
   item: LidarPresentationItem
-  units: string
+  nameOf(id: string): string
   inspecting: boolean
   focused: boolean
   onFit(): void
   onReturn(): void
   onInspect(): void
   onRemove(): void
+  onRefresh(): void
 }) {
   const available = item.state === 'Ready'
-  const style = lidarDisplayStyle(item, units)
+  const style = lidarDisplayStyle(item)
   const percent = Math.round(item.opacity * 100)
   return (
     <div className={styles.settings}>
       <h4>{item.state === 'unavailable' ? t('canvas.lidar.library.unavailableItem') : item.name}</h4>
+      {isStale(item) && item.freshness.state === 'Stale' && (
+        <Notice
+          tone="warning"
+          action={!isRefreshing(item) && <button type="button" onClick={onRefresh}>{t('analyses.details.refresh')}</button>}
+        >
+          <strong>{t('analyses.details.outOfDate')}</strong>
+          <ul className={styles.reasons}>
+            {item.freshness.reasons.map((reason, index) => <li key={index}>{staleReasonText(reason, nameOf)}</li>)}
+          </ul>
+        </Notice>
+      )}
       <label>
         <span>{t('canvas.lidar.layers.opacity')}</span>
         <output>{percent}%</output>
@@ -174,9 +218,9 @@ function ReferenceSettings({ item, units, inspecting, focused, onFit, onReturn, 
         >
           {t('canvas.lidar.layers.inspect')}
         </button>
-        {item.kind === 'Source' && available && (
-          <button type="button" onClick={() => calculateSlopeInLibrary(item.id)}>
-            {t('canvas.lidar.library.calculateSlope')}
+        {item.role === 'Source' && available && (
+          <button type="button" onClick={() => analyzeInLibrary(item.id)}>
+            {t('canvas.lidar.library.analyze')}
           </button>
         )}
       </div>

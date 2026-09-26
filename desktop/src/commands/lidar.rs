@@ -6,14 +6,17 @@
 //! Operation Executor.
 
 use crate::{native_operation::NativeOperationExecutor, services::lidar::LidarLibrary};
-use common_types::lidar::{LidarAnalysisKind, LidarAnalysisParameters, LidarLibrarySnapshot};
+use common_types::library::{
+    AnalysisReceipt, AnalysisRequest, LibraryDeleteImpact, LibrarySnapshot, ProcessingHistoryPage,
+    RasterQuantity,
+};
 use tauri::State;
 
 #[tauri::command]
 pub async fn lidar_list_library(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-) -> Result<LidarLibrarySnapshot, String> {
+) -> Result<LibrarySnapshot, String> {
     let library = library.inner().clone();
     executor
         .run(
@@ -24,51 +27,54 @@ pub async fn lidar_list_library(
         .await
 }
 
+/// Rename one library item, source or derived; metadata only.
 #[tauri::command]
-pub async fn lidar_rename_layer(
+pub async fn lidar_rename_item(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
+    item_id: String,
     name: String,
 ) -> Result<(), String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
-            "lidar rename layer",
-            move || library.rename_layer(&layer_id, &name),
+            "lidar rename item",
+            move || library.rename_item(&item_id, &name),
         )
         .await
 }
 
+/// The derived items calculated from one item, shown before deletion.
 #[tauri::command]
-pub async fn lidar_delete_layer_impact(
+pub async fn lidar_delete_impact(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-) -> Result<common_types::lidar::LidarDeleteImpact, String> {
+    item_id: String,
+) -> Result<LibraryDeleteImpact, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar delete impact",
-            move || library.delete_impact(&layer_id),
+            move || library.delete_impact(&item_id),
         )
         .await
 }
 
+/// Delete one library item; refused while results were calculated from it.
 #[tauri::command]
-pub async fn lidar_delete_layer(
+pub async fn lidar_delete_item(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
+    item_id: String,
 ) -> Result<(), String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
-            "lidar delete layer",
-            move || library.delete_layer(&layer_id),
+            "lidar delete item",
+            move || library.delete_item(&item_id),
         )
         .await
 }
@@ -87,42 +93,54 @@ pub fn lidar_cancel_analysis_job(library: State<'_, LidarLibrary>, job_id: Strin
     library.cancel_job(&job_id);
 }
 
+/// Create a definition of a registered analysis and start its first run.
 #[tauri::command]
 pub async fn lidar_create_analysis(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
-    layer_id: String,
-    kind: LidarAnalysisKind,
-    parameters: LidarAnalysisParameters,
-    // `result_name`: the name to publish the result under. Omitted or blank
-    // publishes an unnamed result, which the UI shows by kind rather than
-    // inventing a name.
-    result_name: Option<String>,
-) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+    request: AnalysisRequest,
+) -> Result<AnalysisReceipt, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar create analysis",
-            move || library.create_analysis(&layer_id, kind, parameters, result_name),
+            move || library.create_analysis(&request),
         )
         .await
 }
 
-/// Retry one existing analysis definition against its expected source head.
+/// Run a definition again: Retry before a first result, Refresh after one.
 #[tauri::command]
-pub async fn lidar_retry_analysis(
+pub async fn lidar_rerun_analysis(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
     definition_id: String,
-    expected_source_generation_id: String,
-) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
+) -> Result<AnalysisReceipt, String> {
     let library = library.inner().clone();
     executor
         .run(
             crate::native_operation::NativeOperationClass::UserData,
-            "lidar retry analysis",
-            move || library.retry_analysis(&definition_id, &expected_source_generation_id),
+            "lidar rerun analysis",
+            move || library.rerun_analysis(&definition_id),
+        )
+        .await
+}
+
+/// One bounded page of a definition's processing history, newest first.
+#[tauri::command]
+pub async fn lidar_processing_history(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    definition_id: String,
+    cursor: Option<String>,
+) -> Result<ProcessingHistoryPage, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::UserData,
+            "lidar processing history",
+            move || library.processing_history(&definition_id, cursor.as_deref()),
         )
         .await
 }
@@ -141,22 +159,6 @@ pub async fn lidar_layer_collection(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar layer collection",
             move || library.layer_collection(&layer_id, cursor.as_deref()),
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn lidar_delete_analysis(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    definition_id: String,
-) -> Result<(), String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar delete analysis",
-            move || library.delete_analysis(&definition_id),
         )
         .await
 }
@@ -237,7 +239,7 @@ pub async fn lidar_import_item(
     library: State<'_, LidarLibrary>,
     executor: State<'_, NativeOperationExecutor>,
     name: String,
-    measurement_kind: common_types::lidar::LidarMeasurementKind,
+    quantity: RasterQuantity,
     // `unit_label` and `unit_unknown` declare the unit of an "other continuous"
     // dataset. Elevation and height are always metres and refuse both.
     unit_label: Option<String>,
@@ -252,7 +254,7 @@ pub async fn lidar_import_item(
             move || {
                 library.import_item(
                     &name,
-                    measurement_kind,
+                    quantity,
                     unit_label.as_deref(),
                     unit_unknown.unwrap_or(false),
                     paths.into_iter().map(std::path::PathBuf::from).collect(),
@@ -293,24 +295,6 @@ pub async fn lidar_dismiss_import(
             crate::native_operation::NativeOperationClass::UserData,
             "lidar dismiss import",
             move || library.dismiss_import(&layer_id),
-        )
-        .await
-}
-
-/// Rename one saved result; metadata only.
-#[tauri::command]
-pub async fn lidar_rename_analysis(
-    library: State<'_, LidarLibrary>,
-    executor: State<'_, NativeOperationExecutor>,
-    definition_id: String,
-    name: String,
-) -> Result<(), String> {
-    let library = library.inner().clone();
-    executor
-        .run(
-            crate::native_operation::NativeOperationClass::UserData,
-            "lidar rename analysis",
-            move || library.rename_analysis(&definition_id, &name),
         )
         .await
 }

@@ -37,6 +37,7 @@ const {
   sampleInspectionCentre,
   sampleInspectionPoint,
 } = await import('../app/lidar/inspection')
+const { librarySnapshot, slopeItem, sourceItem } = await import('./support/library-fixtures')
 const { setCurrentCanvasSession } = await import('../canvas/session')
 const { createTestCanvasRuntimeSurfaces } = await import('./support/canvas-runtime-surfaces')
 const { createTestCanvasQuerySurface } = await import('./support/canvas-query-surface')
@@ -75,25 +76,7 @@ function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState
 }
 
 function libraryWithGeneration(generationId: string) {
-  return {
-    layers: [
-      {
-        id: 'lyr-1',
-        name: 'Ground',
-        measurement_kind: 'GroundElevation',
-        units: 'm',
-        state: 'Ready',
-        resolution_m: 0.5,
-        coverage_cells: '1000',
-        bounds: [0, 0, 1, 1],
-        value_range: null,
-        analysis_count: 0,
-        generation_id: generationId,
-      },
-    ],
-    analyses: [],
-    engine: { available: true, version: null, detail: null },
-  }
+  return librarySnapshot([sourceItem('lyr-1', 'Ground', { generation_id: generationId, coverage_cells: '1000' })])
 }
 
 /** One WGS84 point, as the canvas's own `worldToGeo` would report it. */
@@ -386,6 +369,23 @@ describe('numeric inspection session state', () => {
       reason: 'missing-generation',
     })
     expect(samplePixel).not.toHaveBeenCalled()
+  })
+
+  it('samples a derived result by its library role and generation', async () => {
+    const design = designWithPresentedLayer() as unknown as {
+      lidar: { entries: Array<Record<string, unknown>> }
+    }
+    design.lidar.entries.push({ kind: 'Analysis', id: 'slope-1', visible: true, opacity: 1, order: 1, style: null })
+    replaceCurrentDesignState(design as unknown as Parameters<typeof replaceCurrentDesignState>[0], null, 'Inspect')
+    lidarLibrary.value = librarySnapshot([
+      sourceItem('lyr-1', 'Ground', { generation_id: 'gen-1' }),
+      slopeItem('slope-1', 'lyr-1', { generation_id: 'sgen-1' }),
+    ])
+
+    beginInspection({ kind: 'Analysis', id: 'slope-1', name: 'Slope' })
+    void sampleInspectionPoint(POINT)
+    await Promise.resolve()
+    expect(samplePixel.mock.calls[0]?.[0]).toMatchObject({ kind: 'Derived', entity_id: 'slope-1', expected_generation_id: 'sgen-1' })
   })
 
   it('ends inspection at entry when the layer is not presented at all', () => {

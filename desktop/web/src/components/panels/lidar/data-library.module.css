@@ -14,6 +14,8 @@
 .filters select { flex: 1; }
 .list { list-style: none; padding: 0; margin: 0; }
 .item { padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+/* A derived row nests under the item it was calculated from. */
+.item[data-nested='true'] { padding-left: calc(var(--space-3) + var(--space-6)); background: var(--color-surface-alt); }
 .itemMain { display: flex; align-items: flex-start; gap: var(--space-2); }
 .panel .identity { display: flex; flex: 1; min-width: 0; gap: var(--space-3); text-align: left; background: transparent; border: 0; padding: 0; }
 .panel .identity:hover:not(:disabled) { background: transparent; }
@@ -22,7 +24,8 @@
 .identity strong { font-size: var(--text-base); line-height: 1.45; overflow-wrap: anywhere; font-weight: 600; }
 .identity small { font-size: var(--text-xs); color: var(--color-text-muted); }
 .identity small[data-error='true'] { color: var(--color-danger); }
-.rowActions { margin-left: calc(var(--space-12) + var(--space-4)); margin-top: var(--space-2); }
+.identity .stale { align-self: flex-start; padding: 0 var(--space-1-5); border: 1px solid var(--color-warning-line); border-radius: var(--radius-sm); background: var(--color-warning-bg); color: var(--color-text); }
+.rowActions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-left: calc(var(--space-12) + var(--space-4)); margin-top: var(--space-2); }
 .panel .add { font-size: var(--text-xs); }
 .panel .primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-primary-contrast); }
 .panel .primary:hover:not(:disabled) { background: var(--color-primary-hover); }
@@ -54,4 +57,9 @@
 .filename { overflow-wrap: anywhere; }
 .job { margin-top: var(--space-3); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); }
 .job > span { width: 100%; color: var(--color-danger); overflow-wrap: anywhere; }
+.job > span[data-tone='progress'] { color: var(--color-text-muted); }
 .job progress { flex: 1; width: 100px; height: 4px; accent-color: var(--color-primary); }
+.reasons { margin: var(--space-1) 0 0; padding-left: var(--space-4); font-size: var(--text-xs); }
+.history { margin: 0 0 var(--space-2); padding-left: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.history li { display: flex; flex-direction: column; gap: var(--space-0-5); overflow-wrap: anywhere; }
+.history strong { font-weight: 600; }

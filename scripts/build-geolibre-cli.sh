@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the pinned GeoLibre CLI that runs recipe-2 slope.
+# Build the pinned GeoLibre CLI that runs the registered analyses.
 #
 # The revision must equal GEOLIBRE_REVISION in
 # desktop/src/services/lidar/geolibre.rs (a unit test checks it). The binary is

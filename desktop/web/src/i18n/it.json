@@ -460,7 +460,6 @@
         "typeLabel": "Tipo",
         "typeAll": "Tutti i tipi",
         "typeSources": "Dati importati",
-        "typeSlope": "Pendenza",
         "showAll": "Mostra tutti i dati",
         "emptyTitle": "Ancora nessun dato",
         "emptyBody": "Importa una volta raster di quota o altezza, poi aggiungili a qualsiasi Progetto.",
@@ -488,8 +487,6 @@
         "ready": "Pronto",
         "importTitle": "Importa dati",
         "name": "Nome",
-        "measurementLabel": "Cosa misurano i valori",
-        "chooseMeasurement": "Scegli una misura",
         "unit": "Unità",
         "unitUnknown": "Unità sconosciuta",
         "files": "File: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Risoluzione",
         "factRange": "Intervallo di valori",
         "factStatus": "Stato",
-        "factInput": "Calcolato da",
-        "factMethod": "Metodo",
         "factResults": "Risultati salvati",
         "dataUnavailable": "Dati non disponibili",
         "unavailableItem": "Dati non disponibili",
@@ -521,29 +516,17 @@
         "previewPreparing": "Anteprima in preparazione",
         "previewUnavailable": "Anteprima non disponibile",
         "displayFailed": "Visualizzazione non riuscita",
-        "measurement": {
+        "calculating": "Calcolo in corso",
+        "quantityLabel": "Cosa misurano i valori",
+        "chooseQuantity": "Scegli una misura",
+        "quantity": {
           "GroundElevation": "Quota del terreno",
           "SurfaceElevation": "Quota della superficie",
           "AboveGroundHeight": "Altezza dal suolo",
-          "OtherContinuous": "Altri valori"
+          "OtherContinuous": "Altri valori",
+          "Slope": "Pendenza"
         },
-        "calculateSlope": "Calcola pendenza",
-        "calculating": "Calcolo in corso",
-        "calculateTitle": "Calcola pendenza",
-        "calculateFrom": "Da {{name}}",
-        "resultName": "Nome del risultato",
-        "unitDegrees": "Gradi",
-        "unitPercent": "Percentuale",
-        "run": "Esegui",
-        "calculateAttachNote": "Il risultato viene aggiunto a questo Progetto quando è pronto.",
-        "calculateLibraryNote": "Il risultato viene salvato nella libreria; aggiungilo a qualsiasi Progetto.",
-        "slopeNeedsSource": "La pendenza si calcola da una sorgente importata pronta.",
-        "slopeNeedsGround": "La pendenza richiede la quota del terreno.",
-        "slopeNeedsMetres": "La pendenza richiede quote in metri.",
-        "slopeEngineMissing": "Il calcolo della pendenza non è disponibile: manca il motore GeoLibre.",
-        "methodGeolibre": "Pendenza proiettata GeoLibre (5×5)",
-        "methodUnknown": "Metodo sconosciuto",
-        "factEngine": "Motore"
+        "analyze": "Analizza…"
       },
       "layers": {
         "title": "Dati",
@@ -1210,5 +1193,94 @@
     "noMatches": "Nessuna pianta corrisponde a «{{query}}».",
     "noneSelected": "Seleziona piante sulla mappa per elencarne qui le specie.",
     "searchHint": "La ricerca trova i nomi comuni in tutte le lingue note a Canopi, i nomi scientifici e i codici. Accenti, maiuscole e piccoli errori di battitura non contano."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Terreno"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Pendenza",
+        "summary": "Inclinazione del terreno, dalla quota del terreno.",
+        "params": {
+          "unit": {
+            "label": "Unità",
+            "help": "Gradi rispetto all’orizzontale (0–90°), oppure dislivello su distanza in percentuale.",
+            "options": {
+              "degrees": "Gradi",
+              "percent": "Percentuale"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Pendenza"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Richiede: {{expected}}.",
+      "NotReady": "Richiede dati con l’importazione completata.",
+      "ValuesNotMetres": "Richiede valori in metri; questi dati sono in {{units}}.",
+      "GridNotProjectedMetres": "Richiede una griglia proiettata in metri.",
+      "EngineMissing": "Non disponibile: manca il motore GeoLibre.",
+      "NeedsDesktop": "Richiede Canopi Desktop.",
+      "AlreadyInLayers": "Già nei Livelli."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} è cambiato da questo calcolo.",
+      "InputStale": "{{input}} a sua volta non è aggiornato.",
+      "RecipeUpdated": "Il metodo è stato aggiornato (versione {{from}} → {{to}}).",
+      "ToolUpdated": "È installata un’altra versione del motore ({{to}})."
+    },
+    "dialog": {
+      "title": "Analizza {{name}}",
+      "advanced": "Impostazioni avanzate",
+      "outputs": "Risultati",
+      "name": "Nome del risultato",
+      "attachNote": "Il risultato viene aggiunto a questo Progetto quando è pronto.",
+      "libraryNote": "Il risultato viene salvato nella libreria; aggiungilo a qualsiasi Progetto.",
+      "run": "Esegui",
+      "runAgain": "Calcola di nuovo",
+      "showInLayers": "Mostra nei Livelli",
+      "addExisting": "Aggiungi l’esistente",
+      "existingInLibrary": "Nella libreria c’è già un risultato con queste impostazioni.",
+      "yes": "Sì",
+      "no": "No",
+      "errors": {
+        "required": "Scegli un’opzione.",
+        "number": "Inserisci un numero.",
+        "integer": "Inserisci un numero intero.",
+        "range": "Inserisci un valore da {{min}} a {{max}}.",
+        "step": "Usa passi di {{step}}.",
+        "noOutputs": "Scegli almeno un risultato."
+      }
+    },
+    "details": {
+      "analysis": "Analisi",
+      "method": "Metodo",
+      "methodVersion": "Versione {{version}}",
+      "inputs": "Calcolato da",
+      "engine": "Motore",
+      "revision": "Revisione GeoLibre",
+      "created": "Creato",
+      "outOfDate": "Non aggiornato",
+      "refresh": "Aggiorna",
+      "refreshAria": "Aggiorna {{name}}",
+      "refreshing": "Aggiornamento in corso",
+      "refreshFailed": "L’ultimo aggiornamento non è riuscito. {{message}}",
+      "history": "Cronologia di elaborazione",
+      "historyEmpty": "Nessuna esecuzione registrata.",
+      "historyLoading": "Caricamento della cronologia",
+      "historyFailed": "Impossibile leggere la cronologia.",
+      "showMore": "Mostra altro",
+      "runState": {
+        "Preparing": "In corso",
+        "Complete": "Completato",
+        "Failed": "Non riuscito",
+        "Cancelled": "Annullato"
+      },
+      "coverage": "{{cells}} celle pubblicate",
+      "noOutputs": "Nulla di pubblicato"
+    }
   }
 }

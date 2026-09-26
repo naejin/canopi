@@ -1,9 +1,12 @@
 import { signal } from '@preact/signals'
 import type { SavedObjectStamp } from '../src/types/saved-object-stamps'
 import type {
-  LidarAnalysisSummary,
+  AnalysisOffer,
+  AnalysisRequest,
+  LibraryItemSummary,
   LidarImportJob,
-  LidarLayerSummary,
+  ProcessingRun,
+  RasterQuantity,
 } from '../src/generated/contracts'
 import { detail, designFixture, species } from './fixtures'
 
@@ -17,50 +20,87 @@ let stamps: SavedObjectStamp[] = state === 'empty' ? [] : ['Orchard guild', 'Pol
   created_at: file.created_at, updated_at: file.updated_at,
 }))
 const lidarBounds: [number, number, number, number] = [-0.427, 48.305, -0.413, 48.314]
-let lidarLayers: LidarLayerSummary[] = state === 'empty' ? [] : [{
-  id: 'lidar-ground',
-  generation_id: 'lidar-ground-g1',
-  name: state === 'long'
-    ? 'IGN bare-earth elevation — La Maignannerie regional survey comparison layer'
-    : 'IGN ground elevation',
-  measurement_kind: 'GroundElevation',
-  units: 'm',
-  state: 'Ready',
-  resolution_m: 0.5,
-  coverage_cells: '4000000',
-  bounds: lidarBounds,
-  value_range: [131.2, 287.8],
-  display_range: { min: 131.2, max: 287.8, basis: 'Exact' },
-  analysis_count: 1,
-  import_job: null,
-}]
-let lidarAnalyses: LidarAnalysisSummary[] = state === 'empty' ? [] : [{
-  id: 'lidar-slope',
-  generation_id: 'lidar-slope-g1',
-  input_generation_id: 'lidar-ground-g1',
-  source_layer_id: 'lidar-ground',
-  kind: 'Slope',
-  name: null,
-  state: 'Ready',
-  detail: null,
-  bounds: lidarBounds,
-  value_range: [0, 41.6],
-  slope_unit: 'Degrees',
-  method: 'GeolibreProjectedSlopeV1',
-  engine_version: 'geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)',
-}]
-function galleryImport(layerId: string, name: string, kind: LidarLayerSummary['measurement_kind'], job: Partial<LidarImportJob>): LidarLayerSummary {
-  return {
-    id: layerId, generation_id: null, name, measurement_kind: kind, units: 'm', state: 'Preparing',
-    resolution_m: null, coverage_cells: null, bounds: null, value_range: null, display_range: null, analysis_count: 0,
-    import_job: { job_id: `job-${layerId}`, layer_id: layerId, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 42 }, ...job },
+const galleryTool = { engine: 'geolibre', version: 'geolibre-cli 1.5.3 (gallery)', revision: 'aac2b7439786aac2b7439786', tools: ['slope'] }
+const galleryCreatedAt = String(Date.UTC(2026, 8, 12, 9, 30))
+
+/** Offers as native computes them for slope: ground elevation that is ready. */
+function galleryOffers(item: Pick<LibraryItemSummary, 'role' | 'item_type' | 'state'>): AnalysisOffer[] {
+  const unavailable: AnalysisOffer['unavailable'] = item.item_type.quantity !== 'GroundElevation'
+    ? { reason: 'WrongInput', expected: [{ kind: 'Raster', quantity: 'GroundElevation' }] }
+    : item.state !== 'Ready' ? { reason: 'NotReady' } : null
+  return [{ analysis_id: 'terrain.slope', unavailable }]
+}
+
+function gallerySource(id: string, name: string, quantity: RasterQuantity, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
+  const item: LibraryItemSummary = {
+    id, name, role: 'Source', item_type: { kind: 'Raster', quantity }, units: 'm', state: 'Ready',
+    generation_id: `${id}-g1`, bounds: lidarBounds, value_range: [131.2, 287.8],
+    display_range: { min: 131.2, max: 287.8, basis: 'Exact' }, resolution_m: 0.5, coverage_cells: '4000000',
+    import_job: null, provenance: null, freshness: { state: 'Current' }, run: null, offers: [], dependents: 0,
+    ...overrides,
   }
+  return { ...item, offers: galleryOffers(item) }
+}
+
+function gallerySlope(id: string, input: string, unit: 'degrees' | 'percent', overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
+  const item: LibraryItemSummary = {
+    id, name: null, role: 'Derived', item_type: { kind: 'Raster', quantity: 'Slope' }, units: unit === 'percent' ? '%' : '°',
+    state: 'Ready', generation_id: `${id}-g1`, bounds: lidarBounds, value_range: unit === 'percent' ? [0, 89.4] : [0, 41.6],
+    display_range: null, resolution_m: 0.5, coverage_cells: '3996004', import_job: null,
+    provenance: {
+      definition_id: `${id}-def`, analysis_id: 'terrain.slope', recipe_version: 1, output_key: 'slope',
+      inputs: [{ key: 'dem', item_id: input, generation_id: `${input}-g1` }],
+      parameters: [{ key: 'unit', value: { Choice: unit } }],
+      tool: galleryTool, job_id: `${id}-job`, created_at: galleryCreatedAt,
+    },
+    freshness: { state: 'Current' }, run: { job_id: `${id}-job`, state: 'Complete', message: null }, offers: [], dependents: 0,
+    ...overrides,
+  }
+  return { ...item, offers: galleryOffers(item) }
+}
+
+let lidarItems: LibraryItemSummary[] = state === 'empty' ? [] : [
+  gallerySource('lidar-ground', state === 'long'
+    ? 'IGN bare-earth elevation — La Maignannerie regional survey comparison layer'
+    : 'IGN ground elevation', 'GroundElevation', { dependents: 2 }),
+  gallerySlope('lidar-slope', 'lidar-ground', 'degrees'),
+  gallerySlope('lidar-slope-percent', 'lidar-ground', 'percent', {
+    name: 'Orchard gradient',
+    freshness: { state: 'Stale', reasons: [{ reason: 'ToolUpdated', from: 'geolibre-cli 1.5.2', to: 'geolibre-cli 1.5.3' }] },
+  }),
+]
+function galleryImport(layerId: string, name: string, quantity: RasterQuantity, job: Partial<LidarImportJob>): LibraryItemSummary {
+  const failed = job.state === 'Failed'
+  return gallerySource(layerId, name, quantity, {
+    generation_id: null, state: failed ? 'Failed' : 'Preparing', resolution_m: null, coverage_cells: null,
+    bounds: null, value_range: null, display_range: null,
+    import_job: { job_id: `job-${layerId}`, layer_id: layerId, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 42 }, ...job },
+  })
 }
 if (state === 'lidar-progress') {
-  lidarLayers = [...lidarLayers,
+  lidarItems = [...lidarItems,
     galleryImport('lidar-canopy', 'Canopy height 2024', 'AboveGroundHeight', { state: 'Applying', progress: { phase: 'RenderingMap', percent: 68 } }),
     galleryImport('lidar-broken', 'Survey tile 0712', 'SurfaceElevation', { state: 'Failed', message: 'The file is not a readable raster.', progress: null }),
+    gallerySlope('lidar-slope-running', 'lidar-ground', 'percent', {
+      name: 'Terrace slope', generation_id: null, state: 'Preparing', value_range: null, coverage_cells: null,
+      run: { job_id: 'lidar-slope-running-job', state: 'Preparing', message: null },
+    }),
   ]
+}
+const galleryRuns = new Map<string, ProcessingRun[]>()
+function recordRun(item: LibraryItemSummary, at = String(Date.now())): void {
+  const provenance = item.provenance!
+  galleryRuns.set(provenance.definition_id, [{
+    job_id: `job-${sequence++}`, state: 'Complete', message: null, recipe_version: provenance.recipe_version, tool: galleryTool,
+    inputs: provenance.inputs, created_at: at, finished_at: at,
+    outputs: [{ item_id: item.id, generation_id: item.generation_id ?? '', coverage_cells: item.coverage_cells }],
+  }, ...(galleryRuns.get(provenance.definition_id) ?? [])])
+}
+for (const item of lidarItems) {
+  if (item.provenance && item.generation_id) recordRun(item, galleryCreatedAt)
+}
+function updateItem(id: unknown, change: (item: LibraryItemSummary) => LibraryItemSummary): void {
+  lidarItems = lidarItems.map(item => item.id === id ? change(item) : item)
 }
 export const activity = signal('All changes stay in memory. Reload to reset.')
 export function convertFileSrc(path: string) { return path }
@@ -102,80 +142,93 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       activity.value = 'Imported the sample design in memory.'; result = file; break
     case 'lidar_list_library':
       result = {
-        layers: lidarLayers,
-        analyses: lidarAnalyses,
-        engine: { available: true, version: '3.8.4', detail: null },
-        slope_engine: { available: true, version: 'geolibre-cli 1.5.3 (gallery)', detail: null },
+        items: lidarItems,
+        engines: {
+          gdal: { available: true, version: '3.8.4', detail: null },
+          geolibre: { available: true, version: galleryTool.version, detail: null },
+        },
       }; break
     case 'lidar_create_analysis': {
+      const request = args.request as AnalysisRequest
+      const input = request.inputs[0]?.item_id ?? ''
+      const unit = request.parameters.find(parameter => parameter.key === 'unit')?.value
       const id = `lidar-analysis-${sequence++}`
-      const layerId = String(args.layerId)
-      const unit = (args.parameters as { slope_unit?: 'Degrees' | 'Percent' } | undefined)?.slope_unit ?? 'Degrees'
-      lidarAnalyses = [...lidarAnalyses, {
-        id, generation_id: `${id}-g1`, input_generation_id: `${layerId}-g1`, source_layer_id: layerId,
-        kind: 'Slope', name: typeof args.resultName === 'string' ? args.resultName : null, state: 'Ready',
-        detail: null, bounds: lidarBounds, value_range: unit === 'Percent' ? [0, 89.4] : [0, 41.6], slope_unit: unit,
-        method: 'GeolibreProjectedSlopeV1', engine_version: 'geolibre-cli 1.5.3 (gallery)',
-      }]
-      lidarLayers = lidarLayers.map(layer => layer.id === layerId ? { ...layer, analysis_count: layer.analysis_count + 1 } : layer)
+      const item = gallerySlope(id, input, unit && 'Choice' in unit && unit.Choice === 'percent' ? 'percent' : 'degrees', { name: request.name })
+      lidarItems = [...lidarItems, item]
+      updateItem(input, source => ({ ...source, dependents: source.dependents + 1 }))
+      recordRun(item)
       activity.value = 'Calculated a slope result in memory.'
-      result = { definition_id: id, job_id: `job-${id}` }
+      result = { definition_id: item.provenance!.definition_id, job_id: item.provenance!.job_id, item_ids: [id] }
       break
     }
+    case 'lidar_rerun_analysis': {
+      const item = lidarItems.find(candidate => candidate.provenance?.definition_id === args.definitionId)
+      if (item) {
+        const refreshed = { ...item, state: 'Ready' as const, generation_id: `${item.id}-g${sequence++}`, freshness: { state: 'Current' as const } }
+        updateItem(item.id, () => refreshed)
+        recordRun(refreshed)
+      }
+      activity.value = 'Refreshed the result in memory.'
+      result = { definition_id: String(args.definitionId), job_id: `job-${sequence++}`, item_ids: item ? [item.id] : [] }
+      break
+    }
+    case 'lidar_processing_history':
+      result = { definition_id: String(args.definitionId), runs: galleryRuns.get(String(args.definitionId)) ?? [], next_cursor: null }
+      break
+    case 'lidar_cancel_analysis_job':
+      lidarItems = lidarItems.map((item): LibraryItemSummary => item.run && item.run.job_id === args.jobId && item.run.state === 'Preparing'
+        ? { ...item, state: item.generation_id ? 'Ready' : 'Failed', run: { ...item.run, state: 'Cancelled' } }
+        : item)
+      activity.value = 'Cancelled the calculation without publishing.'
+      result = undefined
+      break
     case 'lidar_import_item': {
       const id = `lidar-layer-${sequence++}`
-      lidarLayers = [...lidarLayers, galleryImport(id, String(args.name), args.kind as LidarLayerSummary['measurement_kind'], {})]
+      lidarItems = [...lidarItems, galleryImport(id, String(args.name), args.quantity as RasterQuantity, {})]
       activity.value = 'Started a library import in memory.'
       result = { layer_id: id, job_id: `job-${id}` }
       break
     }
     case 'lidar_retry_import':
-      lidarLayers = lidarLayers.map(layer => layer.id === args.layerId && layer.import_job
-        ? { ...layer, import_job: { ...layer.import_job, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 5 } } }
-        : layer)
+      updateItem(args.layerId, item => item.import_job
+        ? { ...item, state: 'Preparing', import_job: { ...item.import_job, state: 'Staging', message: null, progress: { phase: 'PreparingRaster', percent: 5 } } }
+        : item)
       activity.value = 'Retried the import in memory.'
       result = { layer_id: String(args.layerId), job_id: `job-${String(args.layerId)}` }
       break
     case 'lidar_dismiss_import':
-    case 'lidar_delete_layer': {
-      const id = String(args.layerId)
-      lidarLayers = lidarLayers.filter(candidate => candidate.id !== id)
+      lidarItems = lidarItems.filter(candidate => candidate.id !== args.layerId)
       activity.value = 'Removed the library item in memory.'
+      result = undefined
+      break
+    case 'lidar_delete_item': {
+      const removed = lidarItems.find(candidate => candidate.id === args.itemId)
+      if (removed && removed.dependents > 0) throw new Error('Other results were calculated from this data.')
+      lidarItems = lidarItems.filter(candidate => candidate !== removed)
+      const input = removed?.provenance?.inputs[0]?.item_id
+      if (input) updateItem(input, source => ({ ...source, dependents: Math.max(0, source.dependents - 1) }))
+      activity.value = 'Deleted the library item in memory.'
       result = undefined
       break
     }
     case 'lidar_cancel_import':
-      lidarLayers = lidarLayers.map(layer => layer.import_job && layer.import_job.job_id === args.jobId
-        ? { ...layer, import_job: { ...layer.import_job, state: 'Cancelled' as const, progress: null } }
-        : layer)
+      lidarItems = lidarItems.map(item => item.import_job && item.import_job.job_id === args.jobId
+        ? { ...item, state: 'Failed' as const, import_job: { ...item.import_job, state: 'Cancelled' as const, progress: null } }
+        : item)
       activity.value = 'Cancelled the import without publishing.'
       result = undefined
       break
-    case 'lidar_rename_layer':
-      lidarLayers = lidarLayers.map(layer => layer.id === args.layerId ? { ...layer, name: String(args.name) } : layer)
+    case 'lidar_rename_item':
+      updateItem(args.itemId, item => ({ ...item, name: String(args.name) }))
       result = undefined
       break
-    case 'lidar_rename_analysis':
-      lidarAnalyses = lidarAnalyses.map(analysis => analysis.id === args.definitionId ? { ...analysis, name: String(args.name) } : analysis)
-      result = undefined
+    case 'lidar_delete_impact':
+      result = {
+        dependent_item_ids: lidarItems
+          .filter(candidate => candidate.provenance?.inputs.some(input => input.item_id === args.itemId))
+          .map(candidate => candidate.id),
+      }
       break
-    case 'lidar_delete_layer_impact': {
-      const id = String(args.layerId)
-      const layer = lidarLayers.find(candidate => candidate.id === id)
-      const ids = lidarAnalyses.filter(candidate => candidate.source_layer_id === id).map(candidate => candidate.id)
-      result = { layer_name: layer?.name ?? id, analysis_count: ids.length, analysis_ids: ids }
-      break
-    }
-    case 'lidar_delete_analysis': {
-      const removed = lidarAnalyses.find(candidate => candidate.id === String(args.definitionId))
-      lidarAnalyses = lidarAnalyses.filter(candidate => candidate !== removed)
-      lidarLayers = lidarLayers.map(layer => layer.id === removed?.source_layer_id
-        ? { ...layer, analysis_count: layer.analysis_count - 1 }
-        : layer)
-      activity.value = 'Deleted the result in memory.'
-      result = undefined
-      break
-    }
     case 'lidar_layer_collection':
       result = {
         layer_id: String(args.layerId), head_generation_id: 'lidar-ground-g1', member_count: 4,

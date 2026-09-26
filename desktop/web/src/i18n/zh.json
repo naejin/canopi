@@ -460,7 +460,6 @@
         "typeLabel": "类型",
         "typeAll": "所有类型",
         "typeSources": "已导入数据",
-        "typeSlope": "坡度",
         "showAll": "显示所有数据",
         "emptyTitle": "暂无数据",
         "emptyBody": "只需导入一次高程或高度栅格，即可将其添加到任何设计中。",
@@ -488,8 +487,6 @@
         "ready": "就绪",
         "importTitle": "导入数据",
         "name": "名称",
-        "measurementLabel": "数值的含义",
-        "chooseMeasurement": "选择测量类型",
         "unit": "单位",
         "unitUnknown": "未知单位",
         "files": "文件：{{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "分辨率",
         "factRange": "数值范围",
         "factStatus": "状态",
-        "factInput": "计算来源",
-        "factMethod": "方法",
         "factResults": "已保存结果",
         "dataUnavailable": "数据不可用",
         "unavailableItem": "不可用的数据",
@@ -521,29 +516,17 @@
         "previewPreparing": "正在准备预览",
         "previewUnavailable": "预览不可用",
         "displayFailed": "显示失败",
-        "measurement": {
+        "calculating": "正在计算",
+        "quantityLabel": "数值的含义",
+        "chooseQuantity": "选择测量类型",
+        "quantity": {
           "GroundElevation": "地面高程",
           "SurfaceElevation": "表面高程",
           "AboveGroundHeight": "离地高度",
-          "OtherContinuous": "其他数值"
+          "OtherContinuous": "其他数值",
+          "Slope": "坡度"
         },
-        "calculateSlope": "计算坡度",
-        "calculating": "正在计算",
-        "calculateTitle": "计算坡度",
-        "calculateFrom": "来源：{{name}}",
-        "resultName": "结果名称",
-        "unitDegrees": "度",
-        "unitPercent": "百分比",
-        "run": "运行",
-        "calculateAttachNote": "结果就绪后将添加到此设计。",
-        "calculateLibraryNote": "结果保存在数据库中；可添加到任何设计。",
-        "slopeNeedsSource": "坡度需从已就绪的导入数据计算。",
-        "slopeNeedsGround": "坡度需要地面高程。",
-        "slopeNeedsMetres": "坡度需要以米为单位的高程。",
-        "slopeEngineMissing": "无法计算坡度：缺少 GeoLibre 引擎。",
-        "methodGeolibre": "GeoLibre 投影坡度（5×5）",
-        "methodUnknown": "未知方法",
-        "factEngine": "引擎"
+        "analyze": "分析…"
       },
       "layers": {
         "title": "数据",
@@ -1210,5 +1193,94 @@
     "noMatches": "没有植物匹配“{{query}}”。",
     "noneSelected": "在地图上选择植物，即可在此列出其物种。",
     "searchHint": "搜索可匹配 Canopi 支持的所有语言中的俗名、学名和代码。重音、大小写和轻微拼写错误均不影响结果。"
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "地形"
+    },
+    "terrain": {
+      "slope": {
+        "title": "坡度",
+        "summary": "地面的陡峭程度，由地面高程计算。",
+        "params": {
+          "unit": {
+            "label": "单位",
+            "help": "相对水平面的角度（0–90°），或以百分比表示的高差与水平距离之比。",
+            "options": {
+              "degrees": "度",
+              "percent": "百分比"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "坡度"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "需要：{{expected}}。",
+      "NotReady": "需要已完成导入的数据。",
+      "ValuesNotMetres": "需要以米为单位的数值；此数据的单位为 {{units}}。",
+      "GridNotProjectedMetres": "需要以米为单位的投影格网。",
+      "EngineMissing": "不可用：缺少 GeoLibre 引擎。",
+      "NeedsDesktop": "需要 Canopi 桌面版。",
+      "AlreadyInLayers": "已在图层中。"
+    },
+    "stale": {
+      "InputUpdated": "自本次计算以来，{{input}} 已更改。",
+      "InputStale": "{{input}} 本身已过时。",
+      "RecipeUpdated": "方法已更新（版本 {{from}} → {{to}}）。",
+      "ToolUpdated": "已安装不同版本的引擎（{{to}}）。"
+    },
+    "dialog": {
+      "title": "分析 {{name}}",
+      "advanced": "高级设置",
+      "outputs": "结果",
+      "name": "结果名称",
+      "attachNote": "结果就绪后将添加到此设计。",
+      "libraryNote": "结果保存在数据库中；可添加到任何设计。",
+      "run": "运行",
+      "runAgain": "重新计算",
+      "showInLayers": "在图层中显示",
+      "addExisting": "添加现有结果",
+      "existingInLibrary": "数据库中已有使用这些设置的结果。",
+      "yes": "是",
+      "no": "否",
+      "errors": {
+        "required": "请选择一个选项。",
+        "number": "请输入数字。",
+        "integer": "请输入整数。",
+        "range": "请输入 {{min}} 到 {{max}} 之间的值。",
+        "step": "请以 {{step}} 为步长。",
+        "noOutputs": "请至少选择一个结果。"
+      }
+    },
+    "details": {
+      "analysis": "分析",
+      "method": "方法",
+      "methodVersion": "版本 {{version}}",
+      "inputs": "计算来源",
+      "engine": "引擎",
+      "revision": "GeoLibre 修订版本",
+      "created": "创建时间",
+      "outOfDate": "已过时",
+      "refresh": "刷新",
+      "refreshAria": "刷新 {{name}}",
+      "refreshing": "正在刷新",
+      "refreshFailed": "上次刷新失败。{{message}}",
+      "history": "处理历史",
+      "historyEmpty": "没有运行记录。",
+      "historyLoading": "正在加载历史",
+      "historyFailed": "无法读取历史。",
+      "showMore": "显示更多",
+      "runState": {
+        "Preparing": "运行中",
+        "Complete": "已完成",
+        "Failed": "失败",
+        "Cancelled": "已取消"
+      },
+      "coverage": "已发布 {{cells}} 个像元",
+      "noOutputs": "未发布任何内容"
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { designSessionStore } from '../document-session/store'
 import { mapLayers, mapTerrainStateOf } from '../map-layers/state'
-import { lidarLibrary, readCurrentLidarPresentation } from '../lidar/library-store'
+import { readCurrentLidarPresentation } from '../lidar/library-store'
 import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
 import { publishLidarMapViewBounds } from '../lidar/camera-request'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
@@ -26,11 +26,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
       const anchor = { lat: plane.origin.lat, lon: plane.origin.lon }
       return captureWorkspaceMapContributions({
         sessionIdentity,
-        lidar: lidarDisplayLayers(
-          readCurrentLidarPresentation(),
-          lidarDisplayDescriptors.value,
-          (item) => lidarLibrary.value?.layers.find((layer) => layer.id === item.id)?.units ?? '',
-        ),
+        lidar: lidarDisplayLayers(readCurrentLidarPresentation(), lidarDisplayDescriptors.value),
         terrain: { ...mapTerrainStateOf(mapLayers.value), isDark: theme.value === 'dark' },
         overlays: {
           runtime,

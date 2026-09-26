@@ -51,8 +51,8 @@ cargo build --release
 
 - Commands carry and await the Tauri-managed `NativeOperationExecutor`. Classes are chosen by the constrained resource:
   - `Catalog` (admitted 8 / running 1): species search, detail, batches, filters, names, media.
-  - `UserData` (8/1): settings, favorites, Recent Designs, Design Notebook, stamp CRUD, LiDAR catalogue commands (library listing, presentation, display descriptors).
-  - `Local` (6/2): Design save/load, Design drafts (save, load, list, delete), exports (`export_file`, `save_canvas_pdf`), GeoJSON read, stamp files, Problem Reports, LiDAR raster work (import, slope, pixel sampling).
+  - `UserData` (8/1): settings, favorites, Recent Designs, Design Notebook, stamp CRUD, LiDAR catalogue commands (library listing, rename, delete, display descriptors, analysis create and rerun receipts, processing history).
+  - `Local` (6/2): Design save/load, Design drafts (save, load, list, delete), exports (`export_file`, `save_canvas_pdf`), GeoJSON read, stamp files, Problem Reports, LiDAR raster work (import, analysis runs, pixel sampling).
   - `Network` (12/4): HTTP such as geocoding and the species image cache (hits included, so no cache probe runs on the async thread).
 - Admission is immediate. A full class returns its stable busy error before touching any destination, DB or folder. Admitted work waits FIFO for running capacity, and classes are isolated.
 - Admission and running permits move into the started blocking closure. Validation, locks, transactions and publication stay inside it. Dropping the async caller may cancel queued work but never releases capacity for work that cannot be aborted.
@@ -88,7 +88,7 @@ cargo build --release
 
 ## Generated contract publication
 
-- `cd desktop/web && npm run gen:types` (`cargo run -p bindings-gen`) is the only writer for the generated adapter set: frontend contracts, design, settings and filter adapters, New Design defaults, normalization facts, `desktop/src/db/plant_filter_fields.rs` and the Web catalog admission module. It first validates the conformance corpus, the New Design defaults and the species contract, then stages the whole set before replacing any file.
+- `cd desktop/web && npm run gen:types` (`cargo run -p bindings-gen`) is the only writer for the generated adapter set: frontend contracts, design, settings and filter adapters, New Design defaults, normalization facts, `desktop/src/db/plant_filter_fields.rs`, the analysis registry (`desktop/src/services/lidar/analysis_registry_generated.rs` and `generated/analysis-registry.ts`, from `common-types/analysis-registry.json`) and the Web catalog admission module. It first validates the conformance corpus, the New Design defaults, the analysis registry and the species contract, then stages the whole set before replacing any file.
 - `npm run check:types` renders the same set and reports stale files without writing. Generate and check coordinate through `target/bindings-gen-publication.lock`. Keep that file.
 - If an interrupted run leaves `target/bindings-gen-publication.in-progress`, later runs refuse to start. Inspect the diff, restore or accept it, remove `.bindings-gen-*` sidecars and then remove the marker.
 - `desktop/src/db/schema_contract_generated.rs` has its own writer: `python3 scripts/species_catalog_contract.py emit-rust --write`. Run it before `gen:types` after a storage contract change.

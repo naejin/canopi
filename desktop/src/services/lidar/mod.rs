@@ -8,7 +8,8 @@
 #[cfg(test)]
 mod acceptance_hooks;
 pub mod admission;
-pub mod analysis;
+pub(crate) mod analyses;
+mod analysis_registry_generated;
 pub mod catalogue;
 mod collection;
 mod display_cog;
@@ -30,9 +31,12 @@ mod raster_assets;
 mod raster_info;
 
 use catalogue::{new_id, now_iso};
+use common_types::library::{
+    AnalysisReceipt, AnalysisRequest, LibraryDeleteImpact, ProcessingHistoryPage, ProcessingRun,
+    ProcessingRunOutput, RasterQuantity,
+};
 use common_types::lidar::{
-    LidarAnalysisKind, LidarAnalysisParameters, LidarImportJob, LidarImportJobState,
-    LidarImportProgress, LidarImportProgressPhase,
+    LidarImportJob, LidarImportJobState, LidarImportProgress, LidarImportProgressPhase,
 };
 use engine::GdalEngine;
 use paths::LidarPaths;
@@ -43,7 +47,7 @@ use std::sync::MutexGuard;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-pub type LidarSnapshot = common_types::lidar::LidarLibrarySnapshot;
+pub type LidarSnapshot = common_types::library::LibrarySnapshot;
 
 #[derive(Clone)]
 pub struct LidarLibrary {
@@ -55,7 +59,7 @@ pub(crate) struct LidarLibraryInner {
     catalogue: Mutex<Connection>,
     display_cache: Mutex<Connection>,
     pub(crate) engine: GdalEngine,
-    /// The pinned GeoLibre runner for recipe-2 slope definitions.
+    /// The pinned GeoLibre CLI sidecar every registered analysis runs on.
     pub(crate) geolibre: geolibre::GeolibreEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
     executor: Mutex<Option<crate::native_operation::NativeOperationExecutor>>,
@@ -279,7 +283,7 @@ impl LidarLibrary {
         // immutable originals are unaffected.
         {
             let connection = library.catalogue()?;
-            analysis::recover_interrupted_jobs(&connection)?;
+            analyses::recover_interrupted_jobs(&connection)?;
         }
         library.prune_transient_artifacts()?;
         Ok(library)
@@ -317,12 +321,12 @@ impl LidarLibrary {
             .map_err(|_| "LiDAR display cache lock poisoned".to_string())
     }
 
-    /// Remove slope scratch that no running analysis job owns.
+    /// Remove analysis scratch that no running job owns.
     ///
     /// A job removes its own scratch when it settles; a crash leaves it. Only
     /// a job still `preparing` keeps its directory, and startup recovery has
     /// already failed every job the previous run left preparing.
-    fn prune_slope_scratch(&self) -> Result<(), String> {
+    fn prune_analysis_scratch(&self) -> Result<(), String> {
         let prepared = self.inner.paths.prepared_dir();
         let entries = match std::fs::read_dir(&prepared) {
             Ok(entries) => entries,
@@ -334,7 +338,7 @@ impl LidarLibrary {
         let connection = self.catalogue()?;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let Some(job_id) = name.strip_prefix(paths::SLOPE_SCRATCH_PREFIX) else {
+            let Some(job_id) = name.strip_prefix(paths::ANALYSIS_SCRATCH_PREFIX) else {
                 continue;
             };
             let running = connection
@@ -350,14 +354,14 @@ impl LidarLibrary {
                 continue;
             }
             if let Err(error) = std::fs::remove_dir_all(entry.path()) {
-                tracing::warn!(job_id, %error, "failed to remove settled slope scratch");
+                tracing::warn!(job_id, %error, "failed to remove settled analysis scratch");
             }
         }
         Ok(())
     }
 
     /// Best-effort bounded cleanup at startup: job roots of settled jobs,
-    /// unregistered display derivatives, settled slope scratch, leftover engine
+    /// unregistered display derivatives, settled analysis scratch, leftover engine
     /// output, unpublished chunk rows and unreferenced assets.
     fn prune_transient_artifacts(&self) -> Result<(), String> {
         let connection = self.catalogue()?;
@@ -385,7 +389,7 @@ impl LidarLibrary {
         // Display derivatives nobody registered, and interrupted writes, can go
         // now: no WebView reader exists before the library opens.
         display_cog::prune_display_derivatives(self)?;
-        self.prune_slope_scratch()?;
+        self.prune_analysis_scratch()?;
         // Output files of engine children an earlier process never reaped.
         let removed = engine::prune_engine_logs(&self.inner.paths.engine_log_dir())?;
         if removed > 0 {
@@ -464,20 +468,9 @@ impl LidarLibrary {
     }
 
     pub fn library_snapshot(&self) -> Result<LidarSnapshot, String> {
+        let geolibre = self.inner.geolibre.discover();
         let connection = self.catalogue()?;
-        let slope_engine = match self.inner.geolibre.discover() {
-            Ok(tool) => common_types::lidar::LidarEngineStatus {
-                available: true,
-                version: Some(tool.provenance()),
-                detail: None,
-            },
-            Err(error) => common_types::lidar::LidarEngineStatus {
-                available: false,
-                version: None,
-                detail: Some(error),
-            },
-        };
-        presentation::library_snapshot(&connection, &self.inner.engine, slope_engine)
+        presentation::library_snapshot(&connection, &self.inner.engine, &geolibre)
     }
 
     /// One bounded numeric inspection lookup.
@@ -498,7 +491,7 @@ impl LidarLibrary {
     pub fn create_layer(
         &self,
         name: &str,
-        measurement_kind: common_types::lidar::LidarMeasurementKind,
+        quantity: RasterQuantity,
         unit_label: Option<&str>,
         unit_unknown: bool,
     ) -> Result<String, String> {
@@ -507,164 +500,165 @@ impl LidarLibrary {
             return Err("Layer name must not be empty".to_string());
         }
         let id = new_id("lyr");
-        let units = resolve_units(measurement_kind, unit_label, unit_unknown)?;
+        let units = resolve_units(quantity, unit_label, unit_unknown)?;
         let connection = self.catalogue()?;
         connection
             .execute(
-                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![id, name, measurement_kind.as_str(), units, now_iso()],
+                "INSERT INTO lidar_source_layers(id, name, item_kind, quantity, units, created_at)
+                 VALUES(?1, ?2, 'raster', ?3, ?4, ?5)",
+                rusqlite::params![id, name, quantity.key(), units, now_iso()],
             )
             .map_err(|e| format!("Failed to create layer: {e}"))?;
         Ok(id)
     }
 
-    pub fn rename_layer(&self, layer_id: &str, name: &str) -> Result<(), String> {
+    /// Rename one library item. The name is library metadata: values, inputs
+    /// and identity are unchanged, and nothing becomes out of date.
+    pub fn rename_item(&self, item_id: &str, name: &str) -> Result<(), String> {
         let name = name.trim();
         if name.is_empty() {
-            return Err("Layer name must not be empty".to_string());
+            return Err("Name must not be empty".to_string());
         }
-        // Renaming changes no hashes and invalidates no results.
         let connection = self.catalogue()?;
-        let changed = connection
-            .execute(
-                "UPDATE lidar_source_layers SET name = ?2 WHERE id = ?1",
-                rusqlite::params![layer_id, name],
-            )
-            .map_err(|e| format!("Failed to rename layer: {e}"))?;
+        let mut changed = 0;
+        for sql in [
+            "UPDATE lidar_source_layers SET name = ?2 WHERE id = ?1",
+            "UPDATE lidar_derived_items SET name = ?2 WHERE id = ?1",
+        ] {
+            changed += connection
+                .execute(sql, rusqlite::params![item_id, name])
+                .map_err(|e| format!("Failed to rename: {e}"))?;
+        }
         if changed == 0 {
-            return Err(format!("Layer {layer_id} does not exist"));
+            return Err(format!("Item {item_id} does not exist"));
         }
         Ok(())
     }
 
-    /// Rename a saved result. The name is library metadata: values, input and
-    /// identity are unchanged, and a failed operation's Retry keeps the name.
-    pub fn rename_analysis(&self, definition_id: &str, name: &str) -> Result<(), String> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err("Result name must not be empty".to_string());
+    /// What deleting one item would affect: the derived items calculated
+    /// from it, which must be deleted first.
+    pub fn delete_impact(&self, item_id: &str) -> Result<LibraryDeleteImpact, String> {
+        let connection = self.catalogue()?;
+        if analyses::item_facts(&connection, item_id)?.is_none() {
+            return Err(format!("Item {item_id} does not exist"));
         }
-        let connection = self.catalogue()?;
-        let definition = analysis::definition_row(&connection, definition_id)?
-            .ok_or_else(|| format!("Analysis {definition_id} does not exist"))?;
-        let mut parameters = analysis::parse_parameters(&definition.parameters_json)?;
-        parameters.name = Some(name.to_string());
-        let parameters_json = serde_json::to_string(&parameters).map_err(|e| e.to_string())?;
-        let transaction = connection
-            .unchecked_transaction()
-            .map_err(|e| e.to_string())?;
-        transaction
-            .execute(
-                "UPDATE lidar_analysis_definitions SET parameters_json = ?2 WHERE id = ?1",
-                rusqlite::params![definition_id, parameters_json],
-            )
-            .map_err(|e| format!("Failed to rename the result: {e}"))?;
-        transaction
-            .execute(
-                "UPDATE lidar_analysis_generations SET name = ?2 WHERE definition_id = ?1",
-                rusqlite::params![definition_id, name],
-            )
-            .map_err(|e| format!("Failed to rename the result: {e}"))?;
-        transaction.commit().map_err(|e| e.to_string())
-    }
-
-    pub fn delete_impact(
-        &self,
-        layer_id: &str,
-    ) -> Result<common_types::lidar::LidarDeleteImpact, String> {
-        let connection = self.catalogue()?;
-        let layer = catalogue::get_layer(&connection, layer_id)?
-            .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
-        let definitions = catalogue::list_definitions_for_layer(&connection, layer_id)?;
-        Ok(common_types::lidar::LidarDeleteImpact {
-            layer_name: layer.name,
-            analysis_count: definitions.len() as u32,
-            analysis_ids: definitions.iter().map(|d| d.id.clone()).collect(),
+        Ok(LibraryDeleteImpact {
+            dependent_item_ids: catalogue::dependent_items(&connection, item_id)?,
         })
     }
 
-    /// Delete a layer, its analyses and results. Managed originals of dedupe
-    /// shared sources stay until explicit cleanup (slice 2).
-    pub fn delete_layer(&self, layer_id: &str) -> Result<(), String> {
-        let (definition_ids, job_ids) = {
+    /// Delete one library item.
+    ///
+    /// Refused while results were calculated from it: they keep their meaning
+    /// only while their input exists, so they are deleted explicitly first and
+    /// there is no cascade. A derived item takes its generations with it, and
+    /// its definition, runs and history go with the definition's last item.
+    pub fn delete_item(&self, item_id: &str) -> Result<(), String> {
+        let job_ids = {
             let connection = self.catalogue()?;
-            let definitions = catalogue::list_definitions_for_layer(&connection, layer_id)?;
-            refuse_dependent_results(&connection, layer_id, definitions.len())?;
-            let definition_ids = definitions
-                .into_iter()
-                .map(|definition| definition.id)
-                .collect::<Vec<_>>();
-            let mut statement = connection
-                .prepare(
-                    "SELECT id FROM lidar_import_jobs WHERE layer_id = ?1
-                     UNION SELECT j.id FROM lidar_analysis_jobs j
-                     JOIN lidar_analysis_definitions d ON d.id = j.definition_id
-                     WHERE d.layer_id = ?1",
-                )
-                .map_err(|e| e.to_string())?;
-            let job_ids = statement
-                .query_map([layer_id], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?;
-            (definition_ids, job_ids)
+            refuse_dependents(&connection, item_id)?;
+            if catalogue::get_layer(&connection, item_id)?.is_some() {
+                string_column(
+                    &connection,
+                    "SELECT id FROM lidar_import_jobs WHERE layer_id = ?1",
+                    item_id,
+                )?
+            } else if let Some(item) = catalogue::get_derived_item(&connection, item_id)? {
+                if catalogue::definition_items(&connection, &item.definition_id)?.len() == 1 {
+                    string_column(
+                        &connection,
+                        "SELECT id FROM lidar_analysis_jobs WHERE definition_id = ?1",
+                        &item.definition_id,
+                    )?
+                } else {
+                    Vec::new()
+                }
+            } else {
+                return Err(format!("Item {item_id} does not exist"));
+            }
         };
         for job_id in &job_ids {
             self.cancel_job(job_id);
         }
-
         let connection = self.catalogue()?;
         let transaction = connection
             .unchecked_transaction()
             .map_err(|e| e.to_string())?;
         // Recheck inside the transaction: a result created meanwhile keeps its
         // input.
-        let dependents: i64 = transaction
-            .query_row(
-                "SELECT COUNT(*) FROM lidar_analysis_definitions WHERE layer_id = ?1",
-                [layer_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
-        refuse_dependent_results(
-            &transaction,
-            layer_id,
-            usize::try_from(dependents).unwrap_or(usize::MAX),
+        refuse_dependents(&transaction, item_id)?;
+        if catalogue::get_layer(&transaction, item_id)?.is_some() {
+            delete_source_rows(&transaction, item_id)?;
+        } else {
+            delete_derived_rows(&transaction, item_id)?;
+        }
+        transaction.commit().map_err(|e| e.to_string())
+    }
+
+    /// One bounded page of a definition's runs, newest first.
+    pub fn processing_history(
+        &self,
+        definition_id: &str,
+        cursor: Option<&str>,
+    ) -> Result<ProcessingHistoryPage, String> {
+        let before = cursor
+            .map(|cursor| {
+                cursor
+                    .split_once(':')
+                    .map(|(created_at, id)| (created_at.to_string(), id.to_string()))
+                    .ok_or_else(|| "invalid processing history cursor".to_string())
+            })
+            .transpose()?;
+        let connection = self.catalogue()?;
+        if catalogue::get_definition(&connection, definition_id)?.is_none() {
+            return Err(format!("Analysis {definition_id} does not exist"));
+        }
+        let page = common_types::library::PROCESSING_HISTORY_PAGE;
+        let mut jobs = catalogue::analysis_job_page(
+            &connection,
+            definition_id,
+            before
+                .as_ref()
+                .map(|(created_at, id)| (created_at.as_str(), id.as_str())),
+            page + 1,
         )?;
-        for definition_id in &definition_ids {
-            delete_analysis_rows(&transaction, definition_id)?;
-        }
-        // Ordered snapshots keep their own member rows, which reference the
-        // generations deleted below.
-        transaction
-            .execute(
-                "DELETE FROM lidar_collection_members WHERE generation_id IN
-                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        // Chunk rows carry no foreign key to their generation (they are
-        // inserted before it commits), so they are revoked with it explicitly.
-        transaction
-            .execute(
-                "DELETE FROM lidar_generation_chunks WHERE generation_id IN
-                 (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
-                [layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        for sql in [
-            "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
-            "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
-            "DELETE FROM lidar_layer_generations WHERE layer_id = ?1",
-            "DELETE FROM lidar_source_layers WHERE id = ?1",
-        ] {
-            transaction
-                .execute(sql, [layer_id])
-                .map_err(|e| e.to_string())?;
-        }
-        transaction.commit().map_err(|e| e.to_string())?;
-        Ok(())
+        let has_more = jobs.len() as i64 > page;
+        jobs.truncate(usize::try_from(page).unwrap_or(usize::MAX));
+        let next_cursor = match (has_more, jobs.last()) {
+            (true, Some(last)) => Some(format!("{}:{}", last.created_at, last.id)),
+            _ => None,
+        };
+        let runs = jobs
+            .into_iter()
+            .map(|job| {
+                let outputs = catalogue::job_generations(&connection, &job.id)?
+                    .into_iter()
+                    .map(|generation| ProcessingRunOutput {
+                        item_id: generation.item_id,
+                        generation_id: generation.id,
+                        coverage_cells: generation
+                            .coverage_cells
+                            .and_then(|cells| u64::try_from(cells).ok()),
+                    })
+                    .collect();
+                Ok(ProcessingRun {
+                    state: analyses::parse_job_state(&job.state),
+                    message: job.message,
+                    recipe_version: u32::try_from(job.recipe_version).unwrap_or(0),
+                    tool: analyses::parse_tool(job.tool_provenance.as_deref()),
+                    inputs: analyses::parse_pinned_inputs(&job.input_generations_json)?,
+                    created_at: job.created_at,
+                    finished_at: job.finished_at,
+                    outputs,
+                    job_id: job.id,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        Ok(ProcessingHistoryPage {
+            definition_id: definition_id.to_string(),
+            runs,
+            next_cursor,
+        })
     }
 
     /// The ordered composition of one Data Layer, one bounded member page at a
@@ -899,7 +893,8 @@ impl LidarLibrary {
             );
             let _ = connection.execute(
                 "UPDATE lidar_analysis_jobs
-                 SET state = 'cancelled', message = 'analysis cancelled', updated_at = ?2
+                 SET state = 'cancelled', message = 'analysis cancelled', finished_at = ?2,
+                     updated_at = ?2
                  WHERE id = ?1 AND state = 'preparing'",
                 rusqlite::params![job_id, now_iso()],
             );
@@ -914,7 +909,7 @@ impl LidarLibrary {
     pub fn record_import_item(
         &self,
         name: &str,
-        measurement_kind: common_types::lidar::LidarMeasurementKind,
+        quantity: RasterQuantity,
         unit_label: Option<&str>,
         unit_unknown: bool,
         paths: &[PathBuf],
@@ -926,7 +921,7 @@ impl LidarLibrary {
         if name.is_empty() {
             return Err("Layer name must not be empty".to_string());
         }
-        let units = resolve_units(measurement_kind, unit_label, unit_unknown)?;
+        let units = resolve_units(quantity, unit_label, unit_unknown)?;
         let request = import_request_json(paths)?;
         let layer_id = new_id("lyr");
         let job_id = new_id("imp");
@@ -937,9 +932,9 @@ impl LidarLibrary {
         let now = now_iso();
         transaction
             .execute(
-                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![layer_id, name, measurement_kind.as_str(), units, now],
+                "INSERT INTO lidar_source_layers(id, name, item_kind, quantity, units, created_at)
+                 VALUES(?1, ?2, 'raster', ?3, ?4, ?5)",
+                rusqlite::params![layer_id, name, quantity.key(), units, now],
             )
             .map_err(|e| format!("Failed to create the library item: {e}"))?;
         transaction
@@ -1064,13 +1059,13 @@ impl LidarLibrary {
     pub fn import_item(
         &self,
         name: &str,
-        measurement_kind: common_types::lidar::LidarMeasurementKind,
+        quantity: RasterQuantity,
         unit_label: Option<&str>,
         unit_unknown: bool,
         paths: Vec<PathBuf>,
     ) -> Result<common_types::lidar::LidarImportReceipt, String> {
         let (layer_id, job_id) =
-            self.record_import_item(name, measurement_kind, unit_label, unit_unknown, &paths)?;
+            self.record_import_item(name, quantity, unit_label, unit_unknown, &paths)?;
         self.start_recorded_import(&layer_id, &job_id, paths)
     }
 
@@ -1294,302 +1289,90 @@ impl LidarLibrary {
         }
     }
 
-    /// Run one queued slope job to its settled state.
-    async fn run_analysis(
-        self,
-        job_id: String,
-        definition_id: String,
-        parameters_json: String,
-        source_generation_id: String,
-    ) {
+    /// Run one recorded analysis job to its settled state.
+    async fn run_analysis(self, job_id: String) {
         let Some(lease) = self.await_heavy_lease(&job_id).await else {
             return;
         };
         let Ok(executor) = self.executor() else {
             return;
         };
-        // Malformed stored parameters fail the job by name; they are never
-        // replaced by defaults that would compute something else.
-        let parameters = match analysis::parse_parameters(&parameters_json) {
-            Ok(parameters) => parameters,
-            Err(error) => {
-                if let Ok(connection) = self.catalogue() {
-                    let _ = connection.execute(
-                        "UPDATE lidar_analysis_jobs SET state = 'failed', message = ?2, updated_at = ?3 WHERE id = ?1",
-                        rusqlite::params![job_id, format!("the saved calculation settings are unreadable: {error}"), now_iso()],
-                    );
-                }
-                return;
-            }
-        };
         let flag = self.register_cancel(&job_id);
         let library = self.clone();
-        let job_id_for_run = job_id.clone();
-        let definition_id_for_run = definition_id.clone();
-        let source_generation = source_generation_id.clone();
-        let library_for_work = library.clone();
+        let job = job_id.clone();
         let outcome = executor
             .run(
                 crate::native_operation::NativeOperationClass::Local,
                 "lidar analysis",
                 move || {
                     let _lease = lease;
-                    analysis::run_slope_job(
-                        &library_for_work,
-                        &job_id_for_run,
-                        &definition_id_for_run,
-                        &parameters,
-                        &source_generation,
-                        &flag,
-                    )
+                    analyses::run_job(&library, &job, &flag)
                 },
             )
             .await;
         match outcome {
             Ok(outcome) => {
                 tracing::info!(
-                    definition_id,
+                    job_id,
                     summary = outcome.summary(),
                     "LiDAR analysis published"
                 );
             }
             Err(error) => {
-                let state = if error == "cancelled" {
-                    "cancelled"
-                } else {
-                    "failed"
-                };
-                let connection = self.catalogue();
-                if let Ok(connection) = connection {
-                    let _ = connection.execute(
-                        "UPDATE lidar_analysis_jobs SET state = ?2, message = ?3, updated_at = ?4 WHERE id = ?1",
-                        rusqlite::params![job_id, state, error, now_iso()],
-                    );
+                if let Ok(connection) = self.catalogue() {
+                    analyses::settle_unpublished(&connection, &job_id, &error);
                 }
             }
         }
         self.settle_cancel(&job_id);
     }
 
-    /// Create a new slope result with the current method, the pinned GeoLibre
-    /// projected slope (recipe 2), and run its first job.
-    ///
-    /// A missing GeoLibre engine refuses creation by name.
-    pub fn create_analysis(
-        &self,
-        layer_id: &str,
-        kind: LidarAnalysisKind,
-        parameters: LidarAnalysisParameters,
-        result_name: Option<String>,
-    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
-        self.inner.geolibre.discover()?;
-        self.create_analysis_unchecked(layer_id, kind, parameters, result_name)
+    fn start_analysis(&self, job_id: &str) {
+        let library = self.clone();
+        let job_id = job_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            library.run_analysis(job_id).await;
+        });
     }
 
-    /// Record a definition and its first job without checking for the engine.
+    /// Create a definition of a registered analysis and start its first run.
     ///
-    /// Production goes through [`Self::create_analysis`]; tests that only need
-    /// the catalogue rows call this directly.
-    pub(crate) fn create_analysis_unchecked(
-        &self,
-        layer_id: &str,
-        kind: LidarAnalysisKind,
-        parameters: LidarAnalysisParameters,
-        result_name: Option<String>,
-    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
-        let recipe = analysis::SlopeRecipe::GeolibreProjected;
-        let connection = self.catalogue()?;
-        let layer = catalogue::get_layer(&connection, layer_id)?
-            .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
-        analysis::capability(kind, layer.measurement_kind.as_str())?;
-        let input = catalogue::head_generation(&connection, layer_id)?
-            .ok_or_else(|| "Layer has no accepted coverage to analyse yet".to_string())?;
-        let definition_id = new_id("adef");
-        // The name rides with the definition's parameters, so a retry
-        // publishes the name the user gave, and a caller that sends no name
-        // simply publishes unnamed. The unit is always the caller's choice.
-        let parameters = analysis::AnalysisParameters {
-            slope_unit: parameters.slope_unit,
-            name: result_name,
-        };
-        let parameters_json = serde_json::to_string(&parameters).map_err(|e| e.to_string())?;
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_definitions(id, layer_id, kind, version, parameters_json, created_at)
-                 VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params![definition_id, layer_id, kind.as_str(), recipe.version(), parameters_json, now_iso()],
-            )
-            .map_err(|e| format!("Failed to create analysis definition: {e}"))?;
-        connection
-            .execute(
-                "INSERT INTO lidar_dependencies(definition_id, layer_id, kind) VALUES(?1, ?2, 'source')",
-                rusqlite::params![definition_id, layer_id],
-            )
-            .map_err(|e| e.to_string())?;
-        // One job for this new definition only, pinned to the input generation
-        // it was created from; other results are never touched.
-        let job_id = new_id("anl");
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
-                 VALUES(?1, ?2, ?3, 'preparing', ?4, ?4)",
-                rusqlite::params![job_id, definition_id, input.id, now_iso()],
-            )
-            .map_err(|e| format!("Failed to enqueue the analysis: {e}"))?;
-        {
-            let library = self.clone();
-            let job_id = job_id.clone();
-            let definition_id = definition_id.clone();
-            let source_generation_id = input.id.clone();
-            tauri::async_runtime::spawn(async move {
-                library
-                    .run_analysis(job_id, definition_id, parameters_json, source_generation_id)
-                    .await;
-            });
-        }
-        Ok(common_types::lidar::LidarAnalysisReceipt {
-            definition_id,
-            job_id,
-        })
-    }
-
-    /// Retry one failed or cancelled calculation with its saved definition.
-    ///
-    /// Retry reruns the stored recipe, parameters and name against the input
-    /// the failed operation was pinned to; it is never a way to recalculate a
-    /// result. A definition that already has a result is refused (make a new
-    /// calculation instead), as is a failed attempt whose pinned input is not
-    /// the one expected or is no longer the source's current generation.
-    pub fn retry_analysis(
-        &self,
-        definition_id: &str,
-        expected_source_generation_id: &str,
-    ) -> Result<common_types::lidar::LidarAnalysisReceipt, String> {
-        let connection = self.catalogue()?;
-        let definition = analysis::definition_row(&connection, definition_id)?
-            .ok_or_else(|| format!("Analysis {definition_id} does not exist"))?;
-        analysis::SlopeRecipe::from_version(definition.version)?;
-        if catalogue::head_analysis_generation(&connection, definition_id)?.is_some() {
-            return Err(
-                "this result is complete; calculate a new slope instead of retrying it".to_string(),
-            );
-        }
-        let pinned: Option<String> = connection
-            .query_row(
-                "SELECT source_generation_id FROM lidar_analysis_jobs
-                 WHERE definition_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
-                [definition_id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|e| e.to_string())?;
-        let Some(pinned) = pinned else {
-            return Err(
-                "this calculation has no recorded input to retry; calculate a new slope instead"
-                    .to_string(),
-            );
-        };
-        if pinned != expected_source_generation_id {
-            return Err("the input of this calculation is not the one expected".to_string());
-        }
-        let head = catalogue::head_generation(&connection, &definition.layer_id)?
-            .ok_or_else(|| "source layer has no accepted coverage to analyse yet".to_string())?;
-        if head.id != pinned {
-            return Err(
-                "the input of this calculation is no longer available; calculate a new slope instead"
-                    .to_string(),
-            );
-        }
-        let active = matches!(
-            catalogue::latest_analysis_job_state(&connection, definition_id)
-                .ok()
-                .flatten()
-                .as_deref(),
-            Some("preparing")
-        );
-        if active {
-            return Err("analysis is already running".to_string());
-        }
-        let job_id = new_id("anl");
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_jobs(id, definition_id, source_generation_id, state, created_at, updated_at)
-                 VALUES(?1, ?2, ?3, 'preparing', ?4, ?4)",
-                rusqlite::params![job_id, definition_id, head.id, now_iso()],
-            )
-            .map_err(|e| format!("Failed to enqueue analysis retry: {e}"))?;
-        let parameters_json = definition.parameters_json.clone();
-        let source_generation_id = head.id.clone();
-        let definition_id = definition_id.to_string();
-        {
-            let library = self.clone();
-            let job_id = job_id.clone();
-            let definition_id = definition_id.clone();
-            let parameters_json = parameters_json.clone();
-            let source_generation_id = source_generation_id.clone();
-            tauri::async_runtime::spawn(async move {
-                library
-                    .run_analysis(job_id, definition_id, parameters_json, source_generation_id)
-                    .await;
-            });
-        }
-        Ok(common_types::lidar::LidarAnalysisReceipt {
-            definition_id,
-            job_id,
-        })
-    }
-
-    pub fn delete_analysis(&self, definition_id: &str) -> Result<(), String> {
-        let job_ids = {
+    /// The request is validated against the registry and the inputs' stored
+    /// facts; a missing GeoLibre engine refuses creation by name.
+    pub fn create_analysis(&self, request: &AnalysisRequest) -> Result<AnalysisReceipt, String> {
+        let engine = self.inner.geolibre.discover();
+        let receipt = {
             let connection = self.catalogue()?;
-            let exists = connection
-                .query_row(
-                    "SELECT 1 FROM lidar_analysis_definitions WHERE id = ?1",
-                    [definition_id],
-                    |_| Ok(()),
-                )
-                .is_ok();
-            if !exists {
-                return Err(format!("Analysis {definition_id} does not exist"));
-            }
-            let mut statement = connection
-                .prepare("SELECT id FROM lidar_analysis_jobs WHERE definition_id = ?1")
-                .map_err(|e| e.to_string())?;
-            statement
-                .query_map([definition_id], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?
+            analyses::record_definition(&connection, request, Some(&engine))?
         };
-        for job_id in job_ids {
-            self.cancel_job(&job_id);
-        }
-        let connection = self.catalogue()?;
-        let transaction = connection
-            .unchecked_transaction()
-            .map_err(|e| e.to_string())?;
-        delete_analysis_rows(&transaction, definition_id)?;
-        transaction.commit().map_err(|e| e.to_string())?;
-        drop(connection);
-        Ok(())
+        self.start_analysis(&receipt.job_id);
+        Ok(receipt)
+    }
+
+    /// Run a definition again with its saved settings and current inputs:
+    /// Retry before a first result, Refresh after one. A refresh updates the
+    /// definition's items in place; the earlier run stays in its history.
+    pub fn rerun_analysis(&self, definition_id: &str) -> Result<AnalysisReceipt, String> {
+        let engine = self.inner.geolibre.discover();
+        let receipt = {
+            let connection = self.catalogue()?;
+            analyses::record_rerun(&connection, definition_id, Some(&engine))?
+        };
+        self.start_analysis(&receipt.job_id);
+        Ok(receipt)
     }
 }
 
-/// Refuse to delete a source that saved results were calculated from.
-///
-/// Results keep their meaning only while their input exists, so they are
-/// deleted explicitly first; there is no cascade and no orphan result.
-fn refuse_dependent_results(
-    connection: &Connection,
-    layer_id: &str,
-    dependents: usize,
-) -> Result<(), String> {
+/// Refuse to delete an item other results were calculated from.
+fn refuse_dependents(connection: &Connection, item_id: &str) -> Result<(), String> {
+    let dependents = catalogue::dependent_items(connection, item_id)?.len();
     if dependents == 0 {
         return Ok(());
     }
-    let name = catalogue::get_layer(connection, layer_id)?
+    let name = catalogue::get_layer(connection, item_id)?
         .map(|layer| layer.name)
-        .unwrap_or_else(|| layer_id.to_string());
+        .or(catalogue::get_derived_item(connection, item_id)?.and_then(|item| item.name))
+        .unwrap_or_else(|| item_id.to_string());
     Err(format!(
         "{name} has {dependents} saved result{} calculated from it; delete {} first",
         if dependents == 1 { "" } else { "s" },
@@ -1601,26 +1384,61 @@ fn refuse_dependent_results(
     ))
 }
 
-fn delete_analysis_rows(connection: &Connection, definition_id: &str) -> Result<(), String> {
-    // Result and quality chunk rows carry no foreign key to their generation
-    // (they are inserted before it commits), so they are revoked with it.
-    connection
-        .execute(
-            "DELETE FROM lidar_generation_chunks WHERE generation_id IN
-             (SELECT id FROM lidar_analysis_generations WHERE definition_id = ?1)",
-            [definition_id],
-        )
-        .map_err(|e| e.to_string())?;
+fn string_column(connection: &Connection, sql: &str, key: &str) -> Result<Vec<String>, String> {
+    let mut statement = connection.prepare(sql).map_err(|e| e.to_string())?;
+    statement
+        .query_map([key], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn delete_source_rows(connection: &Connection, layer_id: &str) -> Result<(), String> {
+    // Ordered snapshots keep their own member rows, which reference the
+    // generations deleted below. Chunk rows carry no foreign key to their
+    // generation (they are inserted before it commits), so they are revoked
+    // with it explicitly.
     for sql in [
-        "DELETE FROM lidar_analysis_heads WHERE definition_id = ?1",
-        "DELETE FROM lidar_analysis_jobs WHERE definition_id = ?1",
-        "DELETE FROM lidar_analysis_generations WHERE definition_id = ?1",
-        "DELETE FROM lidar_dependencies WHERE definition_id = ?1",
-        "DELETE FROM lidar_analysis_definitions WHERE id = ?1",
+        "DELETE FROM lidar_collection_members WHERE generation_id IN
+         (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+        "DELETE FROM lidar_generation_chunks WHERE generation_id IN
+         (SELECT id FROM lidar_layer_generations WHERE layer_id = ?1)",
+        "DELETE FROM lidar_layer_heads WHERE layer_id = ?1",
+        "DELETE FROM lidar_import_jobs WHERE layer_id = ?1",
+        "DELETE FROM lidar_layer_generations WHERE layer_id = ?1",
+        "DELETE FROM lidar_source_layers WHERE id = ?1",
     ] {
         connection
-            .execute(sql, [definition_id])
+            .execute(sql, [layer_id])
             .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn delete_derived_rows(connection: &Connection, item_id: &str) -> Result<(), String> {
+    let item = catalogue::get_derived_item(connection, item_id)?
+        .ok_or_else(|| format!("Item {item_id} does not exist"))?;
+    for sql in [
+        "DELETE FROM lidar_generation_chunks WHERE generation_id IN
+         (SELECT id FROM lidar_derived_generations WHERE item_id = ?1)",
+        "DELETE FROM lidar_derived_heads WHERE item_id = ?1",
+        "DELETE FROM lidar_derived_generations WHERE item_id = ?1",
+        "DELETE FROM lidar_derived_items WHERE id = ?1",
+    ] {
+        connection
+            .execute(sql, [item_id])
+            .map_err(|e| e.to_string())?;
+    }
+    if catalogue::definition_items(connection, &item.definition_id)?.is_empty() {
+        for sql in [
+            "DELETE FROM lidar_analysis_jobs WHERE definition_id = ?1",
+            "DELETE FROM lidar_analysis_inputs WHERE definition_id = ?1",
+            "DELETE FROM lidar_analysis_definitions WHERE id = ?1",
+        ] {
+            connection
+                .execute(sql, [&item.definition_id])
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -1643,48 +1461,16 @@ mod tests {
             .unwrap()
     }
 
-    fn seed_analysis(connection: &Connection, layer_id: &str, definition_id: &str) {
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_definitions
-             (id, layer_id, kind, version, parameters_json, created_at)
-             VALUES (?1, ?2, 'slope', 2, '{\"slope_unit\":\"Degrees\",\"name\":null}', '0')",
-                rusqlite::params![definition_id, layer_id],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_generations
-             (id, definition_id, source_generation_id, engine_version, state,
-              manifest_json, coverage_cells, min_value, max_value,
-              bounds_3857, published_at, method_id, recipe_version)
-             VALUES ('agen-1', ?1, 'source-gen', 'test', 'ready', '{}',
-                     1, 0, 1, '[0,0,1,1]', '0', 'geolibre-projected-slope-v1', 2)",
-                [definition_id],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_heads(definition_id, generation_id)
-             VALUES (?1, 'agen-1')",
-                [definition_id],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_analysis_jobs
-             (id, definition_id, source_generation_id, state, created_at, updated_at)
-             VALUES ('ajob-1', ?1, 'source-gen', 'complete', '0', '0')",
-                [definition_id],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO lidar_dependencies(definition_id, layer_id, kind)
-             VALUES (?1, ?2, 'source')",
-                rusqlite::params![definition_id, layer_id],
-            )
-            .unwrap();
+    fn seed_analysis(connection: &Connection, layer_id: &str, item_id: &str) {
+        analyses::test_support::seed_published_slope(
+            connection,
+            layer_id,
+            "source-gen",
+            &format!("adef-{item_id}"),
+            item_id,
+            &format!("dgen-{item_id}"),
+            None,
+        );
     }
 
     /// An "other continuous" dataset must declare its unit.
@@ -1697,91 +1483,92 @@ mod tests {
     /// dimensionless — a measurement claim nobody made.
     #[test]
     fn an_other_continuous_layer_must_declare_its_unit() {
-        use common_types::lidar::LidarMeasurementKind;
-
         // A real label is stored as given, trimmed.
         assert_eq!(
-            resolve_units(
-                LidarMeasurementKind::OtherContinuous,
-                Some("  mg/kg "),
-                false
-            )
-            .unwrap(),
+            resolve_units(RasterQuantity::OtherContinuous, Some("  mg/kg "), false).unwrap(),
             "mg/kg"
         );
         // An explicit unknown is stored as the sentinel, not as a label the
         // author never chose.
         assert_eq!(
-            resolve_units(LidarMeasurementKind::OtherContinuous, None, true).unwrap(),
+            resolve_units(RasterQuantity::OtherContinuous, None, true).unwrap(),
             common_types::lidar::LIDAR_UNITS_UNKNOWN
         );
         // Undeclared is refused.
         assert!(
-            resolve_units(LidarMeasurementKind::OtherContinuous, None, false).is_err(),
+            resolve_units(RasterQuantity::OtherContinuous, None, false).is_err(),
             "an undeclared unit must not be stored"
         );
         // Whitespace is not a label.
         assert!(
-            resolve_units(LidarMeasurementKind::OtherContinuous, Some("   "), false).is_err(),
+            resolve_units(RasterQuantity::OtherContinuous, Some("   "), false).is_err(),
             "a blank label is undeclared, not a unit"
         );
         // Claiming both is contradictory.
         assert!(
-            resolve_units(LidarMeasurementKind::OtherContinuous, Some("mg/kg"), true).is_err(),
+            resolve_units(RasterQuantity::OtherContinuous, Some("mg/kg"), true).is_err(),
             "a label and an explicit unknown cannot both hold"
         );
 
         // Elevation and height are always metres and refuse both declarations,
         // so a caller cannot relabel a measurement that has an inherent unit.
         for kind in [
-            LidarMeasurementKind::GroundElevation,
-            LidarMeasurementKind::SurfaceElevation,
-            LidarMeasurementKind::AboveGroundHeight,
+            RasterQuantity::GroundElevation,
+            RasterQuantity::SurfaceElevation,
+            RasterQuantity::AboveGroundHeight,
         ] {
             assert_eq!(resolve_units(kind, None, false).unwrap(), "m");
             assert!(
                 resolve_units(kind, Some("ft"), false).is_err(),
                 "{} must not accept a substitute unit",
-                kind.as_str()
+                kind.key()
             );
             assert!(
                 resolve_units(kind, None, true).is_err(),
                 "{} is not of unknown unit",
-                kind.as_str()
+                kind.key()
             );
         }
+        // A derived quantity only ever comes from an analysis.
+        let error = resolve_units(RasterQuantity::Slope, None, false).unwrap_err();
+        assert!(error.contains("cannot be imported"), "{error}");
     }
 
     #[test]
-    fn delete_analysis_removes_its_complete_row_graph() {
+    fn deleting_a_derived_item_removes_its_complete_row_graph() {
         let root = std::env::temp_dir().join(new_id("lidar-delete-analysis-test"));
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
                 "Delete analysis fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                RasterQuantity::GroundElevation,
                 None,
                 false,
             )
             .unwrap();
         {
             let connection = library.catalogue().unwrap();
-            seed_analysis(&connection, &layer_id, "analysis-1");
+            seed_analysis(&connection, &layer_id, "item-1");
         }
 
-        library.delete_analysis("analysis-1").unwrap();
+        library.delete_item("item-1").unwrap();
         let connection = library.catalogue().unwrap();
         for table in [
-            "lidar_analysis_heads",
+            "lidar_derived_heads",
+            "lidar_derived_generations",
+            "lidar_derived_items",
             "lidar_analysis_jobs",
-            "lidar_analysis_generations",
-            "lidar_dependencies",
+            "lidar_analysis_inputs",
             "lidar_analysis_definitions",
         ] {
             assert_eq!(row_count(&connection, table), 0, "{table}");
         }
         assert_eq!(row_count(&connection, "lidar_source_layers"), 1);
         drop(connection);
+        assert!(
+            library.delete_item("item-1").is_err(),
+            "a deleted item is gone"
+        );
         drop(library);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1800,12 +1587,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = library
-            .create_layer(
-                "Empty",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
+            .create_layer("Empty", RasterQuantity::GroundElevation, None, false)
             .unwrap();
 
         let read = |name: &'static str, library: LidarLibrary, layer_id: String| {
@@ -1842,13 +1624,13 @@ mod tests {
     }
 
     #[test]
-    fn delete_layer_removes_all_referencing_rows_with_foreign_keys_enabled() {
+    fn deleting_a_source_removes_all_referencing_rows_with_foreign_keys_enabled() {
         let root = std::env::temp_dir().join(new_id("lidar-delete-layer-test"));
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
                 "Delete layer fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -1866,7 +1648,7 @@ mod tests {
             connection
                 .execute(
                     "INSERT INTO lidar_interpretations
-                 (id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                 (id, source_sha256, band_index, quantity, units, scale, offset,
                   crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
                   valid_cells)
                  VALUES ('interp-delete', 'sha-delete', 1, 'ground-elevation', 'm', 1, 0,
@@ -1878,8 +1660,8 @@ mod tests {
                 .execute(
                     "INSERT INTO lidar_layer_generations
                  (id, layer_id, created_at, manifest_json,
-                  coverage_cells, min_value, max_value, bounds_3857)
-                 VALUES ('source-gen', ?1, '0', '{}', 1, 0, 1, '[0,0,1,1]')",
+                  coverage_cells, min_value, max_value, bounds_3857, crs_class)
+                 VALUES ('source-gen', ?1, '0', '{}', 1, 0, 1, '[0,0,1,1]', 'projected-metre')",
                     [&layer_id],
                 )
                 .unwrap();
@@ -1926,14 +1708,19 @@ mod tests {
                     [],
                 )
                 .unwrap();
-            seed_analysis(&connection, &layer_id, "analysis-delete");
+            seed_analysis(&connection, &layer_id, "item-delete");
         }
 
         // A saved result is deleted explicitly first; the source then removes
         // every row that references it.
-        assert!(library.delete_layer(&layer_id).is_err());
-        library.delete_analysis("analysis-delete").unwrap();
-        library.delete_layer(&layer_id).unwrap();
+        let refused = library.delete_item(&layer_id).unwrap_err();
+        assert!(refused.contains("1 saved result"), "{refused}");
+        assert_eq!(
+            library.delete_impact(&layer_id).unwrap().dependent_item_ids,
+            ["item-delete"]
+        );
+        library.delete_item("item-delete").unwrap();
+        library.delete_item(&layer_id).unwrap();
         let connection = library.catalogue().unwrap();
         for table in [
             "lidar_source_layers",
@@ -1941,10 +1728,10 @@ mod tests {
             "lidar_layer_generations",
             "lidar_collection_members",
             "lidar_import_jobs",
-            "lidar_analysis_heads",
+            "lidar_derived_heads",
             "lidar_analysis_jobs",
-            "lidar_analysis_generations",
-            "lidar_dependencies",
+            "lidar_derived_generations",
+            "lidar_analysis_inputs",
             "lidar_analysis_definitions",
             "lidar_generation_chunks",
         ] {
@@ -1967,7 +1754,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "Lease fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2048,12 +1835,7 @@ mod tests {
 
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = library
-            .create_layer(
-                "one step",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
+            .create_layer("one step", RasterQuantity::GroundElevation, None, false)
             .expect("layer created");
 
         // The production sequence, without the spawned wrapper around it.
@@ -2121,12 +1903,7 @@ mod tests {
         let broken = root.join("broken.tif");
         std::fs::write(&broken, b"not a raster").expect("broken file");
         let other = library
-            .create_layer(
-                "broken batch",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
-                None,
-                false,
-            )
+            .create_layer("broken batch", RasterQuantity::GroundElevation, None, false)
             .expect("layer created");
         let second_job = library.record_import_job(&other).expect("job recorded");
         let failure = import::stage_import(
@@ -2301,40 +2078,41 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// Startup removes slope scratch that no running job owns.
+    /// Startup removes analysis scratch that no running job owns.
     #[test]
-    fn startup_sweeps_settled_slope_scratch_and_keeps_a_running_jobs() {
-        let root = std::env::temp_dir().join(new_id("lidar-slope-scratch-sweep"));
+    fn startup_sweeps_settled_analysis_scratch_and_keeps_a_running_jobs() {
+        let root = std::env::temp_dir().join(new_id("lidar-analysis-scratch-sweep"));
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
                 "Scratch fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                RasterQuantity::GroundElevation,
                 None,
                 false,
             )
             .unwrap();
         {
             let connection = library.catalogue().unwrap();
-            seed_analysis(&connection, &layer_id, "analysis-1");
+            seed_analysis(&connection, &layer_id, "item-1");
             connection
                 .execute(
                     "INSERT INTO lidar_analysis_jobs
-                 (id, definition_id, source_generation_id, state, created_at, updated_at)
-                 VALUES ('ajob-running', 'analysis-1', 'source-gen', 'preparing', '0', '0')",
+                 (id, definition_id, state, recipe_version, input_generations_json,
+                  created_at, updated_at)
+                 VALUES ('ajob-running', 'adef-item-1', 'preparing', 1, '[]', '3', '3')",
                     [],
                 )
                 .unwrap();
         }
         let prepared = library.inner.paths.prepared_dir();
-        let scratch = |job: &str| prepared.join(format!("scratch-slope-{job}"));
-        for job in ["ajob-1", "ajob-running", "ajob-unknown"] {
+        let scratch = |job: &str| prepared.join(format!("scratch-analysis-{job}"));
+        for job in ["adef-item-1-job", "ajob-running", "ajob-unknown"] {
             std::fs::create_dir_all(scratch(job)).unwrap();
             std::fs::write(scratch(job).join("window.tif"), b"partial").unwrap();
         }
         library.prune_transient_artifacts().unwrap();
         assert!(
-            !scratch("ajob-1").exists(),
+            !scratch("adef-item-1-job").exists(),
             "a settled job's scratch is swept"
         );
         assert!(
@@ -2362,14 +2140,14 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "Asset fixture",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                RasterQuantity::GroundElevation,
                 None,
                 false,
             )
             .unwrap();
         {
             let connection = library.catalogue().unwrap();
-            seed_analysis(&connection, &layer_id, "analysis-1");
+            seed_analysis(&connection, &layer_id, "item-1");
             for sha in ["referenced", "orphan"] {
                 connection
                     .execute(
@@ -2384,7 +2162,7 @@ mod tests {
                 .execute(
                     "INSERT INTO lidar_generation_chunks(generation_id, role, chunk_x, chunk_y,
                         asset_sha256, valid_cells, state)
-                     VALUES('agen-1', 'result', 0, 0, 'referenced', 1, 'published')",
+                     VALUES('dgen-item-1', 'result', 0, 0, 'referenced', 1, 'published')",
                     [],
                 )
                 .unwrap();
@@ -2450,30 +2228,32 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// Canopi v2 does not read a v1 library: opening deletes it (catalogue,
-    /// originals, assets and derivatives) and starts an empty one.
+    /// An older catalogue (here v20, before typed items and provenance) is not
+    /// migrated: opening deletes the library (catalogue, originals, assets and
+    /// derivatives) and starts an empty one.
     #[test]
     fn an_older_library_is_deleted_and_a_fresh_one_opens() {
-        let root = std::env::temp_dir().join(new_id("lidar-v1-library"));
+        let root = std::env::temp_dir().join(new_id("lidar-older-library"));
         let lidar = paths::library_root(&root);
         std::fs::create_dir_all(lidar.join("sources/abc")).unwrap();
-        std::fs::write(lidar.join("sources/abc/original"), b"v1 original").unwrap();
+        std::fs::write(lidar.join("sources/abc/original"), b"older original").unwrap();
         {
-            let v1 = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
-            v1.execute_batch(
-                "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                 INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '19');
+            let older = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
+            older
+                .execute_batch(
+                    "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '20');
                  CREATE TABLE lidar_source_layers (id TEXT PRIMARY KEY);",
-            )
-            .unwrap();
+                )
+                .unwrap();
         }
 
         let library = LidarLibrary::open(&root).unwrap();
         assert!(
             !lidar.join("sources/abc").exists(),
-            "v1 originals are deleted"
+            "older originals are deleted"
         );
-        assert!(library.library_snapshot().unwrap().layers.is_empty());
+        assert!(library.library_snapshot().unwrap().items.is_empty());
         assert_eq!(
             catalogue::stored_version(&library.inner.paths.catalogue_path()).unwrap(),
             Some(catalogue::CATALOGUE_VERSION)
@@ -2521,10 +2301,9 @@ impl std::ops::Deref for CatalogueGuard<'_> {
 
 /// Delete a library written by an older Canopi.
 ///
-/// Canopi v2 keeps no migration path for v1 LiDAR libraries: an older
-/// catalogue means the whole managed library directory is removed before a
-/// fresh one is created. A newer catalogue is left in place for
-/// `catalogue::open` to refuse.
+/// There is no migration path (ADR 0003): an older catalogue means the whole
+/// managed library directory is removed before a fresh one is created. A newer
+/// catalogue is left in place for `catalogue::open` to refuse.
 fn discard_unsupported_library(root: &std::path::Path) -> Result<(), String> {
     let catalogue_path = root.join(paths::CATALOGUE_FILE);
     match catalogue::stored_version(&catalogue_path)? {
@@ -2646,45 +2425,27 @@ fn parse_import_progress_phase(raw: &str) -> Option<LidarImportProgressPhase> {
     }
 }
 
-fn default_units(kind: common_types::lidar::LidarMeasurementKind) -> String {
-    match kind {
-        common_types::lidar::LidarMeasurementKind::GroundElevation
-        | common_types::lidar::LidarMeasurementKind::SurfaceElevation
-        | common_types::lidar::LidarMeasurementKind::AboveGroundHeight => "m".to_string(),
-        // Only reachable through `resolve_units`, which refuses an undeclared
-        // unit, so this arm is never the answer for a stored layer.
-        common_types::lidar::LidarMeasurementKind::OtherContinuous => {
-            common_types::lidar::LIDAR_UNITS_UNKNOWN.to_string()
-        }
-    }
-}
-
-/// The unit label for a new layer, or a refusal when none was declared.
+/// The unit label for a new source, or a refusal when none was declared.
 ///
 /// Elevation and height have an inherent unit, so their label is fixed and a
 /// caller cannot contradict it. An "other continuous" dataset has no inherent
 /// unit, so its author must either supply one or state that it is unknown:
 /// silently storing a label such as `unitless` would assert the values are
-/// dimensionless, which is a measurement claim nobody made.
+/// dimensionless, which is a measurement claim nobody made. Derived quantities
+/// are never imported.
 fn resolve_units(
-    kind: common_types::lidar::LidarMeasurementKind,
+    quantity: RasterQuantity,
     unit_label: Option<&str>,
     unit_unknown: bool,
 ) -> Result<String, String> {
-    use common_types::lidar::LidarMeasurementKind;
-    match kind {
-        LidarMeasurementKind::GroundElevation
-        | LidarMeasurementKind::SurfaceElevation
-        | LidarMeasurementKind::AboveGroundHeight => {
-            if unit_label.is_some() || unit_unknown {
-                return Err(format!(
-                    "A {} dataset is measured in metres; its unit is not selectable",
-                    kind.as_str()
-                ));
-            }
-            Ok(default_units(kind))
-        }
-        LidarMeasurementKind::OtherContinuous => {
+    if !quantity.is_importable() {
+        return Err(format!(
+            "{} is calculated by an analysis and cannot be imported",
+            quantity.key()
+        ));
+    }
+    match quantity {
+        RasterQuantity::OtherContinuous => {
             let label = unit_label.map(str::trim).filter(|value| !value.is_empty());
             match (label, unit_unknown) {
                 (Some(_), true) => Err(
@@ -2697,6 +2458,15 @@ fn resolve_units(
                         .to_string(),
                 ),
             }
+        }
+        _ => {
+            if unit_label.is_some() || unit_unknown {
+                return Err(format!(
+                    "A {} dataset is measured in metres; its unit is not selectable",
+                    quantity.key()
+                ));
+            }
+            Ok("m".to_string())
         }
     }
 }

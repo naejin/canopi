@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { entityKind, lidarAssetUrl, lidarDisplayStyle, readLidarDisplay, requestLidarDisplay } from '../../../app/lidar/display'
+import { lidarAssetUrl, lidarDisplayStyle, readLidarDisplay, requestLidarDisplay } from '../../../app/lidar/display'
 import type { LibraryItem } from '../../../app/lidar/library-items'
 import { rasterWorkerPool, type RasterPoolClient } from '../../../maplibre/raster-display/pool'
 import { t } from '../../../i18n'
@@ -47,13 +47,10 @@ export function LibraryPreview({ item, client, width, height, large = false }: {
   height: number
   large?: boolean
 }) {
-  const kind = entityKind(item)
+  const kind = item.role
   const ready = item.status === 'ready' && item.generationId !== null
   const descriptor = ready ? readLidarDisplay(kind, item.id, item.generationId) : null
-  const style = lidarDisplayStyle(
-    { kind: item.kind, detail: item.type, slopeUnit: item.slopeUnit, displayRange: item.displayRange ? [...item.displayRange] : null },
-    item.units,
-  )
+  const style = lidarDisplayStyle(item)
   const key = `${item.generationId}|${width}x${height}|${style.colormap}|${style.reversed}|${style.rescale.join(',')}`
   const [url, setUrl] = useState<string | null>(previewCache.get(key) ?? null)
   const [failed, setFailed] = useState(false)

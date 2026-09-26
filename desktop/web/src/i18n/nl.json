@@ -460,7 +460,6 @@
         "typeLabel": "Type",
         "typeAll": "Alle typen",
         "typeSources": "Geïmporteerde data",
-        "typeSlope": "Helling",
         "showAll": "Alle data tonen",
         "emptyTitle": "Nog geen data",
         "emptyBody": "Importeer hoogte- of terreinrasters één keer en voeg ze daarna aan elk Ontwerp toe.",
@@ -488,8 +487,6 @@
         "ready": "Gereed",
         "importTitle": "Data importeren",
         "name": "Naam",
-        "measurementLabel": "Wat de waarden meten",
-        "chooseMeasurement": "Kies een meting",
         "unit": "Eenheid",
         "unitUnknown": "Onbekende eenheid",
         "files": "Bestanden: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Resolutie",
         "factRange": "Waardebereik",
         "factStatus": "Status",
-        "factInput": "Berekend uit",
-        "factMethod": "Methode",
         "factResults": "Opgeslagen resultaten",
         "dataUnavailable": "Data niet beschikbaar",
         "unavailableItem": "Niet-beschikbare data",
@@ -521,29 +516,17 @@
         "previewPreparing": "Voorbeeld voorbereiden",
         "previewUnavailable": "Voorbeeld niet beschikbaar",
         "displayFailed": "Weergave mislukt",
-        "measurement": {
+        "calculating": "Bezig met berekenen",
+        "quantityLabel": "Wat de waarden meten",
+        "chooseQuantity": "Kies een meting",
+        "quantity": {
           "GroundElevation": "Maaiveldhoogte",
           "SurfaceElevation": "Oppervlaktehoogte",
           "AboveGroundHeight": "Hoogte boven maaiveld",
-          "OtherContinuous": "Andere waarden"
+          "OtherContinuous": "Andere waarden",
+          "Slope": "Helling"
         },
-        "calculateSlope": "Helling berekenen",
-        "calculating": "Bezig met berekenen",
-        "calculateTitle": "Helling berekenen",
-        "calculateFrom": "Uit {{name}}",
-        "resultName": "Naam van het resultaat",
-        "unitDegrees": "Graden",
-        "unitPercent": "Procent",
-        "run": "Uitvoeren",
-        "calculateAttachNote": "Het resultaat wordt aan dit Ontwerp toegevoegd zodra het gereed is.",
-        "calculateLibraryNote": "Het resultaat wordt in de bibliotheek bewaard; voeg het aan elk Ontwerp toe.",
-        "slopeNeedsSource": "Helling wordt berekend uit een geïmporteerde bron die gereed is.",
-        "slopeNeedsGround": "Helling vereist maaiveldhoogte.",
-        "slopeNeedsMetres": "Helling vereist hoogtes in meters.",
-        "slopeEngineMissing": "Hellingsberekening is niet beschikbaar: de GeoLibre-engine ontbreekt.",
-        "methodGeolibre": "GeoLibre geprojecteerde helling (5×5)",
-        "methodUnknown": "Onbekende methode",
-        "factEngine": "Engine"
+        "analyze": "Analyseren…"
       },
       "layers": {
         "title": "Data",
@@ -1210,5 +1193,94 @@
     "noMatches": "Geen planten gevonden voor ‘{{query}}’.",
     "noneSelected": "Selecteer planten op de kaart om hun soorten hier te tonen.",
     "searchHint": "De zoekfunctie vindt gewone namen in alle talen die Canopi kent, wetenschappelijke namen en codes. Accenten, hoofdletters en kleine typfouten maken niet uit."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Terrein"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Helling",
+        "summary": "Steilheit van het terrein, berekend uit de maaiveldhoogte.",
+        "params": {
+          "unit": {
+            "label": "Eenheid",
+            "help": "Graden ten opzichte van horizontaal (0–90°), of hoogteverschil per afstand in procent.",
+            "options": {
+              "degrees": "Graden",
+              "percent": "Procent"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Helling"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Vereist: {{expected}}.",
+      "NotReady": "Vereist gegevens waarvan de import is voltooid.",
+      "ValuesNotMetres": "Vereist waarden in meters; deze gegevens zijn in {{units}}.",
+      "GridNotProjectedMetres": "Vereist een geprojecteerd raster in meters.",
+      "EngineMissing": "Niet beschikbaar: de GeoLibre-engine ontbreekt.",
+      "NeedsDesktop": "Vereist Canopi Desktop.",
+      "AlreadyInLayers": "Staat al in Lagen."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} is gewijzigd sinds deze berekening.",
+      "InputStale": "{{input}} is zelf niet meer actueel.",
+      "RecipeUpdated": "De methode is bijgewerkt (versie {{from}} → {{to}}).",
+      "ToolUpdated": "Er is een andere engineversie geïnstalleerd ({{to}})."
+    },
+    "dialog": {
+      "title": "{{name}} analyseren",
+      "advanced": "Geavanceerde instellingen",
+      "outputs": "Resultaten",
+      "name": "Naam van het resultaat",
+      "attachNote": "Het resultaat wordt aan dit Ontwerp toegevoegd zodra het gereed is.",
+      "libraryNote": "Het resultaat wordt in de bibliotheek bewaard; voeg het aan elk Ontwerp toe.",
+      "run": "Uitvoeren",
+      "runAgain": "Opnieuw berekenen",
+      "showInLayers": "Tonen in Lagen",
+      "addExisting": "Bestaande toevoegen",
+      "existingInLibrary": "Er staat al een resultaat met deze instellingen in de bibliotheek.",
+      "yes": "Ja",
+      "no": "Nee",
+      "errors": {
+        "required": "Kies een optie.",
+        "number": "Voer een getal in.",
+        "integer": "Voer een geheel getal in.",
+        "range": "Voer een waarde van {{min}} tot {{max}} in.",
+        "step": "Gebruik stappen van {{step}}.",
+        "noOutputs": "Kies ten minste één resultaat."
+      }
+    },
+    "details": {
+      "analysis": "Analyse",
+      "method": "Methode",
+      "methodVersion": "Versie {{version}}",
+      "inputs": "Berekend uit",
+      "engine": "Engine",
+      "revision": "GeoLibre-revisie",
+      "created": "Aangemaakt",
+      "outOfDate": "Verouderd",
+      "refresh": "Vernieuwen",
+      "refreshAria": "{{name}} vernieuwen",
+      "refreshing": "Bezig met vernieuwen",
+      "refreshFailed": "De laatste vernieuwing is mislukt. {{message}}",
+      "history": "Verwerkingsgeschiedenis",
+      "historyEmpty": "Geen uitvoeringen vastgelegd.",
+      "historyLoading": "Geschiedenis laden",
+      "historyFailed": "De geschiedenis kon niet worden gelezen.",
+      "showMore": "Meer tonen",
+      "runState": {
+        "Preparing": "Bezig",
+        "Complete": "Voltooid",
+        "Failed": "Mislukt",
+        "Cancelled": "Geannuleerd"
+      },
+      "coverage": "{{cells}} cellen gepubliceerd",
+      "noOutputs": "Niets gepubliceerd"
+    }
   }
 }

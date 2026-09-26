@@ -1,39 +1,33 @@
 //! Library-side presentation snapshots for IPC consumers.
 //!
-//! The snapshot reports catalogue identity, status and current generations;
-//! the map draws each generation through its display descriptor. Document-side visibility/opacity/order live in `.canopi` via the
-//! Design Edit seam; the library never reads documents.
+//! The snapshot reports every item with its role, type, status and current
+//! generation; derived items add provenance, their latest run and whether they
+//! are out of date, and every item lists the analyses it can feed. The map
+//! draws each generation through its display descriptor. Document-side
+//! visibility, opacity and order live in `.canopi` via the Design Edit seam;
+//! the library never reads documents.
 
+use super::analyses::{self, FreshnessCheck, ItemFacts};
 use super::catalogue;
 use super::engine::GdalEngine;
-use common_types::lidar::{
-    LidarAnalysisKind, LidarAnalysisMethod, LidarAnalysisSummary, LidarEngineStatus,
-    LidarLayerSummary, LidarLibrarySnapshot, LidarResultState,
+use super::geolibre::GeolibreTool;
+use common_types::library::{
+    AnalysisRunStatus, Freshness, LibraryEngines, LibraryItemRole, LibraryItemSummary,
+    LibraryItemType, LibrarySnapshot, Provenance,
 };
+use common_types::lidar::{LidarEngineStatus, LidarResultState};
 use rusqlite::Connection;
 
 pub fn library_snapshot(
     connection: &Connection,
     engine: &GdalEngine,
-    slope_engine: LidarEngineStatus,
-) -> Result<LidarLibrarySnapshot, String> {
-    let layers = catalogue::list_layers(connection)?;
-    let definitions = catalogue::list_definitions(connection)?;
-    let mut layer_summaries = Vec::new();
-    for layer in layers {
+    geolibre: &Result<GeolibreTool, String>,
+) -> Result<LibrarySnapshot, String> {
+    let mut items = Vec::new();
+    for layer in catalogue::list_layers(connection)? {
         let head = catalogue::head_generation(connection, &layer.id)?;
-        let analysis_count =
-            catalogue::list_definitions_for_layer(connection, &layer.id)?.len() as u32;
         let (coverage_cells, display_range, resolution_m, bounds, value_range) = match &head {
             Some(head) => {
-                let bounds = serde_json::from_str::<Vec<f64>>(&head.bounds_3857)
-                    .ok()
-                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
-                    .map(bounds_3857_to_wgs84);
-                let range = match (head.min_value, head.max_value) {
-                    (Some(min), Some(max)) => Some([min, max]),
-                    _ => None,
-                };
                 let manifest = super::import::read_generation_manifest(&head.manifest_json).ok();
                 (
                     head.coverage_cells.map(|cells| cells.max(0) as u64),
@@ -41,8 +35,8 @@ pub fn library_snapshot(
                     manifest
                         .as_ref()
                         .map(|manifest| manifest.grid.pixel_size().0),
-                    bounds,
-                    range,
+                    wgs84_bounds(&head.bounds_3857),
+                    value_range(head.min_value, head.max_value),
                 )
             }
             None => (Some(0), None, None, None, None),
@@ -62,134 +56,170 @@ pub fn library_snapshot(
                 _ => LidarResultState::Failed,
             }
         };
-        layer_summaries.push(LidarLayerSummary {
-            id: layer.id.clone(),
-            generation_id: head.as_ref().map(|head| head.id.clone()),
-            name: layer.name.clone(),
-            measurement_kind: parse_measurement_kind(&layer.measurement_kind),
+        let item_type = LibraryItemType::Raster {
+            quantity: analyses::parse_quantity(&layer.quantity)?,
+        };
+        let facts = ItemFacts {
+            item_type,
             units: layer.units.clone(),
+            head: head
+                .as_ref()
+                .map(|head| (head.id.clone(), head.crs_class.clone())),
+        };
+        items.push(LibraryItemSummary {
+            id: layer.id.clone(),
+            name: Some(layer.name),
+            role: LibraryItemRole::Source,
+            item_type,
+            units: layer.units,
             state,
-            resolution_m,
-            coverage_cells,
+            generation_id: head.as_ref().map(|head| head.id.clone()),
             bounds,
             value_range,
             display_range,
-            analysis_count,
+            resolution_m,
+            coverage_cells,
             import_job,
+            provenance: None,
+            freshness: Freshness::Current,
+            run: None,
+            offers: analyses::offers(&facts, geolibre),
+            dependents: dependents(connection, &layer.id)?,
         });
     }
 
-    let mut analysis_summaries = Vec::new();
-    for definition in definitions {
-        let head_result = catalogue::head_analysis_generation(connection, &definition.id)?;
-        let latest_job = catalogue::latest_analysis_job_state(connection, &definition.id)?;
-        // A published result is a fixed library item: it describes the input
-        // generation it was calculated from, whatever happened to that source
-        // afterwards, and nothing refreshes it. Without a result the item is
-        // its operation: preparing while the job runs, failed otherwise.
-        let (state, detail) = match (&head_result, latest_job.as_deref()) {
-            (Some(result), _) => (parse_result_state(&result.state), None),
-            (None, Some("preparing")) => (LidarResultState::Preparing, None),
-            (None, Some("cancelled")) => (LidarResultState::Failed, Some("cancelled".to_string())),
-            (None, Some(_)) => (LidarResultState::Failed, Some(String::new())),
-            (None, None) => (LidarResultState::Preparing, None),
+    let mut freshness = FreshnessCheck::new(connection, geolibre);
+    for item in catalogue::list_derived_items(connection)? {
+        let head = catalogue::derived_head(connection, &item.id)?;
+        let latest = catalogue::latest_analysis_job(connection, &item.definition_id)?;
+        let definition = catalogue::get_definition(connection, &item.definition_id)?
+            .ok_or_else(|| format!("derived item {} has no definition", item.id))?;
+        // A published result stays Ready while a refresh runs; the run says
+        // so. Without a result the item is its operation: preparing while its
+        // job runs, failed otherwise.
+        let state = match (&head, latest.as_ref().map(|job| job.state.as_str())) {
+            (Some(_), _) => LidarResultState::Ready,
+            (None, Some("preparing")) => LidarResultState::Preparing,
+            (None, _) => LidarResultState::Failed,
         };
-        // This build wrote every definition row; unreadable parameters are a
-        // damaged catalogue, reported rather than shown with an invented unit.
-        let parameters = serde_json::from_str::<super::analysis::AnalysisParameters>(
-            &definition.parameters_json,
-        )
-        .map_err(|error| {
-            format!(
-                "LiDAR analysis {} has unreadable parameters: {error}",
-                definition.id
-            )
-        })?;
-        // A published result carries its own name (none for an unnamed one,
-        // and the UI then shows the kind). An operation without a result
-        // shows the name its author gave the calculation.
-        let result_name = match &head_result {
-            Some(result) => result.name.clone(),
-            None => parameters
-                .name
-                .as_deref()
-                .map(str::trim)
-                .filter(|name| !name.is_empty())
-                .map(str::to_string),
+        // Provenance describes the run that produced the current result, or
+        // the latest run before there is one.
+        let produced_by = match &head {
+            Some(head) => catalogue::get_analysis_job(connection, &head.job_id)?,
+            None => latest.clone(),
         };
-        // The unit belongs to the definition's own parameters, so a percent
-        // slope is never labelled with the input layer's elevation unit.
-        let slope_unit = parameters.slope_unit;
-        let (bounds, value_range) = match &head_result {
-            Some(result) => {
-                let bounds = serde_json::from_str::<Vec<f64>>(&result.bounds_3857)
-                    .ok()
-                    .and_then(|v| <[f64; 4]>::try_from(v).ok())
-                    .map(bounds_3857_to_wgs84);
-                let range = match (result.min_value, result.max_value) {
-                    (Some(min), Some(max)) => Some([min, max]),
-                    _ => None,
-                };
-                (bounds, range)
-            }
-            None => (None, None),
+        let provenance = match produced_by {
+            Some(job) => Some(Provenance {
+                definition_id: definition.id.clone(),
+                analysis_id: definition.analysis_id.clone(),
+                recipe_version: u32::try_from(job.recipe_version).unwrap_or(0),
+                output_key: item.output_key.clone(),
+                inputs: analyses::parse_pinned_inputs(&job.input_generations_json)?,
+                parameters: analyses::parse_parameters(&definition.parameters_json)?,
+                tool: analyses::parse_tool(job.tool_provenance.as_deref()),
+                job_id: job.id,
+                created_at: job.created_at,
+            }),
+            None => None,
         };
-        // A result describes the input it was calculated from; an operation
-        // without one describes the input its latest job was pinned to, which
-        // is what Retry reruns.
-        let input_generation_id = match &head_result {
-            Some(result) => Some(result.source_generation_id.clone()),
-            None => catalogue::latest_analysis_job_input(connection, &definition.id)?,
+        let item_type = LibraryItemType::Raster {
+            quantity: analyses::parse_quantity(&item.quantity)?,
         };
-        let method = super::analysis::SlopeRecipe::from_version(definition.version)
-            .ok()
-            .map(|recipe| match recipe {
-                super::analysis::SlopeRecipe::GeolibreProjected => {
-                    LidarAnalysisMethod::GeolibreProjectedSlopeV1
-                }
-            });
-        let engine_version = head_result.as_ref().and_then(|result| {
-            serde_json::from_str::<super::analysis::ResultManifest>(&result.manifest_json)
-                .ok()
-                .map(|manifest| manifest.engine_version)
-                .filter(|version| !version.is_empty())
-        });
-        analysis_summaries.push(LidarAnalysisSummary {
-            id: definition.id.clone(),
-            generation_id: head_result.as_ref().map(|result| result.id.clone()),
-            input_generation_id,
-            source_layer_id: definition.layer_id.clone(),
-            kind: parse_analysis_kind(&definition.kind)?,
-            name: result_name,
+        let facts = ItemFacts {
+            item_type,
+            units: item.units.clone(),
+            head: head
+                .as_ref()
+                .map(|head| (head.id.clone(), head.crs_class.clone())),
+        };
+        let range = head
+            .as_ref()
+            .and_then(|head| value_range(head.min_value, head.max_value));
+        items.push(LibraryItemSummary {
+            id: item.id.clone(),
+            name: item.name.clone(),
+            role: LibraryItemRole::Derived,
+            item_type,
+            units: item.units.clone(),
             state,
-            detail,
-            bounds,
-            value_range,
-            slope_unit,
-            method,
-            engine_version,
+            generation_id: head.as_ref().map(|head| head.id.clone()),
+            bounds: head
+                .as_ref()
+                .and_then(|head| wgs84_bounds(&head.bounds_3857)),
+            value_range: range,
+            display_range: range.map(|[min, max]| common_types::lidar::LidarDisplayRange {
+                min,
+                max,
+                basis: common_types::lidar::LidarDisplayRangeBasis::Exact,
+            }),
+            resolution_m: head
+                .as_ref()
+                .and_then(|head| analyses::read_derived_manifest(&head.manifest_json).ok())
+                .map(|manifest| manifest.grid.pixel_size().0),
+            coverage_cells: head
+                .as_ref()
+                .and_then(|head| head.coverage_cells)
+                .map(|cells| cells.max(0) as u64),
+            import_job: None,
+            provenance,
+            freshness: freshness.of(&item.id)?,
+            run: latest.map(|job| AnalysisRunStatus {
+                state: analyses::parse_job_state(&job.state),
+                message: job.message,
+                job_id: job.id,
+            }),
+            offers: analyses::offers(&facts, geolibre),
+            dependents: dependents(connection, &item.id)?,
         });
     }
 
-    let engine_status = match engine.discover() {
-        Ok(tools) => LidarEngineStatus {
-            available: true,
-            version: Some(tools.version),
-            detail: None,
+    Ok(LibrarySnapshot {
+        items,
+        engines: LibraryEngines {
+            gdal: match engine.discover() {
+                Ok(tools) => LidarEngineStatus {
+                    available: true,
+                    version: Some(tools.version),
+                    detail: None,
+                },
+                Err(error) => LidarEngineStatus {
+                    available: false,
+                    version: None,
+                    detail: Some(error),
+                },
+            },
+            geolibre: match geolibre {
+                Ok(tool) => LidarEngineStatus {
+                    available: true,
+                    version: Some(analyses::tool_label(&tool.provenance(Vec::new()))),
+                    detail: None,
+                },
+                Err(error) => LidarEngineStatus {
+                    available: false,
+                    version: None,
+                    detail: Some(error.clone()),
+                },
+            },
         },
-        Err(error) => LidarEngineStatus {
-            available: false,
-            version: None,
-            detail: Some(error),
-        },
-    };
-
-    Ok(LidarLibrarySnapshot {
-        layers: layer_summaries,
-        analyses: analysis_summaries,
-        engine: engine_status,
-        slope_engine,
     })
+}
+
+fn dependents(connection: &Connection, item_id: &str) -> Result<u32, String> {
+    Ok(u32::try_from(catalogue::dependent_items(connection, item_id)?.len()).unwrap_or(u32::MAX))
+}
+
+fn wgs84_bounds(bounds_3857: &str) -> Option<[f64; 4]> {
+    serde_json::from_str::<Vec<f64>>(bounds_3857)
+        .ok()
+        .and_then(|v| <[f64; 4]>::try_from(v).ok())
+        .map(bounds_3857_to_wgs84)
+}
+
+fn value_range(min: Option<f64>, max: Option<f64>) -> Option<[f64; 2]> {
+    match (min, max) {
+        (Some(min), Some(max)) => Some([min, max]),
+        _ => None,
+    }
 }
 
 /// The latest import operation recorded for one item.
@@ -259,8 +289,6 @@ fn bounds_3857_to_wgs84(bounds: [f64; 4]) -> [f64; 4] {
     ]
 }
 
-// Parsing helpers remain grouped below the presentation regression tests.
-#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::bounds_3857_to_wgs84;
@@ -270,28 +298,5 @@ mod tests {
         let bounds = bounds_3857_to_wgs84([-47_546.0, 6_157_700.0, -45_981.0, 6_159_269.0]);
         assert!(bounds[0] > -0.5 && bounds[2] < -0.4, "{bounds:?}");
         assert!(bounds[1] > 48.2 && bounds[3] < 48.4, "{bounds:?}");
-    }
-}
-
-fn parse_measurement_kind(raw: &str) -> common_types::lidar::LidarMeasurementKind {
-    match raw {
-        "surface-elevation" => common_types::lidar::LidarMeasurementKind::SurfaceElevation,
-        "above-ground-height" => common_types::lidar::LidarMeasurementKind::AboveGroundHeight,
-        "other-continuous" => common_types::lidar::LidarMeasurementKind::OtherContinuous,
-        _ => common_types::lidar::LidarMeasurementKind::GroundElevation,
-    }
-}
-
-fn parse_analysis_kind(raw: &str) -> Result<LidarAnalysisKind, String> {
-    match raw {
-        "slope" => Ok(LidarAnalysisKind::Slope),
-        other => Err(format!("unknown analysis kind {other}")),
-    }
-}
-
-fn parse_result_state(raw: &str) -> LidarResultState {
-    match raw {
-        "failed" => LidarResultState::Failed,
-        _ => LidarResultState::Ready,
     }
 }

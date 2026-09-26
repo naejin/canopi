@@ -460,7 +460,6 @@
         "typeLabel": "種類",
         "typeAll": "すべての種類",
         "typeSources": "インポートしたデータ",
-        "typeSlope": "傾斜",
         "showAll": "すべてのデータを表示",
         "emptyTitle": "データはまだありません",
         "emptyBody": "標高や高さのラスターを一度インポートすれば、どのデザインにも追加できます。",
@@ -488,8 +487,6 @@
         "ready": "準備完了",
         "importTitle": "データをインポート",
         "name": "名前",
-        "measurementLabel": "値が表すもの",
-        "chooseMeasurement": "計測値を選択",
         "unit": "単位",
         "unitUnknown": "不明な単位",
         "files": "ファイル: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "解像度",
         "factRange": "値の範囲",
         "factStatus": "状態",
-        "factInput": "計算元",
-        "factMethod": "手法",
         "factResults": "保存済みの結果",
         "dataUnavailable": "データを利用できません",
         "unavailableItem": "利用できないデータ",
@@ -521,29 +516,17 @@
         "previewPreparing": "プレビューを準備中",
         "previewUnavailable": "プレビューを利用できません",
         "displayFailed": "表示に失敗しました",
-        "measurement": {
+        "calculating": "計算中",
+        "quantityLabel": "値が表すもの",
+        "chooseQuantity": "計測値を選択",
+        "quantity": {
           "GroundElevation": "地表標高",
           "SurfaceElevation": "表面標高",
           "AboveGroundHeight": "地上高",
-          "OtherContinuous": "その他の値"
+          "OtherContinuous": "その他の値",
+          "Slope": "傾斜"
         },
-        "calculateSlope": "傾斜を計算",
-        "calculating": "計算中",
-        "calculateTitle": "傾斜を計算",
-        "calculateFrom": "{{name}}から",
-        "resultName": "結果の名前",
-        "unitDegrees": "度",
-        "unitPercent": "パーセント",
-        "run": "実行",
-        "calculateAttachNote": "準備ができるとこのデザインに結果が追加されます。",
-        "calculateLibraryNote": "結果はライブラリに保存されます。どのデザインにも追加できます。",
-        "slopeNeedsSource": "傾斜は準備済みのインポート元から計算します。",
-        "slopeNeedsGround": "傾斜には地表標高が必要です。",
-        "slopeNeedsMetres": "傾斜にはメートル単位の標高が必要です。",
-        "slopeEngineMissing": "傾斜を計算できません：GeoLibre エンジンがありません。",
-        "methodGeolibre": "GeoLibre 投影傾斜（5×5）",
-        "methodUnknown": "不明な手法",
-        "factEngine": "エンジン"
+        "analyze": "解析…"
       },
       "layers": {
         "title": "データ",
@@ -1210,5 +1193,94 @@
     "noMatches": "「{{query}}」に一致する植物はありません。",
     "noneSelected": "地図上で植物を選択すると、その種がここに一覧表示されます。",
     "searchHint": "Canopi が対応するすべての言語の一般名、学名、コードを検索します。アクセント、大文字・小文字、軽微な入力ミスは区別されません。"
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "地形"
+    },
+    "terrain": {
+      "slope": {
+        "title": "傾斜",
+        "summary": "地表標高から求める地面の傾きです。",
+        "params": {
+          "unit": {
+            "label": "単位",
+            "help": "水平からの角度（0–90°）、または水平距離に対する高低差をパーセントで表します。",
+            "options": {
+              "degrees": "度",
+              "percent": "パーセント"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "傾斜"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "{{expected}}が必要です。",
+      "NotReady": "インポートが完了したデータが必要です。",
+      "ValuesNotMetres": "メートル単位の値が必要です。このデータの単位は {{units}} です。",
+      "GridNotProjectedMetres": "メートル単位の投影グリッドが必要です。",
+      "EngineMissing": "利用できません：GeoLibre エンジンがありません。",
+      "NeedsDesktop": "Canopi Desktop が必要です。",
+      "AlreadyInLayers": "すでにレイヤーにあります。"
+    },
+    "stale": {
+      "InputUpdated": "この計算以降に {{input}} が変更されました。",
+      "InputStale": "{{input}} 自体が最新ではありません。",
+      "RecipeUpdated": "手法が更新されました（バージョン {{from}} → {{to}}）。",
+      "ToolUpdated": "別のエンジンがインストールされています（{{to}}）。"
+    },
+    "dialog": {
+      "title": "{{name}} を解析",
+      "advanced": "詳細設定",
+      "outputs": "結果",
+      "name": "結果の名前",
+      "attachNote": "準備ができるとこのデザインに結果が追加されます。",
+      "libraryNote": "結果はライブラリに保存されます。どのデザインにも追加できます。",
+      "run": "実行",
+      "runAgain": "もう一度計算",
+      "showInLayers": "レイヤーで表示",
+      "addExisting": "既存の結果を追加",
+      "existingInLibrary": "この設定の結果はすでにライブラリにあります。",
+      "yes": "はい",
+      "no": "いいえ",
+      "errors": {
+        "required": "オプションを選択してください。",
+        "number": "数値を入力してください。",
+        "integer": "整数を入力してください。",
+        "range": "{{min}} から {{max}} までの値を入力してください。",
+        "step": "{{step}} 刻みで入力してください。",
+        "noOutputs": "少なくとも 1 つの結果を選択してください。"
+      }
+    },
+    "details": {
+      "analysis": "解析",
+      "method": "手法",
+      "methodVersion": "バージョン {{version}}",
+      "inputs": "計算元",
+      "engine": "エンジン",
+      "revision": "GeoLibre リビジョン",
+      "created": "作成日時",
+      "outOfDate": "最新ではありません",
+      "refresh": "更新",
+      "refreshAria": "{{name}} を更新",
+      "refreshing": "更新中",
+      "refreshFailed": "前回の更新に失敗しました。{{message}}",
+      "history": "処理履歴",
+      "historyEmpty": "実行の記録はありません。",
+      "historyLoading": "履歴を読み込み中",
+      "historyFailed": "履歴を読み込めませんでした。",
+      "showMore": "さらに表示",
+      "runState": {
+        "Preparing": "実行中",
+        "Complete": "完了",
+        "Failed": "失敗",
+        "Cancelled": "キャンセル済み"
+      },
+      "coverage": "{{cells}} セルを公開",
+      "noOutputs": "公開されたものはありません"
+    }
   }
 }

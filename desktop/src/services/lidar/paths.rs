@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 /// Catalogue file name inside the library root.
 pub const CATALOGUE_FILE: &str = "lidar-library.sqlite";
 
-/// Name prefix of a slope scratch directory; the rest is its job id.
-pub const SLOPE_SCRATCH_PREFIX: &str = "scratch-slope-";
+/// Name prefix of an analysis job's scratch directory; the rest is its job id.
+pub const ANALYSIS_SCRATCH_PREFIX: &str = "scratch-analysis-";
 
 /// Managed library root under the app data directory.
 pub fn library_root(app_data_dir: &Path) -> PathBuf {
@@ -84,16 +84,16 @@ impl LidarPaths {
         self.source_dir(sha256).join("original")
     }
 
-    /// Holds only per-job slope scratch directories.
+    /// Holds only per-job analysis scratch directories.
     pub fn prepared_dir(&self) -> PathBuf {
         self.root.join("prepared")
     }
 
-    /// One analysis job's slope scratch; removed when the job settles and
-    /// swept at startup if a crash left it.
-    pub fn slope_scratch_dir(&self, job_id: &str) -> PathBuf {
+    /// One analysis job's scratch; removed when the job settles and swept at
+    /// startup if a crash left it.
+    pub fn analysis_scratch_dir(&self, job_id: &str) -> PathBuf {
         self.prepared_dir()
-            .join(format!("{SLOPE_SCRATCH_PREFIX}{job_id}"))
+            .join(format!("{ANALYSIS_SCRATCH_PREFIX}{job_id}"))
     }
 
     /// Captured stdout and stderr of running engine children; swept at startup.

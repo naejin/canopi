@@ -74,7 +74,7 @@ fn report_library_bytes(label: &str, root: &std::path::Path) -> (u64, u64, u64, 
 /// current generation and together hold valid values. Returns that generation.
 fn assert_displays(
     library: &LidarLibrary,
-    kind: common_types::lidar::LidarSampleEntityKind,
+    kind: common_types::library::LibraryItemRole,
     entity_id: &str,
 ) -> String {
     library
@@ -194,7 +194,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     let layer_id = library
         .create_layer(
             "IGN ground POC",
-            common_types::lidar::LidarMeasurementKind::GroundElevation,
+            common_types::library::RasterQuantity::GroundElevation,
             None,
             false,
         )
@@ -240,8 +240,8 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     // Snapshot shows the layer with its display derivatives.
     let snapshot = library.library_snapshot().expect("snapshot");
-    assert_eq!(snapshot.layers.len(), 1);
-    let layer = &snapshot.layers[0];
+    assert_eq!(snapshot.items.len(), 1);
+    let layer = &snapshot.items[0];
     assert_eq!(layer.id, layer_id);
     assert!(
         layer
@@ -251,77 +251,22 @@ fn e2e_import_publish_slope_restart_reuse() {
     );
     assert_displays(
         &library,
-        common_types::lidar::LidarSampleEntityKind::Source,
+        common_types::library::LibraryItemRole::Source,
         &layer_id,
     );
 
     // 4. One persisted slope result via the analysis pipeline.
-    let receipt = library
-        .create_analysis_unchecked(
-            &layer_id,
-            common_types::lidar::LidarAnalysisKind::Slope,
-            common_types::lidar::LidarAnalysisParameters {
-                slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
-                name: None,
-            },
-            None,
-        )
-        .expect("analysis created");
-    // Run the enqueued job synchronously for the test.
-    let job_state: String = {
-        let connection = library.catalogue().unwrap();
-        connection
-            .query_row(
-                "SELECT state FROM lidar_analysis_jobs WHERE id = ?1",
-                [&receipt.job_id],
-                |row| row.get(0),
-            )
-            .unwrap()
-    };
-    assert_eq!(job_state, "preparing");
-    let parameters = analysis::parse_parameters(&{
-        let connection = library.catalogue().unwrap();
-        connection
-            .query_row(
-                "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                [&receipt.definition_id],
-                |row| row.get::<_, String>(0),
-            )
-            .unwrap()
-    })
-    .unwrap();
-    let analysis_outcome = analysis::run_slope_job(
-        &library,
-        &receipt.job_id,
-        &receipt.definition_id,
-        &parameters,
-        &{
-            let connection = library.catalogue().unwrap();
-            let source_generation: String = connection
-                .query_row(
-                    "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
-                    [&receipt.job_id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            source_generation
-        },
-        &cancel,
-    )
-    .expect("slope job runs");
-    assert!(
-        analysis_outcome.coverage_cells > 0,
-        "slope result published: {}",
-        analysis_outcome.summary()
-    );
-
+    let receipt = analyses::test_support::run_slope(&library, &layer_id, "degrees", None);
     let snapshot = library.library_snapshot().expect("snapshot after analysis");
-    assert_eq!(snapshot.analyses.len(), 1);
-    let analysis = &snapshot.analyses[0];
+    let analysis = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == receipt.item_ids[0])
+        .expect("the result is listed");
     assert_eq!(analysis.state, common_types::lidar::LidarResultState::Ready);
     assert_displays(
         &library,
-        common_types::lidar::LidarSampleEntityKind::Analysis,
+        common_types::library::LibraryItemRole::Derived,
         &analysis.id,
     );
     println!("analysis ready: {:?}", analysis.value_range);
@@ -331,21 +276,23 @@ fn e2e_import_publish_slope_restart_reuse() {
     drop(library);
     let reopened = LidarLibrary::open(&work).expect("library reopens");
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
-    assert_eq!(snapshot.layers.len(), 1);
-    assert_eq!(snapshot.analyses.len(), 1);
-    assert_eq!(
-        snapshot.analyses[0].state,
-        common_types::lidar::LidarResultState::Ready
+    assert_eq!(snapshot.items.len(), 2);
+    let result = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == receipt.item_ids[0])
+        .expect("the result survives");
+    assert_eq!(result.state, common_types::lidar::LidarResultState::Ready);
+    assert_eq!(result.freshness, common_types::library::Freshness::Current);
+    assert_displays(
+        &reopened,
+        common_types::library::LibraryItemRole::Source,
+        &layer_id,
     );
     assert_displays(
         &reopened,
-        common_types::lidar::LidarSampleEntityKind::Source,
-        &snapshot.layers[0].id,
-    );
-    assert_displays(
-        &reopened,
-        common_types::lidar::LidarSampleEntityKind::Analysis,
-        &snapshot.analyses[0].id,
+        common_types::library::LibraryItemRole::Derived,
+        &result.id,
     );
     let engine_status = reopened.engine_status();
     assert!(engine_status.available);
@@ -356,11 +303,24 @@ fn e2e_import_publish_slope_restart_reuse() {
 
     // Rename preserves identity and results.
     reopened
-        .rename_layer(&layer_id, "IGN ground renamed")
+        .rename_item(&layer_id, "IGN ground renamed")
         .expect("rename");
     let snapshot = reopened.library_snapshot().expect("snapshot after rename");
-    assert_eq!(snapshot.layers[0].name, "IGN ground renamed");
-    assert_eq!(snapshot.analyses[0].source_layer_id, layer_id);
+    let source = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == layer_id)
+        .unwrap();
+    assert_eq!(source.name.as_deref(), Some("IGN ground renamed"));
+    let result = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == receipt.item_ids[0])
+        .unwrap();
+    assert_eq!(
+        result.provenance.as_ref().unwrap().inputs[0].item_id,
+        layer_id
+    );
 
     // Importing the same file again creates a separate item; the first item's
     // head is untouched.
@@ -370,7 +330,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     let second_layer = reopened
         .create_layer(
             "IGN ground again",
-            common_types::lidar::LidarMeasurementKind::GroundElevation,
+            common_types::library::RasterQuantity::GroundElevation,
             None,
             false,
         )
@@ -390,7 +350,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     let snapshot = reopened
         .library_snapshot()
         .expect("snapshot with two items");
-    assert_eq!(snapshot.layers.len(), 2);
+    assert_eq!(snapshot.items.len(), 3, "two sources and one result");
     assert_eq!(
         catalogue::head_generation(&reopened.catalogue().unwrap(), &layer_id)
             .unwrap()
@@ -400,24 +360,23 @@ fn e2e_import_publish_slope_restart_reuse() {
     );
     assert_displays(
         &reopened,
-        common_types::lidar::LidarSampleEntityKind::Source,
+        common_types::library::LibraryItemRole::Source,
         &second_layer,
     );
     reopened
-        .delete_layer(&second_layer)
+        .delete_item(&second_layer)
         .expect("the second item deletes");
 
     // A source with a saved result is kept until the result is deleted.
-    assert!(reopened.delete_layer(&layer_id).is_err());
+    assert!(reopened.delete_item(&layer_id).is_err());
     reopened
-        .delete_analysis(&receipt.definition_id)
+        .delete_item(&receipt.item_ids[0])
         .expect("the result deletes");
     reopened
-        .delete_layer(&layer_id)
+        .delete_item(&layer_id)
         .expect("the source deletes once nothing depends on it");
     let deleted = reopened.library_snapshot().expect("snapshot after delete");
-    assert!(deleted.layers.is_empty());
-    assert!(deleted.analyses.is_empty());
+    assert!(deleted.items.is_empty());
 
     let _ = std::fs::remove_dir_all(&work);
 }
@@ -448,7 +407,7 @@ fn e2e_sparse_generation_lifecycle() {
     let layer_id = library
         .create_layer(
             "IGN ground sparse",
-            common_types::lidar::LidarMeasurementKind::GroundElevation,
+            common_types::library::RasterQuantity::GroundElevation,
             None,
             false,
         )
@@ -503,57 +462,15 @@ fn e2e_sparse_generation_lifecycle() {
     // 2. The layer's display derivatives prepare and hold its values.
     let generation_id = assert_displays(
         &library,
-        common_types::lidar::LidarSampleEntityKind::Source,
+        common_types::library::LibraryItemRole::Source,
         &layer_id,
     );
 
     // 3. Slope over the chunked head publishes sparse result and quality.
-    let receipt = library
-        .create_analysis_unchecked(
-            &layer_id,
-            common_types::lidar::LidarAnalysisKind::Slope,
-            common_types::lidar::LidarAnalysisParameters {
-                slope_unit: common_types::lidar::LidarSlopeUnit::Degrees,
-                name: None,
-            },
-            None,
-        )
-        .expect("analysis created");
-    let (parameters, source_generation) = {
-        let connection = library.catalogue().unwrap();
-        let parameters: String = connection
-            .query_row(
-                "SELECT parameters_json FROM lidar_analysis_definitions WHERE id = ?1",
-                [&receipt.definition_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let source_generation: String = connection
-            .query_row(
-                "SELECT source_generation_id FROM lidar_analysis_jobs WHERE id = ?1",
-                [&receipt.job_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        (parameters, source_generation)
-    };
-    let outcome = analysis::run_slope_job(
-        &library,
-        &receipt.job_id,
-        &receipt.definition_id,
-        &analysis::parse_parameters(&parameters).unwrap(),
-        &source_generation,
-        &cancel,
-    )
-    .expect("slope job runs");
-    assert!(
-        outcome.coverage_cells > 0,
-        "slope result published: {}",
-        outcome.summary()
-    );
+    let receipt = analyses::test_support::run_slope(&library, &layer_id, "degrees", None);
     let analysis_head = {
         let connection = library.catalogue().unwrap();
-        catalogue::head_analysis_generation(&connection, &receipt.definition_id)
+        catalogue::derived_head(&connection, &receipt.item_ids[0])
             .unwrap()
             .expect("analysis head")
     };
@@ -573,11 +490,10 @@ fn e2e_sparse_generation_lifecycle() {
         analysis_head.min_value,
         analysis_head.max_value
     );
-    let snapshot = library.library_snapshot().expect("snapshot after analysis");
     assert_displays(
         &library,
-        common_types::lidar::LidarSampleEntityKind::Analysis,
-        &snapshot.analyses[0].id,
+        common_types::library::LibraryItemRole::Derived,
+        &receipt.item_ids[0],
     );
 
     // 4. Restart reuse: the sparse head, its display and its result survive.
@@ -585,14 +501,19 @@ fn e2e_sparse_generation_lifecycle() {
     let reopened = LidarLibrary::open(&work).expect("library reopens");
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
     assert_eq!(
-        snapshot.layers[0].coverage_cells,
+        snapshot
+            .items
+            .iter()
+            .find(|item| item.id == layer_id)
+            .unwrap()
+            .coverage_cells,
         Some(head.coverage_cells.unwrap_or(0).max(0) as u64),
         "coverage survives restart"
     );
     assert_eq!(
         assert_displays(
             &reopened,
-            common_types::lidar::LidarSampleEntityKind::Source,
+            common_types::library::LibraryItemRole::Source,
             &layer_id
         ),
         generation_id,
@@ -674,7 +595,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let layer_id = library
         .create_layer(
             "MNH batch",
-            common_types::lidar::LidarMeasurementKind::AboveGroundHeight,
+            common_types::library::RasterQuantity::AboveGroundHeight,
             None,
             false,
         )
@@ -768,7 +689,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let prepared = std::time::Instant::now();
     assert_displays(
         &library,
-        common_types::lidar::LidarSampleEntityKind::Source,
+        common_types::library::LibraryItemRole::Source,
         &layer_id,
     );
     println!(
@@ -795,9 +716,9 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     let snapshot = reopened.library_snapshot().expect("snapshot after restart");
     // The reopened layer reports the same composition and, honestly, the same
     // unknown exact coverage: a restart must not invent a count it never took.
-    assert_eq!(snapshot.layers[0].coverage_cells, None);
+    assert_eq!(snapshot.items[0].coverage_cells, None);
     assert_eq!(
-        snapshot.layers[0]
+        snapshot.items[0]
             .display_range
             .map(|range| range.basis)
             .map(|basis| format!("{basis:?}"))
@@ -806,8 +727,8 @@ fn e2e_mnh_batch_import_apply_display_restart() {
     );
     println!(
         "restart: coverage {:?}, display range {:?}",
-        snapshot.layers[0].coverage_cells,
-        snapshot.layers[0]
+        snapshot.items[0].coverage_cells,
+        snapshot.items[0]
             .display_range
             .map(|range| (range.min, range.max))
     );

@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { currentDesign } from '../../../app/document-session/store'
 import {
   addToDesign,
-  calculateSlope,
   cancelAnalysisJob,
   cancelLibraryImport,
   chooseImportFiles,
@@ -10,33 +9,40 @@ import {
   dismissLibraryImport,
   fetchDeleteImpact,
   fetchItemSources,
+  fetchProcessingHistory,
   importLibraryItem,
   renameLibraryItem,
-  retryFailedCalculation,
+  rerunAnalysis,
   retryLibraryImport,
-  runningAnalysisJobId,
+  runAnalysis,
 } from '../../../app/lidar/actions'
+import type { AnalysisContext } from '../../../app/analyses/model'
+import { analysisTitle, findAnalysis } from '../../../app/analyses/registry'
+import { IMPORTABLE_QUANTITIES, RASTER_QUANTITIES, itemTypeLabel } from '../../../app/lidar/item-types'
 import {
   filterLibraryItems,
   libraryItems,
-  slopeIneligibility,
   suggestedItemName,
   type LibraryItem,
   type LibraryTypeFilter,
-  type SlopeIneligibility,
 } from '../../../app/lidar/library-items'
 import { installLidarLibraryObserver, lidarLibrary, lidarStatusMessage } from '../../../app/lidar/library-store'
-import { libraryCalculateRequest, libraryFocusRequest } from '../../../app/lidar/library-navigation'
+import { libraryAnalyzeRequest, libraryFocusRequest, showInLayers } from '../../../app/lidar/library-navigation'
+import { locale } from '../../../app/settings/state'
+import { ANALYSIS_GROUPS } from '../../../generated/analysis-registry'
 import type {
-  LidarAnalysisMethod,
-  LidarDeleteImpact,
-  LidarMeasurementKind,
-  LidarSlopeUnit,
+  LibraryDeleteImpact,
+  ProcessingRun,
+  Provenance,
+  RasterQuantity,
 } from '../../../generated/contracts'
 import { t } from '../../../i18n'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'
+import { Notice } from '../../shared/Notice'
 import { SurfaceSearch } from '../../shared/SurfaceSearch'
+import { AnalyzeDialog } from '../analyze/AnalyzeDialog'
+import { formatTimestamp, paramValueText, staleReasonText } from '../analyze/analysis-text'
 import { LibraryPreview, usePreviewClient } from './LibraryPreview'
 import styles from './data-library.module.css'
 
@@ -44,9 +50,7 @@ type View =
   | { readonly kind: 'list' }
   | { readonly kind: 'import'; readonly paths: readonly string[] }
   | { readonly kind: 'details' | 'rename' | 'delete'; readonly id: string }
-  | { readonly kind: 'calculate'; readonly id: string; readonly attach: boolean }
-
-const MEASUREMENTS: readonly LidarMeasurementKind[] = ['GroundElevation', 'SurfaceElevation', 'AboveGroundHeight', 'OtherContinuous']
+  | { readonly kind: 'analyze'; readonly id: string; readonly attach: boolean; readonly analysisId: string | null }
 
 /**
  * The Data Library: reusable terrain data shared by every Design.
@@ -60,7 +64,7 @@ export function DataLibraryPanel() {
   useEffect(() => installLidarLibraryObserver(), [])
   const client = usePreviewClient()
   const snapshot = lidarLibrary.value
-  const items = useMemo(() => libraryItems(snapshot, t('canvas.lidar.library.typeSlope')), [snapshot])
+  const items = useMemo(() => libraryItems(snapshot), [snapshot, locale.value])
   const references = currentDesign.value?.lidar?.entries ?? []
   const [view, setView] = useState<View>({ kind: 'list' })
   const [query, setQuery] = useState('')
@@ -76,7 +80,12 @@ export function DataLibraryPanel() {
   const visible = filterLibraryItems(items, query, type, relatedTo)
   const item = 'id' in view ? items.find((candidate) => candidate.id === view.id) ?? null : null
   const isAdded = (row: LibraryItem) => references.some((entry) => entry.id === row.id)
-  const slopeEngine = snapshot?.slope_engine
+  const nameOf = (id: string) => items.find((candidate) => candidate.id === id)?.name ?? t('canvas.lidar.library.dataUnavailable')
+  const analysisContext = useMemo<AnalysisContext>(() => ({
+    edition: 'desktop',
+    results: items.filter((candidate) => candidate.role === 'Derived'),
+    inDesign: new Set(references.map((entry) => entry.id)),
+  }), [items, references])
 
   // Another surface (Layers) can ask to show one item's details.
   useEffect(() => {
@@ -86,13 +95,13 @@ export function DataLibraryPanel() {
     open({ kind: 'details', id: request })
   }, [libraryFocusRequest.value])
 
-  // Layers can ask to calculate slope; that result joins the asking Design.
+  // Layers can ask to analyze an item; its results join the asking Design.
   useEffect(() => {
-    const request = libraryCalculateRequest.value
+    const request = libraryAnalyzeRequest.value
     if (!request) return
-    libraryCalculateRequest.value = null
-    open({ kind: 'calculate', id: request, attach: true })
-  }, [libraryCalculateRequest.value])
+    libraryAnalyzeRequest.value = null
+    open({ kind: 'analyze', id: request.itemId, attach: true, analysisId: request.analysisId })
+  }, [libraryAnalyzeRequest.value])
 
   useLayoutEffect(() => {
     if (view.kind === 'list' && restoringList.current) {
@@ -102,7 +111,8 @@ export function DataLibraryPanel() {
         ? document.getElementById(`library-item-${restoreFocusId.current}`)
         : null
       ;(target ?? scroll.current?.querySelector<HTMLElement>('input'))?.focus({ preventScroll: true })
-    } else if (view.kind !== 'list') {
+    } else if (view.kind !== 'list' && view.kind !== 'analyze') {
+      // The Analyze dialog focuses its own first control.
       scroll.current?.querySelector<HTMLElement>('[data-autofocus="true"], input, h3')?.focus()
     }
   }, [view])
@@ -135,6 +145,10 @@ export function DataLibraryPanel() {
     // Cancelling the chooser creates nothing and leaves the list as it was.
     if (paths) open({ kind: 'import', paths })
   })
+  const refresh = (row: LibraryItem) => {
+    const definitionId = row.provenance?.definition_id
+    if (definitionId) void run(() => rerunAnalysis(definitionId))
+  }
 
   const addButton = (row: LibraryItem) => {
     const added = isAdded(row)
@@ -146,19 +160,31 @@ export function DataLibraryPanel() {
         aria-label={added
           ? t('canvas.lidar.library.addedAria', { name: row.name })
           : t('canvas.lidar.library.addAria', { name: row.name })}
-        onClick={() => addToDesign(row.kind, row.id)}
+        onClick={() => addToDesign(row.role, row.id)}
       >
         {added ? t('canvas.lidar.library.added') : t('canvas.lidar.library.addToDesign')}
       </button>
     )
   }
+  const refreshButton = (row: LibraryItem) => isStale(row) && !isRunning(row) && (
+    <button
+      type="button"
+      disabled={busy}
+      aria-label={t('analyses.details.refreshAria', { name: row.name })}
+      onClick={() => refresh(row)}
+    >
+      {t('analyses.details.refresh')}
+    </button>
+  )
   const menu = (row: LibraryItem) => (
     <ActionMenu label={t('canvas.lidar.library.actionsFor', { name: row.name })} items={[
-      ...(row.kind === 'Source' && row.status === 'ready'
-        ? [{ label: t('canvas.lidar.library.calculateSlope'), run: () => open({ kind: 'calculate', id: row.id, attach: false }) }]
+      ...(row.status === 'ready'
+        ? [
+            { label: t('canvas.lidar.library.analyze'), run: () => open({ kind: 'analyze', id: row.id, attach: false, analysisId: null }) },
+            { label: t('canvas.lidar.library.rename'), run: () => open({ kind: 'rename', id: row.id }) },
+          ]
         : []),
-      ...(row.status === 'ready' ? [{ label: t('canvas.lidar.library.rename'), run: () => open({ kind: 'rename', id: row.id }) }] : []),
-      ...(row.status === 'ready' || row.kind === 'Analysis'
+      ...(row.status === 'ready' || row.role === 'Derived'
         ? [{ label: t('canvas.lidar.library.deleteFromLibrary'), danger: true, run: () => open({ kind: 'delete', id: row.id }) }]
         : []),
     ]} />
@@ -179,20 +205,19 @@ export function DataLibraryPanel() {
         </div>
       )
     }
-    if (row.status === 'preparing' && row.kind === 'Analysis') {
-      const running = runningAnalysisJobId(row.id) !== null
+    if (isRunning(row)) {
       return (
         <div className={styles.job}>
-          <span role="status">{t('canvas.lidar.library.calculating')}</span>
-          {running && (
-            <button type="button" onClick={() => void run(() => cancelAnalysisJob(row.id))}>
-              {t('canvas.lidar.library.cancel')}
-            </button>
-          )}
+          <span role="status" data-tone="progress">
+            {row.status === 'ready' ? t('analyses.details.refreshing') : t('canvas.lidar.library.calculating')}
+          </span>
+          <button type="button" onClick={() => void run(() => cancelAnalysisJob(row))}>
+            {t('canvas.lidar.library.cancel')}
+          </button>
         </div>
       )
     }
-    if (row.status === 'failed' && row.kind === 'Source') {
+    if (row.status === 'failed' && row.role === 'Source') {
       return (
         <div className={styles.job}>
           <span role="status">{row.message || t('canvas.lidar.library.importFailed')}</span>
@@ -205,10 +230,22 @@ export function DataLibraryPanel() {
         </div>
       )
     }
-    if (row.status === 'failed' && row.kind === 'Analysis' && row.inputGenerationId === null) {
+    if (row.status === 'failed' && row.role === 'Derived') {
       return (
         <div className={styles.job}>
-          <span role="status">{row.message || t('canvas.lidar.library.calculationFailed')}</span>
+          {row.run?.state !== 'Cancelled' && (
+            <span role="status">{row.message || t('canvas.lidar.library.calculationFailed')}</span>
+          )}
+          <button type="button" disabled={busy || !row.provenance} onClick={() => refresh(row)}>
+            {t('canvas.lidar.library.retry')}
+          </button>
+        </div>
+      )
+    }
+    if (row.status === 'ready' && row.run?.state === 'Failed') {
+      return (
+        <div className={styles.job}>
+          <span role="status">{t('analyses.details.refreshFailed', { message: row.run.message ?? '' })}</span>
         </div>
       )
     }
@@ -236,7 +273,7 @@ export function DataLibraryPanel() {
               <select value={type} aria-label={t('canvas.lidar.library.typeLabel')} onChange={(event) => { setType(event.currentTarget.value as LibraryTypeFilter); setRelatedTo(null) }}>
                 <option value="all">{t('canvas.lidar.library.typeAll')}</option>
                 <option value="sources">{t('canvas.lidar.library.typeSources')}</option>
-                <option value="slope">{t('canvas.lidar.library.typeSlope')}</option>
+                {ANALYSIS_GROUPS.map((group) => <option key={group.key} value={group.key}>{t(group.labelKey)}</option>)}
               </select>
             </label>
             {relatedTo !== null && (
@@ -254,7 +291,7 @@ export function DataLibraryPanel() {
           ) : (
             <ul className={styles.list}>
               {visible.map((row) => (
-                <li className={styles.item} key={`${row.kind}-${row.id}`}>
+                <li className={styles.item} key={row.id} data-nested={row.depth > 0}>
                   <div className={styles.itemMain}>
                     <button
                       type="button"
@@ -269,11 +306,12 @@ export function DataLibraryPanel() {
                         {row.status !== 'ready' && (
                           <small data-error={row.status === 'failed'}>{statusLabel(row)}</small>
                         )}
+                        {isStale(row) && <small className={styles.stale}>{t('analyses.details.outOfDate')}</small>}
                       </span>
                     </button>
                     {menu(row)}
                   </div>
-                  {row.status === 'ready' && <div className={styles.rowActions}>{addButton(row)}</div>}
+                  {row.status === 'ready' && <div className={styles.rowActions}>{addButton(row)}{refreshButton(row)}</div>}
                   {operation(row)}
                 </li>
               ))}
@@ -299,8 +337,8 @@ export function DataLibraryPanel() {
             busy={busy}
             error={error}
             onCancel={back}
-            onSubmit={(name, kind, unit) => void run(
-              () => importLibraryItem([...view.paths], name, kind, unit),
+            onSubmit={(name, quantity, unit) => void run(
+              () => importLibraryItem([...view.paths], name, quantity, unit),
               () => { restoreFocusId.current = null; back() },
             )}
           />
@@ -309,37 +347,37 @@ export function DataLibraryPanel() {
           <ItemDetails
             item={item}
             client={client}
-            items={items}
+            nameOf={nameOf}
             addButton={addButton(item)}
+            refreshButton={refreshButton(item)}
             menu={menu(item)}
             operation={operation(item)}
-            busy={busy}
-            onRetryCalculation={() => item.inputGenerationId === null
-              ? undefined
-              : void run(() => retryFailedCalculation(item.id, item.inputGenerationId!))}
             onOpen={(id) => open({ kind: 'details', id })}
-            onCalculate={() => open({ kind: 'calculate', id: item.id, attach: false })}
+            onAnalyze={() => open({ kind: 'analyze', id: item.id, attach: false, analysisId: null })}
           />
         )}
-        {view.kind === 'calculate' && item && (
-          <CalculateSlopeForm
+        {view.kind === 'analyze' && item && (
+          <AnalyzeDialog
             item={item}
-            reason={slopeIneligibility(item, slopeEngine?.available ?? false)}
-            engineDetail={slopeEngine?.detail ?? null}
+            context={analysisContext}
             attach={view.attach}
+            canAddToDesign={currentDesign.value !== null}
+            initialAnalysisId={view.analysisId}
             busy={busy}
             error={error}
             onCancel={back}
-            onSubmit={(unit, name) => void run(
-              () => calculateSlope(item.id, unit, name, view.attach),
+            onRun={(request) => void run(
+              () => runAnalysis(request, view.attach),
               () => { restoreFocusId.current = null; back() },
             )}
+            onShowInLayers={showInLayers}
+            onAddExisting={(id) => { addToDesign('Derived', id); back() }}
           />
         )}
-        {view.kind === 'details' && !item && <p className={styles.muted}>{t('canvas.lidar.library.itemGone')}</p>}
+        {view.kind !== 'list' && view.kind !== 'import' && !item && <p className={styles.muted}>{t('canvas.lidar.library.itemGone')}</p>}
         {view.kind === 'rename' && item && (
           <RenameForm item={item} busy={busy} error={error} onCancel={back}
-            onSubmit={(name) => void run(() => renameLibraryItem(item.kind, item.id, name), back)} />
+            onSubmit={(name) => void run(() => renameLibraryItem(item.id, name), back)} />
         )}
         {view.kind === 'delete' && item && (
           <DeleteConfirmation
@@ -349,7 +387,7 @@ export function DataLibraryPanel() {
             error={error}
             onKeep={back}
             onShowResults={() => { setRelatedTo(item.id); setQuery(''); setType('all'); back() }}
-            onDelete={() => void run(() => deleteLibraryItem(item.kind, item.id), () => { restoreFocusId.current = null; back() })}
+            onDelete={() => void run(() => deleteLibraryItem(item.id), () => { restoreFocusId.current = null; back() })}
           />
         )}
       </div>
@@ -357,11 +395,17 @@ export function DataLibraryPanel() {
   )
 }
 
+function isStale(row: LibraryItem): boolean {
+  return row.status === 'ready' && row.freshness.state === 'Stale'
+}
+
+function isRunning(row: LibraryItem): boolean {
+  return row.role === 'Derived' && row.run?.state === 'Preparing'
+}
+
 function summary(row: LibraryItem): string {
-  const type = row.kind === 'Analysis'
-    ? t('canvas.lidar.library.typeSlope')
-    : t(`canvas.lidar.library.measurement.${row.type}`)
-  if (row.kind === 'Analysis') return `${type} · ${row.units}`
+  const type = itemTypeLabel(row.itemType)
+  if (row.role === 'Derived') return row.units ? `${type} · ${row.units}` : type
   const resolution = row.resolutionM !== null ? ` · ${formatMetres(row.resolutionM)}` : ''
   return `${type}${resolution}`
 }
@@ -371,11 +415,8 @@ function statusLabel(row: LibraryItem): string {
     const phase = row.importJob?.progress?.phase
     return phase ? t(`canvas.lidar.progressPhase.${phase}`) : t('canvas.lidar.library.preparing')
   }
-  // A calculation reports cancellation through its detail, an import through its job.
-  if (row.importJob?.state === 'Cancelled' || (row.kind === 'Analysis' && row.message === 'cancelled')) {
-    return t('canvas.lidar.library.cancelled')
-  }
-  return row.kind === 'Analysis' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
+  if (row.importJob?.state === 'Cancelled' || row.run?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
+  return row.role === 'Derived' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
 }
 
 function formatMetres(value: number): string {
@@ -387,18 +428,18 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
   busy: boolean
   error: string | null
   onCancel(): void
-  onSubmit(name: string, kind: LidarMeasurementKind, unit: { label: string | null; unknown: boolean }): void
+  onSubmit(name: string, quantity: RasterQuantity, unit: { label: string | null; unknown: boolean }): void
 }) {
   const [name, setName] = useState(() => suggestedItemName(paths))
-  const [kind, setKind] = useState<LidarMeasurementKind | ''>('')
+  const [quantity, setQuantity] = useState<RasterQuantity | ''>('')
   const [unitLabel, setUnitLabel] = useState('')
   const [unitUnknown, setUnitUnknown] = useState(false)
-  const unitReady = kind !== 'OtherContinuous' || unitUnknown || unitLabel.trim() !== ''
+  const unitReady = quantity !== 'OtherContinuous' || unitUnknown || unitLabel.trim() !== ''
   return (
     <form className={styles.form} onSubmit={(event) => {
       event.preventDefault()
-      if (!kind || !name.trim() || !unitReady || busy) return
-      onSubmit(name.trim(), kind, kind === 'OtherContinuous'
+      if (!quantity || !name.trim() || !unitReady || busy) return
+      onSubmit(name.trim(), quantity, quantity === 'OtherContinuous'
         ? { label: unitUnknown ? null : unitLabel.trim(), unknown: unitUnknown }
         : { label: null, unknown: false })
     }}>
@@ -408,15 +449,15 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
         <input required value={name} onInput={(event) => setName(event.currentTarget.value)} />
       </label>
       <label>
-        {t('canvas.lidar.library.measurementLabel')}
-        <select required value={kind} onChange={(event) => setKind(event.currentTarget.value as LidarMeasurementKind)}>
-          <option value="" disabled>{t('canvas.lidar.library.chooseMeasurement')}</option>
-          {MEASUREMENTS.map((value) => (
-            <option key={value} value={value}>{t(`canvas.lidar.library.measurement.${value}`)}</option>
+        {t('canvas.lidar.library.quantityLabel')}
+        <select required value={quantity} onChange={(event) => setQuantity(event.currentTarget.value as RasterQuantity)}>
+          <option value="" disabled>{t('canvas.lidar.library.chooseQuantity')}</option>
+          {IMPORTABLE_QUANTITIES.map((value) => (
+            <option key={value} value={value}>{t(RASTER_QUANTITIES[value].labelKey)}</option>
           ))}
         </select>
       </label>
-      {kind === 'OtherContinuous' && (
+      {quantity === 'OtherContinuous' && (
         <fieldset className={styles.unit}>
           <label>
             {t('canvas.lidar.library.unit')}
@@ -440,7 +481,7 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
       {error && <p className={styles.error} role="alert">{error}</p>}
       <div className={styles.formActions}>
         <button type="button" onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
-        <button type="submit" className={styles.primary} disabled={busy || !kind || !name.trim() || !unitReady}>
+        <button type="submit" className={styles.primary} disabled={busy || !quantity || !name.trim() || !unitReady}>
           {t('canvas.lidar.library.importFiles', { count: paths.length })}
         </button>
       </div>
@@ -448,34 +489,27 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
   )
 }
 
-function methodLabel(method: LidarAnalysisMethod | null): string {
-  if (method === 'GeolibreProjectedSlopeV1') return t('canvas.lidar.library.methodGeolibre')
-  return t('canvas.lidar.library.methodUnknown')
-}
-
-function ItemDetails({ item, client, items, addButton, menu, operation, busy, onRetryCalculation, onOpen, onCalculate }: {
+function ItemDetails({ item, client, nameOf, addButton, refreshButton, menu, operation, onOpen, onAnalyze }: {
   item: LibraryItem
   client: ReturnType<typeof usePreviewClient>
-  items: readonly LibraryItem[]
+  nameOf(id: string): string
   addButton: preact.ComponentChildren
+  refreshButton: preact.ComponentChildren
   menu: preact.ComponentChildren
   operation: preact.ComponentChildren
-  busy: boolean
-  onRetryCalculation(): void
   onOpen(id: string): void
-  onCalculate(): void
+  onAnalyze(): void
 }) {
   const [files, setFiles] = useState<string[] | null>(null)
   useEffect(() => {
     setFiles(null)
-    if (item.kind !== 'Source' || item.status !== 'ready') return
+    if (item.role !== 'Source' || item.status !== 'ready') return
     let current = true
     void fetchItemSources(item.id)
       .then((page) => { if (current) setFiles(page.sources.map((source) => source.filename)) })
       .catch(() => { if (current) setFiles([]) })
     return () => { current = false }
   }, [item.id, item.status])
-  const input = item.sourceLayerId ? items.find((candidate) => candidate.id === item.sourceLayerId) : null
   return (
     <div className={styles.form}>
       <div className={styles.detailTitle}>
@@ -485,9 +519,17 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
       <div className={styles.previewFrame}>
         <LibraryPreview item={item} client={client} width={640} height={328} large />
       </div>
+      {isStale(item) && item.freshness.state === 'Stale' && (
+        <Notice tone="warning" action={refreshButton}>
+          <strong>{t('analyses.details.outOfDate')}</strong>
+          <ul className={styles.reasons}>
+            {item.freshness.reasons.map((reason, index) => <li key={index}>{staleReasonText(reason, nameOf)}</li>)}
+          </ul>
+        </Notice>
+      )}
       <dl className={styles.facts}>
         <dt>{t('canvas.lidar.library.factType')}</dt>
-        <dd>{item.kind === 'Analysis' ? t('canvas.lidar.library.typeSlope') : t(`canvas.lidar.library.measurement.${item.type}`)}</dd>
+        <dd>{itemTypeLabel(item.itemType)}</dd>
         <dt>{t('canvas.lidar.library.factUnits')}</dt>
         <dd>{item.units === 'unknown' ? t('canvas.lidar.library.unitUnknown') : item.units}</dd>
         {item.resolutionM !== null && <>
@@ -500,39 +542,115 @@ function ItemDetails({ item, client, items, addButton, menu, operation, busy, on
         </>}
         <dt>{t('canvas.lidar.library.factStatus')}</dt>
         <dd>{item.status === 'ready' ? t('canvas.lidar.library.ready') : statusLabel(item)}</dd>
-        {item.kind === 'Analysis' && <>
-          <dt>{t('canvas.lidar.library.factInput')}</dt>
-          <dd>{input
-            ? <button type="button" className={styles.link} onClick={() => onOpen(input.id)}>{input.name}</button>
-            : t('canvas.lidar.library.dataUnavailable')}</dd>
-          <dt>{t('canvas.lidar.library.factMethod')}</dt>
-          <dd>{methodLabel(item.method)}</dd>
-          {item.engineVersion && <>
-            <dt>{t('canvas.lidar.library.factEngine')}</dt>
-            <dd className={styles.filename}>{item.engineVersion}</dd>
-          </>}
-        </>}
-        {item.kind === 'Source' && item.resultCount > 0 && <>
+        {item.provenance && <ProvenanceFacts provenance={item.provenance} nameOf={nameOf} onOpen={onOpen} />}
+        {item.dependents > 0 && <>
           <dt>{t('canvas.lidar.library.factResults')}</dt>
-          <dd>{item.resultCount}</dd>
+          <dd>{item.dependents}</dd>
         </>}
       </dl>
       {item.status === 'ready' && addButton}
-      {item.kind === 'Source' && item.status === 'ready' && (
-        <button type="button" onClick={onCalculate}>{t('canvas.lidar.library.calculateSlope')}</button>
+      {item.status === 'ready' && (
+        <button type="button" onClick={onAnalyze}>{t('canvas.lidar.library.analyze')}</button>
       )}
       {operation}
-      {item.kind === 'Analysis' && item.status === 'failed' && item.inputGenerationId !== null && (
-        <button type="button" disabled={busy} onClick={onRetryCalculation}>{t('canvas.lidar.library.retry')}</button>
-      )}
-      {item.kind === 'Source' && files && files.length > 0 && (
+      {item.role === 'Source' && files && files.length > 0 && (
         <details>
           <summary>{t('canvas.lidar.library.sourceFiles', { count: files.length })}</summary>
           <ol className={styles.files}>{files.map((file, index) => <li key={`${index}-${file}`} className={styles.filename}>{file}</li>)}</ol>
         </details>
       )}
+      {item.provenance && <ProcessingHistory key={item.provenance.definition_id} definitionId={item.provenance.definition_id} />}
     </div>
   )
+}
+
+/** What produced a derived item: analysis, method version, settings, inputs, engine and date. */
+function ProvenanceFacts({ provenance, nameOf, onOpen }: {
+  provenance: Provenance
+  nameOf(id: string): string
+  onOpen(id: string): void
+}) {
+  const language = locale.value
+  const entry = findAnalysis(provenance.analysis_id)
+  const tool = provenance.tool
+  return <>
+    <dt>{t('analyses.details.analysis')}</dt>
+    <dd>{analysisTitle(provenance.analysis_id)}</dd>
+    <dt>{t('analyses.details.method')}</dt>
+    <dd>{t('analyses.details.methodVersion', { version: provenance.recipe_version })}</dd>
+    {provenance.parameters.map((parameter) => {
+      const spec = entry?.params.find((param) => param.key === parameter.key)
+      return [
+        <dt key={`${parameter.key}-label`}>{spec ? t(spec.labelKey) : parameter.key}</dt>,
+        <dd key={`${parameter.key}-value`}>{paramValueText(entry, parameter, language)}</dd>,
+      ]
+    })}
+    <dt>{t('analyses.details.inputs')}</dt>
+    <dd>
+      {provenance.inputs.map((input) => (
+        <button key={input.key} type="button" className={styles.link} onClick={() => onOpen(input.item_id)}>
+          {nameOf(input.item_id)}
+        </button>
+      ))}
+    </dd>
+    {tool && <>
+      <dt>{t('analyses.details.engine')}</dt>
+      <dd className={styles.filename}>{tool.version}</dd>
+      <dt>{t('analyses.details.revision')}</dt>
+      <dd className={styles.filename}>{tool.revision.slice(0, 12)}</dd>
+    </>}
+    <dt>{t('analyses.details.created')}</dt>
+    <dd>{formatTimestamp(provenance.created_at, language)}</dd>
+  </>
+}
+
+/** The runs of one definition, loaded when opened and paged on request. */
+function ProcessingHistory({ definitionId }: { definitionId: string }) {
+  const [runs, setRuns] = useState<ProcessingRun[] | null>(null)
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const language = locale.value
+  const load = (from: string | null) => {
+    setLoading(true)
+    setFailed(false)
+    void fetchProcessingHistory(definitionId, from)
+      .then((page) => {
+        setRuns((previous) => [...(from ? previous ?? [] : []), ...page.runs])
+        setCursor(page.next_cursor)
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false))
+  }
+  return (
+    <details onToggle={(event) => { if (event.currentTarget.open && runs === null && !loading) load(null) }}>
+      <summary>{t('analyses.details.history')}</summary>
+      {runs !== null && runs.length === 0 && <p className={styles.muted}>{t('analyses.details.historyEmpty')}</p>}
+      {runs !== null && runs.length > 0 && (
+        <ol className={styles.history}>
+          {runs.map((entry) => (
+            <li key={entry.job_id}>
+              <strong>{formatTimestamp(entry.created_at, language)}</strong>
+              <span>{t(`analyses.details.runState.${entry.state}`)}{entry.tool ? ` · ${entry.tool.version}` : ''}</span>
+              <span className={styles.muted}>{runOutputs(entry, language)}</span>
+              {entry.message && <span className={styles.muted}>{entry.message}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+      {loading && <p className={styles.muted} role="status">{t('analyses.details.historyLoading')}</p>}
+      {failed && <p className={styles.error} role="alert">{t('analyses.details.historyFailed')}</p>}
+      {cursor && !loading && (
+        <button type="button" onClick={() => load(cursor)}>{t('analyses.details.showMore')}</button>
+      )}
+    </details>
+  )
+}
+
+function runOutputs(run: ProcessingRun, language: string): string {
+  if (run.outputs.length === 0) return t('analyses.details.noOutputs')
+  const cells = run.outputs.reduce((total, output) => total + Number(output.coverage_cells ?? 0), 0)
+  return t('analyses.details.coverage', { cells: new Intl.NumberFormat(language).format(cells) })
 }
 
 function RenameForm({ item, busy, error, onCancel, onSubmit }: {
@@ -568,14 +686,13 @@ function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onShow
   onShowResults(): void
   onDelete(): void
 }) {
-  const [impact, setImpact] = useState<LidarDeleteImpact | null>(null)
+  const [impact, setImpact] = useState<LibraryDeleteImpact | null>(null)
   useEffect(() => {
-    if (item.kind !== 'Source') return
     let current = true
     void fetchDeleteImpact(item.id).then((value) => { if (current) setImpact(value) }).catch(() => {})
     return () => { current = false }
   }, [item.id])
-  const dependents = item.kind === 'Source' ? impact?.analysis_count ?? item.resultCount : 0
+  const dependents = impact?.dependent_item_ids.length ?? item.dependents
   return (
     <div className={styles.form}>
       <h3 tabIndex={-1} data-autofocus="true">{t('canvas.lidar.library.deleteTitle', { name: item.name })}</h3>
@@ -592,76 +709,11 @@ function DeleteConfirmation({ item, inCurrentDesign, busy, error, onKeep, onShow
         {error && <p className={styles.error} role="alert">{error}</p>}
         <div className={styles.formActions}>
           <button type="button" onClick={onKeep}>{t('canvas.lidar.library.keep')}</button>
-          <button type="button" className={styles.danger} disabled={busy || item.status === 'preparing'} onClick={onDelete}>
+          <button type="button" className={styles.danger} disabled={busy || item.status === 'preparing' || isRunning(item)} onClick={onDelete}>
             {t('canvas.lidar.library.deleteFromLibrary')}
           </button>
         </div>
       </>}
     </div>
-  )
-}
-
-const INELIGIBLE: Record<SlopeIneligibility, string> = {
-  notSource: 'canvas.lidar.library.slopeNeedsSource',
-  notReady: 'canvas.lidar.library.slopeNeedsSource',
-  notGround: 'canvas.lidar.library.slopeNeedsGround',
-  notMetres: 'canvas.lidar.library.slopeNeedsMetres',
-  engine: 'canvas.lidar.library.slopeEngineMissing',
-}
-
-/**
- * One contextual operation: slope from a fixed input as a new library result.
- * With a single qualified method there is no algorithm picker; the method is
- * named in the result's details.
- */
-function CalculateSlopeForm({ item, reason, engineDetail, attach, busy, error, onCancel, onSubmit }: {
-  item: LibraryItem
-  reason: SlopeIneligibility | null
-  engineDetail: string | null
-  attach: boolean
-  busy: boolean
-  error: string | null
-  onCancel(): void
-  onSubmit(unit: LidarSlopeUnit, name: string): void
-}) {
-  const [name, setName] = useState(`${item.name} · ${t('canvas.lidar.library.typeSlope')}`)
-  const [unit, setUnit] = useState<LidarSlopeUnit>('Degrees')
-  return (
-    <form className={styles.form} onSubmit={(event) => {
-      event.preventDefault()
-      if (!reason && name.trim() && !busy) onSubmit(unit, name.trim())
-    }}>
-      <h3 tabIndex={-1} data-autofocus="true">{t('canvas.lidar.library.calculateTitle')}</h3>
-      <p>{t('canvas.lidar.library.calculateFrom', { name: item.name })}</p>
-      {reason ? (
-        <p className={styles.error} role="alert">
-          {t(INELIGIBLE[reason])}{reason === 'engine' && engineDetail ? ` (${engineDetail})` : ''}
-        </p>
-      ) : <>
-        <label>
-          {t('canvas.lidar.library.resultName')}
-          <input required value={name} onInput={(event) => setName(event.currentTarget.value)} />
-        </label>
-        <fieldset className={styles.unit}>
-          <legend>{t('canvas.lidar.library.unit')}</legend>
-          {(['Degrees', 'Percent'] as const).map((value) => (
-            <label key={value} className={styles.check}>
-              <input type="radio" name="slope-unit" checked={unit === value} onChange={() => setUnit(value)} />
-              {t(`canvas.lidar.library.unit${value}`)}
-            </label>
-          ))}
-        </fieldset>
-        <p className={styles.muted}>
-          {attach ? t('canvas.lidar.library.calculateAttachNote') : t('canvas.lidar.library.calculateLibraryNote')}
-        </p>
-      </>}
-      {error && <p className={styles.error} role="alert">{error}</p>}
-      <div className={styles.formActions}>
-        <button type="button" onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
-        <button type="submit" className={styles.primary} disabled={busy || reason !== null || !name.trim()}>
-          {t('canvas.lidar.library.run')}
-        </button>
-      </div>
-    </form>
   )
 }

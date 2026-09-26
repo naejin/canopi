@@ -1,9 +1,9 @@
 import { computed, effect, signal } from '@preact/signals'
-import type { LidarSampleOutcome } from '../../generated/contracts'
+import type { LidarPresentationEntryKind, LidarSampleOutcome } from '../../generated/contracts'
 import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { activePanel } from '../shell/state'
-import { readLidarPresentation, lidarLibrary } from './library-store'
+import { itemRole, readLidarPresentation, lidarLibrary } from './library-store'
 import {
   inspectionPointForScenePoint,
   inspectionViewCentreScenePoint,
@@ -24,9 +24,9 @@ export type InspectionSample =
   | { readonly kind: 'stale' }
   | { readonly kind: 'unavailable'; readonly reason: string }
 
-/** One inspected entity, or none. */
+/** One inspected entity, or none. `kind` is the Design entry kind that presents it. */
 export interface InspectionTarget {
-  readonly kind: 'Source' | 'Analysis'
+  readonly kind: LidarPresentationEntryKind
   readonly id: string
   readonly name: string
 }
@@ -345,7 +345,7 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
   let outcome: LidarSampleOutcome
   try {
     outcome = await lidarSamplePixel({
-      kind: target.kind,
+      kind: itemRole(target.kind),
       entity_id: target.id,
       expected_generation_id: expectedGenerationId,
       request_id: requestId,
@@ -403,9 +403,8 @@ export function interpretOutcome(outcome: LidarSampleOutcome): InspectionSample 
 function readCurrentGenerationId(target: InspectionTarget): string | null {
   const library = lidarLibrary.value
   if (!library) return null
-  const entity = target.kind === 'Source'
-    ? library.layers.find((candidate) => candidate.id === target.id)
-    : library.analyses.find((candidate) => candidate.id === target.id)
+  const role = itemRole(target.kind)
+  const entity = library.items.find((candidate) => candidate.id === target.id && candidate.role === role)
   return entity?.generation_id ?? null
 }
 

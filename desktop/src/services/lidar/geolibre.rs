@@ -1,11 +1,11 @@
-//! The pinned GeoLibre native tool runner used by new slope definitions.
+//! The pinned GeoLibre CLI sidecar every registered analysis runs on.
 //!
-//! Recipe 2 runs the `geolibre` CLI built from `geolibre-rust` at
-//! [`GEOLIBRE_REVISION`] as a job-owned child process: fixed argv, no shell,
+//! Executors run tools of the `geolibre` CLI built from `geolibre-rust` at
+//! [`GEOLIBRE_REVISION`] as job-owned child processes: fixed argv, no shell,
 //! bounded output, the finite process deadline, and kill/reap on cancel, all
 //! through the same runner as the GDAL engine. Discovery is cached like GDAL's,
-//! so a missing binary makes new slope unavailable with a named reason and never
-//! falls back to another method.
+//! so a missing binary makes new analysis runs unavailable with a named reason
+//! and never falls back to another method.
 
 use super::engine::GdalEngine;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 /// The `geolibre-rust` commit the shipped CLI is built from.
 pub const GEOLIBRE_REVISION: &str = "aac2b743978666f3c3119b5c93de1b30963b1493";
-/// Worker threads one slope window may use.
+/// Worker threads one windowed tool run may use.
 const RAYON_THREADS: &str = "2";
 #[cfg(windows)]
 const EXECUTABLE: &str = "geolibre.exe";
@@ -29,13 +29,14 @@ pub struct GeolibreTool {
 }
 
 impl GeolibreTool {
-    /// What a published result records as the engine that actually ran.
-    pub fn provenance(&self) -> String {
-        format!(
-            "{} (geolibre-rust {})",
-            self.version,
-            &GEOLIBRE_REVISION[..12]
-        )
+    /// What a published run records as the engine that actually ran.
+    pub fn provenance(&self, tools: Vec<String>) -> common_types::library::ToolProvenance {
+        common_types::library::ToolProvenance {
+            engine: "geolibre".to_string(),
+            version: self.version.clone(),
+            revision: GEOLIBRE_REVISION.to_string(),
+            tools,
+        }
     }
 }
 
@@ -94,7 +95,7 @@ impl GeolibreEngine {
         };
         if !path.is_file() {
             return Err(format!(
-                "the GeoLibre slope engine is not installed ({} is missing)",
+                "the GeoLibre engine is not installed ({} is missing)",
                 path.display()
             ));
         }
@@ -102,40 +103,41 @@ impl GeolibreEngine {
             GdalEngine::run_managed(&path, &["version".to_string()], &[], None, &self.log_dir)?;
         let version = output.stdout.trim().to_string();
         if version.is_empty() {
-            return Err("the GeoLibre slope engine reported no version".to_string());
+            return Err("the GeoLibre engine reported no version".to_string());
         }
         Ok(GeolibreTool { path, version })
     }
 
-    /// Run the pinned projected slope on one staged window.
+    /// Run one tool of the pinned CLI: `<tool> --input=<input> --output=<output>
+    /// <args>`.
     ///
     /// The tool reads `input` (Float32, a round-trip-safe NoData tag) and writes
-    /// `output` in the same grid. Only a completed child with an output file
-    /// counts as success; the caller owns both paths and their cleanup.
-    pub fn slope(
+    /// `output`. Only a completed child with an output file counts as success;
+    /// the caller owns both paths and their cleanup.
+    pub fn run(
         &self,
+        tool: &str,
         input: &Path,
         output: &Path,
-        percent: bool,
+        args: &[String],
         cancel: &AtomicBool,
     ) -> Result<(), String> {
-        let tool = self.discover()?;
-        let args = vec![
-            "slope".to_string(),
+        let runner = self.discover()?;
+        let mut argv = vec![
+            tool.to_string(),
             format!("--input={}", input.display()),
             format!("--output={}", output.display()),
-            format!("--units={}", if percent { "percent" } else { "degrees" }),
-            "--z_factor=1".to_string(),
         ];
+        argv.extend_from_slice(args);
         GdalEngine::run_managed(
-            &tool.path,
-            &args,
+            &runner.path,
+            &argv,
             &[("RAYON_NUM_THREADS", RAYON_THREADS)],
             Some(cancel),
             &self.log_dir,
         )?;
         if !output.is_file() {
-            return Err("the GeoLibre slope engine produced no output".to_string());
+            return Err(format!("the GeoLibre tool {tool} produced no output"));
         }
         Ok(())
     }
@@ -153,7 +155,7 @@ fn locate() -> Result<PathBuf, String> {
         return Ok(beside);
     }
     super::engine::which_on_path(EXECUTABLE).ok_or_else(|| {
-        "the GeoLibre slope engine is not installed; new slope results are unavailable".to_string()
+        "the GeoLibre engine is not installed; new analysis runs are unavailable".to_string()
     })
 }
 
@@ -178,8 +180,14 @@ mod tests {
         assert!(error.contains("not installed"), "{error}");
         let cancel = AtomicBool::new(false);
         let error = engine
-            .slope(Path::new("in.tif"), Path::new("out.tif"), false, &cancel)
-            .expect_err("no slope without the runner");
+            .run(
+                "slope",
+                Path::new("in.tif"),
+                Path::new("out.tif"),
+                &[],
+                &cancel,
+            )
+            .expect_err("no analysis without the runner");
         assert!(error.contains("not installed"), "{error}");
     }
 }

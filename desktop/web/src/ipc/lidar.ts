@@ -1,31 +1,29 @@
 import { invoke } from '@tauri-apps/api/core'
 import type {
-  LidarDeleteImpact,
-  LidarImportReceipt,
-  LidarAnalysisReceipt,
-  LidarAnalysisKind,
-  LidarAnalysisParameters,
-  LidarLayerCollection,
-  LidarLibrarySnapshot,
-  LidarMeasurementKind,
-  LidarSampleOutcome,
-  LidarSampleRequest,
+  AnalysisReceipt,
+  AnalysisRequest,
+  LibraryDeleteImpact,
+  LibrarySnapshot,
   LidarDisplayDescriptor,
   LidarDisplayRequest,
+  LidarImportReceipt,
+  LidarLayerCollection,
+  LidarSampleOutcome,
+  LidarSampleRequest,
+  ProcessingHistoryPage,
+  RasterQuantity,
 } from '../generated/contracts'
 
 export type {
+  AnalysisReceipt,
+  LibraryDeleteImpact,
   LidarDisplayDescriptor,
-  LidarLayerCollection,
-  LidarAnalysisSummary,
-  LidarLayerSummary,
-  LidarDeleteImpact,
   LidarImportReceipt,
-  LidarMeasurementKind,
+  LidarLayerCollection,
+  ProcessingHistoryPage,
 } from '../generated/contracts'
 
-
-export async function lidarListLibrary(): Promise<LidarLibrarySnapshot> {
+export async function lidarListLibrary(): Promise<LibrarySnapshot> {
   return invoke('lidar_list_library')
 }
 
@@ -34,16 +32,17 @@ export async function lidarListLibrary(): Promise<LidarLibrarySnapshot> {
  *
  * The item and its job are created together only on submission; the files'
  * order is the item's source priority. Import never attaches to a Design.
+ * Only importable quantities are accepted; derived ones are refused by name.
  */
 export async function lidarImportItem(
   name: string,
-  measurementKind: LidarMeasurementKind,
+  quantity: RasterQuantity,
   unit: { label: string | null; unknown: boolean },
   paths: string[],
 ): Promise<LidarImportReceipt> {
   return invoke('lidar_import_item', {
     name,
-    measurementKind,
+    quantity,
     unitLabel: unit.label,
     unitUnknown: unit.unknown,
     paths,
@@ -60,58 +59,49 @@ export async function lidarDismissImport(layerId: string): Promise<void> {
   return invoke('lidar_dismiss_import', { layerId })
 }
 
-export async function lidarRenameLayer(layerId: string, name: string): Promise<void> {
-  return invoke('lidar_rename_layer', { layerId, name })
+/** Rename one library item, source or derived. */
+export async function lidarRenameItem(itemId: string, name: string): Promise<void> {
+  return invoke('lidar_rename_item', { itemId, name })
 }
 
-export async function lidarRenameAnalysis(definitionId: string, name: string): Promise<void> {
-  return invoke('lidar_rename_analysis', { definitionId, name })
+export async function lidarDeleteImpact(itemId: string): Promise<LibraryDeleteImpact> {
+  return invoke('lidar_delete_impact', { itemId })
 }
 
-export async function lidarDeleteLayerImpact(layerId: string): Promise<LidarDeleteImpact> {
-  return invoke('lidar_delete_layer_impact', { layerId })
-}
-
-/** Refused natively while saved results were calculated from this source. */
-export async function lidarDeleteLayer(layerId: string): Promise<void> {
-  return invoke('lidar_delete_layer', { layerId })
+/** Refused natively while other derived items use this item as an input. */
+export async function lidarDeleteItem(itemId: string): Promise<void> {
+  return invoke('lidar_delete_item', { itemId })
 }
 
 export async function lidarCancelImport(jobId: string): Promise<void> {
   return invoke('lidar_cancel_import', { jobId })
 }
 
-export async function lidarCreateAnalysis(
-  layerId: string,
-  kind: LidarAnalysisKind,
-  parameters: LidarAnalysisParameters,
-  resultName: string | null = null,
-): Promise<LidarAnalysisReceipt> {
-  return invoke('lidar_create_analysis', { layerId, kind, parameters, resultName })
+/** Create one analysis definition from a registry entry and start its first run. */
+export async function lidarCreateAnalysis(request: AnalysisRequest): Promise<AnalysisReceipt> {
+  return invoke('lidar_create_analysis', { request })
 }
 
 /**
- * Retry one failed analysis operation with its saved definition.
+ * Run one definition again with its saved inputs and parameters.
  *
- * The definition identity, parameters and published name are preserved: a
- * retry is a new job for the same definition, not a second definition.
+ * Retry when it has no result yet; Refresh when it has one, which republishes
+ * in place under the same item ids while the earlier run stays in history.
  */
-export async function lidarRetryAnalysis(
-  definitionId: string,
-  expectedSourceGenerationId: string,
-): Promise<LidarAnalysisReceipt> {
-  return invoke('lidar_retry_analysis', {
-    definitionId,
-    expectedSourceGenerationId,
-  })
+export async function lidarRerunAnalysis(definitionId: string): Promise<AnalysisReceipt> {
+  return invoke('lidar_rerun_analysis', { definitionId })
 }
 
 export async function lidarCancelAnalysisJob(jobId: string): Promise<void> {
   return invoke('lidar_cancel_analysis_job', { jobId })
 }
 
-export async function lidarDeleteAnalysis(definitionId: string): Promise<void> {
-  return invoke('lidar_delete_analysis', { definitionId })
+/** One bounded page of a definition's runs, newest first. */
+export async function lidarProcessingHistory(
+  definitionId: string,
+  cursor: string | null = null,
+): Promise<ProcessingHistoryPage> {
+  return invoke('lidar_processing_history', { definitionId, cursor })
 }
 
 /**

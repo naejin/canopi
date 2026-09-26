@@ -338,8 +338,8 @@ pub(super) fn insert_snapshot(
 ) -> Result<(), String> {
     connection
         .execute(
-            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, manifest_json, coverage_cells, min_value, max_value, display_min_value, display_max_value, display_basis, bounds_3857)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO lidar_layer_generations(id, layer_id, created_at, manifest_json, coverage_cells, min_value, max_value, display_min_value, display_max_value, display_basis, bounds_3857, crs_class)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 generation_id,
                 layer_id,
@@ -352,6 +352,7 @@ pub(super) fn insert_snapshot(
                 measurement.display_max_value,
                 super::display_basis_label(measurement.display_basis),
                 serde_json::to_string(&measurement.bounds_3857).map_err(|e| e.to_string())?,
+                super::analyses::crs_class(&plan.crs_wkt),
             ],
         )
         .map_err(|e| format!("Failed to record the collection generation: {e}"))?;

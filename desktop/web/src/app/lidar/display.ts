@@ -2,7 +2,8 @@ import { effect, signal } from '@preact/signals'
 import type { convertFileSrc } from '@tauri-apps/api/core'
 import type { RasterDisplayLayer } from '../../maplibre/raster-display/adapter'
 import { lidarDisplayDescriptor, type LidarDisplayDescriptor } from '../../ipc/lidar'
-import type { LidarSampleEntityKind } from '../../generated/contracts'
+import type { LibraryItemRole, LibraryItemType } from '../../generated/contracts'
+import { itemTypeStyle, type LidarDisplayStyle } from './item-types'
 import { readCurrentLidarPresentation, refreshLidarLibrary, type LidarPresentationItem } from './library-store'
 
 /**
@@ -23,12 +24,12 @@ const inflight = new Set<string>()
 const pollTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let storeGeneration = 0
 
-export function displayKey(kind: LidarSampleEntityKind, entityId: string, generationId: string | null): string {
+export function displayKey(kind: LibraryItemRole, entityId: string, generationId: string | null): string {
   return `${kind}/${entityId}/${generationId ?? ''}`
 }
 
 export function readLidarDisplay(
-  kind: LidarSampleEntityKind,
+  kind: LibraryItemRole,
   entityId: string,
   generationId: string | null,
 ): LidarDisplayDescriptor | null {
@@ -48,7 +49,7 @@ function store(key: string, descriptor: LidarDisplayDescriptor): void {
  * not change on its own (ready, unavailable, failed) is already stored.
  */
 export function requestLidarDisplay(
-  kind: LidarSampleEntityKind,
+  kind: LibraryItemRole,
   entityId: string,
   generationId: string | null,
   options: { retry?: boolean } = {},
@@ -95,10 +96,6 @@ export function requestLidarDisplay(
     .finally(() => inflight.delete(key))
 }
 
-export function entityKind(item: Pick<LidarPresentationItem, 'kind'>): LidarSampleEntityKind {
-  return item.kind === 'Analysis' ? 'Analysis' : 'Source'
-}
-
 let displayDisposer: (() => void) | null = null
 
 /**
@@ -110,7 +107,7 @@ export function installLidarDisplayDescriptors(): void {
   displayDisposer = effect(() => {
     for (const item of readCurrentLidarPresentation()) {
       if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
-      requestLidarDisplay(entityKind(item), item.id, item.generationId)
+      requestLidarDisplay(item.role, item.id, item.generationId)
     }
   })
 }
@@ -131,40 +128,18 @@ export function lidarAssetUrl(path: string): string {
   return platform.startsWith('Win') ? `http://asset.localhost/${encoded}` : `asset://localhost/${encoded}`
 }
 
-export interface LidarDisplayStyle {
-  readonly colormap: string
-  readonly reversed: boolean
-  readonly rescale: readonly [number, number]
-  /** Units of `rescale`, for the legend. */
-  readonly units: string
-}
-
-const SLOPE_DEGREES_MAX = 60
-/** The same 60° expressed in percent, so both units share one colour domain. */
-const SLOPE_PERCENT_MAX = Math.round(Math.tan((SLOPE_DEGREES_MAX * Math.PI) / 180) * 1000) / 10
-
 /**
- * Upstream palette and stretch for one item, always in its stored units.
- *
- * Elevation uses `terrain` over the library's display range; heights and other
- * continuous values use `viridis`. Slope uses a reversed `magma` over a fixed
- * domain in the result's own unit, so a percent result is never coloured as
- * degrees.
+ * Upstream palette and stretch for one item, always in its stored units,
+ * dispatched on its item type. A reference whose item is gone has no type and
+ * draws nothing, so its neutral style only serves an empty legend.
  */
-export function lidarDisplayStyle(item: Pick<LidarPresentationItem, 'kind' | 'detail' | 'slopeUnit' | 'displayRange'>, units: string): LidarDisplayStyle {
-  if (item.kind === 'Analysis') {
-    const percent = item.slopeUnit === 'Percent'
-    return {
-      colormap: 'magma',
-      reversed: true,
-      rescale: [0, percent ? SLOPE_PERCENT_MAX : SLOPE_DEGREES_MAX],
-      units: percent ? '%' : '°',
-    }
-  }
-  const [min, max] = item.displayRange ?? [0, 1]
-  const rescale: [number, number] = max > min ? [min, max] : [min, min + 1]
-  const elevation = item.detail === 'GroundElevation' || item.detail === 'SurfaceElevation'
-  return { colormap: elevation ? 'terrain' : 'viridis', reversed: false, rescale, units }
+export function lidarDisplayStyle(item: {
+  readonly itemType: LibraryItemType | null
+  readonly units: string
+  readonly displayRange: readonly [number, number] | null
+}): LidarDisplayStyle {
+  if (!item.itemType) return { colormap: 'viridis', reversed: false, rescale: [0, 1], units: item.units }
+  return itemTypeStyle(item.itemType, item)
 }
 
 /**
@@ -175,17 +150,15 @@ export function lidarDisplayStyle(item: Pick<LidarPresentationItem, 'kind' | 'de
 export function lidarDisplayLayers(
   items: readonly LidarPresentationItem[],
   descriptors: ReadonlyMap<string, LidarDisplayDescriptor>,
-  unitsOf: (item: LidarPresentationItem) => string = () => '',
   toAssetUrl: typeof convertFileSrc = lidarAssetUrl,
 ): RasterDisplayLayer[] {
   const layers: RasterDisplayLayer[] = []
   for (const item of items) {
     if (!item.visible || item.state === 'unavailable' || !item.generationId) continue
-    const kind = entityKind(item)
-    const descriptor = descriptors.get(displayKey(kind, item.id, item.generationId))
+    const descriptor = descriptors.get(displayKey(item.role, item.id, item.generationId))
     if (!descriptor || descriptor.state !== 'Ready' || descriptor.generation_id !== item.generationId) continue
     if (descriptor.assets.length === 0) continue
-    const style = lidarDisplayStyle(item, unitsOf(item))
+    const style = lidarDisplayStyle(item)
     const bounds = descriptor.assets.reduce<[number, number, number, number]>(
       (union, asset) => [
         Math.min(union[0], asset.bounds[0]),
@@ -196,7 +169,7 @@ export function lidarDisplayLayers(
       [Infinity, Infinity, -Infinity, -Infinity],
     )
     layers.push({
-      id: `lidar-${kind === 'Analysis' ? 'result' : 'source'}-${item.id}-${item.generationId}`,
+      id: `lidar-${item.role === 'Derived' ? 'result' : 'source'}-${item.id}-${item.generationId}`,
       name: item.name,
       assets: descriptor.assets.map((asset) => ({ url: toAssetUrl(asset.path), bbox: asset.bounds })),
       bounds,

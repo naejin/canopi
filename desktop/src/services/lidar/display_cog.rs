@@ -13,7 +13,7 @@
 //!
 //! - an ordered-collection source occurrence converts its own immutable COG,
 //!   keyed by content digest, so reuse across items and Designs is free;
-//! - a slope result's resolved chunks are read through their exact numeric
+//! - a derived item's resolved chunks are read through their exact numeric
 //!   reader in bounded windows, grouped into parts of at most
 //!   `PART_CHUNKS`² occupied chunks. Empty space between distant chunks is never
 //!   allocated.
@@ -25,9 +25,9 @@
 
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation};
+use common_types::library::LibraryItemRole;
 use common_types::lidar::{
     LidarDisplayAsset, LidarDisplayDescriptor, LidarDisplayRequest, LidarDisplayState,
-    LidarSampleEntityKind,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::io::{Seek as _, SeekFrom, Write as _};
@@ -73,7 +73,7 @@ struct PartSpec {
 
 /// Every derivative one entity generation needs, top-first.
 pub(super) struct DisplayPlan {
-    kind: LidarSampleEntityKind,
+    kind: LibraryItemRole,
     entity_id: String,
     generation_id: String,
     crs_wkt: String,
@@ -95,10 +95,10 @@ pub(crate) struct DisplayPreparation {
     running: bool,
 }
 
-fn plan_key(kind: LidarSampleEntityKind, entity_id: &str, generation_id: &str) -> String {
+fn plan_key(kind: LibraryItemRole, entity_id: &str, generation_id: &str) -> String {
     let kind = match kind {
-        LidarSampleEntityKind::Source => "source",
-        LidarSampleEntityKind::Analysis => "analysis",
+        LibraryItemRole::Source => "source",
+        LibraryItemRole::Derived => "derived",
     };
     format!("{kind}/{entity_id}/{generation_id}")
 }
@@ -113,12 +113,12 @@ fn nodata_tag(nodata: Option<f32>) -> String {
 /// Resolve the current generation of one entity and the derivatives it needs.
 fn build_plan(
     library: &LidarLibrary,
-    kind: LidarSampleEntityKind,
+    kind: LibraryItemRole,
     entity_id: &str,
     cancel: &AtomicBool,
 ) -> Result<Planned, String> {
     match kind {
-        LidarSampleEntityKind::Source => {
+        LibraryItemRole::Source => {
             let head = {
                 let connection = library.catalogue()?;
                 catalogue::head_generation(&connection, entity_id)?
@@ -155,10 +155,10 @@ fn build_plan(
                 parts,
             })))
         }
-        LidarSampleEntityKind::Analysis => {
+        LibraryItemRole::Derived => {
             let result = {
                 let connection = library.catalogue()?;
-                catalogue::head_analysis_generation(&connection, entity_id)?
+                catalogue::derived_head(&connection, entity_id)?
             };
             let Some(result) = result else {
                 return Ok(Planned::Unavailable(
@@ -166,9 +166,7 @@ fn build_plan(
                     "this result has not been published".to_string(),
                 ));
             };
-            let manifest: super::analysis::ResultManifest =
-                serde_json::from_str(&result.manifest_json)
-                    .map_err(|e| format!("Invalid analysis manifest: {e}"))?;
+            let manifest = super::analyses::read_derived_manifest(&result.manifest_json)?;
             let coordinates = {
                 let connection = library.catalogue()?;
                 catalogue::published_chunk_coordinates(
@@ -910,7 +908,7 @@ impl LidarLibrary {
     /// Test support: prepare an entity's derivatives synchronously.
     pub(super) fn prepare_display_now(
         &self,
-        kind: LidarSampleEntityKind,
+        kind: LibraryItemRole,
         entity_id: &str,
     ) -> Result<(), String> {
         let cancel = AtomicBool::new(false);
@@ -924,7 +922,7 @@ impl LidarLibrary {
 #[cfg(test)]
 mod gdal_tests {
     use super::*;
-    use common_types::lidar::LidarMeasurementKind;
+    use common_types::library::RasterQuantity;
 
     fn plane_source(library: &LidarLibrary, root: &Path, name: &str, origin_x: f64) -> PathBuf {
         let engine = &library.inner.engine;
@@ -984,7 +982,7 @@ mod gdal_tests {
         let west = plane_source(&library, &root, "west", 445_000.0);
         let east = plane_source(&library, &root, "east", 445_300.0);
         let layer_id = library
-            .create_layer("pair", LidarMeasurementKind::GroundElevation, None, false)
+            .create_layer("pair", RasterQuantity::GroundElevation, None, false)
             .unwrap();
         let job_id = library.record_import_job(&layer_id).unwrap();
         super::super::import::stage_and_publish(
@@ -998,18 +996,18 @@ mod gdal_tests {
         let generation_id = library
             .library_snapshot()
             .unwrap()
-            .layers
+            .items
             .into_iter()
             .find(|layer| layer.id == layer_id)
             .and_then(|layer| layer.generation_id)
             .expect("published head");
 
         library
-            .prepare_display_now(LidarSampleEntityKind::Source, &layer_id)
+            .prepare_display_now(LibraryItemRole::Source, &layer_id)
             .unwrap();
         let descriptor = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Source,
+                kind: LibraryItemRole::Source,
                 entity_id: layer_id.clone(),
                 expected_generation_id: Some(generation_id.clone()),
                 retry: false,
@@ -1057,7 +1055,7 @@ mod gdal_tests {
         // A caller aiming at another generation is told the item moved on.
         let stale = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Source,
+                kind: LibraryItemRole::Source,
                 entity_id: layer_id.clone(),
                 expected_generation_id: Some("gen-older".to_string()),
                 retry: false,
@@ -1068,11 +1066,11 @@ mod gdal_tests {
 
         // An unpublished item has nothing to draw, which is not an error.
         let empty_id = library
-            .create_layer("empty", LidarMeasurementKind::GroundElevation, None, false)
+            .create_layer("empty", RasterQuantity::GroundElevation, None, false)
             .unwrap();
         let empty = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Source,
+                kind: LibraryItemRole::Source,
                 entity_id: empty_id,
                 expected_generation_id: None,
                 retry: false,
@@ -1087,7 +1085,7 @@ mod gdal_tests {
             .map(|asset| std::fs::metadata(&asset.path).unwrap().modified().unwrap())
             .collect();
         library
-            .prepare_display_now(LidarSampleEntityKind::Source, &layer_id)
+            .prepare_display_now(LibraryItemRole::Source, &layer_id)
             .unwrap();
         let after: Vec<_> = descriptor
             .assets
@@ -1104,40 +1102,27 @@ mod chunk_display_tests {
     use super::*;
 
     /// A published slope result whose chunks the caller then writes.
-    fn seed_chunk_result(library: &LidarLibrary, definition_id: &str, generation_id: &str) {
-        let manifest = serde_json::json!({
-            "definition_id": definition_id,
-            "kind": "slope",
-            "source_generation_id": "gen-source",
-            "parameters": { "slope_unit": "Degrees", "name": null },
-            "engine_version": "test",
-            "grid": { "width": 1024, "height": 1024, "geotransform": [0.0, 1.0, 0.0, 0.0, 0.0, -1.0] },
-            "crs_wkt": "EPSG:3857",
-            "created_at": "0",
-        });
-        library
-            .catalogue()
-            .unwrap()
-            .execute_batch(&format!(
-                "INSERT INTO lidar_source_layers(id, name, measurement_kind, units, created_at)
-                 VALUES ('lyr-{definition_id}', 'Source', 'ground-elevation', 'm', '0');
-                 INSERT INTO lidar_analysis_definitions
-                    (id, layer_id, kind, version, parameters_json, created_at)
-                 VALUES ('{definition_id}', 'lyr-{definition_id}', 'slope', 2, '{{\"slope_unit\":\"Degrees\",\"name\":null}}', '0');
-                 INSERT INTO lidar_analysis_generations
-                    (id, definition_id, source_generation_id, engine_version, state, manifest_json,
-                     coverage_cells, min_value, max_value, bounds_3857, published_at,
-                     method_id, recipe_version)
-                 VALUES ('{generation_id}', '{definition_id}', 'gen-source', 'test', 'ready',
-                         '{manifest}', 32, 1, 2, '[0,0,1,1]', '0',
-                         'geolibre-projected-slope-v1', 2);
-                 INSERT INTO lidar_analysis_heads(definition_id, generation_id)
-                 VALUES ('{definition_id}', '{generation_id}');"
-            ))
+    fn seed_chunk_result(library: &LidarLibrary, item_id: &str, generation_id: &str) {
+        let connection = library.catalogue().unwrap();
+        connection
+            .execute(
+                "INSERT INTO lidar_source_layers(id, name, item_kind, quantity, units, created_at)
+                 VALUES (?1, 'Source', 'raster', 'ground-elevation', 'm', '0')",
+                [format!("lyr-{item_id}")],
+            )
             .unwrap();
+        super::super::analyses::test_support::seed_published_slope(
+            &connection,
+            &format!("lyr-{item_id}"),
+            "gen-source",
+            &format!("adef-{item_id}"),
+            item_id,
+            generation_id,
+            None,
+        );
     }
 
-    /// A chunked slope result displays from one part per group of occupied
+    /// A chunked derived result displays from one part per group of occupied
     /// chunks: distant coverage produces two small parts, never one raster
     /// spanning the empty space between them.
     #[test]
@@ -1146,22 +1131,22 @@ mod chunk_display_tests {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-chunks"));
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
-        seed_chunk_result(&library, "adef-far", "agen-far");
+        seed_chunk_result(&library, "item-far", "dgen-far");
         let near: Vec<f32> = (0..16)
             .map(|index| if index == 5 { f32::NAN } else { 1.0 })
             .collect();
         let far = vec![2.0f32; 16];
-        generation::publish_test_chunk(&library, "agen-far", 0, 0, 4, 4, &near);
-        generation::publish_test_chunk(&library, "agen-far", 300, 0, 4, 4, &far);
+        generation::publish_test_chunk(&library, "dgen-far", 0, 0, 4, 4, &near);
+        generation::publish_test_chunk(&library, "dgen-far", 300, 0, 4, 4, &far);
 
         library
-            .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-far")
+            .prepare_display_now(LibraryItemRole::Derived, "item-far")
             .unwrap();
         let descriptor = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Analysis,
-                entity_id: "adef-far".to_string(),
-                expected_generation_id: Some("agen-far".to_string()),
+                kind: LibraryItemRole::Derived,
+                entity_id: "item-far".to_string(),
+                expected_generation_id: Some("dgen-far".to_string()),
                 retry: false,
             })
             .unwrap();
@@ -1222,13 +1207,13 @@ mod chunk_display_tests {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-capacity"));
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
-        seed_chunk_result(&library, "adef-cap", "agen-cap");
-        generation::publish_test_chunk(&library, "agen-cap", 0, 0, 4, 4, &[1.0; 16]);
+        seed_chunk_result(&library, "item-cap", "dgen-cap");
+        generation::publish_test_chunk(&library, "dgen-cap", 0, 0, 4, 4, &[1.0; 16]);
 
         {
             let _full = super::super::paths::capacity_probe::override_available(1024);
             let error = library
-                .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-cap")
+                .prepare_display_now(LibraryItemRole::Derived, "item-cap")
                 .unwrap_err();
             assert!(error.contains("needs at least"), "{error}");
         }
@@ -1247,12 +1232,12 @@ mod chunk_display_tests {
             "the failed write left no staging file"
         );
         library
-            .prepare_display_now(LidarSampleEntityKind::Analysis, "adef-cap")
+            .prepare_display_now(LibraryItemRole::Derived, "item-cap")
             .unwrap();
         let ready = library
             .display_descriptor(&LidarDisplayRequest {
-                kind: LidarSampleEntityKind::Analysis,
-                entity_id: "adef-cap".to_string(),
+                kind: LibraryItemRole::Derived,
+                entity_id: "item-cap".to_string(),
                 expected_generation_id: None,
                 retry: false,
             })

@@ -218,6 +218,7 @@ export function designFixture(state = 'populated'): CanopiFile {
       entries: [
         { kind: 'Source', id: 'lidar-ground', visible: true, opacity: 0.82, order: 0, style: null },
         { kind: 'Analysis', id: 'lidar-slope', visible: true, opacity: 0.66, order: 1, style: null },
+        { kind: 'Analysis', id: 'lidar-slope-percent', visible: false, opacity: 0.66, order: 2, style: null },
       ],
     },
     budget_currency: 'EUR',

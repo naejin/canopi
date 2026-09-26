@@ -10,10 +10,11 @@ const display = await import('../app/lidar/display')
 function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentationItem {
   return {
     kind: 'Source',
+    role: 'Source',
     id: 'lyr-1',
     name: 'Orchard terrain',
-    detail: 'GroundElevation',
-    slopeUnit: null,
+    itemType: { kind: 'Raster', quantity: 'GroundElevation' },
+    units: 'm',
     state: 'Ready',
     visible: true,
     opacity: 0.8,
@@ -21,6 +22,9 @@ function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentation
     bounds: [0, 0, 1, 1],
     generationId: 'gen-2',
     displayRange: [104, 132],
+    freshness: { state: 'Current' },
+    definitionId: null,
+    run: null,
     ...overrides,
   }
 }
@@ -46,7 +50,7 @@ function descriptor(overrides: Partial<LidarDisplayDescriptor> = {}): LidarDispl
 describe('LiDAR display projection', () => {
   it('draws a ready generation from its ordered asset URLs with one layer-wide stretch', () => {
     const descriptors = new Map([[display.displayKey('Source', 'lyr-1', 'gen-2'), descriptor()]])
-    const [layer] = display.lidarDisplayLayers([item()], descriptors, () => 'm', (path) => `asset://localhost/${encodeURIComponent(path)}`)
+    const [layer] = display.lidarDisplayLayers([item()], descriptors, (path) => `asset://localhost/${encodeURIComponent(path)}`)
     expect(layer).toEqual({
       id: 'lidar-source-lyr-1-gen-2',
       name: 'Orchard terrain',
@@ -76,13 +80,19 @@ describe('LiDAR display projection', () => {
     ], descriptors)).toEqual([])
   })
 
-  it('colours slope in its own stored unit, never as degrees for a percent result', () => {
-    const degrees = display.lidarDisplayStyle(item({ kind: 'Analysis', slopeUnit: 'Degrees' }), '')
-    const percent = display.lidarDisplayStyle(item({ kind: 'Analysis', slopeUnit: 'Percent' }), '')
-    expect(degrees).toMatchObject({ colormap: 'magma', reversed: true, rescale: [0, 60], units: '°' })
-    expect(percent).toMatchObject({ colormap: 'magma', reversed: true, rescale: [0, 173.2], units: '%' })
-    expect(display.lidarDisplayStyle(item({ detail: 'AboveGroundHeight', displayRange: [3, 3] }), 'm'))
-      .toMatchObject({ colormap: 'viridis', rescale: [3, 4], units: 'm' })
+  it('styles each reference by its item type and its own units', () => {
+    const slope = { kind: 'Analysis' as const, role: 'Derived' as const, itemType: { kind: 'Raster' as const, quantity: 'Slope' as const } }
+    expect(display.lidarDisplayStyle(item({ ...slope, units: '%' })))
+      .toMatchObject({ colormap: 'magma', reversed: true, rescale: [0, 173.2], units: '%' })
+    expect(display.lidarDisplayStyle(item({ itemType: null, state: 'unavailable', units: '' })))
+      .toMatchObject({ colormap: 'viridis', rescale: [0, 1] })
+  })
+
+  it('names a derived layer as a result, keyed by its role', () => {
+    const derived = item({ kind: 'Analysis', role: 'Derived', id: 'slope-1', itemType: { kind: 'Raster', quantity: 'Slope' }, units: '°' })
+    const descriptors = new Map([[display.displayKey('Derived', 'slope-1', 'gen-2'), descriptor({ kind: 'Derived', entity_id: 'slope-1' })]])
+    const [layer] = display.lidarDisplayLayers([derived], descriptors, (path) => path)
+    expect(layer).toMatchObject({ id: 'lidar-result-slope-1-gen-2', colormap: 'magma', reversed: true, rescale: [0, 60] })
   })
 })
 

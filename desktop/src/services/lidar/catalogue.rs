@@ -1,5 +1,5 @@
 //! `lidar-library.sqlite` catalogue: sources, fixed library items, analysis
-//! definitions and results, jobs and dependencies.
+//! definitions with their inputs, derived items, jobs and generations.
 //!
 //! Transactions are short; raster computation never happens while a catalogue
 //! connection is held. All SQL uses prepared statements with placeholders.
@@ -12,7 +12,7 @@ use rusqlite::{Connection, OptionalExtension};
 /// owner deletes an older library before opening (see
 /// [`stored_version`]), and a newer catalogue is refused so an older binary
 /// never writes rows it does not understand.
-pub const CATALOGUE_VERSION: i32 = 20;
+pub const CATALOGUE_VERSION: i32 = 21;
 
 /// Open (or create) the catalogue at `path`.
 ///
@@ -116,7 +116,7 @@ CREATE TABLE lidar_interpretations (
     id TEXT PRIMARY KEY,
     source_sha256 TEXT NOT NULL REFERENCES lidar_sources(sha256),
     band_index INTEGER NOT NULL,
-    measurement_kind TEXT NOT NULL,
+    quantity TEXT NOT NULL,
     units TEXT NOT NULL,
     scale REAL NOT NULL,
     offset REAL NOT NULL,
@@ -132,10 +132,13 @@ CREATE TABLE lidar_interpretations (
     max_value REAL
 );
 
+-- An imported library item. Its quantity is one of the importable raster
+-- quantities (`RasterQuantity::key`).
 CREATE TABLE lidar_source_layers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    measurement_kind TEXT NOT NULL,
+    item_kind TEXT NOT NULL CHECK (item_kind IN ('raster')),
+    quantity TEXT NOT NULL,
     units TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -153,6 +156,9 @@ CREATE TABLE lidar_layer_generations (
     display_max_value REAL,
     display_basis TEXT,
     bounds_3857 TEXT NOT NULL,
+    -- `projected-metre`, `projected-other`, `geographic` or `unknown`, read from
+    -- the stored CRS at import so analysis offers need no GDAL call.
+    crs_class TEXT NOT NULL,
     CHECK ((display_min_value IS NULL) = (display_max_value IS NULL)),
     CHECK (display_min_value IS NULL OR display_min_value <= display_max_value)
 );
@@ -202,59 +208,80 @@ CREATE TABLE lidar_import_jobs (
     request_json TEXT
 );
 
+-- One registered analysis (`analysis_id`, see analysis-registry.json) with its
+-- resolved parameters and selected outputs. Recipe versions live on jobs.
 CREATE TABLE lidar_analysis_definitions (
     id TEXT PRIMARY KEY,
-    layer_id TEXT NOT NULL REFERENCES lidar_source_layers(id),
-    kind TEXT NOT NULL,
-    version INTEGER NOT NULL,
+    analysis_id TEXT NOT NULL,
     parameters_json TEXT NOT NULL,
+    outputs_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX idx_analysis_definitions_layer
-    ON lidar_analysis_definitions(layer_id);
+-- The library item bound to each input key; a source or a derived item.
+CREATE TABLE lidar_analysis_inputs (
+    definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
+    input_key TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    PRIMARY KEY (definition_id, input_key)
+);
 
--- Analysis results are stored as sparse chunks (lidar_generation_chunks).
-CREATE TABLE lidar_analysis_generations (
+CREATE INDEX idx_analysis_inputs_item ON lidar_analysis_inputs(item_id);
+
+-- One output of a definition as a library item. Refresh publishes a new
+-- generation under the same item.
+CREATE TABLE lidar_derived_items (
     id TEXT PRIMARY KEY,
     definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
-    source_generation_id TEXT NOT NULL,
-    engine_version TEXT NOT NULL,
-    state TEXT NOT NULL,
-    manifest_json TEXT NOT NULL,
-    coverage_cells INTEGER NOT NULL,
-    min_value REAL,
-    max_value REAL,
-    bounds_3857 TEXT NOT NULL,
-    published_at TEXT NOT NULL,
+    output_key TEXT NOT NULL,
+    item_kind TEXT NOT NULL CHECK (item_kind IN ('raster')),
+    quantity TEXT NOT NULL,
+    units TEXT NOT NULL,
     name TEXT,
-    method_id TEXT NOT NULL,
-    recipe_version INTEGER NOT NULL
+    created_at TEXT NOT NULL,
+    UNIQUE (definition_id, output_key)
 );
 
-CREATE INDEX idx_analysis_generations_definition
-    ON lidar_analysis_generations(definition_id);
-
-CREATE TABLE lidar_analysis_heads (
-    definition_id TEXT PRIMARY KEY REFERENCES lidar_analysis_definitions(id),
-    generation_id TEXT NOT NULL REFERENCES lidar_analysis_generations(id)
-);
-
+-- One run of a definition: the recipe it ran, the input generations it was
+-- pinned to and, once published, the tool that ran. Runs stay as the
+-- processing history.
 CREATE TABLE lidar_analysis_jobs (
     id TEXT PRIMARY KEY,
     definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
-    source_generation_id TEXT NOT NULL,
     state TEXT NOT NULL,
     message TEXT,
+    recipe_version INTEGER NOT NULL,
+    input_generations_json TEXT NOT NULL,
+    tool_provenance TEXT,
     created_at TEXT NOT NULL,
+    finished_at TEXT,
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE lidar_dependencies (
-    definition_id TEXT NOT NULL REFERENCES lidar_analysis_definitions(id),
-    layer_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    PRIMARY KEY (definition_id, layer_id)
+CREATE INDEX idx_analysis_jobs_definition
+    ON lidar_analysis_jobs(definition_id, created_at);
+
+-- Results are sparse chunks (lidar_generation_chunks). A refresh deletes the
+-- superseded generation's chunk rows and keeps this row for the history.
+CREATE TABLE lidar_derived_generations (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL REFERENCES lidar_derived_items(id),
+    job_id TEXT NOT NULL REFERENCES lidar_analysis_jobs(id),
+    manifest_json TEXT NOT NULL,
+    coverage_cells INTEGER,
+    min_value REAL,
+    max_value REAL,
+    bounds_3857 TEXT NOT NULL,
+    crs_class TEXT NOT NULL,
+    published_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_derived_generations_item ON lidar_derived_generations(item_id);
+CREATE INDEX idx_derived_generations_job ON lidar_derived_generations(job_id);
+
+CREATE TABLE lidar_derived_heads (
+    item_id TEXT PRIMARY KEY REFERENCES lidar_derived_items(id),
+    generation_id TEXT NOT NULL REFERENCES lidar_derived_generations(id)
 );
 
 CREATE TABLE lidar_raster_assets (
@@ -277,7 +304,7 @@ CREATE TABLE lidar_interpretation_cogs (
     created_at TEXT NOT NULL
 );
 
--- Resolved chunks of a layer or analysis generation. Rows stay unpublished,
+-- Resolved chunks of a source or derived generation. Rows stay unpublished,
 -- and unreadable, until the owning generation's publish transaction flips them.
 CREATE TABLE lidar_generation_chunks (
     generation_id TEXT NOT NULL,
@@ -308,7 +335,8 @@ CREATE INDEX lidar_generation_chunks_role_order_idx
 pub struct LayerRow {
     pub id: String,
     pub name: String,
-    pub measurement_kind: String,
+    /// `RasterQuantity::key` of an importable quantity.
+    pub quantity: String,
     pub units: String,
 }
 
@@ -327,30 +355,58 @@ pub struct GenerationRow {
     pub display_max_value: Option<f64>,
     pub display_basis: Option<String>,
     pub bounds_3857: String,
+    pub crs_class: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct AnalysisDefinitionRow {
     pub id: String,
-    pub layer_id: String,
-    pub kind: String,
+    /// Registry id, e.g. `terrain.slope`.
+    pub analysis_id: String,
     pub parameters_json: String,
-    /// Recipe version: the execution authority for how the kind is computed.
-    pub version: i64,
+    pub outputs_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalysisInputRow {
+    pub input_key: String,
+    pub item_id: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct AnalysisGenerationRow {
+pub struct DerivedItemRow {
     pub id: String,
-    pub source_generation_id: String,
-    pub state: String,
-    /// The name its author gave this result, when one was given.
+    pub definition_id: String,
+    pub output_key: String,
+    pub quantity: String,
+    pub units: String,
     pub name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DerivedGenerationRow {
+    pub id: String,
+    pub item_id: String,
+    pub job_id: String,
+    pub manifest_json: String,
+    pub coverage_cells: Option<i64>,
     pub min_value: Option<f64>,
     pub max_value: Option<f64>,
     pub bounds_3857: String,
-    /// Storage format and lattice of the published result.
-    pub manifest_json: String,
+    pub crs_class: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalysisJobRow {
+    pub id: String,
+    pub definition_id: String,
+    pub state: String,
+    pub message: Option<String>,
+    pub recipe_version: i64,
+    pub input_generations_json: String,
+    pub tool_provenance: Option<String>,
+    pub created_at: String,
+    pub finished_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -369,14 +425,16 @@ pub struct ImportJobRow {
 
 pub fn list_layers(connection: &Connection) -> Result<Vec<LayerRow>, String> {
     let mut statement = connection
-        .prepare("SELECT id, name, measurement_kind, units FROM lidar_source_layers ORDER BY created_at, id")
+        .prepare(
+            "SELECT id, name, quantity, units FROM lidar_source_layers ORDER BY created_at, id",
+        )
         .map_err(|e| e.to_string())?;
     let rows = statement
         .query_map([], |row| {
             Ok(LayerRow {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                measurement_kind: row.get(2)?,
+                quantity: row.get(2)?,
                 units: row.get(3)?,
             })
         })
@@ -389,13 +447,13 @@ pub fn list_layers(connection: &Connection) -> Result<Vec<LayerRow>, String> {
 pub fn get_layer(connection: &Connection, layer_id: &str) -> Result<Option<LayerRow>, String> {
     connection
         .query_row(
-            "SELECT id, name, measurement_kind, units FROM lidar_source_layers WHERE id = ?1",
+            "SELECT id, name, quantity, units FROM lidar_source_layers WHERE id = ?1",
             [layer_id],
             |row| {
                 Ok(LayerRow {
                     id: row.get(0)?,
                     name: row.get(1)?,
-                    measurement_kind: row.get(2)?,
+                    quantity: row.get(2)?,
                     units: row.get(3)?,
                 })
             },
@@ -413,11 +471,32 @@ pub fn head_generation(
             "SELECT g.id, g.manifest_json,
                     g.coverage_cells, g.min_value, g.max_value,
                     g.display_min_value, g.display_max_value, g.display_basis,
-                    g.bounds_3857
+                    g.bounds_3857, g.crs_class
              FROM lidar_layer_heads h
              JOIN lidar_layer_generations g ON g.id = h.generation_id
              WHERE h.layer_id = ?1",
             [layer_id],
+            map_generation_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// One generation of one source item, current or not.
+pub fn layer_generation(
+    connection: &Connection,
+    layer_id: &str,
+    generation_id: &str,
+) -> Result<Option<GenerationRow>, String> {
+    connection
+        .query_row(
+            "SELECT g.id, g.manifest_json,
+                    g.coverage_cells, g.min_value, g.max_value,
+                    g.display_min_value, g.display_max_value, g.display_basis,
+                    g.bounds_3857, g.crs_class
+             FROM lidar_layer_generations g
+             WHERE g.id = ?1 AND g.layer_id = ?2",
+            [generation_id, layer_id],
             map_generation_row,
         )
         .optional()
@@ -435,115 +514,280 @@ fn map_generation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GenerationRow
         display_max_value: row.get(6)?,
         display_basis: row.get(7)?,
         bounds_3857: row.get(8)?,
+        crs_class: row.get(9)?,
     })
 }
 
-pub fn list_definitions(connection: &Connection) -> Result<Vec<AnalysisDefinitionRow>, String> {
-    let mut statement = connection
-        .prepare(
-            "SELECT id, layer_id, kind, parameters_json, version
-             FROM lidar_analysis_definitions ORDER BY created_at, id",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok(AnalysisDefinitionRow {
-                id: row.get(0)?,
-                layer_id: row.get(1)?,
-                kind: row.get(2)?,
-                parameters_json: row.get(3)?,
-                version: row.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(rows)
+fn map_definition_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AnalysisDefinitionRow> {
+    Ok(AnalysisDefinitionRow {
+        id: row.get(0)?,
+        analysis_id: row.get(1)?,
+        parameters_json: row.get(2)?,
+        outputs_json: row.get(3)?,
+    })
 }
 
-pub fn list_definitions_for_layer(
-    connection: &Connection,
-    layer_id: &str,
-) -> Result<Vec<AnalysisDefinitionRow>, String> {
-    let mut statement = connection
-        .prepare(
-            "SELECT id, layer_id, kind, parameters_json, version
-             FROM lidar_analysis_definitions WHERE layer_id = ?1 ORDER BY created_at, id",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = statement
-        .query_map([layer_id], |row| {
-            Ok(AnalysisDefinitionRow {
-                id: row.get(0)?,
-                layer_id: row.get(1)?,
-                kind: row.get(2)?,
-                parameters_json: row.get(3)?,
-                version: row.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(rows)
-}
-
-pub fn head_analysis_generation(
+pub fn get_definition(
     connection: &Connection,
     definition_id: &str,
-) -> Result<Option<AnalysisGenerationRow>, String> {
+) -> Result<Option<AnalysisDefinitionRow>, String> {
     connection
         .query_row(
-            "SELECT g.id, g.source_generation_id, g.state, g.min_value, g.max_value,
-                    g.bounds_3857, g.manifest_json, g.name
-             FROM lidar_analysis_heads h
-             JOIN lidar_analysis_generations g ON g.id = h.generation_id
-             WHERE h.definition_id = ?1",
+            "SELECT id, analysis_id, parameters_json, outputs_json
+             FROM lidar_analysis_definitions WHERE id = ?1",
             [definition_id],
-            |row| {
-                Ok(AnalysisGenerationRow {
-                    id: row.get(0)?,
-                    source_generation_id: row.get(1)?,
-                    state: row.get(2)?,
-                    min_value: row.get(3)?,
-                    max_value: row.get(4)?,
-                    bounds_3857: row.get(5)?,
-                    manifest_json: row.get(6)?,
-                    name: row.get(7)?,
-                })
-            },
+            map_definition_row,
         )
         .optional()
         .map_err(|e| e.to_string())
 }
 
-pub fn latest_analysis_job_state(
+/// The inputs of a definition, in the order they were bound (registry order).
+pub fn definition_inputs(
     connection: &Connection,
     definition_id: &str,
+) -> Result<Vec<AnalysisInputRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT input_key, item_id FROM lidar_analysis_inputs
+             WHERE definition_id = ?1 ORDER BY rowid",
+        )
+        .map_err(|e| e.to_string())?;
+    statement
+        .query_map([definition_id], |row| {
+            Ok(AnalysisInputRow {
+                input_key: row.get(0)?,
+                item_id: row.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn map_derived_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<DerivedItemRow> {
+    Ok(DerivedItemRow {
+        id: row.get(0)?,
+        definition_id: row.get(1)?,
+        output_key: row.get(2)?,
+        quantity: row.get(3)?,
+        units: row.get(4)?,
+        name: row.get(5)?,
+    })
+}
+
+const DERIVED_ITEM_COLUMNS: &str = "id, definition_id, output_key, quantity, units, name";
+
+pub fn list_derived_items(connection: &Connection) -> Result<Vec<DerivedItemRow>, String> {
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {DERIVED_ITEM_COLUMNS} FROM lidar_derived_items ORDER BY created_at, id"
+        ))
+        .map_err(|e| e.to_string())?;
+    statement
+        .query_map([], map_derived_item)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_derived_item(
+    connection: &Connection,
+    item_id: &str,
+) -> Result<Option<DerivedItemRow>, String> {
+    connection
+        .query_row(
+            &format!("SELECT {DERIVED_ITEM_COLUMNS} FROM lidar_derived_items WHERE id = ?1"),
+            [item_id],
+            map_derived_item,
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// The items of one definition, in output order of creation.
+pub fn definition_items(
+    connection: &Connection,
+    definition_id: &str,
+) -> Result<Vec<DerivedItemRow>, String> {
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {DERIVED_ITEM_COLUMNS} FROM lidar_derived_items
+             WHERE definition_id = ?1 ORDER BY rowid"
+        ))
+        .map_err(|e| e.to_string())?;
+    statement
+        .query_map([definition_id], map_derived_item)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn map_derived_generation(row: &rusqlite::Row<'_>) -> rusqlite::Result<DerivedGenerationRow> {
+    Ok(DerivedGenerationRow {
+        id: row.get(0)?,
+        item_id: row.get(1)?,
+        job_id: row.get(2)?,
+        manifest_json: row.get(3)?,
+        coverage_cells: row.get(4)?,
+        min_value: row.get(5)?,
+        max_value: row.get(6)?,
+        bounds_3857: row.get(7)?,
+        crs_class: row.get(8)?,
+    })
+}
+
+const DERIVED_GENERATION_COLUMNS: &str = "g.id, g.item_id, g.job_id, g.manifest_json, \
+     g.coverage_cells, g.min_value, g.max_value, g.bounds_3857, g.crs_class";
+
+/// The current generation of a derived item.
+pub fn derived_head(
+    connection: &Connection,
+    item_id: &str,
+) -> Result<Option<DerivedGenerationRow>, String> {
+    connection
+        .query_row(
+            &format!(
+                "SELECT {DERIVED_GENERATION_COLUMNS} FROM lidar_derived_heads h
+                 JOIN lidar_derived_generations g ON g.id = h.generation_id
+                 WHERE h.item_id = ?1"
+            ),
+            [item_id],
+            map_derived_generation,
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// The generations one run published.
+pub fn job_generations(
+    connection: &Connection,
+    job_id: &str,
+) -> Result<Vec<DerivedGenerationRow>, String> {
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {DERIVED_GENERATION_COLUMNS} FROM lidar_derived_generations g
+             WHERE g.job_id = ?1 ORDER BY g.rowid"
+        ))
+        .map_err(|e| e.to_string())?;
+    statement
+        .query_map([job_id], map_derived_generation)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// The current generation of any library item: a source's or a derived one's.
+pub fn item_head_generation_id(
+    connection: &Connection,
+    item_id: &str,
 ) -> Result<Option<String>, String> {
     connection
         .query_row(
-            "SELECT state FROM lidar_analysis_jobs WHERE definition_id = ?1
-             ORDER BY created_at DESC, id DESC LIMIT 1",
-            [definition_id],
+            "SELECT generation_id FROM lidar_layer_heads WHERE layer_id = ?1
+             UNION ALL
+             SELECT generation_id FROM lidar_derived_heads WHERE item_id = ?1",
+            [item_id],
             |row| row.get(0),
         )
         .optional()
         .map_err(|e| e.to_string())
 }
 
-/// The input generation the latest job of a definition was pinned to.
-pub fn latest_analysis_job_input(
+fn map_job_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AnalysisJobRow> {
+    Ok(AnalysisJobRow {
+        id: row.get(0)?,
+        definition_id: row.get(1)?,
+        state: row.get(2)?,
+        message: row.get(3)?,
+        recipe_version: row.get(4)?,
+        input_generations_json: row.get(5)?,
+        tool_provenance: row.get(6)?,
+        created_at: row.get(7)?,
+        finished_at: row.get(8)?,
+    })
+}
+
+const JOB_COLUMNS: &str = "id, definition_id, state, message, recipe_version, \
+     input_generations_json, tool_provenance, created_at, finished_at";
+
+pub fn get_analysis_job(
     connection: &Connection,
-    definition_id: &str,
-) -> Result<Option<String>, String> {
+    job_id: &str,
+) -> Result<Option<AnalysisJobRow>, String> {
     connection
         .query_row(
-            "SELECT source_generation_id FROM lidar_analysis_jobs WHERE definition_id = ?1
-             ORDER BY created_at DESC, id DESC LIMIT 1",
-            [definition_id],
-            |row| row.get(0),
+            &format!("SELECT {JOB_COLUMNS} FROM lidar_analysis_jobs WHERE id = ?1"),
+            [job_id],
+            map_job_row,
         )
         .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// The newest job of a definition.
+pub fn latest_analysis_job(
+    connection: &Connection,
+    definition_id: &str,
+) -> Result<Option<AnalysisJobRow>, String> {
+    connection
+        .query_row(
+            &format!(
+                "SELECT {JOB_COLUMNS} FROM lidar_analysis_jobs WHERE definition_id = ?1
+                 ORDER BY created_at DESC, id DESC LIMIT 1"
+            ),
+            [definition_id],
+            map_job_row,
+        )
+        .optional()
+        .map_err(|e| e.to_string())
+}
+
+/// One page of a definition's jobs, newest first, strictly older than `before`
+/// (`created_at`, `id`).
+pub fn analysis_job_page(
+    connection: &Connection,
+    definition_id: &str,
+    before: Option<(&str, &str)>,
+    limit: i64,
+) -> Result<Vec<AnalysisJobRow>, String> {
+    // One more than a page, so the caller knows whether another page exists.
+    let limit = limit.clamp(1, common_types::library::PROCESSING_HISTORY_PAGE + 1);
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {JOB_COLUMNS} FROM lidar_analysis_jobs
+             WHERE definition_id = ?1
+               AND (?2 IS NULL OR created_at < ?2 OR (created_at = ?2 AND id < ?3))
+             ORDER BY created_at DESC, id DESC LIMIT ?4"
+        ))
+        .map_err(|e| e.to_string())?;
+    let (created_at, id) = match before {
+        Some((created_at, id)) => (Some(created_at), Some(id)),
+        None => (None, None),
+    };
+    statement
+        .query_map(
+            rusqlite::params![definition_id, created_at, id, limit],
+            map_job_row,
+        )
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Derived items whose definitions use `item_id` as an input.
+pub fn dependent_items(connection: &Connection, item_id: &str) -> Result<Vec<String>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT d.id FROM lidar_analysis_inputs i
+             JOIN lidar_derived_items d ON d.definition_id = i.definition_id
+             WHERE i.item_id = ?1 ORDER BY d.created_at, d.id",
+        )
+        .map_err(|e| e.to_string())?;
+    statement
+        .query_map([item_id], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
 }
 
@@ -1314,8 +1558,8 @@ mod tests {
         connection
             .execute_batch(
                 "INSERT INTO lidar_source_layers
-                    (id, name, measurement_kind, units, created_at)
-                 VALUES ('layer', 'Ground', 'ground-elevation', 'm', '0');
+                    (id, name, item_kind, quantity, units, created_at)
+                 VALUES ('layer', 'Ground', 'raster', 'ground-elevation', 'm', '0');
                  INSERT INTO lidar_import_jobs
                     (id, layer_id, state, created_at, updated_at,
                      progress_phase, progress_percent)
@@ -1367,7 +1611,7 @@ mod tests {
 
     #[test]
     fn any_other_catalogue_version_is_refused_before_writes() {
-        for version in ["19", "99"] {
+        for version in ["20", "99"] {
             let root = std::env::temp_dir().join(new_id("canopi-catalogue-other"));
             std::fs::create_dir_all(&root).unwrap();
             let path = root.join("lidar-library.sqlite");

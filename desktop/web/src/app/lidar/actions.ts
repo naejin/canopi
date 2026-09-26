@@ -1,23 +1,26 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  LidarLibrarySnapshot,
-  LidarMeasurementKind,
-  LidarPresentationEntryKind,
-  LidarSlopeUnit,
+  AnalysisReceipt,
+  AnalysisRequest,
+  AnalysisRunStatus,
+  LibraryDeleteImpact,
+  LibraryItemRole,
+  LibrarySnapshot,
+  ProcessingHistoryPage,
+  RasterQuantity,
 } from '../../generated/contracts'
 import {
   lidarCancelAnalysisJob,
   lidarCancelImport,
   lidarCreateAnalysis,
-  lidarDeleteAnalysis,
-  lidarDeleteLayer,
-  lidarDeleteLayerImpact,
+  lidarDeleteImpact,
+  lidarDeleteItem,
   lidarDismissImport,
   lidarImportItem,
   lidarLayerCollection,
-  lidarRenameAnalysis,
-  lidarRenameLayer,
-  lidarRetryAnalysis,
+  lidarProcessingHistory,
+  lidarRenameItem,
+  lidarRerunAnalysis,
   lidarRetryImport,
   type LidarImportReceipt,
   type LidarLayerCollection,
@@ -31,16 +34,19 @@ import {
 import {
   ensureLidarPolling,
   lidarStatusMessage,
+  presentationEntryKind,
   refreshLidarLibrary,
 } from './library-store'
 import { designSessionStore } from '../document-session/store'
+import { isPresentableOutput } from '../analyses/registry'
 import { reconcileInspectionWithPresentation } from './inspection'
 
 /**
  * Leaf action module for the Data Library and the Layers data band: every UI
  * mutation flows through here so panels never orchestrate IPC sequencing.
  *
- * Library operations (import, rename, delete, retry) never dirty a Design.
+ * Library operations (import, rename, delete, analyses and their reruns)
+ * never dirty a Design.
  * Design references change only through Add to Design, visibility, opacity,
  * order and Remove from Design, which are Design Edits and undoable.
  */
@@ -68,10 +74,10 @@ export async function chooseImportFiles(title: string): Promise<string[] | null>
 export async function importLibraryItem(
   paths: string[],
   name: string,
-  kind: LidarMeasurementKind,
+  quantity: RasterQuantity,
   unit: { label: string | null; unknown: boolean },
 ): Promise<LidarImportReceipt> {
-  const receipt = await withLidarError(() => lidarImportItem(name, kind, unit, paths))
+  const receipt = await withLidarError(() => lidarImportItem(name, quantity, unit, paths))
   await refreshLidarLibrary()
   ensureLidarPolling()
   return receipt
@@ -96,33 +102,26 @@ export async function dismissLibraryImport(layerId: string): Promise<void> {
   await refreshLidarLibrary()
 }
 
-export async function renameLibraryItem(
-  kind: LidarPresentationEntryKind,
-  id: string,
-  name: string,
-): Promise<void> {
-  await withLidarError(() => (kind === 'Analysis' ? lidarRenameAnalysis(id, name) : lidarRenameLayer(id, name)))
+export async function renameLibraryItem(id: string, name: string): Promise<void> {
+  await withLidarError(() => lidarRenameItem(id, name))
   await refreshLidarLibrary()
 }
 
-export async function fetchDeleteImpact(layerId: string) {
-  return lidarDeleteLayerImpact(layerId)
+export async function fetchDeleteImpact(id: string): Promise<LibraryDeleteImpact> {
+  return lidarDeleteImpact(id)
 }
 
 /**
  * Delete one library item.
  *
- * A source with saved results is refused natively. On success the current
+ * An item other results were calculated from is refused natively. On success the current
  * Design's reference is removed through Design Edit, but only while the same
  * Design session is still current: Undo can restore that reference, which then
  * honestly shows unavailable data. Other saved Designs keep their references.
  */
-export async function deleteLibraryItem(
-  kind: LidarPresentationEntryKind,
-  id: string,
-): Promise<void> {
+export async function deleteLibraryItem(id: string): Promise<void> {
   const identity = designSessionStore.sessionIdentity.value
-  await withLidarError(() => (kind === 'Analysis' ? lidarDeleteAnalysis(id) : lidarDeleteLayer(id)))
+  await withLidarError(() => lidarDeleteItem(id))
   await refreshLidarLibrary()
   if (designSessionStore.sessionIdentity.value === identity) {
     removePresentedEntities([id])
@@ -141,8 +140,8 @@ export async function fetchItemSources(layerId: string): Promise<LidarLayerColle
  * A new reference is visible at the top of the data band and dirties the
  * Design; the camera does not move.
  */
-export function addToDesign(kind: LidarPresentationEntryKind, id: string): void {
-  upsertLidarEntry(kind, id)
+export function addToDesign(role: LibraryItemRole, id: string): void {
+  upsertLidarEntry(presentationEntryKind(role), id)
 }
 
 /**
@@ -175,64 +174,81 @@ export function moveReference(id: string, towards: 'front' | 'back'): void {
 }
 
 /**
- * Calculate slope from one source as a new, separate library result.
+ * Run one registered analysis as a new definition, saved to the library.
  *
- * Inputs and earlier results never change, and a second calculation with the
- * same settings is a second result. When asked from Layers, the finished
- * result joins only the Design session that asked: switching Designs while it
- * runs leaves it in the library, never in the replacement Design.
+ * Inputs and earlier results never change, and a second run with the same
+ * settings is a second definition. When asked from Layers, the finished
+ * results join only the Design session that asked: switching Designs while it
+ * runs leaves them in the library, never in the replacement Design.
  */
-export async function calculateSlope(
-  layerId: string,
-  unit: LidarSlopeUnit,
-  name: string,
-  attachToDesign: boolean,
-): Promise<string> {
+export async function runAnalysis(request: AnalysisRequest, attachToDesign: boolean): Promise<AnalysisReceipt> {
   const identity = designSessionStore.sessionIdentity.value
-  const receipt = await withLidarError(() =>
-    lidarCreateAnalysis(layerId, 'Slope', { slope_unit: unit, name: null }, name.trim() || null))
-  runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
-  if (attachToDesign) pendingAttachments.set(receipt.definition_id, identity)
+  const receipt = await withLidarError(() => lidarCreateAnalysis(request))
+  if (attachToDesign) {
+    pendingAttachments.set(receipt.definition_id, { identity, itemIds: receipt.item_ids })
+  }
   await refreshLidarLibrary()
   ensureLidarPolling()
-  return receipt.definition_id
+  return receipt
+}
+
+/**
+ * Run one definition again with its saved inputs and parameters: Retry when
+ * it produced no result, Refresh when it did. A refresh republishes in place,
+ * so every Design that uses the result sees the new one; the earlier run stays
+ * in the processing history. Never automatic.
+ */
+export async function rerunAnalysis(definitionId: string): Promise<AnalysisReceipt> {
+  const receipt = await withLidarError(() => lidarRerunAnalysis(definitionId))
+  await refreshLidarLibrary()
+  ensureLidarPolling()
+  return receipt
 }
 
 /** Layers-initiated results waiting to join the Design session that asked. */
-const pendingAttachments = new Map<string, object>()
+const pendingAttachments = new Map<string, { readonly identity: object; readonly itemIds: readonly string[] }>()
 
 /**
  * Attach finished Layers-initiated results to their originating Design
- * session, and drop requests whose session ended or whose operation failed.
+ * session, and drop requests whose session ended or whose run failed.
+ *
+ * Every presentable output of the definition joins, in registry output order,
+ * once all of them are published; outputs kept only for provenance never do.
  */
-export function settleSlopeAttachments(snapshot: LidarLibrarySnapshot | null): void {
+export function settleResultAttachments(snapshot: LibrarySnapshot | null): void {
   if (!snapshot || pendingAttachments.size === 0) return
   const current = designSessionStore.sessionIdentity.value
-  for (const [id, identity] of [...pendingAttachments]) {
-    const analysis = snapshot.analyses.find((candidate) => candidate.id === id)
-    if (identity !== current || !analysis || analysis.state === 'Failed') {
-      pendingAttachments.delete(id)
-    } else if (analysis.generation_id) {
-      pendingAttachments.delete(id)
-      upsertLidarEntry('Analysis', id)
+  for (const [definitionId, pending] of [...pendingAttachments]) {
+    const items = pending.itemIds.map((id) => snapshot.items.find((candidate) => candidate.id === id))
+    const settled = items.every((item) => item?.generation_id)
+    if (pending.identity !== current || items.some((item) => !item || (item.state === 'Failed' && !item.generation_id))) {
+      pendingAttachments.delete(definitionId)
+    } else if (settled) {
+      pendingAttachments.delete(definitionId)
+      for (const item of items) {
+        if (item?.provenance && isPresentableOutput(item.provenance.analysis_id, item.provenance.output_key)) {
+          upsertLidarEntry('Analysis', item.id)
+        }
+      }
     }
   }
 }
 
-/**
- * Retry one failed calculation with its saved definition and input.
- *
- * A published result is never recalculated in place; Retry exists only for an
- * operation that produced no result.
- */
-export async function retryFailedCalculation(
-  definitionId: string,
-  inputGenerationId: string,
-): Promise<void> {
-  const receipt = await withLidarError(() => lidarRetryAnalysis(definitionId, inputGenerationId))
-  runningAnalysisJobs.set(receipt.definition_id, receipt.job_id)
+/** Cancel the running job of one derived item; false when nothing runs. */
+export async function cancelAnalysisJob(item: { readonly run: AnalysisRunStatus | null }): Promise<boolean> {
+  const run = item.run
+  if (!run || run.state !== 'Preparing') return false
+  await withLidarError(() => lidarCancelAnalysisJob(run.job_id))
   await refreshLidarLibrary()
-  ensureLidarPolling()
+  return true
+}
+
+/** One page of a definition's processing history, newest first. */
+export async function fetchProcessingHistory(
+  definitionId: string,
+  cursor: string | null = null,
+): Promise<ProcessingHistoryPage> {
+  return lidarProcessingHistory(definitionId, cursor)
 }
 
 function removePresentedEntities(ids: string[]): void {
@@ -254,21 +270,4 @@ async function withLidarError<T>(work: () => Promise<T>): Promise<T> {
     lidarStatusMessage.value = message
     throw error instanceof Error ? error : new Error(message)
   }
-}
-
-/** Calculation jobs this session started, by definition, for Cancel. */
-const runningAnalysisJobs = new Map<string, string>()
-
-export function runningAnalysisJobId(definitionId: string): string | null {
-  return runningAnalysisJobs.get(definitionId) ?? null
-}
-
-/** Cancel the calculation this session started for one definition. */
-export async function cancelAnalysisJob(definitionId: string): Promise<boolean> {
-  const jobId = runningAnalysisJobs.get(definitionId)
-  if (!jobId) return false
-  await withLidarError(() => lidarCancelAnalysisJob(jobId))
-  runningAnalysisJobs.delete(definitionId)
-  await refreshLidarLibrary()
-  return true
 }

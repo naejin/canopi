@@ -1,13 +1,15 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LidarAnalysisSummary, LidarLayerSummary, LidarLibrarySnapshot } from '../generated/contracts'
+import type { LibraryItemSummary, LibrarySnapshot } from '../generated/contracts'
+import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
 const actions = vi.hoisted(() => ({
   addToDesign: vi.fn(),
-  calculateSlope: vi.fn().mockResolvedValue('adef-new'),
+  runAnalysis: vi.fn().mockResolvedValue({ definition_id: 'adef-new', job_id: 'job', item_ids: ['new'] }),
+  rerunAnalysis: vi.fn().mockResolvedValue({ definition_id: 'adef', job_id: 'job', item_ids: [] }),
   cancelAnalysisJob: vi.fn().mockResolvedValue(true),
-  runningAnalysisJobId: vi.fn().mockReturnValue(null),
+  fetchProcessingHistory: vi.fn(),
   cancelLibraryImport: vi.fn().mockResolvedValue(undefined),
   chooseImportFiles: vi.fn(),
   deleteLibraryItem: vi.fn().mockResolvedValue(undefined),
@@ -16,7 +18,6 @@ const actions = vi.hoisted(() => ({
   fetchItemSources: vi.fn().mockResolvedValue({ sources: [] }),
   importLibraryItem: vi.fn().mockResolvedValue({ layer_id: 'new', job_id: 'job' }),
   renameLibraryItem: vi.fn().mockResolvedValue(undefined),
-  retryFailedCalculation: vi.fn().mockResolvedValue(undefined),
   retryLibraryImport: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -25,8 +26,9 @@ vi.mock('../app/lidar/actions', () => actions)
 vi.mock('../app/lidar/library-store', async () => {
   const { signal } = await import('@preact/signals')
   return {
+    ...(await vi.importActual<typeof import('../app/lidar/library-store')>('../app/lidar/library-store')),
     installLidarLibraryObserver: () => () => {},
-    lidarLibrary: signal<LidarLibrarySnapshot | null>(null),
+    lidarLibrary: signal<LibrarySnapshot | null>(null),
     lidarStatusMessage: signal<string | null>(null),
   }
 })
@@ -44,32 +46,20 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
 import { DataLibraryPanel } from '../components/panels/lidar/DataLibraryPanel'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { libraryCalculateRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
+import { libraryAnalyzeRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
+import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 
-function layer(id: string, name: string, overrides: Partial<LidarLayerSummary> = {}): LidarLayerSummary {
-  return {
-    id, name, generation_id: `${id}-g1`, measurement_kind: 'GroundElevation', units: 'm', state: 'Ready',
-    resolution_m: 0.5, coverage_cells: null, bounds: [0, 0, 1, 1], value_range: [1, 2], display_range: null, analysis_count: 0, import_job: null, ...overrides,
-  }
+function layer(id: string, name: string, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
+  return sourceItem(id, name, { resolution_m: 0.5, value_range: [1, 2], ...overrides })
 }
 
-function slope(id: string, source: string, overrides: Partial<LidarAnalysisSummary> = {}): LidarAnalysisSummary {
-  return {
-    id, generation_id: `${id}-g1`, input_generation_id: `${source}-g1`, source_layer_id: source, kind: 'Slope',
-    name: null, state: 'Ready', detail: null, bounds: [0, 0, 1, 1], value_range: [0, 30], slope_unit: 'Degrees', ...overrides,
-  } as LidarAnalysisSummary
+function slope(id: string, source: string, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
+  return slopeItem(id, source, { value_range: [0, 30], ...overrides })
 }
 
-function library(layers: LidarLayerSummary[], analyses: LidarAnalysisSummary[] = [], slopeEngine = true): LidarLibrarySnapshot {
-  return {
-    layers,
-    analyses,
-    engine: { available: true, version: null, detail: null },
-    slope_engine: slopeEngine
-      ? { available: true, version: 'geolibre-cli 1.5.3', detail: null }
-      : { available: false, version: null, detail: 'not installed' },
-  }
+function library(layers: LibraryItemSummary[], analyses: LibraryItemSummary[] = []): LibrarySnapshot {
+  return librarySnapshot([...layers, ...analyses])
 }
 
 function design(entries: { kind: 'Source' | 'Analysis'; id: string }[]) {
@@ -176,13 +166,33 @@ describe('Data Library panel', () => {
     expect(actions.dismissLibraryImport).toHaveBeenCalledWith('x')
   })
 
-  it('refuses to delete a source with saved results and can show those results', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground', { analysis_count: 1 }), layer('b', 'Canopy')], [slope('s', 'a')])
-    actions.fetchDeleteImpact.mockResolvedValue({ layer_name: 'Ground', analysis_count: 1, analysis_ids: ['s'] })
+  it('nests results under the data they were calculated from', () => {
+    lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')], [slope('s', 'a')])
+    mount()
+    const rows = Array.from(container.querySelectorAll('li')).map((row) => [row.querySelector('strong')?.textContent, row.dataset.nested])
+    expect(rows).toEqual([['Canopy', 'false'], ['Ground', 'false'], ['Ground · Slope', 'true']])
+  })
+
+  it('filters by analysis group from the registry', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+    mount()
+    const select = container.querySelector('select') as HTMLSelectElement
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['all', 'sources', 'terrain'])
+    await act(async () => {
+      select.value = 'terrain'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(Array.from(container.querySelectorAll('li strong')).map((node) => node.textContent)).toEqual(['Ground · Slope'])
+  })
+
+  it('refuses to delete an item other results use and can show those results', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground', { dependents: 1 }), layer('b', 'Canopy')], [slope('s', 'a')])
+    actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: ['s'] })
     mount()
     await click(button('Actions for Ground'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
 
+    expect(actions.fetchDeleteImpact).toHaveBeenCalledWith('a')
     expect(container.textContent).toContain('Saved results depend on this data (1)')
     expect(() => button(/^Delete from library$/)).toThrow()
     await click(button('Show results'))
@@ -192,9 +202,19 @@ describe('Data Library panel', () => {
     expect(actions.deleteLibraryItem).not.toHaveBeenCalled()
   })
 
-  it('retries a failed calculation with its saved input', async () => {
+  it('deletes a result by its item id', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+    actions.fetchDeleteImpact.mockResolvedValue({ dependent_item_ids: [] })
+    mount()
+    await click(button('Actions for Steepness'))
+    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
+    await click(button(/^Delete from library$/))
+    expect(actions.deleteLibraryItem).toHaveBeenCalledWith('s')
+  })
+
+  it('retries a failed calculation by rerunning its definition', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
-      generation_id: null, state: 'Failed', detail: 'engine stopped', name: 'Steepness',
+      generation_id: null, state: 'Failed', name: 'Steepness', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' },
     })])
     mount()
     await act(async () => {
@@ -202,83 +222,185 @@ describe('Data Library panel', () => {
     })
 
     expect(container.querySelector('h3')?.textContent).toBe('Steepness')
+    expect(container.textContent).toContain('engine stopped')
     await click(button(/^Retry$/))
-    expect(actions.retryFailedCalculation).toHaveBeenCalledWith('s', 'a-g1')
+    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
   })
 
-  async function openCalculate(name: string): Promise<void> {
+  async function openAnalyze(name: string): Promise<void> {
     await click(button(`Actions for ${name}`))
-    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Calculate slope"]')!)
+    await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Analyze…"]')!)
   }
 
-  it('calculates slope from a source as a new library result', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')])
-    mount()
-    await openCalculate('Ground')
+  async function choose(label: string): Promise<void> {
+    const input = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+      .find((candidate) => candidate.closest('label')?.textContent?.includes(label))!
+    await act(async () => { input.click() })
+  }
 
-    expect(container.textContent).toContain('From Ground')
-    const name = container.querySelector('form input:not([type])') as HTMLInputElement
-    expect(name.value).toBe('Ground · Slope')
-    const percent = [...container.querySelectorAll<HTMLInputElement>('input[type="radio"]')][1]!
-    await act(async () => { percent.click() })
+  async function submit(): Promise<void> {
     await act(async () => {
       container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     })
+  }
 
-    expect(actions.calculateSlope).toHaveBeenCalledWith('a', 'Percent', 'Ground · Slope', false)
+  it('runs slope from a source as a new library result, once a unit is chosen', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')])
+    mount()
+    await openAnalyze('Ground')
+
+    expect(container.querySelector('h3')?.textContent).toBe('Analyze Ground')
+    const name = container.querySelector<HTMLInputElement>('form input:not([type])')!
+    expect(name.value).toBe('Ground · Slope')
+    await submit()
+    expect(actions.runAnalysis).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Choose an option.')
+
+    await choose('Percent')
+    await submit()
+    expect(actions.runAnalysis).toHaveBeenCalledWith({
+      analysis_id: 'terrain.slope',
+      inputs: [{ key: 'dem', item_id: 'a' }],
+      parameters: [{ key: 'unit', value: { Choice: 'percent' } }],
+      outputs: ['slope'],
+      name: 'Ground · Slope',
+    }, false)
     expect(container.querySelector('form')).toBeNull()
   })
 
-  it('explains why slope cannot run instead of choosing another method', async () => {
-    lidarLibrary.value = library([layer('s', 'Canopy', { measurement_kind: 'SurfaceElevation' }), layer('g', 'Ground')], [], false)
+  it('explains by name why an analysis cannot run', async () => {
+    lidarLibrary.value = library([
+      layer('s', 'Canopy', {
+        item_type: { kind: 'Raster', quantity: 'SurfaceElevation' },
+        offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'WrongInput', expected: [{ kind: 'Raster', quantity: 'GroundElevation' }] } }],
+      }),
+      layer('g', 'Ground', { offers: [{ analysis_id: 'terrain.slope', unavailable: { reason: 'EngineMissing', detail: 'not installed' } }] }),
+    ])
     mount()
-    await openCalculate('Canopy')
-    expect(container.textContent).toContain('Slope needs ground elevation.')
+    await openAnalyze('Canopy')
+    expect(container.textContent).toContain('Needs Ground elevation.')
     expect(button(/^Run$/).disabled).toBe(true)
 
     await click(button('Back'))
-    await openCalculate('Ground')
-    expect(container.textContent).toContain('the GeoLibre engine is missing')
+    await openAnalyze('Ground')
+    expect(container.textContent).toContain('Unavailable: the GeoLibre engine is missing. (not installed)')
     expect(button(/^Run$/).disabled).toBe(true)
-    expect(actions.calculateSlope).not.toHaveBeenCalled()
+    expect(actions.runAnalysis).not.toHaveBeenCalled()
   })
 
-  it('attaches a Layers-initiated calculation to the asking Design', async () => {
+  it('attaches a Layers-initiated analysis to the asking Design', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')])
     mount()
-    await act(async () => { libraryCalculateRequest.value = 'a' })
+    await act(async () => { libraryAnalyzeRequest.value = { itemId: 'a', analysisId: 'terrain.slope' } })
     expect(container.textContent).toContain('added to this Design when it is ready')
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
-    expect(actions.calculateSlope).toHaveBeenCalledWith('a', 'Degrees', 'Ground · Slope', true)
+    await choose('Degrees')
+    await submit()
+    expect(actions.runAnalysis).toHaveBeenCalledWith(expect.objectContaining({ analysis_id: 'terrain.slope' }), true)
   })
 
-  it('names each result by its method and engine', async () => {
-    lidarLibrary.value = library([layer('a', 'Ground')], [
-      slope('old', 'a', { name: 'Old', method: null, engine_version: null }),
-      slope('new', 'a', { name: 'New', method: 'GeolibreProjectedSlopeV1', engine_version: 'geolibre-cli 1.5.3 (geolibre-rust aac2b7439786)' }),
-    ])
+  it('shows a result the Design already has in Layers instead of calculating it again', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+    setDesign(design([{ kind: 'Analysis', id: 's' }]))
+    mount()
+    await openAnalyze('Ground')
+    await choose('Degrees')
+    expect(container.textContent).toContain('Already in Layers.')
+    await click(button('Show in Layers'))
+    expect(sidePanel.value).toBe('layers')
+    expect(actions.runAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('offers an existing library result before calculating a duplicate', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
+    mount()
+    await openAnalyze('Ground')
+    await choose('Degrees')
+    expect(container.textContent).toContain('already in the library')
+    await click(button('Add existing'))
+    expect(actions.addToDesign).toHaveBeenCalledWith('Derived', 's')
+    expect(actions.runAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('describes a result by its provenance', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('new', 'a', { name: 'New' })])
     mount()
     await act(async () => { libraryFocusRequest.value = 'new' })
-    expect(container.textContent).toContain('GeoLibre projected slope (5×5)')
-    expect(container.textContent).toContain('geolibre-cli 1.5.3')
-    await act(async () => { libraryFocusRequest.value = 'old' })
-    expect(container.textContent).toContain('Unknown method')
+    const facts = container.querySelector('dl')!.textContent
+    expect(facts).toContain('AnalysisSlope')
+    expect(facts).toContain('Version 1')
+    expect(facts).toContain('UnitDegrees')
+    expect(facts).toContain('Calculated fromGround')
+    expect(facts).toContain('geolibre-cli 1.5.3')
+    expect(facts).toContain('aac2b7439786')
+    expect(facts).not.toContain('aac2b74397861')
+    await click(button(/^Ground$/))
+    expect(container.querySelector('h3')?.textContent).toBe('Ground')
   })
 
-  it('offers Cancel for a calculation this session started', async () => {
-    actions.runningAnalysisJobId.mockReturnValue('job-1')
-    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { generation_id: null, state: 'Preparing', name: 'Pending' })])
+  it('marks an out-of-date result with its reasons and refreshes it', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
+      name: 'Steepness',
+      freshness: { state: 'Stale', reasons: [
+        { reason: 'InputUpdated', input_key: 'dem', item_id: 'a' },
+        { reason: 'ToolUpdated', from: 'geolibre-cli 1.5.2', to: 'geolibre-cli 1.5.3' },
+      ] },
+    })])
+    mount()
+    const row = button('Steepness').closest('li')!
+    expect(row.textContent).toContain('Out of date')
+    await click(button('Refresh Steepness'))
+    expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
+
+    await act(async () => { libraryFocusRequest.value = 's' })
+    expect(container.textContent).toContain('Ground has changed since this was calculated.')
+    expect(container.textContent).toContain('A different engine build is installed (geolibre-cli 1.5.3).')
+  })
+
+  it('pages processing history when it is opened', async () => {
+    const run = (job: string) => ({
+      job_id: job, state: 'Complete' as const, message: null, recipe_version: 1, tool: null, inputs: [],
+      created_at: '1790000000000', finished_at: null, outputs: [{ item_id: 's', generation_id: 'g', coverage_cells: '1200' }],
+    })
+    actions.fetchProcessingHistory
+      .mockResolvedValueOnce({ definition_id: 's-def', runs: [run('j2')], next_cursor: 'c1' })
+      .mockResolvedValueOnce({ definition_id: 's-def', runs: [{ ...run('j1'), state: 'Failed', message: 'engine stopped', outputs: [] }], next_cursor: null })
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
+    mount()
+    await act(async () => { libraryFocusRequest.value = 's' })
+    expect(actions.fetchProcessingHistory).not.toHaveBeenCalled()
+
+    const history = Array.from(container.querySelectorAll('details')).find((node) => node.textContent?.includes('Processing history'))!
+    await act(async () => {
+      history.open = true
+      history.dispatchEvent(new Event('toggle'))
+    })
+    expect(actions.fetchProcessingHistory).toHaveBeenCalledWith('s-def', null)
+    expect(history.textContent).toContain('Completed')
+    expect(history.textContent).toContain('1,200 cells published')
+    await act(async () => {})
+
+    await click(button('Show more'))
+    await act(async () => {})
+    expect(actions.fetchProcessingHistory).toHaveBeenLastCalledWith('s-def', 'c1')
+    expect(history.querySelectorAll('li')).toHaveLength(2)
+    expect(history.textContent).toContain('engine stopped')
+    expect(history.textContent).toContain('Nothing published')
+    expect(() => button('Show more')).toThrow()
+  })
+
+  it('offers Cancel for a running calculation and cancels its job', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', {
+      generation_id: null, state: 'Preparing', name: 'Pending', run: { job_id: 'job-1', state: 'Preparing', message: null },
+    })])
     mount()
     expect(container.textContent).toContain('Calculating')
     await click(button(/^Cancel$/))
-    expect(actions.cancelAnalysisJob).toHaveBeenCalledWith('s')
+    expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 's', run: expect.objectContaining({ job_id: 'job-1' }) }))
   })
 
   it('labels a cancelled calculation as cancelled, not failed', () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [
-      slope('c', 'a', { generation_id: null, state: 'Failed', detail: 'cancelled', name: 'Stopped' }),
+      slope('c', 'a', { generation_id: null, state: 'Failed', name: 'Stopped', run: { job_id: 'j', state: 'Cancelled', message: null } }),
     ])
     mount()
     const row = button('Stopped').closest('li')!

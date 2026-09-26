@@ -460,7 +460,6 @@
         "typeLabel": "Type",
         "typeAll": "Tous les types",
         "typeSources": "Données importées",
-        "typeSlope": "Pente",
         "showAll": "Afficher toutes les données",
         "emptyTitle": "Aucune donnée",
         "emptyBody": "Importez une fois des rasters d’altitude ou de hauteur, puis ajoutez-les à n’importe quel Design.",
@@ -488,8 +487,6 @@
         "ready": "Prêt",
         "importTitle": "Importer des données",
         "name": "Nom",
-        "measurementLabel": "Ce que mesurent les valeurs",
-        "chooseMeasurement": "Choisir une mesure",
         "unit": "Unité",
         "unitUnknown": "Unité inconnue",
         "files": "Fichiers : {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Résolution",
         "factRange": "Plage de valeurs",
         "factStatus": "État",
-        "factInput": "Calculé à partir de",
-        "factMethod": "Méthode",
         "factResults": "Résultats enregistrés",
         "dataUnavailable": "Données indisponibles",
         "unavailableItem": "Données indisponibles",
@@ -521,29 +516,17 @@
         "previewPreparing": "Préparation de l’aperçu",
         "previewUnavailable": "Aperçu indisponible",
         "displayFailed": "Échec de l’affichage",
-        "measurement": {
+        "calculating": "Calcul en cours",
+        "quantityLabel": "Ce que mesurent les valeurs",
+        "chooseQuantity": "Choisir une mesure",
+        "quantity": {
           "GroundElevation": "Altitude du sol",
           "SurfaceElevation": "Altitude de surface",
           "AboveGroundHeight": "Hauteur au-dessus du sol",
-          "OtherContinuous": "Autres valeurs"
+          "OtherContinuous": "Autres valeurs",
+          "Slope": "Pente"
         },
-        "calculateSlope": "Calculer la pente",
-        "calculating": "Calcul en cours",
-        "calculateTitle": "Calculer la pente",
-        "calculateFrom": "À partir de {{name}}",
-        "resultName": "Nom du résultat",
-        "unitDegrees": "Degrés",
-        "unitPercent": "Pourcentage",
-        "run": "Lancer",
-        "calculateAttachNote": "Le résultat est ajouté à ce Design quand il est prêt.",
-        "calculateLibraryNote": "Le résultat est enregistré dans la bibliothèque ; ajoutez-le à n’importe quel Design.",
-        "slopeNeedsSource": "La pente se calcule à partir d’une source importée prête.",
-        "slopeNeedsGround": "La pente nécessite l’altitude du sol.",
-        "slopeNeedsMetres": "La pente nécessite des altitudes en mètres.",
-        "slopeEngineMissing": "Le calcul de pente est indisponible : le moteur GeoLibre est absent.",
-        "methodGeolibre": "Pente projetée GeoLibre (5×5)",
-        "methodUnknown": "Méthode inconnue",
-        "factEngine": "Moteur"
+        "analyze": "Analyser…"
       },
       "layers": {
         "title": "Données",
@@ -1210,5 +1193,94 @@
     "noMatches": "Aucune plante ne correspond à « {{query}} ».",
     "noneSelected": "Sélectionnez des plantes sur la carte pour lister leurs espèces ici.",
     "searchHint": "La recherche porte sur les noms communs dans toutes les langues connues de Canopi, les noms scientifiques et les codes. Les accents, les majuscules et les petites fautes de frappe n’ont pas d’importance."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Terrain"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Pente",
+        "summary": "Inclinaison du terrain, calculée à partir de l’altitude du sol.",
+        "params": {
+          "unit": {
+            "label": "Unité",
+            "help": "Degrés par rapport à l’horizontale (0–90°), ou dénivelé rapporté à la distance en pourcentage.",
+            "options": {
+              "degrees": "Degrés",
+              "percent": "Pourcentage"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Pente"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Nécessite : {{expected}}.",
+      "NotReady": "Nécessite des données dont l’import est terminé.",
+      "ValuesNotMetres": "Nécessite des valeurs en mètres ; ces données sont en {{units}}.",
+      "GridNotProjectedMetres": "Nécessite une grille projetée en mètres.",
+      "EngineMissing": "Indisponible : le moteur GeoLibre est absent.",
+      "NeedsDesktop": "Nécessite Canopi Desktop.",
+      "AlreadyInLayers": "Déjà dans les calques."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} a changé depuis ce calcul.",
+      "InputStale": "{{input}} n’est lui-même plus à jour.",
+      "RecipeUpdated": "La méthode a été mise à jour (version {{from}} → {{to}}).",
+      "ToolUpdated": "Une autre version du moteur est installée ({{to}})."
+    },
+    "dialog": {
+      "title": "Analyser {{name}}",
+      "advanced": "Réglages avancés",
+      "outputs": "Résultats",
+      "name": "Nom du résultat",
+      "attachNote": "Le résultat est ajouté à ce Design quand il est prêt.",
+      "libraryNote": "Le résultat est enregistré dans la bibliothèque ; ajoutez-le à n’importe quel Design.",
+      "run": "Lancer",
+      "runAgain": "Calculer à nouveau",
+      "showInLayers": "Afficher dans les calques",
+      "addExisting": "Ajouter l’existant",
+      "existingInLibrary": "Un résultat avec ces réglages est déjà dans la bibliothèque.",
+      "yes": "Oui",
+      "no": "Non",
+      "errors": {
+        "required": "Choisissez une option.",
+        "number": "Saisissez un nombre.",
+        "integer": "Saisissez un nombre entier.",
+        "range": "Saisissez une valeur de {{min}} à {{max}}.",
+        "step": "Utilisez des pas de {{step}}.",
+        "noOutputs": "Choisissez au moins un résultat."
+      }
+    },
+    "details": {
+      "analysis": "Analyse",
+      "method": "Méthode",
+      "methodVersion": "Version {{version}}",
+      "inputs": "Calculé à partir de",
+      "engine": "Moteur",
+      "revision": "Révision GeoLibre",
+      "created": "Créé le",
+      "outOfDate": "Plus à jour",
+      "refresh": "Actualiser",
+      "refreshAria": "Actualiser {{name}}",
+      "refreshing": "Actualisation en cours",
+      "refreshFailed": "La dernière actualisation a échoué. {{message}}",
+      "history": "Historique des traitements",
+      "historyEmpty": "Aucune exécution enregistrée.",
+      "historyLoading": "Chargement de l’historique",
+      "historyFailed": "Impossible de lire l’historique.",
+      "showMore": "Afficher plus",
+      "runState": {
+        "Preparing": "En cours",
+        "Complete": "Terminé",
+        "Failed": "Échec",
+        "Cancelled": "Annulé"
+      },
+      "coverage": "{{cells}} cellules publiées",
+      "noOutputs": "Rien de publié"
+    }
   }
 }

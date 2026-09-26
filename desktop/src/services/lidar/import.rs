@@ -180,7 +180,7 @@ pub fn stage_import(
             engine,
             paths,
             library,
-            &layer.measurement_kind,
+            &layer.quantity,
             &layer.units,
             source_path,
             job_id,
@@ -504,7 +504,7 @@ fn stage_source(
     engine: &GdalEngine,
     paths: &LidarPaths,
     library: &LidarLibrary,
-    measurement_kind: &str,
+    quantity: &str,
     units: &str,
     source_path: &Path,
     job_id: &str,
@@ -605,7 +605,7 @@ fn stage_source(
     let vertical_ref = "unspecified";
     let interp_hash = grid::sha256_hex(
         format!(
-            "{}|1|{measurement_kind}|{units}|{}|{}|{}|{}|{}|{vertical_ref}",
+            "{}|1|{quantity}|{units}|{}|{}|{}|{}|{}|{vertical_ref}",
             sha256,
             probe.band_type,
             probe.nodata.map(|v| v.to_string()).unwrap_or_default(),
@@ -629,7 +629,7 @@ fn stage_source(
     connection
         .execute(
             "INSERT INTO lidar_interpretations(
-                id, source_sha256, band_index, measurement_kind, units, scale, offset,
+                id, source_sha256, band_index, quantity, units, scale, offset,
                 crs_wkt, vertical_ref, nodata, geotransform, width, height, interp_hash,
                 valid_cells, min_value, max_value)
              VALUES(?1, ?2, 1, ?3, ?4, 1, 0, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
@@ -637,7 +637,7 @@ fn stage_source(
             rusqlite::params![
                 format!("interp-{interp_hash}"),
                 sha256,
-                measurement_kind,
+                quantity,
                 units,
                 probe.crs_wkt,
                 vertical_ref,
@@ -1696,7 +1696,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "staging oracle",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2295,7 +2295,7 @@ mod tests {
             next_layer = library
                 .create_layer(
                     "next import",
-                    common_types::lidar::LidarMeasurementKind::GroundElevation,
+                    common_types::library::RasterQuantity::GroundElevation,
                     None,
                     false,
                 )
@@ -2397,7 +2397,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "first batch crs",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2446,7 +2446,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "zero valid",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2488,7 +2488,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "published statistics",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2554,7 +2554,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "region facts",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2593,7 +2593,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "bounded members",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2688,7 +2688,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "sparse gap",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2840,7 +2840,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "24 tiles",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2948,7 +2948,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "envelope over",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -2994,7 +2994,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "budget over",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -3062,7 +3062,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "copy policy",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -3248,7 +3248,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "retained payload",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -3339,7 +3339,7 @@ mod tests {
         let second_layer = reopened
             .create_layer(
                 "second payload",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -3393,7 +3393,7 @@ mod tests {
         let layer_id = library
             .create_layer(
                 "reused asset",
-                common_types::lidar::LidarMeasurementKind::GroundElevation,
+                common_types::library::RasterQuantity::GroundElevation,
                 None,
                 false,
             )
@@ -3544,7 +3544,7 @@ mod tests {
             let accepted_layer = library
                 .create_layer(
                     "accepted",
-                    common_types::lidar::LidarMeasurementKind::GroundElevation,
+                    common_types::library::RasterQuantity::GroundElevation,
                     None,
                     false,
                 )

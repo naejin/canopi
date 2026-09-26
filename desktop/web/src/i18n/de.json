@@ -460,7 +460,6 @@
         "typeLabel": "Typ",
         "typeAll": "Alle Typen",
         "typeSources": "Importierte Daten",
-        "typeSlope": "Hangneigung",
         "showAll": "Alle Daten anzeigen",
         "emptyTitle": "Noch keine Daten",
         "emptyBody": "Importieren Sie Höhen- oder Geländeraster einmal und fügen Sie sie dann jedem Design hinzu.",
@@ -488,8 +487,6 @@
         "ready": "Bereit",
         "importTitle": "Daten importieren",
         "name": "Name",
-        "measurementLabel": "Was die Werte messen",
-        "chooseMeasurement": "Messgröße wählen",
         "unit": "Einheit",
         "unitUnknown": "Unbekannte Einheit",
         "files": "Dateien: {{count}}",
@@ -502,8 +499,6 @@
         "factResolution": "Auflösung",
         "factRange": "Wertebereich",
         "factStatus": "Status",
-        "factInput": "Berechnet aus",
-        "factMethod": "Methode",
         "factResults": "Gespeicherte Ergebnisse",
         "dataUnavailable": "Daten nicht verfügbar",
         "unavailableItem": "Nicht verfügbare Daten",
@@ -521,29 +516,17 @@
         "previewPreparing": "Vorschau wird vorbereitet",
         "previewUnavailable": "Vorschau nicht verfügbar",
         "displayFailed": "Anzeige fehlgeschlagen",
-        "measurement": {
+        "calculating": "Wird berechnet",
+        "quantityLabel": "Was die Werte messen",
+        "chooseQuantity": "Messgröße wählen",
+        "quantity": {
           "GroundElevation": "Geländehöhe",
           "SurfaceElevation": "Oberflächenhöhe",
           "AboveGroundHeight": "Höhe über Grund",
-          "OtherContinuous": "Andere Werte"
+          "OtherContinuous": "Andere Werte",
+          "Slope": "Hangneigung"
         },
-        "calculateSlope": "Hangneigung berechnen",
-        "calculating": "Wird berechnet",
-        "calculateTitle": "Hangneigung berechnen",
-        "calculateFrom": "Aus {{name}}",
-        "resultName": "Name des Ergebnisses",
-        "unitDegrees": "Grad",
-        "unitPercent": "Prozent",
-        "run": "Starten",
-        "calculateAttachNote": "Das Ergebnis wird diesem Design hinzugefügt, sobald es bereit ist.",
-        "calculateLibraryNote": "Das Ergebnis wird in der Bibliothek gespeichert; fügen Sie es einem beliebigen Design hinzu.",
-        "slopeNeedsSource": "Die Hangneigung wird aus einer bereiten importierten Quelle berechnet.",
-        "slopeNeedsGround": "Die Hangneigung benötigt Geländehöhen.",
-        "slopeNeedsMetres": "Die Hangneigung benötigt Höhen in Metern.",
-        "slopeEngineMissing": "Die Hangneigungsberechnung ist nicht verfügbar: Die GeoLibre-Engine fehlt.",
-        "methodGeolibre": "GeoLibre projizierte Hangneigung (5×5)",
-        "methodUnknown": "Unbekannte Methode",
-        "factEngine": "Engine"
+        "analyze": "Analysieren…"
       },
       "layers": {
         "title": "Daten",
@@ -1210,5 +1193,94 @@
     "noMatches": "Keine Pflanzen passen zu „{{query}}“.",
     "noneSelected": "Wählen Sie Pflanzen auf der Karte aus, um ihre Arten hier aufzulisten.",
     "searchHint": "Die Suche findet Trivialnamen in allen Sprachen, die Canopi kennt, sowie wissenschaftliche Namen und Codes. Akzente, Groß- und Kleinschreibung und kleine Tippfehler spielen keine Rolle."
+  },
+  "analyses": {
+    "groups": {
+      "terrain": "Gelände"
+    },
+    "terrain": {
+      "slope": {
+        "title": "Hangneigung",
+        "summary": "Steilheit des Geländes, aus der Geländehöhe berechnet.",
+        "params": {
+          "unit": {
+            "label": "Einheit",
+            "help": "Grad gegenüber der Waagerechten (0–90°) oder Höhenunterschied pro Strecke in Prozent.",
+            "options": {
+              "degrees": "Grad",
+              "percent": "Prozent"
+            }
+          }
+        },
+        "outputs": {
+          "slope": "Hangneigung"
+        }
+      }
+    },
+    "unavailable": {
+      "WrongInput": "Benötigt: {{expected}}.",
+      "NotReady": "Benötigt Daten mit abgeschlossenem Import.",
+      "ValuesNotMetres": "Benötigt Werte in Metern; diese Daten sind in {{units}}.",
+      "GridNotProjectedMetres": "Benötigt ein projiziertes Raster in Metern.",
+      "EngineMissing": "Nicht verfügbar: Die GeoLibre-Engine fehlt.",
+      "NeedsDesktop": "Benötigt Canopi Desktop.",
+      "AlreadyInLayers": "Bereits in den Ebenen."
+    },
+    "stale": {
+      "InputUpdated": "{{input}} hat sich seit dieser Berechnung geändert.",
+      "InputStale": "{{input}} ist selbst nicht mehr aktuell.",
+      "RecipeUpdated": "Die Methode wurde aktualisiert (Version {{from}} → {{to}}).",
+      "ToolUpdated": "Eine andere Engine-Version ist installiert ({{to}})."
+    },
+    "dialog": {
+      "title": "{{name}} analysieren",
+      "advanced": "Erweiterte Einstellungen",
+      "outputs": "Ergebnisse",
+      "name": "Name des Ergebnisses",
+      "attachNote": "Das Ergebnis wird diesem Design hinzugefügt, sobald es bereit ist.",
+      "libraryNote": "Das Ergebnis wird in der Bibliothek gespeichert; fügen Sie es einem beliebigen Design hinzu.",
+      "run": "Starten",
+      "runAgain": "Erneut berechnen",
+      "showInLayers": "In den Ebenen zeigen",
+      "addExisting": "Vorhandenes hinzufügen",
+      "existingInLibrary": "Ein Ergebnis mit diesen Einstellungen ist bereits in der Bibliothek.",
+      "yes": "Ja",
+      "no": "Nein",
+      "errors": {
+        "required": "Wählen Sie eine Option.",
+        "number": "Geben Sie eine Zahl ein.",
+        "integer": "Geben Sie eine ganze Zahl ein.",
+        "range": "Geben Sie einen Wert von {{min}} bis {{max}} ein.",
+        "step": "Verwenden Sie Schritte von {{step}}.",
+        "noOutputs": "Wählen Sie mindestens ein Ergebnis."
+      }
+    },
+    "details": {
+      "analysis": "Analyse",
+      "method": "Methode",
+      "methodVersion": "Version {{version}}",
+      "inputs": "Berechnet aus",
+      "engine": "Engine",
+      "revision": "GeoLibre-Revision",
+      "created": "Erstellt",
+      "outOfDate": "Veraltet",
+      "refresh": "Aktualisieren",
+      "refreshAria": "{{name}} aktualisieren",
+      "refreshing": "Wird aktualisiert",
+      "refreshFailed": "Die letzte Aktualisierung ist fehlgeschlagen. {{message}}",
+      "history": "Verarbeitungsverlauf",
+      "historyEmpty": "Keine Läufe aufgezeichnet.",
+      "historyLoading": "Verlauf wird geladen",
+      "historyFailed": "Der Verlauf konnte nicht gelesen werden.",
+      "showMore": "Mehr anzeigen",
+      "runState": {
+        "Preparing": "Läuft",
+        "Complete": "Abgeschlossen",
+        "Failed": "Fehlgeschlagen",
+        "Cancelled": "Abgebrochen"
+      },
+      "coverage": "{{cells}} Zellen veröffentlicht",
+      "noOutputs": "Nichts veröffentlicht"
+    }
   }
 }

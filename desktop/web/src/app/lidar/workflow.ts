@@ -1,16 +1,16 @@
 import { effect } from '@preact/signals'
 import { designSessionStore } from '../document-session/store'
-import { settleSlopeAttachments } from './actions'
+import { settleResultAttachments } from './actions'
 import { ensureLidarPolling, lidarLibrary, stopLidarPolling } from './library-store'
 
 /**
  * Desktop-lifetime owner of library polling.
  *
  * Installed once for the Desktop application/workspace, not per panel and not
- * per Design. Imports and calculations are library work: they keep running and
+ * per Design. Imports and analyses are library work: they keep running and
  * settling across panel navigation and Design replacement. An import never
- * attaches itself to a Design; a slope asked for from Layers joins only the
- * Design session that asked, once it is ready.
+ * attaches itself to a Design; results asked for from Layers join only the
+ * Design session that asked, once they are published.
  */
 let installed = false
 let disposeAttachments: (() => void) | null = null
@@ -22,7 +22,7 @@ export function installLidarWorkflow(): void {
   // pending attachments at once.
   disposeAttachments = effect(() => {
     designSessionStore.sessionIdentity.value
-    settleSlopeAttachments(lidarLibrary.value)
+    settleResultAttachments(lidarLibrary.value)
   })
   // Reopen/application start refreshes immediately and resumes polling if
   // native work is still settling.

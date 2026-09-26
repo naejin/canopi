@@ -1,113 +1,122 @@
+import type { AnalysisGroup } from '../../generated/analysis-registry'
 import type {
-  LidarAnalysisMethod,
+  AnalysisOffer,
+  AnalysisRunStatus,
+  Freshness,
+  LibraryItemRole,
+  LibraryItemType,
+  LibrarySnapshot,
   LidarImportJob,
-  LidarLibrarySnapshot,
-  LidarMeasurementKind,
-  LidarPresentationEntryKind,
-  LidarSlopeUnit,
+  Provenance,
 } from '../../generated/contracts'
+import { analysisGroup } from '../analyses/registry'
+import { itemDisplayRange, libraryItemName } from './library-store'
 
 /**
- * One reusable Data Library item: an imported source or a saved result.
+ * One reusable Data Library item: an imported source or a derived result.
  *
  * Both come from the library snapshot, which remains the only authority; this
  * is a read model for the dock, and search, filter and order are session view
  * state, never Design data.
  */
 export interface LibraryItem {
-  readonly kind: LidarPresentationEntryKind
+  readonly role: LibraryItemRole
   readonly id: string
   readonly name: string
-  /** Measurement kind of a source; `Slope` for a result. */
-  readonly type: LidarMeasurementKind | 'Slope'
+  readonly itemType: LibraryItemType
   readonly status: 'ready' | 'preparing' | 'failed'
   readonly generationId: string | null
   readonly units: string
   readonly resolutionM: number | null
   readonly bounds: readonly [number, number, number, number] | null
   readonly displayRange: readonly [number, number] | null
-  readonly slopeUnit: LidarSlopeUnit | null
   /** The import operation of an unpublished source. */
   readonly importJob: LidarImportJob | null
-  /** A result's input source item and generation. */
-  readonly sourceLayerId: string | null
-  readonly inputGenerationId: string | null
-  /** A source's saved results. */
-  readonly resultCount: number
+  /** What produced a derived item; null for a source. */
+  readonly provenance: Provenance | null
+  readonly freshness: Freshness
+  /** The latest run of a derived item: first calculation, retry or refresh. */
+  readonly run: AnalysisRunStatus | null
+  readonly offers: readonly AnalysisOffer[]
+  /** Derived items calculated from this one. */
+  readonly dependents: number
+  /** The item a derived row nests under: its first input. */
+  readonly parentId: string | null
+  /** The registry group of the analysis that produced a derived item. */
+  readonly group: AnalysisGroup | null
+  /** Nesting depth in the list: 0 for a top-level row. */
+  readonly depth: number
   readonly message: string | null
-  /** A result's method, from its recipe; null for a source or an unknown recipe. */
-  readonly method: LidarAnalysisMethod | null
-  /** The engine build that produced a result, as recorded when it was published. */
-  readonly engineVersion: string | null
 }
 
-export type LibraryTypeFilter = 'all' | 'sources' | 'slope'
+/** All, sources, or the derived items of one registry group. */
+export type LibraryTypeFilter = 'all' | 'sources' | AnalysisGroup
 
-export function libraryItems(snapshot: LidarLibrarySnapshot | null, slopeLabel = 'Slope'): LibraryItem[] {
+/**
+ * Library items in list order: top-level rows by name, each followed by the
+ * derived items calculated from it, nested under their first input.
+ */
+export function libraryItems(snapshot: LibrarySnapshot | null): LibraryItem[] {
   if (!snapshot) return []
-  const items: LibraryItem[] = []
-  for (const layer of snapshot.layers) {
-    const job = layer.import_job ?? null
-    const running = job?.state === 'Staging' || job?.state === 'Applying'
-    items.push({
-      kind: 'Source',
-      id: layer.id,
-      name: layer.name,
-      type: layer.measurement_kind,
-      status: layer.generation_id ? 'ready' : running ? 'preparing' : 'failed',
-      generationId: layer.generation_id ?? null,
-      units: layer.units,
-      resolutionM: layer.resolution_m ?? null,
-      bounds: layer.bounds ?? null,
-      displayRange: layer.display_range
-        ? [layer.display_range.min, layer.display_range.max]
-        : layer.value_range ?? null,
-      slopeUnit: null,
-      importJob: layer.generation_id ? null : job,
-      sourceLayerId: null,
-      inputGenerationId: null,
-      resultCount: layer.analysis_count,
-      message: layer.generation_id ? null : job?.message ?? null,
-      method: null,
-      engineVersion: null,
-    })
+  const items = snapshot.items.map((summary): Omit<LibraryItem, 'depth'> => {
+    const job = summary.import_job ?? null
+    const published = summary.generation_id !== null
+    return {
+      role: summary.role,
+      id: summary.id,
+      name: libraryItemName(summary, snapshot),
+      itemType: summary.item_type,
+      status: summary.state === 'Ready' ? 'ready' : summary.state === 'Preparing' ? 'preparing' : 'failed',
+      generationId: summary.generation_id ?? null,
+      units: summary.units,
+      resolutionM: summary.resolution_m ?? null,
+      bounds: summary.bounds ?? null,
+      displayRange: itemDisplayRange(summary),
+      importJob: published ? null : job,
+      provenance: summary.provenance,
+      freshness: summary.freshness,
+      run: summary.run,
+      offers: summary.offers,
+      dependents: summary.dependents,
+      parentId: summary.provenance?.inputs[0]?.item_id ?? null,
+      group: summary.provenance ? analysisGroup(summary.provenance.analysis_id) : null,
+      message: summary.role === 'Source'
+        ? (published ? null : job?.message ?? null)
+        : summary.run?.message ?? null,
+    }
+  })
+  const ids = new Set(items.map((item) => item.id))
+  const children = new Map<string | null, Omit<LibraryItem, 'depth'>[]>()
+  for (const item of items) {
+    const parent = item.parentId !== null && item.parentId !== item.id && ids.has(item.parentId) ? item.parentId : null
+    children.set(parent, [...(children.get(parent) ?? []), item])
   }
-  for (const analysis of snapshot.analyses) {
-    const source = snapshot.layers.find((layer) => layer.id === analysis.source_layer_id)
-    const unit = analysis.slope_unit
-    items.push({
-      kind: 'Analysis',
-      id: analysis.id,
-      name: analysis.name ?? (source ? `${source.name} · ${slopeLabel}` : slopeLabel),
-      type: 'Slope',
-      status: analysis.generation_id
-        ? 'ready'
-        : analysis.state === 'Preparing' ? 'preparing' : 'failed',
-      generationId: analysis.generation_id ?? null,
-      units: unit === 'Percent' ? '%' : '°',
-      resolutionM: source?.resolution_m ?? null,
-      bounds: analysis.bounds ?? null,
-      displayRange: analysis.value_range ?? null,
-      slopeUnit: unit,
-      importJob: null,
-      sourceLayerId: analysis.source_layer_id,
-      inputGenerationId: analysis.input_generation_id ?? null,
-      resultCount: 0,
-      message: analysis.detail ?? null,
-      method: analysis.method ?? null,
-      engineVersion: analysis.engine_version ?? null,
-    })
+  const ordered: LibraryItem[] = []
+  const visited = new Set<string>()
+  const visit = (parent: string | null, depth: number) => {
+    // Stable name order, identity as the tie-breaker: names are not unique.
+    const rows = [...(children.get(parent) ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+      || left.id.localeCompare(right.id))
+    for (const row of rows) {
+      if (visited.has(row.id)) continue
+      visited.add(row.id)
+      ordered.push({ ...row, depth })
+      visit(row.id, depth + 1)
+    }
   }
-  // Stable name order, identity as the tie-breaker: names are not unique.
-  return items.sort((left, right) =>
-    left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-    || left.id.localeCompare(right.id))
+  visit(null, 0)
+  // A cycle has no root; list whatever it left out at the top level.
+  for (const item of items) {
+    if (!visited.has(item.id)) ordered.push({ ...item, depth: 0 })
+  }
+  return ordered
 }
 
 /**
  * Items matching a name search and type filter. Operations in progress or
- * failed stay listed whatever the filter, so an import started here is never
- * hidden before it settles.
+ * failed stay listed whatever the filter, so an import or calculation started
+ * here is never hidden before it settles.
  */
 export function filterLibraryItems(
   items: readonly LibraryItem[],
@@ -117,10 +126,10 @@ export function filterLibraryItems(
 ): LibraryItem[] {
   const needle = query.trim().toLocaleLowerCase()
   return items.filter((item) => {
-    if (item.status !== 'ready' && item.kind === 'Source') return true
-    if (relatedTo !== null) return item.sourceLayerId === relatedTo
-    if (type === 'sources' && item.kind !== 'Source') return false
-    if (type === 'slope' && item.kind !== 'Analysis') return false
+    if (item.status !== 'ready') return true
+    if (relatedTo !== null) return item.provenance?.inputs.some((input) => input.item_id === relatedTo) ?? false
+    if (type === 'sources' && item.role !== 'Source') return false
+    if (type !== 'all' && type !== 'sources' && item.group !== type) return false
     return needle === '' || item.name.toLocaleLowerCase().includes(needle)
   })
 }
@@ -136,19 +145,4 @@ export function suggestedItemName(paths: readonly string[]): string {
   }
   const trimmed = prefix.replace(/[\s_\-.]+$/, '')
   return trimmed.length >= 3 ? trimmed : names[0]!
-}
-
-/** Why slope cannot be calculated from this item, or null when it can. */
-export type SlopeIneligibility = 'notSource' | 'notReady' | 'notGround' | 'notMetres' | 'engine'
-
-export function slopeIneligibility(
-  item: LibraryItem,
-  engineAvailable: boolean,
-): SlopeIneligibility | null {
-  if (item.kind !== 'Source') return 'notSource'
-  if (item.status !== 'ready') return 'notReady'
-  if (item.type !== 'GroundElevation') return 'notGround'
-  if (!/^(m|metres?|meters?)$/i.test(item.units.trim())) return 'notMetres'
-  if (!engineAvailable) return 'engine'
-  return null
 }

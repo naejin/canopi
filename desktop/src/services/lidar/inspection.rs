@@ -7,56 +7,26 @@
 //! decodes a colourised tile, never interpolates between pixels, and never
 //! returns a value from a generation the caller did not ask for.
 //!
-//! Source layers and analysis results are different storage contracts, so they
-//! are resolved separately: a source is an ordered collection or a published
-//! chunk store described by `import::GenerationManifest`, while a result is
-//! described by `analysis::ResultManifest` and always reads through resolved
-//! chunks. Units come from whichever contract owns the bytes — a result reports
-//! its own degrees/percent choice rather than the source layer's unit string.
+//! Sources and derived items are different storage contracts, so they are
+//! resolved separately: a source is an ordered collection described by
+//! `import::GenerationManifest`, while a derived item is described by
+//! `analyses::DerivedManifest` and always reads through resolved chunks. Units
+//! come from the item that owns the bytes: a derived item reports the units its
+//! analysis recorded (a slope in percent is not an elevation in metres).
 
 use std::sync::atomic::AtomicBool;
 
-use common_types::lidar::{
-    LidarSampleEntityKind, LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason,
-    LidarSlopeUnit,
-};
+use common_types::library::LibraryItemRole;
+use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason};
 
-use super::analysis;
+use super::analyses;
 use super::engine::{GdalEngine, GdalProgram};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
 
-/// The label of a slope result computed in degrees.
-const DEGREES_UNIT: &str = "°";
-/// The label of a slope result computed in percent.
-const PERCENT_UNIT: &str = "%";
-
-/// The unit label a slope result is sampled in.
-fn result_units(unit: LidarSlopeUnit) -> &'static str {
-    match unit {
-        LidarSlopeUnit::Degrees => DEGREES_UNIT,
-        LidarSlopeUnit::Percent => PERCENT_UNIT,
-    }
-}
-
-/// One analysis definition's own row, by definition id.
-fn analysis_definition_layer(
-    connection: &rusqlite::Connection,
-    definition_id: &str,
-) -> Result<Option<String>, String> {
-    use rusqlite::OptionalExtension as _;
-    let mut statement = connection
-        .prepare("SELECT layer_id FROM lidar_analysis_definitions WHERE id = ?1")
-        .map_err(|e| e.to_string())?;
-    statement
-        .query_row([definition_id], |row| row.get::<_, String>(0))
-        .optional()
-        .map_err(|e| e.to_string())
-}
-
 /// Which reader serves a target's numbers.
 enum TargetRead {
-    /// Published result chunks of an analysis result.
+    /// Published result chunks of a derived item.
     Chunks,
     /// An ordered source collection, resolved on demand from its members.
     Collection(Box<import::GenerationManifest>),
@@ -85,7 +55,7 @@ fn resolve_target(
 ) -> Result<Option<SampleTarget>, String> {
     let connection = library.catalogue()?;
     match request.kind {
-        LidarSampleEntityKind::Source => {
+        LibraryItemRole::Source => {
             let Some(row) = catalogue::head_generation(&connection, &request.entity_id)? else {
                 return Ok(None);
             };
@@ -103,27 +73,21 @@ fn resolve_target(
                 read,
             }))
         }
-        LidarSampleEntityKind::Analysis => {
-            // The definition owns the result, so a definition that no longer
-            // exists has no generation to sample even if a row survived.
-            if analysis_definition_layer(&connection, &request.entity_id)?.is_none() {
-                return Ok(None);
-            }
-            let Some(row) = catalogue::head_analysis_generation(&connection, &request.entity_id)?
-            else {
+        LibraryItemRole::Derived => {
+            // The item owns its result, so an item that no longer exists has no
+            // generation to sample even if a row survived.
+            let Some(item) = catalogue::get_derived_item(&connection, &request.entity_id)? else {
                 return Ok(None);
             };
-            let manifest: analysis::ResultManifest = serde_json::from_str(&row.manifest_json)
-                .map_err(|e| format!("Invalid analysis manifest: {e}"))?;
-            // A result reports the measurement it was computed in, not the unit
-            // string of the layer it was derived from: a slope in percent is not
-            // a source elevation in metres.
-            let units = result_units(manifest.parameters.slope_unit).to_string();
+            let Some(row) = catalogue::derived_head(&connection, &request.entity_id)? else {
+                return Ok(None);
+            };
+            let manifest = analyses::read_derived_manifest(&row.manifest_json)?;
             Ok(Some(SampleTarget {
                 generation_id: row.id,
-                grid: manifest.grid.clone(),
-                crs_wkt: manifest.crs_wkt.clone(),
-                units,
+                grid: manifest.grid,
+                crs_wkt: manifest.crs_wkt,
+                units: item.units,
                 read: TargetRead::Chunks,
             }))
         }
@@ -562,12 +526,5 @@ mod tests {
         let mut broken = grid();
         broken.geotransform[5] = 0.0;
         assert_eq!(containing_pixel(&broken, 1.0, 1.0), None);
-    }
-
-    /// A result's unit is its own parameter, not its source layer's.
-    #[test]
-    fn a_slope_result_reports_the_unit_it_was_computed_in() {
-        assert_eq!(result_units(LidarSlopeUnit::Degrees), DEGREES_UNIT);
-        assert_eq!(result_units(LidarSlopeUnit::Percent), PERCENT_UNIT);
     }
 }

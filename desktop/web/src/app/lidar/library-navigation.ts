@@ -17,12 +17,24 @@ export function openDataLibrary(): void {
 }
 
 /**
- * A request, from Layers, to calculate slope from one source in the Data
- * Library. The finished result then joins the Design that asked.
+ * A request, from Layers, to analyze one item in the Data Library, optionally
+ * with one registry entry already chosen. The finished results then join the
+ * Design that asked.
  */
-export const libraryCalculateRequest = signal<string | null>(null)
+export const libraryAnalyzeRequest = signal<{ readonly itemId: string; readonly analysisId: string | null } | null>(null)
 
-export function calculateSlopeInLibrary(id: string): void {
-  libraryCalculateRequest.value = id
+export function analyzeInLibrary(itemId: string, analysisId: string | null = null): void {
+  libraryAnalyzeRequest.value = { itemId, analysisId }
   sidePanel.value = 'data'
+}
+
+/**
+ * A request, from the Analyze dialog, to show one reference in Layers rather
+ * than calculating a result the Design already has.
+ */
+export const layersFocusRequest = signal<string | null>(null)
+
+export function showInLayers(itemId: string): void {
+  layersFocusRequest.value = itemId
+  sidePanel.value = 'layers'
 }
