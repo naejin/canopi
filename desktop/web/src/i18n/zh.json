@@ -813,7 +813,8 @@
     "untitledDesign": "未命名设计",
     "designNameInput": "设计名称",
     "menus": "菜单",
-    "renameDesign": "重命名设计：{{name}}"
+    "renameDesign": "重命名设计：{{name}}",
+    "menu": "菜单"
   },
   "about": {
     "title": "关于 Canopi",

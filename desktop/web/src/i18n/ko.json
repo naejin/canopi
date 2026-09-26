@@ -813,7 +813,8 @@
     "untitledDesign": "제목 없는 디자인",
     "designNameInput": "디자인 이름",
     "menus": "메뉴",
-    "renameDesign": "디자인 이름 바꾸기: {{name}}"
+    "renameDesign": "디자인 이름 바꾸기: {{name}}",
+    "menu": "메뉴"
   },
   "about": {
     "title": "Canopi 정보",

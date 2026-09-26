@@ -120,8 +120,48 @@
   outline-offset: 2px;
 }
 
+.wide {
+  display: contents;
+}
+
 @media (max-width: 900px) {
   .nameText {
     max-width: 22vw;
+  }
+}
+
+/* Narrow windows: one Menu button, the Design name over its status, then the place field.
+   Help, Settings and file actions stay in the menu. */
+@media (max-width: 760px) {
+  .titleBar {
+    top: var(--space-2);
+    right: var(--space-2);
+    left: var(--space-2);
+    gap: var(--space-1);
+    height: auto;
+    min-height: var(--title-bar-height);
+    padding: var(--space-1);
+  }
+
+  .logo,
+  .rule,
+  .wide {
+    display: none;
+  }
+
+  .design {
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .nameText {
+    max-width: 100%;
+    font-size: var(--text-md);
+  }
+
+  .spacer {
+    display: none;
   }
 }

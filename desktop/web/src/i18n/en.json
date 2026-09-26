@@ -935,7 +935,8 @@
     "untitledDesign": "Untitled Design",
     "designNameInput": "Design name",
     "menus": "Menus",
-    "renameDesign": "Rename Design: {{name}}"
+    "renameDesign": "Rename Design: {{name}}",
+    "menu": "Menu"
   },
   "about": {
     "title": "About Canopi",

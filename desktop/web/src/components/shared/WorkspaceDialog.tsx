@@ -22,8 +22,9 @@ export function WorkspaceDialog({ title, onClose, children, footer, wide = false
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    dialog.current?.querySelector<HTMLElement>('[data-dialog-initial-focus]')?.focus()
-      ?? dialog.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+    const initial = dialog.current?.querySelector<HTMLElement>('[data-dialog-initial-focus]')
+      ?? dialog.current?.querySelector<HTMLElement>(FOCUSABLE)
+    initial?.focus()
     return () => previous?.focus?.()
   }, [])
 

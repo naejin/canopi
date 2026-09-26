@@ -4,7 +4,7 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 ## Chrome
 
-- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right.
+- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right. The labelled rail is a fixed 224 px so it does not jump between tools. Until the right-click menu lands, plant colour and symbol stay on the rail when plants are selected.
 - View chip (bottom left): Grid, Snap to grid, Rulers as pressed toggles with a check icon; off by default except Snap.
 - Zoom group (bottom right): scale bar, zoom out, scale ratio (a menu of common scales), zoom in, Fit to Design (Shift F). The attribution pill sits immediately left of the group so it never collides with panels. Below 0.1 px/m the Design is shown as one pin ("Return to …"), editing tools are disabled and a top-centre chip says "Zoom in to edit" with Return to Design.
 - The map is always the background; there is no grid or ruler frame unless turned on.

@@ -22,6 +22,12 @@ const mocks = vi.hoisted(() => ({
   uninstallContinuousSave: vi.fn(),
   installPlaceSearchSession: vi.fn(),
   disposePlaceSearchSession: vi.fn(),
+  installToolRailLearning: vi.fn(),
+  disposeToolRailLearning: vi.fn(),
+}));
+
+vi.mock("../app/tool-rail/learning", () => ({
+  installToolRailLearning: mocks.installToolRailLearning,
 }));
 
 vi.mock("../web/browser-design-session", () => ({
@@ -84,6 +90,8 @@ describe("settings platform bootstrap", () => {
     mocks.installContinuousSave.mockReset().mockReturnValue(mocks.uninstallContinuousSave);
     mocks.disposePlaceSearchSession.mockReset();
     mocks.installPlaceSearchSession.mockReset().mockReturnValue(mocks.disposePlaceSearchSession);
+    mocks.disposeToolRailLearning.mockReset();
+    mocks.installToolRailLearning.mockReset().mockReturnValue(mocks.disposeToolRailLearning);
   });
 
   afterEach(() => {
@@ -128,6 +136,8 @@ describe("settings platform bootstrap", () => {
 
     expect(mocks.uninstallContinuousSave).toHaveBeenCalledOnce();
     expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installToolRailLearning).toHaveBeenCalledTimes(2);
+    expect(mocks.disposeToolRailLearning).toHaveBeenCalledOnce();
     expect(mocks.installContinuousSave).toHaveBeenCalledTimes(2);
   });
 
@@ -179,6 +189,8 @@ describe("settings platform bootstrap", () => {
     expect(mocks.disposeCloseGuard).toHaveBeenCalledOnce();
     expect(mocks.installPlaceSearchSession).toHaveBeenCalledTimes(2);
     expect(mocks.disposePlaceSearchSession).toHaveBeenCalledOnce();
+    expect(mocks.installToolRailLearning).toHaveBeenCalledTimes(2);
+    expect(mocks.disposeToolRailLearning).toHaveBeenCalledOnce();
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });

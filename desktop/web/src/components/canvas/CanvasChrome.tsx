@@ -1,5 +1,6 @@
 import type { ComponentChildren, RefObject } from 'preact'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
+import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { toolRailShowsNames } from '../../app/tool-rail/learning'
 import { CanvasOverview } from './CanvasOverview'
 import { DisplayLegend } from './DisplayLegend'
@@ -21,15 +22,17 @@ export function CanvasChrome({ projection, canvasRef, children }: {
   /** Edition-only chrome (Desktop: raster inspection). */
   readonly children?: ComponentChildren
 }) {
+  // "Where is your site?" is the one task until it is answered or skipped.
+  const locating = siteLocateOpen.value
   return (
     <>
-      <ToolRail projection={projection} showNames={toolRailShowsNames.value} />
+      {!locating && <ToolRail projection={projection} showNames={toolRailShowsNames.value} />}
       <ViewChip toggles={projection.settingsToggles} />
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />
       {children}
       <SpeciesFocusChip />
-      <CanvasOverview />
+      {!locating && <CanvasOverview />}
       <DisplayLegend />
       <SiteOnboarding />
     </>

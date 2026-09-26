@@ -8,6 +8,41 @@
   position: relative;
 }
 
+/* Narrow windows show one Menu button instead of the menu bar. */
+.compactGroup {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .compactGroup {
+    display: block;
+  }
+
+  .fullGroup {
+    display: none;
+  }
+
+  .compactGroup .trigger {
+    width: var(--control-size-touch);
+    height: var(--control-size-touch);
+    justify-content: center;
+    padding: 0;
+  }
+
+  .menu {
+    max-width: calc(100vw - 2 * var(--chrome-inset));
+  }
+
+  /* Submenus open in place: there is no room beside the menu. */
+  .submenu {
+    position: static;
+    min-width: 0;
+    margin-left: var(--space-3);
+    border: 0;
+    box-shadow: none;
+  }
+}
+
 .trigger {
   display: inline-flex;
   align-items: center;

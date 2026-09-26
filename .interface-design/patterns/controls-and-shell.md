@@ -7,6 +7,8 @@ Read the [design system](../system.md) first. Canvas boards: DesignSystem, Rules
 - Floating title bar (see the design system). The Design name is a button that renames (F2). Save status is a live region: Saved, Saving… (not announced), Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and a Download a copy link; the file actions are icons (Open a .canopi file).
 - Menus (native on macOS): File (New, Open…, Open recent ▸, Rename…, Save as…, Revert…, Add data…, Data library…, Import GeoJSON…, Export ▸ Planting plan (PDF)…, GeoJSON…, Budget as CSV…, Settings…, Close, Quit), Edit (history, clipboard, selection, species commands, grouping, Rotate…, lock, stamps), View (zoom, fit, place search, Grid/Snap/Rulers/Labels/Tool names as checkable items, panels Ctrl 1–8, Background, Theme), Tools (every tool with its key), Help (Keyboard shortcuts F1, Getting started, Report a problem…, About). Checkable items are `menuitemcheckbox`; a check column is reserved when a menu has any.
 
+Shipped so far (canopi-h90p app frame): File keeps Save (Ctrl S) beside Save as…; Edit adds Find plants (Ctrl F) and uses Lock Ctrl L / Unlock rather than Unlock all; Close, Getting started, Add data…, Budget as CSV…, Rotate… and View › Labels (N) are not in the menus yet. Below 760 px the menubar becomes one Menu button with submenus inline, and Help, Settings and the Web file icons move into it.
+
 ## Start and new Designs
 
 - Start: left column with logo, one line of purpose, New Design (Ctrl N, primary) and Open Design… (Ctrl O), a drop hint, Settings, Keyboard shortcuts, Report a problem…. Right: Search your Designs, Recent Designs (thumbnail, name, place name, counts, relative date; the row opens; More), Drafts (dashed tile; deleting confirms inline and names the draft).
@@ -25,6 +27,8 @@ A dialog with sections: Appearance (theme, language), Map and imagery (satellite
 ## Export planting plan
 
 A side sheet beside the live preview: title on the sheet, paper, scale, area, background (None, Map, Satellite) and Fade, plant colours (As in the Design, Grayscale, Black), symbol size in mm, Include (codes, zones and notes, site data, north and scale), species key on the plan or on page 2 (default when there are many species), page thumbnails as buttons, Save PDF…. The printed key never truncates: names wrap and continued columns repeat their heading.
+
+Shipped so far: the Settings dialog has Appearance only (theme, language, tool names); the other sections are follow-up work.
 
 ## Controls
 

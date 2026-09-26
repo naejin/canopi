@@ -22,10 +22,10 @@ export function SiteOnboarding() {
   if (siteLocateOpen.value) return <SiteLocateDialog />
   if (!startDesignCardOpen.value) return null
   return (
-    <>
+    <div className={styles.startRow}>
       <StartDesignCard />
       <FoundSiteChip />
-    </>
+    </div>
   )
 }
 

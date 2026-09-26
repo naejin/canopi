@@ -813,7 +813,8 @@
     "untitledDesign": "無題のデザイン",
     "designNameInput": "デザイン名",
     "menus": "メニュー",
-    "renameDesign": "デザイン名を変更: {{name}}"
+    "renameDesign": "デザイン名を変更: {{name}}",
+    "menu": "メニュー"
   },
   "about": {
     "title": "Canopi について",

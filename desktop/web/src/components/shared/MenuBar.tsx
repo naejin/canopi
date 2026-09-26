@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import type { MenuAction, MenuDefinition, MenuEntry } from '../../app/shell-commands/menus'
+import { flattenMenuActions, type MenuAction, type MenuDefinition, type MenuEntry } from '../../app/shell-commands/menus'
+import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
 import styles from './MenuBar.module.css'
 
@@ -10,6 +11,8 @@ const wrapNext = (i: number, len: number) => i < len - 1 ? i + 1 : 0
 interface MenuBarProps {
   readonly menus: readonly MenuDefinition[]
   readonly label: string
+  /** Name of the single menu narrow windows show instead of the menu bar. */
+  readonly compactLabel?: string
   /** Called when a menu opens, so callers can refresh data it lists (Open recent). */
   readonly onMenuOpen?: (menuId: string) => void
 }
@@ -19,7 +22,20 @@ interface MenuBarProps {
  * of commands with their shortcuts. Checkable items are `menuitemcheckbox`
  * or `menuitemradio`, and a check column is reserved when a menu has any.
  */
-export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
+export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: MenuBarProps) {
+  // Narrow windows get one menu whose submenus are File, Edit, View, Tools and Help.
+  const compactMenu: MenuDefinition | null = compactLabel ? {
+    id: 'file',
+    label: compactLabel,
+    items: fullMenus.map((menu) => ({
+      type: 'submenu' as const,
+      id: `compact.${menu.id}`,
+      label: menu.label,
+      disabled: false,
+      items: flattenMenuActions([menu]),
+    })),
+  } : null
+  const menus = fullMenus
   const openMenuId = useSignal<string | null>(null)
   const openSubmenuId = useSignal<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -58,7 +74,7 @@ export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
   function openRootMenu(menuId: string): void {
     openMenuId.value = menuId
     openSubmenuId.value = null
-    onMenuOpen?.(menuId)
+    onMenuOpen?.(menuId === 'compact' ? 'file' : menuId)
   }
 
   function closeAll(returnFocus: boolean): void {
@@ -69,6 +85,7 @@ export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
   }
 
   function moveToSiblingMenu(menuId: string, direction: -1 | 1): void {
+    if (openMenuId.value === 'compact') return
     const index = menus.findIndex((menu) => menu.id === menuId)
     const next = menus[direction < 0 ? wrapPrev(index, menus.length) : wrapNext(index, menus.length)]
     if (!next) return
@@ -150,6 +167,7 @@ export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
 
   function handleTriggerKeyDown(event: KeyboardEvent, menuId: string): void {
     const index = menus.findIndex((menu) => menu.id === menuId)
+    if (menuId === 'compact' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) return
     switch (event.key) {
       case 'ArrowDown':
       case 'Enter':
@@ -262,42 +280,51 @@ export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
 
   return (
     <div className={styles.menuBar} ref={barRef} role="menubar" aria-label={label}>
-      {menus.map((menu) => {
-        const isOpen = openMenuId.value === menu.id
-        const checkable = menu.items.some((entry) => entry.type === 'action' && entry.check !== undefined)
-        return (
-          <div key={menu.id} className={styles.menuGroup}>
-            <button
-              ref={(element) => {
-                if (element) triggerRefs.current.set(menu.id, element)
-                else triggerRefs.current.delete(menu.id)
-              }}
-              className={styles.trigger}
-              type="button"
-              role="menuitem"
-              data-menu-id={menu.id}
-              onClick={() => { if (isOpen) closeAll(false); else openRootMenu(menu.id) }}
-              onMouseEnter={() => { if (openMenuId.value !== null && openMenuId.value !== menu.id) openRootMenu(menu.id) }}
-              onKeyDown={(event) => handleTriggerKeyDown(event, menu.id)}
-              aria-expanded={isOpen}
-              aria-haspopup="menu"
-            >
-              {menu.label}
-            </button>
-            {isOpen && (
-              <div
-                className={styles.menu}
-                role="menu"
-                aria-label={menu.label}
-                data-menu-popup="root"
-                onKeyDown={(event) => handleMenuKeyDown(event, menu)}
-              >
-                {menu.items.map((entry, index) => renderEntry(entry, index, checkable))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {compactMenu && renderRootMenu(compactMenu, true)}
+      {menus.map((menu) => renderRootMenu(menu, false))}
     </div>
   )
+
+  function renderRootMenu(menu: MenuDefinition, compact: boolean) {
+    const key = compact ? 'compact' : menu.id
+    {
+      const isOpen = openMenuId.value === key
+      const checkable = menu.items.some((entry) => entry.type === 'action' && entry.check !== undefined)
+      return (
+        <div key={key} className={`${styles.menuGroup} ${compact ? styles.compactGroup : styles.fullGroup}`}>
+          <button
+            ref={(element) => {
+              if (element) triggerRefs.current.set(key, element)
+              else triggerRefs.current.delete(key)
+            }}
+            className={styles.trigger}
+            type="button"
+            role="menuitem"
+            data-menu-id={compact ? undefined : menu.id}
+            aria-label={compact ? menu.label : undefined}
+            onClick={() => { if (isOpen) closeAll(false); else openRootMenu(key) }}
+            onMouseEnter={() => { if (openMenuId.value !== null && openMenuId.value !== key) openRootMenu(key) }}
+            onKeyDown={(event) => handleTriggerKeyDown(event, key)}
+            aria-expanded={isOpen}
+            aria-haspopup="menu"
+          >
+            {compact
+              ? <><ControlIcon name="menu" size={20} /><ButtonTooltip label={menu.label} side="bottom" /></>
+              : menu.label}
+          </button>
+          {isOpen && (
+            <div
+              className={styles.menu}
+              role="menu"
+              aria-label={menu.label}
+              data-menu-popup="root"
+              onKeyDown={(event) => handleMenuKeyDown(event, menu)}
+            >
+              {menu.items.map((entry, index) => renderEntry(entry, index, checkable))}
+            </div>
+          )}
+        </div>
+      )
+    }
+  }
 }

@@ -197,7 +197,15 @@
 @media (max-width: 760px) {
   .titleBarVariant {
     width: auto;
-    flex: 1 1 120px;
+    flex: 0 1 180px;
+  }
+
+  .titleBarVariant .field {
+    height: var(--control-size-touch);
+  }
+
+  .titleBarVariant .input {
+    font-size: var(--text-touch);
   }
 
   .titleBarVariant .key {

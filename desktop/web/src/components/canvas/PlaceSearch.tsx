@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { parseCoordinates, placeSearch as search, type PlaceSearchResult } from '../../app/geocoding/place-search-session'
 import { PLACE_SEARCH_ZOOM, placeSearchFocusRequest } from '../../app/geocoding/place-search-ui'
 import { currentCanvasViewportCommandSurface } from '../../canvas/session'
+import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
@@ -90,7 +91,9 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
         : status === 'error' ? t('canvas.placeSearch.error')
           : null
   const listVisible = (variant === 'dialog' || expanded) && (options.length > 0 || statusText !== null)
-  const active = activeIndex >= 0 && activeIndex < options.length ? options[activeIndex] : null
+  // A coordinate row is the answer to what was typed, so it starts active.
+  const activeOption = activeIndex >= 0 ? activeIndex : coordinates ? 0 : -1
+  const active = activeOption < options.length ? options[activeOption] ?? null : null
 
   function clear(): void {
     setQuery('')
@@ -197,7 +200,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
               key={option.id}
               id={option.id}
               role="option"
-              aria-selected={index === activeIndex}
+              aria-selected={index === activeOption}
               className={styles.option}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => pick(option)}
@@ -221,6 +224,8 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
 /** The title-bar place field (View › Search a place…, Ctrl K). Choosing a place moves the camera only. */
 export function PlaceSearchField({ compact = false }: { readonly compact?: boolean }) {
   const viewport = currentCanvasViewportCommandSurface.value
+  // While "Where is your site?" asks, its field is the place search.
+  if (siteLocateOpen.value) return null
   return (
     <PlaceCombobox
       variant="title-bar"

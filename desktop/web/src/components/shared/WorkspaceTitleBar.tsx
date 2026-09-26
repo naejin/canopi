@@ -53,7 +53,7 @@ export function WorkspaceTitleBar({
         alt="Canopi"
         draggable={false}
       />
-      <MenuBar menus={menus} label={t('titleBar.menus')} onMenuOpen={onMenuOpen} />
+      <MenuBar menus={menus} label={t('titleBar.menus')} compactLabel={t('titleBar.menu')} onMenuOpen={onMenuOpen} />
       {design && (
         <>
           <span className={styles.rule} aria-hidden="true" />
@@ -61,10 +61,12 @@ export function WorkspaceTitleBar({
         </>
       )}
       <span className={styles.spacer} />
-      {fileActions}
+      <span className={styles.wide}>{fileActions}</span>
       {search}
-      <TitleBarIconButton command={help} icon="help" />
-      <TitleBarIconButton command={settings} icon="gear" />
+      <span className={styles.wide}>
+        <TitleBarIconButton command={help} icon="help" />
+        <TitleBarIconButton command={settings} icon="gear" />
+      </span>
       {windowControls && (
         <>
           <span className={styles.rule} aria-hidden="true" />

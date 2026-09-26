@@ -813,7 +813,8 @@
     "untitledDesign": "Naamloos ontwerp",
     "designNameInput": "Ontwerpnaam",
     "menus": "Menu’s",
-    "renameDesign": "Ontwerp hernoemen: {{name}}"
+    "renameDesign": "Ontwerp hernoemen: {{name}}",
+    "menu": "Menu"
   },
   "about": {
     "title": "Over Canopi",

@@ -813,7 +813,8 @@
     "untitledDesign": "Unbenannter Entwurf",
     "designNameInput": "Entwurfsname",
     "menus": "Menüs",
-    "renameDesign": "Entwurf umbenennen: {{name}}"
+    "renameDesign": "Entwurf umbenennen: {{name}}",
+    "menu": "Menü"
   },
   "about": {
     "title": "Über Canopi",

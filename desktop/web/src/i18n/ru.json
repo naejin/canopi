@@ -813,7 +813,8 @@
     "untitledDesign": "Безымянный дизайн",
     "designNameInput": "Название дизайна",
     "menus": "Меню",
-    "renameDesign": "Переименовать дизайн: {{name}}"
+    "renameDesign": "Переименовать дизайн: {{name}}",
+    "menu": "Меню"
   },
   "about": {
     "title": "О Canopi",

@@ -19,9 +19,7 @@
 }
 
 .named {
-  width: max-content;
-  min-width: 214px;
-  max-width: 290px;
+  width: var(--chrome-rail-named-width);
 }
 
 .group {
@@ -100,6 +98,9 @@
 
 .label {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -127,14 +128,50 @@
   position: relative;
 }
 
-/* Short windows: tighter buttons keep Undo and Redo above the view chip. */
-@media (max-height: 760px) {
+/* Short canvases: tighter buttons keep Undo and Redo above the view chip. */
+@container (max-height: 720px) {
   .icons .button,
   .named .button {
-    height: var(--control-size-lg);
+    height: var(--control-size-md);
   }
 
-  .icons .button {
+  .named .heading {
+    display: none;
+  }
+}
+
+/* Very short canvases: the rail scrolls rather than covering the view chip. */
+@container (max-height: 600px) {
+  .rail {
+    max-height: calc(100cqh - var(--chrome-rail-top) - var(--chrome-bottom));
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+/* Narrow canvases: names stay as accessible names but the rail keeps to icons. */
+@container (max-width: 600px) {
+  .named {
+    width: var(--chrome-rail-width);
+  }
+
+  .named .button {
+    justify-content: center;
     width: var(--control-size-3xl);
+    padding: 0;
+  }
+
+  .named .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .named .key,
+  .named .heading {
+    display: none;
   }
 }

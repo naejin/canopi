@@ -140,3 +140,15 @@
   display: inline-flex;
   width: var(--icon-size-md);
 }
+
+/* Narrow canvases: the ratio stands for the scale bar. */
+@container (max-width: 600px) {
+  .scaleBar,
+  .rule {
+    display: none;
+  }
+
+  .group {
+    padding-left: var(--space-1);
+  }
+}

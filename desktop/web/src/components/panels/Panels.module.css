@@ -13,13 +13,15 @@
 .canvasArea {
   /* The tool card slot sits beside the tool rail: wider while it shows names. */
   --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-width));
+  /* Chrome sizes itself against the canvas, not the window (the gallery nests it). */
+  container-type: size;
   position: relative;
   flex: 1;
   overflow: hidden;
 }
 
 .canvasArea:has([data-tool-rail="named"]) {
-  --canvas-tool-card-left: calc(2 * var(--chrome-inset) + 290px);
+  --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-named-width));
 }
 
 /* Rulers start below the floating title bar; they pass under the rails. */

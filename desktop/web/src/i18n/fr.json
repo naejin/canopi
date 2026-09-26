@@ -813,7 +813,8 @@
     "untitledDesign": "Design sans titre",
     "designNameInput": "Nom du Design",
     "menus": "Menus",
-    "renameDesign": "Renommer le Design : {{name}}"
+    "renameDesign": "Renommer le Design : {{name}}",
+    "menu": "Menu"
   },
   "about": {
     "title": "À propos de Canopi",

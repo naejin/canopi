@@ -39,7 +39,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 - **Relative arrangements.** Saved object stamps stay relative arrangements in metres. Design templates are v7 files and are placed relative to the view on insert.
 - **LiDAR** sampling and coverage fit use the session plane.
 - **View, not placement.** Pan, zoom, fit and place search move the camera only. Objects never move unless the user edits them (cut and paste relocates objects).
-- **New Design view.** A new Design opens at the app's last view (`last_view {lon, lat, zoom}` in settings); without one, at lat 23.0, lon 13.0, zoom 4 with a "Search your site" prompt. Opening a Design fits the camera to its objects; an empty Design uses the last view.
+- **New Design view.** A new Design opens at the app's last view (`last_view {lon, lat, zoom}` in settings); without one, at lat 23.0, lon 13.0, zoom 4 and asks "Where is your site?" before "Start your Design". Opening a Design fits the camera to its objects; an empty Design uses the last view.
 
 ## Map stack
 
@@ -56,7 +56,7 @@ interaction overlays
 - **Basemap.** OpenFreeMap vector styles (Liberty by default; Positron, Bright, Dark) with the attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap". The style is added as a vector source, style layers, glyphs and sprite without `setStyle()`, so the map lifetime, camera and edits survive a style change. Row opacity scales each style layer's paint opacity. Labels follow the app locale (`name:<locale>`, falling back to `name`).
 - **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Google is the only imagery (Esri World Imagery was rejected on its licence terms). Without a key, Google serves its public `mt1.google.com` tiles, as GeoLibre's basemap control does; with the user's device key it uses the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary (see [ADR 0001](adr/0001-geolocated-map-canvas.md)). The key never enters a Design, export, snapshot, diagnostic bundle or log.
 - **Site references** group in Layers: Basemap, Satellite, LiDAR items, Contours, Hillshade.
-- **Place search.** A pin button under the inspection lens (loupe) button opens a search field for a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
+- **Place search.** The title-bar place field (Ctrl K) searches a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
 - **Failure.** If WebGL2 or MapLibre cannot start, or the map fails later, the workspace shows an explicit "map unavailable" state: the map surface publishes its error status, no renderer or editing session is mounted, and the Design stays loaded so it can still be saved. There is no fallback renderer.
 
 ## GeoLibre reuse boundary

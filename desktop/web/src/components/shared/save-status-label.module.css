@@ -117,3 +117,14 @@
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
+
+/* Narrow windows keep the status and leave its action to File. */
+@media (max-width: 760px) {
+  .status {
+    font-size: var(--text-xs);
+  }
+
+  .link {
+    display: none;
+  }
+}

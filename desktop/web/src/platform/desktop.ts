@@ -13,15 +13,18 @@ import {
 } from "../app/lidar/display";
 import { installDesignContinuousSave } from "../app/document-session/transition";
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
+import { installToolRailLearning } from "../app/tool-rail/learning";
 import { desktopSettingsPlatformAdapter } from "./settings.desktop";
 
 let shellBootstrap: ShellBootstrap | null = null;
 let closeGuardLifetime: CloseGuardLifetime | null = null;
 let disposeContinuousSave: (() => void) | null = null;
 let disposePlaceSearchSession: (() => void) | null = null;
+let disposeToolRailLearning: (() => void) | null = null;
 
 export function bootstrapPlatform(): void {
   closeGuardLifetime?.dispose();
+  disposeToolRailLearning?.();
   disposePlaceSearchSession?.();
   disposeContinuousSave?.();
   shellBootstrap?.dispose();
@@ -32,6 +35,7 @@ export function bootstrapPlatform(): void {
   shellBootstrap = bootstrapShell(desktopSettingsPlatformAdapter);
   disposeContinuousSave = installDesignContinuousSave();
   disposePlaceSearchSession = installPlaceSearchSession();
+  disposeToolRailLearning = installToolRailLearning();
   closeGuardLifetime = registerCloseGuard();
 }
 
@@ -43,6 +47,8 @@ if (import.meta.hot) {
     closeGuardLifetime = null;
     disposePlaceSearchSession?.();
     disposePlaceSearchSession = null;
+    disposeToolRailLearning?.();
+    disposeToolRailLearning = null;
     disposeContinuousSave?.();
     disposeContinuousSave = null;
     shellBootstrap?.dispose();

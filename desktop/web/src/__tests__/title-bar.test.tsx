@@ -88,9 +88,11 @@ describe('TitleBar', () => {
     })
 
     const menubar = container.querySelector('[role="menubar"]')!
-    expect([...menubar.querySelectorAll(':scope > div > button')].map((button) => button.textContent)).toEqual([
+    expect([...menubar.querySelectorAll('button[data-menu-id]')].map((button) => button.textContent)).toEqual([
       'File', 'Edit', 'View', 'Tools', 'Help',
     ])
+    // The narrow-window "Menu" button carries every menu; CSS shows one or the other.
+    expect(menubar.querySelector('button[aria-label="Menu"]')?.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Untitled Design')
     expect(container.querySelector('button[aria-label^="Rename Design"]')).toBeNull()
     expect(container.querySelector('input[role="combobox"]')).toBeNull()

@@ -61,7 +61,7 @@ Paths are relative to `desktop/web/src/` unless they start with `desktop/`.
 
 ## Place search
 
-- The pin icon button under the inspection lens button, `Ctrl+K` (`view.searchPlace`; `Ctrl+F` belongs to the open panel's plant finder) or the empty-Design "Search your site" prompt opens `components/canvas/PlaceSearch.tsx`. The component only renders: `app/geocoding/place-search-session.ts` owns the one place-search controller (bound to `#geocoding-transport`) and closes and clears the search when the Design is replaced. Both platform bootstraps install it (`installPlaceSearchSession()`).
+- The title-bar place field, focused by `Ctrl+K` (`view.searchPlace`; `Ctrl+F` belongs to the open panel's plant finder), and the New Design "Where is your site?" card use `components/canvas/PlaceSearch.tsx`: one combobox that closes on a pick, clears on Escape, offers typed coordinates as the first (active) row and goes to them on Enter without a request. Results show short labels with the region as detail. There is no pin button. The component only renders: `app/geocoding/place-search-session.ts` owns the one place-search controller (bound to `#geocoding-transport`) and closes and clears the search when the Design is replaced. Both platform bootstraps install it (`installPlaceSearchSession()`).
 - `app/geocoding/place-search.ts` parses coordinates locally and paces requests; `app/geocoding/registry.ts` (copied from GeoLibre) holds providers: Nominatim first, search on Enter only, never as-you-type, at least 1.1 s between requests (`NOMINATIM_MIN_INTERVAL_MS`), OSM attribution on results.
 - The `#geocoding-transport` alias selects the edition transport: `transport.desktop.ts` calls the native `geocode_address` command (identifying User-Agent); `transport.browser.ts` uses `fetch`. No proxy.
 - Confirm calls `viewport.showPlace`: camera only.
@@ -85,7 +85,7 @@ Paths are relative to `desktop/web/src/` unless they start with `desktop/`.
 - `canvas/runtime/scene-runtime/construction.ts` builds SceneStore, the one camera owner, SceneHistory, the settled scene authority, the render scheduler with its one injected renderer, presentation, document bridge and role surfaces. It returns only a `SceneStateReader`, a session writer and edit/admission roles; never leak the concrete store.
 - `canvas/runtime/lifecycle-owner.ts` holds the single runtime lease (`acquireCanvasRuntimeLifecycle`); a new runtime waits for the previous release. The UI gallery mounts this same shared workspace composition (`ui-gallery/gallery-workspace-runtime.ts`); only scene-level tests use the map-free host in `__tests__/support/live-canvas-runtime.ts`. Production never imports the gallery.
 - Production files under `canvas/runtime/` never import `app/**`. App behaviour enters through `CanvasRuntimeAppAdapter` (`canvas/runtime/app-adapter.ts`; production factory `app/canvas-runtime/app-adapter.ts`): Design composition, clean state, `translate`, settings reads/writes, layer projection and presentation data. Optional capabilities stay absent, never no-op.
-- `app/canvas-commands/` owns the platform-neutral toolbar catalog (tool groups, labels, shortcuts, availability, typed intents). A disabled command never dispatches; adapters re-read the live command surface at dispatch time. Web shortcuts install through `web/canvas-shortcuts.ts`, not the Desktop command graph.
+- `app/canvas-commands/` owns the platform-neutral tool rail and canvas menu catalog (tool groups, labels, single-key shortcuts, history, edit and view actions, availability, typed intents). A disabled command never dispatches; adapters re-read the live command surface at dispatch time. Web shortcuts install through `web/canvas-shortcuts.ts`, not the Desktop command graph.
 
 ## Scene authority and history
 
@@ -109,7 +109,7 @@ Paths are relative to `desktop/web/src/` unless they start with `desktop/`.
 - `canvas/runtime/scene-runtime/render-scheduler.ts` owns the mounted renderer: mounts once, rejects a second mount, coalesces invalidations into one frame (scene beats viewport), fences stale preparation, reports fire-and-forget failures and leaves the scene intact on `unmount()`. Awaited scene renders stay immediate for document settlement.
 - Invalidation kinds: scene (content, selection, presentation, locale, theme, hover) via `renderScene()`; viewport (pan, zoom, fit, resize) via `setViewport()`; chrome (rulers, grid, guides). Never route viewport work through a full scene render.
 - `SceneRendererSnapshot` is total: typed hover target, per-kind selections derived from typed targets, `selectionLabelPlantIds` only for a single direct plant selection. No missing-array fallbacks.
-- Screen-space chrome stays outside the renderer. `canvas/rulers.ts` owns the ruler/scale overlay lifetime; grid (`canvas/grid.ts`) and scale bar (`canvas/scale-bar.ts`) compose around it.
+- Screen-space chrome stays outside the renderer. `canvas/rulers.ts` owns the ruler overlay lifetime (inset under the floating chrome); grid (`canvas/grid.ts`) composes around it. The scale bar is DOM in the zoom group; `canvas/scale-bar.ts` and `canvas/map-scale.ts` compute its length and the 1:N ratio.
 
 ## Presentation invariants
 

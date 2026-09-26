@@ -123,6 +123,7 @@
   --text-sm: 13px;        /* small buttons, segments, tooltips */
   --text-base: 14px;      /* controls and UI text */
   --text-md: 15px;        /* body */
+  --text-touch: 16px;     /* text fields on phones, so browsers do not zoom in */
   --text-dialog: 14.5px;  /* dialog body */
   --text-title-bar: 17px; /* Design name in the title bar */
   --text-lg: 18px;        /* panel titles */
@@ -138,6 +139,7 @@
   --chrome-rail-top: 72px;     /* rails and the dock start below the title bar */
   --chrome-bottom: 64px;       /* the dock stops above the view chip and zoom group */
   --chrome-rail-width: 52px;   /* icon-only tool and panel rails */
+  --chrome-rail-named-width: 224px; /* tool rail while it shows names and keys */
   --dock-width: 380px;
   --dock-width-wide: 440px;    /* Budget and Consortium */
   --panel-width: 280px;
