@@ -89,7 +89,7 @@ Subagents are allowed without asking for exploration, verification or disjoint i
 
 ## Style
 
-Follow the surrounding file. TypeScript/Preact: 2-space indent, `PascalCase` components, `camelCase` functions and signals, `kebab-case` CSS module files. Rust: standard style. Comment only non-obvious behaviour, invariants and boundaries. UI direction (field-notebook palette, ochre accent, no green chrome) is in [.interface-design/system.md](.interface-design/system.md).
+Follow the surrounding file. TypeScript/Preact: 2-space indent, `PascalCase` components, `camelCase` functions and signals, `kebab-case` CSS module files. Rust: standard style. Comment only non-obvious behaviour, invariants and boundaries. UI direction (Field Atlas: parchment, ink and ochre floating over the map; no green chrome; ADR 0010) is in [.interface-design/system.md](.interface-design/system.md).
 
 ## Docs
 

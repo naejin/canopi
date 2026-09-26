@@ -83,6 +83,8 @@ Every copied file keeps an MIT header naming its source path and commit and gets
 - **Personal libraries:** saved object stamps and the Design Notebook live in the Desktop user DB; Web keeps stamps browser-local. See [ADR 0007](adr/0007-design-objects-and-personal-libraries.md).
 - **PDF:** one browser-compatible layout and encoder for every edition, without map backgrounds in v2.0. See [ADR 0008](adr/0008-canvas-pdf-export.md).
 - **Saving:** always-on continuous save to each Design's home (a file or a Design Draft), with conflict detection and no unsaved-changes prompts. See [ADR 0009](adr/0009-continuous-save.md).
+- **Interface:** a map-first Field Atlas interface with floating chrome, menus for every command, one plant finder and one species row everywhere. See [ADR 0010](adr/0010-map-first-interface.md).
+- **Analyses and stories:** analyses come from a registry over typed library items with recorded provenance; Designs hold saved views and stories presented inside Canopi. See [ADR 0011](adr/0011-analyses-provenance-and-stories.md).
 - **GeoJSON:** RFC 7946 import and export of design objects in both editions through one pure codec (`app/geojson/`). Export reads canonical lon/lat; import rejects malformed files before mutation and adds objects as one undoable runtime transaction.
 
 ## Native execution
