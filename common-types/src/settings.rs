@@ -196,7 +196,10 @@ mod tests {
         assert_eq!(settings.used_canvas_tools, vec!["select", "polygon"]);
         assert_eq!(settings.tool_names_visible, Some(false));
         let value = serde_json::to_value(&settings).expect("settings should serialize");
-        assert_eq!(value["used_canvas_tools"], serde_json::json!(["select", "polygon"]));
+        assert_eq!(
+            value["used_canvas_tools"],
+            serde_json::json!(["select", "polygon"])
+        );
         assert_eq!(value["tool_names_visible"], serde_json::json!(false));
     }
 

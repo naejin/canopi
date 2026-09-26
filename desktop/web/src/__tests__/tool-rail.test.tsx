@@ -261,15 +261,15 @@ describe('ToolRail', () => {
   it('runs undo and redo from the rail only while history allows it', async () => {
     await mount()
     expect(railButton('edit.undo').getAttribute('aria-disabled')).toBe('true')
-    railButton('edit.undo').click()
+    await act(async () => { railButton('edit.undo').click() })
     expect(undo).not.toHaveBeenCalled()
 
     await act(async () => {
       canUndo.value = true
       canRedo.value = true
     })
-    railButton('edit.undo').click()
-    railButton('edit.redo').click()
+    await act(async () => { railButton('edit.undo').click() })
+    await act(async () => { railButton('edit.redo').click() })
     expect(undo).toHaveBeenCalledOnce()
     expect(redo).toHaveBeenCalledOnce()
   })
@@ -317,8 +317,8 @@ describe('ViewChip', () => {
     }))
   })
 
-  afterEach(() => {
-    render(null, container)
+  afterEach(async () => {
+    await act(async () => { render(null, container) })
     container.remove()
     setCurrentCanvasSession(null)
   })
@@ -335,7 +335,7 @@ describe('ViewChip', () => {
     expect(toggles.map((button) => button.querySelector('svg') !== null)).toEqual([false, true, false])
     expect(toggles[0]!.getAttribute('aria-keyshortcuts')).toBe('Shift+G')
 
-    toggles.forEach((button) => button.click())
+    await act(async () => { toggles.forEach((button) => button.click()) })
     expect(toggleGrid).toHaveBeenCalledOnce()
     expect(toggleSnapToGrid).toHaveBeenCalledOnce()
     expect(toggleRulers).toHaveBeenCalledOnce()
