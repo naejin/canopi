@@ -2,7 +2,7 @@ import { effect, signal } from '@preact/signals'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CanvasRuntimeHost } from '../canvas/runtime/runtime'
+import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../canvas/session'
 import { GalleryCanvasSurface } from '../../ui-gallery/GalleryCanvasSurface'
 import { designFixture } from '../../ui-gallery/fixtures'
@@ -16,12 +16,7 @@ vi.mock('../web/WebCanvasToolbar', () => ({ WebCanvasToolbar: () => null }))
 vi.mock('../components/canvas/InspectionLens', () => ({ InspectionLens: () => null }))
 vi.mock('../components/canvas/SpeciesFocusChip', () => ({ SpeciesFocusChip: () => null }))
 vi.mock('../components/canvas/ZoomControls', () => ({ ZoomControls: () => null }))
-vi.mock('../canvas/runtime/scene-runtime', () => ({ SceneCanvasRuntime: class {} }))
-vi.mock('../../ui-gallery/scene-canvas-runtime-host', () => ({ createSceneCanvasRuntimeHost: vi.fn() }))
-vi.mock('../app/canvas-runtime/app-adapter', () => ({ createAppCanvasRuntimeAppAdapter: vi.fn() }))
-vi.mock('../app/saved-object-stamps', () => ({
-  savedObjectStampWorkbench: { saveSelection: vi.fn() },
-}))
+vi.mock('../../ui-gallery/gallery-workspace-runtime', () => ({ createGalleryWorkspaceRuntimeComposition: vi.fn() }))
 
 class FakeResizeObserver {
   static instances: FakeResizeObserver[] = []
@@ -57,8 +52,8 @@ describe('UI gallery canvas surface', () => {
   })
 
   it('releases the canvas owner on primary-route removal and creates a fresh owner on return', async () => {
-    const first = fakeRuntimeHost()
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
+    const second = fakeRuntimeComposition()
     const activeSurface = signal('workspace')
     const onReadyChange = vi.fn()
 
@@ -69,7 +64,7 @@ describe('UI gallery canvas surface', () => {
           design={designFixture()}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={() => first.host}
+          createRuntimeComposition={() => first.host}
         />,
         container,
       )
@@ -78,7 +73,7 @@ describe('UI gallery canvas surface', () => {
 
     await vi.waitFor(() => expect(first.documents.loadDocument).toHaveBeenCalledOnce())
 
-    expect(first.host.init).toHaveBeenCalledOnce()
+    expect(first.host.start).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBe(first.host.surfaces)
     expect(onReadyChange).toHaveBeenLastCalledWith(true)
 
@@ -87,7 +82,7 @@ describe('UI gallery canvas surface', () => {
       await flushMicrotasks()
     })
 
-    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(first.host.dispose).toHaveBeenCalledOnce())
 
     expect(FakeResizeObserver.instances[0]?.disconnect).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBeNull()
@@ -100,24 +95,24 @@ describe('UI gallery canvas surface', () => {
           design={designFixture()}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={() => second.host}
+          createRuntimeComposition={() => second.host}
         />,
         container,
       )
       await flushMicrotasks()
     })
 
-    await vi.waitFor(() => expect(second.host.init).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(second.host.start).toHaveBeenCalledOnce())
 
-    expect(vi.mocked(first.host.destroy).mock.invocationCallOrder[0])
-      .toBeLessThan(vi.mocked(second.host.init).mock.invocationCallOrder[0]!)
-    expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
+    expect(vi.mocked(first.host.dispose).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(second.host.start).mock.invocationCallOrder[0]!)
+    await vi.waitFor(() => expect(getCurrentCanvasSession() === second.host.surfaces).toBe(true))
   })
 
   it('ignores late initialization after cleanup and preserves the replacement session', async () => {
     let finishFirst: (() => void) | undefined
-    const first = fakeRuntimeHost(() => new Promise<void>(resolve => { finishFirst = resolve }))
-    const second = fakeRuntimeHost()
+    const first = fakeRuntimeComposition(() => new Promise<void>(resolve => { finishFirst = resolve }))
+    const second = fakeRuntimeComposition()
     const activeSurface = signal('workspace')
     const onReadyChange = vi.fn()
     const design = designFixture()
@@ -129,7 +124,7 @@ describe('UI gallery canvas surface', () => {
           design={design}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={() => first.host}
+          createRuntimeComposition={() => first.host}
         />,
         container,
       )
@@ -140,7 +135,7 @@ describe('UI gallery canvas surface', () => {
       render(<div data-hmr-boundary />, container)
       await flushMicrotasks()
     })
-    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(first.host.dispose).toHaveBeenCalledOnce())
 
     await act(async () => {
       render(
@@ -149,7 +144,7 @@ describe('UI gallery canvas surface', () => {
           design={design}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={() => second.host}
+          createRuntimeComposition={() => second.host}
         />,
         container,
       )
@@ -163,12 +158,12 @@ describe('UI gallery canvas surface', () => {
     })
 
     expect(first.documents.loadDocument).not.toHaveBeenCalled()
-    expect(first.host.destroy).toHaveBeenCalledOnce()
+    expect(first.host.dispose).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
   })
 
   it('keeps readiness false when publication synchronously removes the owner', async () => {
-    const first = fakeRuntimeHost()
+    const first = fakeRuntimeComposition()
     const onReadyChange = vi.fn()
     let removed = false
     const disposePublicationEffect = effect(() => {
@@ -186,14 +181,14 @@ describe('UI gallery canvas surface', () => {
             design={designFixture()}
             dense={false}
             onReadyChange={onReadyChange}
-            createRuntimeHost={() => first.host}
+            createRuntimeComposition={() => first.host}
           />,
           container,
         )
         await flushMicrotasks()
       })
 
-      await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+      await vi.waitFor(() => expect(first.host.dispose).toHaveBeenCalledOnce())
 
       expect(getCurrentCanvasSession()).toBeNull()
       expect(onReadyChange).not.toHaveBeenCalledWith(true)
@@ -204,8 +199,8 @@ describe('UI gallery canvas surface', () => {
   })
 
   it('does not clear a successor published reentrantly during destruction', async () => {
-    const successor = fakeRuntimeHost()
-    const first = fakeRuntimeHost(
+    const successor = fakeRuntimeComposition()
+    const first = fakeRuntimeComposition(
       async () => {},
       async () => setCurrentCanvasSession(successor.host.surfaces),
     )
@@ -217,7 +212,7 @@ describe('UI gallery canvas surface', () => {
           design={designFixture()}
           dense={false}
           onReadyChange={() => {}}
-          createRuntimeHost={() => first.host}
+          createRuntimeComposition={() => first.host}
         />,
         container,
       )
@@ -231,18 +226,18 @@ describe('UI gallery canvas surface', () => {
       await flushMicrotasks()
     })
 
-    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(first.host.dispose).toHaveBeenCalledOnce())
 
     expect(getCurrentCanvasSession()).toBe(successor.host.surfaces)
   })
 
   it('waits for asynchronous destruction before constructing a replacement owner', async () => {
     let finishDestroy: (() => void) | undefined
-    const first = fakeRuntimeHost(
+    const first = fakeRuntimeComposition(
       async () => {},
       () => new Promise<void>(resolve => { finishDestroy = resolve }),
     )
-    const second = fakeRuntimeHost()
+    const second = fakeRuntimeComposition()
     const activeSurface = signal('workspace')
     const onReadyChange = vi.fn()
     const createSecond = vi.fn(() => second.host)
@@ -254,7 +249,7 @@ describe('UI gallery canvas surface', () => {
           design={designFixture()}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={() => first.host}
+          createRuntimeComposition={() => first.host}
         />,
         container,
       )
@@ -270,25 +265,25 @@ describe('UI gallery canvas surface', () => {
           design={designFixture()}
           dense={false}
           onReadyChange={onReadyChange}
-          createRuntimeHost={createSecond}
+          createRuntimeComposition={createSecond}
         />,
         container,
       )
       await flushMicrotasks()
     })
 
-    await vi.waitFor(() => expect(first.host.destroy).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(first.host.dispose).toHaveBeenCalledOnce())
 
     expect(finishDestroy).toBeTypeOf('function')
     expect(createSecond).not.toHaveBeenCalled()
-    expect(second.host.init).not.toHaveBeenCalled()
+    expect(second.host.start).not.toHaveBeenCalled()
 
     await act(async () => {
       finishDestroy!()
       await flushMicrotasks()
     })
 
-    await vi.waitFor(() => expect(second.host.init).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(second.host.start).toHaveBeenCalledOnce())
 
     expect(createSecond).toHaveBeenCalledOnce()
     expect(getCurrentCanvasSession()).toBe(second.host.surfaces)
@@ -301,11 +296,11 @@ async function flushMicrotasks(): Promise<void> {
   }
 }
 
-function fakeRuntimeHost(
+function fakeRuntimeComposition(
   initialize: () => Promise<void> = async () => {},
   destroy: () => Promise<void> = async () => {},
 ): {
-  readonly host: CanvasRuntimeHost
+  readonly host: WorkspaceRuntimeComposition
   readonly documents: ReturnType<typeof createTestCanvasDocumentSurface>
 } {
   const documents = createTestCanvasDocumentSurface({
@@ -322,8 +317,11 @@ function fakeRuntimeHost(
     documents,
     host: {
       surfaces,
-      init: vi.fn(initialize),
-      destroy: vi.fn(destroy),
+      start: vi.fn(async () => {
+        await initialize()
+        return 'shared-ready' as const
+      }),
+      dispose: vi.fn(destroy),
     },
   }
 }

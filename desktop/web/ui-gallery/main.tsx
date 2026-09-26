@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { effect, signal } from '@preact/signals'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import '../src/styles/global.css'
 import styles from './gallery.module.css'
 import { speciesCatalogWorkbench } from '../src/app/plant-browser'

@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { CanopiFile } from '../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
-import type { CanvasRuntimeHost, CanvasRuntimeSurfaces } from '../canvas/runtime/runtime'
+import type { CanvasRuntimeSurfaces } from '../canvas/runtime/runtime'
 import {
   createGeoJsonWorkflow,
   type GeoJsonFileAdapter,
   type GeoJsonNotice,
 } from '../app/geojson/workflow'
 import { geoAt } from './support/geo-design'
-import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
+import { createLiveTestCanvasRuntimeHost, type CanvasRuntimeHost } from './support/live-canvas-runtime'
 
 const LAYERS: CanopiFile['layers'] = [
   { name: 'plants', visible: true, locked: false, opacity: 1 },

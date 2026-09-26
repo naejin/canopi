@@ -2,7 +2,7 @@
 
 From `desktop/web/`, run `npm run dev:ui` and open http://127.0.0.1:1422/.
 
-The gallery mounts production workspace and panel components with at most one live disposable canvas runtime. The mounted canvas surface owns runtime construction, publication, resize observation and cleanup. The backend and file dialogs are replaced by this Vite configuration with memory fixtures: no user database, Design, settings store or file is read or written, and a reload resets the session.
+The gallery mounts production workspace and panel components with at most one live disposable canvas runtime. The canvas is the production shared workspace (MapLibre + `maplibre-pixi`, `gallery-workspace-runtime.ts`); it works offline and deterministically because the Basemap and Satellite stay hidden, so the map draws only its local background and no tiles are fetched, whatever the Layers panel shows. It needs WebGL2; without it the map is unavailable and the status line says so. The mounted canvas surface owns composition construction, publication, resize observation and cleanup. The backend and file dialogs are replaced by this Vite configuration with memory fixtures: no user database, Design, settings store or file is read or written, and a reload resets the session.
 
 Surfaces (`?surface=`): `workspace`, `color`, `symbol`, `key`, `layers`, `calendar`, `calendar-expanded`, `budget`, `consortium`, `favorites`, `notebook` (Desktop only), `lens`.
 
