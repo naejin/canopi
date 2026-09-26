@@ -1,3 +1,5 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
+
 export interface HoverTooltipController {
   show(screenX: number, screenY: number, commonName: string | null, scientificName: string): void
   hide(): void
@@ -21,7 +23,7 @@ export function createHoverTooltip(container: HTMLElement): HoverTooltipControll
     'border-radius: var(--radius-md)',
     'white-space: nowrap',
     `max-width: ${MAX_WIDTH_PX}px`,
-    'font-family: Inter, sans-serif',
+    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
   ].join(';')
 
   const commonEl = document.createElement('div')

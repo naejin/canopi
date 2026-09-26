@@ -2,6 +2,7 @@ import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+const DRAFT_LINE_PX = 2
 
 export interface PolygonDraftOverlayController {
   update(vertices: readonly ScenePoint[], activePoint: ScenePoint | null, camera: WorkspaceCameraFrameReader): void
@@ -35,7 +36,7 @@ export function createPolygonDraftOverlay(container: HTMLElement): PolygonDraftO
         const fill = document.createElementNS(SVG_NS, 'polygon')
         fill.dataset.polygonDraftFill = 'true'
         fill.setAttribute('points', formatSvgPoints(committedPoints))
-        fill.setAttribute('fill', 'var(--color-overlay-rect-bg)')
+        fill.setAttribute('fill', 'var(--canvas-zone-fill)')
         fill.setAttribute('stroke', 'none')
         root.appendChild(fill)
       }
@@ -43,13 +44,11 @@ export function createPolygonDraftOverlay(container: HTMLElement): PolygonDraftO
       const activeScreen = activePoint ? camera.worldToScreen(activePoint) : null
       const linePoints = activeScreen ? [...committedPoints, activeScreen] : committedPoints
       if (linePoints.length >= 2) {
-        const line = document.createElementNS(SVG_NS, 'polyline')
+        // Dark casing first so the light draft line reads on any imagery.
+        const points = formatSvgPoints(linePoints)
+        root.appendChild(createDraftPolyline(points, 'var(--canvas-overlay-casing)', DRAFT_LINE_PX + 2))
+        const line = createDraftPolyline(points, 'var(--canvas-guide-line)', DRAFT_LINE_PX)
         line.dataset.polygonDraftLine = 'true'
-        line.setAttribute('points', formatSvgPoints(linePoints))
-        line.setAttribute('fill', 'none')
-        line.setAttribute('stroke', 'var(--canvas-selection-stroke)')
-        line.setAttribute('stroke-width', '1.5')
-        line.setAttribute('stroke-linejoin', 'round')
         root.appendChild(line)
       }
 
@@ -58,8 +57,10 @@ export function createPolygonDraftOverlay(container: HTMLElement): PolygonDraftO
         marker.dataset.polygonDraftVertex = 'true'
         marker.setAttribute('cx', formatSvgNumber(point.x))
         marker.setAttribute('cy', formatSvgNumber(point.y))
-        marker.setAttribute('r', '3')
-        marker.setAttribute('fill', 'var(--canvas-selection-stroke)')
+        marker.setAttribute('r', '3.5')
+        marker.setAttribute('fill', 'var(--canvas-guide-line)')
+        marker.setAttribute('stroke', 'var(--canvas-overlay-casing)')
+        marker.setAttribute('stroke-width', '1.5')
         root.appendChild(marker)
       }
 
@@ -73,6 +74,17 @@ export function createPolygonDraftOverlay(container: HTMLElement): PolygonDraftO
       root.remove()
     },
   }
+}
+
+function createDraftPolyline(points: string, stroke: string, width: number): SVGPolylineElement {
+  const line = document.createElementNS(SVG_NS, 'polyline')
+  line.setAttribute('points', points)
+  line.setAttribute('fill', 'none')
+  line.setAttribute('stroke', stroke)
+  line.setAttribute('stroke-width', String(width))
+  line.setAttribute('stroke-linejoin', 'round')
+  line.setAttribute('stroke-linecap', 'round')
+  return line
 }
 
 function formatSvgPoints(points: readonly ScenePoint[]): string {

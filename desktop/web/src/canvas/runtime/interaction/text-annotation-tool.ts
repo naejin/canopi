@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -54,7 +55,7 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
       outline: 'none',
       resize: 'none',
       overflow: 'hidden',
-      fontFamily: 'var(--font-sans, Inter, system-ui, sans-serif)',
+      fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: 'var(--text-base)',
       lineHeight: '1.4',
       color: 'var(--color-text)',

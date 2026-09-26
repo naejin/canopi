@@ -6,11 +6,13 @@ import {
 } from '../rulers'
 import type { CameraViewportSnapshot } from './camera'
 import { getCanvasColor } from '../theme-refresh'
+import { getGuideLineVisual, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
 import { CANVAS_RULER_SIZE_PX } from '../canvas-notice-layout'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
 const GRID_Z_INDEX = 4
 const MAJOR_STEP = 2
+const GUIDE_LINE_PX = 1
 
 export interface SceneChromeSnapshot {
   camera: CameraViewportSnapshot
@@ -24,8 +26,8 @@ export class SceneChromeOverlay {
   private readonly _gridCanvas = document.createElement('canvas')
   private readonly _rulers: RulerOverlay
   private _snapshot: SceneChromeSnapshot | null = null
-  private _gridColor = '#D4CFC5'
-  private _gridMajorColor = '#B8A482'
+  private _gridColor = getCanvasColor('grid')
+  private _gridMajorColor = getCanvasColor('grid-major')
   private _destroyed = false
 
   constructor(
@@ -186,25 +188,28 @@ export class SceneChromeOverlay {
     const rulerInset = snapshot.rulersVisible ? RULER_SIZE : 0
     const viewport = snapshot.camera.viewport
 
+    const guideLine = getGuideLineVisual()
     ctx.save()
-    ctx.strokeStyle = getCanvasColor('guide-line')
-    ctx.lineWidth = 1
     ctx.setLineDash([6, 4])
 
     for (const guide of snapshot.guides) {
+      ctx.beginPath()
       if (guide.axis === 'v') {
         const x = viewport.x + guide.position * viewport.scale
-        ctx.beginPath()
         ctx.moveTo(Math.round(x) + 0.5, rulerInset)
         ctx.lineTo(Math.round(x) + 0.5, height)
-        ctx.stroke()
       } else {
         const y = viewport.y + guide.position * viewport.scale
-        ctx.beginPath()
         ctx.moveTo(rulerInset, Math.round(y) + 0.5)
         ctx.lineTo(width, Math.round(y) + 0.5)
-        ctx.stroke()
       }
+      // Dark casing first so the light dashes read on any imagery.
+      ctx.strokeStyle = guideLine.casing
+      ctx.lineWidth = GUIDE_LINE_PX + OVERLAY_CASING_EXTRA_PX
+      ctx.stroke()
+      ctx.strokeStyle = guideLine.color
+      ctx.lineWidth = GUIDE_LINE_PX
+      ctx.stroke()
     }
 
     ctx.restore()
@@ -212,7 +217,7 @@ export class SceneChromeOverlay {
 
   private _refreshGridColors(): void {
     const style = getComputedStyle(this._container)
-    this._gridColor = style.getPropertyValue('--canvas-grid').trim() || '#D4CFC5'
-    this._gridMajorColor = style.getPropertyValue('--canvas-grid-major').trim() || '#B8A482'
+    this._gridColor = style.getPropertyValue('--canvas-grid').trim() || getCanvasColor('grid')
+    this._gridMajorColor = style.getPropertyValue('--canvas-grid-major').trim() || getCanvasColor('grid-major')
   }
 }

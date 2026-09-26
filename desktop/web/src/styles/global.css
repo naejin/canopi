@@ -64,11 +64,6 @@
   --color-action-fertilising: #7D6F5E; /* graphite */
   --color-action-other: #8B7355;       /* driftwood */
 
-  /* Canvas overlay — selection band & rectangle preview */
-  --color-overlay-band-border: rgba(90, 115, 160, 0.9);
-  --color-overlay-band-bg: rgba(90, 115, 160, 0.16);
-  --color-overlay-rect-bg: rgba(139, 127, 99, 0.18);
-
   /* Plant attributes — earthy tones, not neon */
   --color-edible: #5A7D3A;           /* moss — food plants */
   --color-edible-bg: rgba(90, 125, 58, 0.08);
@@ -167,26 +162,25 @@
   --color-close-active: #8C2A22;
 
   /* Canvas — the garden (separate from the tool chrome) */
-  --canvas-bg: #F6F2EA;
-  --canvas-grid: rgba(60, 45, 30, 0.05);
-  --canvas-grid-major: rgba(60, 45, 30, 0.10);
-  --canvas-ruler-bg: #EDE8DD;
-  --canvas-ruler-text: rgba(60, 45, 30, 0.4);
-  --canvas-selection: rgba(160, 107, 31, 0.18);
-  --canvas-hover-stroke: rgba(160, 107, 31, 0.62);
-  --canvas-selection-stroke: rgba(160, 107, 31, 0.92);
-  --canvas-locked-object-stroke: rgba(107, 95, 78, 0.86);
-  --canvas-locked-layer-stroke: rgba(181, 67, 42, 0.88);
-  --canvas-guide-line: rgba(45, 95, 63, 0.6);
-  --canvas-guide-smart: rgba(181, 67, 42, 0.72);
-  --canvas-stack-badge-bg: #5A7D3A;
-  --canvas-stack-badge-text: #FCF8F2;
-  --canvas-plant-label: #444444;
-  --canvas-annotation-text: #1A1A1A;
-  --canvas-annotation-stroke: #6B6253;
-  --canvas-annotation-surface: #F8F4ED;
-  --canvas-zone-stroke: #2D5F3F;
-  --canvas-zone-fill: rgba(45, 95, 63, 0.1);
+  --canvas-bg: #EFE9DD;                                /* paper behind lens previews */
+  --canvas-grid: rgba(39, 35, 29, 0.07);
+  --canvas-grid-major: rgba(39, 35, 29, 0.14);
+  --canvas-ruler-bg: #F3EEE3;
+  --canvas-ruler-text: #645A4C;
+  --canvas-selection: rgba(156, 90, 22, 0.14);         /* band selection fill */
+  --canvas-hover-stroke: rgba(156, 90, 22, 0.62);
+  --canvas-selection-stroke: #9C5A16;                  /* ochre accent */
+  --canvas-interaction-casing: #FFF8EC;                /* cream casing under hover, selection and lock strokes */
+  --canvas-locked-object-stroke: rgba(100, 90, 76, 0.86);
+  --canvas-locked-layer-stroke: rgba(168, 51, 42, 0.88);
+  --canvas-guide-line: #FFF3D6;                        /* guides and drawing previews over the map */
+  --canvas-overlay-casing: rgba(20, 16, 10, 0.6);      /* dark casing under light overlay strokes */
+  --canvas-stack-badge-bg: #27231D;
+  --canvas-stack-badge-text: #FBF3E4;
+  --canvas-plant-label: #27231D;
+  --canvas-annotation-text: #27231D;
+  --canvas-zone-stroke: #FFF3D6;
+  --canvas-zone-fill: rgba(255, 243, 214, 0.1);
   --canvas-toolbar-width: var(--chrome-rail-width);
 }
 
@@ -246,10 +240,6 @@
   --color-action-fertilising: #A89A88;
   --color-action-other: #9E8D78;
 
-  --color-overlay-band-border: rgba(120, 145, 190, 0.85);
-  --color-overlay-band-bg: rgba(120, 145, 190, 0.18);
-  --color-overlay-rect-bg: rgba(180, 165, 140, 0.2);
-
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -260,26 +250,25 @@
   --color-close-hover: #F08A7C;
   --color-close-active: #E07466;
 
-  --canvas-bg: #151210;
-  --canvas-grid: rgba(200, 180, 150, 0.04);
-  --canvas-grid-major: rgba(200, 180, 150, 0.09);
-  --canvas-ruler-bg: #1A1714;
-  --canvas-ruler-text: rgba(200, 180, 150, 0.45);
-  --canvas-selection: rgba(200, 155, 74, 0.22);
-  --canvas-hover-stroke: rgba(200, 155, 74, 0.66);
-  --canvas-selection-stroke: rgba(200, 155, 74, 0.96);
-  --canvas-locked-object-stroke: rgba(176, 162, 146, 0.82);
-  --canvas-locked-layer-stroke: rgba(212, 118, 90, 0.9);
-  --canvas-guide-line: rgba(200, 180, 150, 0.72);
-  --canvas-guide-smart: rgba(212, 118, 90, 0.8);
-  --canvas-stack-badge-bg: #8BAA5E;
-  --canvas-stack-badge-text: #1C1915;
-  --canvas-plant-label: #D8D3C8;
-  --canvas-annotation-text: #E8E2D8;
-  --canvas-annotation-stroke: #BEB0A0;
-  --canvas-annotation-surface: #362F28;
-  --canvas-zone-stroke: rgba(200, 180, 150, 0.65);
-  --canvas-zone-fill: rgba(200, 180, 150, 0.08);
+  --canvas-bg: #161510;
+  --canvas-grid: rgba(239, 232, 218, 0.06);
+  --canvas-grid-major: rgba(239, 232, 218, 0.12);
+  --canvas-ruler-bg: #2A2721;
+  --canvas-ruler-text: #B5AC9D;
+  --canvas-selection: rgba(227, 160, 76, 0.2);
+  --canvas-hover-stroke: rgba(227, 160, 76, 0.66);
+  --canvas-selection-stroke: #E3A04C;
+  --canvas-interaction-casing: rgba(20, 16, 10, 0.72);
+  --canvas-locked-object-stroke: rgba(181, 172, 157, 0.82);
+  --canvas-locked-layer-stroke: rgba(240, 138, 124, 0.9);
+  --canvas-guide-line: #FFF3D6;
+  --canvas-overlay-casing: rgba(20, 16, 10, 0.6);
+  --canvas-stack-badge-bg: #EFE8DA;
+  --canvas-stack-badge-text: #1D1A14;
+  --canvas-plant-label: #EFE8DA;
+  --canvas-annotation-text: #EFE8DA;
+  --canvas-zone-stroke: #FFF3D6;
+  --canvas-zone-fill: rgba(255, 243, 214, 0.08);
 
   /* Plant attributes — desaturated for dark */
   --color-edible: #8BAA5E;

@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
@@ -79,7 +80,7 @@ export function createPlantSpacingOverlay(
     'border: 1px solid var(--color-border-strong, var(--color-border))',
     'border-radius: var(--radius-md)',
     'box-shadow: 0 2px 6px rgba(44, 36, 24, 0.10)',
-    'font-family: Inter, sans-serif',
+    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')
@@ -183,9 +184,10 @@ export function createPlantSpacingOverlay(
     'z-index: 4',
     'display: none',
     'pointer-events: none',
-    'border: 2px solid var(--color-primary)',
+    'border: 2px solid var(--canvas-selection-stroke)',
     'border-radius: var(--radius-full)',
     'box-sizing: border-box',
+    'box-shadow: 0 0 0 1px var(--canvas-interaction-casing), inset 0 0 0 1px var(--canvas-interaction-casing)',
     'background: transparent',
   ].join(';')
 
@@ -195,7 +197,8 @@ export function createPlantSpacingOverlay(
     'z-index: 3',
     'display: none',
     'height: 0',
-    'border-top: 2px dashed var(--color-primary)',
+    'border-top: 2px dashed var(--canvas-selection-stroke)',
+    'box-shadow: 0 0 0 1px var(--canvas-interaction-casing)',
     'transform-origin: 0 0',
     'pointer-events: none',
   ].join(';')

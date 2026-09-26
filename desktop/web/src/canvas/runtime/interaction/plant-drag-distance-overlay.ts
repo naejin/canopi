@@ -107,16 +107,10 @@ function appendGuide(
   end: ScenePoint,
   text: string,
 ): void {
-  const line = document.createElementNS(SVG_NS, 'line')
+  // Dark casing first so the light distance line reads on any imagery.
+  svg.appendChild(createGuideLine(start, end, 'var(--canvas-overlay-casing)', 3.5))
+  const line = createGuideLine(start, end, 'var(--canvas-guide-line)', 1.5)
   line.dataset.plantDragDistanceLine = 'true'
-  line.setAttribute('x1', String(start.x))
-  line.setAttribute('y1', String(start.y))
-  line.setAttribute('x2', String(end.x))
-  line.setAttribute('y2', String(end.y))
-  line.setAttribute('stroke', 'var(--color-overlay-band-border)')
-  line.setAttribute('stroke-width', '1.5')
-  line.setAttribute('stroke-dasharray', '4 4')
-  line.setAttribute('stroke-linecap', 'round')
   svg.appendChild(line)
 
   const midpoint = {
@@ -144,6 +138,19 @@ function appendGuide(
     boxShadow: 'var(--shadow-sm)',
   })
   root.appendChild(label)
+}
+
+function createGuideLine(start: ScenePoint, end: ScenePoint, stroke: string, width: number): SVGLineElement {
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('x1', String(start.x))
+  line.setAttribute('y1', String(start.y))
+  line.setAttribute('x2', String(end.x))
+  line.setAttribute('y2', String(end.y))
+  line.setAttribute('stroke', stroke)
+  line.setAttribute('stroke-width', String(width))
+  line.setAttribute('stroke-dasharray', '4 4')
+  line.setAttribute('stroke-linecap', 'round')
+  return line
 }
 
 function isPlantLayerVisible(scene: ScenePersistedState): boolean {

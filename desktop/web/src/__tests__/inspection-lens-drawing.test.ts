@@ -50,7 +50,7 @@ describe('drawInspectionLensScene', () => {
     expect(ctx.stroke).not.toHaveBeenCalled()
   })
 
-  it('keeps Zone outlines two CSS pixels wide on a high-density backing store', () => {
+  it('keeps Zone outlines two CSS pixels wide over a four-pixel casing on a high-density backing store', () => {
     const canvas = createTransformTrackingCanvasContext(2)
     const widths: number[] = []
     canvas.context.stroke.mockImplementation(() => { widths.push(canvas.context.lineWidth) })
@@ -59,7 +59,7 @@ describe('drawInspectionLensScene', () => {
       zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: null, notes: null }],
     }), { dpr: 2 })
-    expect(widths).toEqual([0.1])
+    expect(widths).toEqual([0.2, 0.1])
   })
 
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', () => {
@@ -128,7 +128,8 @@ describe('drawInspectionLensScene', () => {
       plants: [createPlant({ id: 'a', position: { x: 10, y: 10 } }), createPlant({ id: 'b', position: { x: 30, y: 10 } })],
       viewport: { x: 0, y: 0, scale: 10 },
     }))
-    expect(ctx.stroke.mock.calls.length).toBe(plainStrokes.stroke.mock.calls.length + 1)
+    // The hover ring is one casing stroke and one ring stroke.
+    expect(ctx.stroke.mock.calls.length).toBe(plainStrokes.stroke.mock.calls.length + 2)
   })
 })
 

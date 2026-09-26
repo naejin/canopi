@@ -8,9 +8,10 @@ import {
 } from './scale-bar'
 import { CANVAS_RULER_SIZE_PX } from './canvas-notice-layout'
 import { NICE_DISTANCES } from './grid'
+import { CANVAS_CHROME_FONT_FAMILY } from './chrome-fonts'
+import { getCanvasColor } from './theme-refresh'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
-const FONT_SANS_FALLBACK = 'Inter, system-ui, sans-serif'
 
 export type RulerAxis = 'h' | 'v'
 
@@ -40,12 +41,12 @@ interface RulerPalette {
 }
 
 const DEFAULT_PALETTE: RulerPalette = {
-  background: '#E8E3D9',
-  text: '#6B5F4E',
-  border: '#D4CFC5',
-  scaleBar: '#6B5F4E',
-  font10: `10px ${FONT_SANS_FALLBACK}`,
-  font11: `11px ${FONT_SANS_FALLBACK}`,
+  background: getCanvasColor('ruler-bg'),
+  text: getCanvasColor('ruler-text'),
+  border: 'rgba(58, 46, 28, 0.14)',
+  scaleBar: getCanvasColor('ruler-text'),
+  font10: `10px ${CANVAS_CHROME_FONT_FAMILY}`,
+  font11: `11px ${CANVAS_CHROME_FONT_FAMILY}`,
 }
 
 export function createRulerOverlay(
@@ -265,15 +266,14 @@ class HtmlRulerOverlay implements RulerOverlay {
 
 function readRulerPalette(container: HTMLElement): RulerPalette {
   const style = getComputedStyle(container)
-  const text = style.getPropertyValue('--canvas-ruler-text').trim() || '#64748b'
-  const fontSans = style.getPropertyValue('--font-sans').trim() || FONT_SANS_FALLBACK
+  const text = style.getPropertyValue('--canvas-ruler-text').trim() || DEFAULT_PALETTE.text
   return {
-    background: style.getPropertyValue('--canvas-ruler-bg').trim() || '#fff',
+    background: style.getPropertyValue('--canvas-ruler-bg').trim() || DEFAULT_PALETTE.background,
     text,
-    border: style.getPropertyValue('--color-border').trim() || '#e2e0dd',
+    border: style.getPropertyValue('--color-border').trim() || DEFAULT_PALETTE.border,
     scaleBar: style.getPropertyValue('--color-text-muted').trim() || text,
-    font10: `10px ${fontSans}`,
-    font11: `11px ${fontSans}`,
+    font10: DEFAULT_PALETTE.font10,
+    font11: DEFAULT_PALETTE.font11,
   }
 }
 

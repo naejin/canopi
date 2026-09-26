@@ -5,6 +5,7 @@ import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapsh
 import { LabelCollisionIndex } from '../canvas/label-collision'
 import { Container, Text } from 'pixi.js'
 import { createPixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
+import { CANVAS_CHROME_FONT_FAMILY } from '../canvas/chrome-fonts'
 
 vi.mock('pixi.js', () => {
   const state = {
@@ -400,7 +401,7 @@ describe('createPixiScenePresentation', () => {
       for (const scale of [0.1, 8, 14, 20, 63.75, 1000, 20]) {
         renderer.setViewport({ x: 0.35, y: 0.45, scale })
         for (const text of texts) {
-          expect(text.style.options.fontFamily).toBe('Inter, sans-serif')
+          expect(text.style.options.fontFamily).toBe(CANVAS_CHROME_FONT_FAMILY)
           expect(text.scale.set).not.toHaveBeenCalled()
         }
         expect(texts.find(text => text.text === 'Érable 日本語')?.style.options.fontSize).toBe(16)
@@ -602,7 +603,10 @@ describe('createPixiScenePresentation', () => {
       graphics.moveTo.mock.calls.some(([x, y]) => x === 40 && y === 10)
       && graphics.lineTo.mock.calls.some(([x, y]) => x === 10 && y === 40),
     )
-    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 0.4, alpha: .25 })
+    // A light 1.5 px guide over a 3.5 px dark casing, in world units at scale 2.
+    expect(guideGraphic?.stroke.mock.calls).toHaveLength(2)
+    expect(guideGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ color: 0x14100a, width: 1.75, alpha: .6 })
+    expect(guideGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ color: 0xfff3d6, width: 0.75, alpha: 1 })
     const label = pixi.__pixiMockState.texts.find((text) => text.text === '42 m')
     const expectedLabelPoint = {
       x: 50 - MEASUREMENT_GUIDE_LABEL_OFFSET_PX * Math.SQRT1_2,
@@ -879,10 +883,14 @@ describe('createPixiScenePresentation', () => {
 
     const rotatedZoneStrokes = pixi.__pixiMockState.graphics
       .filter((graphics) => graphics.moveTo.mock.calls.length > 0)
-      .map((graphics) => graphics.stroke.mock.calls[0]?.[0])
+      .map((graphics) => graphics.stroke.mock.calls)
 
     expect(rotatedZoneStrokes).toHaveLength(2)
-    for (const stroke of rotatedZoneStrokes) expect(stroke?.alpha).toBeCloseTo(0.72 * 0.62)
+    for (const [casing, stroke] of rotatedZoneStrokes) {
+      expect(casing?.[0].alpha).toBeCloseTo(0.72)
+      expect(casing?.[0].width).toBeGreaterThan(stroke?.[0].width)
+      expect(stroke?.[0].alpha).toBeCloseTo(0.72 * 0.62)
+    }
     renderer.dispose()
   })
 
@@ -944,12 +952,14 @@ describe('createPixiScenePresentation', () => {
 
     const zoneGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.rect.mock.calls.length > 0)
     const plantGraphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 0)
-    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.125 })
+    // Selected: 2.5 CSS px over a 5.5 CSS px casing, divided by camera scale 4.
+    expect(zoneGraphic?.stroke.mock.calls[0]?.[0]).toMatchObject({ width: 1.375 })
+    expect(zoneGraphic?.stroke.mock.calls[1]?.[0]).toMatchObject({ width: 0.625 })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
     expect(plantGraphic?.stroke).not.toHaveBeenCalled()
 
     renderer.renderScene(createTestSceneRendererSnapshot({
@@ -961,13 +971,13 @@ describe('createPixiScenePresentation', () => {
       ],
     }))
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.125 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 4.5 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 0.625 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
-    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 2.25 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 4.5 })
+    expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
+    expect(plantGraphic?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
     renderer.dispose()
   })
 
@@ -1032,10 +1042,13 @@ describe('createPixiScenePresentation', () => {
       .find((graphics) => graphics.rect.mock.calls[0]?.[0] === 0)
     const hoverGraphic = pixi.__pixiMockState.graphics
       .find((graphics) => graphics.rect.mock.calls[0]?.[0] === 20)
-    const selectedStroke = selectedGraphic?.stroke.mock.calls[0]?.[0]
-    const hoverStroke = hoverGraphic?.stroke.mock.calls[0]?.[0]
+    const selectedCasing = selectedGraphic?.stroke.mock.calls[0]?.[0]
+    const selectedStroke = selectedGraphic?.stroke.mock.calls[1]?.[0]
+    const hoverStroke = hoverGraphic?.stroke.mock.calls[1]?.[0]
 
-    expect(selectedStroke).toMatchObject({ color: 0xa06b1f })
+    expect(selectedStroke).toMatchObject({ color: 0x9c5a16 })
+    expect(selectedCasing).toMatchObject({ color: 0xfff8ec })
+    expect(selectedCasing.width).toBeGreaterThan(selectedStroke.width)
     expect(selectedStroke.width).toBeGreaterThan(hoverStroke.width)
     expect(selectedStroke.alpha).toBeGreaterThan(hoverStroke.alpha)
     renderer.dispose()

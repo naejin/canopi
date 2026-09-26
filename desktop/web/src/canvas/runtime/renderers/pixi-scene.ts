@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { speciesFocusOpacity } from '../species-key'
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import 'pixi.js/unsafe-eval'
@@ -32,13 +33,16 @@ import { getCanvasDetailLayout, isMeasurementLabelVisible } from '../automatic-d
 import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
+  getGuideLineVisual,
   getPlantSymbolEdgeColor,
   getPlantSymbolEdgeWidth,
   getPlantLabelColor,
   getSceneLayerStyle,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
+  OVERLAY_CASING_EXTRA_PX,
   resolveZoneVisual,
+  type CanvasInteractionStrokeVisual,
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
 import type { SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
@@ -47,7 +51,7 @@ import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity,
 import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const ZONE_STROKE_PX = 2
-const PLANT_STROKE_PX = 1.5
+const MEASUREMENT_GUIDE_STROKE_PX = 1.5
 const graphicsKeys = new WeakMap<Graphics, string>()
 
 type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
@@ -375,7 +379,7 @@ function syncMeasurementGuides(
     )
     const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     setTextStyle(text, {
-      fontFamily: 'Inter, sans-serif',
+      fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
     })
@@ -419,31 +423,71 @@ function drawMeasurementGuide(
 
   const interactionState = resolveInteractionState(selected, false, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const color = toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0)
-  const strokeWidth = screenPxToWorldPx(interactionVisual?.widthPx ?? .8, viewportScale)
-  const strokeAlpha = (interactionVisual?.alpha ?? .25) * cssColorAlpha(interactionVisual?.color ?? getAnnotationTextColor())
-  if (reuseGeometry(graphics, [guide.start, guide.end, color, strokeWidth, strokeAlpha, viewportScale])) return
+  const stroke = resolveCasedStroke(interactionVisual, getGuideLineVisual(), MEASUREMENT_GUIDE_STROKE_PX, viewportScale)
+  if (reuseGeometry(graphics, [guide.start, guide.end, stroke, viewportScale])) return
   graphics.clear()
-  drawDashedMeasurementGuideLine(
-    graphics,
-    guide.start,
-    guide.end,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_DASH_PX, viewportScale),
-    screenPxToWorldPx(MEASUREMENT_GUIDE_GAP_PX, viewportScale),
-  )
-  drawMeasurementGuideTick(
-    graphics,
-    guide.start,
-    presentation.normalWorld,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
-  )
-  drawMeasurementGuideTick(
-    graphics,
-    guide.end,
-    presentation.normalWorld,
-    screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
-  )
-  graphics.stroke({ color, width: strokeWidth, alpha: strokeAlpha })
+  const trace = () => {
+    drawDashedMeasurementGuideLine(
+      graphics,
+      guide.start,
+      guide.end,
+      screenPxToWorldPx(MEASUREMENT_GUIDE_DASH_PX, viewportScale),
+      screenPxToWorldPx(MEASUREMENT_GUIDE_GAP_PX, viewportScale),
+    )
+    drawMeasurementGuideTick(
+      graphics,
+      guide.start,
+      presentation.normalWorld,
+      screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
+    )
+    drawMeasurementGuideTick(
+      graphics,
+      guide.end,
+      presentation.normalWorld,
+      screenPxToWorldPx(MEASUREMENT_GUIDE_TICK_HALF_PX, viewportScale),
+    )
+  }
+  trace()
+  graphics.stroke(stroke.casing)
+  trace()
+  graphics.stroke(stroke.stroke)
+}
+
+interface CasedStroke {
+  readonly casing: { color: number; width: number; alpha: number }
+  readonly stroke: { color: number; width: number; alpha: number }
+}
+
+/** Resolves the interaction stroke, or the base overlay stroke, and the casing drawn under it. */
+function resolveCasedStroke(
+  interactionVisual: CanvasInteractionStrokeVisual | null,
+  base: { color: string; casing: string },
+  baseWidthPx: number,
+  viewportScale: number,
+): CasedStroke {
+  return casedStroke(interactionVisual ?? {
+    color: base.color,
+    widthPx: baseWidthPx,
+    alpha: 1,
+    casingColor: base.casing,
+    casingWidthPx: baseWidthPx + OVERLAY_CASING_EXTRA_PX,
+  }, viewportScale)
+}
+
+/** Screen-pixel widths become world units under the camera transform (`viewportScale` 1 for CSS-pixel layers). */
+function casedStroke(visual: CanvasInteractionStrokeVisual, viewportScale: number): CasedStroke {
+  return {
+    casing: {
+      color: toPixiColor(visual.casingColor, 0),
+      width: screenPxToWorldPx(visual.casingWidthPx, viewportScale),
+      alpha: visual.alpha * cssColorAlpha(visual.casingColor),
+    },
+    stroke: {
+      color: toPixiColor(visual.color, 0),
+      width: screenPxToWorldPx(visual.widthPx, viewportScale),
+      alpha: visual.alpha * cssColorAlpha(visual.color),
+    },
+  }
 }
 
 function drawDashedMeasurementGuideLine(
@@ -532,53 +576,49 @@ function drawZone(
   const fillAlpha = 0.2 * cssColorAlpha(visual.fill)
   const interactionState = resolveInteractionState(selected, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const strokeColor = toPixiColor(interactionVisual?.color ?? visual.stroke, 0)
-  const strokeWidth = screenPxToWorldPx(
-    interactionVisual?.widthPx ?? ZONE_STROKE_PX,
-    viewportScale,
-  )
-  const strokeAlpha = (interactionVisual?.alpha ?? 1) * cssColorAlpha(interactionVisual?.color ?? visual.stroke)
+  const stroke = resolveCasedStroke(interactionVisual, { color: visual.stroke, casing: visual.casing }, ZONE_STROKE_PX, viewportScale)
 
-  if (reuseGeometry(graphics, [zone.zoneType, zone.points, zone.rotationDeg, fillColor, fillAlpha, strokeColor, strokeWidth, strokeAlpha])) return
+  if (reuseGeometry(graphics, [zone.zoneType, zone.points, zone.rotationDeg, fillColor, fillAlpha, stroke])) return
   graphics.clear()
 
+  if (!traceZonePath(graphics, zone)) return
+  if (zone.zoneType !== 'line') graphics.fill({ color: fillColor, alpha: fillAlpha })
+  graphics.stroke(stroke.casing)
+  traceZonePath(graphics, zone)
+  graphics.stroke(stroke.stroke)
+}
+
+/** Traces the zone outline; the caller fills and strokes it. Returns false when nothing is drawable. */
+function traceZonePath(graphics: Graphics, zone: SceneZoneEntity): boolean {
   if (zone.zoneType === 'rect' && zone.points.length >= 4) {
     if (Math.abs(zone.rotationDeg) > 0.000001) {
       const corners = getRectangularZoneCorners(zone)
-      if (!corners) return
+      if (!corners) return false
       drawClosedZonePath(graphics, corners)
-        .fill({ color: fillColor, alpha: fillAlpha })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-      return
+      return true
     }
 
     const start = zone.points[0]!
     const end = zone.points[2]!
     graphics.rect(start.x, start.y, end.x - start.x, end.y - start.y)
-      .fill({ color: fillColor, alpha: fillAlpha })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-    return
+    return true
   }
 
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
     if (Math.abs(zone.rotationDeg) > 0.000001) {
       const polygon = getEllipticalZonePolygon(zone)
-      if (!polygon) return
+      if (!polygon) return false
       drawClosedZonePath(graphics, polygon)
-        .fill({ color: fillColor, alpha: fillAlpha })
-        .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-      return
+      return true
     }
 
     const center = zone.points[0]!
     const radii = zone.points[1]!
     graphics.ellipse(center.x, center.y, radii.x, radii.y)
-      .fill({ color: fillColor, alpha: fillAlpha })
-      .stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
-    return
+    return true
   }
 
-  if (zone.points.length < 2) return
+  if (zone.points.length < 2) return false
 
   const first = zone.points[0]!
   graphics.moveTo(first.x, first.y)
@@ -586,12 +626,8 @@ function drawZone(
     const point = zone.points[i]!
     graphics.lineTo(point.x, point.y)
   }
-
-  if (zone.zoneType !== 'line') {
-    graphics.closePath().fill({ color: fillColor, alpha: fillAlpha })
-  }
-
-  graphics.stroke({ color: strokeColor, width: strokeWidth, alpha: strokeAlpha })
+  if (zone.zoneType !== 'line') graphics.closePath()
+  return true
 }
 
 function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y: number }[]): Graphics {
@@ -765,7 +801,8 @@ function plantGeometryKey(
   const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
   return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${glyphOpacity}|${selected ? 1 : 0}`
     + `|${interactionState ?? ''}|${interactionVisual?.color ?? ''}|${interactionVisual?.widthPx ?? ''}`
-    + `|${interactionVisual?.alpha ?? ''}|${edgeColor}|${edgeWidth}`
+    + `|${interactionVisual?.alpha ?? ''}|${interactionVisual?.casingColor ?? ''}|${interactionVisual?.casingWidthPx ?? ''}`
+    + `|${edgeColor}|${edgeWidth}`
 }
 
 function drawPlantGeometry(
@@ -776,7 +813,6 @@ function drawPlantGeometry(
   hoverState: SceneRendererHoverState | null,
   glyphOpacity: number,
 ): void {
-  const color = toPixiColor(entry.color, 0)
   const selected = entry.selected
   const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
   const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
@@ -785,25 +821,14 @@ function drawPlantGeometry(
   const y = 0
   const r = entry.radiusScreenPx
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
-  const selectedStrokeColor = toPixiColor(interactionVisual?.color ?? entry.color, color)
   drawPlantSymbolGlyph(graphics, renderedSymbol, { ...entry, screenPoint: { x, y } }, glyphOpacity)
 
-  if (selected) {
-    graphics.circle(x, y, r)
-      .stroke({
-        color: selectedStrokeColor,
-        width: interactionVisual?.widthPx ?? PLANT_STROKE_PX,
-        alpha: cssColorAlpha(interactionVisual?.color ?? entry.color),
-      })
-  }
-  if (interactionState && !selected) {
-    const ringVisual = getCanvasInteractionStrokeVisual(interactionState)
-    graphics.circle(x, y, r * 1.4)
-      .stroke({
-        color: toPixiColor(ringVisual.color, 0),
-        width: ringVisual.widthPx,
-        alpha: ringVisual.alpha * cssColorAlpha(ringVisual.color),
-      })
+  if (interactionVisual) {
+    // Plants draw in the CSS-pixel layer, so ring widths need no camera scaling.
+    const ring = casedStroke(interactionVisual, 1)
+    const ringRadius = selected ? r : r * 1.4
+    graphics.circle(x, y, ringRadius).stroke(ring.casing)
+    graphics.circle(x, y, ringRadius).stroke(ring.stroke)
   }
 }
 
@@ -857,7 +882,7 @@ function drawStackBadgeText(
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
   badgeText.text = String(stackCount)
   setTextStyle(badgeText, {
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: CANVAS_CHROME_FONT_FAMILY,
     fontSize: 9,
     fill: toPixiColor(getStackBadgeTextColor(), 0),
   })
@@ -949,7 +974,7 @@ function drawAnnotationText(
 ): void {
   text.text = annotation.text
   setTextStyle(text, {
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: CANVAS_CHROME_FONT_FAMILY,
     fontSize: annotation.fontSize,
     lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
     fill: getAnnotationTextColor(),
@@ -986,12 +1011,9 @@ function drawAnnotationDecoration(
   if (state) {
     const corners = getAnnotationVisualWorldCorners(annotation, viewport.scale, revealText, { x: 4, y: 2 }, textAllowed)
       .map((point) => worldToScreen(point, viewport))
-    const visual = getCanvasInteractionStrokeVisual(state)
-    drawClosedZonePath(graphics, corners).stroke({
-      color: toPixiColor(visual.color, 0),
-      width: visual.widthPx,
-      alpha: visual.alpha * cssColorAlpha(visual.color),
-    })
+    const outline = casedStroke(getCanvasInteractionStrokeVisual(state), 1)
+    drawClosedZonePath(graphics, corners).stroke(outline.casing)
+    drawClosedZonePath(graphics, corners).stroke(outline.stroke)
   }
 }
 
@@ -1012,7 +1034,7 @@ function syncSelectionLabels(
     }
     text.text = label.text
     setTextStyle(text, {
-      fontFamily: 'Inter, sans-serif',
+      fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: 12,
       fontWeight: '600',
       fontStyle: label.fontStyle,
@@ -1053,7 +1075,7 @@ function syncPinnedPlantNameLabels(
       }
       text.text = label.text
       setTextStyle(text, {
-        fontFamily: 'Inter, sans-serif',
+        fontFamily: CANVAS_CHROME_FONT_FAMILY,
         fontSize: 12,
         fontWeight: '600',
         fontStyle: label.fontStyle,

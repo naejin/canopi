@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { SceneDesignObjectTarget } from '../scene'
 
@@ -41,7 +42,7 @@ export function createLockedObjectAffordance(
     'border: 1px solid var(--color-border-strong, var(--color-border))',
     'border-radius: var(--radius-md)',
     'box-shadow: 0 2px 6px rgba(44, 36, 24, 0.10)',
-    'font-family: Inter, sans-serif',
+    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')

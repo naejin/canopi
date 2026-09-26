@@ -3,6 +3,15 @@ import type { ScenePoint } from '../scene'
 
 export type InteractionPreviewMode = 'band' | 'rectangle' | 'ellipse' | 'line'
 
+// Every preview stroke sits on a casing painted on both sides of the border so
+// it reads on bright or dark imagery: the band selection box is 2 px ochre over
+// a 5 px casing, drafts are light 2 px strokes over a 4 px dark casing.
+const SELECTION_BOX_BORDER = '2px solid var(--canvas-selection-stroke)'
+const SELECTION_BOX_CASING = '0 0 0 1.5px var(--canvas-interaction-casing), inset 0 0 0 1.5px var(--canvas-interaction-casing)'
+const DRAFT_BORDER = '2px solid var(--canvas-guide-line)'
+const DRAFT_CASING = '0 0 0 1px var(--canvas-overlay-casing), inset 0 0 0 1px var(--canvas-overlay-casing)'
+const DRAFT_LINE_CASING = '0 0 0 1px var(--canvas-overlay-casing)'
+
 export function createInteractionPreview(container: HTMLElement): HTMLDivElement {
   const preview = document.createElement('div')
   Object.assign(preview.style, {
@@ -10,8 +19,9 @@ export function createInteractionPreview(container: HTMLElement): HTMLDivElement
     pointerEvents: 'none',
     display: 'none',
     zIndex: '2',
-    border: '1px dashed var(--color-overlay-band-border)',
-    background: 'var(--color-overlay-band-bg)',
+    border: SELECTION_BOX_BORDER,
+    boxShadow: SELECTION_BOX_CASING,
+    background: 'var(--canvas-selection)',
     left: '0',
     top: '0',
   })
@@ -35,8 +45,9 @@ export function showInteractionPreview(
       width: `${Math.hypot(dx, dy)}px`,
       height: '0',
       border: '0',
-      borderTop: '2px solid var(--color-overlay-band-border)',
+      borderTop: DRAFT_BORDER,
       borderRadius: '0',
+      boxShadow: DRAFT_LINE_CASING,
       background: 'transparent',
       transform: `rotate(${Math.atan2(dy, dx)}rad)`,
       transformOrigin: '0 0',
@@ -51,10 +62,10 @@ export function showInteractionPreview(
     top: `${rect.y}px`,
     width: `${rect.width}px`,
     height: `${rect.height}px`,
-    border: '1px dashed var(--color-overlay-band-border)',
-    borderStyle: mode === 'band' ? 'dashed' : 'solid',
+    border: mode === 'band' ? SELECTION_BOX_BORDER : DRAFT_BORDER,
     borderRadius: mode === 'ellipse' ? '50%' : '0',
-    background: mode === 'band' ? 'var(--color-overlay-band-bg)' : 'var(--color-overlay-rect-bg)',
+    boxShadow: mode === 'band' ? SELECTION_BOX_CASING : DRAFT_CASING,
+    background: mode === 'band' ? 'var(--canvas-selection)' : 'var(--canvas-zone-fill)',
     transform: 'none',
     transformOrigin: '0 0',
   })

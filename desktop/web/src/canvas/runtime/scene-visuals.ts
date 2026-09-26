@@ -13,6 +13,8 @@ export interface SceneLayerStyle {
 export interface SceneZoneVisual {
   fill: string
   stroke: string
+  /** Drawn under the stroke so the zone edge reads on bright or dark imagery. */
+  casing: string
 }
 
 export type CanvasInteractionVisualState =
@@ -25,7 +27,13 @@ export interface CanvasInteractionStrokeVisual {
   color: string
   widthPx: number
   alpha: number
+  /** Drawn first, under the stroke, at the same alpha. */
+  casingColor: string
+  casingWidthPx: number
 }
+
+/** Light overlay strokes (zones, guides, drafts) sit on a casing this much wider. */
+export const OVERLAY_CASING_EXTRA_PX = 2
 
 export function getSceneLayerStyle(
   scene: ScenePersistedState,
@@ -47,7 +55,13 @@ export function resolveZoneVisual(zone: SceneZoneEntity): SceneZoneVisual {
   return {
     fill,
     stroke: getCanvasColor('zone-stroke'),
+    casing: getCanvasColor('overlay-casing'),
   }
+}
+
+/** Guides and drawing previews over the map: a light stroke on a dark casing. */
+export function getGuideLineVisual(): { color: string; casing: string } {
+  return { color: getCanvasColor('guide-line'), casing: getCanvasColor('overlay-casing') }
 }
 
 export function getAnnotationTextColor(): string {
@@ -61,34 +75,26 @@ export function getPlantLabelColor(): string {
 export function getCanvasInteractionStrokeVisual(
   state: CanvasInteractionVisualState,
 ): CanvasInteractionStrokeVisual {
-  if (state === 'selected') {
-    return {
-      color: getCanvasColor('selection-stroke'),
-      widthPx: 4.5,
-      alpha: 1,
-    }
-  }
+  // Selected: 2.5 px ochre over a 5.5 px casing; every state keeps its casing
+  // so rings and outlines read on satellite imagery and plain basemaps alike.
+  if (state === 'selected') return interactionStroke('selection-stroke', 2.5, 1, 5.5)
+  if (state === 'locked-design-object') return interactionStroke('locked-object-stroke', 2.25, 0.86, 4.25)
+  if (state === 'locked-layer') return interactionStroke('locked-layer-stroke', 2.25, 0.9, 4.25)
+  return interactionStroke('hover-stroke', 2, 0.72, 4)
+}
 
-  if (state === 'locked-design-object') {
-    return {
-      color: getCanvasColor('locked-object-stroke'),
-      widthPx: 2.75,
-      alpha: 0.86,
-    }
-  }
-
-  if (state === 'locked-layer') {
-    return {
-      color: getCanvasColor('locked-layer-stroke'),
-      widthPx: 2.75,
-      alpha: 0.9,
-    }
-  }
-
+function interactionStroke(
+  token: 'selection-stroke' | 'locked-object-stroke' | 'locked-layer-stroke' | 'hover-stroke',
+  widthPx: number,
+  alpha: number,
+  casingWidthPx: number,
+): CanvasInteractionStrokeVisual {
   return {
-    color: getCanvasColor('hover-stroke'),
-    widthPx: 2.5,
-    alpha: 0.72,
+    color: getCanvasColor(token),
+    widthPx,
+    alpha,
+    casingColor: getCanvasColor('interaction-casing'),
+    casingWidthPx,
   }
 }
 

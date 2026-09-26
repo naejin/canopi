@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../../saved-object-stamp-source'
 import type { SavedObjectStampPayload } from '../../saved-object-stamp-payload'
 import { getAnnotationPresentation, ANNOTATION_MARKER_PATHS, ANNOTATION_MARKER_STROKE_PX } from '../annotation-layout'
@@ -392,7 +393,7 @@ function appendAnnotationGhost(
     x: frame.origin.x,
     y: frame.origin.y,
     fill: getAnnotationTextColor(),
-    'font-family': 'Inter, sans-serif',
+    'font-family': CANVAS_CHROME_FONT_FAMILY,
     'font-size': annotation.fontSize,
     opacity: STAMP_GHOST_ANNOTATION_OPACITY * textOpacity,
     transform: `rotate(${formatNumber(frame.rotationDeg)} ${formatNumber(frame.origin.x)} ${formatNumber(frame.origin.y)})`,

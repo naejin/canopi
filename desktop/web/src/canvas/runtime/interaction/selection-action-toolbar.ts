@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { WorkspaceCameraFrameReader, SceneBounds } from '../camera'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from '../runtime'
@@ -83,7 +84,7 @@ export function createSelectionActionToolbar(
     'border-radius: var(--radius-md)',
     'box-shadow: 0 2px 6px rgba(44, 36, 24, 0.10)',
     'box-sizing: border-box',
-    'font-family: Inter, sans-serif',
+    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')

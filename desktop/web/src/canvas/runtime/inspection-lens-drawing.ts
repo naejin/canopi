@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../chrome-fonts'
 import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
@@ -19,9 +20,12 @@ import {
   getSceneLayerStyle,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
+  OVERLAY_CASING_EXTRA_PX,
   resolveZoneVisual,
 } from './scene-visuals'
 import { getRectangularZoneCorners } from './zone-geometry'
+
+const ZONE_STROKE_PX = 2
 
 export interface InspectionLensDrawOptions {
   readonly widthPx: number
@@ -61,9 +65,12 @@ function drawZones(ctx: CanvasRenderingContext2D, snapshot: SceneRendererSnapsho
     ctx.fillStyle = visual.fill
     ctx.globalAlpha = 0.2 * layer.opacity
     if (zone.zoneType !== 'line') ctx.fill()
-    ctx.strokeStyle = visual.stroke
     ctx.globalAlpha = layer.opacity
-    ctx.lineWidth = 2 / snapshot.viewport.scale
+    ctx.strokeStyle = visual.casing
+    ctx.lineWidth = (ZONE_STROKE_PX + OVERLAY_CASING_EXTRA_PX) / snapshot.viewport.scale
+    ctx.stroke()
+    ctx.strokeStyle = visual.stroke
+    ctx.lineWidth = ZONE_STROKE_PX / snapshot.viewport.scale
     ctx.stroke()
   }
 
@@ -155,8 +162,11 @@ function drawPlants(
       const ring = getCanvasInteractionStrokeVisual(hoverTarget.state)
       ctx.beginPath()
       ctx.arc(entry.plant.position.x, entry.plant.position.y, entry.radiusWorld * 1.4, 0, Math.PI * 2)
-      ctx.strokeStyle = ring.color
       ctx.globalAlpha = ring.alpha * layer.opacity
+      ctx.strokeStyle = ring.casingColor
+      ctx.lineWidth = ring.casingWidthPx / snapshot.viewport.scale
+      ctx.stroke()
+      ctx.strokeStyle = ring.color
       ctx.lineWidth = ring.widthPx / snapshot.viewport.scale
       ctx.stroke()
     }
@@ -221,7 +231,7 @@ function drawStackBadge(
   ctx.arc(x, y, STACK_BADGE_RADIUS_PX, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = getStackBadgeTextColor()
-  ctx.font = '9px Inter, sans-serif'
+  ctx.font = `9px ${CANVAS_CHROME_FONT_FAMILY}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(String(count), x, y)

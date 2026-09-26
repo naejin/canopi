@@ -7,68 +7,73 @@
 
 type CanvasColorName =
   | 'background'
+  | 'grid'
+  | 'grid-major'
+  | 'ruler-bg'
+  | 'ruler-text'
   | 'plant-label'
   | 'guide-line'
-  | 'guide-smart'
+  | 'overlay-casing'
   | 'stack-badge-bg'
   | 'stack-badge-text'
   | 'annotation-text'
-  | 'annotation-stroke'
-  | 'annotation-surface'
   | 'zone-stroke'
   | 'zone-fill'
-  | 'selection-fill'
   | 'hover-stroke'
   | 'selection-stroke'
+  | 'interaction-casing'
   | 'locked-object-stroke'
   | 'locked-layer-stroke'
-  | 'highlight-glow'
 
-// CSS variable name for each canvas color. Most follow `--canvas-{key}`;
-// the two exceptions are explicit here instead of hidden in procedural code.
-const _cssVarMap: { [K in CanvasColorName]: string } = {
+/** CSS variable read for each canvas colour. Most follow `--canvas-{key}`. */
+export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } = {
   background: '--canvas-bg',
+  grid: '--canvas-grid',
+  'grid-major': '--canvas-grid-major',
+  'ruler-bg': '--canvas-ruler-bg',
+  'ruler-text': '--canvas-ruler-text',
   'plant-label': '--canvas-plant-label',
   'guide-line': '--canvas-guide-line',
-  'guide-smart': '--canvas-guide-smart',
+  'overlay-casing': '--canvas-overlay-casing',
   'stack-badge-bg': '--canvas-stack-badge-bg',
   'stack-badge-text': '--canvas-stack-badge-text',
   'annotation-text': '--canvas-annotation-text',
-  'annotation-stroke': '--canvas-annotation-stroke',
-  'annotation-surface': '--canvas-annotation-surface',
   'zone-stroke': '--canvas-zone-stroke',
   'zone-fill': '--canvas-zone-fill',
-  'selection-fill': '--canvas-selection',
   'hover-stroke': '--canvas-hover-stroke',
   'selection-stroke': '--canvas-selection-stroke',
+  'interaction-casing': '--canvas-interaction-casing',
   'locked-object-stroke': '--canvas-locked-object-stroke',
   'locked-layer-stroke': '--canvas-locked-layer-stroke',
-  'highlight-glow': '--color-primary',
 }
 
+// Light-theme values from `styles/global.css`, used until the first refresh.
 const _colors: { [K in CanvasColorName]: string } = {
-  background: '#F6F2EA',
-  'plant-label': '#444444',
-  'guide-line': 'rgba(45, 95, 63, 0.6)',
-  'guide-smart': 'rgba(181, 67, 42, 0.72)',
-  'stack-badge-bg': '#5A7D3A',
-  'stack-badge-text': '#FCF8F2',
-  'annotation-text': '#1A1A1A',
-  'annotation-stroke': '#6B6253',
-  'annotation-surface': '#FFFDF8',
-  'zone-stroke': '#2D5F3F',
-  'zone-fill': 'rgba(45, 95, 63, 0.1)',
-  'selection-fill': 'rgba(160, 107, 31, 0.18)',
-  'hover-stroke': 'rgba(160, 107, 31, 0.62)',
-  'selection-stroke': 'rgba(160, 107, 31, 0.92)',
-  'locked-object-stroke': 'rgba(107, 95, 78, 0.86)',
-  'locked-layer-stroke': 'rgba(181, 67, 42, 0.88)',
-  'highlight-glow': '#A06B1F',
+  background: '#EFE9DD',
+  grid: 'rgba(39, 35, 29, 0.07)',
+  'grid-major': 'rgba(39, 35, 29, 0.14)',
+  'ruler-bg': '#F3EEE3',
+  'ruler-text': '#645A4C',
+  'plant-label': '#27231D',
+  'guide-line': '#FFF3D6',
+  'overlay-casing': 'rgba(20, 16, 10, 0.6)',
+  'stack-badge-bg': '#27231D',
+  'stack-badge-text': '#FBF3E4',
+  'annotation-text': '#27231D',
+  'zone-stroke': '#FFF3D6',
+  'zone-fill': 'rgba(255, 243, 214, 0.1)',
+  'hover-stroke': 'rgba(156, 90, 22, 0.62)',
+  'selection-stroke': '#9C5A16',
+  'interaction-casing': '#FFF8EC',
+  'locked-object-stroke': 'rgba(100, 90, 76, 0.86)',
+  'locked-layer-stroke': 'rgba(168, 51, 42, 0.88)',
 }
 
+// The light and dark `--canvas-zone-fill` values: a zone storing one of them
+// follows the theme instead of keeping it as an authored colour.
 const MANAGED_ZONE_FILL_VALUES = new Set([
-  'rgba(45,95,63,0.1)',
-  'rgba(200,180,150,0.06)',
+  'rgba(255,243,214,0.1)',
+  'rgba(255,243,214,0.08)',
 ])
 
 function normalizeColor(value: string | null | undefined): string | null {
@@ -93,7 +98,7 @@ export function refreshCanvasColorCache(container: HTMLElement): void {
   const cs = getComputedStyle(container)
 
   for (const key of Object.keys(_colors) as CanvasColorName[]) {
-    const value = cs.getPropertyValue(_cssVarMap[key]).trim()
+    const value = cs.getPropertyValue(CANVAS_COLOR_CSS_VARS[key]).trim()
     if (value) _colors[key] = value
   }
 }

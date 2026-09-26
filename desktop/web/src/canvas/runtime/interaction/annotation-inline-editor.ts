@@ -1,3 +1,4 @@
+import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getAnnotationScreenFrame } from '../annotation-layout'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { SceneAnnotationEntity, SceneStateReader } from '../scene'
@@ -191,7 +192,7 @@ export function createAnnotationInlineEditor(
       outline: 'none',
       resize: 'none',
       overflow: 'hidden',
-      fontFamily: 'var(--font-sans, Inter, system-ui, sans-serif)',
+      fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: `${annotation.fontSize}px`,
       lineHeight: '1.25',
       color: 'var(--color-text)',
