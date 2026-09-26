@@ -160,6 +160,10 @@ export class SceneRuntimeMutationController {
     )
   }
 
+  selectSpecies(canonicalNames: readonly string[]): void {
+    this._runCommandWhenSettled(() => this._selectSpeciesWhenSettled(canonicalNames), undefined)
+  }
+
   bringToFront(): void {
     this._runCommandWhenSettled(() => this._bringToFrontWhenSettled(), undefined)
   }
@@ -426,6 +430,18 @@ export class SceneRuntimeMutationController {
       speciesPlantIds,
       options.additive === true,
     )
+    if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
+    this._selection.set(nextSelection)
+    this._invalidateScene()
+  }
+
+  private _selectSpeciesWhenSettled(canonicalNames: readonly string[]): void {
+    const persisted = this._sceneStore.persisted
+    const selectable = new Set([...new Set(canonicalNames)].flatMap((canonicalName) =>
+      getSelectablePlantIdsForSpecies(persisted, canonicalName)))
+    const plantIds = persisted.plants.filter((plant) => selectable.has(plant.id)).map((plant) => plant.id)
+    if (plantIds.length === 0) return
+    const nextSelection = applySpeciesSelection(this._sceneStore.session.selectedTargets, plantIds, false)
     if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
     this._selection.set(nextSelection)
     this._invalidateScene()

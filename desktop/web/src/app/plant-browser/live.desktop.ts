@@ -1,5 +1,6 @@
 import { getFavorites, getRecentlyViewed, toggleFavorite } from '../../ipc/favorites'
 import {
+  getCommonNames,
   getDynamicFilterOptions,
   getFilterOptions,
   searchSpecies,
@@ -18,6 +19,7 @@ const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench({
   getFavorites,
   getRecentlyViewed,
   toggleFavorite,
+  resolveCommonNames: (canonicalNames, locale) => getCommonNames([...canonicalNames], locale),
 })
 
 export const speciesCatalogWorkbench: SpeciesCatalogWorkbench = liveSpeciesCatalogWorkbench

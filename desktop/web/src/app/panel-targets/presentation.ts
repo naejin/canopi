@@ -4,6 +4,7 @@ import type { PanelTarget } from '../../types/design'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
+  matchedPanelTargets,
   selectedPanelTargetOrigin,
   selectedPanelTargets,
 } from './state'
@@ -143,8 +144,15 @@ export function clearSelectedPanelTargetsForOrigin(
   selectedPanelTargetOrigin.value = null
 }
 
+export function setMatchedPanelTargets(targetList: readonly PanelTarget[]): void {
+  if (!targetIdentity.listEquals(matchedPanelTargets.peek(), targetList)) {
+    matchedPanelTargets.value = targetList
+  }
+}
+
 export function clearPanelOriginTargets(): void {
   clearHoveredPanelTargets()
+  setMatchedPanelTargets([])
   if (selectedPanelTargets.peek().length > 0) {
     selectedPanelTargets.value = []
   }
@@ -190,6 +198,7 @@ export function readPanelOriginTargets(): readonly PanelTarget[] {
   return [
     ...selectedPanelTargets.value,
     ...hoveredPanelTargets.value,
+    ...matchedPanelTargets.value,
   ]
 }
 
@@ -206,6 +215,7 @@ export function subscribePanelOriginTargetChanges(
   return effect(() => {
     void hoveredPanelTargets.value
     void selectedPanelTargets.value
+    void matchedPanelTargets.value
     onChange()
   })
 }

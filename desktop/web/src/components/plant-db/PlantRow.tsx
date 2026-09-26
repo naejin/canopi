@@ -1,4 +1,3 @@
-import type { ComponentChildren } from 'preact'
 import { t } from '../../i18n'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../../canvas/session'
@@ -9,7 +8,6 @@ import {
 import { STRATUM_I18N_KEY } from '../../types/constants'
 import type { SpeciesListItem } from '../../types/species'
 import { secondaryCommonNameForDisplay } from './common-name-display'
-import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import styles from './PlantDb.module.css'
 
 /** Format height to 1 decimal place max, dropping trailing .0 */
@@ -20,11 +18,9 @@ function fmtHeight(m: number): string {
 
 interface Props {
   plant: SpeciesListItem
-  variant?: 'catalog' | 'favorites'
-  mark?: ComponentChildren
 }
 
-export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
+export function PlantRow({ plant }: Props) {
   const session = currentCanvasToolCommandSurface.value
 
   const handleDragStart = (e: DragEvent) => {
@@ -65,27 +61,22 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
       ? `Z${plant.hardiness_zone_min}–${plant.hardiness_zone_max}`
       : `Z${plant.hardiness_zone_min}`
     : null
-  const metadataTags = variant === 'favorites'
-    ? []
-    : catalogMetadataTags(plant, hardiness)
-  const showMatchedCommonName = variant === 'catalog'
-    && speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
+  const metadataTags = catalogMetadataTags(plant, hardiness)
+  const showMatchedCommonName = speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
   const secondaryCommonName = secondaryCommonNameForDisplay(plant, showMatchedCommonName)
 
   return (
     <div
       className={styles.plantRow}
-      data-variant={variant}
       draggable={true}
       onDragStart={handleDragStart}
-      onClick={variant === 'catalog' ? handleRowClick : undefined}
-      onKeyDown={variant === 'catalog' ? handleRowKeyDown : undefined}
-      tabIndex={variant === 'catalog' ? 0 : undefined}
+      onClick={handleRowClick}
+      onKeyDown={handleRowKeyDown}
+      tabIndex={0}
       role="listitem"
       aria-label={plant.canonical_name}
     >
       <div className={styles.plantRowContent}>
-        {variant === 'favorites' ? <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} mark={mark} /> : <>
         <div className={styles.nameRow}>
           {plant.common_name ? (
             <>
@@ -99,7 +90,6 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
             <span className={styles.botanicalName}>{plant.canonical_name}</span>
           )}
         </div>
-        </>}
         {metadataTags.length > 0 && <div className={styles.tagRow}>
           {metadataTags.map((tag) => (
             <span key={tag.label} className={styles.tag} style={{ color: tag.color }}>{tag.label}</span>
@@ -131,13 +121,6 @@ export function PlantRow({ plant, variant = 'catalog', mark }: Props) {
         >
           {plant.is_favorite ? '★' : '☆'}
         </button>
-        {variant === 'favorites' && <button type="button" className={styles.detailBtn}
-          data-species-detail={plant.canonical_name}
-          aria-label={t('speciesKey.details', { name: plant.common_name || plant.canonical_name })}
-          title={t('speciesKey.details', { name: plant.common_name || plant.canonical_name })}
-          onClick={handleRowClick}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-        </button>}
       </div>
     </div>
   )

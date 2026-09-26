@@ -1,4 +1,5 @@
-import { handleAppCommandKeyDown } from '../commands/registry'
+import { commandPaletteOpen, handleAppCommandKeyDown } from '../commands/registry'
+import { runFindPlantsShortcut } from '../app/plant-finder/focus'
 
 export { commandPaletteOpen } from '../commands/registry'
 
@@ -12,6 +13,8 @@ export function initShortcuts() {
   }
 
   _keydownHandler = (e: KeyboardEvent) => {
+    // Ctrl F belongs to the open panel's plant finder, even while a field has focus.
+    if (!commandPaletteOpen.peek() && runFindPlantsShortcut(e)) return
     handleAppCommandKeyDown(e)
   }
 

@@ -77,3 +77,29 @@ describe('Species Catalog view demand', () => {
     favorites(); s.workbench.dispose()
   })
 })
+
+describe('Species Catalog lookups for plant lists', () => {
+  it('searches close matches outside the catalog view session and resolves names per language', async () => {
+    const locale = signal('fr')
+    const search = vi.fn(async () => ({ items: [makeSpeciesListItem('Malus floribunda')], next_cursor: null, total_estimate: 0 }))
+    const resolveCommonNames = vi.fn(async (names: readonly string[], language: string) => (
+      Object.fromEntries(names.map((name) => [name, `${name} (${language})`]))
+    ))
+    const workbench = createSpeciesCatalogWorkbench({ locale, search, resolveCommonNames })
+
+    expect(await workbench.searchCloseMatches('p', 4)).toEqual([])
+    expect(search).not.toHaveBeenCalled()
+    const found = await workbench.searchCloseMatches('pommier', 4)
+    expect(found.map((item) => item.canonical_name)).toEqual(['Malus floribunda'])
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'pommier', cursor: null, limit: 4, locale: 'fr', include_total: false,
+    }))
+    expect(workbench.intent.value.text).toBe('')
+
+    expect(await workbench.resolveCommonNames(['Malus domestica'], 'de')).toEqual({ 'Malus domestica': 'Malus domestica (de)' })
+    expect(await workbench.resolveCommonNames([], 'de')).toEqual({})
+    expect(resolveCommonNames).toHaveBeenCalledOnce()
+    workbench.dispose()
+    expect(await workbench.searchCloseMatches('pommier', 4)).toEqual([])
+  })
+})

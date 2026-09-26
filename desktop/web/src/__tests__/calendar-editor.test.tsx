@@ -16,6 +16,8 @@ import { dropdownTrigger } from './support/dropdown-trigger'
 const plants: PlacedPlant[] = [
   plant('apple', 'Malus domestica', 'Apple'),
   plant('lavender', 'Lavandula angustifolia', 'English lavender'),
+  plant('lavender-2', 'Lavandula angustifolia', 'English lavender'),
+  plant('spike', 'Lavandula latifolia', 'Spike lavender'),
 ]
 
 function plant(id: string, canonicalName: string, commonName: string): PlacedPlant {
@@ -148,28 +150,49 @@ describe('Calendar action editor', () => {
     expect(currentDesign.value?.timeline[0]).toMatchObject({ start_date: null, end_date: null })
   })
 
-  it('keeps selected species visible while searching and supports explicit add and removal', async () => {
+  it('picks species targets from a multi-select list with the plant finder, keyboard and Add all', async () => {
     const editor = await openEdit()
     const search = editor.querySelector<HTMLInputElement>('input[type="search"]')!
+    const list = () => editor.querySelector<HTMLElement>('[role="listbox"]')!
+    const option = (name: string) => editor.querySelector<HTMLElement>(`[role="option"][data-calendar-species-option="${name}"]`)!
 
-    expect(editor.querySelector('[data-calendar-selected-target="Malus domestica"]')).not.toBeNull()
+    expect(list().getAttribute('aria-multiselectable')).toBe('true')
+    expect(search.getAttribute('aria-controls')).toBe(list().id)
+    expect(editor.textContent).toContain('1 species chosen · 1 plant')
+    expect(option('Malus domestica').getAttribute('aria-selected')).toBe('true')
+
     await act(async () => {
-      search.value = 'lavender'
+      search.value = 'lavendr'
       search.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(editor.querySelector('[data-calendar-selected-target="Malus domestica"]')).not.toBeNull()
+    expect([...list().querySelectorAll('[role="option"]')].map((node) => node.getAttribute('data-calendar-species-option')))
+      .toEqual(['Lavandula angustifolia', 'Lavandula latifolia'])
+    expect(editor.textContent).toContain('2 species match “lavendr”')
+
+    await act(async () => { button(editor, 'Add all 2').click() })
+    expect(option('Lavandula latifolia').getAttribute('aria-selected')).toBe('true')
+    expect(editor.textContent).toContain('3 species chosen · 4 plants')
+
+    await act(async () => { search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })) })
+    expect(document.activeElement).toBe(option('Lavandula angustifolia'))
+    await act(async () => { option('Lavandula angustifolia').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })) })
+    expect(document.activeElement).toBe(option('Lavandula latifolia'))
+    await act(async () => { option('Lavandula latifolia').dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })) })
+    expect(option('Lavandula latifolia').getAttribute('aria-selected')).toBe('false')
+    await act(async () => { option('Lavandula latifolia').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(option('Lavandula latifolia').getAttribute('aria-selected')).toBe('true')
 
     await act(async () => {
-      editor.querySelector<HTMLButtonElement>('[data-calendar-species-option="Lavandula angustifolia"]')!.click()
+      search.value = ''
+      search.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    expect(editor.querySelector('[data-calendar-selected-target="Lavandula angustifolia"]')).not.toBeNull()
-    await act(async () => {
-      editor.querySelector<HTMLButtonElement>('[aria-label="Remove Apple"]')!.click()
-    })
+    await act(async () => { option('Malus domestica').click() })
+    expect(option('Malus domestica').getAttribute('aria-selected')).toBe('false')
     await act(async () => { button(editor, 'Save').click() })
 
     expect(currentDesign.value?.timeline[0]?.targets).toEqual([
       speciesTarget('Lavandula angustifolia'),
+      speciesTarget('Lavandula latifolia'),
     ])
   })
 

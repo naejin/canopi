@@ -13,6 +13,9 @@ import {
   type ConsortiumPlanningRow,
 } from '../planning-projection'
 import { usePlanningViewState, type ConsortiumListFilter } from '../planning-view/state'
+import type { PlantFinderResult } from '../plant-finder/matcher'
+import { useMapSelectionSpecies } from '../plant-finder/selection'
+import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from './time-model'
 
 const consortiumTargetPresentation = createPanelTargetPresentationController('consortium')
@@ -34,6 +37,11 @@ export interface ConsortiumDockWorkbench {
   readonly list: ConsortiumListProjection
   readonly activeLocale: string
   readonly search: string
+  readonly finder: PlantFinderResult<string>
+  readonly selectedOnMap: boolean
+  readonly mapSelectionPlantCount: number
+  /** Species the finder or the map selection narrows to; null when neither is on. */
+  readonly highlightedSpecies: ReadonlySet<string> | null
   readonly filter: ConsortiumListFilter | null
   readonly expandedStrata: ReadonlySet<string>
   readonly editor: ConsortiumEditorState | null
@@ -42,6 +50,8 @@ export interface ConsortiumDockWorkbench {
   readonly focusedCanonical: string | null
   readonly scrollTop: number
   readonly setSearch: (value: string) => void
+  readonly setSelectedOnMap: (value: boolean) => void
+  readonly clearFilters: () => void
   readonly setFilter: (filter: ConsortiumListFilter | null) => void
   readonly toggleStratum: (stratum: string) => void
   readonly setScrollTop: (value: number) => void
@@ -61,6 +71,7 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
   const view = usePlanningViewState()
   const sessionIdentity = designSessionStore.sessionIdentity.value
   const search = view.consortiumSearch.value
+  const selectedOnMap = view.consortiumSelectedOnMap.value
   const filter = view.consortiumFilter.value
   const expandedStrata = view.consortiumExpandedStrata.value
   const editor = useSignal<ConsortiumEditorState | null>(null)
@@ -68,10 +79,28 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
   const movedOutsideFilter = useSignal(false)
   const projectionRef = useRef(surface.projection)
   projectionRef.current = surface.projection
+  const mapSelection = useMapSelectionSpecies()
+  const finderSpecies = useMemo(() => surface.projection.rows.map((row) => ({
+    canonicalName: row.canonicalName,
+    commonName: row.commonName,
+    code: row.code,
+  })), [surface.projection.rows])
+  const finder = usePlantFinder(finderSpecies, search)
+  const matches = useMemo(() => finder.active ? new Set(finder.byKey.keys()) : null, [finder])
+  const selectedSpecies = useMemo(
+    () => selectedOnMap ? new Set(mapSelection.plantCountBySpecies.keys()) : null,
+    [mapSelection, selectedOnMap],
+  )
+  const highlightedSpecies = useMemo(() => {
+    if (!matches) return selectedSpecies
+    if (!selectedSpecies) return matches
+    return new Set([...matches].filter((name) => selectedSpecies.has(name)))
+  }, [matches, selectedSpecies])
   const list = useMemo(() => buildConsortiumListProjection(surface.projection, {
-    search,
+    matches,
+    selectedSpecies,
     filter,
-  }), [filter, search, surface.projection])
+  }), [filter, matches, selectedSpecies, surface.projection])
 
   useEffect(() => {
     if (view.consortiumExpansionInitialized.peek()) return
@@ -195,6 +224,10 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     list,
     activeLocale: surface.activeLocale,
     search,
+    finder,
+    selectedOnMap,
+    mapSelectionPlantCount: mapSelection.plantCount,
+    highlightedSpecies,
     filter,
     expandedStrata,
     editor: editor.value,
@@ -203,6 +236,13 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     focusedCanonical: currentCanvasQuerySurface.value?.getSpeciesFocus().canonicalName ?? null,
     scrollTop: view.consortiumScrollTop,
     setSearch: (value) => { view.consortiumSearch.value = value },
+    setSelectedOnMap: (value) => { view.consortiumSelectedOnMap.value = value },
+    clearFilters: () => {
+      view.consortiumSearch.value = ''
+      view.consortiumSelectedOnMap.value = false
+      view.consortiumFilter.value = null
+      movedOutsideFilter.value = false
+    },
     setFilter,
     toggleStratum,
     setScrollTop: (value) => { view.consortiumScrollTop = value },

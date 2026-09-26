@@ -32,6 +32,7 @@ type RecentlyViewedAdapter = (locale: string, limit: number) => Promise<SpeciesL
 type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
 type SpeciesSelectedAdapter = (canonicalName: string) => void | Promise<void>
 type SpeciesDetailAdapter = (canonicalName: string, locale: string) => Promise<SpeciesCatalogDetail | null>
+type CommonNamesAdapter = (canonicalNames: readonly string[], locale: string) => Promise<Readonly<Record<string, string>>>
 
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
@@ -116,6 +117,13 @@ export interface SpeciesCatalogWorkbench {
   isFavorite(canonicalName: string): boolean
   isSearchLoading(status: PlantSearchStatus): boolean
   isActiveSearchText(text: string): boolean
+  /** Best Common Name per species in one catalog language; species without one are absent. */
+  resolveCommonNames(canonicalNames: readonly string[], locale: string): Promise<Readonly<Record<string, string>>>
+  /**
+   * One unfiltered first page for `text` in the active locale, outside the catalog view's
+   * own search session (so the catalog panel keeps its query and results).
+   */
+  searchCloseMatches(text: string, limit: number): Promise<readonly SpeciesListItem[]>
 }
 
 export interface SpeciesCatalogWorkbenchOptions {
@@ -128,6 +136,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly getRecentlyViewed?: RecentlyViewedAdapter
   readonly toggleFavorite?: ToggleFavoriteAdapter
   readonly getSpeciesDetail?: SpeciesDetailAdapter
+  readonly resolveCommonNames?: CommonNamesAdapter
   readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
   readonly favoritesIncludeRecentlyViewed?: boolean
@@ -145,6 +154,7 @@ const emptyFavoriteItemsAdapter: FavoriteItemsAdapter = async () => []
 const emptyRecentlyViewedAdapter: RecentlyViewedAdapter = async () => []
 const emptyToggleFavoriteAdapter: ToggleFavoriteAdapter = async () => false
 const emptySpeciesDetailAdapter: SpeciesDetailAdapter = async () => null
+const emptyCommonNamesAdapter: CommonNamesAdapter = async () => ({})
 
 export function createSpeciesCatalogWorkbench({
   search = missingSearchAdapter,
@@ -156,6 +166,7 @@ export function createSpeciesCatalogWorkbench({
   getRecentlyViewed: getRecentlyViewedAdapter = emptyRecentlyViewedAdapter,
   toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
   getSpeciesDetail: getSpeciesDetailAdapter = emptySpeciesDetailAdapter,
+  resolveCommonNames: resolveCommonNamesAdapter = emptyCommonNamesAdapter,
   onSpeciesSelected,
   locale: localeSignal = locale,
   favoritesIncludeRecentlyViewed = false,
@@ -676,6 +687,25 @@ export function createSpeciesCatalogWorkbench({
     isSearchLoading: isPlantSearchLoading,
 
     isActiveSearchText: isActiveSpeciesSearchText,
+
+    resolveCommonNames(canonicalNames, requestedLocale) {
+      if (disposed || canonicalNames.length === 0) return Promise.resolve({})
+      return resolveCommonNamesAdapter(canonicalNames, requestedLocale)
+    },
+
+    async searchCloseMatches(text, limit) {
+      if (disposed || !isActiveSpeciesSearchText(text)) return []
+      const page = await search({
+        text,
+        filters: plantFilterModel.toRequestFilters(plantFilterModel.createEmpty(), []),
+        cursor: null,
+        limit,
+        sort: 'Relevance',
+        locale: localeSignal.peek(),
+        include_total: false,
+      })
+      return page.items
+    },
   }
 }
 

@@ -548,6 +548,52 @@ describe('scene runtime mutation controller', () => {
     expect(state.invalidations).toBe(1)
   })
 
+  it('selectSpecies replaces the selection with selectable plants of every named species', () => {
+    const file = makeFile()
+    file.plants = [
+      ...file.plants,
+      {
+        id: 'plant-3',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: geoAt(30, 30),
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: false,
+      },
+      {
+        id: 'plant-4',
+        canonical_name: 'Pyrus communis',
+        common_name: 'Pear',
+        color: null,
+        position: geoAt(40, 40),
+        rotation: null,
+        scale: null,
+        notes: null,
+        planted_date: null,
+        quantity: 1,
+        locked: true,
+      },
+    ]
+    const { controller, sceneStore, state } = createController(file)
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }])
+
+    controller.selectSpecies(['Pyrus communis', 'Malus domestica', 'Unknown species'])
+
+    expect(sceneStore.session.selectedTargets).toEqual([
+      { kind: 'plant', id: 'plant-1' },
+      { kind: 'plant', id: 'plant-2' },
+      { kind: 'plant', id: 'plant-3' },
+    ])
+    expect(state.dirtyTypes).toEqual([])
+    controller.selectSpecies(['Unknown species'])
+    expect(sceneStore.session.selectedTargets).toHaveLength(3)
+  })
+
   it('updates species colors through the presentation seam', () => {
     const { controller, sceneStore, state } = createController()
 

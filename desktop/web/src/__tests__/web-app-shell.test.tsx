@@ -286,7 +286,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(panelBarLabels(container)).toEqual([
       'Design Canvas',
       'World Map',
-      'Species key',
+      'Plants in this Design',
       'Data Library',
       'Layers',
       'Calendar',

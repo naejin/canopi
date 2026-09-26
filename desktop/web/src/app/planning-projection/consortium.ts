@@ -3,7 +3,6 @@ import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium, PlacedPlant } from '../../types/design'
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
 import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
-import { normalizeSearchText } from '../../utils/normalize-search'
 import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from '../consortium/time-model'
 import type { ConsortiumListFilter } from '../planning-view/state'
 
@@ -26,7 +25,6 @@ export interface ConsortiumPlanningRow {
   readonly stratum: string
   readonly startPhase: number
   readonly endPhase: number
-  readonly searchText: string
 }
 
 export interface ConsortiumPlanningGroup {
@@ -82,9 +80,14 @@ export function buildConsortiumPlanningProjection({
 
 export function buildConsortiumListProjection(
   projection: ConsortiumPlanningProjection,
-  options: { readonly search: string; readonly filter: ConsortiumListFilter | null },
+  options: {
+    /** Species the finder matched; null when the finder is empty. */
+    readonly matches: ReadonlySet<string> | null
+    /** Species selected on the map; null when that filter is off. */
+    readonly selectedSpecies: ReadonlySet<string> | null
+    readonly filter: ConsortiumListFilter | null
+  },
 ): ConsortiumListProjection {
-  const needle = normalizeSearchText(options.search.trim())
   const groups = projection.groups.map((group) => {
     const rows = group.rows.filter((row) => {
       if (options.filter?.stratum && row.stratum !== options.filter.stratum) return false
@@ -93,7 +96,8 @@ export function buildConsortiumListProjection(
         && options.filter?.phase !== undefined
         && !(row.startPhase <= options.filter.phase && row.endPhase >= options.filter.phase)
       ) return false
-      return needle === '' || row.searchText.includes(needle)
+      if (options.selectedSpecies && !options.selectedSpecies.has(row.canonicalName)) return false
+      return !options.matches || options.matches.has(row.canonicalName)
     })
     return {
       ...group,
@@ -105,7 +109,7 @@ export function buildConsortiumListProjection(
   return {
     groups,
     visibleCount: groups.reduce((sum, group) => sum + group.rows.length, 0),
-    restricted: needle !== '' || options.filter !== null,
+    restricted: options.matches !== null || options.selectedSpecies !== null || options.filter !== null,
   }
 }
 
@@ -139,7 +143,6 @@ function buildConsortiumRows(
       stratum: entry.stratum,
       startPhase: entry.start_phase,
       endPhase: entry.end_phase,
-      searchText: normalizeSearchText(`${commonName} ${canonicalName} ${code ?? ''}`),
     }
   }).sort((left, right) => (
     left.commonName.localeCompare(right.commonName)

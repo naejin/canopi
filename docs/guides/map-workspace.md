@@ -61,7 +61,7 @@ Paths are relative to `desktop/web/src/` unless they start with `desktop/`.
 
 ## Place search
 
-- The pin icon button under the inspection lens button, `Ctrl+F` (`view.searchPlace`) or the empty-Design "Search your site" prompt opens `components/canvas/PlaceSearch.tsx`. The component only renders: `app/geocoding/place-search-session.ts` owns the one place-search controller (bound to `#geocoding-transport`) and closes and clears the search when the Design is replaced. Both platform bootstraps install it (`installPlaceSearchSession()`).
+- The pin icon button under the inspection lens button, `Ctrl+K` (`view.searchPlace`; `Ctrl+F` belongs to the open panel's plant finder) or the empty-Design "Search your site" prompt opens `components/canvas/PlaceSearch.tsx`. The component only renders: `app/geocoding/place-search-session.ts` owns the one place-search controller (bound to `#geocoding-transport`) and closes and clears the search when the Design is replaced. Both platform bootstraps install it (`installPlaceSearchSession()`).
 - `app/geocoding/place-search.ts` parses coordinates locally and paces requests; `app/geocoding/registry.ts` (copied from GeoLibre) holds providers: Nominatim first, search on Enter only, never as-you-type, at least 1.1 s between requests (`NOMINATIM_MIN_INTERVAL_MS`), OSM attribution on results.
 - The `#geocoding-transport` alias selects the edition transport: `transport.desktop.ts` calls the native `geocode_address` command (identifying User-Agent); `transport.browser.ts` uses `fetch`. No proxy.
 - Confirm calls `viewport.showPlace`: camera only.

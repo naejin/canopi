@@ -144,7 +144,7 @@ export function useCalendarPlanningSurface(options: {
       currentCanvasQuerySurface.peek()?.getSelectedPlantColorContext().plantIds ?? []
     ),
     zoneNames: snapshot.zoneNames,
-    speciesList: buildTimelineSpeciesOptions(snapshot.plants, snapshot.localizedNames, activeLocale),
+    speciesList: buildTimelineSpeciesOptions(snapshot.plants, snapshot.localizedNames, activeLocale, snapshot.speciesKey),
   }
 }
 

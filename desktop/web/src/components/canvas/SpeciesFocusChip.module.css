@@ -1,32 +1,79 @@
+/* Status chip for highlighted plants: top centre, over the map. */
 .chip {
   position: absolute;
   z-index: 5;
   top: var(--space-7);
   left: 50%;
   transform: translateX(-50%);
-  max-width: 60%;
+  max-width: min(640px, calc(100% - var(--space-8)));
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  min-height: var(--control-size-3xl);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text);
+  font-size: var(--text-base);
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.text b {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.button,
+.quiet {
+  position: relative;
+  flex-shrink: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
   font-size: var(--text-sm);
+  font-weight: 600;
   cursor: pointer;
 }
-.chip:hover {
+
+.button:hover,
+.quiet:hover {
   background: var(--color-control-hover);
 }
-.chip:focus-visible {
+
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.primary:hover {
+  background: var(--color-accent-ink);
+}
+
+.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.button:focus-visible,
+.quiet:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
-}
-.count {
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 480px) {

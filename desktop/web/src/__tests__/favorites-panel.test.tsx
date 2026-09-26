@@ -266,19 +266,29 @@ describe('FavoritesPanel', () => {
 
   it('searches favorites and clears a no-results state without changing the library', async () => {
     await act(async () => { render(<FavoritesPanel />, container); await flushEffects(); await workbench.loadFavorites() })
-    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites"]')!
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites and stamps"]')!
     await act(async () => { input.value = 'no-such-species'; input.dispatchEvent(new Event('input', { bubbles: true })) })
     expect(container.textContent).toContain('No matching species.')
-    expect(container.querySelector('[data-variant="favorites"]')).toBeNull()
+    expect(container.querySelector('[data-favorite-species]')).toBeNull()
     await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Clear search"]')!.click() })
-    expect(container.querySelector('[data-variant="favorites"]')?.textContent).toContain('Malus domestica')
+    expect(container.querySelector('[data-favorite-species]')?.textContent).toContain('Malus domestica')
     expect(workbench.favorites.value.items).toHaveLength(1)
     expect(document.activeElement).toBe(input)
   })
 
+  it('leads favourite rows with the star and names Place with its plant', async () => {
+    await act(async () => { render(<FavoritesPanel />, container); await flushEffects() })
+    await act(async () => { await workbench.loadFavorites(); await flushEffects() })
+    const favorite = container.querySelector<HTMLElement>('[data-favorite-species="Malus domestica"]')!
+    const buttons = [...favorite.querySelectorAll<HTMLButtonElement>(':scope > button')]
+    expect(buttons[0]!.getAttribute('aria-label')).toBe('Remove Malus domestica from favorites')
+    expect(buttons.at(-1)!.getAttribute('aria-label')).toBe('Place Malus domestica')
+    expect(buttons.at(-1)!.textContent).toBe('Place')
+  })
+
   it('restores the information button, search and list position after detail closes', async () => {
     await act(async () => { render(<FavoritesPanel />, container); await flushEffects(); await workbench.loadFavorites() })
-    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites"]')!
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites and stamps"]')!
     await act(async () => { input.value = 'Malus'; input.dispatchEvent(new Event('input', { bubbles: true })) })
     const list = container.querySelector<HTMLElement>('[role="list"]')!
     list.scrollTop = 90
@@ -302,7 +312,7 @@ describe('FavoritesPanel', () => {
 
     expect(loadStampLibraryMock).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Saved stamps')
-    expect(container.querySelector('button[aria-label="Stamp actions"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label^="More actions for "]')).toBeTruthy()
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')).toBeNull()
     expect(container.textContent).toContain('Pommier, Lavande')
     expect(container.textContent).toContain('2 plants · 1 zone · 1 annotation')
@@ -330,7 +340,7 @@ describe('FavoritesPanel', () => {
 
     expect(importStampFileMock).toHaveBeenCalledTimes(1)
 
-    const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Place"]')
+    const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Place stamp "]')
     expect(placeButton).toBeTruthy()
 
     await act(async () => {
@@ -375,7 +385,7 @@ describe('FavoritesPanel', () => {
 
     const row = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-1"]')
     const body = container.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-1"]')
-    const grip = container.querySelector<HTMLElement>('[aria-label="Reorder saved stamp"]')
+    const grip = container.querySelector<HTMLElement>('[data-saved-stamp-grip]')
     expect(row).toBeTruthy()
     expect(body).toBeTruthy()
     expect(grip).toBeTruthy()
@@ -398,7 +408,7 @@ describe('FavoritesPanel', () => {
     expect(readSavedObjectStampDragData(reorderDragData)).toBeNull()
 
     await openStampActions()
-    expect(container.querySelector('button[aria-label="Place"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeTruthy()
     expect(document.querySelector('button[aria-label="Export"]')).toBeTruthy()
     expect(document.querySelector('button[aria-label="Rename"]')).toBeTruthy()
     expect(document.querySelector('button[aria-label="Delete"]')).toBeTruthy()
@@ -412,7 +422,7 @@ describe('FavoritesPanel', () => {
 
     const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     expect(renameInput).toBeTruthy()
-    expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
     expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
@@ -454,7 +464,7 @@ describe('FavoritesPanel', () => {
       await flushEffects()
     })
     expect(container.textContent).toContain('Delete this saved stamp?')
-    expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
     expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(document.querySelector('button[aria-label="Rename"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm delete"]')).toBeTruthy()
@@ -566,10 +576,30 @@ describe('FavoritesPanel', () => {
     expect(document.activeElement).toBe(renameInput)
     expect(renameInput?.selectionStart).toBe(0)
     expect(renameInput?.selectionEnd).toBe('Pommier, Lavande'.length)
-    expect(container.querySelector('button[aria-label="Place"]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
     expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
+  })
+
+  it('moves a Saved Stamp with Alt and the arrow keys from its named handle', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-1', name: 'Alpha guild', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-2', name: 'Berry guild', sort_order: 1 },
+      ],
+    }
+    await act(async () => { render(<FavoritesPanel />, container); await flushEffects() })
+    const grip = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Berry guild (Alt ↑ or ↓)"]')!
+    expect(grip.getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowUp Alt+ArrowDown')
+    expect(container.querySelector('button[aria-label="Place stamp Berry guild"]')).not.toBeNull()
+
+    await act(async () => { grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })) })
+    expect(reorderStampMock).not.toHaveBeenCalled()
+    await act(async () => { grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true })) })
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-2', 'stamp-1'])
   })
 
   it('previews Saved Stamp reorder during pointer drag and persists once on release', async () => {
@@ -596,7 +626,7 @@ describe('FavoritesPanel', () => {
     expect(visibleNames()[2]).toContain('Canopy guild')
 
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-3"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-3"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     installSavedStampRowRects(container)
@@ -657,7 +687,7 @@ describe('FavoritesPanel', () => {
     const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
       .map((row) => row.textContent ?? '')
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-1"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     installSavedStampRowRects(container)
@@ -715,7 +745,7 @@ describe('FavoritesPanel', () => {
     const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
       .map((row) => row.textContent ?? '')
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-1"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     installSavedStampRowRects(container)
@@ -773,7 +803,7 @@ describe('FavoritesPanel', () => {
     const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
       .map((row) => row.textContent ?? '')
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-1"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     installSavedStampRowRects(container)
@@ -832,7 +862,7 @@ describe('FavoritesPanel', () => {
     const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
       .map((row) => row.textContent ?? '')
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-1"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     sourceGrip!.setPointerCapture = vi.fn()
@@ -894,7 +924,7 @@ describe('FavoritesPanel', () => {
     const visibleNames = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
       .map((row) => row.textContent ?? '')
     const sourceGrip = container.querySelector<HTMLElement>(
-      '[data-saved-stamp-row="stamp-1"] [aria-label="Reorder saved stamp"]',
+      '[data-saved-stamp-row="stamp-1"] [data-saved-stamp-grip]',
     )
     expect(sourceGrip).toBeTruthy()
     preparePointerGrip(sourceGrip!)
@@ -949,8 +979,8 @@ describe('FavoritesPanel', () => {
 
     const main = container.querySelector<HTMLElement>('[data-favorites-main]')
     const body = container.querySelector<HTMLElement>('[data-saved-stamp-body="stamp-1"]')
-    const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label="Place"]')
-    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label="Stamp actions"]')
+    const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Place stamp "]')
+    const exportButton = container.querySelector<HTMLButtonElement>('button[aria-label^="More actions for "]')
     expect(main).toBeTruthy()
     expect(body).toBeTruthy()
     expect(placeButton).toBeTruthy()
@@ -1133,6 +1163,6 @@ describe('FavoritesPanel', () => {
 async function openStampActions() {
   if (document.querySelector('[role="menu"]')) return
   await act(async () => {
-    document.querySelector<HTMLButtonElement>('button[aria-label="Stamp actions"]')!.click()
+    document.querySelector<HTMLButtonElement>('button[aria-label^="More actions for "]')!.click()
   })
 }

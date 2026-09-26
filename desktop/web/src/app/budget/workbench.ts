@@ -10,10 +10,18 @@ import {
 import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import { setBudgetCurrency, setPlantBudgetPrice } from '../design-edit'
 import { designSessionStore } from '../document-session/store'
-import { usePlanningViewState, type BudgetPriceFilter, type BudgetSort } from '../planning-view/state'
+import { usePlanningViewState, type BudgetSort } from '../planning-view/state'
 import { currentCanvasQuerySurface, currentCanvasSpeciesFocusCommands } from '../../canvas/session'
+import type { PlantFinderResult } from '../plant-finder/matcher'
+import { useMapSelectionSpecies } from '../plant-finder/selection'
+import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { exportBudgetCsv, isBudgetExportCancelled } from './export'
-import { formatBudgetCurrency } from './formatting'
+import {
+  budgetCurrencySymbol,
+  formatBudgetCurrency,
+  formatBudgetPriceInput,
+  parseBudgetPriceInput,
+} from './formatting'
 
 const budgetTargetPresentation = createPanelTargetPresentationController('budget')
 
@@ -23,8 +31,13 @@ export interface BudgetItemWorkbench {
   readonly currency: string
   readonly activeLocale: string
   readonly search: string
+  readonly finder: PlantFinderResult<string>
   readonly sort: BudgetSort
-  readonly priceFilter: BudgetPriceFilter
+  readonly missingPriceOnly: boolean
+  readonly missingPriceCount: number
+  readonly selectedOnMap: boolean
+  readonly mapSelectionPlantCount: number
+  readonly currencySymbol: string
   readonly editingCanonical: string | null
   readonly editPrice: string
   readonly priceInvalid: boolean
@@ -34,7 +47,11 @@ export interface BudgetItemWorkbench {
   readonly scrollTop: number
   readonly setSearch: (value: string) => void
   readonly setSort: (value: BudgetSort) => void
-  readonly setPriceFilter: (value: BudgetPriceFilter) => void
+  readonly setMissingPriceOnly: (value: boolean) => void
+  readonly setSelectedOnMap: (value: boolean) => void
+  readonly clearFilters: () => void
+  /** The unit cost as the field shows it: the draft while editing, else locale decimals. */
+  readonly priceInputValue: (row: BudgetPlanningRow) => string
   readonly setScrollTop: (value: number) => void
   readonly setEditPrice: (value: string) => void
   readonly clearHover: () => void
@@ -52,16 +69,10 @@ export type BudgetPriceDraftResult =
   | { readonly valid: true; readonly value: number }
   | { readonly valid: false }
 
-export function validateBudgetPriceDraft(value: string): BudgetPriceDraftResult {
-  const trimmed = value.trim()
-  if (trimmed === '') return { valid: false }
-  const parsed = Number(trimmed)
-  if (!Number.isFinite(parsed) || parsed < 0) return { valid: false }
-  return { valid: true, value: parsed }
-}
-
-export function budgetPriceDraftValue(price: number | null | undefined): string {
-  return price == null ? '' : String(price)
+/** Accepts locale decimals ("3,90" in French) as well as a dot. */
+export function validateBudgetPriceDraft(value: string, locale = 'en'): BudgetPriceDraftResult {
+  const parsed = parseBudgetPriceInput(value, locale)
+  return parsed === null ? { valid: false } : { valid: true, value: parsed }
 }
 
 export function useBudgetItemWorkbench(): BudgetItemWorkbench {
@@ -75,7 +86,15 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   const sessionIdentity = designSessionStore.sessionIdentity.value
   const search = view.budgetSearch.value
   const sort = view.budgetSort.value
-  const priceFilter = view.budgetPriceFilter.value
+  const missingPriceOnly = view.budgetMissingPriceOnly.value
+  const selectedOnMap = view.budgetSelectedOnMap.value
+  const mapSelection = useMapSelectionSpecies()
+  const finderSpecies = useMemo(() => projection.rows.map((row) => ({
+    canonicalName: row.canonical,
+    commonName: row.commonName,
+    code: row.code,
+  })), [projection.rows])
+  const finder = usePlantFinder(finderSpecies, search)
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
   const priceInvalid = useSignal(false)
@@ -85,11 +104,12 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   const exportEpochRef = useRef(0)
   const projectionRef = useRef(projection)
   const list = useMemo(() => buildBudgetListProjection(projection, {
-    search,
+    matches: finder.active ? new Set(finder.byKey.keys()) : null,
+    selectedSpecies: selectedOnMap ? new Set(mapSelection.plantCountBySpecies.keys()) : null,
+    missingPriceOnly,
     sort,
-    priceFilter,
     locale: activeLocale,
-  }), [activeLocale, priceFilter, projection, search, sort])
+  }), [activeLocale, finder, mapSelection, missingPriceOnly, projection, selectedOnMap, sort])
   const listRef = useRef(list)
   projectionRef.current = projection
   listRef.current = list
@@ -128,12 +148,13 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   }, [])
 
   const startPriceEdit = useCallback((canonical: string) => {
+    if (editingCanonical.peek() === canonical) return
     const existing = projectionRef.current.lineItemPriceMap.get(canonical)
-    editPrice.value = budgetPriceDraftValue(existing?.unit_cost)
+    editPrice.value = existing ? formatBudgetPriceInput(existing.unit_cost, activeLocale) : ''
     priceInvalid.value = false
     editingIdentityRef.current = designSessionStore.sessionIdentity.peek()
     editingCanonical.value = canonical
-  }, [editPrice, editingCanonical, priceInvalid])
+  }, [activeLocale, editPrice, editingCanonical, priceInvalid])
 
   const commitPriceEdit = useCallback((canonical: string, advance = false): boolean => {
     // A replaced input may emit blur after Enter has already advanced the editor.
@@ -147,7 +168,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
       editingIdentityRef.current = null
       return false
     }
-    const parsed = validateBudgetPriceDraft(editPrice.value)
+    const parsed = validateBudgetPriceDraft(editPrice.value, activeLocale)
     if (!parsed.valid) {
       priceInvalid.value = true
       return false
@@ -160,7 +181,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
       const next = rows[rows.findIndex((row) => row.canonical === canonical) + 1]
       if (next) {
         const existing = projectionRef.current.lineItemPriceMap.get(next.canonical)
-        editPrice.value = budgetPriceDraftValue(existing?.unit_cost)
+        editPrice.value = existing ? formatBudgetPriceInput(existing.unit_cost, activeLocale) : ''
         editingCanonical.value = next.canonical
         return true
       }
@@ -168,7 +189,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     editingCanonical.value = null
     editingIdentityRef.current = null
     return true
-  }, [editPrice, editingCanonical, priceInvalid])
+  }, [activeLocale, editPrice, editingCanonical, priceInvalid])
 
   const cancelPriceEdit = useCallback(() => {
     editingCanonical.value = null
@@ -178,8 +199,8 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
 
   const setEditPrice = useCallback((value: string) => {
     editPrice.value = value
-    priceInvalid.value = !validateBudgetPriceDraft(value).valid
-  }, [editPrice, priceInvalid])
+    priceInvalid.value = value.trim() !== '' && !validateBudgetPriceDraft(value, activeLocale).valid
+  }, [activeLocale, editPrice, priceInvalid])
 
   const formatCurrency = useCallback((amount: number) => (
     formatBudgetCurrency(amount, currency, activeLocale)
@@ -219,8 +240,13 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     currency,
     activeLocale,
     search,
+    finder,
     sort,
-    priceFilter,
+    missingPriceOnly,
+    missingPriceCount: projection.rows.length - projection.pricedCount,
+    selectedOnMap,
+    mapSelectionPlantCount: mapSelection.plantCount,
+    currencySymbol: budgetCurrencySymbol(currency, activeLocale),
     editingCanonical: editingCanonical.value,
     editPrice: editPrice.value,
     priceInvalid: priceInvalid.value,
@@ -230,7 +256,18 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     scrollTop: view.budgetScrollTop,
     setSearch: (value) => { view.budgetSearch.value = value },
     setSort: (value) => { view.budgetSort.value = value },
-    setPriceFilter: (value) => { view.budgetPriceFilter.value = value },
+    setMissingPriceOnly: (value) => { view.budgetMissingPriceOnly.value = value },
+    setSelectedOnMap: (value) => { view.budgetSelectedOnMap.value = value },
+    clearFilters: () => {
+      view.budgetSearch.value = ''
+      view.budgetMissingPriceOnly.value = false
+      view.budgetSelectedOnMap.value = false
+    },
+    priceInputValue: (row) => (
+      editingCanonical.value === row.canonical
+        ? editPrice.value
+        : row.hasPrice ? formatBudgetPriceInput(row.unitCost, activeLocale) : ''
+    ),
     setScrollTop: (value) => { view.budgetScrollTop = value },
     setEditPrice,
     clearHover,

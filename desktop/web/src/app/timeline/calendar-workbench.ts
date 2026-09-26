@@ -85,6 +85,8 @@ export interface CalendarWorkbench {
   readonly setRange: (range: boolean) => void
   readonly setTargetMode: (mode: Exclude<CalendarTargetMode, 'preserve'>) => void
   readonly toggleSpeciesTarget: (canonicalName: string) => void
+  /** Adds every given species to the targets; ones already chosen stay once. */
+  readonly addSpeciesTargets: (canonicalNames: readonly string[]) => void
   readonly setZoneTarget: (zoneName: string) => void
   readonly saveEditor: () => boolean
   readonly cancelEditor: () => void
@@ -258,6 +260,24 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     calendarTargetPresentation.setSelectedTargets(targets)
   }, [editor, editorError])
 
+  const addSpeciesTargets = useCallback((canonicalNames: readonly string[]) => {
+    const current = editor.value
+    if (!current) return
+    const existing = current.draft.targets.filter((target) => target.kind === 'species')
+    const chosen = new Set(existing.map((target) => target.canonical_name))
+    const added = canonicalNames
+      .filter((name) => !chosen.has(name))
+      .map((name) => ({ kind: 'species' as const, canonical_name: name }))
+    if (added.length === 0) return
+    const targets = [...existing, ...added]
+    editor.value = {
+      ...current,
+      draft: { ...current.draft, targetMode: 'species', targets, targetsChanged: true },
+    }
+    editorError.value = null
+    calendarTargetPresentation.setSelectedTargets(targets)
+  }, [editor, editorError])
+
   const setZoneTarget = useCallback((zoneName: string) => {
     const current = editor.value
     if (!current) return
@@ -384,6 +404,7 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     setRange,
     setTargetMode,
     toggleSpeciesTarget,
+    addSpeciesTargets,
     setZoneTarget,
     saveEditor,
     cancelEditor,

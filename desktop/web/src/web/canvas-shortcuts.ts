@@ -4,6 +4,7 @@ import {
 } from '../app/canvas-commands'
 import { saveProblem } from '../app/document-session/save-problem'
 import { isPlaceSearchShortcut, openPlaceSearch } from '../app/geocoding/place-search-ui'
+import { runFindPlantsShortcut } from '../app/plant-finder/focus'
 import { getCurrentCanvasSession } from '../canvas/session'
 import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
 import { dispatchCurrentWebCanvasCommandIntent } from './canvas-command-adapter'
@@ -21,7 +22,9 @@ export function installWebCanvasShortcuts(target: Window = window): () => void {
 
   const handler = (event: KeyboardEvent): void => {
     // The save dialog is modal: no shortcut may change the Design under it.
-    if (saveProblem.peek() !== null || isEditableTarget(event.target)) return
+    if (saveProblem.peek() !== null) return
+    if (runFindPlantsShortcut(event)) return
+    if (isEditableTarget(event.target)) return
     if (isPlaceSearchShortcut(event)) {
       if (!getCurrentCanvasSession()) return
       openPlaceSearch()

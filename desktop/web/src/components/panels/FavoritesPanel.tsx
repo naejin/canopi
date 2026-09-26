@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import {
   MIN_FAVORITES_FRAME_HEIGHT,
@@ -22,22 +22,32 @@ import {
   writeSavedObjectStampDragData,
 } from '../../canvas/saved-object-stamp-source'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
-import { PlantRow } from '../plant-db/PlantRow'
-import {
-  filterFavoriteSpecies,
-  useFavoriteSpeciesDetailNavigation,
-} from '../plant-db/favorite-species-presentation'
+import type { SpeciesListItem } from '../../types/species'
+import { useFavoriteSpeciesDetailNavigation } from '../plant-db/favorite-species-presentation'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { usePointerResize } from '../shared/usePointerResize'
 import { usePointerReorder } from '../shared/usePointerReorder'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
-import { currentCanvasQuerySurface } from '../../canvas/session'
+import { currentCanvasQuerySurface, currentCanvasToolCommandSurface } from '../../canvas/session'
 import { resolvePlantSymbolId } from '../../canvas/runtime/scene'
+import {
+  beginPlantStampFromSpecies,
+  writePlantStampDragData,
+} from '../../canvas/plant-stamp-source'
+import { navigateTo } from '../../app/shell/state'
+import { findPlants } from '../../app/plant-finder/matcher'
+import { useMapSelectionSpecies } from '../../app/plant-finder/selection'
+import { usePlantFinder } from '../../app/plant-finder/use-plant-finder'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
-import { SurfaceSearch } from '../shared/SurfaceSearch'
+import { EmptyState } from '../shared/EmptyState'
+import { PanelIcon } from '../shared/PanelIcon'
+import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
+import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { ActionMenu } from '../shared/ActionMenu'
+import { ControlIcon } from '../shared/ControlIcon'
+import row from '../shared/species-row.module.css'
 import styles from './FavoritesPanel.module.css'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
@@ -63,6 +73,8 @@ interface SavedStampReorderSession {
 
 export function FavoritesPanel() {
   const [search, setSearch] = useState('')
+  const [selectedOnMap, setSelectedOnMap] = useState(false)
+  const mapSelection = useMapSelectionSpecies()
   const queries = currentCanvasQuerySurface.value
   void queries?.revision.scene.value
   const scene = queries?.getSceneSnapshot()
@@ -115,12 +127,31 @@ export function FavoritesPanel() {
   }, [])
 
   const items = favoritesView.items
-  const visibleItems = filterFavoriteSpecies(items, search)
+  const finderSpecies = useMemo(() => items.map((item) => ({
+    canonicalName: item.canonical_name,
+    commonName: item.common_name,
+    code: scene?.plantSpeciesCodes[item.canonical_name],
+  })), [items, scene])
+  const finder = usePlantFinder(finderSpecies, search)
+  const visibleItems = useMemo(() => {
+    const shown = items.filter((item) => (
+      (!selectedOnMap || mapSelection.plantCountBySpecies.has(item.canonical_name))
+      && (!finder.active || finder.byKey.has(item.canonical_name))
+    ))
+    if (!finder.active) return shown
+    const rank = new Map(finder.hits.map((hit, index) => [hit.key, index]))
+    return shown.sort((left, right) => rank.get(left.canonical_name)! - rank.get(right.canonical_name)!)
+  }, [finder, items, mapSelection, selectedOnMap])
   const count = items.length
   const isLoading = favoritesView.loading
   const savedStampItems = savedStampsView.items
   savedStampItemsRef.current = savedStampItems
+  const stampMatches = useMemo(() => findPlants(savedStampItems.map((stamp) => ({
+    key: stamp.id,
+    names: [{ text: stamp.name, kind: 'common' as const }],
+  })), search), [savedStampItems, search])
   const orderedSavedStampItems = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds)
+    .filter((stamp) => !stampMatches.active || stampMatches.byKey.has(stamp.id))
   const savedStampsChrome = [headerRef.current, resizeHandleRef.current]
 
   useEffect(() => {
@@ -263,7 +294,26 @@ export function FavoritesPanel() {
         aria-hidden={selected !== null}
         inert={selected !== null}
       >
-        <div ref={headerRef}><DockPanelHeader title={t('nav.favorites')} /></div>
+        <div ref={headerRef} className={styles.head}>
+          <DockPanelHeader title={t('nav.favorites')} />
+          <div className={styles.finder}>
+            <PlantFinder
+              value={search}
+              onChange={setSearch}
+              label={t('favorites.searchAll')}
+              placeholder={t('favorites.searchAll')}
+              correction={finder.correction}
+              selectedOnMap={{
+                pressed: selectedOnMap,
+                plantCount: mapSelection.plantCount,
+                onChange: setSelectedOnMap,
+              }}
+              summary={finder.active || selectedOnMap
+                ? t('plantFinder.species', { count: visibleItems.length })
+                : undefined}
+            />
+          </div>
+        </div>
 
         <section
           className={styles.plantsFrame}
@@ -276,30 +326,28 @@ export function FavoritesPanel() {
               <span className={styles.count}>{count}</span>
             )}
           </div>
-          <div className={styles.search}><SurfaceSearch value={search} onChange={setSearch} label={t('favorites.search')} /></div>
           <div className={styles.plantsFrameBody}>
             {isLoading ? (
               <div className={styles.loading} aria-live="polite" aria-busy="true">
                 {t('plantDb.loading')}
               </div>
             ) : count === 0 ? (
-              <div className={styles.empty} aria-live="polite">
-                <svg className={styles.emptyIcon} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span className={styles.emptyTitle}>{t('favorites.empty')}</span>
-                <span className={styles.emptyHint}>{t('favorites.emptyHint')}</span>
-              </div>
+              <EmptyState icon={<PanelIcon panel="favorites" />} action={{ label: t('speciesKey.openCatalog'), onClick: () => navigateTo('plant-db') }}>
+                {t('favorites.empty')}
+              </EmptyState>
             ) : visibleItems.length === 0 ? (
-              <div className={styles.empty} role="status">{t('speciesKey.noResults')}</div>
+              <EmptyState status>{t('speciesKey.noResults')}</EmptyState>
             ) : (
               <div className={styles.list} role="list" aria-label={t('canvas.layers.plants')}>
                 {visibleItems.map((plant) => (
-                  <PlantRow key={plant.canonical_name} plant={plant} variant="favorites" mark={
-                    <span style={{ color: scene?.plantSpeciesColors[plant.canonical_name] ?? 'var(--color-text-muted)' }}>
-                      <PlantSymbolGlyph symbol={resolvePlantSymbolId(scene?.plantSpeciesSymbols[plant.canonical_name])} size={24} />
-                    </span>
-                  } />
+                  <FavoriteSpeciesRow
+                    key={plant.canonical_name}
+                    plant={plant}
+                    code={scene?.plantSpeciesCodes[plant.canonical_name] ?? ''}
+                    color={scene?.plantSpeciesColors[plant.canonical_name] ?? null}
+                    symbol={scene?.plantSpeciesSymbols[plant.canonical_name]}
+                    highlight={finderHighlight(finder.byKey.get(plant.canonical_name))}
+                  />
                 ))}
               </div>
             )}
@@ -518,6 +566,52 @@ function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeo
   ref.current = null
 }
 
+/** One favourite species: star first, the row opens details, Place arms placement. */
+function FavoriteSpeciesRow({ plant, code, color, symbol, highlight }: {
+  plant: SpeciesListItem
+  code: string
+  color: string | null
+  symbol: string | undefined
+  highlight: ((text: string) => ComponentChildren) | undefined
+}) {
+  const name = plant.common_name || plant.canonical_name
+  return (
+    <div className={row.row} role="listitem" data-favorite-species={plant.canonical_name}>
+      <button
+        type="button"
+        className={styles.star}
+        aria-pressed={true}
+        aria-label={t('favorites.remove', { name })}
+        onClick={() => { void speciesCatalogWorkbench.toggleFavorite(plant.canonical_name) }}
+      >
+        <ControlIcon name="star" size={18} />
+        <ButtonTooltip label={t('favorites.remove', { name })} side="right" />
+      </button>
+      <button
+        type="button"
+        className={row.main}
+        data-species-detail={plant.canonical_name}
+        draggable={true}
+        onDragStart={(event) => writePlantStampDragData(event.dataTransfer, plant)}
+        onClick={() => speciesCatalogWorkbench.selectSpecies(plant.canonical_name)}
+      >
+        <span className={row.srOnly}>{t('favorites.detailsFor')} </span>
+        <span className={row.glyph} aria-hidden="true" style={{ color: color ?? 'var(--color-text-muted)' }}>
+          <PlantSymbolGlyph symbol={resolvePlantSymbolId(symbol)} size={22} />
+        </span>
+        <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} highlight={highlight} />
+        <span className={row.code}>{code}</span>
+      </button>
+      <button
+        type="button"
+        className={styles.placeButton}
+        aria-label={t('favorites.place', { name })}
+        onClick={() => beginPlantStampFromSpecies(plant, currentCanvasToolCommandSurface.value)}
+      >{t('savedObjectStamps.place')}</button>
+    </div>
+  )
+}
+
 function SavedStampRecognitionOverlay({
   preview,
   panelRef,
@@ -683,10 +777,12 @@ function SavedObjectStampRow({
       <button
         type="button"
         className={styles.savedStampGrip}
-        aria-label={t('savedObjectStamps.reorderLabel')}
+        aria-label={t('savedObjectStamps.reorderNamed', { name: stamp.name })}
+        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+        data-saved-stamp-grip
         onPointerDown={(event) => onReorderBegin(stamp.id, event)}
         onKeyDown={event => {
-          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+          if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
           event.preventDefault()
           const ids = savedObjectStampWorkbench.library.value.items.map(item => item.id)
           const index = ids.indexOf(stamp.id)
@@ -793,14 +889,14 @@ function SavedObjectStampRow({
         ) : (
           <>
             <SavedStampIconButton
-              label={t('savedObjectStamps.place')}
+              label={t('savedObjectStamps.placeNamed', { name: stamp.name })}
               onClick={() => savedObjectStampWorkbench.placeStamp(stamp)}
               onFocus={(anchor) => onPreviewRequest(stamp, anchor)}
               onBlur={onPreviewClear}
             >
               <PlusIcon />
             </SavedStampIconButton>
-            <ActionMenu label={t('savedObjectStamps.actions')} items={[
+            <ActionMenu label={t('savedObjectStamps.actionsFor', { name: stamp.name })} items={[
               { label: t('savedObjectStamps.export'), run: () => { void savedObjectStampWorkbench.exportStamp(stamp) } },
               { label: t('savedObjectStamps.rename'), run: () => { setConfirmingDelete(false); setDraftName(stamp.name); setIsRenaming(true) } },
               { label: t('savedObjectStamps.delete'), danger: true, run: () => { setIsRenaming(false); setConfirmingDelete(true) } },

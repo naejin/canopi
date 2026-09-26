@@ -11,6 +11,7 @@ import {
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
 import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
+import { registerPlantFinder } from '../app/plant-finder/focus'
 
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -138,6 +139,30 @@ describe('shortcut manager canvas tool switching', () => {
     input.remove()
   })
 
+  it('focuses the open panel plant finder on Ctrl+F and leaves Ctrl+F alone otherwise', () => {
+    const finder = document.createElement('input')
+    document.body.append(finder)
+    const focus = vi.fn(() => finder.focus())
+    const unregister = registerPlantFinder(focus)
+
+    const event = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(finder)
+
+    commandPaletteOpen.value = true
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true }))
+    expect(focus).toHaveBeenCalledOnce()
+    commandPaletteOpen.value = false
+
+    unregister()
+    const unclaimed = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true })
+    window.dispatchEvent(unclaimed)
+    expect(unclaimed.defaultPrevented).toBe(false)
+    expect(placeSearchOpen.value).toBe(false)
+    finder.remove()
+  })
+
   it('toggles and closes the command palette through the keyboard seam', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true }))
 
@@ -259,7 +284,7 @@ describe('shortcut manager canvas tool switching', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
 
     expect(copy).toHaveBeenCalledTimes(1)
     expect(paste).toHaveBeenCalledTimes(1)

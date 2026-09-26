@@ -16,6 +16,7 @@ const STROKED = {
 
 const FILLED = {
   more: dot(5, 10) + dot(10, 10) + dot(15, 10),
+  star: 'M10 2.2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z',
 } as const
 
 export type ControlIconName = keyof typeof STROKED | keyof typeof FILLED

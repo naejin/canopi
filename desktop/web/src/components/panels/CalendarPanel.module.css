@@ -10,7 +10,7 @@
 .toolbar button,
 .emptyDate button,
 .noResults button,
-.editor button,
+.editor button:not([data-species-picker] button),
 .unscheduledBar {
   min-height: var(--control-size-md);
   padding: 0 var(--space-2);
@@ -399,8 +399,7 @@
   font-weight: 600;
 }
 
-.editorFields textarea,
-.targetPicker > input {
+.editorFields textarea {
   width: 100%;
   min-height: var(--control-size-md);
   padding: var(--space-2);
@@ -494,67 +493,6 @@
 .dateFields > .field > div,
 .dateFields > .field button {
   width: 100%;
-}
-
-.targetPicker,
-.speciesOptions {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.speciesOptions {
-  max-height: calc(var(--control-size-window) * 3);
-  overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-alt);
-}
-
-.selectedSpecies {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.speciesChip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  width: fit-content;
-  max-width: 100%;
-  min-height: var(--control-size-md);
-  border-color: var(--color-accent) !important;
-  background: var(--color-control-active) !important;
-  color: var(--color-accent) !important;
-}
-
-.speciesChip span:first-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.speciesChip small {
-  color: var(--color-text-muted);
-}
-
-.editor .speciesOption {
-  display: grid;
-  gap: var(--space-0-5);
-  width: 100%;
-  padding: var(--space-2);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.editor .speciesOption:hover {
-  background: var(--color-control-hover);
-}
-
-.speciesOption em {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: var(--text-2xs);
 }
 
 .editorActions {

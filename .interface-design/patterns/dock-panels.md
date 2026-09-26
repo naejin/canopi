@@ -10,9 +10,14 @@ A floating panel on the right (top 72, right 76, bottom 64): Literata 18 title, 
 
 Every panel that lists plants starts with the finder (see the design system): search, quick filters, count. Panel-specific filters follow "Selected on map": Budget adds "Missing a price · N" and sort; Consortium marks every cell containing a match with a dot; Calendar targets use it as a multi-select picker with "Add all N".
 
+- `components/shared/PlantFinder.tsx`: the field (placeholder "Find plants: name, scientific name or code", Ctrl F key cap until there is text), a "Quick filters" group of pressed-toggle chips, and one `role="status"` line: "Showing results for **pommier** · 2 species · 7 plants" when the matcher corrected a typo, "1 species · 3 plants selected on the map" under the selection filter, nothing while the list is unfiltered.
+- Matches are marked with `<mark>` (`--color-mark`) in the common and scientific names; rows keep the one species row layout from the shared `species-row.module.css`.
+- Found and filtered-out states use `EmptyState` with `status` so the reason is announced; the panel empties (no plants yet) use `EmptyState` with the panel icon and one action, usually "Open plant catalog".
+- Only Plants in this Design rings its matches on the map, with the top chip "N plants match “q” · Zoom to them · Select all N · Clear". Other lists filter without touching the map; their rows still highlight on hover.
+
 ## Plants in this Design
 
-Finder, a collapsible "Display on the map" section (Color by Species / Stratum / One color, Symbol size, Outline Light / Dark / None, Labels None / Codes / Names, Soften background), then species rows with a colour swatch first. A swatch recolours the whole species (or stratum, or all plants). Activating a row highlights that species on the map with a top chip: "Framboisier · 142 plants highlighted · Select these plants · Clear". "In the catalog, not in this Design" lists close matches with Open in catalog.
+Title with a muted "N plants · N species" subtitle, then a collapsible "Display on the map" section (Color by Species / Stratum / One color, Symbol size, Outline Light / Dark / None, Labels None / Codes / Names, Soften background), then species rows with a colour swatch first. A swatch recolours the whole species (or stratum, or all plants). Activating a row highlights that species on the map with a top chip: "Framboisier · 142 plants highlighted · Select these plants · Clear". "In the catalog, not in this Design" lists close matches with Open in catalog.
 
 ## Layers, data and analysis
 

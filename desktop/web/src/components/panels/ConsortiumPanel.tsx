@@ -6,17 +6,29 @@ import {
 import {
   CONSORTIUM_STRATA,
   CONSORTIUM_SUCCESSION_PHASES,
+  type SuccessionPhaseDefinition,
 } from '../../app/consortium/time-model'
 import type { ConsortiumListFilter } from '../../app/planning-view/state'
 import type { ConsortiumPlanningRow } from '../../app/planning-projection'
+import { navigateTo, sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
+import { ControlIcon } from '../shared/ControlIcon'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
+import { EmptyState } from '../shared/EmptyState'
+import { PanelIcon } from '../shared/PanelIcon'
+import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
-import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
-import { sidePanel } from '../../app/shell/state'
+import row from '../shared/species-row.module.css'
 import styles from './ConsortiumPanel.module.css'
+
+const UNASSIGNED = 'unassigned'
+const PHASE_GROUPS = [
+  { key: 'placenta', labelKey: 'canvas.consortium.phaseGroupPlacenta' },
+  { key: 'secondaire', labelKey: 'canvas.consortium.phaseGroupSecondary' },
+  { key: 'climax', labelKey: 'canvas.consortium.phaseGroupClimax' },
+] as const
 
 export function ConsortiumPanel() {
   const workbench = useConsortiumDockWorkbench()
@@ -44,6 +56,10 @@ export function ConsortiumPanel() {
     workbench.cancelEditor()
   }
 
+  const { projection, finder } = workbench
+  const withoutStratum = projection.rows.filter((item) => item.stratum === UNASSIGNED).length
+  const matchedCells = countMatchedCells(workbench)
+
   return (
     <section
       className={styles.panel}
@@ -60,86 +76,93 @@ export function ConsortiumPanel() {
         document.querySelector<HTMLButtonElement>('button[data-panel="consortium"]')?.focus()
       }}
     >
-      <DockPanelHeader
-        title={t('canvas.consortium.title')}
-        count={workbench.projection.activeSpeciesCount}
-      />
-      {workbench.projection.activeSpeciesCount === 0 ? (
-        <div className={styles.emptyState}>
-          <strong>{t('canvas.consortium.noPlantsTitle')}</strong>
-          <p>{t('canvas.consortium.empty')}</p>
-        </div>
+      <DockPanelHeader title={t('canvas.consortium.title')} />
+      {projection.activeSpeciesCount === 0 ? (
+        <EmptyState icon={<PanelIcon panel="consortium" />} action={{ label: t('speciesKey.openCatalog'), onClick: () => navigateTo('plant-db') }}>
+          {t('canvas.consortium.empty')}
+        </EmptyState>
       ) : (
         <>
-          <ConsortiumMatrix workbench={workbench} />
-          <div className={styles.controls}>
-            <SurfaceSearch
-              value={workbench.search}
-              onChange={workbench.setSearch}
-              label={t('canvas.consortium.search')}
-            />
-            {workbench.filter && (
+          <p className={styles.subtitle}>
+            {t('plantFinder.species', { count: projection.activeSpeciesCount })}
+            {withoutStratum > 0 && <>
+              {' · '}
               <button
-                ref={filterSummaryRef}
                 type="button"
-                className={styles.filterChip}
-                onClick={() => {
-                  workbench.setFilter(null)
-                  workbench.dismissMovedConfirmation()
+                className={styles.inlineLink}
+                aria-pressed={workbench.filter?.stratum === UNASSIGNED}
+                onClick={() => workbench.setFilter(workbench.filter?.stratum === UNASSIGNED ? null : { stratum: UNASSIGNED, phase: null })}
+              >{t('canvas.consortium.noStratumYet', { count: withoutStratum })}</button>
+            </>}
+          </p>
+          <div ref={scrollRef} className={styles.scroll} onScroll={(event) => workbench.setScrollTop(event.currentTarget.scrollTop)}>
+            <div className={styles.controls}>
+              <PlantFinder
+                value={workbench.search}
+                onChange={workbench.setSearch}
+                correction={finder.correction}
+                selectedOnMap={{
+                  pressed: workbench.selectedOnMap,
+                  plantCount: workbench.mapSelectionPlantCount,
+                  onChange: workbench.setSelectedOnMap,
                 }}
-              >
-                {filterLabel(workbench.filter)} <span aria-hidden="true">×</span>
-              </button>
-            )}
-            {workbench.movedOutsideFilter && (
-              <p className={styles.confirmation} role="status">
-                {t('canvas.consortium.movedOutsideFilter')}
-              </p>
+                summary={workbench.highlightedSpecies
+                  ? t('canvas.consortium.foundInCells', {
+                    count: matchedCells,
+                    species: t('plantFinder.species', { count: workbench.highlightedSpecies.size }),
+                  })
+                  : undefined}
+              />
+            </div>
+            <ConsortiumMatrix workbench={workbench} />
+            <div className={styles.listHead}>
+              <ListHeading workbench={workbench} filterSummaryRef={filterSummaryRef} />
+              {workbench.movedOutsideFilter && (
+                <p className={styles.confirmation} role="status">
+                  {t('canvas.consortium.movedOutsideFilter')}
+                </p>
+              )}
+            </div>
+            {workbench.list.visibleCount === 0 ? (
+              <EmptyState status action={{ label: t('canvas.consortium.clearFilters'), onClick: workbench.clearFilters }}>
+                {t('canvas.consortium.noResults')}
+              </EmptyState>
+            ) : (
+              <div className={styles.list} onMouseLeave={workbench.clearHover}>
+                {workbench.list.groups.map((group) => {
+                  const expanded = workbench.list.restricted || workbench.expandedStrata.has(group.stratum)
+                  return (
+                    <section key={group.stratum} className={styles.group}>
+                      <button
+                        type="button"
+                        className={styles.groupHeader}
+                        aria-expanded={expanded}
+                        onClick={() => workbench.toggleStratum(group.stratum)}
+                      >
+                        <ControlIcon name={expanded ? 'chevron-down' : 'chevron-right'} />
+                        <span className={styles.groupName}>{stratumLabel(group.stratum)}</span>
+                        <small>{t('canvas.consortium.groupCounts', {
+                          species: t('plantFinder.species', { count: group.speciesCount }),
+                          plants: t('plantFinder.plants', { count: group.plantCount }),
+                        })}</small>
+                      </button>
+                      {expanded && group.rows.length > 0 && (
+                        <div className={styles.columns} aria-hidden="true">
+                          <span className={styles.countColumn}>{t('canvas.consortium.plants')}</span>
+                          <span className={styles.phaseColumn}>{t('canvas.consortium.phases')}</span>
+                        </div>
+                      )}
+                      {expanded && group.rows.map((item) => (
+                        workbench.editor?.canonicalName === item.canonicalName
+                          ? <ConsortiumRowEditor key={item.canonicalName} row={item} workbench={workbench} onCancel={cancelEditorAndRestoreFocus} />
+                          : <ConsortiumRow key={item.canonicalName} row={item} workbench={workbench} />
+                      ))}
+                    </section>
+                  )
+                })}
+              </div>
             )}
           </div>
-          {workbench.list.visibleCount === 0 ? (
-            <div className={styles.emptyState}>
-              <strong>{t('canvas.consortium.noResults')}</strong>
-              <button type="button" onClick={() => {
-                workbench.setSearch('')
-                workbench.setFilter(null)
-              }}>{t('canvas.consortium.clearFilters')}</button>
-            </div>
-          ) : (
-            <div
-              ref={scrollRef}
-              className={styles.list}
-              onScroll={(event) => workbench.setScrollTop(event.currentTarget.scrollTop)}
-              onMouseLeave={workbench.clearHover}
-            >
-              {workbench.list.groups.map((group) => {
-                const expanded = workbench.search.trim() !== ''
-                  || workbench.filter?.stratum === group.stratum
-                  || workbench.expandedStrata.has(group.stratum)
-                return (
-                  <section key={group.stratum} className={styles.group}>
-                    <button
-                      type="button"
-                      className={styles.groupHeader}
-                      aria-expanded={expanded}
-                      onClick={() => workbench.toggleStratum(group.stratum)}
-                    >
-                      <span>{expanded ? '▾' : '▸'} {stratumLabel(group.stratum)}</span>
-                      <small>{t('canvas.consortium.groupCounts', {
-                        species: group.speciesCount,
-                        plants: group.plantCount,
-                      })}</small>
-                    </button>
-                    {expanded && group.rows.map((row) => (
-                      workbench.editor?.canonicalName === row.canonicalName
-                        ? <ConsortiumRowEditor key={row.canonicalName} row={row} workbench={workbench} onCancel={cancelEditorAndRestoreFocus} />
-                        : <ConsortiumRow key={row.canonicalName} row={row} workbench={workbench} />
-                    ))}
-                  </section>
-                )
-              })}
-            </div>
-          )}
         </>
       )}
     </section>
@@ -148,49 +171,111 @@ export function ConsortiumPanel() {
 
 type Workbench = ReturnType<typeof useConsortiumDockWorkbench>
 
+function ListHeading({ workbench, filterSummaryRef }: {
+  workbench: Workbench
+  filterSummaryRef: { current: HTMLButtonElement | null }
+}) {
+  if (workbench.filter) {
+    return (
+      <button
+        ref={filterSummaryRef}
+        type="button"
+        className={styles.filterChip}
+        aria-label={t('canvas.consortium.clearCellFilter', { filter: filterLabel(workbench.filter) })}
+        onClick={() => {
+          workbench.setFilter(null)
+          workbench.dismissMovedConfirmation()
+        }}
+      >
+        {filterLabel(workbench.filter)}
+        <ControlIcon name="close" />
+      </button>
+    )
+  }
+  if (workbench.finder.active) {
+    return <div className={styles.matchHeading}>
+      <h3>{t('canvas.consortium.matching', {
+        query: workbench.finder.correction ?? workbench.search.trim(),
+        species: t('plantFinder.species', { count: workbench.list.visibleCount }),
+      })}</h3>
+      <button type="button" className={styles.inlineLink} onClick={() => workbench.setSearch('')}>
+        {t('canvas.consortium.clearMatches')}
+      </button>
+    </div>
+  }
+  return <p className={styles.legend}>{t('canvas.consortium.matrixLegend')}</p>
+}
+
 function ConsortiumMatrix({ workbench }: { workbench: Workbench }) {
+  const strata = workbench.projection.matrix.filter((item) => item.stratum !== UNASSIGNED)
   return (
     <div className={styles.matrixRegion}>
       <table className={styles.matrix}>
+        <caption className={row.srOnly}>{t('canvas.consortium.matrixCaption')}</caption>
+        <colgroup><col className={styles.stratumColumn} /></colgroup>
+        {PHASE_GROUPS.map((group) => (
+          <colgroup key={group.key} span={phasesOf(group.key).length} />
+        ))}
         <thead>
           <tr>
-            <th scope="col">{t('canvas.consortium.stratum')}</th>
+            <td />
+            {PHASE_GROUPS.map((group) => (
+              <th key={group.key} scope="colgroup" colSpan={phasesOf(group.key).length} className={styles.phaseGroup}>
+                {t(group.labelKey)}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <th scope="col" className={row.srOnly}>{t('canvas.consortium.stratum')}</th>
             {CONSORTIUM_SUCCESSION_PHASES.map((phase) => (
-              <th key={phase.key} scope="col" title={`${t(phase.labelKey)} · ${t(phase.durationKey)}`}>
-                {phaseAbbreviation(phase.key)}
+              <th key={phase.key} scope="col" className={styles.phaseHeader}>
+                <span className={row.srOnly}>{t(phase.labelKey)}, </span>
+                <span className={styles.phaseNumber} aria-hidden="true">{phaseNumber(phase)}</span>
+                <span className={styles.phaseDuration}>{t(phase.durationKey)}</span>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {workbench.projection.matrix.map((row) => (
-            <tr key={row.stratum}>
+          {strata.map((item) => (
+            <tr key={item.stratum}>
               <th scope="row">
                 <button
                   type="button"
-                  aria-pressed={workbench.filter?.stratum === row.stratum && workbench.filter.phase === null}
-                  onMouseEnter={() => workbench.hoverRows(workbench.projection.rows.filter((item) => item.stratum === row.stratum))}
+                  className={styles.stratumButton}
+                  aria-pressed={workbench.filter?.stratum === item.stratum && workbench.filter.phase === null}
+                  onMouseEnter={() => workbench.hoverRows(workbench.projection.rows.filter((entry) => entry.stratum === item.stratum))}
                   onMouseLeave={workbench.clearHover}
-                  onClick={() => workbench.setFilter(sameFilter(workbench.filter, row.stratum, null)
+                  onClick={() => workbench.setFilter(sameFilter(workbench.filter, item.stratum, null)
                     ? null
-                    : { stratum: row.stratum, phase: null })}
-                >{stratumLabel(row.stratum)}</button>
+                    : { stratum: item.stratum, phase: null })}
+                >{stratumLabel(item.stratum)}</button>
               </th>
-              {row.counts.map((count, phase) => {
-                const selected = sameFilter(workbench.filter, row.stratum, phase)
-                const matchingRows = workbench.projection.rows.filter((item) => (
-                  item.stratum === row.stratum && item.startPhase <= phase && item.endPhase >= phase
-                ))
+              {item.counts.map((count, phase) => {
+                const selected = sameFilter(workbench.filter, item.stratum, phase)
+                const cellRows = rowsInCell(workbench.projection.rows, item.stratum, phase)
+                const match = Boolean(workbench.highlightedSpecies && cellRows.some((entry) => workbench.highlightedSpecies!.has(entry.canonicalName)))
+                const definition = CONSORTIUM_SUCCESSION_PHASES[phase]!
                 return (
                   <td key={phase}>
                     <button
                       type="button"
-                      aria-label={`${stratumLabel(row.stratum)} · ${t(CONSORTIUM_SUCCESSION_PHASES[phase]!.labelKey)} · ${count}`}
+                      className={styles.cell}
+                      data-level={heatLevel(count)}
+                      aria-label={t(match ? 'canvas.consortium.cellWithMatch' : 'canvas.consortium.cell', {
+                        stratum: stratumLabel(item.stratum),
+                        phase: t(definition.labelKey),
+                        duration: t(definition.durationKey),
+                        species: t('plantFinder.species', { count }),
+                      })}
                       aria-pressed={selected}
-                      onMouseEnter={() => workbench.hoverRows(matchingRows)}
+                      onMouseEnter={() => workbench.hoverRows(cellRows)}
                       onMouseLeave={workbench.clearHover}
-                      onClick={() => workbench.setFilter(selected ? null : { stratum: row.stratum, phase })}
-                    >{count}</button>
+                      onClick={() => workbench.setFilter(selected ? null : { stratum: item.stratum, phase })}
+                    >
+                      {count === 0 ? '·' : count}
+                      {match && <span className={styles.matchDot} data-match-dot aria-hidden="true" />}
+                    </button>
                   </td>
                 )
               })}
@@ -198,61 +283,53 @@ function ConsortiumMatrix({ workbench }: { workbench: Workbench }) {
           ))}
         </tbody>
       </table>
-      <p className={styles.legend}>{t('canvas.consortium.matrixLegend')}</p>
     </div>
   )
 }
 
-function ConsortiumRow({ row, workbench }: { row: ConsortiumPlanningRow; workbench: Workbench }) {
+function ConsortiumRow({ row: item, workbench }: { row: ConsortiumPlanningRow; workbench: Workbench }) {
   return (
     <article
-      className={styles.row}
-      onMouseEnter={() => workbench.hoverRow(row)}
+      className={`${row.row} ${styles.row}`}
+      data-selected={workbench.focusedCanonical === item.canonicalName}
+      onMouseEnter={() => workbench.hoverRow(item)}
       onMouseLeave={workbench.clearHover}
     >
       <button
         type="button"
-        className={styles.identityButton}
-        aria-pressed={workbench.focusedCanonical === row.canonicalName}
-        onClick={() => workbench.toggleSpeciesFocus(row.canonicalName)}
+        className={row.main}
+        aria-pressed={workbench.focusedCanonical === item.canonicalName}
+        onClick={() => workbench.toggleSpeciesFocus(item.canonicalName)}
       >
-        <SpeciesIdentity
-          commonName={row.commonName}
-          canonicalName={row.canonicalName}
-          mark={row.appearances.map((appearance) => (
+        <span className={row.srOnly}>{t('canvas.consortium.showOnMap')} </span>
+        <span className={row.glyph} aria-hidden="true">
+          {item.appearances.slice(0, 1).map((appearance) => (
             <span key={`${appearance.color}:${appearance.symbol}`} style={{ color: appearance.color }}>
-              <PlantSymbolGlyph symbol={appearance.symbol} size={20} />
+              <PlantSymbolGlyph symbol={appearance.symbol} size={22} />
             </span>
           ))}
-          detail={<>{row.code && <span className={styles.code}>{row.code} · </span>}{t('canvas.consortium.plantCount', { count: row.count })}</>}
+        </span>
+        <SpeciesIdentity
+          commonName={item.commonName}
+          canonicalName={item.canonicalName}
+          highlight={finderHighlight(workbench.finder.byKey.get(item.canonicalName))}
         />
+        <span className={row.code}>{item.code}</span>
+        <span className={styles.countColumn}>{item.count}</span>
       </button>
+      <span className={styles.phaseColumn}>{phaseSpanLabel(item.startPhase, item.endPhase)}</span>
       <button
         type="button"
         className={styles.editButton}
-        data-consortium-edit={encodeURIComponent(row.canonicalName)}
-        aria-label={t('canvas.consortium.editSpecies', { name: row.commonName })}
-        onClick={() => workbench.openEditor(row)}
+        data-consortium-edit={encodeURIComponent(item.canonicalName)}
+        aria-label={t('canvas.consortium.editSpecies', { name: item.commonName })}
+        onClick={() => workbench.openEditor(item)}
       >{t('canvas.consortium.edit')}</button>
-      <PhaseIndicator row={row} />
     </article>
   )
 }
 
-function PhaseIndicator({ row }: { row: ConsortiumPlanningRow }) {
-  return (
-    <div className={styles.phaseLine}>
-      <span className={styles.segments} aria-hidden="true">
-        {CONSORTIUM_SUCCESSION_PHASES.map((phase, index) => (
-          <span key={phase.key} data-active={row.startPhase <= index && row.endPhase >= index ? 'true' : undefined} />
-        ))}
-      </span>
-      <span>{phaseSpanLabel(row.startPhase, row.endPhase)}</span>
-    </div>
-  )
-}
-
-function ConsortiumRowEditor({ row, workbench, onCancel }: { row: ConsortiumPlanningRow; workbench: Workbench; onCancel: () => void }) {
+function ConsortiumRowEditor({ row: item, workbench, onCancel }: { row: ConsortiumPlanningRow; workbench: Workbench; onCancel: () => void }) {
   const draft = workbench.editor!.draft
   const stratumItems: DropdownItem<string>[] = [
     ...(!supportedConsortiumStratum(draft.stratum)
@@ -265,13 +342,13 @@ function ConsortiumRowEditor({ row, workbench, onCancel }: { row: ConsortiumPlan
     label: `${t(phase.labelKey)} · ${t(phase.durationKey)}`,
   }))
   return (
-    <article className={`${styles.row} ${styles.rowEditor}`}>
-      <SpeciesIdentity commonName={row.commonName} canonicalName={row.canonicalName} />
+    <article className={styles.rowEditor}>
+      <SpeciesIdentity commonName={item.commonName} canonicalName={item.canonicalName} />
       <div className={styles.editorFields}>
         <div className={styles.editorField}>
           <span>{t('canvas.consortium.stratum')}</span>
           <Dropdown
-            trigger={stratumItems.find((item) => item.value === draft.stratum)?.label}
+            trigger={stratumItems.find((option) => option.value === draft.stratum)?.label}
             items={stratumItems}
             value={draft.stratum}
             onChange={(stratum) => workbench.updateDraft({ stratum })}
@@ -313,6 +390,41 @@ function ConsortiumRowEditor({ row, workbench, onCancel }: { row: ConsortiumPlan
   )
 }
 
+/** Species-count steps of the bark heat ramp (Consortium board). */
+function heatLevel(count: number): number {
+  if (count <= 0) return 0
+  if (count <= 5) return 1
+  if (count <= 10) return 2
+  if (count <= 15) return 3
+  return count <= 20 ? 4 : 5
+}
+
+function countMatchedCells(workbench: Workbench): number {
+  const species = workbench.highlightedSpecies
+  if (!species) return 0
+  let cells = 0
+  for (const item of workbench.projection.matrix) {
+    if (item.stratum === UNASSIGNED) continue
+    item.counts.forEach((_, phase) => {
+      if (rowsInCell(workbench.projection.rows, item.stratum, phase).some((entry) => species.has(entry.canonicalName))) cells += 1
+    })
+  }
+  return cells
+}
+
+function rowsInCell(rows: readonly ConsortiumPlanningRow[], stratum: string, phase: number): ConsortiumPlanningRow[] {
+  return rows.filter((entry) => entry.stratum === stratum && entry.startPhase <= phase && entry.endPhase >= phase)
+}
+
+function phasesOf(groupKey: string): readonly SuccessionPhaseDefinition[] {
+  return CONSORTIUM_SUCCESSION_PHASES.filter((phase) => phase.key.startsWith(groupKey))
+}
+
+function phaseNumber(phase: SuccessionPhaseDefinition): string {
+  const digit = phase.key.at(-1)
+  return digit && /\d/.test(digit) ? digit : ''
+}
+
 function sameFilter(filter: ConsortiumListFilter | null, stratum: string, phase: number | null): boolean {
   return filter?.stratum === stratum && filter.phase === phase
 }
@@ -330,15 +442,10 @@ function stratumLabel(stratum: string): string {
     : t('canvas.consortium.unsupportedStratum', { value: stratum })
 }
 
-function phaseAbbreviation(key: string): string {
-  if (key === 'climax') return 'C'
-  if (key.startsWith('placenta')) return `P${key.at(-1)}`
-  return `S${key.at(-1)}`
-}
-
 function phaseSpanLabel(start: number, end: number): string {
   const first = CONSORTIUM_SUCCESSION_PHASES[start]
   const last = CONSORTIUM_SUCCESSION_PHASES[end]
   if (!first || !last) return `${start}–${end}`
   return start === end ? t(first.labelKey) : `${t(first.labelKey)} → ${t(last.labelKey)}`
 }
+

@@ -4,6 +4,7 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
 import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
 import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
+import { registerPlantFinder } from '../app/plant-finder/focus'
 import {
   disposeWebCanvasShortcuts,
   installWebCanvasShortcuts,
@@ -28,16 +29,38 @@ describe('Web Canvas shortcuts', () => {
     vi.restoreAllMocks()
   })
 
-  it('opens place search on Ctrl+F only while a Design canvas is live', () => {
+  it('opens place search on Ctrl+K only while a Design canvas is live', () => {
     installWebCanvasShortcuts()
-    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(placeSearchOpen.value).toBe(false)
 
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
-    expect(dispatchShortcut({ key: 'f', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false)
-    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(dispatchShortcut({ key: 'k', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(placeSearchOpen.value).toBe(false)
+    expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
     expect(placeSearchOpen.value).toBe(true)
     closePlaceSearch()
+  })
+
+  it('focuses the open panel plant finder on Ctrl+F, even from another field', () => {
+    installWebCanvasShortcuts()
+    const other = document.createElement('input')
+    const finder = document.createElement('input')
+    document.body.append(other, finder)
+    finder.value = 'pommier'
+    const unregister = registerPlantFinder(() => { finder.focus(); finder.select() })
+    other.focus()
+
+    const event = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true })
+    other.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(finder)
+    expect(finder.selectionStart).toBe(0)
+    expect(finder.selectionEnd).toBe(7)
+    unregister()
+    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
   })
 
   it('ignores canvas shortcuts while the save dialog is open', async () => {
@@ -49,7 +72,7 @@ describe('Web Canvas shortcuts', () => {
     const decision = requestSaveProblemDecision({ kind: 'revert' })
 
     expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
-    expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(undo).not.toHaveBeenCalled()
     expect(placeSearchOpen.value).toBe(false)
 

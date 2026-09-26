@@ -4,5 +4,5 @@ export const VIEW_SHORTCUTS = {
   zoomIn: 'Ctrl+=',
   zoomOut: 'Ctrl+-',
   fitToContent: 'Ctrl+0',
-  searchPlace: 'Ctrl+F',
+  searchPlace: 'Ctrl+K',
 } as const

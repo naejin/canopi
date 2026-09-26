@@ -96,7 +96,7 @@ describe('Planning Projection', () => {
     })
   })
 
-  it('filters and sorts Budget rows without conflating zero and missing prices', () => {
+  it('filters Budget rows by finder matches, map selection and missing prices without conflating zero and missing prices', () => {
     const projection = buildBudgetPlanningProjection({
       plants: [
         makePlant('Acer campestre', 'Field maple'),
@@ -120,22 +120,21 @@ describe('Planning Projection', () => {
       ],
     })
 
+    const all = { matches: null, selectedSpecies: null, missingPriceOnly: false, locale: 'fr' } as const
     expect(buildBudgetListProjection(projection, {
-      search: 'erable', sort: 'name', priceFilter: 'all', locale: 'fr',
+      ...all, matches: new Set(['Acer campestre']), sort: 'name',
     }).rows.map((row) => row.canonical)).toEqual(['Acer campestre'])
     expect(buildBudgetListProjection(projection, {
-      search: 'pom', sort: 'name', priceFilter: 'all', locale: 'fr',
-    }).rows.map((row) => row.canonical)).toEqual(['Malus domestica'])
+      ...all, selectedSpecies: new Set(['Malus domestica', 'Tilia cordata']), sort: 'most-plants',
+    }).rows.map((row) => row.canonical)).toEqual(['Tilia cordata', 'Malus domestica'])
     expect(buildBudgetListProjection(projection, {
-      search: '', sort: 'highest-total', priceFilter: 'all', locale: 'fr',
+      ...all, sort: 'highest-total',
     }).rows.map((row) => row.canonical)).toEqual(['Acer campestre', 'Malus domestica', 'Tilia cordata'])
-    expect(buildBudgetListProjection(projection, {
-      search: '', sort: 'name', priceFilter: 'zero-price', locale: 'fr',
-    }).rows.map((row) => row.canonical)).toEqual(['Malus domestica'])
     const missing = buildBudgetListProjection(projection, {
-      search: '', sort: 'name', priceFilter: 'no-price', locale: 'fr',
+      ...all, missingPriceOnly: true, sort: 'name',
     })
     expect(missing.rows.map((row) => row.canonical)).toEqual(['Tilia cordata'])
+    expect(missing.restricted).toBe(true)
     expect(missing.shownSubtotal).toBe(0)
     expect(projection.grandTotal).toBe(4)
   })
@@ -165,15 +164,22 @@ describe('Planning Projection', () => {
     expect(projection.groups.find((group) => group.stratum === 'mystery')).toMatchObject({ supported: false })
 
     const filtered = buildConsortiumListProjection(projection, {
-      search: 'pommier',
+      matches: new Set(['Malus domestica']),
+      selectedSpecies: null,
       filter: { stratum: 'high', phase: 2 },
     })
     expect(filtered.visibleCount).toBe(1)
     expect(filtered.groups[0]?.rows[0]?.canonicalName).toBe('Malus domestica')
     expect(buildConsortiumListProjection(projection, {
-      search: 'cerisier',
+      matches: new Set(['Prunus avium']),
+      selectedSpecies: null,
       filter: { stratum: 'high', phase: 2 },
     }).visibleCount).toBe(0)
+    expect(buildConsortiumListProjection(projection, {
+      matches: null,
+      selectedSpecies: new Set(['Prunus avium']),
+      filter: null,
+    }).groups.flatMap((group) => group.rows.map((row) => row.canonicalName))).toEqual(['Prunus avium'])
   })
 
   it('projects Calendar ranges, clipped agenda entries, malformed dates, and filters safely', () => {

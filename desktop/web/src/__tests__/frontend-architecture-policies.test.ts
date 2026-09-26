@@ -542,6 +542,14 @@ const FORBIDDEN_IMPORT_POLICIES = [
     allowTypeOnlyTargets: ['src/canvas/runtime/scene/index.ts'],
     edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
   },
+  {
+    kind: 'forbid-imports',
+    name: 'Plant finder matcher stays pure over the search normalization authority',
+    from: ['src/app/plant-finder/matcher.ts'],
+    targets: ['**'],
+    exceptTargets: ['src/utils/species-search-normalization.ts'],
+    edgeKinds: ['static', 'dynamic', 'import-type', 'reexport'],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 const CONFINED_IMPORTER_POLICIES = [

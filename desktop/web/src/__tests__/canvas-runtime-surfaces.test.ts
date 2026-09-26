@@ -109,6 +109,7 @@ function createCommandSurface() {
       deleteSelected: () => {},
       selectAll: () => {},
       selectSameSpecies: () => {},
+      selectSpecies: () => {},
       bringToFront: () => {},
       sendToBack: () => {},
       lockSelected: () => {},

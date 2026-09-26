@@ -2,7 +2,6 @@ import { signal, type Signal } from '@preact/signals'
 import { designSessionStore } from '../document-session/store'
 
 export type BudgetSort = 'name' | 'highest-total' | 'most-plants'
-export type BudgetPriceFilter = 'all' | 'no-price' | 'zero-price'
 export type CalendarCompletionFilter = 'open' | 'completed' | 'all'
 export type CalendarDisplay = 'month' | 'agenda'
 
@@ -13,9 +12,13 @@ export interface ConsortiumListFilter {
 
 export interface PlanningViewState {
   readonly sessionIdentity: object
+  readonly plantsSearch: Signal<string>
+  readonly plantsSelectedOnMap: Signal<boolean>
+  readonly plantsDisplayOpen: Signal<boolean>
   readonly budgetSearch: Signal<string>
+  readonly budgetSelectedOnMap: Signal<boolean>
   readonly budgetSort: Signal<BudgetSort>
-  readonly budgetPriceFilter: Signal<BudgetPriceFilter>
+  readonly budgetMissingPriceOnly: Signal<boolean>
   budgetScrollTop: number
   readonly calendarSearch: Signal<string>
   readonly calendarActionType: Signal<string>
@@ -27,6 +30,7 @@ export interface PlanningViewState {
   readonly calendarUnscheduledExpanded: Signal<boolean>
   calendarScrollTop: number
   readonly consortiumSearch: Signal<string>
+  readonly consortiumSelectedOnMap: Signal<boolean>
   readonly consortiumFilter: Signal<ConsortiumListFilter | null>
   readonly consortiumExpandedStrata: Signal<ReadonlySet<string>>
   readonly consortiumExpansionInitialized: Signal<boolean>
@@ -58,9 +62,13 @@ function createPlanningViewState(sessionIdentity: object): PlanningViewState {
   const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
   return {
     sessionIdentity,
+    plantsSearch: signal(''),
+    plantsSelectedOnMap: signal(false),
+    plantsDisplayOpen: signal(false),
     budgetSearch: signal(''),
+    budgetSelectedOnMap: signal(false),
     budgetSort: signal<BudgetSort>('name'),
-    budgetPriceFilter: signal<BudgetPriceFilter>('all'),
+    budgetMissingPriceOnly: signal(false),
     budgetScrollTop: 0,
     calendarSearch: signal(''),
     calendarActionType: signal('all'),
@@ -72,6 +80,7 @@ function createPlanningViewState(sessionIdentity: object): PlanningViewState {
     calendarUnscheduledExpanded: signal(true),
     calendarScrollTop: 0,
     consortiumSearch: signal(''),
+    consortiumSelectedOnMap: signal(false),
     consortiumFilter: signal<ConsortiumListFilter | null>(null),
     consortiumExpandedStrata: signal<ReadonlySet<string>>(new Set()),
     consortiumExpansionInitialized: signal(false),

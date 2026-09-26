@@ -39,37 +39,6 @@ describe('PlantRow', () => {
     container.remove()
   })
 
-  it('opens Favorites information only through its dedicated button', () => {
-    plantBrowserMock.selectSpecies.mockClear()
-    render(<PlantRow plant={makeSpeciesListItem('Malus domestica', true)} variant="favorites" />, container)
-    container.querySelector<HTMLElement>('[role="listitem"]')!.click()
-    expect(plantBrowserMock.selectSpecies).not.toHaveBeenCalled()
-    container.querySelector<HTMLButtonElement>('[data-species-detail]')!.click()
-    expect(plantBrowserMock.selectSpecies).toHaveBeenCalledWith('Malus domestica')
-  })
-
-  it('keeps Favorites identity to common and botanical names only', () => {
-    const plant = {
-      ...makeSpeciesListItem('Malus domestica', true),
-      common_name: 'Apple',
-      climate_zones: ['Temperate', 'Continental'],
-      life_cycles: ['Perennial'],
-      hardiness_zone_min: 4,
-      hardiness_zone_max: 8,
-      edibility_rating: 5,
-    }
-
-    render(<PlantRow plant={plant} variant="favorites" />, container)
-
-    expect(container.textContent).toContain('Apple')
-    expect(container.textContent).toContain('Malus domestica')
-    expect(container.textContent).not.toContain('Temperate')
-    expect(container.textContent).not.toContain('Continental')
-    expect(container.textContent).not.toContain('Perennial')
-    expect(container.textContent).not.toContain('Z4')
-    expect(container.textContent).not.toContain('Edible')
-  })
-
   it('shows a distinct matched Common Name during active catalog search', () => {
     plantBrowserMock.intent.value = { text: 'melis' }
     const plant = {
@@ -84,20 +53,5 @@ describe('PlantRow', () => {
     expect(container.textContent).toContain("Clochette d'Irlande")
     expect(container.textContent).toContain('Mélisse des Moluques')
     expect(container.textContent).not.toContain('Moluque verte')
-  })
-
-  it('omits alternate and matched common names from compact Favorites rows', () => {
-    plantBrowserMock.intent.value = { text: 'melis' }
-    const plant = {
-      ...makeSpeciesListItem('Moluccella laevis', true),
-      common_name: "Clochette d'Irlande",
-      common_name_2: 'Moluque verte',
-      matched_common_name: 'Mélisse des Moluques',
-    }
-
-    render(<PlantRow plant={plant} variant="favorites" />, container)
-
-    expect(container.textContent).not.toContain('Moluque verte')
-    expect(container.textContent).not.toContain('Mélisse des Moluques')
   })
 })

@@ -70,7 +70,7 @@ describe('PanelBar', () => {
 
     expect(panelButtonLabels()).toEqual([
       'Design Canvas',
-      'Species key',
+      'Plants in this Design',
       'Data Library',
       'Layers',
       'Calendar',
@@ -99,7 +99,7 @@ describe('PanelBar', () => {
 
     expect(panelButton('Design Canvas').disabled).toBe(false)
     expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
-    expect(panelButton('Species key').disabled).toBe(true)
+    expect(panelButton('Plants in this Design').disabled).toBe(true)
     expect(panelButton('Layers').disabled).toBe(true)
     expect(panelButton('Plant Database').disabled).toBe(true)
     expect(panelButton('Design notebook').disabled).toBe(false)

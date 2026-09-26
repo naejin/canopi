@@ -46,6 +46,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 96px;
+  padding: 0 var(--space-2);
 }
 
 .plantsFrame {
@@ -68,35 +69,6 @@
 }
 
 /* ── Empty state — not dead-center, visually weighted toward top ── */
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--space-8) var(--space-6) var(--space-6);
-  text-align: center;
-  gap: var(--space-1);
-  animation: fadeInEmpty var(--transition-enter) both;
-}
-
-.emptyIcon {
-  color: var(--color-primary);
-  opacity: 0.3;
-  margin-bottom: var(--space-2);
-}
-
-.emptyTitle {
-  font-size: var(--text-sm);
-  font-weight: 400;
-  color: var(--color-text);
-}
-
-.emptyHint {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  line-height: var(--line-height);
-  max-width: 200px;
-}
 
 /* ── Loading ── */
 
@@ -525,20 +497,7 @@
   }
 }
 
-/* ── Transitions ── */
-
-@keyframes fadeInEmpty {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .empty {
-    animation: none;
-  }
-}
-
-.search, .savedStampsActions { padding: 0 var(--space-3) var(--space-2); }
+.savedStampsActions { padding: 0 var(--space-3) var(--space-2); }
 .frameHeader { align-items: center; padding: var(--space-2) var(--space-3); }
 .importStampButton { position: relative; margin-left: auto; padding: 0 var(--space-2); }
 
@@ -548,3 +507,56 @@
 .frameHeader { justify-content: flex-start; min-height: var(--control-size-window); }
 
 .savedStampActions > .savedStampIconButton, .importStampButton { border-color: transparent; }
+
+.head {
+  flex-shrink: 0;
+}
+
+.finder {
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+/* Favourite rows lead with a filled ochre star that removes the favourite. */
+.star {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.star:hover {
+  background: var(--color-control-hover);
+}
+
+.placeButton {
+  flex-shrink: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.placeButton:hover {
+  background: var(--color-control-hover);
+}
+
+.star:focus-visible,
+.placeButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

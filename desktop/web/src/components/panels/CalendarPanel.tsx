@@ -22,7 +22,7 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { DatePicker } from '../shared/DatePicker'
-import { normalizeSearchText } from '../../utils/normalize-search'
+import { CalendarSpeciesPicker } from './CalendarSpeciesPicker'
 import styles from './CalendarPanel.module.css'
 
 const FULL_MONTH_MIN_WIDTH = 640
@@ -520,17 +520,9 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
     ? workbench.projection.weeks.flat().flatMap((day) => day.actions).find((candidate) => candidate.id === editor.actionId)
       ?? workbench.projection.unscheduled.find((candidate) => candidate.id === editor.actionId)
     : null
-  const speciesSearchRef = useRef<HTMLInputElement>(null)
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
-  const [speciesSearch, setSpeciesSearch] = useState('')
-  const speciesNeedle = normalizeSearchText(speciesSearch)
   const selectedSpecies = new Set(
     draft.targets.filter((target) => target.kind === 'species').map((target) => target.canonical_name),
-  )
-  const visibleSpecies = workbench.speciesList.filter((species) =>
-    speciesNeedle !== ''
-    && !selectedSpecies.has(species.canonical_name)
-    && normalizeSearchText(`${species.display_name} ${species.canonical_name}`).includes(speciesNeedle),
   )
   const typeItems: DropdownItem<string>[] = [
     ...(knownActionType(draft.action_type)
@@ -689,58 +681,16 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
             </ul>
           )}
           {draft.targetMode === 'species' && (
-            <div className={styles.targetPicker}>
-              {selectedSpeciesTargets.length > 0 && (
-                <div className={styles.selectedSpecies} aria-label={t('canvas.calendar.speciesTargets')}>
-                  {selectedSpeciesTargets.map((target) => {
-                    const selected = selectedSpeciesLabel(target.canonical_name)
-                    return (
-                      <button
-                        key={target.canonical_name}
-                        type="button"
-                        className={styles.speciesChip}
-                        data-calendar-selected-target={target.canonical_name}
-                        aria-label={t('canvas.calendar.removeSpecies', { name: selected.label })}
-                        onClick={() => workbench.toggleSpeciesTarget(target.canonical_name)}
-                      >
-                        <span>{selected.label}</span>
-                        {selected.unavailable && <small>{t('canvas.calendar.unavailable')}</small>}
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              <input
-                ref={speciesSearchRef}
-                type="search"
-                value={speciesSearch}
-                placeholder={t('canvas.calendar.searchSpecies')}
-                aria-label={t('canvas.calendar.searchSpecies')}
-                onInput={(event) => setSpeciesSearch(event.currentTarget.value)}
-              />
-              {speciesNeedle !== '' && <div className={styles.speciesOptions}>
-                {visibleSpecies.map((species) => (
-                  <button
-                    key={species.canonical_name}
-                    type="button"
-                    className={styles.speciesOption}
-                    data-calendar-species-option={species.canonical_name}
-                    onClick={() => {
-                      workbench.toggleSpeciesTarget(species.canonical_name)
-                      setSpeciesSearch('')
-                      speciesSearchRef.current?.focus()
-                    }}
-                  >
-                    <span>{species.display_name}</span>
-                    <em>{species.canonical_name}</em>
-                  </button>
-                ))}
-                {visibleSpecies.length === 0 && (
-                  <p className={styles.quiet}>{t('canvas.calendar.noSpeciesMatches')}</p>
-                )}
-              </div>}
-            </div>
+            <CalendarSpeciesPicker
+              species={workbench.speciesList}
+              chosen={selectedSpecies}
+              unavailable={selectedSpeciesTargets.flatMap((target) => {
+                const selected = selectedSpeciesLabel(target.canonical_name)
+                return selected.unavailable ? [{ canonicalName: target.canonical_name, label: selected.label }] : []
+              })}
+              onToggle={workbench.toggleSpeciesTarget}
+              onAddAll={workbench.addSpeciesTargets}
+            />
           )}
           {draft.targetMode === 'selection' && (
             <p className={styles.savedTargets}>{t('canvas.calendar.plantSelectionCount', { count: draft.targets.length })}</p>
