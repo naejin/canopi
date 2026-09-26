@@ -11,6 +11,7 @@ import type { CanopiFile, PlacedPlant, TimelineAction } from '../types/design'
 import { currentDesign, designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 const plants: PlacedPlant[] = [
   plant('apple', 'Malus domestica', 'Apple'),
@@ -189,7 +190,7 @@ describe('Calendar action editor', () => {
 
   it('keeps date and target popups outside the bounded editor scroll region', async () => {
     const editor = await openEdit()
-    const targetTrigger = editor.querySelector<HTMLButtonElement>('button[aria-label="Targets"]')!
+    const targetTrigger = dropdownTrigger(editor, 'Targets')!
 
     await act(async () => { targetTrigger.click() })
     const targetMenu = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Targets"]')!
@@ -217,7 +218,7 @@ describe('Calendar action editor', () => {
 
   it('dismisses action type and date popups as part of committing a choice', async () => {
     const editor = await openEdit()
-    const typeTrigger = editor.querySelector<HTMLButtonElement>('button[aria-label="Action type"]')!
+    const typeTrigger = dropdownTrigger(editor, 'Action type')!
 
     await act(async () => { typeTrigger.click() })
     let typeMenu = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Action type"]')!

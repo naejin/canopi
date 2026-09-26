@@ -44,7 +44,7 @@
 }
 
 .backBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 
@@ -110,7 +110,7 @@
 }
 
 .favBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 
@@ -183,7 +183,7 @@
 }
 
 .sectionTitleToggle:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
 
@@ -396,7 +396,7 @@
 }
 
 .retryBtn:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 

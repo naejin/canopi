@@ -1,43 +1,62 @@
+@import './fonts.css';
+
 /* ============================================
-   Canopi Design Tokens
+   Canopi Design Tokens — Field Atlas
    ============================================ */
 
 :root {
-  /* ── Field Notebook — Light Theme ──
-     Parchment surfaces, ink text, pencil borders.
-     Green lives on the canvas, not the chrome.         */
+  /* ── Field Atlas — Light Theme ──
+     Parchment, ink and ochre floating over the map.
+     One meaning per colour: ochre = selected, active or primary; blue = keyboard focus;
+     amber = warning; red = error or destruction. Green is plant data, never chrome. */
+  color-scheme: light;
 
-  /* Primary — ochre: the highlight color in a notebook */
-  --color-primary: #A06B1F;
-  --color-primary-hover: #8B5C18;
-  --color-primary-bg: rgba(160, 107, 31, 0.08);
+  /* Accent — ochre */
+  --color-primary: #9C5A16;
+  --color-primary-hover: #8A4E12;
+  --color-primary-bg: rgba(156, 90, 22, 0.12);
+  --color-accent: #9C5A16;
+  --color-accent-ink: #8A4E12;       /* ochre text and pressed-toggle ink on light surfaces */
+  --color-accent-soft: rgba(156, 90, 22, 0.12);
+  --color-on-accent: #FFF8EC;
+  --color-primary-contrast: #FFF8EC;
 
   /* Structure */
-  --color-secondary: #6B5F4E;        /* graphite — pencil marks */
-  --color-accent: #A06B1F;           /* ochre — brass, golden oak */
-  --color-bg: #E6E0D4;              /* warm bark — the desk surface */
-  --color-surface: #EDE8DD;         /* lighter desk — panel interiors */
-  --color-surface-alt: #E8E2D7;     /* soft card elevation */
-  --color-surface-muted: rgba(237, 232, 221, 0.82);
-  --color-surface-ring: rgba(237, 232, 221, 0.76);
-  --color-border: rgba(60, 45, 30, 0.16); /* ruled line — warm pencil */
-  --color-border-strong: rgba(60, 45, 30, 0.26);
-  --color-text: #2C2418;            /* ink — warm near-black */
-  --color-text-muted: #6B5F4E;      /* graphite — darker for 4.5:1 contrast */
-  --color-primary-contrast: #F8F4ED;
-  --color-control-hover: rgba(160, 107, 31, 0.12);
-  --color-control-active: rgba(160, 107, 31, 0.18);
-  --panel-gradient: linear-gradient(180deg, #EDE8DD 0%, #E6E0D4 100%);
+  --color-secondary: #645A4C;
+  --color-bg: #EFE9DD;               /* paper */
+  --color-surface: #FBF8F2;          /* panels, menus, dialogs */
+  --color-surface-alt: #F3EEE3;      /* wells, segmented tracks, info notices */
+  --color-surface-muted: rgba(251, 248, 242, 0.82);
+  --color-surface-ring: rgba(251, 248, 242, 0.76);
+  --color-glass: rgba(251, 248, 242, 0.95); /* floating chrome over the map */
+  --color-border: rgba(58, 46, 28, 0.14);
+  --color-border-strong: rgba(58, 46, 28, 0.55); /* control boundaries, >= 3:1 on surface */
+  --color-text: #27231D;             /* ink */
+  --color-text-secondary: #4A4237;   /* ink 2: icon buttons, labels, selected-segment border */
+  --color-text-muted: #645A4C;
+  --color-control-hover: rgba(150, 88, 22, 0.08);
+  --color-control-active: rgba(150, 88, 22, 0.14);
+  --color-focus: #1F5F8B;
+  --color-focus-on-tip: #7FB8E0;     /* focus ring inside dark toasts */
+  --color-switch-off: #8C8579;
+  --color-knob: #FFFFFF;             /* switch knob when on */
+  --color-knob-off: #FFFFFF;
+  --color-tip: #27231D;              /* tooltips and toasts */
+  --color-on-tip: #FBF3E4;
+  --color-mark: rgba(214, 170, 40, 0.38); /* search-match highlight */
+  --panel-gradient: linear-gradient(180deg, #FBF8F2 0%, #FBF8F2 100%);
 
   /* Semantic */
-  --color-success: #5A7D3A;         /* moss green — living, growing */
+  --color-success: #5A7D3A;          /* plant data only, never chrome */
   --color-success-bg: rgba(90, 125, 58, 0.08);
-  --color-warning: #B8860B;         /* dark goldenrod — caution */
-  --color-warning-bg: rgba(184, 134, 11, 0.08);
-  --color-danger: #B5432A;          /* terracotta red — alert */
-  --color-danger-bg: rgba(181, 67, 42, 0.07);
+  --color-warning: #7A5A00;          /* amber ink */
+  --color-warning-bg: rgba(214, 170, 40, 0.18);
+  --color-warning-line: #A88410;
+  --color-danger: #A8332A;
+  --color-danger-bg: rgba(168, 51, 42, 0.09);
+  --color-on-danger: #FFF8F4;
 
-  /* Timeline action types — earthy field notebook palette */
+/* Timeline action types — earthy field notebook palette */
   --color-action-planting: #7D6049;   /* walnut brown */
   --color-action-pruning: #A06B1F;    /* ochre */
   --color-action-harvest: #B8860B;    /* dark goldenrod */
@@ -68,11 +87,12 @@
   --color-height: #5C6B6B;           /* stone — dimensions */
   --color-height-bg: rgba(92, 107, 107, 0.08);
 
-  /* Shadows — warm, minimal (notebooks are flat) */
-  --shadow-sm: 0 1px 2px rgba(44, 36, 24, 0.06);
-  --shadow-md: 0 2px 6px rgba(44, 36, 24, 0.08);
-  --shadow-lg: 0 4px 12px rgba(44, 36, 24, 0.10);
-  --color-scrim: rgba(0, 0, 0, 0.4);
+  /* Shadows — soft and warm; floating chrome, menus and dialogs use --shadow-float */
+  --shadow-sm: 0 2px 8px rgba(30, 22, 10, 0.12);
+  --shadow-md: 0 4px 14px rgba(30, 22, 10, 0.14);
+  --shadow-lg: 0 10px 30px rgba(30, 22, 10, 0.16), 0 1px 3px rgba(30, 22, 10, 0.10);
+  --shadow-float: 0 10px 30px rgba(30, 22, 10, 0.16), 0 1px 3px rgba(30, 22, 10, 0.10);
+  --color-scrim: rgba(24, 20, 14, 0.42);
 
   /* Spacing — 4px base, with quarter steps for dense controls */
   --space-0-25: 1px;
@@ -83,29 +103,37 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-7: 28px;
   --space-8: 32px;
   --space-12: 48px;
 
-  /* Radius — slightly sharper: technical, precise */
-  --radius-xs: 1px;
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 7px;
+  /* Radius */
+  --radius-xs: 2px;
+  --radius-sm: 5px;       /* key caps, tags */
+  --radius-md: 7px;       /* small buttons, menu items, tooltips, segments */
+  --radius-control: 8px;  /* buttons, fields, dropdowns */
+  --radius-lg: 11px;      /* menus, toasts, notices */
+  --radius-panel: 14px;   /* floating chrome, panels, dialogs */
   --radius-full: 9999px;
 
-  /* Typography — Inter, but tighter */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --text-2xs: 10px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --line-height: 1.45;
+  /* Typography — Literata titles, Source Sans 3 interface, IBM Plex Mono species codes.
+     Weights 400 and 600 only; nothing below 12px (13px for CJK). */
+  --font-sans: 'Source Sans 3', 'Noto Sans', 'Noto Sans SC', 'Noto Sans JP', 'Noto Sans KR', 'PingFang SC', 'Hiragino Sans', 'Apple SD Gothic Neo', 'Microsoft YaHei', 'Yu Gothic UI', 'Malgun Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Literata', 'Noto Serif', 'Noto Serif SC', 'Noto Sans SC', 'Hiragino Mincho ProN', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'Noto Sans Mono', monospace;
+  --text-2xs: 12px;       /* section headings, badges, key caps, code */
+  --text-xs: 12.5px;      /* captions, hints, secondary names */
+  --text-sm: 13px;        /* small buttons, segments, tooltips */
+  --text-base: 14px;      /* controls and UI text */
+  --text-md: 15px;        /* body */
+  --text-dialog: 14.5px;  /* dialog body */
+  --text-lg: 18px;        /* panel titles */
+  --text-xl: 20px;        /* dialog titles */
+  --text-display: 28px;   /* start screen and display titles */
+  --line-height: 1.4;
+  --line-height-tight: 1.2;
 
   /* Layout — compact */
   --title-bar-height: 36px;
@@ -116,8 +144,11 @@
   --control-size-sm: 24px;
   --control-size-md: 28px;
   --control-size-lg: 32px;
-  --control-size-xl: 34px;
+  --control-size-xl: 34px;    /* text fields and dropdowns */
+  --control-size-2xl: 36px;   /* icon buttons in rails and headers */
+  --control-size-3xl: 40px;   /* rail buttons, floating chips */
   --control-size-window: 44px;
+  --control-size-touch: 44px; /* minimum touch target */
   --icon-size-sm: 12px;
   --icon-size-md: 16px;
   --icon-size-lg: 20px;
@@ -129,11 +160,11 @@
   --transition-delay-tooltip: 400ms;
 
   /* State indicators */
-  --color-dirty-indicator: #B8860B;  /* goldenrod — unsaved mark */
+  --color-dirty-indicator: #9C5A16;
 
   /* Window close */
-  --color-close-hover: #B5432A;
-  --color-close-active: #943525;
+  --color-close-hover: #A8332A;
+  --color-close-active: #8C2A22;
 
   /* Canvas — the garden (separate from the tool chrome) */
   --canvas-bg: #F6F2EA;
@@ -164,36 +195,49 @@
    ============================================ */
 
 [data-theme="dark"] {
-  /* ── Field Notebook — Dark Theme ──
-     Charcoal parchment, cream ink, warm borders.
-     Same warmth, inverted — like writing by lamplight.  */
+  /* ── Field Atlas — Dark Theme ── the same meanings by lamplight. */
+  color-scheme: dark;
 
-  --color-primary: #C89B4A;
-  --color-primary-hover: #D4A85A;
-  --color-primary-bg: rgba(200, 155, 74, 0.12);
+  --color-primary: #E3A04C;
+  --color-primary-hover: #F0B465;
+  --color-primary-bg: rgba(227, 160, 76, 0.20);
+  --color-accent: #E3A04C;
+  --color-accent-ink: #F0B465;
+  --color-accent-soft: rgba(227, 160, 76, 0.20);
+  --color-on-accent: #1D1A14;
+  --color-primary-contrast: #1D1A14;
 
-  --color-secondary: #B0A292;
-  --color-accent: #C89B4A;
-  --color-bg: #1C1915;              /* charcoal parchment */
-  --color-surface: #262220;         /* dark linen */
-  --color-surface-alt: #2E2A26;
-  --color-surface-muted: rgba(46, 42, 38, 0.85);
-  --color-surface-ring: rgba(38, 34, 32, 0.80);
-  --color-border: rgba(200, 180, 150, 0.16); /* warm ruled line — slightly stronger */
-  --color-border-strong: rgba(200, 180, 150, 0.28);
-  --color-text: #E8E2D8;           /* cream ink */
-  --color-text-muted: #B0A292;     /* warmer graphite — brighter for readability */
-  --color-primary-contrast: #1C1915;
-  --color-control-hover: rgba(200, 155, 74, 0.16);
-  --color-control-active: rgba(200, 155, 74, 0.24);
-  --panel-gradient: linear-gradient(180deg, #262220 0%, #201C18 100%);
+  --color-secondary: #B5AC9D;
+  --color-bg: #161510;
+  --color-surface: #201E19;
+  --color-surface-alt: #2A2721;
+  --color-surface-muted: rgba(32, 30, 25, 0.85);
+  --color-surface-ring: rgba(32, 30, 25, 0.80);
+  --color-glass: rgba(30, 28, 23, 0.93);
+  --color-border: rgba(255, 248, 235, 0.12);
+  --color-border-strong: rgba(255, 248, 235, 0.40);
+  --color-text: #EFE8DA;
+  --color-text-secondary: #D6CEBF;
+  --color-text-muted: #B5AC9D;
+  --color-control-hover: rgba(240, 170, 80, 0.10);
+  --color-control-active: rgba(240, 170, 80, 0.18);
+  --color-focus: #7FB8E0;
+  --color-focus-on-tip: #1F5F8B;
+  --color-switch-off: #6E685E;
+  --color-knob: #1D1A14;
+  --color-tip: #EFE8DA;
+  --color-on-tip: #1D1A14;
+  --color-mark: rgba(232, 199, 102, 0.30);
+  --panel-gradient: linear-gradient(180deg, #201E19 0%, #201E19 100%);
 
   --color-success: #8BAA5E;
   --color-success-bg: rgba(90, 125, 58, 0.12);
-  --color-warning: #D4A843;
-  --color-warning-bg: rgba(212, 168, 67, 0.15);
-  --color-danger: #D4765A;
-  --color-danger-bg: rgba(181, 67, 42, 0.10);
+  --color-warning: #E8C766;
+  --color-warning-bg: rgba(232, 199, 102, 0.14);
+  --color-warning-line: #C9A640;
+  --color-danger: #F08A7C;
+  --color-danger-bg: rgba(240, 138, 124, 0.12);
+  --color-on-danger: #1D1A14;
 
   --color-action-planting: #A08F7F;
   --color-action-pruning: #C89B4A;
@@ -206,12 +250,15 @@
   --color-overlay-band-bg: rgba(120, 145, 190, 0.18);
   --color-overlay-rect-bg: rgba(180, 165, 140, 0.2);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --color-scrim: rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --color-scrim: rgba(0, 0, 0, 0.55);
 
-  --color-dirty-indicator: #C89B4A;
+  --color-dirty-indicator: #E3A04C;
+  --color-close-hover: #F08A7C;
+  --color-close-active: #E07466;
 
   --canvas-bg: #151210;
   --canvas-grid: rgba(200, 180, 150, 0.04);
@@ -253,6 +300,14 @@
   --color-height-bg: rgba(138, 154, 154, 0.10);
 }
 
+/* CJK text never goes below 13px. */
+:root:lang(zh),
+:root:lang(ja),
+:root:lang(ko) {
+  --text-2xs: 13px;
+  --text-xs: 13px;
+}
+
 /* ============================================
    Reset & Base
    ============================================ */
@@ -274,6 +329,7 @@ body {
   line-height: var(--line-height);
   color: var(--color-text);
   background: var(--color-bg);
+  font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-user-select: none;
@@ -285,10 +341,32 @@ input, textarea, [contenteditable="true"] {
   user-select: text;
 }
 
-/* Focus ring */
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/* Keyboard focus is always the blue ring; ochre never means focus. */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* Inside menus, lists, rows and segmented controls the ring sits inset so it is never clipped. */
+[role="menuitem"]:focus-visible,
+[role="menuitemcheckbox"]:focus-visible,
+[role="menuitemradio"]:focus-visible,
+[role="option"]:focus-visible,
+[role="row"]:focus-visible,
+[role="radiogroup"] [role="radio"]:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Search-match highlight */
+mark {
+  background: var(--color-mark);
+  color: inherit;
+  border-radius: var(--radius-xs);
+  padding: 0 1px;
 }
 
 /* Scrollbar */
@@ -312,6 +390,7 @@ input, textarea, [contenteditable="true"] {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
 }

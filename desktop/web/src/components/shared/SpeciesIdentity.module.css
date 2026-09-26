@@ -1,7 +1,7 @@
 .identity {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--space-2) + var(--space-0-5));
   min-width: 0;
   flex: 1;
   text-align: left;
@@ -20,14 +20,20 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: var(--space-0-5);
-  font-size: var(--text-sm);
+  gap: var(--space-0-25);
+  font-size: var(--text-base);
+  line-height: var(--line-height-tight);
   overflow-wrap: anywhere;
 }
 
+/* Common name (600) over the italic scientific name. */
 .names strong {
   font-weight: 600;
   color: var(--color-text);
+}
+
+.names em {
+  font-style: italic;
 }
 
 .names em, .detail {

@@ -28,6 +28,7 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 function baseSettings(): Settings {
   return {
@@ -153,7 +154,7 @@ describe('LayerPanel', () => {
       render(<LayerPanel />, container)
     })
 
-    const styleTrigger = container.querySelector<HTMLButtonElement>('button[aria-label="Style"]')
+    const styleTrigger = dropdownTrigger(container, 'Style')
     expect(styleTrigger?.textContent).toContain('Liberty')
     await act(async () => {
       styleTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

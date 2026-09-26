@@ -252,7 +252,7 @@
 }
 
 .rowOpen:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
 
@@ -394,4 +394,4 @@
 .rowMeta { grid-column: 2; }
 .rowActive .fileIcon, .rowActive .rowName { color: var(--color-primary); }
 .headerButton:disabled { color: var(--color-text-muted); cursor: default; opacity: 0.6; }
-.headerButton:focus-visible, .sectionIconButton:focus-visible, .rowIconButton:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.headerButton:focus-visible, .sectionIconButton:focus-visible, .rowIconButton:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }

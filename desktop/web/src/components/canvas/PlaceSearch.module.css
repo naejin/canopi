@@ -35,13 +35,13 @@
 }
 
 .prompt:hover { background: var(--color-control-hover); }
-.prompt:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.prompt:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .launcher:hover { background: var(--color-control-hover); }
 
 .launcher:focus-visible,
 .input:focus-visible,
 .result:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 

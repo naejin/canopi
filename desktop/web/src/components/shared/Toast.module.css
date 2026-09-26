@@ -1,0 +1,38 @@
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(480px, calc(100vw - var(--space-8)));
+  padding: calc(var(--space-2) + var(--space-0-5)) var(--space-3) calc(var(--space-2) + var(--space-0-5)) calc(var(--space-3) + var(--space-0-5));
+  border-radius: var(--radius-lg);
+  background: var(--color-tip);
+  color: var(--color-on-tip);
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-base);
+  line-height: var(--line-height);
+}
+
+.message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.action {
+  flex-shrink: 0;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-1-5);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-on-tip);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--color-focus-on-tip);
+  outline-offset: 2px;
+}

@@ -11,7 +11,7 @@ export function SpeciesIdentity({ commonName, canonicalName, mark, detail }: {
     {mark && <span className={styles.mark} aria-hidden="true">{mark}</span>}
     <span className={styles.names}>
       <strong>{commonName || canonicalName}</strong>
-      {commonName && <em>{canonicalName}</em>}
+      {commonName && <em lang="la">{canonicalName}</em>}
       {detail && <span className={styles.detail}>{detail}</span>}
     </span>
   </span>

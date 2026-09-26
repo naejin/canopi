@@ -65,7 +65,8 @@ Every resource (runtime, renderer, MapLibre instance, timer, listener, observer,
 
 - Use CSS Modules with tokens from `styles/global.css`. No raw `white`, `black` or `rgba()`. Font weights 400 and 600 only. Use the spacing, type, radius, control-size and transition tokens. Dark theme is `[data-theme="dark"]` on `<html>`.
 - Use `Dropdown` (with `utils/floating-position.ts`) instead of a native `<select>` and `DatePicker` instead of `<input type="date">`. Never use `window.prompt()`, `confirm()` or `alert()` (WebView blocks them). Do not wrap `Dropdown` or `DatePicker` in a native `label`.
-- Icon-only buttons use `components/shared/ButtonTooltip.tsx`, not `title`, and carry an `aria-label`. Icons come from `components/canvas/toolbar-icons` and `components/shared/PanelIcon.tsx`.
+- Icon-only buttons use `components/shared/ButtonTooltip.tsx`, not `title`, and carry an `aria-label`. Icons come from `components/canvas/toolbar-icons`, `components/shared/PanelIcon.tsx` and, for control glyphs (chevrons, check, close, search, notice icons), `components/shared/ControlIcon.tsx`.
+- Interface fonts (Literata, Source Sans 3, IBM Plex Mono; latin, latin-ext and cyrillic subsets) are bundled from `@fontsource` by `styles/fonts.css`, imported by `styles/global.css`, so Desktop needs no network for them. Never load fonts from a CDN.
 - Close on click-outside with `pointerup`. Controls that must not dismiss overlays carry `data-preserve-overlays="true"`. Nested Escape handling belongs on the inner dialog element. Move focus into dialogs after mount. Position floating elements synchronously.
 - Preact SVG uses native attribute spellings (`stroke-width`, `clip-path`, `tabindex`).
 - `display: flex` on `<td>` is unreliable in WebKitGTK, so wrap flex content inside the cell.

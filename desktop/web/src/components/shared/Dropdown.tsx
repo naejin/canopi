@@ -1,8 +1,9 @@
 import { createPortal } from 'preact/compat'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useId, useLayoutEffect, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
 import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
+import { ControlIcon } from './ControlIcon'
 import styles from './Dropdown.module.css'
 
 export interface DropdownItem<T> {
@@ -19,7 +20,7 @@ interface Props<T> {
   onChange: (value: T) => void
   /** 'up' opens menu above trigger, 'down' below. Default: 'down'. */
   menuDirection?: 'up' | 'down'
-  /** Accessible label for the trigger button and menu. */
+  /** What the value is (e.g. "Units"). The trigger's accessible name is this label followed by the shown value. */
   ariaLabel: string
   /** Extra class on the outermost wrapper. */
   className?: string
@@ -50,6 +51,7 @@ export function Dropdown<T>({
   floating = false,
 }: Props<T>) {
   const open = useSignal(false)
+  const id = useId()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -200,7 +202,8 @@ export function Dropdown<T>({
             triggerRef.current?.focus({ preventScroll: true })
           }}
         >
-          {item.label}
+            <span className={styles.optionLabel}>{item.label}</span>
+          {item.value === value && <ControlIcon name="check" className={styles.optionCheck} />}
         </button>
       ))}
     </div>
@@ -237,15 +240,11 @@ export function Dropdown<T>({
         }}
         aria-expanded={open.value}
         aria-haspopup="listbox"
-        aria-label={ariaLabel}
+        aria-labelledby={`${id}-label ${id}-value`}
       >
-        {trigger}
-        <span
-          className={`${styles.chevron} ${open.value ? styles.chevronOpen : ''}`}
-          aria-hidden="true"
-        >
-          ›
-        </span>
+        <span id={`${id}-label`} className={styles.srOnly}>{ariaLabel}</span>
+        <span id={`${id}-value`} className={styles.value}>{trigger}</span>
+        <ControlIcon name="chevron-down" className={`${styles.chevron} ${open.value ? styles.chevronOpen : ''}`} />
       </button>
       {menu && (floating ? createPortal(menu, document.body) : menu)}
     </div>

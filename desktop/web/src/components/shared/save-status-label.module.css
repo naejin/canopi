@@ -1,10 +1,17 @@
 .status {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-1-5);
   flex-shrink: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   white-space: nowrap;
+}
+
+.text,
+.errorText {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .text {
@@ -13,37 +20,42 @@
 
 .errorText {
   color: var(--color-danger);
+  font-weight: 600;
 }
 
 .action,
 .conflictAction {
-  height: var(--control-size-sm);
-  padding: 0 var(--space-1-5);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-size-md);
+  padding: 0 calc(var(--space-2) + var(--space-0-5));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
 }
 
-.action {
-  color: var(--color-text);
-  text-decoration: underline;
-}
-
 .conflictAction {
   border-color: var(--color-danger);
+  background: transparent;
   color: var(--color-danger);
 }
 
-.action:hover,
-.conflictAction:hover {
+.action:hover {
   background: var(--color-control-hover);
+}
+
+.conflictAction:hover {
+  background: var(--color-danger-bg);
 }
 
 .action:focus-visible,
 .conflictAction:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }

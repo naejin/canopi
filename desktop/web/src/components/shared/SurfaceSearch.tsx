@@ -1,13 +1,30 @@
 import { useRef } from 'preact/hooks'
 import { t } from '../../i18n'
+import { ControlIcon } from './ControlIcon'
 import styles from './SurfaceSearch.module.css'
 
-export function SurfaceSearch({ value, onChange, label }: { value: string; onChange(value: string): void; label: string }) {
+/**
+ * A panel search field. The clear button replaces the optional key hint (e.g. "Ctrl F")
+ * once there is text; `keyShortcuts` is the matching `aria-keyshortcuts` value.
+ */
+export function SurfaceSearch({ value, onChange, label, placeholder, shortcutHint, keyShortcuts }: {
+  value: string
+  onChange(value: string): void
+  label: string
+  /** Visible prompt; defaults to the label. */
+  placeholder?: string
+  shortcutHint?: string
+  keyShortcuts?: string
+}) {
   const input = useRef<HTMLInputElement>(null)
   return <div className={styles.search}>
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" /><path d="m10 10 4 4" /></svg>
-    <input ref={input} type="search" value={value} aria-label={label} placeholder={label}
+    <ControlIcon name="search" className={styles.icon} />
+    <input ref={input} type="search" value={value} aria-label={label} placeholder={placeholder ?? label}
+      aria-keyshortcuts={keyShortcuts}
       onInput={event => onChange(event.currentTarget.value)} />
-    {value && <button type="button" aria-label={t('speciesKey.clearSearch')} onClick={() => { onChange(''); input.current?.focus() }}>×</button>}
+    {value
+      ? <button type="button" className={styles.clear} aria-label={t('speciesKey.clearSearch')}
+        onClick={() => { onChange(''); input.current?.focus() }}><ControlIcon name="close" /></button>
+      : shortcutHint && <kbd className={styles.hint} aria-hidden="true">{shortcutHint}</kbd>}
   </div>
 }

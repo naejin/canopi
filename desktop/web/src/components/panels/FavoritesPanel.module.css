@@ -350,7 +350,7 @@
 
 .savedStampNameInput:focus {
   border-color: var(--color-border-strong);
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
   background: var(--color-surface-alt);
 }

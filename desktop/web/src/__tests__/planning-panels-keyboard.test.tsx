@@ -11,6 +11,7 @@ import type { CanopiFile, PlacedPlant } from '../types/design'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 function design(): CanopiFile {
   return {
@@ -210,7 +211,7 @@ describe('planning panel keyboard hierarchy', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[data-consortium-edit]')!.click()
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stratum"]')!
+    const trigger = dropdownTrigger(container, 'Stratum')!
 
     await act(async () => { trigger.click() })
     const menu = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Stratum"]')!

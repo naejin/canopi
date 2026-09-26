@@ -32,13 +32,14 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 
 `desktop/web/src/styles/global.css` is the single source for colour, spacing, type, radii, control sizes, shadows and transitions. CSS Modules use tokens only: no raw `rgba()`, `white` or `black`, weights 400 and 600.
 
+- Palette: paper `--color-bg`, `--color-surface` (panels, menus, dialogs), `--color-surface-alt` (wells, tracks, info notices), `--color-glass` (floating chrome), ink `--color-text` / `--color-text-secondary` / `--color-text-muted`, ochre `--color-accent` / `--color-accent-ink` / `--color-accent-soft` / `--color-on-accent`, `--color-focus`, amber `--color-warning` / `--color-warning-bg` / `--color-warning-line`, red `--color-danger` / `--color-danger-bg` / `--color-on-danger`, `--color-tip` / `--color-on-tip` (tooltips, toasts), `--color-mark` (match highlight). Radii: `--radius-md` 7 (menu items, tips, segments), `--radius-control` 8 (buttons, fields), `--radius-lg` 11 (menus, notices, toasts), `--radius-panel` 14 (floating chrome, panels, dialogs). Shadows: `--shadow-sm` (tips), `--shadow-float` (floating chrome, menus, dialogs). Type: `--font-display`, `--font-sans`, `--font-mono`; `--text-2xs` 12 · `--text-xs` 12.5 · `--text-sm` 13 · `--text-base` 14 · `--text-dialog` 14.5 · `--text-md` 15 · `--text-lg` 18 · `--text-xl` 20 · `--text-display` 28 (CJK raises 12 and 12.5 to 13).
 - Control boundaries (`--color-border-strong`) reach 3:1 against the surface; the off switch, selected segment and radio ring too.
 - Selected rows: `--color-accent-soft` fill and a 3 px inset `--color-accent` edge. Selected tiles and cells: soft fill and 2 px inset ring. Selected swatches: 2 px gap then a 2 px ring. Pressed toggles: soft fill, accent border and ink, and a check icon.
 - Focus: `outline: 2px solid var(--color-focus); outline-offset: 2px` on `:focus-visible` everywhere (inset inside menus, rows and segments); text fields show focus with `:focus-within`.
 
 ## Icons and icon-only buttons
 
-- In-house inline SVG only: `components/canvas/toolbar-icons.tsx` (tools and actions) and `components/shared/PanelIcon.tsx` (panels), 20×20, 1.6 stroke, round caps, `currentColor`, `aria-hidden`. Dotted icons (more, grip) use filled circles, never `.01` segments. No emoji or text glyphs as icons.
+- In-house inline SVG only: `components/canvas/toolbar-icons.tsx` (tools and actions), `components/shared/PanelIcon.tsx` (panels) and `components/shared/ControlIcon.tsx` (control glyphs), 20×20, 1.6 stroke, round caps, `currentColor`, `aria-hidden`. Dotted icons (more, grip) use filled circles, never `.01` segments. No emoji or text glyphs as icons.
 - Every icon-only button has a localized `aria-label` naming the action and its object, a `ButtonTooltip` with the same label and its shortcut (`aria-keyshortcuts`), a visible focus ring, a size token (28 px in rows, 36–40 px in rails, 44 px on touch) and `position: relative`.
 
 ## Plants
@@ -62,7 +63,7 @@ Every plant list uses the shared finder: search (Ctrl F) over names in every lan
 
 ## Reuse before adding a pattern
 
-Shared building blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `DockPanelHeader`, `SurfaceSearch`, `SpeciesIdentity`, `ActionMenu`, `Dropdown`, `DatePicker`, `ButtonTooltip`, `usePointerResize`, `usePointerReorder`, and the plant finder). They own presentation or an interaction lifecycle; callers keep domain actions. No universal panel framework.
+Shared building blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `DockPanelHeader`, `SurfaceSearch`, `SpeciesIdentity`, `ActionMenu`, `Dropdown`, `DatePicker`, `ButtonTooltip`, `SegmentedControl`, `Switch`, `Notice`, `Toast`, `ControlIcon`, `usePointerResize`, `usePointerReorder`, and the plant finder). They own presentation or an interaction lifecycle; callers keep domain actions. No universal panel framework.
 
 ## Working method
 

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Code copied or adapted from other projects, with its source, the exact revision and its licence. Dependencies installed through Cargo or npm carry their own licence files and are not listed here.
+Code copied or adapted from other projects, with its source, the exact revision and its licence. Dependencies installed through Cargo or npm carry their own licence files and are not listed here, except fonts that ship inside the app.
 
 ## GeoLibre
 
@@ -25,3 +25,13 @@ MIT License text:
 - OpenFreeMap vector tiles and styles: "OpenFreeMap © OpenMapTiles Data from OpenStreetMap" (shown on the map).
 - Google satellite imagery: "© Google" (shown on the map). Without a key the public `mt1.google.com` tiles are used; with the user's key, the Google Map Tiles API and its viewport copyright.
 - Place search: Nominatim, "Search by Nominatim · © OpenStreetMap contributors" (shown with results), ODbL.
+
+## Bundled interface fonts
+
+Desktop must work offline, so the interface fonts ship inside both editions (latin, latin-ext and cyrillic subsets, WOFF2) from the `@fontsource` npm packages, imported by `desktop/web/src/styles/fonts.css`. Each is licensed under the SIL Open Font License 1.1 (https://openfontlicense.org); the full licence text is in each package's `LICENSE` file.
+
+| Font | Package | Copyright |
+|---|---|---|
+| Literata (400, 600) | `@fontsource/literata` 5.3.0 | Copyright 2017 The Literata Project Authors (https://github.com/googlefonts/literata) |
+| Source Sans 3 (400, 600, 400 italic) | `@fontsource/source-sans-3` 5.3.0 | Copyright 2010-2020 Adobe (http://www.adobe.com/) |
+| IBM Plex Mono (400, 600) | `@fontsource/ibm-plex-mono` 5.3.0 | Copyright 2017 IBM Corp. |

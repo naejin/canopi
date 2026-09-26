@@ -1,6 +1,6 @@
 .section { min-width: 0; border-top: 1px solid var(--color-border); display: flex; flex-direction: column; }
 .section button { font: inherit; cursor: pointer; color: var(--color-text); }
-.section :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.section :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .sectionTitle { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
 .sectionTitle h3 { min-width: 0; margin: 0; font-size: var(--text-xs); font-weight: 600; }
 .sectionTitle h3 span { margin-left: var(--space-1); color: var(--color-text-muted); font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -20,7 +20,7 @@
 .layerName small { font-size: var(--text-xs); color: var(--color-text-muted); }
 .order { display: flex; flex-direction: column; }
 .order button { position: relative; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; padding: 0 var(--space-2); }
-.order button:focus-visible, .eye:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.order button:focus-visible, .eye:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .order button:disabled { color: var(--color-text-muted); opacity: 0.5; cursor: default; }
 .settings { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--color-border); font-size: var(--text-xs); }
 .settings h4 { margin: 0; font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }

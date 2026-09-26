@@ -35,7 +35,7 @@ describe('Dropdown keyboard interaction', () => {
         container,
       )
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Example"]')!
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
     trigger.focus()
 
     await keyDown(trigger, 'ArrowDown')
@@ -68,7 +68,7 @@ describe('Dropdown keyboard interaction', () => {
         container,
       )
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Example"]')!
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
 
     await act(async () => { trigger.click() })
     expect(document.activeElement?.textContent).toBe('Two')
@@ -100,7 +100,7 @@ describe('Dropdown keyboard interaction', () => {
         container,
       )
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Example"]')!
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
     await act(async () => { trigger.click() })
 
     await act(async () => {
@@ -134,7 +134,7 @@ describe('Dropdown keyboard interaction', () => {
         container,
       )
     })
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Example"]')!
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
     await act(async () => { trigger.click() })
     outside.focus()
 

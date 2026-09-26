@@ -1,51 +1,119 @@
 .trigger {
   position: relative;
-  width: var(--control-size-sm);
-  height: var(--control-size-sm);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-size-md);
+  height: var(--control-size-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
   background: transparent;
   cursor: pointer;
-  font-size: var(--text-md);
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  background: var(--color-control-hover);
 }
 
 .menu {
   position: fixed;
   z-index: 50;
-  min-width: 144px;
+  min-width: 200px;
   max-width: calc(100vw - var(--space-4));
   max-height: calc(100dvh - var(--space-4));
   overflow-y: auto;
   padding: var(--space-1);
   background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
 }
 
-.menu button {
-  display: block;
+.item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
   width: 100%;
-  min-height: var(--control-size-md);
-  padding: var(--space-2);
+  min-height: var(--control-size-lg);
+  padding: var(--space-1) calc(var(--space-2) + var(--space-0-5));
   text-align: left;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text);
-  font-size: var(--text-sm);
+  font: inherit;
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
-.menu button[data-danger="true"] {
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.check {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--icon-size-md);
+}
+
+.shortcut {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.submenuChevron {
+  color: var(--color-text-muted);
+}
+
+.item[data-danger="true"] {
   color: var(--color-danger);
 }
 
-.trigger:hover, .menu button:hover {
-  background: var(--color-control-hover);
+/* Ochre marks the item under the pointer and an open submenu's parent. */
+.item:hover:not([aria-disabled="true"]),
+.item[aria-expanded="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
-.trigger:focus-visible, .menu button:focus-visible {
-  outline: 2px solid var(--color-accent);
+.item[data-danger="true"]:hover:not([aria-disabled="true"]) {
+  background: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+.item:hover:not([aria-disabled="true"]) .shortcut,
+.item:hover:not([aria-disabled="true"]) .submenuChevron,
+.item[aria-expanded="true"] .shortcut,
+.item[aria-expanded="true"] .submenuChevron {
+  color: inherit;
+}
+
+.item[aria-disabled="true"] {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-1-5);
+  background: var(--color-border);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }

@@ -3,6 +3,7 @@ import { problemReportDialogOpen } from '../../app/problem-report/state'
 import { problemReportSubmission } from '../../app/problem-report/submission'
 import { t } from '../../i18n'
 import styles from './ProblemReportDialog.module.css'
+import { ControlIcon } from './ControlIcon'
 
 export function ProblemReportDialog() {
   if (!problemReportDialogOpen.value) return null
@@ -76,7 +77,7 @@ function ProblemReportDialogContent() {
             onClick={closeDialog}
             aria-label={t('problemReport.close')}
           >
-            ×
+            <ControlIcon name="close" size={18} />
           </button>
         </header>
 

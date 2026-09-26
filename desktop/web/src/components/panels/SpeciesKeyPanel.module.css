@@ -89,7 +89,7 @@
   cursor: pointer;
 }
 .entry:focus-visible, .details:focus-visible, .summary button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
 @media (max-width: 860px) {
