@@ -1,283 +1,45 @@
-// SVG icon components for the canvas toolbar.
-// All icons use currentColor so they inherit the button's text color.
+// Tool rail and action glyphs on the 20×20 grid: 1.6 stroke, round caps, currentColor.
 
 interface IconProps {
   className?: string
 }
 
-export function SelectIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M4 2L4 14L7.5 10.5L10 16L11.5 15.3L9 9.5L13.5 9.5L4 2Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
+export type ToolIconName =
+  | 'select'
+  | 'hand'
+  | 'plant-stamp'
+  | 'plant-spacing'
+  | 'object-stamp'
+  | 'polygon'
+  | 'rectangle'
+  | 'ellipse'
+  | 'line'
+  | 'text'
+  | 'measurement-guide'
+  | 'undo'
+  | 'redo'
+
+const TOOL_ICON_PATHS: Record<ToolIconName, string> = {
+  select: 'M5 3l10.5 6.6-4.7 1.3-2.1 4.6z',
+  hand: 'M7 11V5.2a1.3 1.3 0 0 1 2.6 0V10M9.6 9.6V4a1.3 1.3 0 0 1 2.6 0v5.6M12.2 9.6V5.4a1.3 1.3 0 0 1 2.6 0V12c0 3.6-2.3 6-5.6 6-2.6 0-3.8-1.2-4.8-3.2L3 11.6a1.3 1.3 0 0 1 2.2-1.3L7 12.4',
+  'plant-stamp': 'M10 17.5v-7M10 10.5C10 7 7.7 5 4 5c0 3.5 2.3 5.5 6 5.5zM10 10.5c0-3.5 2.3-5.5 6-5.5 0 3.5-2.3 5.5-6 5.5z',
+  'plant-spacing': 'M2.5 16.5h15M4 16.5l1.5-1.5M4 16.5l1.5 1.5M16 16.5l-1.5-1.5M16 16.5l-1.5 1.5M5 11V8M5 8c0-1.7 1-2.8 2.6-2.8 0 1.7-1 2.8-2.6 2.8zM10 11V8M10 8c0-1.7 1-2.8 2.6-2.8 0 1.7-1 2.8-2.6 2.8zM15 11V8M15 8c0-1.7 1-2.8 2.6-2.8 0 1.7-1 2.8-2.6 2.8z',
+  'object-stamp': 'M8 3.5h4v4l3.5 1.2V11h-11V8.7L8 7.5zM3.5 13.5h13v2.5h-13z',
+  polygon: 'M4 7l6-4 6 4.5-2.2 8H6.2z',
+  rectangle: 'M3.5 5.5h13v9h-13z',
+  ellipse: 'M17 10c0 3-3.1 5.5-7 5.5S3 13 3 10s3.1-5.5 7-5.5S17 7 17 10z',
+  line: 'M4 16L16 4',
+  text: 'M4.5 6V4.5h11V6M10 4.5v11M7.5 15.5h5',
+  'measurement-guide': 'M3 13.5L13.5 3l3.5 3.5L6.5 17zM6.5 10l1.6 1.6M9 7.5l1.6 1.6M11.5 5l1.6 1.6',
+  undo: 'M7.5 12L3.5 8l4-4M3.5 8h8.5a4.5 4.5 0 0 1 0 9H9',
+  redo: 'M12.5 12l4-4-4-4M16.5 8H8a4.5 4.5 0 0 0 0 9h3',
 }
 
-export function HandIcon({ className }: IconProps) {
+export function ToolIcon({ name, className }: IconProps & { readonly name: ToolIconName }) {
   return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M7 10V5a1.5 1.5 0 0 1 3 0v5-6a1.5 1.5 0 0 1 3 0v6-4a1.5 1.5 0 0 1 3 0v5-2a1.5 1.5 0 0 1 3 0v4c0 4-2.5 6-6 6h-1c-2 0-3.4-1-4.5-2.5L3.5 12a1.5 1.5 0 0 1 2.3-1.9L7 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 -1)" />
-    </svg>
-  )
-}
-
-export function UndoIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M8 5L4 9L8 13"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5 9H12C14.21 9 16 10.79 16 13C16 15.21 14.21 17 12 17H9"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function RedoIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 5L16 9L12 13"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15 9H8C5.79 9 4 10.79 4 13C4 15.21 5.79 17 8 17H11"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function RectangleIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect
-        x="3"
-        y="5"
-        width="14"
-        height="10"
-        rx="1"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </svg>
-  )
-}
-
-export function EllipseIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <ellipse
-        cx="10"
-        cy="10"
-        rx="7"
-        ry="5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </svg>
-  )
-}
-
-export function PolygonIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {/* Pentagon */}
-      <path
-        d="M10 2.5L17 7.5L14.5 16H5.5L3 7.5L10 2.5Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function LineIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <line
-        x1="3"
-        y1="17"
-        x2="17"
-        y2="3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <circle cx="3" cy="17" r="2" fill="currentColor" />
-      <circle cx="17" cy="3" r="2" fill="currentColor" />
-    </svg>
-  )
-}
-
-export function MeasurementGuideIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <line
-        x1="3"
-        y1="12"
-        x2="17"
-        y2="12"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeDasharray="2 2"
-      />
-      <line x1="3" y1="8" x2="3" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="17" y1="8" x2="17" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path
-        d="M7.5 6H12.5"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M8 4.5L7 6L8 7.5M12 4.5L13 6L12 7.5"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function TextIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M3 4H17"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10 4V16"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 16H13"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-export function GridIcon({ className }: IconProps) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="3" y="3" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5" /><path d="M8 3v14m4-14v14M3 8h14M3 12h14" stroke="currentColor" strokeWidth="1" />
-    </svg>
-  )
-}
-
-export function SnapIcon({ className }: IconProps) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M4 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4Z M4 8h4m4 0h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-export function RulerIcon({ className }: IconProps) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="m3 12 9-9 5 5-9 9Z M6 9l2 2m1-5 2 2m1-5 2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d={TOOL_ICON_PATHS[name]} />
     </svg>
   )
 }
@@ -336,44 +98,6 @@ export function PlantSymbolIcon({ className }: IconProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  )
-}
-
-export function ObjectStampIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect x="4" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="10" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M8 10L9 11"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12.5 4.5L15.5 4.5L15.5 7.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function SpacingIcon({ className }: IconProps) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M4 10h12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" /><circle cx="3.5" cy="10" r="2" stroke="currentColor" strokeWidth="1.5" /><circle cx="16.5" cy="10" r="2" stroke="currentColor" strokeWidth="1.5" /><path d="m8 5-2-2m0 0 2-2M6 3h8m-2-2 2 2-2 2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" transform="translate(0 2)" />
     </svg>
   )
 }

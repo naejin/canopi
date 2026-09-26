@@ -5,7 +5,11 @@ import type { DesignSessionStore } from './store'
 /** Continuous save writes this long after the last committed change. */
 export const CONTINUOUS_SAVE_DELAY_MS = 1500
 
-export type DesignSaveStatus = 'saved' | 'saving' | 'error' | 'conflict'
+/**
+ * `draft`: the Design lives in a Design Draft (never saved to a file); Canopi
+ * keeps every change there. `saved`/`saving` describe a Design with a file.
+ */
+export type DesignSaveStatus = 'saved' | 'saving' | 'draft' | 'error' | 'conflict'
 
 /**
  * Where a Design Session writes. A file home is the `.canopi` file the
@@ -61,6 +65,8 @@ export interface ContinuousSaveOptions {
  */
 export interface ContinuousSave {
   readonly status: ReadonlySignal<DesignSaveStatus>
+  /** Why the last write failed, in the writer's words; null unless the status is `error`. */
+  readonly failureReason: ReadonlySignal<string | null>
   readonly conflict: ReadonlySignal<ContinuousSaveConflict | null>
   readonly revertAvailable: ReadonlySignal<boolean>
   /** Bind a new home to the store's current session (call from replacement finalization). */
@@ -100,6 +106,7 @@ export function createContinuousSave({
   const writePending = signal(false)
   const changed = signal(false)
   const failed = signal(false)
+  const failureReason = signal<string | null>(null)
   const conflict = signal<ContinuousSaveConflict | null>(null)
   // The session whose write is in flight; another session's write never shows as its "Saving…".
   const writingSession = signal<object | null>(null)
@@ -128,6 +135,7 @@ export function createContinuousSave({
     if (homeless.value) return pending.value ? 'error' : 'saved'
     if (conflict.value) return 'conflict'
     if (failed.value) return 'error'
+    if (!store.designPath.value) return 'draft'
     const writing = writingSession.value !== null && writingSession.value === currentRecord()?.identity
     return writing || pending.value ? 'saving' : 'saved'
   })
@@ -225,6 +233,7 @@ export function createContinuousSave({
     batch(() => {
       if (pendingAtStart) writePending.value = false
       failed.value = false
+      failureReason.value = null
     })
     if (pending.peek()) {
       schedule()
@@ -238,7 +247,10 @@ export function createContinuousSave({
     if (error instanceof DesignHomeConflictError) {
       return settleOutcome(session, { kind: 'conflict', fileGone: error.fileGone }, false)
     }
-    failed.value = true
+    batch(() => {
+      failed.value = true
+      failureReason.value = describeFailure(error)
+    })
     logError('Continuous save failed:', error)
     return false
   }
@@ -254,6 +266,7 @@ export function createContinuousSave({
 
   return {
     status,
+    failureReason: computed(() => status.value === 'error' ? failureReason.value : null),
     conflict,
     revertAvailable,
 
@@ -273,6 +286,7 @@ export function createContinuousSave({
         writePending.value = pendingWrite
         changed.value = false
         failed.value = false
+        failureReason.value = null
         conflict.value = null
       })
     },
@@ -301,6 +315,7 @@ export function createContinuousSave({
       batch(() => {
         record.value = { ...current }
         failed.value = false
+        failureReason.value = null
         conflict.value = null
       })
     },
@@ -365,6 +380,11 @@ export function createContinuousSave({
       clearTimer()
     },
   }
+}
+
+function describeFailure(error: unknown): string | null {
+  if (error instanceof Error) return error.message || null
+  return typeof error === 'string' && error ? error : null
 }
 
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {

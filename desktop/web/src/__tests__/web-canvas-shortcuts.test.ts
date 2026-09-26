@@ -2,7 +2,9 @@ import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
-import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
+import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
+import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
+import { createBrowserShellCatalog } from '../web/browser-shell-commands'
 import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import { registerPlantFinder } from '../app/plant-finder/focus'
 import {
@@ -29,18 +31,35 @@ describe('Web Canvas shortcuts', () => {
     vi.restoreAllMocks()
   })
 
-  it('opens place search on Ctrl+K only while a Design canvas is live', () => {
+  it('focuses the place field on Ctrl+K only while a Design canvas is live', () => {
     installWebCanvasShortcuts()
+    const before = placeSearchFocusRequest.value
     expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
-    expect(placeSearchOpen.value).toBe(false)
+    expect(placeSearchFocusRequest.value).toBe(before)
 
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
     expect(dispatchShortcut({ key: 'k', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
-    expect(placeSearchOpen.value).toBe(false)
     expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
-    expect(placeSearchOpen.value).toBe(true)
-    closePlaceSearch()
+    expect(placeSearchFocusRequest.value).toBe(before + 1)
+  })
+
+  it('routes the shell shortcuts a browser lets a page keep, and leaves the rest to the browser', () => {
+    const newDesign = vi.fn()
+    const catalog = createBrowserShellCatalog({
+      newDesign, openCanopi: vi.fn(), downloadCanopi: vi.fn(), revertDesign: vi.fn(),
+      importGeoJson: vi.fn(), exportGeoJson: vi.fn(), navigate: vi.fn(),
+    }, { templatesEnabled: false, canvasReady: () => true })
+    installWebCanvasShortcuts(window, {
+      catalog,
+      readState: () => ({ hasDesign: true, revertAvailable: false, activePanel: 'canvas', sidePanel: null }),
+    })
+
+    expect(dispatchShortcut({ key: 'F1' }).defaultPrevented).toBe(true)
+    expect(keyboardShortcutsDialogOpen.value).toBe(true)
+    keyboardShortcutsDialogOpen.value = false
+    expect(dispatchShortcut({ key: 'n', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(newDesign).not.toHaveBeenCalled()
   })
 
   it('focuses the open panel plant finder on Ctrl+F, even from another field', () => {
@@ -72,9 +91,10 @@ describe('Web Canvas shortcuts', () => {
     const decision = requestSaveProblemDecision({ kind: 'revert' })
 
     expect(dispatchShortcut({ key: 'z', ctrlKey: true }).defaultPrevented).toBe(false)
+    const focusRequest = placeSearchFocusRequest.value
     expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(undo).not.toHaveBeenCalled()
-    expect(placeSearchOpen.value).toBe(false)
+    expect(placeSearchFocusRequest.value).toBe(focusRequest)
 
     answerSaveProblem('cancel')
     await decision

@@ -1,16 +1,10 @@
 import type { CameraViewportSnapshot } from './runtime/camera'
-import {
-  SCALE_BAR_CANVAS_WIDTH,
-  SCALE_BAR_MARGIN_X,
-  SCALE_BAR_MARGIN_Y,
-  SCALE_BAR_RESERVED_BOTTOM_PX,
-  getScaleBarDisplay,
-} from './scale-bar'
-import { CANVAS_RULER_SIZE_PX } from './canvas-notice-layout'
 import { NICE_DISTANCES } from './grid'
 import { CANVAS_CHROME_FONT_FAMILY } from './chrome-fonts'
 import { getCanvasColor } from './theme-refresh'
 
+/** Ruler band thickness in CSS px. */
+export const CANVAS_RULER_SIZE_PX = 24
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
 
 export type RulerAxis = 'h' | 'v'
@@ -35,18 +29,14 @@ interface RulerPalette {
   readonly background: string
   readonly text: string
   readonly border: string
-  readonly scaleBar: string
   readonly font10: string
-  readonly font11: string
 }
 
 const DEFAULT_PALETTE: RulerPalette = {
   background: getCanvasColor('ruler-bg'),
   text: getCanvasColor('ruler-text'),
   border: 'rgba(58, 46, 28, 0.14)',
-  scaleBar: getCanvasColor('ruler-text'),
   font10: `10px ${CANVAS_CHROME_FONT_FAMILY}`,
-  font11: `11px ${CANVAS_CHROME_FONT_FAMILY}`,
 }
 
 export function createRulerOverlay(
@@ -59,7 +49,6 @@ export function createRulerOverlay(
 class HtmlRulerOverlay implements RulerOverlay {
   private readonly _horizontalCanvas = document.createElement('canvas')
   private readonly _verticalCanvas = document.createElement('canvas')
-  private readonly _scaleCanvas = document.createElement('canvas')
   private readonly _corner = document.createElement('div')
   private _snapshot: RulerOverlaySnapshot | null = null
   private _palette = DEFAULT_PALETTE
@@ -82,7 +71,6 @@ class HtmlRulerOverlay implements RulerOverlay {
     try {
       this._container.appendChild(this._horizontalCanvas)
       this._container.appendChild(this._verticalCanvas)
-      this._container.appendChild(this._scaleCanvas)
       this._container.appendChild(this._corner)
       this._horizontalCanvas.addEventListener('mousedown', this._onHorizontalMouseDown)
       this._verticalCanvas.addEventListener('mousedown', this._onVerticalMouseDown)
@@ -104,10 +92,6 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._horizontalCanvas.style.display = rulerDisplay
     this._verticalCanvas.style.display = rulerDisplay
     this._corner.style.display = rulerDisplay
-    this._scaleCanvas.style.display = snapshot.chromeVisible
-      && (siteMode || snapshot.camera.groundMetersPerCssPixel !== null)
-      ? 'block'
-      : 'none'
 
     if (!snapshot.chromeVisible || !snapshot.rulersVisible || !siteMode) {
       this._cancelActiveDrag?.()
@@ -115,11 +99,9 @@ class HtmlRulerOverlay implements RulerOverlay {
     if (!snapshot.chromeVisible) return
 
     if (siteMode) {
-      drawHorizontalRuler(this._horizontalCanvas, snapshot.camera, this._palette)
-      drawVerticalRuler(this._verticalCanvas, snapshot.camera, this._palette)
-    }
-    if (siteMode || snapshot.camera.groundMetersPerCssPixel !== null) {
-      drawScaleBar(this._scaleCanvas, snapshot.camera, this._palette)
+      const origin = this._overlayOrigin()
+      drawHorizontalRuler(this._horizontalCanvas, snapshot.camera, this._palette, origin)
+      drawVerticalRuler(this._verticalCanvas, snapshot.camera, this._palette, origin)
     }
   }
 
@@ -161,18 +143,6 @@ class HtmlRulerOverlay implements RulerOverlay {
       z-index: 15;
       pointer-events: auto;
       cursor: e-resize;
-      display: none;
-    `
-
-    this._scaleCanvas.dataset.rulerOverlayPart = 'scale'
-    this._scaleCanvas.style.cssText = `
-      position: absolute;
-      left: 0;
-      bottom: 0;
-      width: ${SCALE_BAR_CANVAS_WIDTH}px;
-      height: ${SCALE_BAR_RESERVED_BOTTOM_PX}px;
-      z-index: 18;
-      pointer-events: none;
       display: none;
     `
 
@@ -225,10 +195,11 @@ class HtmlRulerOverlay implements RulerOverlay {
       const snapshot = this._snapshot
       if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible) return
       const rect = this._container.getBoundingClientRect()
-      const screenX = upEvent.clientX - rect.left
-      const screenY = upEvent.clientY - rect.top
-      if (axis === 'h' && screenY <= RULER_SIZE) return
-      if (axis === 'v' && screenX <= RULER_SIZE) return
+      const origin = this._overlayOrigin()
+      const screenX = upEvent.clientX - rect.left + origin.x
+      const screenY = upEvent.clientY - rect.top + origin.y
+      if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
+      if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
 
       const viewport = snapshot.camera.viewport
       const screenPosition = axis === 'h' ? screenY : screenX
@@ -251,6 +222,14 @@ class HtmlRulerOverlay implements RulerOverlay {
     }
   }
 
+  /**
+   * Where the overlay sits inside the canvas, in camera screen pixels: the
+   * workspace insets it below the floating title bar.
+   */
+  private _overlayOrigin(): RulerOverlayOrigin {
+    return { x: this._container.offsetLeft, y: this._container.offsetTop }
+  }
+
   private _removeRootListeners(): void {
     this._horizontalCanvas.removeEventListener('mousedown', this._onHorizontalMouseDown)
     this._verticalCanvas.removeEventListener('mousedown', this._onVerticalMouseDown)
@@ -259,7 +238,6 @@ class HtmlRulerOverlay implements RulerOverlay {
   private _removeParts(): void {
     this._horizontalCanvas.remove()
     this._verticalCanvas.remove()
-    this._scaleCanvas.remove()
     this._corner.remove()
   }
 }
@@ -271,19 +249,23 @@ function readRulerPalette(container: HTMLElement): RulerPalette {
     background: style.getPropertyValue('--canvas-ruler-bg').trim() || DEFAULT_PALETTE.background,
     text,
     border: style.getPropertyValue('--color-border').trim() || DEFAULT_PALETTE.border,
-    scaleBar: style.getPropertyValue('--color-text-muted').trim() || text,
     font10: DEFAULT_PALETTE.font10,
-    font11: DEFAULT_PALETTE.font11,
   }
+}
+
+interface RulerOverlayOrigin {
+  readonly x: number
+  readonly y: number
 }
 
 function drawHorizontalRuler(
   canvas: HTMLCanvasElement,
   camera: CameraViewportSnapshot,
   palette: RulerPalette,
+  origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
-  const cssWidth = Math.max(0, camera.screenSize.width - RULER_SIZE)
+  const cssWidth = Math.max(0, camera.screenSize.width - origin.x - RULER_SIZE)
   const cssHeight = RULER_SIZE
   if (cssWidth <= 0) return
 
@@ -308,7 +290,7 @@ function drawHorizontalRuler(
   context.stroke()
 
   const { tickInterval, labelInterval } = calcTickIntervals(scale)
-  const screenOffsetX = RULER_SIZE
+  const screenOffsetX = origin.x + RULER_SIZE
   const worldLeft = (screenOffsetX - viewport.x) / scale
   const worldRight = (screenOffsetX + cssWidth - viewport.x) / scale
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
@@ -338,10 +320,11 @@ function drawVerticalRuler(
   canvas: HTMLCanvasElement,
   camera: CameraViewportSnapshot,
   palette: RulerPalette,
+  origin: RulerOverlayOrigin,
 ): void {
   const dpr = window.devicePixelRatio || 1
   const cssWidth = RULER_SIZE
-  const cssHeight = Math.max(0, camera.screenSize.height - RULER_SIZE)
+  const cssHeight = Math.max(0, camera.screenSize.height - origin.y - RULER_SIZE)
   if (cssHeight <= 0) return
 
   const newWidth = Math.round(cssWidth * dpr)
@@ -365,7 +348,7 @@ function drawVerticalRuler(
   context.stroke()
 
   const { tickInterval, labelInterval } = calcTickIntervals(scale)
-  const screenOffsetY = RULER_SIZE
+  const screenOffsetY = origin.y + RULER_SIZE
   const worldTop = (screenOffsetY - viewport.y) / scale
   const worldBottom = (screenOffsetY + cssHeight - viewport.y) / scale
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
@@ -395,52 +378,6 @@ function drawVerticalRuler(
       context.restore()
     }
   }
-}
-
-function drawScaleBar(
-  canvas: HTMLCanvasElement,
-  camera: CameraViewportSnapshot,
-  palette: RulerPalette,
-): void {
-  const dpr = window.devicePixelRatio || 1
-  const cssWidth = SCALE_BAR_CANVAS_WIDTH
-  const cssHeight = SCALE_BAR_RESERVED_BOTTOM_PX
-  const newWidth = Math.round(cssWidth * dpr)
-  const newHeight = Math.round(cssHeight * dpr)
-  if (canvas.width !== newWidth) canvas.width = newWidth
-  if (canvas.height !== newHeight) canvas.height = newHeight
-
-  const context = canvas.getContext('2d')
-  if (!context) return
-  context.setTransform(dpr, 0, 0, dpr, 0, 0)
-  context.clearRect(0, 0, cssWidth, cssHeight)
-
-  const scale = camera.mode === 'overview'
-    ? 1 / camera.groundMetersPerCssPixel!
-    : camera.viewport.scale
-  const { barScreenPx, label } = getScaleBarDisplay(scale)
-  const startX = SCALE_BAR_MARGIN_X
-  const endX = startX + barScreenPx
-  const lineY = cssHeight - SCALE_BAR_MARGIN_Y
-
-  context.strokeStyle = palette.scaleBar
-  context.fillStyle = palette.scaleBar
-  context.lineWidth = 2
-  context.lineCap = 'square'
-  context.beginPath()
-  context.moveTo(startX, lineY)
-  context.lineTo(endX, lineY)
-  context.stroke()
-  context.beginPath()
-  context.moveTo(startX, lineY - 4)
-  context.lineTo(startX, lineY + 4)
-  context.moveTo(endX, lineY - 4)
-  context.lineTo(endX, lineY + 4)
-  context.stroke()
-  context.font = palette.font11
-  context.textAlign = 'center'
-  context.textBaseline = 'bottom'
-  context.fillText(label, startX + barScreenPx / 2, lineY - 8)
 }
 
 const RULER_DISTANCES = NICE_DISTANCES.filter((distance) => distance >= 0.1)

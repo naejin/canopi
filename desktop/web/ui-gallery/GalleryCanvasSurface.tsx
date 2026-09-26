@@ -1,15 +1,13 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { WorkspaceRuntimeComposition } from '../src/app/canvas-map-surface/workspace-runtime-composition'
-import { InspectionLens } from '../src/components/canvas/InspectionLens'
-import { CanvasOverview } from '../src/components/canvas/CanvasOverview'
-import { SpeciesFocusChip } from '../src/components/canvas/SpeciesFocusChip'
-import { ZoomControls } from '../src/components/canvas/ZoomControls'
+import { CanvasChrome } from '../src/components/canvas/CanvasChrome'
+import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
+import panelStyles from '../src/components/panels/Panels.module.css'
 import { CanvasRuntimeCleanupError } from '../src/canvas/runtime/cleanup'
 import { acquireCanvasRuntimeLifecycle } from '../src/canvas/runtime/lifecycle-owner'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../src/canvas/session'
 import type { CanopiFile } from '../src/types/design'
-import { WebCanvasToolbar } from '../src/web/WebCanvasToolbar'
 import {
   createGalleryWorkspaceRuntimeComposition,
   type GalleryWorkspaceRuntimeOptions,
@@ -186,21 +184,19 @@ export function GalleryCanvasSurface({
 
   useEffect(() => {
     if (!ready.value || activeSurface.value !== 'lens') return
-    canvas.current?.parentElement?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+    canvas.current?.parentElement?.querySelector<HTMLButtonElement>('button[data-inspection-launcher][aria-expanded="false"]')?.click()
   }, [activeSurface.value, ready.value])
 
   return (
     <div className={styles.canvasWorkspace}>
-      {ready.value && <WebCanvasToolbar />}
-      <div className={styles.canvasArea}>
+      <div className={`${panelStyles.canvasArea} ${styles.canvasArea}`}>
         <div ref={canvas} className={styles.canvas} />
         {ready.value ? (
-          <>
-            <InspectionLens key={activeSurface.value === 'lens' ? 'lens' : 'other'} canvasRef={canvas} />
-            <SpeciesFocusChip />
-            <CanvasOverview />
-            <div className={styles.canvasZoom}><ZoomControls /></div>
-          </>
+          <CanvasChrome
+            key={activeSurface.value === 'lens' ? 'lens' : 'other'}
+            projection={workspaceCanvasCommandProjection.value}
+            canvasRef={canvas}
+          />
         ) : null}
       </div>
     </div>

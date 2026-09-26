@@ -61,6 +61,9 @@ function openSession({
   save.beginSession({ draftId, fingerprint, writePending })
 }
 
+/** A Design saved to a file reports Saving… and Saved; a Draft reports Draft. */
+const FILE_HOME = { path: '/designs/garden.canopi', draftId: null }
+
 function edit(description: string): void {
   editDesignSessionForTest(store, (design) => ({ ...design, description }))
 }
@@ -94,8 +97,31 @@ afterEach(() => {
 })
 
 describe('continuous save', () => {
-  it('writes to the home once, 1500 ms after the last committed change', async () => {
+  it('reports a Draft while it lives in a Design Draft, whether writing or written', async () => {
     openSession()
+    expect(save.status.value).toBe('draft')
+    edit('a')
+    expect(save.status.value).toBe('draft')
+    await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
+    expect(writes).toEqual([{ kind: 'draft', id: 'draft-1' }])
+    expect(save.status.value).toBe('draft')
+  })
+
+  it('keeps the writer\'s reason for a failure until a write succeeds', async () => {
+    openSession()
+    writeHome.mockRejectedValueOnce(new Error('No space left on device'))
+    edit('a')
+    await expect(save.flush()).resolves.toBe(false)
+    expect(save.status.value).toBe('error')
+    expect(save.failureReason.value).toBe('No space left on device')
+
+    await expect(save.flush()).resolves.toBe(true)
+    expect(save.status.value).toBe('draft')
+    expect(save.failureReason.value).toBeNull()
+  })
+
+  it('writes to the home once, 1500 ms after the last committed change', async () => {
+    openSession(FILE_HOME)
     edit('a')
     await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS - 100)
     edit('b')
@@ -104,7 +130,7 @@ describe('continuous save', () => {
     expect(save.status.value).toBe('saving')
 
     await vi.advanceTimersByTimeAsync(100)
-    expect(writes).toEqual([{ kind: 'draft', id: 'draft-1' }])
+    expect(writes).toEqual([{ kind: 'file', path: '/designs/garden.canopi', fingerprint: null }])
     expect(store.designDirty.value).toBe(false)
     expect(save.status.value).toBe('saved')
   })
@@ -135,7 +161,7 @@ describe('continuous save', () => {
   })
 
   it('keeps one write in flight and writes again for a change made during it', async () => {
-    openSession()
+    openSession(FILE_HOME)
     let finishFirst!: () => void
     writeHome.mockImplementationOnce((home) => {
       writes.push(home)
@@ -172,7 +198,7 @@ describe('continuous save', () => {
   })
 
   it('writes a pending home without an edit', async () => {
-    openSession({ writePending: true })
+    openSession({ ...FILE_HOME, writePending: true })
     expect(save.status.value).toBe('saving')
     await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
     expect(writeHome).toHaveBeenCalledTimes(1)
@@ -182,7 +208,7 @@ describe('continuous save', () => {
   })
 
   it('reports a failed write, keeps the change pending and recovers on retry', async () => {
-    openSession()
+    openSession(FILE_HOME)
     writeHome.mockRejectedValueOnce(new Error('disk full'))
     edit('a')
     await expect(save.flush()).resolves.toBe(false)
@@ -227,26 +253,26 @@ describe('continuous save', () => {
 
     openSession({ draftId: 'draft-2' })
     expect(save.conflict.value).toBeNull()
-    expect(save.status.value).toBe('saved')
+    expect(save.status.value).toBe('draft')
     expect(save.readHome()).toEqual({ kind: 'draft', id: 'draft-2' })
   })
 
   it('ignores the outcome of a write that belonged to a replaced session', async () => {
-    openSession()
+    openSession(FILE_HOME)
     let rejectFirst!: (error: Error) => void
     writeHome.mockImplementationOnce(() => new Promise((_resolve, reject) => {
       rejectFirst = reject
     }))
     edit('a')
     const flushed = save.flush()
-    openSession({ draftId: 'draft-2' })
+    openSession({ path: '/designs/other.canopi', draftId: null })
     rejectFirst(new Error('late failure'))
     await expect(flushed).resolves.toBe(false)
     expect(save.status.value).toBe('saved')
   })
 
   it("does not show a replaced session's write in flight as saving the new Design", async () => {
-    openSession()
+    openSession(FILE_HOME)
     let resolveFirst!: (outcome: HomeWriteOutcome) => void
     writeHome.mockImplementationOnce(() => new Promise((resolve) => {
       resolveFirst = resolve
@@ -255,7 +281,7 @@ describe('continuous save', () => {
     const flushed = save.flush()
     expect(save.status.value).toBe('saving')
 
-    openSession({ draftId: 'draft-2' })
+    openSession({ path: '/designs/other.canopi', draftId: null })
 
     expect(save.status.value).toBe('saved')
     resolveFirst({ kind: 'written' })

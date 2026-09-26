@@ -90,7 +90,8 @@ describe('App Command Graph shell catalog', () => {
 
     expect(match('n', { ctrlKey: true })).toBe('file.new')
     expect(match('S', { metaKey: true, shiftKey: true })).toBe('file.saveAs')
-    expect(match('2', { ctrlKey: true })).toBe('nav.plantDb')
+    expect(match('3', { ctrlKey: true })).toBe('nav.plantDb')
+    expect(match('2', { ctrlKey: true })).toBeNull()
     expect(match('2', { ctrlKey: true, altKey: true })).toBeNull()
     expect(match('n', { ctrlKey: true, metaKey: true })).toBeNull()
     expect(match('n')).toBeNull()
@@ -122,11 +123,11 @@ describe('App Command Graph shell catalog', () => {
 
     expect(projection.menus.map((menu) => ({
       id: menu.id,
-      commandIds: menu.items.map((command) => command.id),
-    }))).toEqual([{
-      id: 'file',
-      commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi'],
-    }])
+      commandIds: menu.sections.flat().map((command) => command.id),
+    }))).toEqual([
+      { id: 'file', commandIds: ['file.new', 'file.openCanopi', 'file.downloadCanopi'] },
+      { id: 'view', commandIds: ['view.toggleTheme'] },
+    ])
     expect(projection.menus[0]?.sections.map((section) =>
       section.map((command) => command.id)
     )).toEqual([
@@ -134,13 +135,16 @@ describe('App Command Graph shell catalog', () => {
       ['file.downloadCanopi'],
     ])
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual(['nav.canvas'])
-    expect(projection.panelBar.side.map((command) => command.id)).toEqual([
+    expect(projection.panelBar.design.map((command) => command.id)).toEqual([
       'nav.plantDb',
       'nav.favorites',
     ])
+    expect(projection.panelBar.planning).toEqual([])
     expect(projection.commands.get('file.downloadCanopi')).toMatchObject({ disabled: true })
     expect(projection.commands.get('nav.favorites')).toMatchObject({
-      label: 'translated:nav.favorites',
+      label: 'translated:panelRail.favorites',
+      shortcut: 'translated:shortcutKeys.ctrl 4',
+      ariaShortcut: 'Control+4 Meta+4',
       active: true,
       disabled: false,
     })
@@ -153,5 +157,23 @@ describe('App Command Graph shell catalog', () => {
     expect(newDesign).toHaveBeenCalledOnce()
     expect(downloadCanopi).not.toHaveBeenCalled()
     expect(navigateFavorites).toHaveBeenCalledOnce()
+  })
+
+  it('projects checkable commands with their state and hides shortcuts the edition cannot receive', () => {
+    let dark = true
+    const catalog = composeShellCommandCatalog({
+      newDesign: { execute: () => undefined },
+      navigateLayers: { execute: () => undefined },
+      toggleTheme: { execute: () => { dark = !dark }, isChecked: () => dark },
+    })
+    const state = { hasDesign: true, revertAvailable: false, activePanel: 'canvas' as const, sidePanel: null }
+    const projection = projectShellCommandCatalog(catalog, state, (key) => key === 'shortcutKeys.ctrl' ? 'Ctrl' : key, {
+      unavailableShortcuts: new Set(['Ctrl+N']),
+    })
+
+    expect(projection.commands.get('view.toggleTheme')).toMatchObject({ check: 'checkbox', checked: true })
+    expect(projection.commands.get('file.new')?.shortcut).toBeUndefined()
+    expect(projection.commands.get('nav.layers')?.shortcut).toBe('Ctrl 1')
+    expect(projection.commands.get('file.new')?.checked).toBeUndefined()
   })
 })

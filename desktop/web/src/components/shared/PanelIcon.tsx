@@ -1,186 +1,27 @@
 import type { Panel } from '../../app/shell/state'
 
-const PANEL_ICON_STROKE_WIDTH = 1.5
+export type PanelIconName = Panel
 
-const panelIcons: Record<Panel, () => preact.JSX.Element> = {
-  'species-key': () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="5" cy="6" r="2" />
-      <path d="m5 10 2.5 4h-5Z" />
-      <rect x="3" y="18" width="4" height="4" rx=".5" />
-      <path d="M11 6h10M11 13h10M11 20h10" />
-    </svg>
-  ),
-  layers: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m12 3 9 5-9 5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
-    </svg>
-  ),
-  data: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <ellipse cx="12" cy="6" rx="8" ry="3" />
-      <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
-    </svg>
-  ),
-  calendar: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="5" width="18" height="16" rx="1" />
-      <path d="M7 3v4M17 3v4M3 10h18M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2" />
-    </svg>
-  ),
-  consortium: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 20V8M9 20V4M14 20v-9M19 20V6M2 20h20" />
-      <path d="M3 11h3M8 8h3M13 14h3M18 10h3" />
-    </svg>
-  ),
-  budget: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M7 6.5h10M7 17.5h10M9 3.5 6 6.5l3 3M15 14.5l3 3-3 3" />
-    </svg>
-  ),
-  canvas: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-    </svg>
-  ),
-  templates: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M3 6.5h18" />
-      <path d="M5 6.5v12" />
-      <path d="M19 6.5v12" />
-      <path d="M7 18.5h10" />
-      <path d="M8.5 10.5h7" />
-      <path d="M8.5 13.5h4" />
-    </svg>
-  ),
-  'plant-db': () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.78 10-10 10Z" />
-      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-    </svg>
-  ),
-  'design-notebook': () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z" />
-      <path d="M4 5.5v16" />
-      <path d="M8 7h8" />
-      <path d="M8 11h6" />
-    </svg>
-  ),
-  favorites: () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={PANEL_ICON_STROKE_WIDTH}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
+// Panel glyphs on the 20×20 grid: 1.6 stroke, round caps, currentColor.
+const PANEL_ICON_PATHS: Record<Panel, string> = {
+  canvas: 'M3 4.5h14v11H3zM3 13l4-4 3 3 2.5-2.5L17 14',
+  templates: 'M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0zM3 10h14M10 3c2 2 2.8 4.4 2.8 7S12 15 10 17c-2-2-2.8-4.4-2.8-7S8 5 10 3z',
+  layers: 'M10 3l7.5 4-7.5 4-7.5-4zM2.5 11l7.5 4 7.5-4',
+  data: 'M10 7.5c3.6 0 6.5-1 6.5-2.3S13.6 3 10 3 3.5 4 3.5 5.2 6.4 7.5 10 7.5zM3.5 5.2v9.6c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3V5.2M3.5 10c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3',
+  'species-key': 'M5.5 16.5v-3M5.5 13.5c-2 0-3.2-1.3-3.2-3S3.6 7.3 5.5 7.3s3.2 1.4 3.2 3.2-1.2 3-3.2 3zM11 7.5h6.5M11 11h6.5M11 14.5h4.5',
+  'plant-db': 'M8.5 14.5a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM17.5 17.5l-4.8-4.8M8.5 12V8.4M8.5 8.4c0-2 1.3-3.3 3.3-3.4 0 2-1.3 3.3-3.3 3.4zM8.5 10c-.1-1.5-1-2.4-2.6-2.4 0 1.5.9 2.4 2.6 2.4z',
+  favorites: 'M10 3l2.1 4.4 4.8.6-3.5 3.3.9 4.7L10 13.7 5.7 16l.9-4.7L3.1 8l4.8-.6z',
+  calendar: 'M4 5.5h12v11H4zM4 9h12M7.5 3.5v3M12.5 3.5v3',
+  budget: 'M10 7.5c3.6 0 6.5-1 6.5-2.3S13.6 3 10 3 3.5 4 3.5 5.2 6.4 7.5 10 7.5zM3.5 5.2v3.5c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3V5.2M3.5 8.7v3.5c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3V8.7M3.5 12.2v3.3c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3v-3.3',
+  consortium: 'M2.5 17h15M5 17v-2.5M5 14.5c-1.2 0-2-.8-2-1.8s.8-1.9 2-1.9 2 .9 2 1.9-.8 1.8-2 1.8zM10 17v-4M10 13c-1.6 0-2.6-1.1-2.6-2.5S8.4 7.9 10 7.9s2.6 1.2 2.6 2.6S11.6 13 10 13zM15 17V11.5M15 11.5c-1.9 0-3.1-1.3-3.1-3S13.1 5.3 15 5.3s3.1 1.4 3.1 3.2-1.2 3-3.1 3z',
+  'design-notebook': 'M6 3h9.5v14H6zM6 3c-.8 0-1.5.7-1.5 1.5v11c0 .8.7 1.5 1.5 1.5M3.5 6h2M3.5 9h2M3.5 12h2M9 7h4M9 10h4',
 }
 
-export function PanelIcon({ panel }: { readonly panel: Panel }) {
-  const Icon = panelIcons[panel]
-  return <Icon />
+export function PanelIcon({ panel }: { panel: Panel }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d={PANEL_ICON_PATHS[panel]} />
+    </svg>
+  )
 }

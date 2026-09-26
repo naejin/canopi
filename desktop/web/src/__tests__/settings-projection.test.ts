@@ -47,6 +47,8 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     plant_spacing_interval_m: 0.5,
     saved_stamps_frame_height: 220,
     last_view: null,
+    used_canvas_tools: [],
+    tool_names_visible: null,
     ...overrides,
   }
 }
@@ -197,6 +199,8 @@ describe('settings projection', () => {
       plant_spacing_interval_m: 0.25,
       google_maps_api_key: null,
       last_view: null,
+      used_canvas_tools: [],
+      tool_names_visible: null,
     })
     expect(saveSettings).not.toHaveBeenCalled()
   })
@@ -912,8 +916,9 @@ describe('settings projection', () => {
       '../app/canvas-runtime/app-adapter.ts',
       '../app/favorites/controller.ts',
       '../app/shell/controller.ts',
-      '../components/shared/TitleBar.tsx',
-      '../commands/graph/catalog.ts',
+      '../components/shared/SettingsDialog.tsx',
+      '../app/workspace-commands/capabilities.ts',
+      '../app/tool-rail/learning.ts',
       '../utils/theme.ts',
     ].map(readSource)
 

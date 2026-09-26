@@ -28,3 +28,9 @@ export const MIN_FAVORITES_FRAME_HEIGHT = 120
 export const savedStampsFrameHeight = signal<number>(
   DEFAULT_SETTINGS.saved_stamps_frame_height ?? DEFAULT_SAVED_STAMPS_FRAME_HEIGHT,
 )
+
+/** Canvas tools used at least once on this device; the tool rail shows names until all are used. */
+export const usedCanvasTools = signal<readonly string[]>(DEFAULT_SETTINGS.used_canvas_tools)
+
+/** View › Tool names: null follows first use, a boolean is the user's choice. */
+export const toolNamesVisible = signal<boolean | null>(DEFAULT_SETTINGS.tool_names_visible ?? null)

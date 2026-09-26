@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPlaceSearchController,
   parseCoordinates,
+  shortPlaceLabel,
   resetPlaceSearchPacingForTests,
 } from '../app/geocoding/place-search'
 import { NOMINATIM_ATTRIBUTION, NOMINATIM_MIN_INTERVAL_MS } from '../app/geocoding/registry'
@@ -9,12 +10,21 @@ import { NOMINATIM_ATTRIBUTION, NOMINATIM_MIN_INTERVAL_MS } from '../app/geocodi
 afterEach(() => resetPlaceSearchPacingForTests())
 
 describe('place search', () => {
+  it('shortens long geocoder names to a place and its locality', () => {
+    expect(shortPlaceLabel('Ballon-Saint-Mars, Mamers, Sarthe, Pays de la Loire, France métropolitaine, 72290, France')).toEqual({
+      label: 'Ballon-Saint-Mars',
+      detail: 'Sarthe, Pays de la Loire, France',
+    })
+    expect(shortPlaceLabel('Tours, France')).toEqual({ label: 'Tours', detail: 'France' })
+    expect(shortPlaceLabel('Antarctica')).toEqual({ label: 'Antarctica', detail: null })
+  })
+
   it('parses coordinates locally without any request', async () => {
     const transport = vi.fn()
     const search = createPlaceSearchController({ transport })
     await search.search('48.8584, 2.2945')
     expect(transport).not.toHaveBeenCalled()
-    expect(search.results.value).toEqual([{ label: '48.858400, 2.294500', lat: 48.8584, lon: 2.2945, source: 'coordinates' }])
+    expect(search.results.value).toEqual([{ label: '48.858400, 2.294500', detail: null, lat: 48.8584, lon: 2.2945, source: 'coordinates' }])
     expect(search.attribution.value).toBeNull()
   })
 
@@ -39,7 +49,7 @@ describe('place search', () => {
     const search = createPlaceSearchController({ transport, sleep: async () => {} })
     await search.search('Tours, France')
     expect(transport).toHaveBeenCalledTimes(1)
-    expect(search.results.value).toEqual([{ label: 'Tours, Indre-et-Loire, France', lat: 47.39, lon: 0.689, source: 'geocoder' }])
+    expect(search.results.value).toEqual([{ label: 'Tours', detail: 'Indre-et-Loire, France', lat: 47.39, lon: 0.689, source: 'geocoder' }])
     expect(search.status.value).toBe('results')
     expect(search.attribution.value).toBe(NOMINATIM_ATTRIBUTION)
   })
@@ -52,7 +62,7 @@ describe('place search', () => {
     ])
     const search = createPlaceSearchController({ transport, sleep: async () => {} })
     await search.search('Tours')
-    expect(search.results.value.map((result) => result.label)).toEqual(['Tours, France', 'Tours-sur-Marne, France'])
+    expect(search.results.value.map((result) => result.label)).toEqual(['Tours', 'Tours-sur-Marne'])
     expect(search.results.value[0]).toMatchObject({ lat: 47.39, lon: 0.689 })
   })
 

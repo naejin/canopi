@@ -22,6 +22,11 @@ import { TEST_GEO_ORIGIN } from './support/geo-design'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
+
+// The floating chrome has its own tests; here it only marks where the workspace mounts it.
+vi.mock('../components/canvas/CanvasChrome', () => ({
+  CanvasChrome: () => <div data-testid="canvas-chrome" />,
+}))
 import type {
   WorkspaceRuntimeComposition,
   WorkspaceRuntimeStartOutcome,
@@ -469,14 +474,15 @@ describe('Web Edition canvas workspace', () => {
     expect(runtime.documents.hideCanvasChrome).toHaveBeenCalled()
     expect(currentCanvasSession.value).toBe(runtime.composition.surfaces)
     expect(container.querySelector('[data-testid="web-welcome-screen"]')).not.toBeNull()
-    expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
+    expect(container.querySelector('h1')?.textContent).toBe('Canopi')
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).toBeNull()
     expect(container.textContent).toContain('New Design')
-    expect(container.textContent).toContain('Open Design')
+    expect(container.textContent).toContain('Open a .canopi file…')
     expect(container.textContent).not.toContain('Recent Files')
     expect(container.textContent).not.toContain('No Design loaded')
 
     await act(async () => {
-      buttonByText(container, 'Open Design').click()
+      buttonByText(container, 'Open a .canopi file…Ctrl O').click()
     })
     expect(fileAdapter.openCanopiFile).toHaveBeenCalledOnce()
 
@@ -521,7 +527,7 @@ describe('Web Edition canvas workspace', () => {
     expect(runtime.documents.replaceDocument).not.toHaveBeenCalled()
   })
 
-  it('offers place search beside the inspection lens once a Design is open', async () => {
+  it('mounts the shared floating chrome once a Design is open', async () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const store = createMemoryDesignSessionStore()
@@ -545,7 +551,7 @@ describe('Web Edition canvas workspace', () => {
       await flushMicrotasks()
     })
 
-    expect(container.querySelector('button[aria-label="Search for a place"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
   })
 
   it('releases a runtime whose Design attachment fails', async () => {
@@ -862,6 +868,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       focusTemporaryBounds: vi.fn(() => false),
       returnFromTemporaryFocus: vi.fn(() => false),
       showPlace: vi.fn(() => false),
+      zoomBy: vi.fn(),
     },
     history: {
       canUndo: signal(false),

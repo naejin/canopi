@@ -56,10 +56,10 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly readEmptySceneScale?: () => number
   readonly speciesFocus: SpeciesFocusCommands
   readonly sceneStore: SceneStateReader
-  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport'>
+  readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport' | 'screenSize'>
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn'
+    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn'
   >
   readonly history: SceneHistoryCommands
   readonly commandAdmission: SceneCommandAdmission
@@ -159,6 +159,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.viewport = {
       zoomIn: () => this.zoomIn(),
       zoomOut: () => this.zoomOut(),
+      zoomBy: (factor) => this.zoomBy(factor),
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
@@ -290,6 +291,14 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
 
   private zoomOut(): void {
     this.options.cameraNavigation.zoomOut()
+    this.options.invalidate('viewport')
+  }
+
+  /** Zoom about the screen centre; the scale menu picks the factor for a map scale. */
+  private zoomBy(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) return
+    const screen = this.options.camera.screenSize
+    this.options.cameraNavigation.zoomAroundScreenPoint({ x: screen.width / 2, y: screen.height / 2 }, factor)
     this.options.invalidate('viewport')
   }
 

@@ -1,3 +1,5 @@
+import { projectBrowserShellForTest } from './support/browser-shell-projection'
+import { flattenMenuActions } from '../app/shell-commands/menus'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +27,6 @@ import {
   showBrowserShellNotice,
 } from '../web/browser-shell-notice'
 import { BrowserAppShell } from '../web/BrowserAppShell'
-import { createBrowserShellCommandProjection } from '../web/browser-shell-commands'
 import { appCommandGraphChromeProjection } from '../commands/registry'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
@@ -113,9 +114,9 @@ describe('Desktop GeoJSON file adapter', () => {
 
 describe('Desktop App Command Graph GeoJSON commands', () => {
   it('lists GeoJSON import and export in the File menu, enabled with a mounted Design', () => {
-    const fileMenuIds = () => appCommandGraphChromeProjection.value.menus
-      .find((menu) => menu.id === 'file')!
-      .items.flatMap((entry) => entry.type === 'action' ? [{ id: entry.id, disabled: entry.disabled }] : [])
+    const fileMenuIds = () => flattenMenuActions([appCommandGraphChromeProjection.value.menus
+      .find((menu) => menu.id === 'file')!])
+      .map((entry) => ({ id: entry.id, disabled: entry.disabled }))
       .filter((entry) => entry.id.includes('GeoJson'))
 
     expect(fileMenuIds()).toEqual([
@@ -185,7 +186,7 @@ describe('Web GeoJSON file adapter and notice', () => {
   it('shows and dismisses the shell notice', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
-    const projection = createBrowserShellCommandProjection({
+    const projection = projectBrowserShellForTest({
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
@@ -200,7 +201,6 @@ describe('Web GeoJSON file adapter and notice', () => {
         importGeoJson: () => undefined,
         exportGeoJson: () => undefined,
         navigate: () => undefined,
-        toggleTheme: () => undefined,
       },
     })
 

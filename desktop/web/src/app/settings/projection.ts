@@ -23,6 +23,8 @@ import {
   plantSpacingIntervalM,
   savedStampsFrameHeight,
   theme,
+  toolNamesVisible,
+  usedCanvasTools,
 } from './state'
 import type { SettingsPlatformAdapter } from './platform-adapter'
 
@@ -43,6 +45,10 @@ export interface SettingsProjectionDraft {
     frameHeight: number
   }
   mapLayers: MapLayersState
+  toolRail: {
+    usedTools: readonly string[]
+    namesVisible: boolean | null
+  }
 }
 
 interface MutateSettingsProjectionOptions {
@@ -125,6 +131,10 @@ function createDraftFromProjection(): SettingsProjectionDraft {
       frameHeight: savedStampsFrameHeight.value,
     },
     mapLayers: mapLayers.value,
+    toolRail: {
+      usedTools: usedCanvasTools.value,
+      namesVisible: toolNamesVisible.value,
+    },
   }
 }
 
@@ -160,6 +170,10 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
       frameHeight: normalizeSavedStampsFrameHeight(draft.savedStamps.frameHeight),
     },
     mapLayers: normalizeMapLayers(draft.mapLayers),
+    toolRail: {
+      usedTools: [...new Set(draft.toolRail.usedTools)],
+      namesVisible: draft.toolRail.namesVisible,
+    },
   }
 }
 
@@ -175,6 +189,8 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     sidePanelWidth.value = draft.sidePanel.width
     savedStampsFrameHeight.value = draft.savedStamps.frameHeight
     if (!mapLayersEqual(mapLayers.value, draft.mapLayers)) mapLayers.value = draft.mapLayers
+    if (!sameStrings(usedCanvasTools.value, draft.toolRail.usedTools)) usedCanvasTools.value = draft.toolRail.usedTools
+    toolNamesVisible.value = draft.toolRail.namesVisible
   })
 }
 
@@ -199,6 +215,8 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     contour_interval: draft.mapLayers.contours.intervalMeters,
     hillshade_visible: draft.mapLayers.hillshade.visible,
     hillshade_opacity: draft.mapLayers.hillshade.opacity,
+    used_canvas_tools: [...draft.toolRail.usedTools],
+    tool_names_visible: draft.toolRail.namesVisible,
   }
 }
 
@@ -215,16 +233,24 @@ function sameLastView(left: LastView | null | undefined, right: LastView | null 
   return left.lon === right.lon && left.lat === right.lat && left.zoom === right.zoom
 }
 
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 function settingsEqual(left: Settings, right: Settings): boolean {
   const leftKeys = Object.keys(left) as Array<keyof Settings>
   if (leftKeys.length !== Object.keys(right).length) return false
 
   return leftKeys.every((key) => (
     Object.prototype.hasOwnProperty.call(right, key)
-    && (key === 'last_view'
-      ? sameLastView(left.last_view, right.last_view)
-      : Object.is(left[key], right[key]))
+    && sameSettingValue(key, left, right)
   ))
+}
+
+function sameSettingValue(key: keyof Settings, left: Settings, right: Settings): boolean {
+  if (key === 'last_view') return sameLastView(left.last_view, right.last_view)
+  if (key === 'used_canvas_tools') return sameStrings(left.used_canvas_tools, right.used_canvas_tools)
+  return Object.is(left[key], right[key])
 }
 
 function currentSettingsSnapshot(): Settings {
@@ -265,6 +291,10 @@ function projectSettingsToSignals(settings: Settings): Settings {
         visible: settings.hillshade_visible,
         opacity: settings.hillshade_opacity,
       },
+    },
+    toolRail: {
+      usedTools: settings.used_canvas_tools,
+      namesVisible: settings.tool_names_visible ?? null,
     },
   })
   applyDraftToProjection(draft)
@@ -649,7 +679,7 @@ export function mutateSettingsProjection(
     const updated = settingsFromDraft(normalized)
     let changed = false
     for (const key of Object.keys(updated) as Array<keyof Settings>) {
-      if (!Object.is(before[key], updated[key])) {
+      if (!sameSettingValue(key, before, updated)) {
         ;(projection.pendingHydrationPatch as Record<string, unknown>)[key] = updated[key]
         changed = true
       }

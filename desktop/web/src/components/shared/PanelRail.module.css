@@ -1,0 +1,62 @@
+.rail {
+  position: absolute;
+  top: var(--chrome-rail-top);
+  right: var(--chrome-inset);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  width: var(--chrome-rail-width);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.rule {
+  height: 1px;
+  margin: var(--space-0-75) var(--space-1-5);
+  background: var(--color-border);
+}
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-size-3xl);
+  height: var(--control-size-3xl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-control-hover);
+}
+
+.button[aria-expanded="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

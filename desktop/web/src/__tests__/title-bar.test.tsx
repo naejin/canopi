@@ -14,12 +14,11 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => windowMocks,
 }))
 
-vi.mock('../components/shared/MenuBar', () => ({
-  MenuBar: () => null,
-}))
 
 import { locale, theme } from '../app/settings/state'
 import { activePanel } from '../app/shell/state'
+import { requestDesignRename } from '../app/shell/requests'
+import { settingsDialogOpen, keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
 import {
   designSessionFixture,
   currentDesign,
@@ -79,7 +78,7 @@ describe('TitleBar', () => {
     container.remove()
   })
 
-  it('shows the app title on the Welcome Screen without exposing design rename', async () => {
+  it('shows menus, Help and Settings on the start screen without a Design name or place search', async () => {
     designSessionFixture.file = null
     designSessionFixture.name = 'Untitled'
 
@@ -88,24 +87,47 @@ describe('TitleBar', () => {
       await flushEffects()
     })
 
-    expect(container.textContent).toContain('Canopi')
+    const menubar = container.querySelector('[role="menubar"]')!
+    expect([...menubar.querySelectorAll(':scope > div > button')].map((button) => button.textContent)).toEqual([
+      'File', 'Edit', 'View', 'Tools', 'Help',
+    ])
     expect(container.textContent).not.toContain('Untitled Design')
-    expect(container.querySelector('button[aria-label="Rename design name"]')).toBeNull()
-    expect(container.querySelector('input[aria-label="Design name"]')).toBeNull()
+    expect(container.querySelector('button[aria-label^="Rename Design"]')).toBeNull()
+    expect(container.querySelector('input[role="combobox"]')).toBeNull()
+
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Settings…"]')!.click() })
+    expect(settingsDialogOpen.value).toBe(true)
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Keyboard shortcuts"]')!.click() })
+    expect(keyboardShortcutsDialogOpen.value).toBe(true)
+    expect(container.querySelector('button[aria-label="Keyboard shortcuts"]')!.getAttribute('aria-keyshortcuts')).toBe('F1')
+    settingsDialogOpen.value = false
+    keyboardShortcutsDialogOpen.value = false
   })
 
-  it('edits the Design name from the title bar without persisting unchanged fallback text', async () => {
+  it('shows the save status and the place field while a Design is open', async () => {
     await act(async () => {
       render(<TitleBar />, container)
       await flushEffects()
     })
 
-    const nameButton = container.querySelector<HTMLButtonElement>('button[aria-label="Rename design name"]')
-    expect(nameButton).toBeTruthy()
-    expect(nameButton?.textContent).toContain('Untitled Design')
+    // With no continuous-save session in this fixture, the Design reads as saved.
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved')
+    expect(container.querySelector('input[role="combobox"]')?.getAttribute('placeholder')).toBe('Search a place or coordinates')
+  })
+
+  it('renames the Design with one click or F2 without persisting unchanged fallback text', async () => {
+    await act(async () => {
+      render(<TitleBar />, container)
+      await flushEffects()
+    })
+
+    const nameButton = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Rename Design: "]')
+    expect(nameButton()?.textContent).toBe('Untitled Design')
+    expect(nameButton()?.getAttribute('aria-label')).toBe('Rename Design: Untitled Design')
+    expect(nameButton()?.getAttribute('aria-keyshortcuts')).toBe('F2')
 
     await act(async () => {
-      nameButton!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }))
+      nameButton()!.click()
       await flushEffects()
     })
 
@@ -127,15 +149,26 @@ describe('TitleBar', () => {
     expect(currentDesign.value?.name).toBe('Untitled')
     expect(designDirty.value).toBe(false)
 
-    const fallbackButton = container.querySelector<HTMLButtonElement>('button[aria-label="Rename design name"]')
     await act(async () => {
-      fallbackButton!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }))
+      requestDesignRename()
       await flushEffects()
     })
-
     input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
-    expect(input).toBeTruthy()
+    expect(document.activeElement).toBe(input)
 
+    await act(async () => {
+      input!.value = 'Scrap'
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      input!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
+      await flushEffects()
+    })
+    expect(designName.value).toBe('Untitled')
+
+    await act(async () => {
+      requestDesignRename()
+      await flushEffects()
+    })
+    input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
     await act(async () => {
       input!.value = 'Forest Edge'
       input!.dispatchEvent(new Event('input', { bubbles: true }))
@@ -149,6 +182,20 @@ describe('TitleBar', () => {
     expect(designName.value).toBe('Forest Edge')
     expect(currentDesign.value?.name).toBe('Forest Edge')
     expect(designDirty.value).toBe(true)
-    expect(container.textContent).toContain('Forest Edge')
+    expect(nameButton()?.textContent).toBe('Forest Edge')
+  })
+
+  it('drags the frameless window from empty title-bar space and maximizes on a double press', async () => {
+    await act(async () => {
+      render(<TitleBar />, container)
+      await flushEffects()
+    })
+    const bar = container.querySelector<HTMLElement>('[data-workspace-title-bar]')!
+    bar.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1, detail: 1 }))
+    expect(windowMocks.startDragging).toHaveBeenCalledOnce()
+    bar.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1, detail: 2 }))
+    expect(windowMocks.toggleMaximize).toHaveBeenCalledOnce()
+    container.querySelector('[role="menubar"] button')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1, detail: 1 }))
+    expect(windowMocks.startDragging).toHaveBeenCalledOnce()
   })
 })

@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "Plantendatabase",
-    "canvas": "Ontwerpcanvas",
-    "designNotebook": "Ontwerpnotitieboek",
     "favorites": "Favorieten"
   },
   "webShell": {
-    "commands": "Webeditie-opdrachten",
     "panels": "Webeditie-panelen",
     "workspace": "Webeditie-werkruimte",
-    "openCanopi": ".canopi openen",
-    "downloadCanopi": ".canopi downloaden",
-    "dismissNotice": "Sluiten"
+    "openCanopi": "Een .canopi-bestand openen…",
+    "downloadCanopi": "Een kopie downloaden",
+    "dismissNotice": "Sluiten",
+    "downloadCopy": "Een kopie downloaden",
+    "savedInBrowser": "Opgeslagen in deze browser",
+    "openCanopiFile": "Een .canopi-bestand openen"
   },
   "designNotebook": {
     "title": "Ontwerpnotitieboek",
@@ -89,32 +89,20 @@
       "panHint": "Voorbeeld. Sleep of gebruik pijltjestoetsen; Shift verplaatst verder.",
       "recenter": "Centreren op canvas"
     },
-    "emptyWelcome": "Begin je ontwerp",
-    "emptyNewDesign": "Nieuw ontwerp",
-    "emptyOpenDesign": "Ontwerp openen",
-    "emptyRecentFiles": "Recente bestanden",
     "toolbar": "Gereedschap",
     "tools": {
       "select": "Selecteren",
-      "selectDesc": "Klik om objecten te selecteren",
-      "hand": "Hand",
-      "handDesc": "Canvas verschuiven",
-      "rectangle": "Rechthoek",
-      "rectangleDesc": "Rechthoekige zones tekenen",
-      "ellipse": "Ellips",
-      "ellipseDesc": "Elliptische zones tekenen",
-      "polygon": "Veelhoek",
-      "polygonDesc": "Veelhoekige zones tekenen",
-      "line": "Lijn",
-      "lineDesc": "Lineaire zones tekenen",
-      "text": "Tekst",
-      "textDesc": "Tekstlabels toevoegen",
-      "objectStamp": "Objectstempel",
-      "objectStampDesc": "Bestaande ontwerpobjecten kopiëren",
-      "plantSpacing": "Plantafstand",
-      "plantSpacingDesc": "Een geplaatste plant langs een afstandslijn herhalen",
-      "measurementGuide": "Meethulp",
-      "measurementGuideDesc": "Plaats een permanente afstandsgids"
+      "hand": "Pannen",
+      "rectangle": "Rechthoekzone",
+      "ellipse": "Ellipszone",
+      "polygon": "Veelhoekzone",
+      "line": "Lijnzone",
+      "text": "Tekstnotitie",
+      "objectStamp": "Stempel plaatsen",
+      "plantSpacing": "Een rij planten",
+      "measurementGuide": "Meten",
+      "zones": "Zones",
+      "plantStamp": "Planten plaatsen"
     },
     "plantSpacing": {
       "selectSource": "Selecteer een geplaatste plant",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "Raster",
-      "gridDesc": "Rasteroverlay in-/uitschakelen",
-      "snapToGrid": "Vastklikken op raster",
-      "snapToGridDesc": "Vormen vastklikken op rasterpunten",
+      "snapToGrid": "Uitlijnen op raster",
       "rulers": "Linialen",
-      "rulersDesc": "Horizontale en verticale linialen in-/uitschakelen",
       "zoom": "Zoom"
     },
     "overview": {
-      "label": "Overzicht",
-      "zoomInToEdit": "Zoom in om te bewerken",
+      "zoomInToEdit": "Zoom in om te bewerken. Op deze schaal zijn planten verborgen.",
       "returnToDesign": "Terug naar ontwerp",
-      "design": "Ontwerp",
-      "designMarker": "Terug naar het ontwerp"
+      "designPin": "Ontwerp: {{name}}"
     },
     "plantColor": {
       "label": "Plantkleur",
@@ -211,21 +194,22 @@
       "applySelection": "Toepassen op {{count}} geselecteerde"
     },
     "placeSearch": {
-      "open": "Plaats zoeken",
-      "placeholder": "Plaatsnaam of lat, lon",
+      "placeholder": "Zoek een plaats of coördinaten",
       "searching": "Zoeken…",
       "noResults": "Geen plaatsen gevonden",
       "error": "Plaats zoeken mislukt",
       "results": "Plaatsen",
-      "emptyPrompt": "Zoek je terrein"
+      "placeholderShort": "Plaats zoeken",
+      "east": "O",
+      "north": "N",
+      "clear": "Zoekopdracht wissen",
+      "south": "Z",
+      "coordinates": "{{lat}}° {{northSouth}}, {{lon}}° {{eastWest}}",
+      "west": "W",
+      "goStraightThere": "Coördinaten · er direct heen"
     },
     "file": {
-      "new": "Nieuw ontwerp",
-      "open": "Ontwerp openen",
-      "save": "Opslaan",
-      "saveAs": "Opslaan als",
-      "cancel": "Annuleren",
-      "revert": "Terug naar de geopende versie"
+      "cancel": "Annuleren"
     },
     "layers": {
       "layerPanel": "Lagen",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "Zonder sleutel gebruikt Canopi de openbare satelliettegels van Google. Voeg je Google Maps API-sleutel toe om de officiële Map Tiles API te gebruiken."
-    }
+    },
+    "zoom": {
+      "scaleBar": "Schaalbalk: {{distance}}",
+      "chooseScale": "Schaal {{scale}}. Kies een schaal",
+      "mapScale": "Kaartschaal"
+    },
+    "viewChip": "Weergave"
   },
   "worldMap": {
     "title": "Wereldkaart",
@@ -592,18 +582,11 @@
     "filterByStyle": "Filter op stijl",
     "openTemplate": "Openen als nieuw ontwerp"
   },
-  "status": {
-    "language": "Taal",
-    "theme": "Thema"
-  },
   "theme": {
     "light": "Licht",
     "dark": "Donker"
   },
   "commands": {
-    "plantDb": "Ga naar Plantendatabase",
-    "canvas": "Ga naar Ontwerpcanvas",
-    "toggleTheme": "Thema wisselen",
     "commandPalette": "Opdrachtenpalet",
     "searchPlaceholder": "Typ een opdracht...",
     "noResults": "Geen opdrachten gevonden"
@@ -781,21 +764,56 @@
     "file": "Bestand",
     "edit": "Bewerken",
     "view": "Beeld",
-    "file.exit": "Afsluiten",
+    "file.exit": "Canopi afsluiten",
     "edit.undo": "Ongedaan maken",
     "edit.redo": "Opnieuw",
     "view.zoomIn": "Inzoomen",
     "view.zoomOut": "Uitzoomen",
-    "view.fitToContent": "Aanpassen aan inhoud",
     "view.searchPlace": "Plaats zoeken…",
     "help": "Help",
-    "help.reportProblem": "Probleem melden",
-    "help.aboutCanopi": "Over Canopi"
+    "help.reportProblem": "Probleem melden…",
+    "help.aboutCanopi": "Over Canopi",
+    "edit.duplicate": "Dupliceren",
+    "edit.delete": "Verwijderen",
+    "file.settings": "Instellingen…",
+    "edit.ungroup": "Groep opheffen",
+    "edit.sendToBack": "Naar achtergrond",
+    "edit.arrange": "Schikken",
+    "edit.selectSameSpecies": "Alles van deze soort selecteren",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "Ontgrendelen",
+    "view.darkTheme": "Donker thema",
+    "edit.saveAsStamp": "Opslaan als stempel",
+    "view.fitToDesign": "Passend op ontwerp",
+    "file.new": "Nieuw ontwerp",
+    "view.backgroundMap": "Kaart",
+    "edit.findPlants": "Planten zoeken…",
+    "file.revert": "Terug naar de versie bij openen…",
+    "tools": "Gereedschap",
+    "edit.copy": "Kopiëren",
+    "edit.paste": "Plakken",
+    "file.rename": "Naam wijzigen…",
+    "view.background": "Achtergrond",
+    "file.saveAs": "Opslaan als…",
+    "edit.group": "Groeperen",
+    "view.toolNames": "Gereedschapsnamen",
+    "file.save": "Opslaan",
+    "file.export": "Exporteren",
+    "view.backgroundNone": "Geen",
+    "help.shortcuts": "Sneltoetsen",
+    "view.backgroundSatellite": "Satelliet",
+    "edit.bringToFront": "Naar voorgrond",
+    "edit.lock": "Vergrendelen",
+    "file.open": "Ontwerp openen…",
+    "edit.selectAll": "Alles selecteren",
+    "file.exportPlantingPlan": "Plantplan (pdf)…",
+    "edit.cut": "Knippen"
   },
   "titleBar": {
     "untitledDesign": "Naamloos ontwerp",
-    "renameDesignName": "Ontwerpnaam wijzigen",
-    "designNameInput": "Ontwerpnaam"
+    "designNameInput": "Ontwerpnaam",
+    "menus": "Menu’s",
+    "renameDesign": "Ontwerp hernoemen: {{name}}"
   },
   "about": {
     "title": "Over Canopi",
@@ -1145,7 +1163,15 @@
     "saved": "Opgeslagen",
     "error": "Opslaan mislukt",
     "retry": "Opnieuw proberen",
-    "conflict": "Buiten Canopi gewijzigd"
+    "conflict": "Buiten Canopi gewijzigd",
+    "detailsUnknown": "Canopi kon het bestand niet schrijven.",
+    "detailsTitle": "Je laatste wijzigingen konden niet worden opgeslagen",
+    "detailsReason": "Canopi kon het bestand niet schrijven: {{reason}}",
+    "details": "Details…",
+    "draft": "Concept",
+    "detailsSafe": "Je werk blijft veilig in Canopi zolang het open blijft. Probeer het opnieuw of sla het elders op.",
+    "saveAs": "Opslaan als…",
+    "resolve": "Oplossen…"
   },
   "saveProblem": {
     "flushFailedTitle": "Je wijzigingen konden niet worden opgeslagen",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "Concepten",
-    "delete": "Concept verwijderen: {{name}}",
-    "confirmDelete": "Dit concept verwijderen?",
-    "confirmDeleteAction": "Verwijderen"
+    "confirmDelete": "‘{{name}}’ verwijderen? Het is nooit als bestand opgeslagen en kan niet worden hersteld.",
+    "confirmDeleteAction": "Concept verwijderen",
+    "intro": "Canopi bewaart elke wijziging terwijl je werkt. Een ontwerp dat nooit als bestand is opgeslagen, blijft hier tot je het opslaat of verwijdert.",
+    "deleteItem": "Concept verwijderen…",
+    "neverSaved": "Concept, nooit als bestand opgeslagen",
+    "actions": "Acties voor {{name}}"
   },
   "plantFinder": {
     "label": "Planten zoeken",
@@ -1283,5 +1312,66 @@
       "coverage": "{{cells}} cellen gepubliceerd",
       "noOutputs": "Niets gepubliceerd"
     }
+  },
+  "panelRail": {
+    "label": "Panelen",
+    "canvas": "Ontwerpcanvas",
+    "layers": "Lagen",
+    "data": "Databibliotheek",
+    "plants": "Planten in dit ontwerp",
+    "catalog": "Plantencatalogus",
+    "favorites": "Favorieten en stempels",
+    "calendar": "Kalender",
+    "budget": "Budget",
+    "consortium": "Consortium",
+    "notebook": "Ontwerpnotitieboek"
+  },
+  "start": {
+    "region": "Start",
+    "purpose": "Ontwerp agroforestry en voedselbossen op de kaart van je grond.",
+    "more": "Meer",
+    "searchDesigns": "Je ontwerpen doorzoeken",
+    "noMatches": "Geen ontwerpen komen overeen met ‘{{query}}’.",
+    "recentDesigns": "Recente ontwerpen",
+    "footerDesktop": "Werkt offline. Je ontwerpen blijven op deze computer.",
+    "footerWeb": "Je ontwerpen blijven in deze browser. Download een kopie om een bestand te bewaren.",
+    "plantCount": "{{plants}} planten"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "delete": "Del",
+    "escape": "Esc",
+    "enter": "Enter"
+  },
+  "siteOnboarding": {
+    "locateTitle": "Waar ligt je terrein?",
+    "locateIntro": "Zoek een plaats of plak coördinaten. De kaart gaat erheen; er wordt nog niets geplaatst.",
+    "placeNamesCredit": "Plaatsnamen © OpenStreetMap-bijdragers",
+    "skip": "Overslaan, ik zoek het op de kaart",
+    "startTitle": "Begin je ontwerp",
+    "closeStart": "Begin je ontwerp sluiten",
+    "stepZone": "Teken de omtrek van je grond met een zone.",
+    "stepCatalog": "Zoek soorten in de Plantencatalogus en plaats ze of sleep er een naar de kaart.",
+    "stepSave": "Alles wordt bewaard terwijl je werkt. Klik bovenaan op de naam om het ontwerp te hernoemen, en op Opslaan als… om het als bestand te bewaren.",
+    "openCatalog": "Plantencatalogus openen",
+    "drawZone": "Een zone tekenen",
+    "searchAgain": "Opnieuw zoeken",
+    "noPlace": "Geen plaats gezocht"
+  },
+  "shortcuts": {
+    "title": "Sneltoetsen",
+    "toolsHeading": "{{menu}} (als de kaart focus heeft)",
+    "escape": "Esc doet één ding tegelijk: een menu of dialoog sluiten, tekenen annuleren, terug naar Selecteren, de selectie wissen.",
+    "footnote": "Gereedschapstoetsen werken als de kaart focus heeft."
+  },
+  "settings": {
+    "title": "Instellingen",
+    "appearance": "Weergave",
+    "theme": "Thema",
+    "language": "Taal",
+    "toolNames": "Gereedschapsnamen in de balk",
+    "toolNamesHint": "Namen en toetsen blijven zichtbaar tot je elk gereedschap één keer hebt gebruikt."
   }
 }

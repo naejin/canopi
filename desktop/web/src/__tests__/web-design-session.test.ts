@@ -632,7 +632,7 @@ describe('browser Design Session lifecycle', () => {
       }))
       await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS - 1)
       expect(controller.listDrafts()).toEqual([])
-      expect(controller.continuousSave.status.value).toBe('saving')
+      expect(controller.continuousSave.status.value).toBe('draft')
 
       await vi.advanceTimersByTimeAsync(1)
       expect(controller.listDrafts()).toEqual([
@@ -642,7 +642,7 @@ describe('browser Design Session lifecycle', () => {
           updatedAt: NOW.toISOString(),
         },
       ])
-      expect(controller.continuousSave.status.value).toBe('saved')
+      expect(controller.continuousSave.status.value).toBe('draft')
 
       await controller.newDesign()
       await expect(controller.openDraft('draft-browser-patio')).resolves.toBe(true)
@@ -721,7 +721,7 @@ describe('browser Design Session lifecycle', () => {
     requestSaveDecision.mockResolvedValueOnce('discard' as never)
     await controller.newDesign()
     expect(store.readCurrentDesign()?.description).toBeNull()
-    expect(controller.continuousSave.status.value).toBe('saved')
+    expect(controller.continuousSave.status.value).toBe('draft')
   })
 
   it('reverts to the version opened and writes it to the same Draft', async () => {
@@ -1195,7 +1195,7 @@ describe('browser Design Session lifecycle', () => {
       await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS)
 
       expect(store.isDesignDirty()).toBe(false)
-      expect(controller.continuousSave.status.value).toBe('saved')
+      expect(controller.continuousSave.status.value).toBe('draft')
       expect(appDataStore.loadDraft('draft-save-retry')?.description).toBe(
         'Saved after Canvas settled',
       )

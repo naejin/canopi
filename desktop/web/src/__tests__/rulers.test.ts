@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRulerOverlay } from '../canvas/rulers'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import { SCALE_BAR_CANVAS_WIDTH, SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
 
-type RulerPart = 'horizontal' | 'vertical' | 'scale' | 'corner'
+type RulerPart = 'horizontal' | 'vertical' | 'corner'
 
 function cameraSnapshot(overrides: {
   x?: number
@@ -91,8 +90,9 @@ describe('RulerOverlay', () => {
 
     expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
     expect(findPart<HTMLCanvasElement>(host, 'vertical').style.display).toBe('none')
-    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('none')
     expect(findPart<HTMLDivElement>(host, 'corner').style.display).toBe('none')
+    // The scale bar lives in the zoom group, not on the canvas.
+    expect(host.querySelector('[data-ruler-overlay-part="scale"]')).toBeNull()
 
     overlay.destroy()
   })
@@ -277,27 +277,31 @@ describe('RulerOverlay', () => {
 
     expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
     expect(findPart<HTMLCanvasElement>(host, 'vertical').style.display).toBe('none')
-    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('none')
     expect(host.style.cursor).toBe('crosshair')
     expect(onGuideCreate).not.toHaveBeenCalled()
     overlay.destroy()
   })
 
-  it('draws one geographic scale bar for confirmed map overview', () => {
+  it('draws rulers from the overlay inset so ticks and guides stay on camera coordinates', () => {
     const host = document.createElement('div')
+    Object.defineProperty(host, 'offsetTop', { value: 64 })
+    Object.defineProperty(host, 'offsetLeft', { value: 0 })
+    setHostRect(host, 100, 114)
     const context = createContextStub()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
-    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+    const onGuideCreate = vi.fn()
+    const overlay = createRulerOverlay(host, { onGuideCreate })
+    overlay.update({ camera: cameraSnapshot({ y: 0, scale: 10 }), chromeVisible: true, rulersVisible: true })
 
-    overlay.update({
-      camera: cameraSnapshot({ scale: 0.01, groundMetersPerCssPixel: 50_000 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
+    const vertical = findPart<HTMLCanvasElement>(host, 'vertical')
+    expect(vertical.height).toBe((324 - 64 - 24) * 2)
+    // World 10 m sits at camera y 100, which is 12 px into the vertical ruler below the inset.
+    const drawnYs = vi.mocked(context.moveTo).mock.calls.map(([, y]) => y)
+    expect(drawnYs).toContain(100 - 64 - 24)
 
-    expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
-    expect(findPart<HTMLCanvasElement>(host, 'scale').style.display).toBe('block')
-    expect(context.fillText).toHaveBeenCalledExactlyOnceWith('5000km', 90, 16)
+    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 120 }))
+    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
+    expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 10)
     overlay.destroy()
   })
 
@@ -315,20 +319,15 @@ describe('RulerOverlay', () => {
 
     const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
     const vertical = findPart<HTMLCanvasElement>(host, 'vertical')
-    const scale = findPart<HTMLCanvasElement>(host, 'scale')
     const corner = findPart<HTMLDivElement>(host, 'corner')
     expect(horizontal.style.display).toBe('none')
     expect(vertical.style.display).toBe('none')
     expect(corner.style.display).toBe('none')
-    expect(scale.style.display).toBe('block')
     expect(horizontal.width).toBe(800)
     expect(horizontal.height).toBe(48)
     expect(vertical.width).toBe(48)
     expect(vertical.height).toBe(600)
-    expect(scale.width).toBe(SCALE_BAR_CANVAS_WIDTH * 2)
-    expect(scale.height).toBe(SCALE_BAR_RESERVED_BOTTOM_PX * 2)
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0)
-    expect(ctx.fillText).toHaveBeenCalledWith('20m', 120, 16)
 
     overlay.update({
       camera: cameraSnapshot(),
@@ -338,7 +337,6 @@ describe('RulerOverlay', () => {
     expect(horizontal.style.display).toBe('none')
     expect(vertical.style.display).toBe('none')
     expect(corner.style.display).toBe('none')
-    expect(scale.style.display).toBe('none')
     overlay.destroy()
   })
 

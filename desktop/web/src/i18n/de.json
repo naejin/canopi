@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "Pflanzendatenbank",
-    "canvas": "Entwurfsfläche",
-    "designNotebook": "Design-Notizbuch",
     "favorites": "Favoriten"
   },
   "webShell": {
-    "commands": "Befehle der Web Edition",
     "panels": "Panels der Web Edition",
     "workspace": "Arbeitsbereich der Web Edition",
-    "openCanopi": ".canopi öffnen",
-    "downloadCanopi": ".canopi herunterladen",
-    "dismissNotice": "Schließen"
+    "openCanopi": ".canopi-Datei öffnen…",
+    "downloadCanopi": "Kopie herunterladen",
+    "dismissNotice": "Schließen",
+    "downloadCopy": "Kopie herunterladen",
+    "savedInBrowser": "In diesem Browser gespeichert",
+    "openCanopiFile": ".canopi-Datei öffnen"
   },
   "designNotebook": {
     "title": "Design-Notizbuch",
@@ -89,32 +89,20 @@
       "panHint": "Vorschau. Ziehen oder Pfeiltasten verwenden; Umschalt bewegt weiter.",
       "recenter": "Auf Zeichenfläche zentrieren"
     },
-    "emptyWelcome": "Starten Sie Ihren Entwurf",
-    "emptyNewDesign": "Neuer Entwurf",
-    "emptyOpenDesign": "Entwurf öffnen",
-    "emptyRecentFiles": "Zuletzt verwendete Dateien",
     "toolbar": "Werkzeuge",
     "tools": {
       "select": "Auswählen",
-      "selectDesc": "Klicken, um Objekte auszuwählen",
-      "hand": "Hand",
-      "handDesc": "Ansicht verschieben",
-      "rectangle": "Rechteck",
-      "rectangleDesc": "Rechteckige Zonen zeichnen",
-      "ellipse": "Ellipse",
-      "ellipseDesc": "Elliptische Zonen zeichnen",
-      "polygon": "Polygon",
-      "polygonDesc": "Polygonzonen zeichnen",
-      "line": "Linie",
-      "lineDesc": "Lineare Zonen zeichnen",
-      "text": "Text",
-      "textDesc": "Textbeschriftungen hinzufügen",
-      "objectStamp": "Objektstempel",
-      "objectStampDesc": "Vorhandene Entwurfsobjekte kopieren",
-      "plantSpacing": "Pflanzenabstand",
-      "plantSpacingDesc": "Eine platzierte Pflanze entlang einer Abstandshilfe wiederholen",
-      "measurementGuide": "Messhilfe",
-      "measurementGuideDesc": "Dauerhafte Abstandshilfe platzieren"
+      "hand": "Verschieben",
+      "rectangle": "Rechteckzone",
+      "ellipse": "Ellipsenzone",
+      "polygon": "Polygonzone",
+      "line": "Linienzone",
+      "text": "Textnotiz",
+      "objectStamp": "Stempel setzen",
+      "plantSpacing": "Eine Reihe pflanzen",
+      "measurementGuide": "Messen",
+      "zones": "Zonen",
+      "plantStamp": "Pflanzen setzen"
     },
     "plantSpacing": {
       "selectSource": "Platzierte Pflanze auswählen",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "Raster",
-      "gridDesc": "Rasterüberlagerung umschalten",
-      "snapToGrid": "Am Raster einrasten",
-      "snapToGridDesc": "Formen an Rasterschnittpunkten einrasten",
+      "snapToGrid": "Am Raster ausrichten",
       "rulers": "Lineale",
-      "rulersDesc": "Horizontale und vertikale Lineale umschalten",
       "zoom": "Zoom"
     },
     "overview": {
-      "label": "Übersicht",
-      "zoomInToEdit": "Zum Bearbeiten hineinzoomen",
-      "returnToDesign": "Zum Entwurf zurückkehren",
-      "design": "Entwurf",
-      "designMarker": "Zum Entwurf zurückkehren"
+      "zoomInToEdit": "Zum Bearbeiten hineinzoomen. In diesem Maßstab sind Pflanzen ausgeblendet.",
+      "returnToDesign": "Zum Entwurf zurück",
+      "designPin": "Entwurf: {{name}}"
     },
     "plantColor": {
       "label": "Pflanzenfarbe",
@@ -211,21 +194,22 @@
       "applySelection": "Auf {{count}} ausgewählte anwenden"
     },
     "placeSearch": {
-      "open": "Ort suchen",
-      "placeholder": "Ortsname oder Breite, Länge",
+      "placeholder": "Ort oder Koordinaten suchen",
       "searching": "Suche…",
       "noResults": "Keine Orte gefunden",
       "error": "Ortssuche fehlgeschlagen",
       "results": "Orte",
-      "emptyPrompt": "Grundstück suchen"
+      "placeholderShort": "Ort suchen",
+      "east": "O",
+      "north": "N",
+      "clear": "Suche löschen",
+      "south": "S",
+      "coordinates": "{{lat}}° {{northSouth}}, {{lon}}° {{eastWest}}",
+      "west": "W",
+      "goStraightThere": "Koordinaten · direkt hin"
     },
     "file": {
-      "new": "Neuer Entwurf",
-      "open": "Entwurf öffnen",
-      "save": "Speichern",
-      "saveAs": "Speichern unter",
-      "cancel": "Abbrechen",
-      "revert": "Auf die geöffnete Version zurücksetzen"
+      "cancel": "Abbrechen"
     },
     "layers": {
       "layerPanel": "Ebenen",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "Ohne Schlüssel nutzt Canopi die öffentlichen Satellitenkacheln von Google. Fügen Sie Ihren Google-Maps-API-Schlüssel hinzu, um die offizielle Map Tiles API zu verwenden."
-    }
+    },
+    "zoom": {
+      "scaleBar": "Maßstabsleiste: {{distance}}",
+      "chooseScale": "Maßstab {{scale}}. Maßstab wählen",
+      "mapScale": "Kartenmaßstab"
+    },
+    "viewChip": "Ansicht"
   },
   "worldMap": {
     "title": "Weltkarte",
@@ -592,18 +582,11 @@
     "filterByStyle": "Nach Stil filtern",
     "openTemplate": "Als neues Design öffnen"
   },
-  "status": {
-    "language": "Sprache",
-    "theme": "Erscheinungsbild"
-  },
   "theme": {
     "light": "Hell",
     "dark": "Dunkel"
   },
   "commands": {
-    "plantDb": "Zur Pflanzendatenbank",
-    "canvas": "Zur Entwurfsfläche",
-    "toggleTheme": "Erscheinungsbild wechseln",
     "commandPalette": "Befehlspalette",
     "searchPlaceholder": "Befehl eingeben...",
     "noResults": "Keine Befehle gefunden"
@@ -781,21 +764,56 @@
     "file": "Datei",
     "edit": "Bearbeiten",
     "view": "Ansicht",
-    "file.exit": "Beenden",
-    "edit.undo": "Ruckgangig",
+    "file.exit": "Canopi beenden",
+    "edit.undo": "Rückgängig",
     "edit.redo": "Wiederholen",
-    "view.zoomIn": "Vergrossern",
+    "view.zoomIn": "Vergrößern",
     "view.zoomOut": "Verkleinern",
-    "view.fitToContent": "An Inhalt anpassen",
     "view.searchPlace": "Ort suchen…",
     "help": "Hilfe",
-    "help.reportProblem": "Problem melden",
-    "help.aboutCanopi": "Über Canopi"
+    "help.reportProblem": "Problem melden…",
+    "help.aboutCanopi": "Über Canopi",
+    "edit.duplicate": "Duplizieren",
+    "edit.delete": "Löschen",
+    "file.settings": "Einstellungen…",
+    "edit.ungroup": "Gruppierung aufheben",
+    "edit.sendToBack": "Nach hinten stellen",
+    "edit.arrange": "Anordnen",
+    "edit.selectSameSpecies": "Alle dieser Art auswählen",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "Entsperren",
+    "view.darkTheme": "Dunkles Design",
+    "edit.saveAsStamp": "Als Stempel speichern",
+    "view.fitToDesign": "An Entwurf anpassen",
+    "file.new": "Neuer Entwurf",
+    "view.backgroundMap": "Karte",
+    "edit.findPlants": "Pflanzen finden…",
+    "file.revert": "Auf die Version beim Öffnen zurücksetzen…",
+    "tools": "Werkzeuge",
+    "edit.copy": "Kopieren",
+    "edit.paste": "Einfügen",
+    "file.rename": "Umbenennen…",
+    "view.background": "Hintergrund",
+    "file.saveAs": "Speichern unter…",
+    "edit.group": "Gruppieren",
+    "view.toolNames": "Werkzeugnamen",
+    "file.save": "Speichern",
+    "file.export": "Exportieren",
+    "view.backgroundNone": "Keiner",
+    "help.shortcuts": "Tastenkürzel",
+    "view.backgroundSatellite": "Satellit",
+    "edit.bringToFront": "Nach vorne bringen",
+    "edit.lock": "Sperren",
+    "file.open": "Entwurf öffnen…",
+    "edit.selectAll": "Alles auswählen",
+    "file.exportPlantingPlan": "Pflanzplan (PDF)…",
+    "edit.cut": "Ausschneiden"
   },
   "titleBar": {
     "untitledDesign": "Unbenannter Entwurf",
-    "renameDesignName": "Entwurf umbenennen",
-    "designNameInput": "Entwurfsname"
+    "designNameInput": "Entwurfsname",
+    "menus": "Menüs",
+    "renameDesign": "Entwurf umbenennen: {{name}}"
   },
   "about": {
     "title": "Über Canopi",
@@ -1145,7 +1163,15 @@
     "saved": "Gespeichert",
     "error": "Speichern fehlgeschlagen",
     "retry": "Erneut versuchen",
-    "conflict": "Außerhalb von Canopi geändert"
+    "conflict": "Außerhalb von Canopi geändert",
+    "detailsUnknown": "Canopi konnte die Datei nicht schreiben.",
+    "detailsTitle": "Die letzten Änderungen konnten nicht gespeichert werden",
+    "detailsReason": "Canopi konnte die Datei nicht schreiben: {{reason}}",
+    "details": "Details…",
+    "draft": "Skizze",
+    "detailsSafe": "Solange Canopi geöffnet bleibt, ist deine Arbeit sicher. Versuche es erneut oder speichere sie an einem anderen Ort.",
+    "saveAs": "Speichern unter…",
+    "resolve": "Klären…"
   },
   "saveProblem": {
     "flushFailedTitle": "Änderungen konnten nicht gespeichert werden",
@@ -1168,10 +1194,13 @@
     "revertConfirm": "Zurücksetzen"
   },
   "drafts": {
-    "title": "Entwürfe",
-    "delete": "Entwurf löschen: {{name}}",
-    "confirmDelete": "Diesen Entwurf löschen?",
-    "confirmDeleteAction": "Löschen"
+    "title": "Skizzen",
+    "confirmDelete": "„{{name}}“ löschen? Die Skizze wurde nie als Datei gespeichert und lässt sich nicht wiederherstellen.",
+    "confirmDeleteAction": "Skizze löschen",
+    "intro": "Canopi hält jede Änderung fest, während du arbeitest. Ein Entwurf, der nie als Datei gespeichert wurde, bleibt hier, bis du ihn speicherst oder löschst.",
+    "deleteItem": "Skizze löschen…",
+    "neverSaved": "Skizze, nie als Datei gespeichert",
+    "actions": "Aktionen für {{name}}"
   },
   "plantFinder": {
     "label": "Pflanzen finden",
@@ -1283,5 +1312,66 @@
       "coverage": "{{cells}} Zellen veröffentlicht",
       "noOutputs": "Nichts veröffentlicht"
     }
+  },
+  "panelRail": {
+    "label": "Bereiche",
+    "canvas": "Entwurfsfläche",
+    "layers": "Ebenen",
+    "data": "Datenbibliothek",
+    "plants": "Pflanzen in diesem Entwurf",
+    "catalog": "Pflanzenkatalog",
+    "favorites": "Favoriten und Stempel",
+    "calendar": "Kalender",
+    "budget": "Budget",
+    "consortium": "Konsortium",
+    "notebook": "Entwurfsnotizbuch"
+  },
+  "start": {
+    "region": "Start",
+    "purpose": "Plane Agroforst und Waldgärten auf der Karte deines Grundstücks.",
+    "more": "Mehr",
+    "searchDesigns": "Deine Entwürfe durchsuchen",
+    "noMatches": "Kein Entwurf passt zu „{{query}}“.",
+    "recentDesigns": "Letzte Entwürfe",
+    "footerDesktop": "Funktioniert offline. Deine Entwürfe bleiben auf diesem Computer.",
+    "footerWeb": "Deine Entwürfe bleiben in diesem Browser. Lade eine Kopie herunter, um eine Datei zu behalten.",
+    "plantCount": "{{plants}} Pflanzen"
+  },
+  "shortcutKeys": {
+    "ctrl": "Strg",
+    "shift": "Umschalt",
+    "alt": "Alt",
+    "delete": "Entf",
+    "escape": "Esc",
+    "enter": "Eingabe"
+  },
+  "siteOnboarding": {
+    "locateTitle": "Wo liegt dein Grundstück?",
+    "locateIntro": "Suche einen Ort oder füge Koordinaten ein. Die Karte springt dorthin; es wird noch nichts gesetzt.",
+    "placeNamesCredit": "Ortsnamen © OpenStreetMap-Mitwirkende",
+    "skip": "Überspringen, ich finde es auf der Karte",
+    "startTitle": "Beginne deinen Entwurf",
+    "closeStart": "„Beginne deinen Entwurf“ schließen",
+    "stepZone": "Zeichne den Umriss deines Grundstücks als Zone.",
+    "stepCatalog": "Finde Arten im Pflanzenkatalog und setze sie oder ziehe eine auf die Karte.",
+    "stepSave": "Alles bleibt beim Arbeiten erhalten. Klicke oben auf den Namen, um den Entwurf umzubenennen, und auf Speichern unter…, um ihn als Datei zu behalten.",
+    "openCatalog": "Pflanzenkatalog öffnen",
+    "drawZone": "Zone zeichnen",
+    "searchAgain": "Erneut suchen",
+    "noPlace": "Kein Ort gesucht"
+  },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "toolsHeading": "{{menu}} (wenn die Karte den Fokus hat)",
+    "escape": "Esc tut eins nach dem anderen: Menü oder Dialog schließen, Zeichnen abbrechen, zu Auswählen zurück, Auswahl aufheben.",
+    "footnote": "Werkzeugtasten wirken, wenn die Karte den Fokus hat."
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "appearance": "Darstellung",
+    "theme": "Farbschema",
+    "language": "Sprache",
+    "toolNames": "Werkzeugnamen in der Leiste",
+    "toolNamesHint": "Namen und Tasten bleiben sichtbar, bis du jedes Werkzeug einmal benutzt hast."
   }
 }

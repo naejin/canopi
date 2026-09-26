@@ -34,6 +34,12 @@
   transform: none;
 }
 
+.tooltipBottom {
+  top: calc(100% + 8px);
+  right: 0;
+  transform: none;
+}
+
 button:hover .tooltip,
 button:focus-visible .tooltip {
   opacity: 1;

@@ -1,255 +1,92 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import { setDesignName } from '../../app/design-edit'
 import { currentDesign, designName } from '../../app/document-session/store'
 import {
+  designSaveFailureReason,
   designSaveStatus,
   resolveDesignConflict,
   retryDesignSave,
+  saveAsCurrentDesign,
 } from '../../app/document-session/actions'
-import { activePanel } from '../../app/shell/state'
 import {
   closeAppWindow,
   minimizeAppWindow,
   startDraggingAppWindow,
   toggleMaximizeAppWindow,
 } from '../../app/shell/window-actions'
-import { locale, theme } from '../../app/settings/state'
-import { mutateSettingsProjection } from '../../app/settings/projection'
+import { designNotebookWorkbench } from '../../app/design-notebook'
+import { appCommandGraphChromeProjection } from '../../commands/registry'
 import { t } from '../../i18n'
-import { Dropdown, type DropdownItem } from './Dropdown'
-import { MenuBar } from './MenuBar'
+import { PlaceSearchField } from '../canvas/PlaceSearch'
+import { ControlIcon } from './ControlIcon'
+import { DesignNameField } from './DesignNameField'
 import { SaveStatusLabel } from './SaveStatusLabel'
-import styles from './TitleBar.module.css'
+import { WorkspaceTitleBar } from './WorkspaceTitleBar'
+import styles from './WorkspaceTitleBar.module.css'
 
-const LOCALES = ['en', 'fr', 'es', 'pt', 'it', 'zh', 'de', 'ja', 'ko', 'nl', 'ru'] as const
+/** Desktop title bar: the shared floating bar over the command graph, plus window controls. */
+export function TitleBar() {
+  const projection = appCommandGraphChromeProjection.value
+  const hasDesign = currentDesign.value !== null
 
-const LOCALE_ITEMS: DropdownItem<string>[] = LOCALES.map((code) => ({
-  value: code,
-  label: code.toUpperCase(),
-}))
+  useEffect(() => {
+    void designNotebookWorkbench.loadRecentDesigns()
+  }, [])
 
-const FALLBACK_DESIGN_NAME = 'Untitled'
-
-function LocalePicker() {
-  const handleChange = (code: string) => {
-    mutateSettingsProjection((settings) => {
-      settings.locale = code as typeof locale.value
-    }, { persist: 'immediate' })
+  // Frameless window: a press on empty title-bar space drags; a double press maximizes.
+  const handleMouseDown = (event: MouseEvent) => {
+    if (event.buttons !== 1) return
+    const target = event.target as HTMLElement
+    if (target.closest('button, input, label, [role="menu"], [role="menubar"], [role="dialog"], [role="listbox"]')) return
+    if (event.detail === 2) void toggleMaximizeAppWindow()
+    else void startDraggingAppWindow()
   }
 
   return (
-    <Dropdown
-      trigger={locale.value.toUpperCase()}
-      items={LOCALE_ITEMS}
-      value={locale.value}
-      onChange={handleChange}
-      menuDirection="down"
-      ariaLabel={t('status.language')}
-      className={styles.localePicker}
-      triggerClassName={styles.localeBtn}
-      menuClassName={styles.localeMenu}
-      optionClassName={styles.localeItem}
-      preserveOverlays
+    <WorkspaceTitleBar
+      menus={projection.menus}
+      onMenuOpen={(menuId) => {
+        if (menuId === 'file') void designNotebookWorkbench.loadRecentDesigns()
+      }}
+      design={hasDesign ? (
+        <>
+          <DesignNameField name={designName.value} onRename={setDesignName} />
+          <SaveStatusLabel
+            status={designSaveStatus.value}
+            failureReason={designSaveFailureReason.value}
+            draftLabel={t('saveStatus.draft')}
+            draftAction={{ label: t('saveStatus.saveAs'), style: 'button', run: saveAs }}
+            saveElsewhere={{ label: t('saveStatus.saveAs'), run: saveAs }}
+            onRetry={() => { void retryDesignSave() }}
+            onResolveConflict={() => { void resolveDesignConflict().catch(logSaveCommandError) }}
+          />
+        </>
+      ) : undefined}
+      search={hasDesign ? <PlaceSearchField /> : undefined}
+      help={projection.titleBar.help}
+      settings={projection.titleBar.settings}
+      onMouseDown={handleMouseDown}
+      windowControls={(
+        <>
+          <button type="button" className={styles.iconButton} onClick={() => void minimizeAppWindow()} aria-label={t('window.minimize')} tabIndex={-1}>
+            <ControlIcon name="window-minimize" />
+          </button>
+          <button type="button" className={styles.iconButton} onClick={() => void toggleMaximizeAppWindow()} aria-label={t('window.maximize')} tabIndex={-1}>
+            <ControlIcon name="window-maximize" />
+          </button>
+          <button type="button" className={styles.iconButton} onClick={() => void closeAppWindow()} aria-label={t('window.close')} tabIndex={-1}>
+            <ControlIcon name="close" />
+          </button>
+        </>
+      )}
     />
   )
 }
 
-export function TitleBar() {
-  const hasActiveDesign = currentDesign.value !== null
-  const showsDocumentName = hasActiveDesign && activePanel.value === 'canvas'
-  const name = designName.value
-  const saveStatus = designSaveStatus.value
-  const visibleName = visibleDesignName(name)
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [draftName, setDraftName] = useState(visibleName)
-  const nameInputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (isEditingName) return
-    setDraftName(visibleName)
-  }, [isEditingName, visibleName])
-
-  useEffect(() => {
-    if (!isEditingName) return
-    const input = nameInputRef.current
-    if (!input) return
-    input.focus()
-    input.setSelectionRange(0, input.value.length)
-  }, [isEditingName])
-
-  useEffect(() => {
-    if (hasActiveDesign || !isEditingName) return
-    setIsEditingName(false)
-    setDraftName(visibleDesignName(designName.value))
-  }, [hasActiveDesign, isEditingName])
-
-  // From Tauri docs: use e.buttons === 1 (left button held) and e.detail
-  // to distinguish single click (drag) from double click (maximize).
-  const handleMouseDown = (e: MouseEvent) => {
-    // Only respond to primary (left) button
-    if (e.buttons !== 1) return
-    // Don't drag if clicking on a window control button
-    const target = e.target as HTMLElement
-    if (target.closest('button, input, [role="menu"], [role="menubar"], [role="menuitem"]')) return
-
-    if (e.detail === 2) {
-      void toggleMaximizeAppWindow()
-    } else {
-      void startDraggingAppWindow()
-    }
-  }
-
-  function beginDesignNameEdit(): void {
-    setDraftName(visibleName)
-    setIsEditingName(true)
-  }
-
-  function commitDesignNameEdit(): void {
-    const nextName = draftName.trim()
-    if (
-      nextName.length > 0 &&
-      nextName !== name &&
-      !isVisibleFallbackName(name, nextName)
-    ) {
-      setDesignName(nextName)
-    }
-    setDraftName(visibleDesignName(designName.value))
-    setIsEditingName(false)
-  }
-
-  function cancelDesignNameEdit(): void {
-    setDraftName(visibleName)
-    setIsEditingName(false)
-  }
-
-  return (
-    <div className={styles.titleBar} onMouseDown={handleMouseDown}>
-      {/* Left: Logo + menu bar */}
-      <div className={styles.left}>
-        <img
-          src={new URL('../../assets/canopi-logo.svg', import.meta.url).href}
-          className={styles.logo}
-          alt="Canopi"
-          draggable={false}
-        />
-        <MenuBar />
-      </div>
-
-      {/* Center: file name + draggable spacer */}
-      <div className={styles.dragRegion}>
-        {!hasActiveDesign ? (
-          <span className={styles.fileName}>Canopi</span>
-        ) : showsDocumentName && name && (
-          isEditingName ? (
-            <input
-              ref={nameInputRef}
-              className={styles.fileNameInput}
-              aria-label={t('titleBar.designNameInput')}
-              value={draftName}
-              onInput={(event) => setDraftName((event.currentTarget as HTMLInputElement).value)}
-              onBlur={commitDesignNameEdit}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  commitDesignNameEdit()
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  cancelDesignNameEdit()
-                }
-              }}
-            />
-          ) : (
-            <>
-              <button
-                type="button"
-                className={styles.fileNameButton}
-                aria-label={t('titleBar.renameDesignName')}
-                onDblClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  beginDesignNameEdit()
-                }}
-              >
-                <span className={styles.fileNameText}>{visibleName}</span>
-              </button>
-              <SaveStatusLabel
-                status={saveStatus}
-                onRetry={() => { void retryDesignSave() }}
-                onResolveConflict={() => { void resolveDesignConflict().catch(logSaveCommandError) }}
-              />
-            </>
-          )
-        )}
-      </div>
-
-      {/* Right controls: language + theme */}
-      <div className={styles.settings}>
-        <LocalePicker />
-        <button
-          className={styles.themeBtn}
-          onClick={() => {
-            mutateSettingsProjection((settings) => {
-              settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-            }, { persist: 'immediate' })
-          }}
-          aria-label={t('status.theme')}
-          title={t(theme.value === 'dark' ? 'theme.light' : 'theme.dark')}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            {theme.value === 'dark' ? (
-              <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" />
-            ) : (
-              <path d="M13 8.5a5.5 5.5 0 0 1-7.5-7.5 6 6 0 1 0 7.5 7.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            )}
-          </svg>
-        </button>
-      </div>
-
-      {/* Window controls */}
-      <div className={styles.controls}>
-        <button
-          className={styles.controlBtn}
-          onClick={() => void minimizeAppWindow()}
-          aria-label={t('window.minimize')}
-          tabIndex={-1}
-        >
-          <svg width="10" height="1" viewBox="0 0 10 1">
-            <rect width="10" height="1" fill="currentColor" />
-          </svg>
-        </button>
-        <button
-          className={styles.controlBtn}
-          onClick={() => void toggleMaximizeAppWindow()}
-          aria-label={t('window.maximize')}
-          tabIndex={-1}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" />
-          </svg>
-        </button>
-        <button
-          className={`${styles.controlBtn} ${styles.closeBtn}`}
-          onClick={() => void closeAppWindow()}
-          aria-label={t('window.close')}
-          tabIndex={-1}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  )
+function saveAs(): void {
+  void saveAsCurrentDesign().catch(logSaveCommandError)
 }
 
 function logSaveCommandError(error: unknown): void {
   console.error('Design save command failed:', error)
-}
-
-function visibleDesignName(name: string): string {
-  return name === FALLBACK_DESIGN_NAME ? t('titleBar.untitledDesign') : name
-}
-
-function isVisibleFallbackName(currentName: string, draftName: string): boolean {
-  return currentName === FALLBACK_DESIGN_NAME && draftName === t('titleBar.untitledDesign')
 }

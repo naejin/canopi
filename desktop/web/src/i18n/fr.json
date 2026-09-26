@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "Base de plantes",
-    "canvas": "Zone de dessin",
-    "designNotebook": "Carnet de designs",
     "favorites": "Favoris"
   },
   "webShell": {
-    "commands": "Commandes de l'édition web",
     "panels": "Panneaux de l'édition web",
     "workspace": "Espace de travail web",
-    "openCanopi": "Ouvrir .canopi",
-    "downloadCanopi": "Télécharger .canopi",
-    "dismissNotice": "Fermer"
+    "openCanopi": "Ouvrir un fichier .canopi…",
+    "downloadCanopi": "Télécharger une copie",
+    "dismissNotice": "Fermer",
+    "downloadCopy": "Télécharger une copie",
+    "savedInBrowser": "Enregistré dans ce navigateur",
+    "openCanopiFile": "Ouvrir un fichier .canopi"
   },
   "designNotebook": {
     "title": "Carnet de designs",
@@ -89,32 +89,20 @@
       "panHint": "Aperçu. Glissez ou utilisez les flèches ; Maj accélère le déplacement.",
       "recenter": "Centrer sur le canevas"
     },
-    "emptyWelcome": "Commencez votre design",
-    "emptyNewDesign": "Nouveau design",
-    "emptyOpenDesign": "Ouvrir un design",
-    "emptyRecentFiles": "Fichiers récents",
     "toolbar": "Outils",
     "tools": {
       "select": "Sélection",
-      "selectDesc": "Cliquer pour sélectionner des objets",
-      "hand": "Main",
-      "handDesc": "Déplacer la vue",
-      "rectangle": "Rectangle",
-      "rectangleDesc": "Dessiner des zones rectangulaires",
-      "ellipse": "Ellipse",
-      "ellipseDesc": "Dessiner des zones elliptiques",
-      "polygon": "Polygone",
-      "polygonDesc": "Dessiner des zones polygonales",
-      "line": "Ligne",
-      "lineDesc": "Dessiner des zones linéaires",
-      "text": "Texte",
-      "textDesc": "Ajouter des étiquettes texte",
-      "objectStamp": "Tampon objet",
-      "objectStampDesc": "Copier des objets de conception existants",
-      "plantSpacing": "Espacement des plantes",
-      "plantSpacingDesc": "Répéter une plante placée le long d'un guide d'espacement",
-      "measurementGuide": "Guide de mesure",
-      "measurementGuideDesc": "Placer un guide de distance permanent"
+      "hand": "Déplacer la vue",
+      "rectangle": "Zone rectangle",
+      "ellipse": "Zone ellipse",
+      "polygon": "Zone polygone",
+      "line": "Zone linéaire",
+      "text": "Note texte",
+      "objectStamp": "Placer un tampon",
+      "plantSpacing": "Planter une rangée",
+      "measurementGuide": "Mesurer",
+      "zones": "Zones",
+      "plantStamp": "Placer des plantes"
     },
     "plantSpacing": {
       "selectSource": "Sélectionnez une plante placée",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "Grille",
-      "gridDesc": "Afficher/masquer la grille",
       "snapToGrid": "Aimanter à la grille",
-      "snapToGridDesc": "Aligner les formes sur la grille",
       "rulers": "Règles",
-      "rulersDesc": "Afficher/masquer les règles",
       "zoom": "Zoom"
     },
     "overview": {
-      "label": "Vue d’ensemble",
-      "zoomInToEdit": "Zoomez pour modifier",
-      "returnToDesign": "Revenir au projet",
-      "design": "Projet",
-      "designMarker": "Revenir au projet"
+      "zoomInToEdit": "Zoomez pour modifier. Les plantes sont masquées à cette échelle.",
+      "returnToDesign": "Revenir au Design",
+      "designPin": "Design : {{name}}"
     },
     "plantColor": {
       "label": "Couleur de plante",
@@ -211,21 +194,22 @@
       "applySelection": "Appliquer aux {{count}} sélectionnés"
     },
     "placeSearch": {
-      "open": "Rechercher un lieu",
-      "placeholder": "Nom de lieu ou lat, lon",
+      "placeholder": "Lieu ou coordonnées",
       "searching": "Recherche…",
       "noResults": "Aucun lieu trouvé",
       "error": "La recherche de lieu a échoué",
       "results": "Lieux",
-      "emptyPrompt": "Rechercher votre site"
+      "placeholderShort": "Chercher un lieu",
+      "east": "E",
+      "north": "N",
+      "clear": "Effacer la recherche",
+      "south": "S",
+      "coordinates": "{{lat}}° {{northSouth}}, {{lon}}° {{eastWest}}",
+      "west": "O",
+      "goStraightThere": "Coordonnées · y aller directement"
     },
     "file": {
-      "new": "Nouveau design",
-      "open": "Ouvrir un design",
-      "save": "Enregistrer",
-      "saveAs": "Enregistrer sous",
-      "cancel": "Annuler",
-      "revert": "Revenir à la version ouverte"
+      "cancel": "Annuler"
     },
     "layers": {
       "layerPanel": "Calques",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "Sans clé, Canopi utilise les tuiles satellite publiques de Google. Ajoutez votre clé API Google Maps pour utiliser l'API officielle Map Tiles."
-    }
+    },
+    "zoom": {
+      "scaleBar": "Barre d’échelle : {{distance}}",
+      "chooseScale": "Échelle {{scale}}. Choisir une échelle",
+      "mapScale": "Échelle de la carte"
+    },
+    "viewChip": "Affichage"
   },
   "worldMap": {
     "title": "Carte du monde",
@@ -592,18 +582,11 @@
     "filterByStyle": "Filtrer par style",
     "openTemplate": "Ouvrir comme nouveau design"
   },
-  "status": {
-    "language": "Langue",
-    "theme": "Thème"
-  },
   "theme": {
     "light": "Clair",
     "dark": "Sombre"
   },
   "commands": {
-    "plantDb": "Aller à la base de plantes",
-    "canvas": "Aller à la zone de dessin",
-    "toggleTheme": "Changer le thème",
     "commandPalette": "Palette de commandes",
     "searchPlaceholder": "Entrez une commande...",
     "noResults": "Aucune commande trouvée"
@@ -779,23 +762,58 @@
   },
   "menu": {
     "file": "Fichier",
-    "edit": "Edition",
+    "edit": "Édition",
     "view": "Affichage",
-    "file.exit": "Quitter",
+    "file.exit": "Quitter Canopi",
     "edit.undo": "Annuler",
-    "edit.redo": "Retablir",
+    "edit.redo": "Rétablir",
     "view.zoomIn": "Zoom avant",
-    "view.zoomOut": "Zoom arriere",
-    "view.fitToContent": "Ajuster au contenu",
+    "view.zoomOut": "Zoom arrière",
     "view.searchPlace": "Rechercher un lieu…",
     "help": "Aide",
-    "help.reportProblem": "Signaler un problème",
-    "help.aboutCanopi": "À propos de Canopi"
+    "help.reportProblem": "Signaler un problème…",
+    "help.aboutCanopi": "À propos de Canopi",
+    "edit.duplicate": "Dupliquer",
+    "edit.delete": "Supprimer",
+    "file.settings": "Réglages…",
+    "edit.ungroup": "Dégrouper",
+    "edit.sendToBack": "Mettre à l’arrière-plan",
+    "edit.arrange": "Disposition",
+    "edit.selectSameSpecies": "Sélectionner toute l’espèce",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "Déverrouiller",
+    "view.darkTheme": "Thème sombre",
+    "edit.saveAsStamp": "Enregistrer comme planche",
+    "view.fitToDesign": "Ajuster au Design",
+    "file.new": "Nouveau Design",
+    "view.backgroundMap": "Carte",
+    "edit.findPlants": "Trouver des plantes…",
+    "file.revert": "Revenir à la version d’ouverture…",
+    "tools": "Outils",
+    "edit.copy": "Copier",
+    "edit.paste": "Coller",
+    "file.rename": "Renommer…",
+    "view.background": "Fond de carte",
+    "file.saveAs": "Enregistrer sous…",
+    "edit.group": "Grouper",
+    "view.toolNames": "Noms des outils",
+    "file.save": "Enregistrer",
+    "file.export": "Exporter",
+    "view.backgroundNone": "Aucun",
+    "help.shortcuts": "Raccourcis clavier",
+    "view.backgroundSatellite": "Satellite",
+    "edit.bringToFront": "Mettre au premier plan",
+    "edit.lock": "Verrouiller",
+    "file.open": "Ouvrir un Design…",
+    "edit.selectAll": "Tout sélectionner",
+    "file.exportPlantingPlan": "Plan de plantation (PDF)…",
+    "edit.cut": "Couper"
   },
   "titleBar": {
-    "untitledDesign": "Planche sans titre",
-    "renameDesignName": "Renommer la planche",
-    "designNameInput": "Nom de la planche"
+    "untitledDesign": "Design sans titre",
+    "designNameInput": "Nom du Design",
+    "menus": "Menus",
+    "renameDesign": "Renommer le Design : {{name}}"
   },
   "about": {
     "title": "À propos de Canopi",
@@ -1143,9 +1161,17 @@
   "saveStatus": {
     "saving": "Enregistrement…",
     "saved": "Enregistré",
-    "error": "Échec de l'enregistrement",
+    "error": "Échec de l’enregistrement",
     "retry": "Réessayer",
-    "conflict": "Modifié hors de Canopi"
+    "conflict": "Modifié hors de Canopi",
+    "detailsUnknown": "Canopi n’a pas pu écrire le fichier.",
+    "detailsTitle": "Impossible d’enregistrer vos dernières modifications",
+    "detailsReason": "Canopi n’a pas pu écrire le fichier : {{reason}}",
+    "details": "Détails…",
+    "draft": "Brouillon",
+    "detailsSafe": "Votre travail reste en sécurité dans Canopi tant qu’il est ouvert. Réessayez, ou enregistrez-le ailleurs.",
+    "saveAs": "Enregistrer sous…",
+    "resolve": "Résoudre…"
   },
   "saveProblem": {
     "flushFailedTitle": "Impossible d'enregistrer vos modifications",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "Brouillons",
-    "delete": "Supprimer le brouillon : {{name}}",
-    "confirmDelete": "Supprimer ce brouillon ?",
-    "confirmDeleteAction": "Supprimer"
+    "confirmDelete": "Supprimer « {{name}} » ? Il n’a jamais été enregistré dans un fichier et ne pourra pas être récupéré.",
+    "confirmDeleteAction": "Supprimer le brouillon",
+    "intro": "Canopi garde chaque modification au fil du travail. Un Design jamais enregistré dans un fichier reste ici jusqu’à ce que vous l’enregistriez ou le supprimiez.",
+    "deleteItem": "Supprimer le brouillon…",
+    "neverSaved": "Brouillon, jamais enregistré dans un fichier",
+    "actions": "Actions pour {{name}}"
   },
   "plantFinder": {
     "label": "Trouver des plantes",
@@ -1283,5 +1312,66 @@
       "coverage": "{{cells}} cellules publiées",
       "noOutputs": "Rien de publié"
     }
+  },
+  "panelRail": {
+    "label": "Panneaux",
+    "canvas": "Carte du Design",
+    "layers": "Calques",
+    "data": "Bibliothèque de données",
+    "plants": "Plantes de ce Design",
+    "catalog": "Catalogue des plantes",
+    "favorites": "Favoris et planches",
+    "calendar": "Calendrier",
+    "budget": "Budget",
+    "consortium": "Consortium",
+    "notebook": "Carnet de Designs"
+  },
+  "start": {
+    "region": "Accueil",
+    "purpose": "Concevez agroforesterie et forêts nourricières sur la carte de votre terrain.",
+    "more": "Plus",
+    "searchDesigns": "Rechercher dans vos Designs",
+    "noMatches": "Aucun Design ne correspond à « {{query}} ».",
+    "recentDesigns": "Designs récents",
+    "footerDesktop": "Fonctionne hors ligne. Vos Designs restent sur cet ordinateur.",
+    "footerWeb": "Vos Designs restent dans ce navigateur. Téléchargez une copie pour garder un fichier.",
+    "plantCount": "{{plants}} plantes"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Maj",
+    "alt": "Alt",
+    "delete": "Suppr",
+    "escape": "Échap",
+    "enter": "Entrée"
+  },
+  "siteOnboarding": {
+    "locateTitle": "Où se trouve votre terrain ?",
+    "locateIntro": "Cherchez un lieu ou collez des coordonnées. La carte s’y rend ; rien n’est encore placé.",
+    "placeNamesCredit": "Noms de lieux © contributeurs OpenStreetMap",
+    "skip": "Passer, je le trouverai sur la carte",
+    "startTitle": "Commencez votre Design",
+    "closeStart": "Fermer Commencez votre Design",
+    "stepZone": "Tracez le contour de votre terrain avec une zone.",
+    "stepCatalog": "Trouvez des espèces dans le Catalogue des plantes, puis placez-les ou faites-en glisser une sur la carte.",
+    "stepSave": "Tout est conservé au fil du travail. Cliquez sur le nom en haut pour renommer le Design, puis Enregistrer sous… pour le garder dans un fichier.",
+    "openCatalog": "Ouvrir le catalogue",
+    "drawZone": "Tracer une zone",
+    "searchAgain": "Chercher à nouveau",
+    "noPlace": "Aucun lieu recherché"
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "toolsHeading": "{{menu}} (quand la carte a le focus)",
+    "escape": "Échap fait une chose à la fois : fermer un menu ou une boîte de dialogue, annuler le tracé en cours, revenir à Sélection, vider la sélection.",
+    "footnote": "Les touches d’outils fonctionnent quand la carte a le focus."
+  },
+  "settings": {
+    "title": "Réglages",
+    "appearance": "Apparence",
+    "theme": "Thème",
+    "language": "Langue",
+    "toolNames": "Noms des outils dans la barre",
+    "toolNamesHint": "Les noms et les touches restent affichés jusqu’à ce que vous ayez utilisé chaque outil une fois."
   }
 }

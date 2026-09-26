@@ -64,7 +64,13 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       DEFAULT_SETTINGS.plant_spacing_interval_m,
     ),
     last_view: readLastView(value.last_view),
+    used_canvas_tools: readStrings(value.used_canvas_tools),
+    tool_names_visible: typeof value.tool_names_visible === 'boolean' ? value.tool_names_visible : null,
   }
+}
+
+function readStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 function readEnum<T extends string>(

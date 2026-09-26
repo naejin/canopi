@@ -47,10 +47,6 @@ import {
   type SettledSceneReader,
 } from '../canvas/runtime/scene-runtime/transactions'
 import {
-  CANVAS_NOTICE_MARGIN_PX,
-  CANVAS_RULER_SIZE_PX,
-} from '../canvas/canvas-notice-layout'
-import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
 } from './support/scene-interaction-events'
@@ -3804,30 +3800,15 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('places the Plant Spacing HUD in the top-left safe canvas slot', () => {
+  it('places the Plant Spacing HUD in the tool card slot beside the tool rail', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
 
     session.setTool('plant-spacing')
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    const safeInset = CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX
-    expect(hud.style.left).toBe(`${safeInset}px`)
-    expect(hud.style.top).toBe(`${safeInset}px`)
-    session.dispose()
-  })
-
-  it('compacts the Plant Spacing HUD on constrained canvas sizes', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 180 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 96 })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-
-    session.setTool('plant-spacing')
-
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    expect(hud.dataset.compact).toBe('true')
-    expect(Number.parseFloat(hud.style.maxWidth)).toBeLessThan(240)
+    expect(hud.style.top).toBe('var(--chrome-rail-top, 72px)')
+    expect(hud.style.left).toBe('var(--canvas-tool-card-left, 76px)')
     expect(hud.textContent).toContain('Select a placed plant')
     session.dispose()
   })

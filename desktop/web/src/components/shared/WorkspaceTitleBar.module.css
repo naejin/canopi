@@ -1,0 +1,127 @@
+/* Floating title bar: glass over the full-bleed map, 50 px tall, inset from the window edges. */
+.titleBar {
+  position: absolute;
+  top: var(--chrome-top);
+  right: var(--chrome-inset);
+  left: var(--chrome-inset);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  height: var(--title-bar-height);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+  cursor: default;
+}
+
+.logo {
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.rule {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--space-3) var(--space-1);
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.design {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
+  min-width: 0;
+}
+
+.spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nameButton {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--control-size-xl);
+  padding: 0 var(--space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.nameButton:hover {
+  background: var(--color-control-hover);
+}
+
+.nameText {
+  display: block;
+  min-width: 0;
+  max-width: 440px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-title-bar);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nameInput {
+  width: min(360px, 40vw);
+  height: var(--control-size-xl);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-focus);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-focus);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-title-bar);
+  font-weight: 600;
+  outline: none;
+}
+
+.iconButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-size-2xl);
+  height: var(--control-size-2xl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--color-control-hover);
+}
+
+.iconButton[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.nameButton:focus-visible,
+.iconButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .nameText {
+    max-width: 22vw;
+  }
+}

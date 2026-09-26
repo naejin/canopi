@@ -57,6 +57,11 @@ pub struct Settings {
     pub plant_spacing_interval_m: f64,
     /// The camera view last shown on a Design; a new Design opens here.
     pub last_view: Option<LastView>,
+    /// Canvas tools used at least once on this device. The tool rail shows
+    /// names and keys until every tool is in this list.
+    pub used_canvas_tools: Vec<String>,
+    /// View › Tool names: `None` follows first use, `Some` is the user's choice.
+    pub tool_names_visible: Option<bool>,
 }
 
 /// A geographic camera view: WGS84 centre and MapLibre zoom.
@@ -89,6 +94,8 @@ impl Default for Settings {
             hillshade_opacity: 0.55,
             plant_spacing_interval_m: default_plant_spacing_interval_m(),
             last_view: None,
+            used_canvas_tools: Vec::new(),
+            tool_names_visible: None,
         }
     }
 }
@@ -173,6 +180,24 @@ mod tests {
 
             assert_eq!(settings.basemap_style, *style);
         }
+    }
+
+    #[test]
+    fn tool_rail_learning_defaults_to_names_and_round_trips() {
+        let defaults = Settings::default();
+        assert!(defaults.used_canvas_tools.is_empty());
+        assert_eq!(defaults.tool_names_visible, None);
+
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "used_canvas_tools": ["select", "polygon"],
+            "tool_names_visible": false
+        }))
+        .expect("tool rail settings should load");
+        assert_eq!(settings.used_canvas_tools, vec!["select", "polygon"]);
+        assert_eq!(settings.tool_names_visible, Some(false));
+        let value = serde_json::to_value(&settings).expect("settings should serialize");
+        assert_eq!(value["used_canvas_tools"], serde_json::json!(["select", "polygon"]));
+        assert_eq!(value["tool_names_visible"], serde_json::json!(false));
     }
 
     #[test]

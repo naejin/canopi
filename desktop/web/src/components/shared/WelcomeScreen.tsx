@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'preact/hooks'
 import { t } from '../../i18n'
-import { locale } from '../../app/settings/state'
 import {
   newDesignAction,
   openDesign,
@@ -9,10 +8,12 @@ import {
 } from '../../app/document-session/actions'
 import { createDesignDraftsController } from '../../app/design-drafts'
 import { createRecentFilesController } from '../../app/recent-files'
-import { DraftList } from './DraftList'
-import { formatRelativeDate } from './relative-date'
-import styles from './WelcomeScreen.module.css'
+import { openKeyboardShortcutsDialog, openSettingsDialog } from '../../app/shell/dialogs'
+import { openProblemReportDialog } from '../../app/problem-report/submission'
+import { formatShortcut } from '../../app/shell-commands/shortcut-text'
+import { StartScreen } from './StartScreen'
 
+/** Desktop start screen: recent Design files and Design Drafts from app data. */
 export function WelcomeScreen() {
   const recentFilesController = useMemo(() => createRecentFilesController(), [])
   const draftsController = useMemo(() => createDesignDraftsController(), [])
@@ -26,84 +27,31 @@ export function WelcomeScreen() {
     }
   }, [recentFilesController, draftsController])
 
-  const recentFiles = recentFilesController.recentFiles.value
-  const drafts = draftsController.drafts.value
-
   return (
-    <div className={styles.welcome} role="region" aria-label={t('canvas.emptyWelcome')}>
-      <div className={styles.hero}>
-        <img
-          src={new URL('../../assets/canopi-logo.svg', import.meta.url).href}
-          className={styles.logo}
-          alt="Canopi"
-          draggable={false}
-        />
-
-        <div className={styles.actions}>
-          <button
-            className={styles.primaryBtn}
-            type="button"
-            onClick={() => { void newDesignAction() }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            {t('canvas.emptyNewDesign')}
-          </button>
-          <button
-            className={styles.secondaryBtn}
-            type="button"
-            onClick={() => { void openDesign() }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 13h12M2 4h5l2 2h5v6H2V4z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {t('canvas.emptyOpenDesign')}
-          </button>
-        </div>
-      </div>
-
-      <DraftList
-        drafts={drafts.map((draft) => ({
-          id: draft.id,
-          name: draft.name,
-          updatedAt: draft.updated_at,
-        }))}
-        locale={locale.value}
-        onOpen={(id) => { void openDesignDraft(id).catch(logWelcomeError) }}
-        onDelete={(id) => { void draftsController.remove(id).catch(logWelcomeError) }}
-      />
-
-      {recentFiles.length > 0 && (
-        <div className={styles.recentSection}>
-          <h2 className={styles.recentTitle}>{t('canvas.emptyRecentFiles')}</h2>
-          <ul className={styles.recentList}>
-            {recentFiles.map((file) => (
-              <li key={file.path}>
-                <button
-                  className={styles.recentItem}
-                  type="button"
-                  onClick={() => { void openDesignFromPath(file.path) }}
-                  title={file.path}
-                >
-                  <svg className={styles.recentIcon} width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-                    <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
-                  </svg>
-                  <div className={styles.recentInfo}>
-                    <span className={styles.recentName}>{file.name}</span>
-                    <span className={styles.recentMeta}>
-                      {formatRelativeDate(file.updated_at, locale.value)}
-                      {file.plant_count > 0 && ` · ${file.plant_count} plants`}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    <StartScreen
+      newDesign={{ label: t('menu.file.new'), shortcut: formatShortcut('Ctrl+N', t), run: () => { void newDesignAction().catch(logWelcomeError) } }}
+      openDesign={{ label: t('menu.file.open'), shortcut: formatShortcut('Ctrl+O', t), run: () => { void openDesign().catch(logWelcomeError) } }}
+      links={[
+        { icon: 'gear', label: t('menu.file.settings'), run: openSettingsDialog },
+        { icon: 'keyboard', label: t('menu.help.shortcuts'), run: openKeyboardShortcutsDialog },
+        { icon: 'bug', label: t('menu.help.reportProblem'), run: openProblemReportDialog },
+      ]}
+      footer={t('start.footerDesktop')}
+      recent={recentFilesController.recentFiles.value.map((file) => ({
+        id: file.path,
+        name: file.name,
+        plantCount: file.plant_count,
+        updatedAt: file.updated_at,
+        open: () => { void openDesignFromPath(file.path).catch(logWelcomeError) },
+      }))}
+      drafts={draftsController.drafts.value.map((draft) => ({
+        id: draft.id,
+        name: draft.name,
+        updatedAt: draft.updated_at,
+        open: () => { void openDesignDraft(draft.id).catch(logWelcomeError) },
+        delete: () => { void draftsController.remove(draft.id).catch(logWelcomeError) },
+      }))}
+    />
   )
 }
 

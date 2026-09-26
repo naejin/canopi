@@ -66,6 +66,8 @@ export interface CanvasToolCommandSurface {
 export interface CanvasViewportCommandSurface {
   zoomIn(): void
   zoomOut(): void
+  /** Multiply the scale about the screen centre (camera only). */
+  zoomBy(factor: number): void
   zoomToFit(): void
   returnToDesign(): void
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean

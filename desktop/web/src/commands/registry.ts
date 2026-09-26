@@ -13,6 +13,7 @@ export {
 } from './graph'
 export type {
   AppCommandGraphPanelCommand,
+  AppCommandGraphTitleBarCommand,
   AppCommandGraphToolbarActionCommand,
   AppCommandGraphToolbarToolCommand,
   MenuAction,

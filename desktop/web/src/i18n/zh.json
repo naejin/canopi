@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "植物数据库",
-    "canvas": "设计画布",
-    "designNotebook": "设计笔记本",
     "favorites": "收藏夹"
   },
   "webShell": {
-    "commands": "网页版命令",
     "panels": "网页版面板",
     "workspace": "网页版工作区",
-    "openCanopi": "打开 .canopi",
-    "downloadCanopi": "下载 .canopi",
-    "dismissNotice": "关闭"
+    "openCanopi": "打开 .canopi 文件…",
+    "downloadCanopi": "下载副本",
+    "dismissNotice": "关闭",
+    "downloadCopy": "下载副本",
+    "savedInBrowser": "已保存在此浏览器中",
+    "openCanopiFile": "打开 .canopi 文件"
   },
   "designNotebook": {
     "title": "设计笔记本",
@@ -89,32 +89,20 @@
       "panHint": "预览。拖动或使用方向键浏览；按住 Shift 可移动更远。",
       "recenter": "居中到画布视图"
     },
-    "emptyWelcome": "开始您的设计",
-    "emptyNewDesign": "新建设计",
-    "emptyOpenDesign": "打开设计",
-    "emptyRecentFiles": "最近文件",
     "toolbar": "工具",
     "tools": {
       "select": "选择",
-      "selectDesc": "点击选择对象",
-      "hand": "手形",
-      "handDesc": "平移画布",
-      "rectangle": "矩形",
-      "rectangleDesc": "绘制矩形区域",
-      "ellipse": "椭圆",
-      "ellipseDesc": "绘制椭圆区域",
-      "polygon": "多边形",
-      "polygonDesc": "绘制多边形区域",
-      "line": "线条",
-      "lineDesc": "绘制线性区域",
-      "text": "文本",
-      "textDesc": "添加文字标签",
-      "objectStamp": "对象图章",
-      "objectStampDesc": "复制现有设计对象",
-      "plantSpacing": "植物间距",
-      "plantSpacingDesc": "沿间距参考线重复已放置的植物",
-      "measurementGuide": "测量参考线",
-      "measurementGuideDesc": "放置常显的距离参考线"
+      "hand": "平移",
+      "rectangle": "矩形区域",
+      "ellipse": "椭圆区域",
+      "polygon": "多边形区域",
+      "line": "线形区域",
+      "text": "文本注释",
+      "objectStamp": "放置图章",
+      "plantSpacing": "种一行",
+      "measurementGuide": "测量",
+      "zones": "区域",
+      "plantStamp": "放置植物"
     },
     "plantSpacing": {
       "selectSource": "选择已放置的植物",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "网格",
-      "gridDesc": "显示/隐藏网格",
       "snapToGrid": "吸附网格",
-      "snapToGridDesc": "将图形对齐到网格交叉点",
       "rulers": "标尺",
-      "rulersDesc": "显示/隐藏标尺",
       "zoom": "缩放"
     },
     "overview": {
-      "label": "概览",
-      "zoomInToEdit": "放大以编辑",
+      "zoomInToEdit": "放大以编辑。此比例下植物已隐藏。",
       "returnToDesign": "返回设计",
-      "design": "设计",
-      "designMarker": "返回设计"
+      "designPin": "设计：{{name}}"
     },
     "plantColor": {
       "label": "植物颜色",
@@ -211,21 +194,22 @@
       "applySelection": "应用于所选的 {{count}} 个"
     },
     "placeSearch": {
-      "open": "搜索地点",
-      "placeholder": "地名或纬度, 经度",
+      "placeholder": "搜索地点或坐标",
       "searching": "正在搜索…",
       "noResults": "未找到地点",
       "error": "地点搜索失败",
       "results": "地点",
-      "emptyPrompt": "搜索你的场地"
+      "placeholderShort": "搜索地点",
+      "east": "东经",
+      "north": "北纬",
+      "clear": "清除搜索",
+      "south": "南纬",
+      "coordinates": "{{northSouth}}{{lat}}°，{{eastWest}}{{lon}}°",
+      "west": "西经",
+      "goStraightThere": "坐标 · 直接前往"
     },
     "file": {
-      "new": "新建设计",
-      "open": "打开设计",
-      "save": "保存",
-      "saveAs": "另存为",
-      "cancel": "取消",
-      "revert": "恢复到打开时的版本"
+      "cancel": "取消"
     },
     "layers": {
       "layerPanel": "图层",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "没有密钥时，Canopi 使用 Google 的公开卫星瓦片。添加您的 Google Maps API 密钥即可使用官方 Map Tiles API。"
-    }
+    },
+    "zoom": {
+      "scaleBar": "比例尺：{{distance}}",
+      "chooseScale": "地图比例 {{scale}}。选择比例",
+      "mapScale": "地图比例"
+    },
+    "viewChip": "视图"
   },
   "worldMap": {
     "title": "世界地图",
@@ -592,18 +582,11 @@
     "filterByStyle": "按风格筛选",
     "openTemplate": "作为新设计打开"
   },
-  "status": {
-    "language": "语言",
-    "theme": "主题"
-  },
   "theme": {
     "light": "浅色",
     "dark": "深色"
   },
   "commands": {
-    "plantDb": "前往植物数据库",
-    "canvas": "前往设计画布",
-    "toggleTheme": "切换主题",
     "commandPalette": "命令面板",
     "searchPlaceholder": "输入命令...",
     "noResults": "未找到命令"
@@ -781,21 +764,56 @@
     "file": "文件",
     "edit": "编辑",
     "view": "视图",
-    "file.exit": "退出",
+    "file.exit": "退出 Canopi",
     "edit.undo": "撤销",
     "edit.redo": "重做",
     "view.zoomIn": "放大",
     "view.zoomOut": "缩小",
-    "view.fitToContent": "适应内容",
     "view.searchPlace": "搜索地点…",
     "help": "帮助",
-    "help.reportProblem": "报告问题",
-    "help.aboutCanopi": "关于 Canopi"
+    "help.reportProblem": "报告问题…",
+    "help.aboutCanopi": "关于 Canopi",
+    "edit.duplicate": "复制一份",
+    "edit.delete": "删除",
+    "file.settings": "设置…",
+    "edit.ungroup": "取消编组",
+    "edit.sendToBack": "置于底层",
+    "edit.arrange": "排列",
+    "edit.selectSameSpecies": "选择此物种的全部植物",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "解锁",
+    "view.darkTheme": "深色主题",
+    "edit.saveAsStamp": "保存为图章",
+    "view.fitToDesign": "适应设计",
+    "file.new": "新建设计",
+    "view.backgroundMap": "地图",
+    "edit.findPlants": "查找植物…",
+    "file.revert": "恢复到打开时的版本…",
+    "tools": "工具",
+    "edit.copy": "复制",
+    "edit.paste": "粘贴",
+    "file.rename": "重命名…",
+    "view.background": "底图",
+    "file.saveAs": "另存为…",
+    "edit.group": "编组",
+    "view.toolNames": "工具名称",
+    "file.save": "保存",
+    "file.export": "导出",
+    "view.backgroundNone": "无",
+    "help.shortcuts": "键盘快捷键",
+    "view.backgroundSatellite": "卫星",
+    "edit.bringToFront": "置于顶层",
+    "edit.lock": "锁定",
+    "file.open": "打开设计…",
+    "edit.selectAll": "全选",
+    "file.exportPlantingPlan": "种植方案（PDF）…",
+    "edit.cut": "剪切"
   },
   "titleBar": {
     "untitledDesign": "未命名设计",
-    "renameDesignName": "重命名设计",
-    "designNameInput": "设计名称"
+    "designNameInput": "设计名称",
+    "menus": "菜单",
+    "renameDesign": "重命名设计：{{name}}"
   },
   "about": {
     "title": "关于 Canopi",
@@ -1145,7 +1163,15 @@
     "saved": "已保存",
     "error": "无法保存",
     "retry": "重试",
-    "conflict": "已在 Canopi 外部更改"
+    "conflict": "已在 Canopi 外部更改",
+    "detailsUnknown": "Canopi 无法写入文件。",
+    "detailsTitle": "无法保存你最近的更改",
+    "detailsReason": "Canopi 无法写入文件：{{reason}}",
+    "details": "详情…",
+    "draft": "草稿",
+    "detailsSafe": "Canopi 保持打开时，你的工作是安全的。请重试，或保存到其他位置。",
+    "saveAs": "另存为…",
+    "resolve": "解决…"
   },
   "saveProblem": {
     "flushFailedTitle": "无法保存您的更改",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "草稿",
-    "delete": "删除草稿：{{name}}",
-    "confirmDelete": "删除此草稿？",
-    "confirmDeleteAction": "删除"
+    "confirmDelete": "删除“{{name}}”？它从未保存为文件，删除后无法恢复。",
+    "confirmDeleteAction": "删除草稿",
+    "intro": "Canopi 会在你工作时保留每一处更改。从未保存为文件的设计会留在这里，直到你保存或删除它。",
+    "deleteItem": "删除草稿…",
+    "neverSaved": "草稿，从未保存为文件",
+    "actions": "{{name}} 的操作"
   },
   "plantFinder": {
     "label": "查找植物",
@@ -1283,5 +1312,66 @@
       "coverage": "已发布 {{cells}} 个像元",
       "noOutputs": "未发布任何内容"
     }
+  },
+  "panelRail": {
+    "label": "面板",
+    "canvas": "设计画布",
+    "layers": "图层",
+    "data": "数据库",
+    "plants": "此设计中的植物",
+    "catalog": "植物目录",
+    "favorites": "收藏与图章",
+    "calendar": "日历",
+    "budget": "预算",
+    "consortium": "联合体",
+    "notebook": "设计笔记本"
+  },
+  "start": {
+    "region": "开始",
+    "purpose": "在你土地的地图上设计农林复合系统和食物森林。",
+    "more": "更多",
+    "searchDesigns": "搜索你的设计",
+    "noMatches": "没有与“{{query}}”匹配的设计。",
+    "recentDesigns": "最近的设计",
+    "footerDesktop": "可离线使用。你的设计保存在这台电脑上。",
+    "footerWeb": "你的设计保存在此浏览器中。下载副本即可保留文件。",
+    "plantCount": "{{plants}} 株植物"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "delete": "Del",
+    "escape": "Esc",
+    "enter": "Enter"
+  },
+  "siteOnboarding": {
+    "locateTitle": "你的场地在哪里？",
+    "locateIntro": "搜索地点或粘贴坐标。地图会移到那里，但还不会放置任何东西。",
+    "placeNamesCredit": "地名 © OpenStreetMap 贡献者",
+    "skip": "跳过，我会在地图上找",
+    "startTitle": "开始你的设计",
+    "closeStart": "关闭“开始你的设计”",
+    "stepZone": "用一个区域画出你的土地轮廓。",
+    "stepCatalog": "在植物目录中找到物种，然后放置或将其拖到地图上。",
+    "stepSave": "你的所有工作都会被保留。点击顶部的名称可重命名设计，用“另存为…”将其保存为文件。",
+    "openCatalog": "打开植物目录",
+    "drawZone": "绘制区域",
+    "searchAgain": "重新搜索",
+    "noPlace": "未搜索地点"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "toolsHeading": "{{menu}}（地图获得焦点时）",
+    "escape": "Esc 每次只做一件事：关闭菜单或对话框，取消正在绘制的内容，回到选择工具，清除选择。",
+    "footnote": "工具按键在地图获得焦点时生效。"
+  },
+  "settings": {
+    "title": "设置",
+    "appearance": "外观",
+    "theme": "主题",
+    "language": "语言",
+    "toolNames": "在工具栏显示工具名称",
+    "toolNamesHint": "在你用过每个工具一次之前，会显示名称和按键。"
   }
 }

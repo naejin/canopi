@@ -409,7 +409,7 @@ describe('document replacement actions', () => {
     expect(designName.value).toBe('Untitled')
     expect(designPath.value).toBe(null)
     expect(designContinuousSave.readHome()).toMatchObject({ kind: 'draft' })
-    expect(designContinuousSave.status.value).toBe('saved')
+    expect(designContinuousSave.status.value).toBe('draft')
   })
 
   it('saves the canonical document snapshot to its file when no canvas session is mounted', async () => {

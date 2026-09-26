@@ -1,13 +1,10 @@
-import {
-  canvasCommandIntentForShortcut,
-  type CanvasCommandShortcutInput,
-} from '../app/canvas-commands'
+import { canvasCommandDefinitionForShortcut } from '../app/canvas-commands'
 import { saveProblem } from '../app/document-session/save-problem'
-import { isPlaceSearchShortcut, openPlaceSearch } from '../app/geocoding/place-search-ui'
 import { runFindPlantsShortcut } from '../app/plant-finder/focus'
-import { getCurrentCanvasSession } from '../canvas/session'
+import { matchShellCommandShortcut, type ShellCommandState } from '../app/shell-commands'
+import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
 import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
-import { dispatchCurrentWebCanvasCommandIntent } from './canvas-command-adapter'
+import { BROWSER_RESERVED_SHORTCUTS, type BrowserShellCatalog } from './browser-shell-commands'
 
 interface WebCanvasShortcutInstallation {
   readonly target: Window
@@ -15,24 +12,40 @@ interface WebCanvasShortcutInstallation {
   dispose(): void
 }
 
+export interface WebShellShortcutSource {
+  readonly catalog: BrowserShellCatalog
+  readState(): ShellCommandState
+}
+
 let activeInstallation: WebCanvasShortcutInstallation | null = null
 
-export function installWebCanvasShortcuts(target: Window = window): () => void {
+/**
+ * Web Edition keyboard routing: Ctrl F for the open panel's plant finder,
+ * shell shortcuts the browser lets a page keep (Ctrl O, Ctrl S, F1, F2,
+ * Ctrl ,), then canvas commands. Canvas keys never
+ * act inside a text field unless the command says so (Ctrl K).
+ */
+export function installWebCanvasShortcuts(
+  target: Window = window,
+  shell: WebShellShortcutSource | null = null,
+): () => void {
   activeInstallation?.dispose()
 
   const handler = (event: KeyboardEvent): void => {
     // The save dialog is modal: no shortcut may change the Design under it.
     if (saveProblem.peek() !== null) return
+    // Ctrl F belongs to the open panel's plant finder, even while a field has focus.
     if (runFindPlantsShortcut(event)) return
-    if (isEditableTarget(event.target)) return
-    if (isPlaceSearchShortcut(event)) {
-      if (!getCurrentCanvasSession()) return
-      openPlaceSearch()
+    const shellCommand = shell ? matchShellCommandShortcut(shell.catalog, event) : null
+    if (shellCommand?.shortcut && !BROWSER_RESERVED_SHORTCUTS.has(shellCommand.shortcut)) {
       event.preventDefault()
+      if (!shellCommand.isExecutionDisabled(shell!.readState())) shellCommand.execute()
       return
     }
-    const intent = canvasCommandIntentForShortcut(shortcutInput(event))
-    if (!intent || !dispatchCurrentWebCanvasCommandIntent(intent)) return
+    const definition = canvasCommandDefinitionForShortcut(event)
+    if (!definition) return
+    if (isEditableTarget(event.target) && !definition.worksInTextFields) return
+    if (!dispatchWorkspaceCanvasIntent(definition.intent)) return
     event.preventDefault()
   }
   let disposed = false
@@ -51,16 +64,6 @@ export function installWebCanvasShortcuts(target: Window = window): () => void {
 
 export function disposeWebCanvasShortcuts(): void {
   activeInstallation?.dispose()
-}
-
-function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
-  return {
-    key: event.key,
-    ctrlKey: event.ctrlKey,
-    metaKey: event.metaKey,
-    shiftKey: event.shiftKey,
-    altKey: event.altKey,
-  }
 }
 
 if (import.meta.hot) {

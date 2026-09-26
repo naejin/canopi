@@ -1,3 +1,4 @@
+import { projectBrowserShellForTest } from './support/browser-shell-projection'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,35 +30,29 @@ import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
 import { locale, theme } from '../app/settings/state'
 import {
   installSettingsProjection,
-  mutateSettingsProjection,
   resetSettingsProjectionForTests,
 } from '../app/settings/projection'
 import type { Settings } from '../types/settings'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { BrowserAppShell } from '../web/BrowserAppShell'
-import { createBrowserShellCommandProjection } from '../web/browser-shell-commands'
 import { WebApp } from '../web/WebApp'
+import { SettingsDialog } from '../components/shared/SettingsDialog'
 import { editDesignSessionForTest } from './support/design-session-edit'
 
-function commandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-command-id]'))
-    .map((element) => element.dataset.webCommandId ?? '')
-}
-
 function panelBarCommandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-panelbar-command-id]'))
-    .map((element) => element.dataset.webPanelbarCommandId ?? '')
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-panel-rail] [data-command-id]'))
+    .map((element) => element.dataset.commandId ?? '')
 }
 
 function panelBarLabels(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('[data-web-panelbar-command-id]'))
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('[data-panel-rail] [data-command-id]'))
     .map((button) => button.getAttribute('aria-label') ?? '')
 }
 
 function panelBarButton(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-panelbar-command-id="${id}"]`)
-  if (!button) throw new Error(`Missing panel bar command ${id}`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-panel-rail] [data-command-id="${id}"]`)
+  if (!button) throw new Error(`Missing panel rail command ${id}`)
   return button
 }
 
@@ -81,6 +76,8 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     hillshade_opacity: 0.55,
     plant_spacing_interval_m: 0.5,
     last_view: null,
+    used_canvas_tools: [],
+    tool_names_visible: null,
     ...overrides,
   }
 }
@@ -92,7 +89,7 @@ function shellCommandProjection({
   readonly templatesEnabled?: boolean
   readonly downloadCanopiEnabled?: boolean
 } = {}) {
-  return createBrowserShellCommandProjection({
+  return projectBrowserShellForTest({
     currentPanel: activePanel.value,
     currentSidePanel: sidePanel.value,
     downloadCanopiEnabled,
@@ -107,11 +104,6 @@ function shellCommandProjection({
       importGeoJson: () => undefined,
       exportGeoJson: () => undefined,
       navigate: navigateTo,
-      toggleTheme: () => {
-        mutateSettingsProjection((settings) => {
-          settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-        }, { persist: 'immediate' })
-      },
     },
   })
 }
@@ -149,29 +141,26 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
-      'file.revert',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
       'file.importGeoJson',
-      'file.exportGeoJson',
+      'app.settings',
     ])
-    expect(container.textContent).toContain('Open .canopi')
-    expect(container.textContent).toContain('Download .canopi')
+    expect(container.textContent).toContain('Open a .canopi file…')
+    expect(container.textContent).toContain('Download a copy')
+    expect(container.textContent).not.toContain('Quit')
     expect(container.querySelector('[data-testid="browser-drafts-list"]')).toBeNull()
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
-    expect(commandIds(container)).toContain('view.toggleTheme')
-    expect(commandIds(container)).not.toContain('settings.theme')
+    expect(container.querySelector('button[aria-label="Open a .canopi file"]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
-      'nav.canvas',
-      'nav.speciesKey',
-      'nav.data',
       'nav.layers',
+      'nav.data',
+      'nav.speciesKey',
+      'nav.plantDb',
+      'nav.favorites',
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
-      'nav.plantDb',
-      'nav.favorites',
     ])
   })
 
@@ -181,11 +170,11 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     expect(container.querySelector('img[alt="Canopi"]')).not.toBeNull()
-    expect(Array.from(container.querySelectorAll('[data-web-menu-id]')).map((element) => element.textContent)).toEqual([
-      'File',
+    expect(Array.from(container.querySelectorAll('[data-menu-id]')).map((element) => element.textContent)).toEqual([
+      'File', 'Edit', 'View', 'Tools', 'Help',
     ])
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector<HTMLButtonElement>('[data-web-theme-control]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Keyboard shortcuts"]')?.getAttribute('aria-keyshortcuts')).toBe('F1')
+    expect(container.querySelector('button[aria-label="Settings…"]')).not.toBeNull()
   })
 
   it('groups web-safe top bar commands in desktop-like menus', async () => {
@@ -195,8 +184,6 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[role="menubar"]')).not.toBeNull()
     expect(menuTrigger(container, 'file').textContent).toBe('File')
-    expect(container.querySelector('[data-web-locale-control]')?.textContent).toContain('EN')
-    expect(container.querySelector('[data-web-theme-control]')).not.toBeNull()
 
     await act(async () => {
       menuTrigger(container, 'file').click()
@@ -205,11 +192,11 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
-      'file.revert',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
       'file.importGeoJson',
-      'file.exportGeoJson',
+      'app.settings',
     ])
   })
 
@@ -224,11 +211,11 @@ describe('Web Edition Browser App Shell', () => {
     expect(openMenuCommandIds(container)).toEqual([
       'file.new',
       'file.openCanopi',
-      'file.revert',
+      'file.rename',
       'file.downloadCanopi',
-      'file.exportCanvasPdf',
+      'file.revert',
       'file.importGeoJson',
-      'file.exportGeoJson',
+      'app.settings',
     ])
 
     await act(async () => {
@@ -255,10 +242,10 @@ describe('Web Edition Browser App Shell', () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
-    expect(commandIds(container)).toContain('nav.templates')
+    expect(panelBarCommandIds(container)).toContain('nav.templates')
 
     await act(async () => {
-      clickCommand(container, 'nav.templates')
+      panelBarButton(container, 'nav.templates').click()
     })
 
     expect(activePanel.value).toBe('templates')
@@ -270,30 +257,30 @@ describe('Web Edition Browser App Shell', () => {
       render(<BrowserAppShell commandProjection={shellCommandProjection({ templatesEnabled: true })} />, container)
     })
 
-    expect(container.querySelector('[data-testid="web-panel-bar"]')).not.toBeNull()
+    expect(container.querySelector('[data-panel-rail]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.canvas',
       'nav.templates',
-      'nav.speciesKey',
-      'nav.data',
       'nav.layers',
+      'nav.data',
+      'nav.speciesKey',
+      'nav.plantDb',
+      'nav.favorites',
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
-      'nav.plantDb',
-      'nav.favorites',
     ])
     expect(panelBarLabels(container)).toEqual([
-      'Design Canvas',
+      'Design canvas',
       'World Map',
-      'Plants in this Design',
-      'Data Library',
       'Layers',
+      'Data library',
+      'Plants in this Design',
+      'Plant catalog',
+      'Favorites and stamps',
       'Calendar',
       'Budget',
       'Consortium',
-      'Plant Database',
-      'Favorites',
     ])
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()
@@ -332,7 +319,7 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-workspace-composition]')).not.toBeNull()
     expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBe('true')
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
-    expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-pressed')).toBe('true')
+    expect(panelBarButton(container, 'nav.plantDb').getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
@@ -340,7 +327,7 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).toBeNull()
     expect(container.querySelector('[data-workspace-side-panel="favorites"]')).not.toBeNull()
-    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('true')
+    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
       panelBarButton(container, 'nav.favorites').click()
@@ -348,10 +335,10 @@ describe('Web Edition Browser App Shell', () => {
 
     expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
     expect(container.querySelector('[data-workspace-composition]')?.getAttribute('data-workspace-sidebar-open')).toBeNull()
-    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-pressed')).toBe('false')
+    expect(panelBarButton(container, 'nav.favorites').getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('allocates the larger responsive dock variant only to planning panels', async () => {
+  it('opens Budget and Consortium in the wider dock and every other panel at the default width', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
@@ -366,11 +353,11 @@ describe('Web Edition Browser App Shell', () => {
 
     await act(async () => { panelBarButton(container, 'nav.budget').click() })
     expect(container.querySelector('[data-workspace-side-panel="budget"]')).not.toBeNull()
-    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('large')
+    expect(container.querySelector('[data-dock-width]')?.getAttribute('data-dock-width')).toBe('wide')
 
     await act(async () => { panelBarButton(container, 'nav.plantDb').click() })
     expect(container.querySelector('[data-workspace-side-panel="plant-db"]')).not.toBeNull()
-    expect(container.querySelector('[data-responsive-size]')?.getAttribute('data-responsive-size')).toBe('default')
+    expect(container.querySelector('[data-dock-width]')?.getAttribute('data-dock-width')).toBe('default')
   })
 
   it('preserves the canvas across side panels and releases it for the Templates primary route', async () => {
@@ -439,9 +426,8 @@ describe('Web Edition Browser App Shell', () => {
       importGeoJson: vi.fn(),
       exportGeoJson: vi.fn(),
       navigate: vi.fn(),
-      toggleTheme: vi.fn(),
     }
-    const commandProjection = createBrowserShellCommandProjection({
+    const commandProjection = projectBrowserShellForTest({
       currentPanel: 'canvas',
       currentSidePanel: null,
       downloadCanopiEnabled: true,
@@ -459,12 +445,9 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.downloadCanopi')
     await clickShellCommand(container, 'file.importGeoJson')
     await clickShellCommand(container, 'file.exportGeoJson')
-    await clickThemeControl(container)
-    await selectLocale(container, 'fr')
     await act(async () => {
-      clickCommand(container, 'nav.plantDb')
-      clickCommand(container, 'nav.favorites')
-      clickCommand(container, 'nav.canvas')
+      panelBarButton(container, 'nav.plantDb').click()
+      panelBarButton(container, 'nav.favorites').click()
     })
 
     expect(capabilities.newDesign).toHaveBeenCalledOnce()
@@ -472,13 +455,10 @@ describe('Web Edition Browser App Shell', () => {
     expect(capabilities.downloadCanopi).toHaveBeenCalledOnce()
     expect(capabilities.importGeoJson).toHaveBeenCalledOnce()
     expect(capabilities.exportGeoJson).toHaveBeenCalledOnce()
-    expect(capabilities.toggleTheme).toHaveBeenCalledOnce()
     expect(capabilities.navigate.mock.calls).toEqual([
       ['plant-db'],
       ['favorites'],
-      ['canvas'],
     ])
-    expect(locale.value).toBe('fr')
   })
 
   it('persists the browser theme command through the Settings Projection', async () => {
@@ -508,7 +488,7 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await act(async () => {
-      render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
+      render(<><BrowserAppShell commandProjection={shellCommandProjection()} /><SettingsDialog /></>, container)
     })
     await selectLocale(container, 'fr')
 
@@ -542,25 +522,25 @@ describe('Web Edition Browser App Shell', () => {
     await clickShellCommand(container, 'file.new')
 
     await act(async () => {
-      const titleButton = container.querySelector<HTMLButtonElement>('[data-web-design-title-button]')
+      const titleButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Rename Design: "]')
       if (!titleButton) throw new Error('Missing rename title button')
-      titleButton.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      titleButton.click()
     })
     await act(async () => {
-      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      const input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
       if (!input) throw new Error('Missing rename title input')
       input.value = 'Terrace Garden'
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {
-      const input = container.querySelector<HTMLInputElement>('[data-web-design-title-input]')
+      const input = container.querySelector<HTMLInputElement>('input[aria-label="Design name"]')
       if (!input) throw new Error('Missing rename title input')
       input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
     expect(store.readDesignName()).toBe('Terrace Garden')
     expect(store.readCurrentDesign()?.name).toBe('Terrace Garden')
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Terrace Garden')
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')?.textContent).toBe('Terrace Garden')
     await act(async () => {
       await controller.continuousSave.flush()
     })
@@ -591,13 +571,13 @@ describe('Web Edition Browser App Shell', () => {
     })
 
     await openCommandMenu(container, 'file.downloadCanopi')
-    expect(commandButton(container, 'file.downloadCanopi').disabled).toBe(true)
+    expect(commandButton(container, 'file.downloadCanopi').getAttribute('aria-disabled')).toBe('true')
 
     await clickShellCommand(container, 'file.new')
 
     await openCommandMenu(container, 'file.downloadCanopi')
     const download = commandButton(container, 'file.downloadCanopi')
-    expect(download.disabled).toBe(false)
+    expect(download.getAttribute('aria-disabled')).toBeNull()
 
     await act(async () => {
       download.click()
@@ -628,26 +608,27 @@ describe('Web Edition Browser App Shell', () => {
       )
     })
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Canopi')
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')).toBeNull()
     expect(container.querySelector('[data-save-status]')).toBeNull()
 
     await clickShellCommand(container, 'file.new')
 
-    expect(container.querySelector('[data-web-design-title]')?.textContent).toBe('Untitled Design')
-    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saved')
+    expect(container.querySelector('button[aria-label^="Rename Design: "]')?.textContent).toBe('Untitled Design')
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
+    expect(container.querySelector('[data-save-status] button')?.textContent).toBe('Download a copy')
 
     storage.failWrites = true
     await act(async () => {
       editDesignSessionForTest(store, (design) => ({ ...design, description: 'Browser edit' }))
     })
-    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saving…')
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
 
     await act(async () => {
       await controller.continuousSave.flush()
     })
     const status = container.querySelector('[data-save-status]')
     expect(status?.getAttribute('data-save-status')).toBe('error')
-    expect(status?.textContent).toContain("Couldn't save")
+    expect(status?.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t save')
 
     storage.failWrites = false
     await act(async () => {
@@ -655,20 +636,21 @@ describe('Web Edition Browser App Shell', () => {
       await Promise.resolve()
     })
     await act(async () => {
+      Array.from(status?.querySelectorAll<HTMLButtonElement>('[role="dialog"] button') ?? [])
+        .find((button) => button.textContent === 'Retry')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
       await controller.continuousSave.flush()
     })
-    expect(container.querySelector('[data-save-status]')?.textContent).toBe('Saved')
+    expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
     expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
   })
 })
 
-function clickCommand(container: HTMLElement, id: string): void {
-  ensureCommandMenuOpen(container, id)
-  commandButton(container, id).click()
-}
-
 async function clickShellCommand(container: HTMLElement, id: string): Promise<void> {
   await openCommandMenu(container, id)
+  if (id === 'file.exportGeoJson' || id === 'file.exportCanvasPdf') await openExportSubmenu(container)
   await act(async () => {
     commandButton(container, id).click()
   })
@@ -689,25 +671,35 @@ function ensureCommandMenuOpen(container: HTMLElement, id: string): void {
   }
 }
 
+/** Export ▸ items live in a submenu; hovering its parent opens it. */
+async function openExportSubmenu(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    container.querySelector('[data-submenu-id="submenu.export"]')!
+      .parentElement!.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+  })
+}
+
 function menuIdForCommand(id: string): string | null {
-  if (id.startsWith('file.')) return 'file'
+  if (id.startsWith('file.') || id === 'app.settings') return 'file'
+  if (id.startsWith('view.')) return 'view'
   return null
 }
 
 async function clickThemeControl(container: HTMLElement): Promise<void> {
-  await act(async () => {
-    commandButton(container, 'view.toggleTheme').click()
-  })
+  await clickShellCommand(container, 'view.toggleTheme')
 }
 
 async function selectLocale(container: HTMLElement, code: string): Promise<void> {
-  const picker = container.querySelector<HTMLElement>('[data-web-locale-control]')
-  if (!picker) throw new Error('Missing locale control')
+  const names: Record<string, string> = { fr: 'Français', en: 'English' }
   await act(async () => {
-    picker.querySelector<HTMLButtonElement>('button')?.click()
+    container.querySelector<HTMLButtonElement>('button[aria-label="Settings…"]')!.click()
   })
-  const option = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
-    .find((button) => button.textContent === code.toUpperCase())
+  await act(async () => {
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.getAttribute('aria-haspopup') === 'listbox')!.click()
+  })
+  const option = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    .find((button) => button.textContent === names[code])
   if (!option) throw new Error(`Missing locale option ${code}`)
   await act(async () => {
     option.click()
@@ -715,20 +707,20 @@ async function selectLocale(container: HTMLElement, code: string): Promise<void>
 }
 
 function commandButton(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-command-id="${id}"]`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-menu-popup="root"] [data-command-id="${id}"]`)
   if (!button) throw new Error(`Missing command ${id}`)
   return button
 }
 
 function menuTrigger(container: HTMLElement, id: string): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>(`[data-web-menu-id="${id}"]`)
+  const button = container.querySelector<HTMLButtonElement>(`[data-menu-id="${id}"]`)
   if (!button) throw new Error(`Missing menu ${id}`)
   return button
 }
 
 function openMenuCommandIds(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[data-web-menu-open="true"] [data-web-command-id]'))
-    .map((element) => element.dataset.webCommandId ?? '')
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-menu-popup="root"] [data-menu-root-item][data-command-id]'))
+    .map((element) => element.dataset.commandId ?? '')
 }
 
 interface MemoryStorage extends BrowserStorageAdapter {

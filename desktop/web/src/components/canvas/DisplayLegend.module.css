@@ -1,7 +1,10 @@
 /* Legend card — quiet reference for pinned plant names. */
 .legend {
   position: absolute;
-  left: 34px; /* past the 24px ruler gutter */
+  bottom: var(--chrome-bottom);
+  left: var(--canvas-tool-card-left);
+  max-height: calc(100% - var(--chrome-rail-top) - var(--chrome-bottom));
+  overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

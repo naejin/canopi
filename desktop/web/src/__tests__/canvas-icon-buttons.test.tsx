@@ -22,13 +22,14 @@ vi.mock('../app/lidar/inspection', async () => {
 import type { CanvasInspectionHandle } from '../canvas/inspection'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { closePlaceSearch } from '../app/geocoding/place-search-ui'
 import type { CanvasLayerPresentationRow } from '../app/canvas-layer-presentation/presentation'
-import { CanvasToolbar } from '../components/canvas/CanvasToolbar'
+import { ToolRail } from '../components/canvas/ToolRail'
+import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canvas-actions'
+import { WorkspaceTitleBar } from '../components/shared/WorkspaceTitleBar'
+import { PanelRail } from '../components/shared/PanelRail'
 import { ZoomControls } from '../components/canvas/ZoomControls'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import { InspectionStatus } from '../components/canvas/InspectionStatus'
-import { PlaceSearch } from '../components/canvas/PlaceSearch'
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { CanvasOverview } from '../components/canvas/CanvasOverview'
 import { LayerPanel, type LayerPanelActions } from '../components/canvas/LayerPanel'
@@ -115,28 +116,32 @@ describe('canvas icon-only buttons', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    closePlaceSearch()
     ;(inspection.target as ReturnType<typeof signal>).value = null
     setCurrentCanvasSession(null)
   })
 
-  it('labels every toolbar tool and action with a tooltip and shortcut hint', async () => {
-    await mount(<CanvasToolbar />)
-    expectIconButtonsFollowRules(container, 10)
+  it('labels every icon-only tool and history button on the rail with a tooltip and shortcut hint', async () => {
+    await mount(<ToolRail projection={workspaceCanvasCommandProjection.value} showNames={false} />)
+    expectIconButtonsFollowRules(container, 13)
   })
 
-  it('labels the zoom controls with tooltips and their View shortcuts', async () => {
-    await mount(<ZoomControls />)
+  it('labels the zoom buttons with tooltips and their View shortcuts', async () => {
+    await mount(<ZoomControls viewActions={workspaceCanvasCommandProjection.value.viewActions} />)
     expectIconButtonsFollowRules(container, 3)
-    for (const button of Array.from(container.querySelectorAll('button'))) {
+    for (const button of Array.from(container.querySelectorAll('button')).filter(isIconOnly)) {
       expect(button.getAttribute('aria-keyshortcuts'), button.getAttribute('aria-label') ?? '').toBeTruthy()
     }
   })
 
-  it('labels the floating lens and place-search launchers', async () => {
+  it('labels the lens launcher, title-bar icons and panel rail', async () => {
     const host = { current: document.createElement('div') }
-    await mount(<><InspectionLens canvasRef={host} /><PlaceSearch /></>)
-    expectIconButtonsFollowRules(container, 2)
+    const command = (label: string, shortcut: string) => ({ label, shortcut, ariaShortcut: shortcut, action: vi.fn() })
+    await mount(<>
+      <InspectionLens canvasRef={host} />
+      <WorkspaceTitleBar menus={[]} help={command('Keyboard shortcuts', 'F1')} settings={command('Settings…', 'Ctrl ,')} />
+      <PanelRail label="Panels" groups={[[{ panel: 'layers', label: 'Layers', shortcut: 'Ctrl 1', ariaShortcut: 'Control+1', disabled: false, action: vi.fn() }]]} />
+    </>)
+    expectIconButtonsFollowRules(container, 4)
   })
 
   it('labels every control inside the open inspection lens', async () => {

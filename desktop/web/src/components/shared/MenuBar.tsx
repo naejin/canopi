@@ -1,305 +1,284 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { appCommandGraphChromeProjection, type MenuAction, type MenuDefinition, type MenuEntry } from './menu-definitions'
-import { designNotebookWorkbench } from '../../app/design-notebook'
+import type { MenuAction, MenuDefinition, MenuEntry } from '../../app/shell-commands/menus'
+import { ControlIcon } from './ControlIcon'
 import styles from './MenuBar.module.css'
 
 const wrapPrev = (i: number, len: number) => i > 0 ? i - 1 : len - 1
 const wrapNext = (i: number, len: number) => i < len - 1 ? i + 1 : 0
 
-export function MenuBar() {
+interface MenuBarProps {
+  readonly menus: readonly MenuDefinition[]
+  readonly label: string
+  /** Called when a menu opens, so callers can refresh data it lists (Open recent). */
+  readonly onMenuOpen?: (menuId: string) => void
+}
+
+/**
+ * The title-bar menu bar: a `menubar` of menu buttons, each opening a `menu`
+ * of commands with their shortcuts. Checkable items are `menuitemcheckbox`
+ * or `menuitemradio`, and a check column is reserved when a menu has any.
+ */
+export function MenuBar({ menus, label, onMenuOpen }: MenuBarProps) {
   const openMenuId = useSignal<string | null>(null)
   const openSubmenuId = useSignal<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const focusedItemIndex = useRef(-1)
 
-  const menus = appCommandGraphChromeProjection.value.menus
-
-  useEffect(() => {
-    void designNotebookWorkbench.loadRecentDesigns()
-  }, [])
-
-  // Close on click-outside (pointerup)
   useSignalEffect(() => {
     if (!openMenuId.value) return
-    const handleOutside = (e: Event) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        openMenuId.value = null
-        openSubmenuId.value = null
-      }
+    const handleOutside = (event: Event) => {
+      if (barRef.current && !barRef.current.contains(event.target as Node)) closeAll(false)
     }
     document.addEventListener('pointerup', handleOutside)
-    return () => {
-      document.removeEventListener('pointerup', handleOutside)
-    }
+    return () => document.removeEventListener('pointerup', handleOutside)
   })
 
-  const focusItem = (menuEl: HTMLElement, index: number) => {
-    const items = menuEl.querySelectorAll<HTMLButtonElement>('[data-menu-root-item="true"]')
-    const item = items[index]
-    if (item) {
-      focusedItemIndex.current = index
-      item.focus()
-    }
+  function rootItems(menuEl: HTMLElement): HTMLButtonElement[] {
+    return Array.from(menuEl.querySelectorAll<HTMLButtonElement>('[data-menu-root-item="true"]'))
   }
 
-  const focusFirstItemAfterRender = () => {
+  function focusRootItemAfterRender(position: 'first' | 'last' = 'first'): void {
     requestAnimationFrame(() => {
-      const menuEl = barRef.current?.querySelector('[role="menu"]') as HTMLElement | null
-      if (menuEl) focusItem(menuEl, 0)
+      const menuEl = barRef.current?.querySelector<HTMLElement>('[data-menu-popup="root"]')
+      if (!menuEl) return
+      const items = rootItems(menuEl)
+      ;(position === 'first' ? items[0] : items.at(-1))?.focus()
     })
   }
 
-  const focusFirstSubmenuItemAfterRender = (submenuId: string) => {
+  function focusFirstSubmenuItemAfterRender(submenuId: string): void {
     requestAnimationFrame(() => {
-      const submenuEl = submenuRefs.current.get(submenuId)
-      submenuEl?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
+      submenuRefs.current.get(submenuId)?.querySelector<HTMLButtonElement>('button')?.focus()
     })
   }
 
-  const refreshMenuData = (menuId: string) => {
-    if (menuId === 'file') {
-      void designNotebookWorkbench.loadRecentDesigns()
-    }
-  }
-
-  const openRootMenu = (menuId: string) => {
+  function openRootMenu(menuId: string): void {
     openMenuId.value = menuId
-    refreshMenuData(menuId)
-  }
-
-  const openSubmenu = (entry: MenuEntry): boolean => {
-    if (entry.type !== 'submenu' || entry.disabled) return false
-    openSubmenuId.value = entry.id
-    return true
-  }
-
-  const handleMenuKeyDown = (e: KeyboardEvent, menu: MenuDefinition) => {
-    const menuEl = (e.currentTarget as HTMLElement)
-    const items = menuEl.querySelectorAll<HTMLButtonElement>('[data-menu-root-item="true"]')
-    const count = items.length
-
-    switch (e.key) {
-      case 'ArrowDown': {
-        e.preventDefault()
-        focusItem(menuEl, wrapNext(focusedItemIndex.current, count))
-        break
-      }
-      case 'ArrowUp': {
-        e.preventDefault()
-        focusItem(menuEl, wrapPrev(focusedItemIndex.current, count))
-        break
-      }
-      case 'Home': {
-        e.preventDefault()
-        focusItem(menuEl, 0)
-        break
-      }
-      case 'End': {
-        e.preventDefault()
-        focusItem(menuEl, count - 1)
-        break
-      }
-      case 'ArrowLeft': {
-        e.preventDefault()
-        openSubmenuId.value = null
-        const idx = menus.findIndex((m) => m.id === menu.id)
-        const prev = menus[wrapPrev(idx, menus.length)]
-        if (prev) {
-          openRootMenu(prev.id)
-          focusedItemIndex.current = -1
-          focusFirstItemAfterRender()
-        }
-        break
-      }
-      case 'ArrowRight': {
-        e.preventDefault()
-        const submenuId = (e.target as HTMLElement).dataset.submenuId
-        if (submenuId) {
-          const submenuEntry = menu.items.find((entry) => entry.type === 'submenu' && entry.id === submenuId)
-          if (submenuEntry?.type === 'submenu' && openSubmenu(submenuEntry)) {
-            focusFirstSubmenuItemAfterRender(submenuEntry.id)
-            break
-          }
-        }
-        const idx = menus.findIndex((m) => m.id === menu.id)
-        const next = menus[wrapNext(idx, menus.length)]
-        if (next) {
-          openRootMenu(next.id)
-          openSubmenuId.value = null
-          focusedItemIndex.current = -1
-          focusFirstItemAfterRender()
-        }
-        break
-      }
-      case 'Escape': {
-        e.preventDefault()
-        e.stopPropagation()
-        const triggerId = openMenuId.value
-        openMenuId.value = null
-        openSubmenuId.value = null
-        focusedItemIndex.current = -1
-        if (triggerId) triggerRefs.current.get(triggerId)?.focus()
-        break
-      }
-    }
-  }
-
-  const handleSubmenuKeyDown = (e: KeyboardEvent, submenuId: string) => {
-    const submenuEl = e.currentTarget as HTMLElement
-    const items = submenuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
-    const activeIndex = Array.from(items).indexOf(document.activeElement as HTMLButtonElement)
-
-    switch (e.key) {
-      case 'ArrowDown': {
-        e.preventDefault()
-        e.stopPropagation()
-        items[wrapNext(activeIndex, items.length)]?.focus()
-        break
-      }
-      case 'ArrowUp': {
-        e.preventDefault()
-        e.stopPropagation()
-        items[wrapPrev(activeIndex, items.length)]?.focus()
-        break
-      }
-      case 'Home': {
-        e.preventDefault()
-        e.stopPropagation()
-        items[0]?.focus()
-        break
-      }
-      case 'End': {
-        e.preventDefault()
-        e.stopPropagation()
-        items[items.length - 1]?.focus()
-        break
-      }
-      case 'ArrowLeft': {
-        e.preventDefault()
-        e.stopPropagation()
-        openSubmenuId.value = null
-        submenuTriggerRefs.current.get(submenuId)?.focus()
-        break
-      }
-      case 'Escape': {
-        e.preventDefault()
-        e.stopPropagation()
-        const triggerId = openMenuId.value
-        openMenuId.value = null
-        openSubmenuId.value = null
-        focusedItemIndex.current = -1
-        if (triggerId) triggerRefs.current.get(triggerId)?.focus()
-        break
-      }
-    }
-  }
-
-  const handleTriggerKeyDown = (e: KeyboardEvent, menuId: string) => {
-    const idx = menus.findIndex((m) => m.id === menuId)
-
-    switch (e.key) {
-      case 'ArrowDown':
-      case 'Enter':
-      case ' ': {
-        e.preventDefault()
-        openRootMenu(menuId)
-        openSubmenuId.value = null
-        focusedItemIndex.current = -1
-        focusFirstItemAfterRender()
-        break
-      }
-      case 'ArrowLeft': {
-        e.preventDefault()
-        const prev = menus[wrapPrev(idx, menus.length)]
-        if (prev) {
-          triggerRefs.current.get(prev.id)?.focus()
-          if (openMenuId.value) openRootMenu(prev.id)
-          openSubmenuId.value = null
-        }
-        break
-      }
-      case 'ArrowRight': {
-        e.preventDefault()
-        const next = menus[wrapNext(idx, menus.length)]
-        if (next) {
-          triggerRefs.current.get(next.id)?.focus()
-          if (openMenuId.value) openRootMenu(next.id)
-          openSubmenuId.value = null
-        }
-        break
-      }
-    }
-  }
-
-  const handleTriggerClick = (id: string) => {
-    const nextMenuId = openMenuId.value === id ? null : id
-    openMenuId.value = nextMenuId
-    if (nextMenuId) refreshMenuData(nextMenuId)
     openSubmenuId.value = null
-    focusedItemIndex.current = -1
+    onMenuOpen?.(menuId)
   }
 
-  const handleTriggerEnter = (id: string) => {
-    if (openMenuId.value != null && openMenuId.value !== id) {
-      openRootMenu(id)
-      openSubmenuId.value = null
-      focusedItemIndex.current = -1
-    }
-  }
-
-  const handleItemClick = (entry: MenuEntry) => {
-    if (entry.type === 'submenu') {
-      if (openSubmenu(entry)) {
-        focusFirstSubmenuItemAfterRender(entry.id)
-      }
-      return
-    }
-    if (entry.type !== 'action' || entry.disabled) return
+  function closeAll(returnFocus: boolean): void {
+    const triggerId = openMenuId.value
     openMenuId.value = null
     openSubmenuId.value = null
-    focusedItemIndex.current = -1
+    if (returnFocus && triggerId) triggerRefs.current.get(triggerId)?.focus()
+  }
+
+  function moveToSiblingMenu(menuId: string, direction: -1 | 1): void {
+    const index = menus.findIndex((menu) => menu.id === menuId)
+    const next = menus[direction < 0 ? wrapPrev(index, menus.length) : wrapNext(index, menus.length)]
+    if (!next) return
+    openRootMenu(next.id)
+    focusRootItemAfterRender()
+  }
+
+  function runAction(entry: MenuAction): void {
+    if (entry.disabled) return
+    closeAll(true)
     entry.action()
   }
 
-  const renderActionItem = (entry: MenuAction, rootItem: boolean) => (
-    <button
-      key={entry.id}
-      className={`${styles.item}${entry.disabled ? ` ${styles.itemDisabled}` : ''}`}
-      role="menuitem"
-      type="button"
-      tabIndex={-1}
-      aria-disabled={entry.disabled}
-      data-menu-root-item={rootItem ? 'true' : undefined}
-      onMouseEnter={() => {
-        if (rootItem) openSubmenuId.value = null
-      }}
-      onFocus={() => {
-        if (rootItem) openSubmenuId.value = null
-      }}
-      onClick={() => handleItemClick(entry)}
-    >
-      <span className={styles.itemLabel}>{entry.label}</span>
-      {entry.shortcut && <span className={styles.itemShortcut}>{entry.shortcut}</span>}
-    </button>
-  )
+  function handleMenuKeyDown(event: KeyboardEvent, menu: MenuDefinition): void {
+    const items = rootItems(event.currentTarget as HTMLElement)
+    const index = items.indexOf(document.activeElement as HTMLButtonElement)
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        items[wrapNext(index, items.length)]?.focus()
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        items[wrapPrev(index < 0 ? 0 : index, items.length)]?.focus()
+        break
+      case 'Home':
+        event.preventDefault()
+        items[0]?.focus()
+        break
+      case 'End':
+        event.preventDefault()
+        items.at(-1)?.focus()
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        moveToSiblingMenu(menu.id, -1)
+        break
+      case 'ArrowRight': {
+        event.preventDefault()
+        const submenuId = (event.target as HTMLElement).dataset.submenuId
+        const entry = submenuId ? menu.items.find((item) => item.type === 'submenu' && item.id === submenuId) : null
+        if (entry?.type === 'submenu' && !entry.disabled) {
+          openSubmenuId.value = entry.id
+          focusFirstSubmenuItemAfterRender(entry.id)
+          break
+        }
+        moveToSiblingMenu(menu.id, 1)
+        break
+      }
+      case 'Escape':
+        event.preventDefault()
+        event.stopPropagation()
+        closeAll(true)
+        break
+      case 'Tab':
+        closeAll(false)
+        break
+    }
+  }
+
+  function handleSubmenuKeyDown(event: KeyboardEvent, submenuId: string): void {
+    const items = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+    const index = items.indexOf(document.activeElement as HTMLButtonElement)
+    const stop = () => { event.preventDefault(); event.stopPropagation() }
+    switch (event.key) {
+      case 'ArrowDown': stop(); items[wrapNext(index, items.length)]?.focus(); break
+      case 'ArrowUp': stop(); items[wrapPrev(index < 0 ? 0 : index, items.length)]?.focus(); break
+      case 'Home': stop(); items[0]?.focus(); break
+      case 'End': stop(); items.at(-1)?.focus(); break
+      case 'ArrowLeft':
+      case 'Escape':
+        stop()
+        openSubmenuId.value = null
+        submenuTriggerRefs.current.get(submenuId)?.focus()
+        break
+      case 'ArrowRight': stop(); break
+    }
+  }
+
+  function handleTriggerKeyDown(event: KeyboardEvent, menuId: string): void {
+    const index = menus.findIndex((menu) => menu.id === menuId)
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'Enter':
+      case ' ':
+        event.preventDefault()
+        openRootMenu(menuId)
+        focusRootItemAfterRender()
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        openRootMenu(menuId)
+        focusRootItemAfterRender('last')
+        break
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        event.preventDefault()
+        const next = menus[event.key === 'ArrowLeft' ? wrapPrev(index, menus.length) : wrapNext(index, menus.length)]
+        if (!next) break
+        triggerRefs.current.get(next.id)?.focus()
+        if (openMenuId.value) openRootMenu(next.id)
+        break
+      }
+      case 'Escape':
+        if (openMenuId.value) {
+          event.preventDefault()
+          closeAll(true)
+        }
+        break
+    }
+  }
+
+  function renderAction(entry: MenuAction, rootItem: boolean, checkable: boolean) {
+    const role = entry.check === 'radio' ? 'menuitemradio' : entry.check === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'
+    return (
+      <button
+        key={entry.id}
+        className={styles.item}
+        role={role}
+        type="button"
+        tabIndex={-1}
+        aria-checked={entry.check ? entry.checked === true : undefined}
+        aria-disabled={entry.disabled ? true : undefined}
+        aria-keyshortcuts={entry.ariaShortcut}
+        data-command-id={entry.id}
+        data-menu-root-item={rootItem ? 'true' : undefined}
+        onMouseEnter={() => { if (rootItem) openSubmenuId.value = null }}
+        onFocus={() => { if (rootItem) openSubmenuId.value = null }}
+        onClick={() => runAction(entry)}
+      >
+        {checkable && (
+          <span className={styles.check} aria-hidden="true">
+            {entry.checked && <ControlIcon name="check" />}
+          </span>
+        )}
+        <span className={styles.itemLabel}>{entry.label}</span>
+        {entry.shortcut && <span className={styles.itemShortcut} aria-hidden="true">{entry.shortcut}</span>}
+      </button>
+    )
+  }
+
+  function renderEntry(entry: MenuEntry, index: number, checkable: boolean) {
+    if (entry.type === 'separator') return <div key={`sep-${index}`} className={styles.separator} role="separator" />
+    if (entry.type === 'label') return <div key={`label-${index}`} className={styles.heading} role="presentation">{entry.label}</div>
+    if (entry.type === 'action') return renderAction(entry, true, checkable)
+    const submenuOpen = openSubmenuId.value === entry.id && !entry.disabled
+    const submenuCheckable = entry.items.some((item) => item.check)
+    return (
+      <div key={entry.id} className={styles.submenuWrap} onMouseEnter={() => { if (!entry.disabled) openSubmenuId.value = entry.id }}>
+        <button
+          ref={(element) => {
+            if (element) submenuTriggerRefs.current.set(entry.id, element)
+            else submenuTriggerRefs.current.delete(entry.id)
+          }}
+          className={styles.item}
+          role="menuitem"
+          type="button"
+          tabIndex={-1}
+          aria-disabled={entry.disabled ? true : undefined}
+          aria-haspopup="menu"
+          aria-expanded={submenuOpen}
+          data-menu-root-item="true"
+          data-submenu-id={entry.id}
+          onClick={() => {
+            if (entry.disabled) return
+            openSubmenuId.value = entry.id
+            focusFirstSubmenuItemAfterRender(entry.id)
+          }}
+        >
+          {checkable && <span className={styles.check} aria-hidden="true" />}
+          <span className={styles.itemLabel}>{entry.label}</span>
+          <ControlIcon name="chevron-right" className={styles.submenuChevron} />
+        </button>
+        {submenuOpen && (
+          <div
+            ref={(element) => {
+              if (element) submenuRefs.current.set(entry.id, element)
+              else submenuRefs.current.delete(entry.id)
+            }}
+            className={`${styles.menu} ${styles.submenu}`}
+            role="menu"
+            aria-label={entry.label}
+            onKeyDown={(event) => handleSubmenuKeyDown(event, entry.id)}
+          >
+            {entry.items.map((item) => renderAction(item, false, submenuCheckable))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div className={styles.menuBar} ref={barRef} role="menubar">
+    <div className={styles.menuBar} ref={barRef} role="menubar" aria-label={label}>
       {menus.map((menu) => {
         const isOpen = openMenuId.value === menu.id
+        const checkable = menu.items.some((entry) => entry.type === 'action' && entry.check !== undefined)
         return (
           <div key={menu.id} className={styles.menuGroup}>
             <button
-              ref={(el) => { if (el) triggerRefs.current.set(menu.id, el); else triggerRefs.current.delete(menu.id) }}
-              className={`${styles.trigger}${isOpen ? ` ${styles.triggerOpen}` : ''}`}
+              ref={(element) => {
+                if (element) triggerRefs.current.set(menu.id, element)
+                else triggerRefs.current.delete(menu.id)
+              }}
+              className={styles.trigger}
               type="button"
-              onClick={() => handleTriggerClick(menu.id)}
-              onMouseEnter={() => handleTriggerEnter(menu.id)}
-              onKeyDown={(e) => handleTriggerKeyDown(e, menu.id)}
+              role="menuitem"
+              data-menu-id={menu.id}
+              onClick={() => { if (isOpen) closeAll(false); else openRootMenu(menu.id) }}
+              onMouseEnter={() => { if (openMenuId.value !== null && openMenuId.value !== menu.id) openRootMenu(menu.id) }}
+              onKeyDown={(event) => handleTriggerKeyDown(event, menu.id)}
               aria-expanded={isOpen}
               aria-haspopup="menu"
             >
@@ -310,57 +289,10 @@ export function MenuBar() {
                 className={styles.menu}
                 role="menu"
                 aria-label={menu.label}
-                onKeyDown={(e) => handleMenuKeyDown(e, menu)}
+                data-menu-popup="root"
+                onKeyDown={(event) => handleMenuKeyDown(event, menu)}
               >
-                {menu.items.map((entry, i) => {
-                  if (entry.type === 'separator') {
-                    return <div key={`sep-${i}`} className={styles.separator} role="separator" />
-                  }
-                  if (entry.type === 'label') {
-                    return <div key={`label-${i}`} className={styles.label}>{entry.label}</div>
-                  }
-                  if (entry.type === 'submenu') {
-                    const submenuOpen = openSubmenuId.value === entry.id && !entry.disabled
-                    return (
-                      <div
-                        key={entry.id}
-                        className={styles.submenuWrap}
-                        onMouseEnter={() => openSubmenu(entry)}
-                      >
-                        <button
-                          ref={(el) => { if (el) submenuTriggerRefs.current.set(entry.id, el); else submenuTriggerRefs.current.delete(entry.id) }}
-                          className={`${styles.item}${entry.disabled ? ` ${styles.itemDisabled}` : ''}`}
-                          role="menuitem"
-                          type="button"
-                          tabIndex={-1}
-                          disabled={entry.disabled}
-                          aria-disabled={entry.disabled}
-                          aria-haspopup="menu"
-                          aria-expanded={submenuOpen}
-                          data-menu-root-item="true"
-                          data-submenu-id={entry.id}
-                          onFocus={() => openSubmenu(entry)}
-                          onClick={() => handleItemClick(entry)}
-                        >
-                          <span className={styles.itemLabel}>{entry.label}</span>
-                          <span className={styles.submenuArrow} aria-hidden="true">›</span>
-                        </button>
-                        {submenuOpen && (
-                          <div
-                            ref={(el) => { if (el) submenuRefs.current.set(entry.id, el); else submenuRefs.current.delete(entry.id) }}
-                            className={styles.submenu}
-                            role="menu"
-                            aria-label={entry.label}
-                            onKeyDown={(event) => handleSubmenuKeyDown(event, entry.id)}
-                          >
-                            {entry.items.map((item) => renderActionItem(item, false))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
-                  return renderActionItem(entry, true)
-                })}
+                {menu.items.map((entry, index) => renderEntry(entry, index, checkable))}
               </div>
             )}
           </div>

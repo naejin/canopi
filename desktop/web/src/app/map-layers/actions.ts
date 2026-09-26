@@ -1,6 +1,6 @@
 import type { BasemapStyle } from '../../generated/contracts'
 import { mutateSettingsProjection, type SettingsPersistMode } from '../settings/projection'
-import { normalizeMapLayers, type MapLayersState } from './state'
+import { normalizeMapLayers, type MapBackground, type MapLayersState } from './state'
 
 export type MapLayerId = 'basemap' | 'satellite' | 'contours' | 'hillshade'
 
@@ -21,6 +21,18 @@ export function setMapLayerVisible(id: MapLayerId, visible: boolean): void {
 export function setMapLayerOpacity(id: MapLayerId, opacity: number): void {
   if (!Number.isFinite(opacity)) return
   updateMapLayers((state) => ({ ...state, [id]: { ...state[id], opacity } }), 'queued')
+}
+
+/** View › Background: Satellite, Map or None. Satellite keeps the Basemap setting underneath. */
+export function setMapBackground(background: MapBackground): void {
+  updateMapLayers((state) => ({
+    ...state,
+    satellite: { ...state.satellite, visible: background === 'satellite' },
+    basemap: {
+      ...state.basemap,
+      visible: background === 'satellite' ? state.basemap.visible : background === 'basemap',
+    },
+  }), 'immediate')
 }
 
 export function setBasemapStyle(style: BasemapStyle): void {

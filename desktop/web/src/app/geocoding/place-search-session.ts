@@ -2,26 +2,25 @@ import { effect, untracked } from '@preact/signals'
 import { geocodingTransport } from '#geocoding-transport'
 import { designSessionStore } from '../document-session/store'
 import { createPlaceSearchController, type PlaceSearchController } from './place-search'
-import { closePlaceSearch } from './place-search-ui'
 
 export type { PlaceSearchResult } from './place-search'
+export { parseCoordinates } from './place-search'
 
 /** The app's one place search, bound to the edition's geocoding transport. */
 export const placeSearch: PlaceSearchController = createPlaceSearchController({
   transport: geocodingTransport,
 })
 
-/** Close the place search field and forget its results. */
+/** Forget the place search results; the field's text belongs to the field. */
 export function dismissPlaceSearch(): void {
   placeSearch.clear()
-  closePlaceSearch()
 }
 
 let disposeActiveSession: (() => void) | null = null
 
 /**
  * A place search belongs to the Design it was opened for: replacing the
- * Design closes it. Installed once per edition bootstrap.
+ * Design clears its results. Installed once per edition bootstrap.
  */
 export function installPlaceSearchSession(): () => void {
   disposeActiveSession?.()

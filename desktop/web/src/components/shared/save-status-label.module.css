@@ -1,7 +1,7 @@
 .status {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1-5);
+  gap: var(--space-2);
   flex-shrink: 0;
   font-size: var(--text-sm);
   white-space: nowrap;
@@ -24,10 +24,10 @@
 }
 
 .action,
-.conflictAction {
+.primary {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  justify-content: center;
   min-height: var(--control-size-md);
   padding: 0 calc(var(--space-2) + var(--space-0-5));
   border: 1px solid var(--color-border-strong);
@@ -37,25 +37,83 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-}
-
-.conflictAction {
-  border-color: var(--color-danger);
-  background: transparent;
-  color: var(--color-danger);
 }
 
 .action:hover {
   background: var(--color-control-hover);
 }
 
-.conflictAction:hover {
-  background: var(--color-danger-bg);
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.link {
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
 }
 
 .action:focus-visible,
-.conflictAction:focus-visible {
+.primary:focus-visible,
+.link:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.detailsAnchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  left: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(400px, calc(100vw - var(--space-8)));
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text);
+  white-space: normal;
+}
+
+.popoverTitle {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.popoverText {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--line-height);
+}
+
+.popoverActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }

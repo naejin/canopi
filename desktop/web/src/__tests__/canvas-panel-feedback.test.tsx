@@ -8,11 +8,6 @@ import { CanvasPanel } from '../components/panels/CanvasPanel'
 import { designSessionFixture } from './support/design-session-state'
 import type { CanopiFile } from '../types/design'
 import { locale } from '../app/settings/state'
-import {
-  CANVAS_NOTICE_MARGIN_PX,
-  CANVAS_RULER_SIZE_PX,
-} from '../canvas/canvas-notice-layout'
-import { SCALE_BAR_CANVAS_WIDTH, SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
 
 let mockBasemapState: {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -26,16 +21,8 @@ let mockBasemapState: {
   terrainErrorMessage: null,
 }
 
-vi.mock('../components/canvas/CanvasToolbar', () => ({
-  CanvasToolbar: () => <div data-testid="canvas-toolbar" />,
-}))
-
-vi.mock('../components/canvas/DisplayLegend', () => ({
-  DisplayLegend: () => <div data-testid="display-legend" />,
-}))
-
-vi.mock('../components/canvas/ZoomControls', () => ({
-  ZoomControls: () => <div data-testid="zoom-controls" />,
+vi.mock('../components/canvas/CanvasChrome', () => ({
+  CanvasChrome: () => <div data-testid="canvas-chrome" />,
 }))
 
 vi.mock('../components/canvas/LayerPanel', () => ({
@@ -98,7 +85,7 @@ describe('CanvasPanel basemap feedback', () => {
     expect(container.querySelector('[data-map-active="true"]')).toBeNull()
   })
 
-  it('places loading feedback as a bottom-left Map Notice above the scale bar', async () => {
+  it('shows loading feedback as one quiet status chip over the map with the floating chrome', async () => {
     designSessionFixture.file = demoDesign()
     mockBasemapState = {
       status: 'loading',
@@ -113,64 +100,9 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector<HTMLElement>('[role="status"]')!
     expect(status.textContent).toContain('Loading')
-    expect(status.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
-    expect(status.style.left).toBe(`${CANVAS_RULER_SIZE_PX + CANVAS_NOTICE_MARGIN_PX}px`)
-    expect(status.style.bottom).toBe(`${SCALE_BAR_RESERVED_BOTTOM_PX + CANVAS_NOTICE_MARGIN_PX}px`)
-    expect(status.style.top).toBe('auto')
-  })
-
-  it('shifts Map Notices to the right of the scale bar when canvas height is tight', async () => {
-    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
-    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = demoDesign()
-    mockBasemapState = {
-      status: 'loading',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-    }
-
-    try {
-      await act(async () => {
-        render(<CanvasPanel />, container)
-      })
-
-      const status = container.querySelector<HTMLElement>('[role="status"]')!
-      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-right-of-scale-bar')
-      expect(status.style.left).toBe(`${SCALE_BAR_CANVAS_WIDTH + CANVAS_NOTICE_MARGIN_PX}px`)
-      expect(status.style.bottom).toBe(`${CANVAS_NOTICE_MARGIN_PX}px`)
-    } finally {
-      widthSpy.mockRestore()
-      heightSpy.mockRestore()
-    }
-  })
-
-  it('keeps compact Map Notices visible under severe layout pressure', async () => {
-    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
-    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(72)
-    designSessionFixture.file = demoDesign()
-    mockBasemapState = {
-      status: 'loading',
-      errorMessage: null,
-      terrainStatus: 'idle',
-      terrainErrorMessage: null,
-    }
-
-    try {
-      await act(async () => {
-        render(<CanvasPanel />, container)
-      })
-
-      const status = container.querySelector<HTMLElement>('[role="status"]')!
-      expect(status.dataset.locationNoticePlacement).toBe('bottom-left-compact')
-      expect(status.dataset.compact).toBe('true')
-      expect(Number.parseFloat(status.style.maxWidth)).toBeLessThan(240)
-      expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
-      expect(status.textContent).toContain('Loading')
-    } finally {
-      widthSpy.mockRestore()
-      heightSpy.mockRestore()
-    }
+    expect(status.dataset.tone).toBe('loading')
+    expect(status.getAttribute('aria-live')).toBe('polite')
+    expect(container.querySelector('[data-testid="canvas-chrome"]')).not.toBeNull()
   })
 
   it('shows a loading basemap notice until the map becomes active', async () => {
@@ -188,7 +120,6 @@ describe('CanvasPanel basemap feedback', () => {
 
     const status = container.querySelector('[role="status"]')
     expect(status?.textContent).toContain('Loading')
-    expect((status as HTMLElement | null)?.dataset.locationNoticePlacement).toBe('bottom-left-above-scale-bar')
     expect(container.querySelector('[data-map-active="true"]')).not.toBeNull()
   })
 

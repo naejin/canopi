@@ -1,6 +1,11 @@
-/* A full-width strip above the workspace: square corners, a single dividing edge. */
+/* A floating notice below the title bar, centred between the rails. */
 .banner {
-  flex-shrink: 0;
-  border-width: 0 0 1px;
-  border-radius: 0;
+  position: absolute;
+  top: var(--chrome-rail-top);
+  left: 50%;
+  z-index: 38;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--chrome-rail-width) - 6 * var(--chrome-inset));
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
 }

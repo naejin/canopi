@@ -124,16 +124,22 @@
   --text-base: 14px;      /* controls and UI text */
   --text-md: 15px;        /* body */
   --text-dialog: 14.5px;  /* dialog body */
+  --text-title-bar: 17px; /* Design name in the title bar */
   --text-lg: 18px;        /* panel titles */
   --text-xl: 20px;        /* dialog titles */
   --text-display: 28px;   /* start screen and display titles */
   --line-height: 1.4;
   --line-height-tight: 1.2;
 
-  /* Layout — compact */
-  --title-bar-height: 36px;
-  --chrome-rail-width: 44px;
-  --panel-bar-width: var(--chrome-rail-width);
+  /* Layout — floating chrome over the full-bleed map */
+  --chrome-inset: 12px;        /* gap between the window edge and floating chrome */
+  --chrome-top: 10px;          /* title bar distance from the window top */
+  --title-bar-height: 50px;
+  --chrome-rail-top: 72px;     /* rails and the dock start below the title bar */
+  --chrome-bottom: 64px;       /* the dock stops above the view chip and zoom group */
+  --chrome-rail-width: 52px;   /* icon-only tool and panel rails */
+  --dock-width: 380px;
+  --dock-width-wide: 440px;    /* Budget and Consortium */
   --panel-width: 280px;
   --control-size-xs: 20px;
   --control-size-sm: 24px;
@@ -147,6 +153,7 @@
   --icon-size-sm: 12px;
   --icon-size-md: 16px;
   --icon-size-lg: 20px;
+  --icon-size-xl: 24px;
   --slider-thumb-size: 12px;
   --slider-track-size: 2px;
   --transition-fast: 80ms ease;
@@ -181,7 +188,6 @@
   --canvas-annotation-text: #27231D;
   --canvas-zone-stroke: #FFF3D6;
   --canvas-zone-fill: rgba(255, 243, 214, 0.1);
-  --canvas-toolbar-width: var(--chrome-rail-width);
 }
 
 /* ============================================

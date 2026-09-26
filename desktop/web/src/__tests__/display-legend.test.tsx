@@ -2,13 +2,12 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDefaultScenePersistedState, type ScenePlantEntity } from '../canvas/runtime/scene'
-import { SCALE_BAR_RESERVED_BOTTOM_PX } from '../canvas/scale-bar'
+import { readFileSync } from 'node:fs'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { DisplayLegend } from '../components/canvas/DisplayLegend'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 
-const DISPLAY_LEGEND_TOP_RESERVED_PX = 32
 
 describe('DisplayLegend', () => {
   let container: HTMLDivElement
@@ -91,11 +90,12 @@ describe('DisplayLegend', () => {
       await Promise.resolve()
     })
 
-    const legend = container.querySelector<HTMLElement>('[data-pinned-plant-name-legend]')
-    expect(legend?.style.maxHeight).toBe(
-      `calc(100% - ${SCALE_BAR_RESERVED_BOTTOM_PX + DISPLAY_LEGEND_TOP_RESERVED_PX}px)`,
-    )
-    expect(legend?.style.overflowY).toBe('auto')
+    expect(container.querySelectorAll('[data-pinned-plant-name-entry]')).toHaveLength(12)
+    // Between the title bar and the bottom chrome, then it scrolls.
+    const css = readFileSync('src/components/canvas/DisplayLegend.module.css', 'utf8')
+    const legendRule = /\.legend \{(?<body>[^}]*)\}/.exec(css)?.groups?.body ?? ''
+    expect(legendRule).toContain('max-height: calc(100% - var(--chrome-rail-top) - var(--chrome-bottom))')
+    expect(legendRule).toContain('overflow-y: auto')
   })
 
   it('updates pinned plant names when pins or localized names change', async () => {

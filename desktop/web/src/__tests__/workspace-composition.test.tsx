@@ -13,16 +13,16 @@ import { activePanel, navigateTo, sidePanel, type Panel } from '../app/shell/sta
 function projection({
   primary = ['canvas'],
   design = [],
-  side = [],
+  planning = [],
 }: {
   readonly primary?: readonly Panel[]
   readonly design?: readonly Panel[]
-  readonly side?: readonly Panel[]
+  readonly planning?: readonly Panel[]
 } = {}): WorkspacePanelProjection {
   return {
     primary: primary.map(projectedCommand),
     design: design.map(projectedCommand),
-    side: side.map(projectedCommand),
+    planning: planning.map(projectedCommand),
   }
 }
 

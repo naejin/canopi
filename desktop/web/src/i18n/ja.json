@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "植物データベース",
-    "canvas": "デザインキャンバス",
-    "designNotebook": "デザインノート",
     "favorites": "お気に入り"
   },
   "webShell": {
-    "commands": "Web 版コマンド",
     "panels": "Web 版パネル",
     "workspace": "Web 版ワークスペース",
-    "openCanopi": ".canopi を開く",
-    "downloadCanopi": ".canopi をダウンロード",
-    "dismissNotice": "閉じる"
+    "openCanopi": ".canopi ファイルを開く…",
+    "downloadCanopi": "コピーをダウンロード",
+    "dismissNotice": "閉じる",
+    "downloadCopy": "コピーをダウンロード",
+    "savedInBrowser": "このブラウザーに保存済み",
+    "openCanopiFile": ".canopi ファイルを開く"
   },
   "designNotebook": {
     "title": "デザインノート",
@@ -89,32 +89,20 @@
       "panHint": "プレビュー。ドラッグまたは矢印キーで移動。Shift で大きく移動。",
       "recenter": "キャンバスの中央に合わせる"
     },
-    "emptyWelcome": "デザインを始めましょう",
-    "emptyNewDesign": "新規デザイン",
-    "emptyOpenDesign": "デザインを開く",
-    "emptyRecentFiles": "最近のファイル",
     "toolbar": "ツール",
     "tools": {
       "select": "選択",
-      "selectDesc": "クリックしてオブジェクトを選択",
-      "hand": "ハンド",
-      "handDesc": "キャンバスをパン",
-      "rectangle": "長方形",
-      "rectangleDesc": "長方形のゾーンを描画",
-      "ellipse": "楕円",
-      "ellipseDesc": "楕円のゾーンを描画",
-      "polygon": "多角形",
-      "polygonDesc": "多角形のゾーンを描画",
-      "line": "直線",
-      "lineDesc": "線形ゾーンを描画",
-      "text": "テキスト",
-      "textDesc": "テキストラベルを追加",
-      "objectStamp": "オブジェクトスタンプ",
-      "objectStampDesc": "既存のデザインオブジェクトをコピー",
-      "plantSpacing": "植物間隔",
-      "plantSpacingDesc": "配置済みの植物を間隔ガイドに沿って繰り返す",
-      "measurementGuide": "測定ガイド",
-      "measurementGuideDesc": "常時表示される距離ガイドを配置"
+      "hand": "パン",
+      "rectangle": "長方形ゾーン",
+      "ellipse": "楕円ゾーン",
+      "polygon": "多角形ゾーン",
+      "line": "線ゾーン",
+      "text": "テキストメモ",
+      "objectStamp": "スタンプを配置",
+      "plantSpacing": "列に植える",
+      "measurementGuide": "計測",
+      "zones": "ゾーン",
+      "plantStamp": "植物を配置"
     },
     "plantSpacing": {
       "selectSource": "配置済みの植物を選択",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "グリッド",
-      "gridDesc": "グリッドの表示/非表示",
       "snapToGrid": "グリッドにスナップ",
-      "snapToGridDesc": "図形をグリッドの交点にスナップ",
       "rulers": "定規",
-      "rulersDesc": "水平・垂直定規の表示/非表示",
       "zoom": "ズーム"
     },
     "overview": {
-      "label": "概要",
-      "zoomInToEdit": "編集するには拡大してください",
+      "zoomInToEdit": "編集するには拡大してください。この縮尺では植物は表示されません。",
       "returnToDesign": "デザインに戻る",
-      "design": "デザイン",
-      "designMarker": "デザインに戻る"
+      "designPin": "デザイン: {{name}}"
     },
     "plantColor": {
       "label": "植物の色",
@@ -211,21 +194,22 @@
       "applySelection": "選択した{{count}}個に適用"
     },
     "placeSearch": {
-      "open": "場所を検索",
-      "placeholder": "地名または緯度, 経度",
+      "placeholder": "場所または座標を検索",
       "searching": "検索中…",
       "noResults": "場所が見つかりません",
       "error": "場所の検索に失敗しました",
       "results": "場所",
-      "emptyPrompt": "敷地を検索"
+      "placeholderShort": "場所を検索",
+      "east": "東経",
+      "north": "北緯",
+      "clear": "検索をクリア",
+      "south": "南緯",
+      "coordinates": "{{northSouth}}{{lat}}°, {{eastWest}}{{lon}}°",
+      "west": "西経",
+      "goStraightThere": "座標 · そのまま移動"
     },
     "file": {
-      "new": "新規デザイン",
-      "open": "デザインを開く",
-      "save": "保存",
-      "saveAs": "名前を付けて保存",
-      "cancel": "キャンセル",
-      "revert": "開いたときのバージョンに戻す"
+      "cancel": "キャンセル"
     },
     "layers": {
       "layerPanel": "レイヤー",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "キーがない場合、Canopi は Google の公開衛星タイルを使用します。公式の Map Tiles API を使うには Google Maps API キーを追加してください。"
-    }
+    },
+    "zoom": {
+      "scaleBar": "縮尺バー: {{distance}}",
+      "chooseScale": "縮尺 {{scale}}。縮尺を選択",
+      "mapScale": "地図の縮尺"
+    },
+    "viewChip": "表示"
   },
   "worldMap": {
     "title": "世界地図",
@@ -592,18 +582,11 @@
     "filterByStyle": "スタイルで絞り込み",
     "openTemplate": "新しいデザインとして開く"
   },
-  "status": {
-    "language": "言語",
-    "theme": "テーマ"
-  },
   "theme": {
     "light": "ライト",
     "dark": "ダーク"
   },
   "commands": {
-    "plantDb": "植物データベースへ移動",
-    "canvas": "デザインキャンバスへ移動",
-    "toggleTheme": "テーマを切替",
     "commandPalette": "コマンドパレット",
     "searchPlaceholder": "コマンドを入力...",
     "noResults": "コマンドが見つかりません"
@@ -781,21 +764,56 @@
     "file": "ファイル",
     "edit": "編集",
     "view": "表示",
-    "file.exit": "終了",
+    "file.exit": "Canopi を終了",
     "edit.undo": "元に戻す",
     "edit.redo": "やり直し",
     "view.zoomIn": "拡大",
     "view.zoomOut": "縮小",
-    "view.fitToContent": "コンテンツに合わせる",
     "view.searchPlace": "場所を検索…",
     "help": "ヘルプ",
-    "help.reportProblem": "問題を報告",
-    "help.aboutCanopi": "Canopi について"
+    "help.reportProblem": "問題を報告…",
+    "help.aboutCanopi": "Canopi について",
+    "edit.duplicate": "複製",
+    "edit.delete": "削除",
+    "file.settings": "設定…",
+    "edit.ungroup": "グループ解除",
+    "edit.sendToBack": "最背面へ移動",
+    "edit.arrange": "重ね順",
+    "edit.selectSameSpecies": "この種をすべて選択",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "ロック解除",
+    "view.darkTheme": "ダークテーマ",
+    "edit.saveAsStamp": "スタンプとして保存",
+    "view.fitToDesign": "デザインに合わせる",
+    "file.new": "新しいデザイン",
+    "view.backgroundMap": "地図",
+    "edit.findPlants": "植物を探す…",
+    "file.revert": "開いたときのバージョンに戻す…",
+    "tools": "ツール",
+    "edit.copy": "コピー",
+    "edit.paste": "貼り付け",
+    "file.rename": "名前を変更…",
+    "view.background": "背景",
+    "file.saveAs": "名前を付けて保存…",
+    "edit.group": "グループ化",
+    "view.toolNames": "ツール名",
+    "file.save": "保存",
+    "file.export": "書き出し",
+    "view.backgroundNone": "なし",
+    "help.shortcuts": "キーボードショートカット",
+    "view.backgroundSatellite": "衛星",
+    "edit.bringToFront": "最前面へ移動",
+    "edit.lock": "ロック",
+    "file.open": "デザインを開く…",
+    "edit.selectAll": "すべて選択",
+    "file.exportPlantingPlan": "植栽計画（PDF）…",
+    "edit.cut": "切り取り"
   },
   "titleBar": {
     "untitledDesign": "無題のデザイン",
-    "renameDesignName": "デザイン名を変更",
-    "designNameInput": "デザイン名"
+    "designNameInput": "デザイン名",
+    "menus": "メニュー",
+    "renameDesign": "デザイン名を変更: {{name}}"
   },
   "about": {
     "title": "Canopi について",
@@ -1145,7 +1163,15 @@
     "saved": "保存済み",
     "error": "保存できませんでした",
     "retry": "再試行",
-    "conflict": "Canopi の外部で変更されました"
+    "conflict": "Canopi の外部で変更されました",
+    "detailsUnknown": "Canopi はファイルを書き込めませんでした。",
+    "detailsTitle": "最新の変更を保存できませんでした",
+    "detailsReason": "Canopi はファイルを書き込めませんでした: {{reason}}",
+    "details": "詳細…",
+    "draft": "下書き",
+    "detailsSafe": "Canopi を開いている間、作業内容は失われません。再試行するか、別の場所に保存してください。",
+    "saveAs": "名前を付けて保存…",
+    "resolve": "解決…"
   },
   "saveProblem": {
     "flushFailedTitle": "変更を保存できませんでした",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "下書き",
-    "delete": "下書きを削除: {{name}}",
-    "confirmDelete": "この下書きを削除しますか？",
-    "confirmDeleteAction": "削除"
+    "confirmDelete": "「{{name}}」を削除しますか？ファイルに保存されたことがないため、復元できません。",
+    "confirmDeleteAction": "下書きを削除",
+    "intro": "Canopi は作業中のすべての変更を保持します。ファイルに保存していないデザインは、保存または削除するまでここに残ります。",
+    "deleteItem": "下書きを削除…",
+    "neverSaved": "下書き（ファイル未保存）",
+    "actions": "{{name}} の操作"
   },
   "plantFinder": {
     "label": "植物を検索",
@@ -1283,5 +1312,66 @@
       "coverage": "{{cells}} セルを公開",
       "noOutputs": "公開されたものはありません"
     }
+  },
+  "panelRail": {
+    "label": "パネル",
+    "canvas": "デザインキャンバス",
+    "layers": "レイヤー",
+    "data": "データライブラリ",
+    "plants": "このデザインの植物",
+    "catalog": "植物カタログ",
+    "favorites": "お気に入りとスタンプ",
+    "calendar": "カレンダー",
+    "budget": "予算",
+    "consortium": "コンソーシアム",
+    "notebook": "デザインノート"
+  },
+  "start": {
+    "region": "スタート",
+    "purpose": "あなたの土地の地図の上で、アグロフォレストリーと食べられる森をデザインします。",
+    "more": "その他",
+    "searchDesigns": "デザインを検索",
+    "noMatches": "「{{query}}」に一致するデザインはありません。",
+    "recentDesigns": "最近のデザイン",
+    "footerDesktop": "オフラインで使えます。デザインはこのコンピューターに保存されます。",
+    "footerWeb": "デザインはこのブラウザーに保存されます。ファイルとして残すにはコピーをダウンロードしてください。",
+    "plantCount": "{{plants}} 株"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "delete": "Del",
+    "escape": "Esc",
+    "enter": "Enter"
+  },
+  "siteOnboarding": {
+    "locateTitle": "敷地はどこですか？",
+    "locateIntro": "場所を検索するか座標を貼り付けてください。地図がそこへ移動します。まだ何も配置されません。",
+    "placeNamesCredit": "地名 © OpenStreetMap 貢献者",
+    "skip": "スキップして地図で探す",
+    "startTitle": "デザインを始めましょう",
+    "closeStart": "「デザインを始めましょう」を閉じる",
+    "stepZone": "ゾーンで土地の輪郭を描きます。",
+    "stepCatalog": "植物カタログで種を探し、配置するか地図にドラッグします。",
+    "stepSave": "作業内容はすべて保持されます。上部の名前をクリックしてデザイン名を変更し、「名前を付けて保存…」でファイルとして残せます。",
+    "openCatalog": "植物カタログを開く",
+    "drawZone": "ゾーンを描く",
+    "searchAgain": "もう一度検索",
+    "noPlace": "場所は未検索"
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット",
+    "toolsHeading": "{{menu}}（地図にフォーカスがあるとき）",
+    "escape": "Esc は一度に一つずつ働きます：メニューやダイアログを閉じる、描画を取り消す、選択ツールに戻る、選択を解除する。",
+    "footnote": "ツールのキーは地図にフォーカスがあるときに使えます。"
+  },
+  "settings": {
+    "title": "設定",
+    "appearance": "外観",
+    "theme": "テーマ",
+    "language": "言語",
+    "toolNames": "ツールバーにツール名を表示",
+    "toolNamesHint": "各ツールを一度使うまで、名前とキーが表示されます。"
   }
 }

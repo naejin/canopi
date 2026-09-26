@@ -1,7 +1,5 @@
-import { activePanel } from '../../app/shell/state'
 import {
-  canvasHistoryCommandIdForShortcut,
-  canvasToolCommandIdForShortcut,
+  canvasCommandDefinitionForShortcut,
   type CanvasCommandShortcutInput,
 } from '../../app/canvas-commands'
 import { matchShellCommandShortcut } from '../../app/shell-commands'
@@ -13,7 +11,6 @@ import {
   runCatalogCommand,
   type AppCommandId,
 } from './catalog'
-import { isPlaceSearchShortcut } from '../../app/geocoding/place-search-ui'
 
 interface AppCommandShortcutMatch {
   readonly commandId: AppCommandId
@@ -38,115 +35,22 @@ export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
   return true
 }
 
+/**
+ * Shell shortcuts (File, panels, Settings, Help) work everywhere. Canvas
+ * shortcuts need a canvas and never steal keys from a text field, except
+ * the few that are meant to (Ctrl K).
+ */
 export function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcutMatch | null {
-  return shortcutMatchForEvent(event, isEditableTarget(event.target))
-}
+  const input = shortcutInput(event)
+  const shellCommand = matchShellCommandShortcut(DESKTOP_SHELL_COMMAND_CATALOG, input)
+  if (shellCommand) return { commandId: shellCommand.id, preventDefault: true }
 
-function shortcutMatchForEvent(event: KeyboardEvent, editable: boolean): AppCommandShortcutMatch | null {
-  const shellCommand = matchShellCommandShortcut(
-    DESKTOP_SHELL_COMMAND_CATALOG,
-    shortcutInput(event),
-  )
-  if (shellCommand?.family === 'navigation') {
-    return {
-      commandId: shellCommand.id,
-      preventDefault: true,
-    }
-  }
-
-  if (!editable && !event.ctrlKey && !event.metaKey && !event.altKey) {
-    const bareNavigationCommand = matchShellCommandShortcut(
-      DESKTOP_SHELL_COMMAND_CATALOG,
-      { ...shortcutInput(event), ctrlKey: true, shiftKey: false },
-    )
-    if (bareNavigationCommand?.family === 'navigation') {
-      return {
-        commandId: bareNavigationCommand.id,
-        preventDefault: false,
-      }
-    }
-  }
-
-  const canvasToolCommandId = canvasToolCommandIdForShortcut(shortcutInput(event))
-  if (
-    !editable
-    && !event.ctrlKey
-    && !event.metaKey
-    && !event.altKey
-    && activePanel.value === 'canvas'
-    && canvasToolCommandId
-  ) {
-    return {
-      commandId: canvasToolCommandId,
-      preventDefault: true,
-    }
-  }
-
-  if (activePanel.value === 'canvas') {
-    if (shellCommand?.family === 'file') {
-      return {
-        commandId: shellCommand.id,
-        preventDefault: true,
-      }
-    }
-  }
-
-  if (activePanel.value !== 'canvas' || editable || !getCurrentCanvasCommandSurface()) {
-    return null
-  }
-
-  return canvasShortcutCommand(event)
-}
-
-function canvasShortcutCommand(event: KeyboardEvent): AppCommandShortcutMatch | null {
-  const key = event.key
-  const historyCommandId = canvasHistoryCommandIdForShortcut(shortcutInput(event))
-  if (historyCommandId) {
-    return { commandId: historyCommandId, preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '=') {
-    return { commandId: 'view.zoomIn', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '-') {
-    return { commandId: 'view.zoomOut', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === '0') {
-    return { commandId: 'view.fitToContent', preventDefault: true }
-  }
-  if (isPlaceSearchShortcut(event)) {
-    return { commandId: 'view.searchPlace', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'c') {
-    return { commandId: 'canvas.copy', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'v') {
-    return { commandId: 'canvas.paste', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'd') {
-    return { commandId: 'canvas.duplicateSelected', preventDefault: true }
-  }
-  if (key === 'Delete' || key === 'Backspace') {
-    return { commandId: 'canvas.deleteSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'a') {
-    return { commandId: 'canvas.selectAll', preventDefault: true }
-  }
-  if (!event.ctrlKey && !event.metaKey && key === ']') {
-    return { commandId: 'canvas.bringToFront', preventDefault: false }
-  }
-  if (!event.ctrlKey && !event.metaKey && key === '[') {
-    return { commandId: 'canvas.sendToBack', preventDefault: false }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'l') {
-    return { commandId: 'canvas.lockOrUnlockSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'g') {
-    return { commandId: 'canvas.groupSelected', preventDefault: true }
-  }
-  if ((event.ctrlKey || event.metaKey) && event.shiftKey && key.toLowerCase() === 'g') {
-    return { commandId: 'canvas.ungroupSelected', preventDefault: true }
-  }
-  return null
+  const canvasCommand = canvasCommandDefinitionForShortcut(input)
+  if (!canvasCommand) return null
+  // A tool key before the canvas mounts primes the tool it starts with.
+  if (canvasCommand.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return null
+  if (isEditableTarget(event.target) && !canvasCommand.worksInTextFields) return null
+  return { commandId: canvasCommand.commandId, preventDefault: true }
 }
 
 function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {

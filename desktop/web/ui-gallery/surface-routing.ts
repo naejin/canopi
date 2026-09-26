@@ -2,6 +2,7 @@ import { selectPanel, type Panel } from '../src/app/shell/state'
 
 export const GALLERY_SURFACES = {
   workspace: 'Workspace',
+  start: 'Start',
   color: 'Plant color',
   symbol: 'Plant symbol',
   key: 'Species key',

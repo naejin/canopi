@@ -1,5 +1,6 @@
-.launcher, .panel { position: absolute; right: var(--space-3); z-index: 20; }
-.launcher { top: var(--space-7); display: flex; align-items: center; justify-content: center; width: var(--control-size-md); height: var(--control-size-md); }
+/* The launcher sits in the panel-rail column above the zoom group, clear of the dock; the lens opens in the tool card slot. */
+.launcher, .panel { position: absolute; z-index: 30; }
+.launcher { right: var(--chrome-inset); bottom: var(--chrome-bottom); display: flex; align-items: center; justify-content: center; width: var(--control-size-3xl); height: var(--control-size-3xl); }
 .controls button, .expandButton {
   position: relative;
   display: inline-flex;
@@ -14,20 +15,28 @@
   color: var(--color-text);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
+}
+.launcher {
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  color: var(--color-text-secondary);
 }
 .launcher:hover, .panel button:hover { background: var(--color-control-hover); }
 .launcher:focus-visible, .panel button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .panel {
-  top: var(--space-3);
-  width: min(390px, calc(100% - 40px));
-  max-height: calc(100% - 24px);
+  top: var(--chrome-rail-top);
+  left: var(--canvas-tool-card-left);
+  width: min(390px, calc(100% - var(--canvas-tool-card-left) - var(--chrome-inset)));
+  max-height: calc(100% - var(--chrome-rail-top) - var(--chrome-bottom));
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--color-border);
   background: var(--color-surface);
+  box-shadow: var(--shadow-float);
   overflow: auto;
 }
 .controls { display: flex; align-items: center; gap: var(--space-2); }
@@ -35,7 +44,7 @@
 .controls span { color: var(--color-text-muted); }
 
 .preview { position: relative; width: 100%; height: 350px; min-height: 140px; flex: 1 1 auto; background: var(--canvas-bg); border: 1px solid var(--color-border); overflow: hidden; }
-.panel[data-expanded='true'] { width: min(620px, calc(100% - 40px)); }
+.panel[data-expanded='true'] { width: min(620px, calc(100% - var(--canvas-tool-card-left) - var(--chrome-inset))); }
 .panel[data-expanded='true'] .preview { height: 480px; }
 .artwork, .connectors { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .connectors line { stroke: var(--color-text-muted); stroke-width: 0.7; }

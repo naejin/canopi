@@ -37,6 +37,7 @@ export function createTestCanvasCommandSurface(
     viewport: {
       zoomIn: () => {},
       zoomOut: () => {},
+      zoomBy: () => {},
       zoomToFit: () => {},
       returnToDesign: () => {},
       focusTemporaryBounds: () => false,

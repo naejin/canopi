@@ -34,8 +34,21 @@ import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { readPlanningViewState } from '../src/app/planning-view/state'
-import { appCommandGraphPanelProjection } from '../src/commands/registry'
-import { createBrowserShellCommandProjection } from '../src/web/browser-shell-commands'
+import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../src/commands/registry'
+import {
+  createBrowserShellCapabilities,
+  createBrowserShellCatalog,
+  createBrowserShellCommandProjection,
+} from '../src/web/browser-shell-commands'
+import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
+import { keyboardShortcutsDialogOpen } from '../src/app/shell/dialogs'
+import { TitleBar } from '../src/components/shared/TitleBar'
+import { DesktopPanelRail } from '../src/components/panels/DesktopPanelRail'
+import { SettingsDialog } from '../src/components/shared/SettingsDialog'
+import { KeyboardShortcutsDialog } from '../src/components/shared/KeyboardShortcutsDialog'
+import { WelcomeScreen } from '../src/components/shared/WelcomeScreen'
+import { PlaceSearchField } from '../src/components/canvas/PlaceSearch'
+import { BrowserAppShell } from '../src/web/BrowserAppShell'
 import {
   WorkspaceComposition,
   type WorkspacePanelProjection,
@@ -57,7 +70,7 @@ const initial = parseGallerySurface(params.get('surface'))
 const selectedSurface = signal<GallerySurface>(initial)
 const galleryCanvasReady = signal(false)
 const file = designFixture(fixtureState)
-designSessionStore.replaceCurrentDesignState(file, null, file.name)
+if (initial !== 'start') designSessionStore.replaceCurrentDesignState(file, null, file.name)
 lidarMapViewBounds.value = fixtureState === 'located'
   ? [0.02, 48.21, 0.05, 48.23]
   : null
@@ -117,13 +130,18 @@ function Gallery() {
       <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
-    {selectedSurface.value === 'workspace' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
+    {selectedSurface.value === 'workspace' && edition === 'desktop' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
     <main className={styles.workspace} data-edition={edition}>
-      <WorkspaceComposition
-        panelProjection={panelProjection}
-        surfaces={workspaceSurfaces}
-        responsive={edition === 'web'}
-      />
+      {selectedSurface.value === 'start' ? <GalleryStart /> : edition === 'web' ? (
+        <GalleryWebFrame>
+          <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} responsive />
+        </GalleryWebFrame>
+      ) : (
+        <>
+          <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} />
+          <GalleryDesktopFrame />
+        </>
+      )}
     </main>
     <footer className={styles.status} role="status">{activity.value}</footer>
   </div>
@@ -159,32 +177,66 @@ function selectGallerySurface(next: GallerySurface): void {
   history.replaceState(null, '', url)
 }
 
+const galleryWebCatalog = createBrowserShellCatalog(createBrowserShellCapabilities({
+  newDesign: async () => { activity.value = 'New Design stays in memory.' },
+  openCanopi: async () => { activity.value = 'Opened the sample Design in memory.'; return true },
+  downloadCanopi: async () => { activity.value = 'Download completed in memory.' },
+  revertDesign: async () => { activity.value = 'Reverted the sample Design in memory.' },
+}, (error) => console.error(error), {
+  importGeoJson: async () => { activity.value = 'GeoJSON import stays in memory.'; return { status: 'cancelled' as const } },
+  exportGeoJson: async () => { activity.value = 'GeoJSON export completed in memory.'; return { status: 'cancelled' as const } },
+}), { templatesEnabled: false, canvasReady: () => true })
+
+function galleryWebProjection() {
+  return createBrowserShellCommandProjection({
+    catalog: galleryWebCatalog,
+    state: { hasDesign: true, revertAvailable: false, activePanel: activePanel.value, sidePanel: sidePanel.value },
+    canvas: workspaceCanvasCommandProjection.value,
+  })
+}
+
 function galleryPanelProjection(): WorkspacePanelProjection {
   if (edition === 'desktop') return appCommandGraphPanelProjection.value
-  return createBrowserShellCommandProjection({
-    currentPanel: activePanel.value,
-    currentSidePanel: sidePanel.value,
-    downloadCanopiEnabled: true,
-    revertAvailable: false,
-    geoJsonEnabled: true,
-    templatesEnabled: false,
-    capabilities: {
-      newDesign: () => { activity.value = 'New Design stays in memory.' },
-      openCanopi: () => { activity.value = 'Opened the sample Design in memory.' },
-      downloadCanopi: () => { activity.value = 'Download completed in memory.' },
-      revertDesign: () => { activity.value = 'Reverted the sample Design in memory.' },
-      importGeoJson: () => { activity.value = 'GeoJSON import stays in memory.' },
-      exportGeoJson: () => { activity.value = 'GeoJSON export completed in memory.' },
-      navigate: navigateTo,
-      toggleTheme: () => { theme.value = theme.value === 'light' ? 'dark' : 'light' },
-    },
-  }).panelBar
+  return galleryWebProjection().panelBar
+}
+
+/** The Desktop frame over the gallery workspace: the production title bar, rail and dialogs. */
+function GalleryDesktopFrame() {
+  if (selectedSurface.value !== 'workspace' && selectedSurface.value !== 'start') return null
+  return <>
+    <TitleBar />
+    {selectedSurface.value === 'workspace' && <DesktopPanelRail />}
+    <SettingsDialog />
+    {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} />}
+  </>
+}
+
+function GalleryWebFrame({ children }: { readonly children: preact.ComponentChildren }) {
+  const projection = galleryWebProjection()
+  return <>
+    <BrowserAppShell
+      commandProjection={projection}
+      designIdentity={{ name: file.name, saveStatus: 'draft', saveFailureReason: null }}
+      search={<PlaceSearchField compact />}
+    >
+      {children}
+    </BrowserAppShell>
+    <SettingsDialog />
+    {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={projection.workspaceMenus} />}
+  </>
+}
+
+function GalleryStart() {
+  return <>
+    <WelcomeScreen />
+    <GalleryDesktopFrame />
+  </>
 }
 
 function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjection: WorkspacePanelProjection }) {
   return (
     <nav className={styles.workspaceCommands} aria-label="Workspace panel commands">
-      {[...panelProjection.primary, ...panelProjection.design, ...panelProjection.side].map((command) => command.panel ? (
+      {[...panelProjection.primary, ...panelProjection.design, ...panelProjection.planning].map((command) => command.panel ? (
         <button type="button" data-gallery-workspace-panel={command.panel} onClick={() => navigateTo(command.panel!)}>
           {command.panel}
         </button>

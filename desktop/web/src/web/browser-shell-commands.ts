@@ -1,47 +1,66 @@
 import { canvasPdf, canExportCanvasPdf } from '../app/canvas-pdf/live'
 import { navigateTo, type Panel, type SidePanel } from '../app/shell/state'
-import { mutateSettingsProjection } from '../app/settings/projection'
 import {
   composeShellCommandCatalog,
   projectShellCommandCatalog,
   type ProjectedShellCommand,
   type ShellChromeProjection,
+  type ShellCommandCatalogEntry,
   type ShellCommandIdForCapability,
+  type ShellCommandState,
 } from '../app/shell-commands'
+import { composeWorkspaceMenus, type MenuDefinition } from '../app/shell-commands/menus'
+import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capabilities'
+import type { CanvasCommandProjection } from '../app/canvas-commands'
 import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
 import type { GeoJsonWorkflow } from '../app/geojson/workflow'
 
+export type { MenuDefinition } from '../app/shell-commands/menus'
+
 type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
+  | 'renameDesign'
   | 'downloadCanopi'
   | 'revertDesign'
-  | 'exportCanvasPdf'
   | 'importGeoJson'
+  | 'exportCanvasPdf'
   | 'exportGeoJson'
+  | 'openSettings'
+  | 'findPlants'
   | 'navigateCanvas'
   | 'navigateTemplates'
+  | 'navigateLayers'
+  | 'navigateData'
+  | 'navigateSpeciesKey'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
-  | 'navigateSpeciesKey'
-  | 'navigateData'
-  | 'navigateLayers'
   | 'navigateCalendar'
   | 'navigateBudget'
   | 'navigateConsortium'
+  | 'toggleToolNames'
+  | 'showSatellite'
+  | 'showMap'
+  | 'showNoBackground'
   | 'toggleTheme'
+  | 'showShortcuts'
+  | 'aboutCanopi'
 
-type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
+export type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
 
 export type BrowserShellProjectedCommand = ProjectedShellCommand<BrowserShellCommandId>
+export type BrowserShellCatalog = readonly ShellCommandCatalogEntry<BrowserShellCommandId>[]
+
 export interface BrowserShellChromeProjection extends ShellChromeProjection<BrowserShellCommandId> {
-  readonly theme: BrowserShellProjectedCommand
+  /** File, Edit, View, Tools and Help, ready to render. */
+  readonly workspaceMenus: readonly MenuDefinition[]
 }
 
 export interface BrowserShellDesignIdentity {
   readonly name: string
   readonly saveStatus: DesignSaveStatus
+  readonly saveFailureReason: string | null
 }
 
 export interface BrowserShellCapabilities {
@@ -52,7 +71,6 @@ export interface BrowserShellCapabilities {
   importGeoJson(): void
   exportGeoJson(): void
   navigate(panel: Panel): void
-  toggleTheme(): void
 }
 
 export interface BrowserDesignShellCommands {
@@ -61,6 +79,23 @@ export interface BrowserDesignShellCommands {
   downloadCanopi(): Promise<void>
   revertDesign(): Promise<unknown>
 }
+
+/**
+ * A browser keeps these for itself (new window, tab switching), so the Web
+ * Edition neither shows nor listens for them.
+ */
+export const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
+  'Ctrl+N',
+  'Ctrl+Q',
+  'Ctrl+1',
+  'Ctrl+2',
+  'Ctrl+3',
+  'Ctrl+4',
+  'Ctrl+5',
+  'Ctrl+6',
+  'Ctrl+7',
+  'Ctrl+8',
+])
 
 export function createBrowserShellCapabilities(
   commands: BrowserDesignShellCommands,
@@ -75,87 +110,82 @@ export function createBrowserShellCapabilities(
     importGeoJson: () => runBrowserDesignCommand(() => geoJson.importGeoJson(), onError),
     exportGeoJson: () => runBrowserDesignCommand(() => geoJson.exportGeoJson(), onError),
     navigate: navigateTo,
-    toggleTheme: () => {
-      mutateSettingsProjection((settings) => {
-        settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
-      }, { persist: 'immediate' })
-    },
   }
 }
 
-export interface BrowserShellProjectionInput {
-  readonly currentPanel: Panel
-  readonly currentSidePanel: SidePanel | null
-  readonly downloadCanopiEnabled: boolean
-  /** The current Design changed since it was opened or created. */
-  readonly revertAvailable: boolean
-  /** A Design is open in a mounted canvas runtime. */
-  readonly geoJsonEnabled: boolean
+export interface BrowserShellCatalogOptions {
   readonly templatesEnabled: boolean
-  readonly capabilities: BrowserShellCapabilities
+  /** A Design is open in a mounted canvas runtime (GeoJSON needs one). */
+  readonly canvasReady: () => boolean
 }
 
-export function createBrowserShellCommandProjection({
-  currentPanel,
-  currentSidePanel,
-  downloadCanopiEnabled,
-  revertAvailable,
-  geoJsonEnabled,
-  templatesEnabled,
-  capabilities,
-}: BrowserShellProjectionInput): BrowserShellChromeProjection {
-  const catalog = composeShellCommandCatalog({
-    exportCanvasPdf: { execute: () => canvasPdf.show(), isExecutionDisabled: () => !canExportCanvasPdf(), isProjectionDisabled: () => !canExportCanvasPdf() },
+/** The Web Edition command catalog; availability reads the live state it is given. */
+export function createBrowserShellCatalog(
+  capabilities: BrowserShellCapabilities,
+  { templatesEnabled, canvasReady }: BrowserShellCatalogOptions,
+): BrowserShellCatalog {
+  const designPanel = (panel: SidePanel) => ({
+    execute: () => capabilities.navigate(panel),
+    isExecutionDisabled: (state: ShellCommandState) => !state.hasDesign && state.sidePanel !== panel,
+  })
+  const needsDesign = (state: ShellCommandState) => !state.hasDesign
+  return composeShellCommandCatalog({
+    ...createWorkspaceShellCapabilities(),
     newDesign: { execute: () => capabilities.newDesign() },
     openCanopi: { execute: () => capabilities.openCanopi() },
     downloadCanopi: {
       execute: () => capabilities.downloadCanopi(),
-      isExecutionDisabled: () => !downloadCanopiEnabled,
-      isProjectionDisabled: () => !downloadCanopiEnabled,
+      isExecutionDisabled: needsDesign,
     },
     revertDesign: {
       execute: () => capabilities.revertDesign(),
-      isExecutionDisabled: () => !downloadCanopiEnabled || !revertAvailable,
+      isExecutionDisabled: (state) => !state.hasDesign || !state.revertAvailable,
     },
     importGeoJson: {
       execute: () => capabilities.importGeoJson(),
-      isExecutionDisabled: () => !geoJsonEnabled,
+      isExecutionDisabled: (state) => !state.hasDesign || !canvasReady(),
+    },
+    exportCanvasPdf: {
+      execute: () => canvasPdf.show(),
+      isExecutionDisabled: () => !canExportCanvasPdf(),
     },
     exportGeoJson: {
       execute: () => capabilities.exportGeoJson(),
-      isExecutionDisabled: () => !geoJsonEnabled,
+      isExecutionDisabled: (state) => !state.hasDesign || !canvasReady(),
     },
     navigateCanvas: { execute: () => capabilities.navigate('canvas') },
     ...(templatesEnabled
       ? { navigateTemplates: { execute: () => capabilities.navigate('templates') } }
       : {}),
+    navigateLayers: designPanel('layers'),
+    navigateData: designPanel('data'),
+    navigateSpeciesKey: designPanel('species-key'),
     navigatePlantDatabase: { execute: () => capabilities.navigate('plant-db') },
-    navigateSpeciesKey: { execute: () => capabilities.navigate('species-key'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'species-key' },
-    navigateData: { execute: () => capabilities.navigate('data'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'data' },
-    navigateLayers: { execute: () => capabilities.navigate('layers'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'layers' },
-    navigateCalendar: { execute: () => capabilities.navigate('calendar'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'calendar' },
-    navigateBudget: { execute: () => capabilities.navigate('budget'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'budget' },
-    navigateConsortium: { execute: () => capabilities.navigate('consortium'), isExecutionDisabled: () => !downloadCanopiEnabled && currentSidePanel !== 'consortium' },
     navigateFavorites: { execute: () => capabilities.navigate('favorites') },
-    toggleTheme: { execute: () => capabilities.toggleTheme() },
+    navigateCalendar: designPanel('calendar'),
+    navigateBudget: designPanel('budget'),
+    navigateConsortium: designPanel('consortium'),
   })
+}
 
-  const projection = projectShellCommandCatalog(
-    catalog,
-    {
-      hasDesign: downloadCanopiEnabled,
-      revertAvailable,
-      activePanel: currentPanel,
-      sidePanel: currentSidePanel,
-    },
-    t,
-  )
-  const themeDefinition = catalog.find((command) => command.capabilityId === 'toggleTheme')
-  const theme = themeDefinition
-    ? projection.commands.get(themeDefinition.id)
-    : undefined
-  if (!theme) throw new Error('Browser shell projection requires the theme command')
-  return { ...projection, theme }
+export interface BrowserShellProjectionInput {
+  readonly catalog: BrowserShellCatalog
+  readonly state: ShellCommandState
+  readonly canvas: CanvasCommandProjection
+}
+
+export function createBrowserShellCommandProjection({
+  catalog,
+  state,
+  canvas,
+}: BrowserShellProjectionInput): BrowserShellChromeProjection {
+  const shell = projectShellCommandCatalog(catalog, state, t, {
+    unavailableShortcuts: BROWSER_RESERVED_SHORTCUTS,
+  })
+  return {
+    ...shell,
+    workspaceMenus: composeWorkspaceMenus({ shell, canvas, translate: t }),
+  }
 }
 
 function runBrowserDesignCommand(

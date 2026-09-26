@@ -71,7 +71,7 @@ export function WorkspaceComposition({
 
   return (
     <div
-      className={`${styles.root} ${responsive ? styles.responsive : ''} ${responsive && mountedSide ? styles.responsiveOpen : ''}`}
+      className={styles.root}
       data-workspace-composition
       data-workspace-primary-panel={primary}
       data-workspace-sidebar-open={mountedSide ? 'true' : undefined}
@@ -84,7 +84,7 @@ export function WorkspaceComposition({
       {mountedSide && SideSurface ? (
         <SidePanelDock
           responsive={responsive}
-          responsiveSize={isPlanningPanel(mountedSide) ? 'large' : 'default'}
+          wide={isWidePanel(mountedSide)}
           expanded={mountedSide === 'calendar' && planningView.calendarExpanded.value}
           onManualResize={() => { planningView.calendarExpanded.value = false }}
         >
@@ -109,7 +109,7 @@ export function validateWorkspaceSurfaces(
 ): { readonly primary: ReadonlySet<Panel>; readonly side: ReadonlySet<SidePanel> } {
   const primary = projectedPanels(panelProjection.primary, 'primary')
   const side = projectedPanels(
-    [...panelProjection.design, ...panelProjection.side],
+    [...panelProjection.design, ...panelProjection.planning],
     'side',
   )
   const primarySurfaces = new Set(Object.keys(surfaces.primary) as PrimaryPanel[])
@@ -158,8 +158,9 @@ function assertSamePanels(
   throw new Error(`Workspace ${group} registrations disagree with shell capabilities (${details}).`)
 }
 
-function isPlanningPanel(panel: SidePanel): boolean {
-  return panel === 'calendar' || panel === 'budget' || panel === 'consortium'
+/** Budget and Consortium open at 440 px; every other panel at 380 px. */
+function isWidePanel(panel: SidePanel): boolean {
+  return panel === 'budget' || panel === 'consortium'
 }
 
 function WorkspaceLoading() {

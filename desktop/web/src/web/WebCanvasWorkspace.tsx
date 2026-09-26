@@ -1,4 +1,3 @@
-import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   designSessionStore,
@@ -8,10 +7,8 @@ import { getCurrentCanvasSession, setCanvasRuntimeSurfaces } from '../canvas/ses
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CanvasDocumentSurface } from '../canvas/runtime/runtime'
 import { acquireCanvasRuntimeLifecycle } from '../canvas/runtime/lifecycle-owner'
-import { ZoomControls } from '../components/canvas/ZoomControls'
-import { InspectionLens } from '../components/canvas/InspectionLens'
-import { PlaceSearch } from '../components/canvas/PlaceSearch'
-import { CanvasOverview } from '../components/canvas/CanvasOverview'
+import { CanvasChrome } from '../components/canvas/CanvasChrome'
+import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canvas-actions'
 import panelStyles from '../components/panels/Panels.module.css'
 import { browserDesignSessionController, type BrowserDesignSessionController } from './browser-design-session'
 import {
@@ -20,7 +17,6 @@ import {
 } from './browser-workspace-runtime'
 import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
 import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
-import { WebCanvasToolbar } from './WebCanvasToolbar'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
 
 interface WebCanvasWorkspaceProps {
@@ -216,34 +212,16 @@ export function WebCanvasWorkspace({
 
   return (
     <div className={panelStyles.canvasPanel} data-testid="web-canvas-workspace">
-      {hasDesign && <WebCanvasToolbar />}
-      <div className={panelStyles.canvasColumn}>
-        <div className={panelStyles.canvasRow}>
-          <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
-            <div
-              ref={containerRef}
-              className={panelStyles.canvasContainer}
-              data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
-              data-testid="web-canvas-workspace-surface"
-            />
-            <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
-            {hasDesign && <PlaceSearch />}
-            {hasDesign && <InspectionLens canvasRef={containerRef} />}
-            {hasDesign && <SpeciesFocusChip />}
-            {hasDesign && <CanvasOverview />}
-            {!hasDesign && (
-              <div className={panelStyles.canvasEmptyState}>
-                <WebWelcomeScreen controller={controller} />
-              </div>
-            )}
-          </div>
-        </div>
-        {hasDesign && (
-          <div className={panelStyles.canvasBar}>
-            <div className={panelStyles.canvasBarSpacer} />
-            <ZoomControls />
-          </div>
-        )}
+      <div ref={canvasAreaRef} className={panelStyles.canvasArea}>
+        <div
+          ref={containerRef}
+          className={panelStyles.canvasContainer}
+          data-map-active={mapState?.status === 'ready' ? 'true' : 'false'}
+          data-testid="web-canvas-workspace-surface"
+        />
+        <div ref={rulerOverlayRef} className={panelStyles.rulerOverlay} />
+        {hasDesign && <CanvasChrome projection={workspaceCanvasCommandProjection.value} canvasRef={containerRef} />}
+        {!hasDesign && <WebWelcomeScreen controller={controller} />}
       </div>
     </div>
   )

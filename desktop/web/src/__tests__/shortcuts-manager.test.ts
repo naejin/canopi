@@ -10,8 +10,8 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
-import { closePlaceSearch, placeSearchOpen } from '../app/geocoding/place-search-ui'
 import { registerPlantFinder } from '../app/plant-finder/focus'
+import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -75,7 +75,7 @@ describe('shortcut manager canvas tool switching', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z' }))
 
     expect(setTool).toHaveBeenCalledWith('polygon')
     expect(activeTool.value).toBe('polygon')
@@ -85,7 +85,7 @@ describe('shortcut manager canvas tool switching', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }))
 
     expect(setTool).toHaveBeenCalledWith('plant-spacing')
     expect(activeTool.value).toBe('plant-spacing')
@@ -98,7 +98,7 @@ describe('shortcut manager canvas tool switching', () => {
     mountCanvasCommandSurface({ tools: { setTool } })
 
     input.focus()
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }))
 
     expect(setTool).not.toHaveBeenCalled()
     expect(activeTool.value).toBe('select')
@@ -114,32 +114,23 @@ describe('shortcut manager canvas tool switching', () => {
   })
 
   it('keeps panel shortcuts aligned with the command registry mapping', () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '3', ctrlKey: true }))
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
   })
 
-  it('preserves bare panel shortcuts outside editable controls', () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }))
-
-    expect(activePanel.value).toBe('canvas')
-    expect(sidePanel.value).toBe('plant-db')
-
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }))
-
-    expect(sidePanel.value).toBe('plant-db')
-    input.remove()
+  it('leaves bare digits to the map and text fields', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '3' }))
+    expect(sidePanel.value).toBe(null)
   })
 
-  it('focuses the open panel plant finder on Ctrl+F and leaves Ctrl+F alone otherwise', () => {
+  it('focuses the open panel plant finder on Ctrl+F, and opens the Plant catalog when no finder is open', () => {
     const finder = document.createElement('input')
     document.body.append(finder)
     const focus = vi.fn(() => finder.focus())
@@ -158,8 +149,8 @@ describe('shortcut manager canvas tool switching', () => {
     unregister()
     const unclaimed = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, cancelable: true })
     window.dispatchEvent(unclaimed)
-    expect(unclaimed.defaultPrevented).toBe(false)
-    expect(placeSearchOpen.value).toBe(false)
+    expect(unclaimed.defaultPrevented).toBe(true)
+    expect(sidePanel.value).toBe('plant-db')
     finder.remove()
   })
 
@@ -232,7 +223,7 @@ describe('shortcut manager canvas tool switching', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '=', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '-', ctrlKey: true }))
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '0', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F', shiftKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Z', ctrlKey: true, shiftKey: true }))
 
@@ -272,18 +263,22 @@ describe('shortcut manager canvas tool switching', () => {
     })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
+    // Nothing is selected: selection edits stay quiet, Paste and Select all still run.
+    expect(copy).not.toHaveBeenCalled()
+    selectedObjectIds.value = new Set(['plant-1'])
+    const focusRequest = placeSearchFocusRequest.value
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
-    selectedObjectIds.value = new Set(['plant-1'])
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
-    selectedObjectIds.value = new Set()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
+    selectedObjectIds.value = new Set()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
 
     expect(copy).toHaveBeenCalledTimes(1)
@@ -297,7 +292,6 @@ describe('shortcut manager canvas tool switching', () => {
     expect(unlockSelected).not.toHaveBeenCalled()
     expect(groupSelected).toHaveBeenCalledTimes(1)
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
-    expect(placeSearchOpen.value).toBe(true)
-    closePlaceSearch()
+    expect(placeSearchFocusRequest.value).toBe(focusRequest + 1)
   })
 })

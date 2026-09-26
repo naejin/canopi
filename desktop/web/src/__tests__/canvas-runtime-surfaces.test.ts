@@ -90,6 +90,7 @@ function createCommandSurface() {
       focusTemporaryBounds: () => false,
       returnFromTemporaryFocus: () => false,
       showPlace: () => false,
+      zoomBy: () => {},
     },
     history: {
       canUndo: signal(false),

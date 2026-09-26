@@ -11,7 +11,10 @@ import {
 } from './registry'
 
 export interface PlaceSearchResult {
+  /** Short primary name ("Ballon-Saint-Mars"). */
   readonly label: string
+  /** Muted locality line ("Sarthe, Pays de la Loire, France"), or null. */
+  readonly detail: string | null
   readonly lat: number
   readonly lon: number
   readonly source: 'coordinates' | 'geocoder'
@@ -54,6 +57,30 @@ export function parseCoordinates(text: string): { lat: number; lon: number } | n
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
   if (Math.abs(lat) > WEB_MERCATOR_MAX_LATITUDE_DEG || Math.abs(lon) > 180) return null
   return { lat, lon }
+}
+
+const POSTAL_CODE_PATTERN = /^[\d\s-]+$/
+const MAX_LOCALITY_PARTS = 3
+
+/**
+ * Splits a geocoder's long display name into a short name and a locality:
+ * postal codes and parts that only repeat the country ("France
+ * métropolitaine") are dropped, and the locality keeps its last three parts.
+ */
+export function shortPlaceLabel(displayName: string): { label: string; detail: string | null } {
+  const parts = displayName.split(',').map((part) => part.trim()).filter(Boolean)
+  const label = parts[0] ?? displayName.trim()
+  const country = parts.length > 1 ? parts.at(-1)! : null
+  const locality = parts.slice(1).filter((part, index, rest) =>
+    !POSTAL_CODE_PATTERN.test(part)
+    && part !== label
+    && rest.indexOf(part) === index
+    && (index === rest.length - 1 || !country || !part.includes(country)),
+  )
+  return {
+    label,
+    detail: locality.length > 0 ? locality.slice(-MAX_LOCALITY_PARTS).join(', ') : null,
+  }
 }
 
 /** Start time of the last geocoder request per endpoint, shared app-wide. */
@@ -108,6 +135,7 @@ export function createPlaceSearchController(options: PlaceSearchOptions): PlaceS
       if (coordinates) {
         results.value = [{
           label: `${coordinates.lat.toFixed(6)}, ${coordinates.lon.toFixed(6)}`,
+          detail: null,
           ...coordinates,
           source: 'coordinates',
         }]
@@ -136,7 +164,7 @@ export function createPlaceSearchController(options: PlaceSearchOptions): PlaceS
         results.value = matches
           .filter((match) => !seen.has(match.displayName) && seen.add(match.displayName))
           .map((match) => ({
-            label: match.displayName,
+            ...shortPlaceLabel(match.displayName),
             lat: match.lat,
             lon: match.lon,
             source: 'geocoder',

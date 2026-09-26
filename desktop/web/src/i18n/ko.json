@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "식물 데이터베이스",
-    "canvas": "설계 캔버스",
-    "designNotebook": "디자인 노트북",
     "favorites": "즐겨찾기"
   },
   "webShell": {
-    "commands": "웹 에디션 명령",
     "panels": "웹 에디션 패널",
     "workspace": "웹 에디션 작업 공간",
-    "openCanopi": ".canopi 열기",
-    "downloadCanopi": ".canopi 다운로드",
-    "dismissNotice": "닫기"
+    "openCanopi": ".canopi 파일 열기…",
+    "downloadCanopi": "사본 다운로드",
+    "dismissNotice": "닫기",
+    "downloadCopy": "사본 다운로드",
+    "savedInBrowser": "이 브라우저에 저장됨",
+    "openCanopiFile": ".canopi 파일 열기"
   },
   "designNotebook": {
     "title": "디자인 노트북",
@@ -89,32 +89,20 @@
       "panHint": "미리보기. 드래그하거나 방향키로 탐색하세요. Shift를 누르면 더 멀리 이동합니다.",
       "recenter": "캔버스 보기에 맞춰 중앙 정렬"
     },
-    "emptyWelcome": "설계를 시작하세요",
-    "emptyNewDesign": "새 설계",
-    "emptyOpenDesign": "설계 열기",
-    "emptyRecentFiles": "최근 파일",
     "toolbar": "도구",
     "tools": {
       "select": "선택",
-      "selectDesc": "클릭하여 객체 선택",
-      "hand": "손",
-      "handDesc": "캔버스 이동",
-      "rectangle": "직사각형",
-      "rectangleDesc": "직사각형 구역 그리기",
-      "ellipse": "타원",
-      "ellipseDesc": "타원형 구역 그리기",
-      "polygon": "다각형",
-      "polygonDesc": "다각형 구역 그리기",
-      "line": "선",
-      "lineDesc": "선형 구역 그리기",
-      "text": "텍스트",
-      "textDesc": "텍스트 라벨 추가",
-      "objectStamp": "개체 스탬프",
-      "objectStampDesc": "기존 디자인 개체 복사",
-      "plantSpacing": "식물 간격",
-      "plantSpacingDesc": "배치된 식물을 간격 안내선을 따라 반복",
-      "measurementGuide": "측정 가이드",
-      "measurementGuideDesc": "항상 표시되는 거리 가이드를 배치"
+      "hand": "이동",
+      "rectangle": "직사각형 구역",
+      "ellipse": "타원 구역",
+      "polygon": "다각형 구역",
+      "line": "선 구역",
+      "text": "텍스트 메모",
+      "objectStamp": "스탬프 배치",
+      "plantSpacing": "한 줄 심기",
+      "measurementGuide": "측정",
+      "zones": "구역",
+      "plantStamp": "식물 배치"
     },
     "plantSpacing": {
       "selectSource": "배치된 식물 선택",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "격자",
-      "gridDesc": "격자 오버레이 전환",
       "snapToGrid": "격자에 맞추기",
-      "snapToGridDesc": "도형을 격자 교차점에 맞추기",
       "rulers": "눈금자",
-      "rulersDesc": "가로 및 세로 눈금자 전환",
       "zoom": "확대/축소"
     },
     "overview": {
-      "label": "개요",
-      "zoomInToEdit": "편집하려면 확대하세요",
+      "zoomInToEdit": "편집하려면 확대하세요. 이 축척에서는 식물이 숨겨집니다.",
       "returnToDesign": "디자인으로 돌아가기",
-      "design": "디자인",
-      "designMarker": "디자인으로 돌아가기"
+      "designPin": "디자인: {{name}}"
     },
     "plantColor": {
       "label": "식물 색상",
@@ -211,21 +194,22 @@
       "applySelection": "선택한 {{count}}개에 적용"
     },
     "placeSearch": {
-      "open": "장소 검색",
-      "placeholder": "장소 이름 또는 위도, 경도",
+      "placeholder": "장소 또는 좌표 검색",
       "searching": "검색 중…",
       "noResults": "장소를 찾을 수 없습니다",
       "error": "장소 검색에 실패했습니다",
       "results": "장소",
-      "emptyPrompt": "부지 검색"
+      "placeholderShort": "장소 검색",
+      "east": "동경",
+      "north": "북위",
+      "clear": "검색 지우기",
+      "south": "남위",
+      "coordinates": "{{northSouth}} {{lat}}°, {{eastWest}} {{lon}}°",
+      "west": "서경",
+      "goStraightThere": "좌표 · 바로 이동"
     },
     "file": {
-      "new": "새 설계",
-      "open": "설계 열기",
-      "save": "저장",
-      "saveAs": "다른 이름으로 저장",
-      "cancel": "취소",
-      "revert": "열었을 때 버전으로 되돌리기"
+      "cancel": "취소"
     },
     "layers": {
       "layerPanel": "레이어",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "키가 없으면 Canopi는 Google의 공개 위성 타일을 사용합니다. 공식 Map Tiles API를 사용하려면 Google Maps API 키를 추가하세요."
-    }
+    },
+    "zoom": {
+      "scaleBar": "축척 막대: {{distance}}",
+      "chooseScale": "축척 {{scale}}. 축척 선택",
+      "mapScale": "지도 축척"
+    },
+    "viewChip": "보기"
   },
   "worldMap": {
     "title": "세계 지도",
@@ -592,18 +582,11 @@
     "filterByStyle": "스타일별 필터",
     "openTemplate": "새 설계로 열기"
   },
-  "status": {
-    "language": "언어",
-    "theme": "테마"
-  },
   "theme": {
     "light": "라이트",
     "dark": "다크"
   },
   "commands": {
-    "plantDb": "식물 데이터베이스로 이동",
-    "canvas": "설계 캔버스로 이동",
-    "toggleTheme": "테마 전환",
     "commandPalette": "명령 팔레트",
     "searchPlaceholder": "명령을 입력하세요...",
     "noResults": "명령을 찾을 수 없습니다"
@@ -781,21 +764,56 @@
     "file": "파일",
     "edit": "편집",
     "view": "보기",
-    "file.exit": "종료",
+    "file.exit": "Canopi 종료",
     "edit.undo": "실행 취소",
     "edit.redo": "다시 실행",
     "view.zoomIn": "확대",
     "view.zoomOut": "축소",
-    "view.fitToContent": "콘텐츠에 맞추기",
     "view.searchPlace": "장소 검색…",
     "help": "도움말",
-    "help.reportProblem": "문제 신고",
-    "help.aboutCanopi": "Canopi 정보"
+    "help.reportProblem": "문제 신고…",
+    "help.aboutCanopi": "Canopi 정보",
+    "edit.duplicate": "복제",
+    "edit.delete": "삭제",
+    "file.settings": "설정…",
+    "edit.ungroup": "그룹 해제",
+    "edit.sendToBack": "맨 뒤로 보내기",
+    "edit.arrange": "정렬",
+    "edit.selectSameSpecies": "이 종 모두 선택",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "잠금 해제",
+    "view.darkTheme": "어두운 테마",
+    "edit.saveAsStamp": "스탬프로 저장",
+    "view.fitToDesign": "디자인에 맞추기",
+    "file.new": "새 디자인",
+    "view.backgroundMap": "지도",
+    "edit.findPlants": "식물 찾기…",
+    "file.revert": "열었을 때 버전으로 되돌리기…",
+    "tools": "도구",
+    "edit.copy": "복사",
+    "edit.paste": "붙여넣기",
+    "file.rename": "이름 바꾸기…",
+    "view.background": "배경",
+    "file.saveAs": "다른 이름으로 저장…",
+    "edit.group": "그룹화",
+    "view.toolNames": "도구 이름",
+    "file.save": "저장",
+    "file.export": "내보내기",
+    "view.backgroundNone": "없음",
+    "help.shortcuts": "키보드 단축키",
+    "view.backgroundSatellite": "위성",
+    "edit.bringToFront": "맨 앞으로 가져오기",
+    "edit.lock": "잠금",
+    "file.open": "디자인 열기…",
+    "edit.selectAll": "모두 선택",
+    "file.exportPlantingPlan": "식재 계획 (PDF)…",
+    "edit.cut": "잘라내기"
   },
   "titleBar": {
     "untitledDesign": "제목 없는 디자인",
-    "renameDesignName": "디자인 이름 바꾸기",
-    "designNameInput": "디자인 이름"
+    "designNameInput": "디자인 이름",
+    "menus": "메뉴",
+    "renameDesign": "디자인 이름 바꾸기: {{name}}"
   },
   "about": {
     "title": "Canopi 정보",
@@ -1145,7 +1163,15 @@
     "saved": "저장됨",
     "error": "저장하지 못함",
     "retry": "다시 시도",
-    "conflict": "Canopi 외부에서 변경됨"
+    "conflict": "Canopi 외부에서 변경됨",
+    "detailsUnknown": "Canopi가 파일을 쓰지 못했습니다.",
+    "detailsTitle": "최근 변경 사항을 저장하지 못했습니다",
+    "detailsReason": "Canopi가 파일을 쓰지 못했습니다: {{reason}}",
+    "details": "자세히…",
+    "draft": "초안",
+    "detailsSafe": "Canopi가 열려 있는 동안 작업은 안전합니다. 다시 시도하거나 다른 위치에 저장하세요.",
+    "saveAs": "다른 이름으로 저장…",
+    "resolve": "해결…"
   },
   "saveProblem": {
     "flushFailedTitle": "변경 사항을 저장하지 못했습니다",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "초안",
-    "delete": "초안 삭제: {{name}}",
-    "confirmDelete": "이 초안을 삭제할까요?",
-    "confirmDeleteAction": "삭제"
+    "confirmDelete": "“{{name}}”을(를) 삭제할까요? 파일로 저장된 적이 없어 복구할 수 없습니다.",
+    "confirmDeleteAction": "초안 삭제",
+    "intro": "Canopi는 작업하는 동안 모든 변경을 보관합니다. 파일로 저장한 적 없는 디자인은 저장하거나 삭제할 때까지 여기에 남습니다.",
+    "deleteItem": "초안 삭제…",
+    "neverSaved": "초안, 파일로 저장한 적 없음",
+    "actions": "{{name}} 작업"
   },
   "plantFinder": {
     "label": "식물 찾기",
@@ -1283,5 +1312,66 @@
       "coverage": "셀 {{cells}}개 게시됨",
       "noOutputs": "게시된 항목 없음"
     }
+  },
+  "panelRail": {
+    "label": "패널",
+    "canvas": "디자인 캔버스",
+    "layers": "레이어",
+    "data": "데이터 라이브러리",
+    "plants": "이 디자인의 식물",
+    "catalog": "식물 카탈로그",
+    "favorites": "즐겨찾기와 스탬프",
+    "calendar": "달력",
+    "budget": "예산",
+    "consortium": "컨소시엄",
+    "notebook": "디자인 노트북"
+  },
+  "start": {
+    "region": "시작",
+    "purpose": "내 땅의 지도 위에서 혼농임업과 먹거리 숲을 디자인하세요.",
+    "more": "더 보기",
+    "searchDesigns": "내 디자인 검색",
+    "noMatches": "“{{query}}”와 일치하는 디자인이 없습니다.",
+    "recentDesigns": "최근 디자인",
+    "footerDesktop": "오프라인에서 작동합니다. 디자인은 이 컴퓨터에 남습니다.",
+    "footerWeb": "디자인은 이 브라우저에 남습니다. 파일로 보관하려면 사본을 다운로드하세요.",
+    "plantCount": "식물 {{plants}}그루"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "delete": "Del",
+    "escape": "Esc",
+    "enter": "Enter"
+  },
+  "siteOnboarding": {
+    "locateTitle": "부지는 어디에 있나요?",
+    "locateIntro": "장소를 검색하거나 좌표를 붙여 넣으세요. 지도가 그곳으로 이동하며, 아직 아무것도 배치되지 않습니다.",
+    "placeNamesCredit": "지명 © OpenStreetMap 기여자",
+    "skip": "건너뛰고 지도에서 찾기",
+    "startTitle": "디자인 시작하기",
+    "closeStart": "디자인 시작하기 닫기",
+    "stepZone": "구역으로 땅의 윤곽을 그리세요.",
+    "stepCatalog": "식물 카탈로그에서 종을 찾은 다음 배치하거나 지도로 끌어다 놓으세요.",
+    "stepSave": "작업하는 동안 모든 것이 보관됩니다. 위쪽 이름을 클릭해 디자인 이름을 바꾸고, 다른 이름으로 저장…으로 파일로 보관하세요.",
+    "openCatalog": "식물 카탈로그 열기",
+    "drawZone": "구역 그리기",
+    "searchAgain": "다시 검색",
+    "noPlace": "검색한 장소 없음"
+  },
+  "shortcuts": {
+    "title": "키보드 단축키",
+    "toolsHeading": "{{menu}} (지도에 포커스가 있을 때)",
+    "escape": "Esc는 한 번에 하나씩 처리합니다: 메뉴나 대화 상자 닫기, 그리던 것 취소, 선택으로 돌아가기, 선택 해제.",
+    "footnote": "도구 키는 지도에 포커스가 있을 때 작동합니다."
+  },
+  "settings": {
+    "title": "설정",
+    "appearance": "모양",
+    "theme": "테마",
+    "language": "언어",
+    "toolNames": "도구 막대에 도구 이름 표시",
+    "toolNamesHint": "각 도구를 한 번씩 사용할 때까지 이름과 키가 표시됩니다."
   }
 }

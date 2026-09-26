@@ -7,7 +7,7 @@ vi.mock('../components/shared/DegradedBanner', () => ({ DegradedBanner: () => nu
 vi.mock('../components/shared/CommandPalette', () => ({ CommandPalette: () => null }))
 vi.mock('../components/shared/ProblemReportDialog', () => ({ ProblemReportDialog: () => null }))
 vi.mock('../components/panels/CanvasPanel', () => ({ CanvasPanel: () => <div data-testid="canvas-panel" /> }))
-vi.mock('../components/panels/PanelBar', () => ({ PanelBar: () => <div data-testid="panel-bar" /> }))
+vi.mock('../components/panels/DesktopPanelRail', () => ({ DesktopPanelRail: () => <div data-testid="panel-rail" /> }))
 vi.mock('../components/panels/PlantDbPanel', () => ({ PlantDbPanel: () => <div data-testid="plant-db-panel" /> }))
 vi.mock('../components/panels/DesignNotebookPanel', () => ({ DesignNotebookPanel: () => <div data-testid="design-notebook-panel" /> }))
 vi.mock('../app/shell/controller', () => ({ commitSidePanelWidth: vi.fn() }))
@@ -60,14 +60,17 @@ describe('App sidebar width', () => {
     document.body.style.userSelect = ''
   })
 
-  it('uses the compact first-use width within the viewport when no explicit width is saved', async () => {
+  it('opens the dock at 380 px, or 440 px for Budget and Consortium, until a width is saved', async () => {
     await act(async () => {
       render(<App />, container)
     })
 
-    const style = sidePanelElement(container).getAttribute('style')
-    expect(style).toContain('--side-panel-width: clamp(320px, 352px, 90vw)')
-    expect(style).not.toContain('520px')
+    expect(sidePanelElement(container).getAttribute('style')).toContain('--side-panel-width: 380px')
+    expect(sidePanelElement(container).dataset.dockWidth).toBe('default')
+
+    await act(async () => { sidePanel.value = 'budget' })
+    expect(sidePanelElement(container).getAttribute('style')).toContain('--side-panel-width: 440px')
+    expect(sidePanelElement(container).dataset.dockWidth).toBe('wide')
   })
 
   it('mounts the Design Notebook as a right-side panel', async () => {

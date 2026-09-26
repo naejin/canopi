@@ -1,31 +1,79 @@
+import {
+  ariaKeyShortcuts,
+  formatShortcut,
+  matchesShortcut,
+  type ShortcutInput,
+} from '../shell-commands/shortcut-text'
+
 export type CanvasToolId =
   | 'select'
   | 'hand'
-  | 'line'
+  | 'plant-stamp'
+  | 'plant-spacing'
+  | 'object-stamp'
+  | 'polygon'
   | 'rectangle'
   | 'ellipse'
-  | 'polygon'
+  | 'line'
   | 'text'
   | 'measurement-guide'
-  | 'object-stamp'
-  | 'plant-spacing'
+
+/** Tool rail groups, top to bottom. Only `zones` carries a heading. */
+export type CanvasToolGroupId = 'navigate' | 'plant' | 'zones' | 'annotate'
+
+export type CanvasEditAction =
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'duplicate'
+  | 'delete'
+  | 'select-all'
+  | 'select-same-species'
+  | 'group'
+  | 'ungroup'
+  | 'bring-to-front'
+  | 'send-to-back'
+  | 'lock'
+  | 'unlock'
+  | 'save-as-stamp'
+
+export type CanvasViewAction = 'zoom-in' | 'zoom-out' | 'fit-to-design' | 'search-place'
 
 export type CanvasCommandId =
   | 'edit.undo'
   | 'edit.redo'
   | 'canvas.tool.select'
   | 'canvas.tool.hand'
-  | 'canvas.tool.line'
+  | 'canvas.tool.plantStamp'
+  | 'canvas.tool.plantSpacing'
+  | 'canvas.tool.objectStamp'
+  | 'canvas.tool.polygon'
   | 'canvas.tool.rectangle'
   | 'canvas.tool.ellipse'
-  | 'canvas.tool.polygon'
+  | 'canvas.tool.line'
   | 'canvas.tool.text'
   | 'canvas.tool.measurementGuide'
-  | 'canvas.tool.objectStamp'
-  | 'canvas.tool.plantSpacing'
   | 'canvas.toggleGrid'
   | 'canvas.toggleSnapToGrid'
   | 'canvas.toggleRulers'
+  | 'canvas.cut'
+  | 'canvas.copy'
+  | 'canvas.paste'
+  | 'canvas.duplicateSelected'
+  | 'canvas.deleteSelected'
+  | 'canvas.selectAll'
+  | 'canvas.selectSameSpecies'
+  | 'canvas.groupSelected'
+  | 'canvas.ungroupSelected'
+  | 'canvas.bringToFront'
+  | 'canvas.sendToBack'
+  | 'canvas.lockSelected'
+  | 'canvas.unlockSelected'
+  | 'canvas.saveSelectionAsStamp'
+  | 'view.zoomIn'
+  | 'view.zoomOut'
+  | 'view.fitToDesign'
+  | 'view.searchPlace'
 
 export type CanvasCommandIntent =
   | { readonly type: 'select-tool', readonly tool: CanvasToolId }
@@ -34,11 +82,19 @@ export type CanvasCommandIntent =
   | { readonly type: 'toggle-grid' }
   | { readonly type: 'toggle-snap-to-grid' }
   | { readonly type: 'toggle-rulers' }
+  | { readonly type: 'edit', readonly action: CanvasEditAction }
+  | { readonly type: 'view', readonly action: CanvasViewAction }
 
 export interface CanvasCommandProjectionState {
   readonly activeTool: string
+  /** A canvas runtime is mounted. */
+  readonly canvasAvailable: boolean
   readonly toolSelectionAvailable: boolean
+  /** False in overview, where Design objects are hidden and cannot change. */
   readonly spatialEditingAvailable: boolean
+  readonly hasSelection: boolean
+  /** The selection names one species, so "Select all of this species" can run. */
+  readonly sameSpeciesSelectionAvailable: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly settingsAvailable: boolean
@@ -54,54 +110,63 @@ export interface CanvasCommandIntentAdapter {
   toggleGrid(): void
   toggleSnapToGrid(): void
   toggleRulers(): void
+  edit(action: CanvasEditAction): void
+  view(action: CanvasViewAction): void
 }
 
-export interface CanvasToolbarToolCommand {
+/** A command as chrome shows it: menus, the tool rail, the view chip, the palette. */
+export interface CanvasProjectedCommand {
+  readonly commandId: CanvasCommandId
+  readonly label: string
+  /** Display text, e.g. "Ctrl Shift Z". */
+  readonly shortcut?: string
+  /** `aria-keyshortcuts` value. */
+  readonly ariaShortcut?: string
+  readonly disabled: boolean
+  readonly action: () => void
+}
+
+export interface CanvasToolbarToolCommand extends CanvasProjectedCommand {
   readonly tool: CanvasToolId
-  readonly commandId: CanvasCommandId
-  readonly label: string
-  readonly description: string
-  readonly shortcut?: string
-  readonly ariaShortcut?: string
+  readonly group: CanvasToolGroupId
   readonly active: boolean
-  readonly disabled: boolean
-  readonly action: () => void
 }
 
-export interface CanvasToolbarActionCommand {
+export interface CanvasToolbarActionCommand extends CanvasProjectedCommand {
   readonly id: string
-  readonly commandId: CanvasCommandId
-  readonly label: string
-  readonly description?: string
-  readonly shortcut?: string
-  readonly ariaShortcut?: string
-  readonly disabled: boolean
   readonly pressed?: boolean
-  readonly action: () => void
+}
+
+export interface CanvasToolGroupProjection {
+  readonly id: CanvasToolGroupId
+  /** Heading shown above the group while tool names are shown. */
+  readonly heading?: string
+  readonly tools: readonly CanvasToolbarToolCommand[]
 }
 
 export interface CanvasCommandProjection {
-  readonly primaryTools: readonly CanvasToolbarToolCommand[]
-  readonly creationTools: readonly CanvasToolbarToolCommand[]
-  readonly reuseTools: readonly CanvasToolbarToolCommand[]
+  readonly toolGroups: readonly CanvasToolGroupProjection[]
   readonly historyActions: readonly CanvasToolbarActionCommand[]
   readonly settingsToggles: readonly CanvasToolbarActionCommand[]
+  readonly editActions: readonly CanvasToolbarActionCommand[]
+  readonly viewActions: readonly CanvasToolbarActionCommand[]
 }
 
 interface CanvasCommandDefinitionBase {
   readonly commandId: CanvasCommandId
   readonly labelKey: string
-  readonly displayShortcut?: string
-  readonly ariaShortcut?: string
+  /** Canonical shortcuts; the first is shown, the rest are accepted aliases. */
+  readonly shortcuts?: readonly string[]
   readonly palette: boolean
   readonly intent: CanvasCommandIntent
+  /** The shortcut also works while a text field has focus. */
+  readonly worksInTextFields?: boolean
 }
 
 export interface CanvasToolCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'tool'
-  readonly group: 'primary' | 'creation' | 'reuse'
+  readonly group: CanvasToolGroupId
   readonly tool: CanvasToolId
-  readonly descriptionKey: string
 }
 
 export interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionBase {
@@ -112,155 +177,97 @@ export interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionB
 export interface CanvasSettingsCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'settings'
   readonly id: 'grid' | 'snap' | 'rulers'
-  readonly descriptionKey: string
   readonly stateKey: 'gridVisible' | 'snapToGridEnabled' | 'rulersVisible'
+}
+
+export interface CanvasEditCommandDefinition extends CanvasCommandDefinitionBase {
+  readonly kind: 'edit'
+  readonly id: CanvasEditAction
+}
+
+export interface CanvasViewCommandDefinition extends CanvasCommandDefinitionBase {
+  readonly kind: 'view'
+  readonly id: CanvasViewAction
 }
 
 export type CanvasCommandDefinition =
   | CanvasToolCommandDefinition
   | CanvasHistoryCommandDefinition
   | CanvasSettingsCommandDefinition
+  | CanvasEditCommandDefinition
+  | CanvasViewCommandDefinition
 
-export const CANVAS_TOOL_SHORTCUTS = {
-  select: 'V',
-  hand: 'H',
-  line: 'L',
-  rectangle: 'R',
-  ellipse: 'E',
-  polygon: 'P',
-  text: 'T',
-  plantSpacing: 'S',
-} as const
+const CANVAS_TOOL_GROUP_HEADINGS: Partial<Record<CanvasToolGroupId, string>> = {
+  zones: 'canvas.tools.zones',
+}
 
-export const CANVAS_HISTORY_SHORTCUTS = {
-  undo: 'Ctrl+Z',
-  redo: 'Ctrl+Shift+Z',
-} as const
+const CANVAS_TOOL_GROUP_ORDER: readonly CanvasToolGroupId[] = ['navigate', 'plant', 'zones', 'annotate']
+
+function tool(
+  group: CanvasToolGroupId,
+  toolId: CanvasToolId,
+  commandId: CanvasCommandId,
+  labelKey: string,
+  shortcut: string,
+): CanvasToolCommandDefinition {
+  return {
+    kind: 'tool',
+    group,
+    tool: toolId,
+    commandId,
+    labelKey,
+    shortcuts: [shortcut],
+    palette: true,
+    intent: { type: 'select-tool', tool: toolId },
+  }
+}
+
+function edit(
+  id: CanvasEditAction,
+  commandId: CanvasCommandId,
+  labelKey: string,
+  shortcuts?: readonly string[],
+): CanvasEditCommandDefinition {
+  return { kind: 'edit', id, commandId, labelKey, shortcuts, palette: true, intent: { type: 'edit', action: id } }
+}
+
+function view(
+  id: CanvasViewAction,
+  commandId: CanvasCommandId,
+  labelKey: string,
+  shortcuts: readonly string[],
+  worksInTextFields = false,
+): CanvasViewCommandDefinition {
+  return {
+    kind: 'view',
+    id,
+    commandId,
+    labelKey,
+    shortcuts,
+    palette: true,
+    intent: { type: 'view', action: id },
+    worksInTextFields,
+  }
+}
 
 export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
-  {
-    kind: 'tool',
-    group: 'primary',
-    tool: 'select',
-    commandId: 'canvas.tool.select',
-    labelKey: 'canvas.tools.select',
-    descriptionKey: 'canvas.tools.selectDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.select,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.select,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'select' },
-  },
-  {
-    kind: 'tool',
-    group: 'primary',
-    tool: 'hand',
-    commandId: 'canvas.tool.hand',
-    labelKey: 'canvas.tools.hand',
-    descriptionKey: 'canvas.tools.handDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.hand,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.hand,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'hand' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'line',
-    commandId: 'canvas.tool.line',
-    labelKey: 'canvas.tools.line',
-    descriptionKey: 'canvas.tools.lineDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.line,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.line,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'line' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'rectangle',
-    commandId: 'canvas.tool.rectangle',
-    labelKey: 'canvas.tools.rectangle',
-    descriptionKey: 'canvas.tools.rectangleDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.rectangle,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.rectangle,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'rectangle' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'ellipse',
-    commandId: 'canvas.tool.ellipse',
-    labelKey: 'canvas.tools.ellipse',
-    descriptionKey: 'canvas.tools.ellipseDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'ellipse' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'polygon',
-    commandId: 'canvas.tool.polygon',
-    labelKey: 'canvas.tools.polygon',
-    descriptionKey: 'canvas.tools.polygonDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.polygon,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.polygon,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'polygon' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'text',
-    commandId: 'canvas.tool.text',
-    labelKey: 'canvas.tools.text',
-    descriptionKey: 'canvas.tools.textDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.text,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.text,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'text' },
-  },
-  {
-    kind: 'tool',
-    group: 'creation',
-    tool: 'measurement-guide',
-    commandId: 'canvas.tool.measurementGuide',
-    labelKey: 'canvas.tools.measurementGuide',
-    descriptionKey: 'canvas.tools.measurementGuideDesc',
-    palette: true,
-    intent: { type: 'select-tool', tool: 'measurement-guide' },
-  },
-  {
-    kind: 'tool',
-    group: 'reuse',
-    tool: 'object-stamp',
-    commandId: 'canvas.tool.objectStamp',
-    labelKey: 'canvas.tools.objectStamp',
-    descriptionKey: 'canvas.tools.objectStampDesc',
-    palette: true,
-    intent: { type: 'select-tool', tool: 'object-stamp' },
-  },
-  {
-    kind: 'tool',
-    group: 'reuse',
-    tool: 'plant-spacing',
-    commandId: 'canvas.tool.plantSpacing',
-    labelKey: 'canvas.tools.plantSpacing',
-    descriptionKey: 'canvas.tools.plantSpacingDesc',
-    displayShortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
-    ariaShortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
-    palette: true,
-    intent: { type: 'select-tool', tool: 'plant-spacing' },
-  },
+  tool('navigate', 'select', 'canvas.tool.select', 'canvas.tools.select', 'V'),
+  tool('navigate', 'hand', 'canvas.tool.hand', 'canvas.tools.hand', 'H'),
+  tool('plant', 'plant-stamp', 'canvas.tool.plantStamp', 'canvas.tools.plantStamp', 'P'),
+  tool('plant', 'plant-spacing', 'canvas.tool.plantSpacing', 'canvas.tools.plantSpacing', 'W'),
+  tool('plant', 'object-stamp', 'canvas.tool.objectStamp', 'canvas.tools.objectStamp', 'K'),
+  tool('zones', 'polygon', 'canvas.tool.polygon', 'canvas.tools.polygon', 'Z'),
+  tool('zones', 'rectangle', 'canvas.tool.rectangle', 'canvas.tools.rectangle', 'R'),
+  tool('zones', 'ellipse', 'canvas.tool.ellipse', 'canvas.tools.ellipse', 'E'),
+  tool('zones', 'line', 'canvas.tool.line', 'canvas.tools.line', 'L'),
+  tool('annotate', 'text', 'canvas.tool.text', 'canvas.tools.text', 'T'),
+  tool('annotate', 'measurement-guide', 'canvas.tool.measurementGuide', 'canvas.tools.measurementGuide', 'M'),
   {
     kind: 'history',
     id: 'undo',
     commandId: 'edit.undo',
     labelKey: 'menu.edit.undo',
-    displayShortcut: CANVAS_HISTORY_SHORTCUTS.undo,
-    ariaShortcut: 'Control+Z Meta+Z',
+    shortcuts: ['Ctrl+Z'],
     palette: true,
     intent: { type: 'undo' },
   },
@@ -269,18 +276,35 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     id: 'redo',
     commandId: 'edit.redo',
     labelKey: 'menu.edit.redo',
-    displayShortcut: CANVAS_HISTORY_SHORTCUTS.redo,
-    ariaShortcut: 'Control+Shift+Z Meta+Shift+Z',
+    shortcuts: ['Ctrl+Shift+Z', 'Ctrl+Y'],
     palette: true,
     intent: { type: 'redo' },
   },
+  edit('cut', 'canvas.cut', 'menu.edit.cut', ['Ctrl+X']),
+  edit('copy', 'canvas.copy', 'menu.edit.copy', ['Ctrl+C']),
+  edit('paste', 'canvas.paste', 'menu.edit.paste', ['Ctrl+V']),
+  edit('duplicate', 'canvas.duplicateSelected', 'menu.edit.duplicate', ['Ctrl+D']),
+  edit('delete', 'canvas.deleteSelected', 'menu.edit.delete', ['Delete', 'Backspace']),
+  edit('select-all', 'canvas.selectAll', 'menu.edit.selectAll', ['Ctrl+A']),
+  edit('select-same-species', 'canvas.selectSameSpecies', 'menu.edit.selectSameSpecies', ['Ctrl+Shift+A']),
+  edit('group', 'canvas.groupSelected', 'menu.edit.group', ['Ctrl+G']),
+  edit('ungroup', 'canvas.ungroupSelected', 'menu.edit.ungroup', ['Ctrl+Shift+G']),
+  edit('bring-to-front', 'canvas.bringToFront', 'menu.edit.bringToFront', [']']),
+  edit('send-to-back', 'canvas.sendToBack', 'menu.edit.sendToBack', ['[']),
+  edit('lock', 'canvas.lockSelected', 'menu.edit.lock', ['Ctrl+L']),
+  edit('unlock', 'canvas.unlockSelected', 'menu.edit.unlock'),
+  edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
+  view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', ['Ctrl+Plus']),
+  view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', ['Ctrl+Minus']),
+  view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', ['Shift+F', 'Ctrl+0']),
+  view('search-place', 'view.searchPlace', 'menu.view.searchPlace', ['Ctrl+K'], true),
   {
     kind: 'settings',
     id: 'grid',
     commandId: 'canvas.toggleGrid',
     labelKey: 'canvas.grid.grid',
-    descriptionKey: 'canvas.grid.gridDesc',
-    palette: false,
+    shortcuts: ['Shift+G'],
+    palette: true,
     intent: { type: 'toggle-grid' },
     stateKey: 'gridVisible',
   },
@@ -289,8 +313,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     id: 'snap',
     commandId: 'canvas.toggleSnapToGrid',
     labelKey: 'canvas.grid.snapToGrid',
-    descriptionKey: 'canvas.grid.snapToGridDesc',
-    palette: false,
+    shortcuts: ['Shift+S'],
+    palette: true,
     intent: { type: 'toggle-snap-to-grid' },
     stateKey: 'snapToGridEnabled',
   },
@@ -299,89 +323,73 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
     id: 'rulers',
     commandId: 'canvas.toggleRulers',
     labelKey: 'canvas.grid.rulers',
-    descriptionKey: 'canvas.grid.rulersDesc',
-    palette: false,
+    shortcuts: ['Shift+R'],
+    palette: true,
     intent: { type: 'toggle-rulers' },
     stateKey: 'rulersVisible',
   },
 ]
 
-export const canvasToolShortcutKeys: Readonly<Record<string, CanvasToolId>> = Object.freeze(
-  Object.fromEntries(
-    canvasCommandDefinitions
-      .filter((definition): definition is CanvasToolCommandDefinition & { readonly displayShortcut: string } =>
-        definition.kind === 'tool' && definition.displayShortcut !== undefined)
-      .flatMap((definition) => [
-        [definition.displayShortcut.toLowerCase(), definition.tool],
-        [definition.displayShortcut, definition.tool],
-      ]),
-  ),
-)
+export type CanvasCommandShortcutInput = ShortcutInput
 
-export interface CanvasCommandShortcutInput {
-  readonly key: string
-  readonly ctrlKey: boolean
-  readonly metaKey: boolean
-  readonly shiftKey: boolean
-  readonly altKey: boolean
+/** The canvas command a key event names, or null. Callers decide whether the map has focus. */
+export function canvasCommandDefinitionForShortcut(
+  input: CanvasCommandShortcutInput,
+): CanvasCommandDefinition | null {
+  return canvasCommandDefinitions.find((definition) =>
+    definition.shortcuts?.some((shortcut) => matchesShortcut(shortcut, input)),
+  ) ?? null
 }
 
-export function canvasToolCommandIdForShortcut(
+export function canvasCommandIdForShortcut(
   input: CanvasCommandShortcutInput,
 ): CanvasCommandId | null {
-  if (input.ctrlKey || input.metaKey || input.shiftKey || input.altKey) return null
-  const tool = canvasToolShortcutKeys[input.key]
-  return tool ? canvasCommandIdForTool(tool) : null
-}
-
-export function canvasHistoryCommandIdForShortcut(
-  input: CanvasCommandShortcutInput,
-): CanvasCommandId | null {
-  const definition = canvasCommandDefinitions.find(
-    (candidate): candidate is CanvasHistoryCommandDefinition =>
-      candidate.kind === 'history'
-      && candidate.displayShortcut !== undefined
-      && matchesCommandShortcut(input, candidate.displayShortcut),
-  )
-  return definition?.commandId ?? null
+  return canvasCommandDefinitionForShortcut(input)?.commandId ?? null
 }
 
 export function canvasCommandIntentForShortcut(
   input: CanvasCommandShortcutInput,
 ): CanvasCommandIntent | null {
-  const commandId = canvasToolCommandIdForShortcut(input)
-    ?? canvasHistoryCommandIdForShortcut(input)
-  if (!commandId) return null
-  return canvasCommandDefinitions.find(
-    (definition) => definition.commandId === commandId,
-  )?.intent ?? null
+  return canvasCommandDefinitionForShortcut(input)?.intent ?? null
 }
 
-function matchesCommandShortcut(
-  input: CanvasCommandShortcutInput,
-  shortcut: string,
-): boolean {
-  const parts = shortcut.split('+')
-  const shortcutKey = parts.at(-1)
-  if (!shortcutKey) return false
-  const requiresPrimaryModifier = parts.includes('Ctrl')
-  const primaryModifierMatches = requiresPrimaryModifier
-    ? input.ctrlKey !== input.metaKey
-    : !input.ctrlKey && !input.metaKey
-  return primaryModifierMatches
-    && input.shiftKey === parts.includes('Shift')
-    && input.altKey === parts.includes('Alt')
-    && input.key.toLowerCase() === shortcutKey.toLowerCase()
-}
-
-export function canvasCommandIdForTool(tool: CanvasToolId): CanvasCommandId {
+export function canvasCommandIdForTool(toolId: CanvasToolId): CanvasCommandId {
   const definition = canvasCommandDefinitions.find(
     (candidate): candidate is CanvasToolCommandDefinition =>
-      candidate.kind === 'tool' && candidate.tool === tool,
+      candidate.kind === 'tool' && candidate.tool === toolId,
   )
-  if (!definition) throw new Error(`Missing Canvas command for tool '${tool}'`)
+  if (!definition) throw new Error(`Missing Canvas command for tool '${toolId}'`)
   return definition.commandId
 }
+
+const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
+  'cut',
+  'copy',
+  'duplicate',
+  'delete',
+  'group',
+  'ungroup',
+  'bring-to-front',
+  'send-to-back',
+  'lock',
+  'unlock',
+  'save-as-stamp',
+])
+
+/** Edits that change Design objects; overview hides objects, so they cannot run there. */
+const MUTATING_EDITS: ReadonlySet<CanvasEditAction> = new Set([
+  'cut',
+  'paste',
+  'duplicate',
+  'delete',
+  'group',
+  'ungroup',
+  'bring-to-front',
+  'send-to-back',
+  'lock',
+  'unlock',
+  'save-as-stamp',
+])
 
 export function isCanvasCommandDisabled(
   intent: CanvasCommandIntent,
@@ -390,6 +398,7 @@ export function isCanvasCommandDisabled(
   switch (intent.type) {
     case 'select-tool':
       return !state.toolSelectionAvailable
+        || (!state.spatialEditingAvailable && !isNavigationTool(intent.tool))
     case 'undo':
       return !state.canUndo
     case 'redo':
@@ -398,7 +407,19 @@ export function isCanvasCommandDisabled(
     case 'toggle-snap-to-grid':
     case 'toggle-rulers':
       return !state.settingsAvailable
+    case 'view':
+      return !state.canvasAvailable
+    case 'edit': {
+      if (!state.canvasAvailable) return true
+      if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true
+      if (intent.action === 'select-same-species') return !state.sameSpeciesSelectionAvailable
+      return SELECTION_EDITS.has(intent.action) && !state.hasSelection
+    }
   }
+}
+
+function isNavigationTool(toolId: CanvasToolId): boolean {
+  return toolId === 'select' || toolId === 'hand'
 }
 
 export function dispatchCanvasCommandIntent(
@@ -423,6 +444,12 @@ export function dispatchCanvasCommandIntent(
       return
     case 'toggle-rulers':
       adapter.toggleRulers()
+      return
+    case 'edit':
+      adapter.edit(intent.action)
+      return
+    case 'view':
+      adapter.view(intent.action)
   }
 }
 
@@ -437,65 +464,69 @@ export function createCanvasCommandProjection({
   intents,
   translate,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
-  const projectAction = (
-    definition: CanvasCommandDefinition,
-    additionallyDisabled = false,
-  ): (() => void) => () => {
-    if (additionallyDisabled || isCanvasCommandDisabled(definition.intent, state)) return
-    dispatchCanvasCommandIntent(definition.intent, intents)
+  const project = (definition: CanvasCommandDefinition): CanvasProjectedCommand => {
+    const disabled = isCanvasCommandDisabled(definition.intent, state)
+    const shortcut = definition.shortcuts?.[0]
+    return {
+      commandId: definition.commandId,
+      label: translate(definition.labelKey),
+      shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
+      ariaShortcut: definition.shortcuts?.map(ariaKeyShortcuts).join(' '),
+      disabled,
+      action: () => {
+        if (disabled) return
+        dispatchCanvasCommandIntent(definition.intent, intents)
+      },
+    }
   }
+  const projectAction = (
+    definition: CanvasHistoryCommandDefinition
+      | CanvasSettingsCommandDefinition
+      | CanvasEditCommandDefinition
+      | CanvasViewCommandDefinition,
+  ): CanvasToolbarActionCommand => ({
+    ...project(definition),
+    id: definition.id,
+    ...(definition.kind === 'settings' ? { pressed: state[definition.stateKey] } : {}),
+  })
   const toolDefinitions = canvasCommandDefinitions.filter(
     (definition): definition is CanvasToolCommandDefinition => definition.kind === 'tool',
   )
-  const projectTool = (definition: CanvasToolCommandDefinition): CanvasToolbarToolCommand => ({
-    tool: definition.tool,
-    commandId: definition.commandId,
-    label: translate(definition.labelKey),
-    description: !state.spatialEditingAvailable && definition.group !== 'primary'
-      ? translate('canvas.overview.zoomInToEdit')
-      : translate(definition.descriptionKey),
-    shortcut: definition.displayShortcut,
-    ariaShortcut: definition.ariaShortcut,
-    active: state.activeTool === definition.tool,
-    disabled: isCanvasCommandDisabled(definition.intent, state)
-      || (!state.spatialEditingAvailable && definition.group !== 'primary'),
-    action: projectAction(
-      definition,
-      !state.spatialEditingAvailable && definition.group !== 'primary',
-    ),
-  })
 
   return {
-    primaryTools: toolDefinitions
-      .filter((definition) => definition.group === 'primary')
-      .map(projectTool),
-    creationTools: toolDefinitions
-      .filter((definition) => definition.group === 'creation')
-      .map(projectTool),
-    reuseTools: toolDefinitions
-      .filter((definition) => definition.group === 'reuse')
-      .map(projectTool),
+    toolGroups: CANVAS_TOOL_GROUP_ORDER.map((group) => {
+      const headingKey = CANVAS_TOOL_GROUP_HEADINGS[group]
+      return {
+        id: group,
+        ...(headingKey ? { heading: translate(headingKey) } : {}),
+        tools: toolDefinitions
+          .filter((definition) => definition.group === group)
+          .map((definition) => ({
+            ...project(definition),
+            tool: definition.tool,
+            group: definition.group,
+            active: state.activeTool === definition.tool,
+          })),
+      }
+    }),
     historyActions: canvasCommandDefinitions
       .filter((definition): definition is CanvasHistoryCommandDefinition => definition.kind === 'history')
-      .map((definition) => ({
-        id: definition.id,
-        commandId: definition.commandId,
-        label: translate(definition.labelKey),
-        shortcut: definition.displayShortcut,
-        ariaShortcut: definition.ariaShortcut,
-        disabled: isCanvasCommandDisabled(definition.intent, state),
-        action: projectAction(definition),
-      })),
+      .map(projectAction),
     settingsToggles: canvasCommandDefinitions
       .filter((definition): definition is CanvasSettingsCommandDefinition => definition.kind === 'settings')
-      .map((definition) => ({
-        id: definition.id,
-        commandId: definition.commandId,
-        label: translate(definition.labelKey),
-        description: translate(definition.descriptionKey),
-        disabled: isCanvasCommandDisabled(definition.intent, state),
-        pressed: state[definition.stateKey],
-        action: projectAction(definition),
-      })),
+      .map(projectAction),
+    editActions: canvasCommandDefinitions
+      .filter((definition): definition is CanvasEditCommandDefinition => definition.kind === 'edit')
+      .map(projectAction),
+    viewActions: canvasCommandDefinitions
+      .filter((definition): definition is CanvasViewCommandDefinition => definition.kind === 'view')
+      .map(projectAction),
   }
+}
+
+/** Every tool, in rail order. */
+export function projectedCanvasTools(
+  projection: CanvasCommandProjection,
+): readonly CanvasToolbarToolCommand[] {
+  return projection.toolGroups.flatMap((group) => group.tools)
 }

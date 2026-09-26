@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "Base de plantas",
-    "canvas": "Lienzo de diseño",
-    "designNotebook": "Cuaderno de diseños",
     "favorites": "Favoritos"
   },
   "webShell": {
-    "commands": "Comandos de la edición web",
     "panels": "Paneles de la edición web",
     "workspace": "Espacio de trabajo web",
-    "openCanopi": "Abrir .canopi",
-    "downloadCanopi": "Descargar .canopi",
-    "dismissNotice": "Cerrar"
+    "openCanopi": "Abrir un archivo .canopi…",
+    "downloadCanopi": "Descargar una copia",
+    "dismissNotice": "Cerrar",
+    "downloadCopy": "Descargar una copia",
+    "savedInBrowser": "Guardado en este navegador",
+    "openCanopiFile": "Abrir un archivo .canopi"
   },
   "designNotebook": {
     "title": "Cuaderno de diseños",
@@ -89,32 +89,20 @@
       "panHint": "Vista previa. Arrastra o usa las flechas; Mayús desplaza más.",
       "recenter": "Centrar en el lienzo"
     },
-    "emptyWelcome": "Comienza tu diseño",
-    "emptyNewDesign": "Nuevo diseño",
-    "emptyOpenDesign": "Abrir diseño",
-    "emptyRecentFiles": "Archivos recientes",
     "toolbar": "Herramientas",
     "tools": {
-      "select": "Selección",
-      "selectDesc": "Clic para seleccionar objetos",
-      "hand": "Mano",
-      "handDesc": "Desplazar el lienzo",
-      "rectangle": "Rectángulo",
-      "rectangleDesc": "Dibujar zonas rectangulares",
-      "ellipse": "Elipse",
-      "ellipseDesc": "Dibujar zonas elípticas",
-      "polygon": "Polígono",
-      "polygonDesc": "Dibujar zonas poligonales",
-      "line": "Línea",
-      "lineDesc": "Dibujar zonas lineales",
-      "text": "Texto",
-      "textDesc": "Añadir etiquetas de texto",
-      "objectStamp": "Sello de objeto",
-      "objectStampDesc": "Copiar objetos de diseño existentes",
-      "plantSpacing": "Espaciado de plantas",
-      "plantSpacingDesc": "Repetir una planta colocada a lo largo de una guía de espaciado",
-      "measurementGuide": "Guía de medida",
-      "measurementGuideDesc": "Colocar una guía de distancia permanente"
+      "select": "Seleccionar",
+      "hand": "Desplazar",
+      "rectangle": "Zona rectangular",
+      "ellipse": "Zona elíptica",
+      "polygon": "Zona poligonal",
+      "line": "Zona lineal",
+      "text": "Nota de texto",
+      "objectStamp": "Colocar un sello",
+      "plantSpacing": "Plantar una fila",
+      "measurementGuide": "Medir",
+      "zones": "Zonas",
+      "plantStamp": "Colocar plantas"
     },
     "plantSpacing": {
       "selectSource": "Selecciona una planta colocada",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "Cuadrícula",
-      "gridDesc": "Mostrar/ocultar la cuadrícula",
       "snapToGrid": "Ajustar a la cuadrícula",
-      "snapToGridDesc": "Alinear formas a la cuadrícula",
       "rulers": "Reglas",
-      "rulersDesc": "Mostrar/ocultar reglas",
       "zoom": "Zoom"
     },
     "overview": {
-      "label": "Vista general",
-      "zoomInToEdit": "Acerca la vista para editar",
+      "zoomInToEdit": "Acerca la vista para editar. Las plantas se ocultan a esta escala.",
       "returnToDesign": "Volver al diseño",
-      "design": "Diseño",
-      "designMarker": "Volver al diseño"
+      "designPin": "Diseño: {{name}}"
     },
     "plantColor": {
       "label": "Color de planta",
@@ -211,21 +194,22 @@
       "applySelection": "Aplicar a {{count}} seleccionadas"
     },
     "placeSearch": {
-      "open": "Buscar un lugar",
-      "placeholder": "Nombre de lugar o lat, lon",
+      "placeholder": "Busca un lugar o coordenadas",
       "searching": "Buscando…",
       "noResults": "No se encontraron lugares",
       "error": "La búsqueda de lugares falló",
       "results": "Lugares",
-      "emptyPrompt": "Busca tu terreno"
+      "placeholderShort": "Buscar un lugar",
+      "east": "E",
+      "north": "N",
+      "clear": "Borrar búsqueda",
+      "south": "S",
+      "coordinates": "{{lat}}° {{northSouth}}, {{lon}}° {{eastWest}}",
+      "west": "O",
+      "goStraightThere": "Coordenadas · ir directamente"
     },
     "file": {
-      "new": "Nuevo diseño",
-      "open": "Abrir diseño",
-      "save": "Guardar",
-      "saveAs": "Guardar como",
-      "cancel": "Cancelar",
-      "revert": "Volver a la versión abierta"
+      "cancel": "Cancelar"
     },
     "layers": {
       "layerPanel": "Capas",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "Sin clave, Canopi usa los mosaicos satelitales públicos de Google. Añade tu clave de API de Google Maps para usar la API oficial Map Tiles."
-    }
+    },
+    "zoom": {
+      "scaleBar": "Barra de escala: {{distance}}",
+      "chooseScale": "Escala {{scale}}. Elegir una escala",
+      "mapScale": "Escala del mapa"
+    },
+    "viewChip": "Vista"
   },
   "worldMap": {
     "title": "Mapa mundial",
@@ -592,18 +582,11 @@
     "filterByStyle": "Filtrar por estilo",
     "openTemplate": "Abrir como nuevo diseño"
   },
-  "status": {
-    "language": "Idioma",
-    "theme": "Tema"
-  },
   "theme": {
     "light": "Claro",
     "dark": "Oscuro"
   },
   "commands": {
-    "plantDb": "Ir a base de plantas",
-    "canvas": "Ir al lienzo",
-    "toggleTheme": "Cambiar tema",
     "commandPalette": "Paleta de comandos",
     "searchPlaceholder": "Escriba un comando...",
     "noResults": "No se encontraron comandos"
@@ -781,21 +764,56 @@
     "file": "Archivo",
     "edit": "Editar",
     "view": "Ver",
-    "file.exit": "Salir",
+    "file.exit": "Salir de Canopi",
     "edit.undo": "Deshacer",
     "edit.redo": "Rehacer",
     "view.zoomIn": "Acercar",
     "view.zoomOut": "Alejar",
-    "view.fitToContent": "Ajustar al contenido",
     "view.searchPlace": "Buscar un lugar…",
     "help": "Ayuda",
-    "help.reportProblem": "Informar de un problema",
-    "help.aboutCanopi": "Acerca de Canopi"
+    "help.reportProblem": "Informar de un problema…",
+    "help.aboutCanopi": "Acerca de Canopi",
+    "edit.duplicate": "Duplicar",
+    "edit.delete": "Eliminar",
+    "file.settings": "Ajustes…",
+    "edit.ungroup": "Desagrupar",
+    "edit.sendToBack": "Enviar al fondo",
+    "edit.arrange": "Organizar",
+    "edit.selectSameSpecies": "Seleccionar toda esta especie",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "Desbloquear",
+    "view.darkTheme": "Tema oscuro",
+    "edit.saveAsStamp": "Guardar como sello",
+    "view.fitToDesign": "Ajustar al diseño",
+    "file.new": "Nuevo diseño",
+    "view.backgroundMap": "Mapa",
+    "edit.findPlants": "Buscar plantas…",
+    "file.revert": "Volver a la versión al abrir…",
+    "tools": "Herramientas",
+    "edit.copy": "Copiar",
+    "edit.paste": "Pegar",
+    "file.rename": "Cambiar nombre…",
+    "view.background": "Fondo",
+    "file.saveAs": "Guardar como…",
+    "edit.group": "Agrupar",
+    "view.toolNames": "Nombres de herramientas",
+    "file.save": "Guardar",
+    "file.export": "Exportar",
+    "view.backgroundNone": "Ninguno",
+    "help.shortcuts": "Atajos de teclado",
+    "view.backgroundSatellite": "Satélite",
+    "edit.bringToFront": "Traer al frente",
+    "edit.lock": "Bloquear",
+    "file.open": "Abrir diseño…",
+    "edit.selectAll": "Seleccionar todo",
+    "file.exportPlantingPlan": "Plan de plantación (PDF)…",
+    "edit.cut": "Cortar"
   },
   "titleBar": {
     "untitledDesign": "Diseño sin título",
-    "renameDesignName": "Renombrar diseño",
-    "designNameInput": "Nombre del diseño"
+    "designNameInput": "Nombre del diseño",
+    "menus": "Menús",
+    "renameDesign": "Cambiar nombre del diseño: {{name}}"
   },
   "about": {
     "title": "Acerca de Canopi",
@@ -1145,7 +1163,15 @@
     "saved": "Guardado",
     "error": "No se pudo guardar",
     "retry": "Reintentar",
-    "conflict": "Cambiado fuera de Canopi"
+    "conflict": "Cambiado fuera de Canopi",
+    "detailsUnknown": "Canopi no pudo escribir el archivo.",
+    "detailsTitle": "No se pudieron guardar tus últimos cambios",
+    "detailsReason": "Canopi no pudo escribir el archivo: {{reason}}",
+    "details": "Detalles…",
+    "draft": "Borrador",
+    "detailsSafe": "Tu trabajo está a salvo en Canopi mientras siga abierto. Reintenta o guárdalo en otro lugar.",
+    "saveAs": "Guardar como…",
+    "resolve": "Resolver…"
   },
   "saveProblem": {
     "flushFailedTitle": "No se pudieron guardar los cambios",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "Borradores",
-    "delete": "Eliminar borrador: {{name}}",
-    "confirmDelete": "¿Eliminar este borrador?",
-    "confirmDeleteAction": "Eliminar"
+    "confirmDelete": "¿Eliminar «{{name}}»? Nunca se guardó en un archivo y no se podrá recuperar.",
+    "confirmDeleteAction": "Eliminar borrador",
+    "intro": "Canopi guarda cada cambio mientras trabajas. Un diseño que nunca guardaste en un archivo queda aquí hasta que lo guardes o lo elimines.",
+    "deleteItem": "Eliminar borrador…",
+    "neverSaved": "Borrador, nunca guardado en un archivo",
+    "actions": "Acciones para {{name}}"
   },
   "plantFinder": {
     "label": "Buscar plantas",
@@ -1283,5 +1312,66 @@
       "coverage": "{{cells}} celdas publicadas",
       "noOutputs": "Nada publicado"
     }
+  },
+  "panelRail": {
+    "label": "Paneles",
+    "canvas": "Lienzo del diseño",
+    "layers": "Capas",
+    "data": "Biblioteca de datos",
+    "plants": "Plantas de este diseño",
+    "catalog": "Catálogo de plantas",
+    "favorites": "Favoritos y sellos",
+    "calendar": "Calendario",
+    "budget": "Presupuesto",
+    "consortium": "Consorcio",
+    "notebook": "Cuaderno de diseños"
+  },
+  "start": {
+    "region": "Inicio",
+    "purpose": "Diseña sistemas agroforestales y bosques comestibles sobre el mapa de tu terreno.",
+    "more": "Más",
+    "searchDesigns": "Buscar en tus diseños",
+    "noMatches": "Ningún diseño coincide con «{{query}}».",
+    "recentDesigns": "Diseños recientes",
+    "footerDesktop": "Funciona sin conexión. Tus diseños se quedan en este equipo.",
+    "footerWeb": "Tus diseños se quedan en este navegador. Descarga una copia para conservar un archivo.",
+    "plantCount": "{{plants}} plantas"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Mayús",
+    "alt": "Alt",
+    "delete": "Supr",
+    "escape": "Esc",
+    "enter": "Intro"
+  },
+  "siteOnboarding": {
+    "locateTitle": "¿Dónde está tu terreno?",
+    "locateIntro": "Busca un lugar o pega coordenadas. El mapa va allí; todavía no se coloca nada.",
+    "placeNamesCredit": "Nombres de lugares © colaboradores de OpenStreetMap",
+    "skip": "Omitir, lo buscaré en el mapa",
+    "startTitle": "Empieza tu diseño",
+    "closeStart": "Cerrar Empieza tu diseño",
+    "stepZone": "Dibuja el contorno de tu terreno con una zona.",
+    "stepCatalog": "Busca especies en el Catálogo de plantas y colócalas o arrastra una al mapa.",
+    "stepSave": "Todo se guarda mientras trabajas. Haz clic en el nombre de arriba para renombrar el diseño y en Guardar como… para conservarlo como archivo.",
+    "openCatalog": "Abrir el catálogo",
+    "drawZone": "Dibujar una zona",
+    "searchAgain": "Buscar de nuevo",
+    "noPlace": "Ningún lugar buscado"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "toolsHeading": "{{menu}} (con el mapa enfocado)",
+    "escape": "Esc hace una cosa cada vez: cerrar un menú o diálogo, cancelar lo que dibujas, volver a Seleccionar, borrar la selección.",
+    "footnote": "Las teclas de herramientas funcionan con el mapa enfocado."
+  },
+  "settings": {
+    "title": "Ajustes",
+    "appearance": "Apariencia",
+    "theme": "Tema",
+    "language": "Idioma",
+    "toolNames": "Nombres de herramientas en la barra",
+    "toolNamesHint": "Los nombres y las teclas se muestran hasta que hayas usado cada herramienta una vez."
   }
 }

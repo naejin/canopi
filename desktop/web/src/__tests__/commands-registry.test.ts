@@ -26,7 +26,11 @@ import {
   handleAppCommandKeyDown,
 } from '../commands/registry'
 import type { AppCommandId } from '../commands/graph/catalog'
-import { CANVAS_HISTORY_SHORTCUTS, CANVAS_TOOL_SHORTCUTS } from '../app/canvas-commands'
+import { flattenMenuActions } from '../app/shell-commands/menus'
+import { designRenameRequest } from '../app/shell/requests'
+import { keyboardShortcutsDialogOpen, settingsDialogOpen } from '../app/shell/dialogs'
+import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
+import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-stamp-source'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -42,7 +46,7 @@ function menus() {
 
 function runPanelCommand(commandId: string): void {
   const projection = appCommandGraphPanelProjection.value
-  const command = [...projection.primary, ...projection.design, ...projection.side]
+  const command = [...projection.primary, ...projection.design, ...projection.planning]
     .find((entry) => entry.commandId === commandId)
   if (!command) throw new Error(`Missing panel command ${commandId}`)
   command.action()
@@ -147,7 +151,7 @@ describe('command registry canvas tool switching', () => {
 
     getCommand('canvas.tool.polygon').action()
 
-    expect(getCommand('canvas.tool.polygon').shortcut).toBe('P')
+    expect(getCommand('canvas.tool.polygon').shortcut).toBe('Z')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('polygon')
     expect(activeTool.value).toBe('polygon')
@@ -174,7 +178,7 @@ describe('command registry canvas tool switching', () => {
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('measurement-guide')
     expect(activeTool.value).toBe('measurement-guide')
-    expect(appCommandGraphToolbarProjection.value.creationTools.some((tool) =>
+    expect(appCommandGraphToolbarProjection.value.toolGroups.flatMap((group) => group.tools).some((tool) =>
       tool.tool === 'measurement-guide'
       && tool.commandId === 'canvas.tool.measurementGuide',
     )).toBe(true)
@@ -197,7 +201,7 @@ describe('command registry canvas tool switching', () => {
 
     getCommand('canvas.tool.plantSpacing').action()
 
-    expect(getCommand('canvas.tool.plantSpacing').shortcut).toBe('S')
+    expect(getCommand('canvas.tool.plantSpacing').shortcut).toBe('W')
     expect(activePanel.value).toBe('canvas')
     expect(setTool).toHaveBeenCalledWith('plant-spacing')
     expect(activeTool.value).toBe('plant-spacing')
@@ -211,12 +215,17 @@ describe('command registry canvas tool switching', () => {
   })
 
   it('uses the shared shortcut definitions for panel navigation and tools', () => {
-    expect(getCommand('nav.canvas').shortcut).toBe('Ctrl+1')
-    expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl+2')
-    expect(getCommand('nav.designNotebook').shortcut).toBeUndefined()
-    expect(getCommand('canvas.tool.select').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.select)
-    expect(getCommand('canvas.tool.line').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.line)
-    expect(getCommand('canvas.tool.text').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.text)
+    expect(paletteCommands().some((command) => command.id === 'nav.canvas')).toBe(false)
+    expect(getCommand('nav.layers').shortcut).toBe('Ctrl 1')
+    expect(getCommand('nav.speciesKey').shortcut).toBe('Ctrl 2')
+    expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl 3')
+    expect(getCommand('nav.favorites').shortcut).toBe('Ctrl 4')
+    expect(getCommand('nav.calendar').shortcut).toBe('Ctrl 5')
+    expect(getCommand('nav.designNotebook').shortcut).toBe('Ctrl 8')
+    expect(getCommand('canvas.tool.select').shortcut).toBe('V')
+    expect(getCommand('canvas.tool.line').shortcut).toBe('L')
+    expect(getCommand('canvas.tool.text').shortcut).toBe('T')
+    expect(getCommand('canvas.tool.measurementGuide').shortcut).toBe('M')
   })
 
   it('routes file commands through document-session actions', () => {
@@ -258,9 +267,7 @@ describe('command registry canvas tool switching', () => {
 
   it('does not expose Design Report PDF export from the command graph', () => {
     expect(paletteCommands().some((command) => String(command.id) === 'file.exportDesignReportPdf')).toBe(false)
-    expect(menus().some((menu) =>
-      menu.items.some((entry) => entry.type === 'action' && entry.id === 'file.exportDesignReportPdf'),
-    )).toBe(false)
+    expect(flattenMenuActions(menus()).some((entry) => entry.id === 'file.exportDesignReportPdf')).toBe(false)
   })
 
   it('enables Save for any open Design, clean or not', () => {
@@ -353,7 +360,8 @@ describe('command registry canvas tool switching', () => {
   it('exposes panel navigation through the App Command Graph', () => {
     const panelCommand = (id: string) => [
       ...appCommandGraphPanelProjection.value.primary,
-      ...appCommandGraphPanelProjection.value.side,
+      ...appCommandGraphPanelProjection.value.design,
+      ...appCommandGraphPanelProjection.value.planning,
     ].find((entry) => entry.panel === id)!
 
     expect(panelCommand('canvas')).toMatchObject({
@@ -430,12 +438,12 @@ describe('command registry canvas tool switching', () => {
     const toggleSnapToGrid = vi.fn()
     const toggleRulers = vi.fn()
 
-    const primaryTool = (tool: string) => appCommandGraphToolbarProjection.value.primaryTools
+    const railTool = (tool: string) => appCommandGraphToolbarProjection.value.toolGroups
+      .flatMap((group) => group.tools)
       .find((entry) => entry.tool === tool)!
-    const creationTool = (tool: string) => appCommandGraphToolbarProjection.value.creationTools
-      .find((entry) => entry.tool === tool)!
-    const reuseTool = (tool: string) => appCommandGraphToolbarProjection.value.reuseTools
-      .find((entry) => entry.tool === tool)!
+    const primaryTool = railTool
+    const creationTool = railTool
+    const reuseTool = railTool
     const historyAction = (id: string) => appCommandGraphToolbarProjection.value.historyActions
       .find((entry) => entry.id === id)!
     const settingToggle = (id: string) => appCommandGraphToolbarProjection.value.settingsToggles
@@ -445,30 +453,30 @@ describe('command registry canvas tool switching', () => {
       commandId: 'canvas.tool.select',
       active: true,
       disabled: false,
-      shortcut: CANVAS_TOOL_SHORTCUTS.select,
+      shortcut: 'V',
     })
     expect(creationTool('line')).toMatchObject({
       commandId: 'canvas.tool.line',
       active: false,
       disabled: false,
-      shortcut: CANVAS_TOOL_SHORTCUTS.line,
+      shortcut: 'L',
     })
     expect(creationTool('ellipse')).toMatchObject({
       commandId: 'canvas.tool.ellipse',
       active: false,
       disabled: false,
-      shortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
+      shortcut: 'E',
     })
     expect(reuseTool('plant-spacing')).toMatchObject({
       commandId: 'canvas.tool.plantSpacing',
       active: false,
       disabled: false,
-      shortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
+      shortcut: 'W',
     })
     expect(historyAction('undo')).toMatchObject({
       commandId: 'edit.undo',
       disabled: true,
-      shortcut: CANVAS_HISTORY_SHORTCUTS.undo,
+      shortcut: 'Ctrl Z',
     })
     expect(settingToggle('grid')).toMatchObject({
       commandId: 'canvas.toggleGrid',
@@ -616,7 +624,7 @@ describe('command registry canvas tool switching', () => {
     expect(problemReportDialogOpen.value).toBe(true)
 
     const help = menus().find((menu) => menu.id === 'help')
-    expect(help?.items.some((entry) => entry.type === 'action' && entry.id === 'help.reportProblem')).toBe(true)
+    expect(flattenMenuActions(help ? [help] : []).some((entry) => entry.id === 'help.reportProblem')).toBe(true)
   })
 
   it('records async command failures for Problem Reports', async () => {
@@ -634,4 +642,154 @@ describe('command registry canvas tool switching', () => {
     ])
     expect(recentFrontendDiagnostics()[0]!.message).not.toContain('/home/alice')
   })
+
+  it('puts every command in File, Edit, View, Tools or Help with its shortcut', () => {
+    const byMenu = Object.fromEntries(menus().map((menu) => [menu.id, flattenMenuActions([menu]).map((item) => item.id)]))
+
+    expect(Object.keys(byMenu)).toEqual(['file', 'edit', 'view', 'tools', 'help'])
+    expect(byMenu.file).toEqual([
+      'file.new', 'file.open', 'file.rename', 'file.save', 'file.saveAs', 'file.revert',
+      'file.importGeoJson', 'file.exportCanvasPdf', 'file.exportGeoJson', 'app.settings', 'file.exit',
+    ])
+    expect(byMenu.edit).toEqual([
+      'edit.undo', 'edit.redo',
+      'canvas.cut', 'canvas.copy', 'canvas.paste', 'canvas.duplicateSelected', 'canvas.deleteSelected',
+      'canvas.selectAll', 'canvas.selectSameSpecies', 'edit.findPlants',
+      'canvas.groupSelected', 'canvas.ungroupSelected', 'canvas.bringToFront', 'canvas.sendToBack',
+      'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.saveSelectionAsStamp',
+    ])
+    expect(byMenu.view).toEqual([
+      'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
+      'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers', 'view.toggleToolNames',
+      'nav.layers', 'nav.data', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
+      'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook',
+      'view.backgroundSatellite', 'view.backgroundMap', 'view.backgroundNone', 'view.toggleTheme',
+    ])
+    expect(byMenu.tools).toEqual([
+      'canvas.tool.select', 'canvas.tool.hand',
+      'canvas.tool.plantStamp', 'canvas.tool.plantSpacing', 'canvas.tool.objectStamp',
+      'canvas.tool.polygon', 'canvas.tool.rectangle', 'canvas.tool.ellipse', 'canvas.tool.line',
+      'canvas.tool.text', 'canvas.tool.measurementGuide',
+    ])
+    expect(byMenu.help).toEqual(['help.shortcuts', 'help.reportProblem', 'help.aboutCanopi'])
+
+    // Every palette command with a shortcut shows the same shortcut in its menu.
+    const menuShortcut = new Map(flattenMenuActions(menus()).map((item) => [item.id, item.shortcut]))
+    for (const command of paletteCommands()) {
+      if (command.shortcut) expect(menuShortcut.get(command.id), command.id).toBe(command.shortcut)
+    }
+    expect(menuShortcut.get('file.rename')).toBe('F2')
+    expect(menuShortcut.get('app.settings')).toBe('Ctrl ,')
+    expect(menuShortcut.get('view.fitToDesign')).toBe('Shift F')
+    expect(menuShortcut.get('view.searchPlace')).toBe('Ctrl K')
+    expect(menuShortcut.get('help.shortcuts')).toBe('F1')
+    expect(menuShortcut.get('file.exportCanvasPdf')).toBe('Ctrl P')
+    expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
+  })
+
+  it('marks checkable View items with their state and groups Export, Arrange and Background as submenus', () => {
+    theme.value = 'dark'
+    gridVisible.value = true
+    snapToGridEnabled.value = false
+    const view = menus().find((menu) => menu.id === 'view')!
+    const item = (id: string) => flattenMenuActions([view]).find((entry) => entry.id === id)!
+
+    expect(item('view.toggleTheme')).toMatchObject({ check: 'checkbox', checked: true })
+    expect(item('canvas.toggleGrid')).toMatchObject({ check: 'checkbox', checked: true })
+    expect(item('canvas.toggleSnapToGrid')).toMatchObject({ check: 'checkbox', checked: false })
+    expect(item('view.backgroundMap').check).toBe('radio')
+    expect(item('view.zoomIn').check).toBeUndefined()
+    const submenus = menus().flatMap((menu) => menu.items).flatMap((entry) => entry.type === 'submenu' ? [entry.id] : [])
+    expect(submenus).toEqual(['file.openRecent', 'submenu.export', 'edit.arrange', 'submenu.background'])
+  })
+
+  it('routes F2, Ctrl , and F1 to the title bar and dialogs from anywhere', () => {
+    designSessionFixture.file = { ...emptyDesign() }
+    const before = designRenameRequest.value
+    const keyDown = (init: KeyboardEventInit) =>
+      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+
+    expect(keyDown({ key: 'F2' })).toBe(true)
+    expect(designRenameRequest.value).toBe(before + 1)
+    expect(keyDown({ key: ',', ctrlKey: true })).toBe(true)
+    expect(settingsDialogOpen.value).toBe(true)
+    expect(keyDown({ key: 'F1' })).toBe(true)
+    expect(keyboardShortcutsDialogOpen.value).toBe(true)
+    settingsDialogOpen.value = false
+    keyboardShortcutsDialogOpen.value = false
+  })
+
+  it('opens panels with Ctrl 1–8 and never with a bare digit', () => {
+    designSessionFixture.file = { ...emptyDesign() }
+    const keyDown = (init: KeyboardEventInit) =>
+      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+
+    expect(keyDown({ key: '1' })).toBe(false)
+    expect(sidePanel.value).toBe(null)
+    expect(keyDown({ key: '1', ctrlKey: true })).toBe(true)
+    expect(sidePanel.value).toBe('layers')
+    expect(keyDown({ key: '6', ctrlKey: true })).toBe(true)
+    expect(sidePanel.value).toBe('budget')
+  })
+
+  it('focuses the title-bar place field with Ctrl K, even from a text field', () => {
+    mountCanvasCommandSurface({})
+    const before = placeSearchFocusRequest.value
+    const input = document.createElement('input')
+    document.body.append(input)
+    const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true })
+    input.addEventListener('keydown', (keyEvent) => { handleAppCommandKeyDown(keyEvent) })
+    input.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(placeSearchFocusRequest.value).toBe(before + 1)
+    input.remove()
+  })
+
+  it('runs canvas edits from the menus on the live surface', () => {
+    const copy = vi.fn()
+    const deleteSelected = vi.fn()
+    mountCanvasCommandSurface({ sceneEdits: { copy, deleteSelected } })
+    const edit = menus().find((menu) => menu.id === 'edit')!
+    const cut = flattenMenuActions([edit]).find((entry) => entry.id === 'canvas.cut')!
+
+    expect(cut.disabled).toBe(true)
+    cut.action()
+    expect(copy).not.toHaveBeenCalled()
+  })
+
+  it('opens the Plant catalog from Place plants until a species is chosen', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+
+    getCommand('canvas.tool.plantStamp').action()
+    expect(sidePanel.value).toBe('plant-db')
+    expect(setTool).not.toHaveBeenCalled()
+
+    selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: null })
+    getCommand('canvas.tool.plantStamp').action()
+    expect(setTool).toHaveBeenCalledWith('plant-stamp')
+    clearPlantStampSource()
+  })
 })
+
+function emptyDesign() {
+  return {
+    version: 7,
+    name: 'test',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '',
+    updated_at: '',
+    extra: {},
+  }
+}

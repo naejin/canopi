@@ -8,7 +8,7 @@ import {
 } from '../app/document-session/save-problem'
 import { createDesignDraftsController } from '../app/design-drafts'
 import { locale } from '../app/settings/state'
-import { DraftList } from '../components/shared/DraftList'
+import { StartScreen, type StartScreenDraft } from '../components/shared/StartScreen'
 import { SaveProblemDialog } from '../components/shared/SaveProblemDialog'
 import { CommandPalette } from '../components/shared/CommandPalette'
 import { commandPaletteOpen } from '../commands/registry'
@@ -42,37 +42,81 @@ function labels(): string[] {
 }
 
 describe('SaveStatusLabel', () => {
-  it('shows quiet saving and saved text', async () => {
-    const onRetry = vi.fn()
-    await act(async () => {
-      render(<SaveStatusLabel status="saving" onRetry={onRetry} onResolveConflict={vi.fn()} />, container)
-    })
+  const draftAction = { label: 'Save as…', style: 'button' as const, run: vi.fn() }
+  const saveElsewhere = { label: 'Save as…', run: vi.fn() }
+  const label = (props: Partial<Parameters<typeof SaveStatusLabel>[0]> & Pick<Parameters<typeof SaveStatusLabel>[0], 'status'>) => (
+    <SaveStatusLabel draftLabel="Draft" draftAction={draftAction} saveElsewhere={saveElsewhere} onRetry={vi.fn()} {...props} />
+  )
+
+  it('shows quiet saving and saved text, and never announces Saving', async () => {
+    await act(async () => { render(label({ status: 'saving' }), container) })
     expect(container.textContent).toBe('Saving…')
+    expect(container.querySelector('span[aria-hidden="true"]')?.textContent).toBe('Saving…')
     expect(buttons()).toHaveLength(0)
 
-    await act(async () => {
-      render(<SaveStatusLabel status="saved" onRetry={onRetry} onResolveConflict={vi.fn()} />, container)
-    })
+    await act(async () => { render(label({ status: 'saved' }), container) })
     expect(container.textContent).toBe('Saved')
-    expect(container.querySelector('[role="status"]')).not.toBeNull()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Saved')
   })
 
-  it('offers Retry after a failed save and the conflict dialog after an outside change', async () => {
-    const onRetry = vi.fn()
-    const onResolveConflict = vi.fn()
+  it('shows a Draft with its one action, Save as…', async () => {
+    const run = vi.fn()
     await act(async () => {
-      render(<SaveStatusLabel status="error" onRetry={onRetry} onResolveConflict={onResolveConflict} />, container)
+      render(label({ status: 'draft', draftAction: { label: 'Save as…', style: 'button', run } }), container)
     })
-    expect(container.textContent).toContain("Couldn't save")
-    buttons()[0]?.click()
-    expect(onRetry).toHaveBeenCalledOnce()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Draft')
+    expect(labels()).toEqual(['Save as…'])
+    buttons()[0]!.click()
+    expect(run).toHaveBeenCalledOnce()
+  })
 
+  it('explains a failed save in Details… with the reason, Retry and Save as…', async () => {
+    const onRetry = vi.fn()
+    const saveAs = vi.fn()
     await act(async () => {
-      render(<SaveStatusLabel status="conflict" onRetry={onRetry} onResolveConflict={onResolveConflict} />, container)
+      render(label({ status: 'error', failureReason: 'No space left on device', onRetry, saveElsewhere: { label: 'Save as…', run: saveAs } }), container)
     })
-    expect(labels()).toEqual(['Changed outside Canopi'])
-    buttons()[0]?.click()
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t save')
+    expect(labels()).toEqual(['Details…'])
+
+    await act(async () => { buttons()[0]!.click() })
+    const details = container.querySelector('[role="dialog"]')!
+    expect(details.textContent).toContain('Couldn’t save your latest changes')
+    expect(details.textContent).toContain('No space left on device')
+    expect(details.textContent).toContain('Your work is safe in Canopi while it stays open.')
+    expect(labels()).toEqual(['Details…', 'Save as…', 'Retry'])
+    expect(document.activeElement?.textContent).toBe('Save as…')
+
+    await act(async () => { buttons()[2]!.click() })
+    expect(onRetry).toHaveBeenCalledOnce()
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => { buttons()[0]!.click() })
+    await act(async () => {
+      container.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement?.textContent).toBe('Details…')
+    expect(saveAs).not.toHaveBeenCalled()
+  })
+
+  it('offers Resolve… for a file changed outside Canopi', async () => {
+    const onResolveConflict = vi.fn()
+    await act(async () => { render(label({ status: 'conflict', onResolveConflict }), container) })
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Changed outside Canopi')
+    expect(labels()).toEqual(['Resolve…'])
+    buttons()[0]!.click()
     expect(onResolveConflict).toHaveBeenCalledOnce()
+  })
+
+  it('shows "Saved in this browser" with a Download a copy link on the Web', async () => {
+    const run = vi.fn()
+    await act(async () => {
+      render(label({ status: 'draft', draftLabel: 'Saved in this browser', draftAction: { label: 'Download a copy', style: 'link', run } }), container)
+    })
+    expect(container.textContent).toBe('Saved in this browserDownload a copy')
+    buttons()[0]!.click()
+    expect(run).toHaveBeenCalledOnce()
   })
 })
 
@@ -207,58 +251,79 @@ describe('save dialog modality', () => {
   })
 })
 
-describe('DraftList', () => {
-  const drafts = [
-    { id: 'draft-a', name: 'Untitled', updatedAt: new Date().toISOString() },
-    { id: 'draft-b', name: 'Orchard', updatedAt: '2026-01-02T00:00:00.000Z' },
-  ]
+describe('StartScreen', () => {
+  const action = { label: 'New Design', run: vi.fn() }
+  const renderStart = (drafts: StartScreenDraft[], recent: Parameters<typeof StartScreen>[0]['recent'] = null) =>
+    render(
+      <StartScreen newDesign={action} openDesign={{ label: 'Open Design…', run: vi.fn() }} links={[]} footer="" recent={recent} drafts={drafts} />,
+      container,
+    )
 
-  it('renders nothing without drafts', async () => {
+  function draft(id: string, name: string, overrides: Partial<StartScreenDraft> = {}): StartScreenDraft {
+    return { id, name, updatedAt: new Date().toISOString(), open: vi.fn(), delete: vi.fn(), ...overrides }
+  }
+
+  it('lists recent Designs as buttons with their plant count and date', async () => {
+    const open = vi.fn()
     await act(async () => {
-      render(<DraftList drafts={[]} locale="en" onOpen={vi.fn()} onDelete={vi.fn()} />, container)
+      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', plantCount: 2201, updatedAt: new Date().toISOString(), open }])
     })
-    expect(container.innerHTML).toBe('')
+    expect(container.textContent).toContain('Recent Designs')
+    const row = buttons().find((button) => button.textContent?.includes('Orchard'))!
+    expect(row.textContent).toContain('2,201 plants')
+    expect(row.textContent).toMatch(/Today, /)
+    row.click()
+    expect(open).toHaveBeenCalledOnce()
   })
 
-  it('opens a draft and deletes one only after an inline confirmation', async () => {
-    const onOpen = vi.fn()
-    const onDelete = vi.fn()
+  it('searches Designs and Drafts, ignoring accents and case', async () => {
     await act(async () => {
-      render(<DraftList drafts={drafts} locale="en" onOpen={onOpen} onDelete={onDelete} />, container)
+      renderStart([draft('d1', 'Haie fruitière'), draft('d2', 'Mare')])
     })
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!
+    await act(async () => {
+      search.value = 'FRUITIERE'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('Haie fruitière')
+    expect(container.textContent).not.toContain('Mare')
+    await act(async () => {
+      search.value = 'zzz'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('No Designs match “zzz”.')
+  })
+
+  it('opens a draft and deletes one only after an inline confirmation that names it', async () => {
+    const orchard = draft('draft-b', 'Orchard')
+    const untitled = draft('draft-a', 'Untitled')
+    await act(async () => { renderStart([untitled, orchard]) })
     expect(container.textContent).toContain('Drafts')
     expect(container.textContent).toContain('Untitled Design')
-    expect(container.textContent).toContain('today')
+    expect(container.textContent).toContain('Draft, never saved to a file')
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('li button')?.click()
-    })
-    expect(onOpen).toHaveBeenCalledWith('draft-a')
+    await act(async () => { buttons().find((button) => button.textContent?.includes('Untitled Design'))!.click() })
+    expect(untitled.open).toHaveBeenCalledOnce()
 
-    const deleteButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete draft: Orchard"]',
-    )
-    expect(deleteButton?.querySelector('[role="tooltip"]')?.textContent).toContain('Delete draft: Orchard')
-    await act(async () => {
-      deleteButton?.click()
-    })
-    expect(onDelete).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Delete this draft?')
+    const openDeleteConfirmation = async () => {
+      await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Orchard"]')!.click() })
+      await act(async () => {
+        Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+          .find((item) => item.textContent === 'Delete draft…')!.click()
+      })
+    }
+    await openDeleteConfirmation()
+    expect(orchard.delete).not.toHaveBeenCalled()
+    const confirmation = container.querySelector('[role="alertdialog"]')!
+    expect(confirmation.textContent).toContain('Delete “Orchard”? It was never saved to a file and can’t be recovered.')
 
-    await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent === 'Cancel')?.click()
-    })
-    expect(container.textContent).not.toContain('Delete this draft?')
+    await act(async () => { buttons().find((button) => button.textContent === 'Cancel')!.click() })
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Delete draft: Orchard"]')?.click()
-    })
-    await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent === 'Delete')?.click()
-    })
-    expect(onDelete).toHaveBeenCalledWith('draft-b')
+    await openDeleteConfirmation()
+    await act(async () => { buttons().find((button) => button.textContent === 'Delete draft')!.click() })
+    expect(orchard.delete).toHaveBeenCalledOnce()
+    expect(untitled.delete).not.toHaveBeenCalled()
   })
 })
 
@@ -316,11 +381,15 @@ describe('WebWelcomeScreen', () => {
     expect(container.textContent).toContain('Hedge')
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Delete draft: Kitchen Garden"]')?.click()
+      container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Kitchen Garden"]')?.click()
+    })
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+        .find((item) => item.textContent === 'Delete draft…')?.click()
     })
     await act(async () => {
       Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent === 'Delete')?.click()
+        .find((button) => button.textContent === 'Delete draft')?.click()
     })
     expect(container.textContent).not.toContain('Kitchen Garden')
     expect(appDataStore.listDrafts().map((draft) => draft.id)).toEqual(['draft-Hedge'])

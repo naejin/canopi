@@ -5,6 +5,7 @@ export {
 } from './projections'
 export type {
   AppCommandGraphPanelCommand,
+  AppCommandGraphTitleBarCommand,
   AppCommandGraphToolbarActionCommand,
   AppCommandGraphToolbarToolCommand,
   MenuAction,

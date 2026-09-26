@@ -1,13 +1,20 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { PanelBar } from '../components/panels/PanelBar'
+import { PanelRail } from '../components/shared/PanelRail'
+import { DesktopPanelRail } from '../components/panels/DesktopPanelRail'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { appCommandGraphPanelProjection } from '../commands/registry'
 import { designSessionFixture } from './support/design-session-state'
 
-describe('PanelBar', () => {
+/** The rail over the live projection, rendered even without a Design (DesktopPanelRail hides then). */
+function ProjectedRail() {
+  const projection = appCommandGraphPanelProjection.value
+  return <PanelRail label="Panels" groups={[projection.design, projection.planning]} />
+}
+
+describe('Panel rail', () => {
   let container: HTMLDivElement
 
   beforeEach(() => {
@@ -53,115 +60,125 @@ describe('PanelBar', () => {
       .map((button) => button.getAttribute('aria-label') ?? '')
   }
 
-  it('renders panel icons with normal toolbar stroke weight', async () => {
+  it('draws panel icons on the shared 1.6 stroke grid', async () => {
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
-      .map((icon) => icon.getAttribute('stroke-width') ?? icon.getAttribute('strokeWidth'))
-    expect(strokes).toEqual(Array(10).fill('1.5'))
+      .map((icon) => icon.getAttribute('stroke-width'))
+    expect(strokes).toEqual(Array(9).fill('1.6'))
   })
 
-  it('orders the Design Notebook before plant-library panels', async () => {
+  it('orders panels as the rail groups them, with Ctrl 1–8', async () => {
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
     expect(panelButtonLabels()).toEqual([
-      'Design Canvas',
-      'Plants in this Design',
-      'Data Library',
       'Layers',
+      'Data library',
+      'Plants in this Design',
+      'Plant catalog',
+      'Favorites and stamps',
       'Calendar',
       'Budget',
       'Consortium',
       'Design notebook',
-      'Plant Database',
-      'Favorites',
     ])
+    expect(container.querySelectorAll('[role="separator"]')).toHaveLength(1)
+    expect(panelButton('Layers').getAttribute('aria-keyshortcuts')).toBe('Control+1 Meta+1')
+    expect(panelButton('Design notebook').querySelector('[role="tooltip"]')?.textContent).toContain('Ctrl 8')
+    expect(panelButton('Data library').hasAttribute('aria-keyshortcuts')).toBe(false)
   })
 
-  it('does not render a Design Location entry point', async () => {
+  it('does not render a Design Location or canvas entry point', async () => {
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
     expect(container.querySelector('button[aria-label="Design Location"]')).toBeNull()
+    expect(container.querySelector('button[data-panel="canvas"]')).toBeNull()
+  })
+
+  it('hides the Desktop rail on the start screen', async () => {
+    designSessionFixture.file = null
+    await act(async () => {
+      render(<DesktopPanelRail />, container)
+    })
+    expect(container.querySelector('nav')).toBeNull()
   })
 
   it('disables design-dependent panel entry points when no design is open', async () => {
     designSessionFixture.file = null
 
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
-    expect(panelButton('Design Canvas').disabled).toBe(false)
-    expect(panelButton('Design Canvas').getAttribute('aria-pressed')).toBe('true')
     expect(panelButton('Plants in this Design').disabled).toBe(true)
     expect(panelButton('Layers').disabled).toBe(true)
-    expect(panelButton('Plant Database').disabled).toBe(true)
+    expect(panelButton('Plant catalog').disabled).toBe(true)
     expect(panelButton('Design notebook').disabled).toBe(false)
-    expect(panelButton('Favorites').disabled).toBe(true)
+    expect(panelButton('Favorites and stamps').disabled).toBe(true)
   })
 
   it('keeps an active no-design Plant Database panel button enabled so it can close the panel', async () => {
     designSessionFixture.file = null
     const panels = appCommandGraphPanelProjection.value
-    const plantDb = [...panels.primary, ...panels.design, ...panels.side]
+    const plantDb = [...panels.primary, ...panels.design, ...panels.planning]
       .find((command) => command.commandId === 'nav.plantDb')!
     plantDb.action()
 
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
-    expect(panelButton('Plant Database').disabled).toBe(false)
-    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
+    expect(panelButton('Plant catalog').disabled).toBe(false)
+    expect(panelButton('Plant catalog').getAttribute('aria-expanded')).toBe('true')
     expect(panelButton('Design notebook').disabled).toBe(false)
-    expect(panelButton('Favorites').disabled).toBe(true)
+    expect(panelButton('Favorites and stamps').disabled).toBe(true)
 
     await act(async () => {
-      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      panelButton('Plant catalog').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
-    expect(panelButton('Plant Database').disabled).toBe(true)
-    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
+    expect(panelButton('Plant catalog').disabled).toBe(true)
+    expect(panelButton('Plant catalog').getAttribute('aria-expanded')).toBe('false')
   })
 
   it('toggles side panels through the command graph projection click path', async () => {
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
-    expect(panelButton('Plant Database').disabled).toBe(false)
-    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
+    expect(panelButton('Plant catalog').disabled).toBe(false)
+    expect(panelButton('Plant catalog').getAttribute('aria-expanded')).toBe('false')
 
     await act(async () => {
-      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      panelButton('Plant catalog').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
-    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('true')
+    expect(panelButton('Plant catalog').getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => {
-      panelButton('Plant Database').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      panelButton('Plant catalog').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
-    expect(panelButton('Plant Database').getAttribute('aria-pressed')).toBe('false')
+    expect(panelButton('Plant catalog').getAttribute('aria-expanded')).toBe('false')
   })
 
   it('updates panel button tooltips immediately when the locale changes', async () => {
     await act(async () => {
-      render(<PanelBar />, container)
+      render(<ProjectedRail />, container)
     })
 
     expect(container.querySelector('button[aria-label="Layers"] [role="tooltip"]')?.textContent)

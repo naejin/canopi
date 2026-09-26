@@ -7,10 +7,11 @@ import { usePointerResize } from './usePointerResize'
 import styles from './SidePanelDock.module.css'
 
 const MIN_SIDEBAR_WIDTH = 320
-const DEFAULT_SIDEBAR_SIZE = 352
-const DEFAULT_SIDEBAR_WIDTH = `clamp(${MIN_SIDEBAR_WIDTH}px, 352px, 90vw)`
+const DEFAULT_SIDEBAR_WIDTH = 380
+const DEFAULT_WIDE_SIDEBAR_WIDTH = 440
 const MAX_SIDEBAR_RATIO = 0.9
 const MAX_EXPANDED_SIDEBAR_WIDTH = 800
+const KEYBOARD_RESIZE_STEP = 20
 
 interface SidebarResizeSession {
   readonly panel: HTMLDivElement
@@ -19,43 +20,41 @@ interface SidebarResizeSession {
   readonly previousInlineWidth: string
 }
 
+/**
+ * The floating dock beside the panel rail: one panel at a time, 380 px wide
+ * (440 px for Budget and Consortium) until the user resizes it. Narrow
+ * responsive editions turn it into a bottom sheet.
+ */
 export function SidePanelDock({
   children,
   responsive = false,
-  responsiveSize = 'default',
+  wide = false,
   expanded = false,
   onManualResize,
 }: {
   readonly children: ComponentChildren
   readonly responsive?: boolean
-  readonly responsiveSize?: 'default' | 'large'
+  readonly wide?: boolean
   readonly expanded?: boolean
   readonly onManualResize?: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const width = sidePanelWidth.value
+  const baseWidth = width === null ? `${wide ? DEFAULT_WIDE_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH}px` : `${width}px`
   return (
-    <>
+    <div
+      ref={panelRef}
+      className={`${styles.dock} ${responsive ? styles.responsive : ''}`}
+      data-dock-width={wide ? 'wide' : 'default'}
+      style={{
+        '--side-panel-width': expanded
+          ? `max(${baseWidth}, min(${MAX_EXPANDED_SIDEBAR_WIDTH}px, 90%))`
+          : baseWidth,
+      } as Record<string, string>}
+    >
       <SidePanelResizeHandle panelRef={panelRef} onManualResize={onManualResize} />
-      <div
-        ref={panelRef}
-        className={`${styles.sidePanel} ${responsive ? styles.responsive : ''} ${responsive && responsiveSize === 'large' ? styles.responsiveLarge : ''}`}
-        data-responsive-size={responsive ? responsiveSize : undefined}
-        style={
-          {
-            '--side-panel-width':
-              expanded
-                ? `max(${width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`}, min(${MAX_EXPANDED_SIDEBAR_WIDTH}px, 90%))`
-                : width === null ? DEFAULT_SIDEBAR_WIDTH : `${width}px`,
-            ...(responsive
-              ? {}
-              : { minWidth: `${MIN_SIDEBAR_WIDTH}px`, maxWidth: '90%' }),
-          } as Record<string, string>
-        }
-      >
-        {children}
-      </div>
-    </>
+      <div className={styles.panel}>{children}</div>
+    </div>
   )
 }
 
@@ -103,8 +102,8 @@ function SidePanelResizeHandle({
         if (!panel) return
         event.preventDefault()
         onManualResize?.()
-        const width =
-          currentSidebarWidth(panel) + (event.key === 'ArrowLeft' ? 20 : -20)
+        const width = currentSidebarWidth(panel)
+          + (event.key === 'ArrowLeft' ? KEYBOARD_RESIZE_STEP : -KEYBOARD_RESIZE_STEP)
         commitSidePanelWidth(
           Math.max(
             MIN_SIDEBAR_WIDTH,
@@ -114,7 +113,7 @@ function SidePanelResizeHandle({
       }}
       aria-valuemin={MIN_SIDEBAR_WIDTH}
       aria-valuemax={Math.max(MIN_SIDEBAR_WIDTH, Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO))}
-      aria-valuenow={Math.round(sidePanelWidth.value ?? Math.max(MIN_SIDEBAR_WIDTH, Math.min(DEFAULT_SIDEBAR_SIZE, window.innerWidth * MAX_SIDEBAR_RATIO)))}
+      aria-valuenow={Math.round(sidePanelWidth.value ?? DEFAULT_SIDEBAR_WIDTH)}
       role="separator"
       aria-orientation="vertical"
       aria-label={t('sidebar.resize')}
@@ -125,20 +124,14 @@ function SidePanelResizeHandle({
 function currentSidebarWidth(panel: HTMLDivElement): number {
   const measured = panel.getBoundingClientRect().width
   if (Number.isFinite(measured) && measured > 0) return measured
-  return (
-    sidePanelWidth.peek() ??
-    Math.max(
-      MIN_SIDEBAR_WIDTH,
-      Math.floor(Math.min(DEFAULT_SIDEBAR_SIZE, window.innerWidth * MAX_SIDEBAR_RATIO)),
-    )
-  )
+  return sidePanelWidth.peek() ?? DEFAULT_SIDEBAR_WIDTH
 }
 
 function resolveSidebarWidth(
   session: SidebarResizeSession,
   clientX: number,
 ): number {
-  // Right-side panel: dragging left = wider (negative delta = larger).
+  // Right-side dock: dragging left widens it.
   const delta = session.startX - clientX
   const maxWidth = Math.floor(window.innerWidth * MAX_SIDEBAR_RATIO)
   return Math.max(

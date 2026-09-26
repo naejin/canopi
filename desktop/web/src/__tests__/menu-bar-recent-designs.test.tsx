@@ -22,9 +22,9 @@ vi.mock('../app/document-session/actions', async (importOriginal) => {
 import { getRecentFiles } from '../ipc/design'
 import { openDesignFromPath } from '../app/document-session/actions'
 import { designNotebookWorkbench } from '../app/design-notebook'
-import { MenuBar } from '../components/shared/MenuBar'
+import { TitleBar } from '../components/shared/TitleBar'
 
-describe('MenuBar Recent Designs', () => {
+describe('Title bar menu: Open recent', () => {
   let container: HTMLDivElement
 
   beforeEach(async () => {
@@ -45,7 +45,7 @@ describe('MenuBar Recent Designs', () => {
 
   async function renderAndOpenFileMenu(): Promise<void> {
     await act(async () => {
-      render(<MenuBar />, container)
+      render(<TitleBar />, container)
     })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -67,7 +67,7 @@ describe('MenuBar Recent Designs', () => {
       .find((button) => button.textContent?.includes('Open Recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
-    expect(openRecent.disabled).toBe(true)
+    expect(openRecent.getAttribute('aria-disabled')).toBe('true')
     expect(openRecent.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Forest Edge')
   })
@@ -90,7 +90,7 @@ describe('MenuBar Recent Designs', () => {
     if (!openRecent) throw new Error('Missing Open Recent item')
 
     expect(getRecentFiles).toHaveBeenCalledTimes(2)
-    expect(openRecent.disabled).toBe(false)
+    expect(openRecent.getAttribute('aria-disabled')).toBeNull()
 
     await act(async () => {
       openRecent.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
@@ -115,7 +115,7 @@ describe('MenuBar Recent Designs', () => {
       .find((button) => button.textContent?.includes('Open Recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
-    expect(openRecent.disabled).toBe(false)
+    expect(openRecent.getAttribute('aria-disabled')).toBeNull()
     expect(openRecent.getAttribute('aria-haspopup')).toBe('menu')
     expect(container.textContent).not.toContain('Forest Edge')
 

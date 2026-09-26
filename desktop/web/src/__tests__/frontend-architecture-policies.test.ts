@@ -272,10 +272,11 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: [
       'src/shortcuts/manager.ts',
       'src/components/shared/MenuBar.tsx',
-      'src/components/panels/PanelBar.tsx',
-      'src/components/canvas/CanvasToolbar.tsx',
-      'src/components/shared/menu-definitions.ts',
+      'src/components/shared/TitleBar.tsx',
+      'src/components/panels/DesktopPanelRail.tsx',
+      'src/components/panels/CanvasPanel.tsx',
       'src/components/shared/CommandPalette.tsx',
+      'src/app.tsx',
     ],
     targets: ['src/commands/graph/**'],
   },
@@ -293,8 +294,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Panel Bar does not own shell or settings state',
-    from: ['src/components/panels/PanelBar.tsx'],
+    name: 'Panel Rail does not own shell or settings state',
+    from: ['src/components/shared/PanelRail.tsx'],
     targets: [
       'src/app/document-session/store.ts',
       'src/app/shell/state.ts',
@@ -303,8 +304,8 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Canvas Toolbar does not mutate Canvas settings directly',
-    from: ['src/components/canvas/CanvasToolbar.tsx'],
+    name: 'Tool Rail does not mutate Canvas settings directly',
+    from: ['src/components/canvas/ToolRail.tsx', 'src/components/canvas/ViewChip.tsx', 'src/components/canvas/ZoomControls.tsx'],
     targets: ['src/app/canvas-settings/signals.ts'],
   },
   {
@@ -709,10 +710,10 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Web settings callers mutate through the shared projection',
+    name: 'Shell settings callers mutate through the shared projection',
     from: [
-      'src/web/BrowserAppShell.tsx',
-      'src/web/browser-shell-commands.ts',
+      'src/app/workspace-commands/capabilities.ts',
+      'src/components/shared/SettingsDialog.tsx',
     ],
     targets: ['src/app/settings/projection.ts'],
   },
@@ -784,18 +785,18 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Command consumers depend on the registry',
     from: [
       'src/shortcuts/manager.ts',
-      'src/components/panels/PanelBar.tsx',
-      'src/components/canvas/CanvasToolbar.tsx',
-      'src/components/shared/menu-definitions.ts',
+      'src/components/panels/DesktopPanelRail.tsx',
+      'src/components/panels/CanvasPanel.tsx',
+      'src/components/shared/TitleBar.tsx',
       'src/components/shared/CommandPalette.tsx',
     ],
     targets: ['src/commands/registry.ts'],
   },
   {
     kind: 'require-imports',
-    name: 'Menu Bar consumes menu definitions',
+    name: 'Menu Bar renders the shared workspace menu model',
     from: ['src/components/shared/MenuBar.tsx'],
-    targets: ['src/components/shared/menu-definitions.ts'],
+    targets: ['src/app/shell-commands/menus.ts'],
   },
   {
     kind: 'require-imports',
@@ -1093,7 +1094,9 @@ const NAMED_IMPORT_POLICIES = [
       'projectShellCommandCatalog',
       'ProjectedShellCommand',
       'ShellChromeProjection',
+      'ShellCommandCatalogEntry',
       'ShellCommandIdForCapability',
+      'ShellCommandState',
     ],
   },
   {
@@ -1154,8 +1157,8 @@ const NAMED_IMPORT_POLICIES = [
   },
   {
     kind: 'named-imports',
-    name: 'Canvas Toolbar reads Canvas queries and selection only',
-    from: ['src/components/canvas/CanvasToolbar.tsx'],
+    name: 'Tool Rail reads Canvas queries and selection only',
+    from: ['src/components/canvas/ToolRail.tsx'],
     target: 'src/canvas/session.ts',
     requiredNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],
     allowedNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],
@@ -1351,7 +1354,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     kind: 'forbid-source-symbols',
     name: 'Shortcut definitions do not re-export Canvas command shortcuts',
     from: ['src/shortcuts/definitions.ts'],
-    names: ['EDIT_SHORTCUTS', 'TOOL_SHORTCUTS', 'canvasToolKeys'],
+    names: ['EDIT_SHORTCUTS', 'TOOL_SHORTCUTS', 'VIEW_SHORTCUTS', 'canvasToolKeys'],
   },
   {
     kind: 'forbid-source-symbols',

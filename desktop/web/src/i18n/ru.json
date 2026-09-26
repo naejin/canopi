@@ -1,17 +1,17 @@
 {
   "nav": {
     "plantDb": "База растений",
-    "canvas": "Холст дизайна",
-    "designNotebook": "Блокнот дизайнов",
     "favorites": "Избранное"
   },
   "webShell": {
-    "commands": "Команды веб-версии",
     "panels": "Панели веб-версии",
     "workspace": "Рабочая область веб-версии",
-    "openCanopi": "Открыть .canopi",
-    "downloadCanopi": "Скачать .canopi",
-    "dismissNotice": "Закрыть"
+    "openCanopi": "Открыть файл .canopi…",
+    "downloadCanopi": "Скачать копию",
+    "dismissNotice": "Закрыть",
+    "downloadCopy": "Скачать копию",
+    "savedInBrowser": "Сохранено в этом браузере",
+    "openCanopiFile": "Открыть файл .canopi"
   },
   "designNotebook": {
     "title": "Блокнот дизайнов",
@@ -89,32 +89,20 @@
       "panHint": "Просмотр. Перетаскивайте или используйте стрелки; Shift увеличивает шаг.",
       "recenter": "Центрировать по холсту"
     },
-    "emptyWelcome": "Начните свой проект",
-    "emptyNewDesign": "Новый проект",
-    "emptyOpenDesign": "Открыть проект",
-    "emptyRecentFiles": "Недавние файлы",
     "toolbar": "Инструменты",
     "tools": {
       "select": "Выделение",
-      "selectDesc": "Нажмите для выделения объектов",
-      "hand": "Рука",
-      "handDesc": "Перемещение по холсту",
-      "rectangle": "Прямоугольник",
-      "rectangleDesc": "Рисование прямоугольных зон",
-      "ellipse": "Эллипс",
-      "ellipseDesc": "Рисование эллиптических зон",
-      "polygon": "Многоугольник",
-      "polygonDesc": "Рисование полигональных зон",
-      "line": "Линия",
-      "lineDesc": "Рисование линейных зон",
-      "text": "Текст",
-      "textDesc": "Добавление текстовых надписей",
-      "objectStamp": "Штамп объекта",
-      "objectStampDesc": "Копировать существующие объекты дизайна",
-      "plantSpacing": "Интервал растений",
-      "plantSpacingDesc": "Повторять размещенное растение вдоль направляющей интервала",
-      "measurementGuide": "Измерительная направляющая",
-      "measurementGuideDesc": "Разместить постоянную направляющую расстояния"
+      "hand": "Панорама",
+      "rectangle": "Прямоугольная зона",
+      "ellipse": "Эллиптическая зона",
+      "polygon": "Многоугольная зона",
+      "line": "Линейная зона",
+      "text": "Текстовая заметка",
+      "objectStamp": "Поставить штамп",
+      "plantSpacing": "Посадить ряд",
+      "measurementGuide": "Измерить",
+      "zones": "Зоны",
+      "plantStamp": "Разместить растения"
     },
     "plantSpacing": {
       "selectSource": "Выберите размещенное растение",
@@ -153,19 +141,14 @@
     },
     "grid": {
       "grid": "Сетка",
-      "gridDesc": "Переключить наложение сетки",
       "snapToGrid": "Привязка к сетке",
-      "snapToGridDesc": "Привязка фигур к узлам сетки",
       "rulers": "Линейки",
-      "rulersDesc": "Переключить горизонтальную и вертикальную линейки",
       "zoom": "Масштаб"
     },
     "overview": {
-      "label": "Обзор",
-      "zoomInToEdit": "Увеличьте масштаб для редактирования",
-      "returnToDesign": "Вернуться к проекту",
-      "design": "Проект",
-      "designMarker": "Вернуться к проекту"
+      "zoomInToEdit": "Увеличьте масштаб для редактирования. При этом масштабе растения скрыты.",
+      "returnToDesign": "Вернуться к дизайну",
+      "designPin": "Дизайн: {{name}}"
     },
     "plantColor": {
       "label": "Цвет растения",
@@ -211,21 +194,22 @@
       "applySelection": "Применить к выбранным: {{count}}"
     },
     "placeSearch": {
-      "open": "Найти место",
-      "placeholder": "Название места или широта, долгота",
+      "placeholder": "Место или координаты",
       "searching": "Поиск…",
       "noResults": "Места не найдены",
       "error": "Не удалось найти место",
       "results": "Места",
-      "emptyPrompt": "Найдите свой участок"
+      "placeholderShort": "Найти место",
+      "east": "в. д.",
+      "north": "с. ш.",
+      "clear": "Очистить поиск",
+      "south": "ю. ш.",
+      "coordinates": "{{lat}}° {{northSouth}}, {{lon}}° {{eastWest}}",
+      "west": "з. д.",
+      "goStraightThere": "Координаты · перейти сразу"
     },
     "file": {
-      "new": "Новый проект",
-      "open": "Открыть проект",
-      "save": "Сохранить",
-      "saveAs": "Сохранить как",
-      "cancel": "Отмена",
-      "revert": "Вернуть версию при открытии"
+      "cancel": "Отмена"
     },
     "layers": {
       "layerPanel": "Слои",
@@ -577,7 +561,13 @@
     },
     "satellite": {
       "googleKeyOptional": "Без ключа Canopi использует общедоступные спутниковые тайлы Google. Добавьте свой ключ API Google Maps, чтобы использовать официальный Map Tiles API."
-    }
+    },
+    "zoom": {
+      "scaleBar": "Масштабная линейка: {{distance}}",
+      "chooseScale": "Масштаб {{scale}}. Выбрать масштаб",
+      "mapScale": "Масштаб карты"
+    },
+    "viewChip": "Вид"
   },
   "worldMap": {
     "title": "Карта мира",
@@ -592,18 +582,11 @@
     "filterByStyle": "Фильтр по стилю",
     "openTemplate": "Открыть как новый дизайн"
   },
-  "status": {
-    "language": "Язык",
-    "theme": "Тема"
-  },
   "theme": {
     "light": "Светлая",
     "dark": "Тёмная"
   },
   "commands": {
-    "plantDb": "Перейти к базе растений",
-    "canvas": "Перейти к холсту дизайна",
-    "toggleTheme": "Переключить тему",
     "commandPalette": "Палитра команд",
     "searchPlaceholder": "Введите команду...",
     "noResults": "Команды не найдены"
@@ -781,21 +764,56 @@
     "file": "Файл",
     "edit": "Правка",
     "view": "Вид",
-    "file.exit": "Выход",
+    "file.exit": "Выйти из Canopi",
     "edit.undo": "Отменить",
     "edit.redo": "Повторить",
     "view.zoomIn": "Увеличить",
     "view.zoomOut": "Уменьшить",
-    "view.fitToContent": "По содержимому",
     "view.searchPlace": "Найти место…",
     "help": "Справка",
-    "help.reportProblem": "Сообщить о проблеме",
-    "help.aboutCanopi": "О Canopi"
+    "help.reportProblem": "Сообщить о проблеме…",
+    "help.aboutCanopi": "О Canopi",
+    "edit.duplicate": "Дублировать",
+    "edit.delete": "Удалить",
+    "file.settings": "Настройки…",
+    "edit.ungroup": "Разгруппировать",
+    "edit.sendToBack": "На задний план",
+    "edit.arrange": "Упорядочить",
+    "edit.selectSameSpecies": "Выделить весь вид",
+    "file.exportGeoJson": "GeoJSON…",
+    "edit.unlock": "Разблокировать",
+    "view.darkTheme": "Тёмная тема",
+    "edit.saveAsStamp": "Сохранить как штамп",
+    "view.fitToDesign": "Показать весь дизайн",
+    "file.new": "Новый дизайн",
+    "view.backgroundMap": "Карта",
+    "edit.findPlants": "Найти растения…",
+    "file.revert": "Вернуть версию при открытии…",
+    "tools": "Инструменты",
+    "edit.copy": "Копировать",
+    "edit.paste": "Вставить",
+    "file.rename": "Переименовать…",
+    "view.background": "Подложка",
+    "file.saveAs": "Сохранить как…",
+    "edit.group": "Сгруппировать",
+    "view.toolNames": "Названия инструментов",
+    "file.save": "Сохранить",
+    "file.export": "Экспорт",
+    "view.backgroundNone": "Нет",
+    "help.shortcuts": "Сочетания клавиш",
+    "view.backgroundSatellite": "Спутник",
+    "edit.bringToFront": "На передний план",
+    "edit.lock": "Заблокировать",
+    "file.open": "Открыть дизайн…",
+    "edit.selectAll": "Выделить всё",
+    "file.exportPlantingPlan": "План посадки (PDF)…",
+    "edit.cut": "Вырезать"
   },
   "titleBar": {
     "untitledDesign": "Безымянный дизайн",
-    "renameDesignName": "Переименовать дизайн",
-    "designNameInput": "Название дизайна"
+    "designNameInput": "Название дизайна",
+    "menus": "Меню",
+    "renameDesign": "Переименовать дизайн: {{name}}"
   },
   "about": {
     "title": "О Canopi",
@@ -1145,7 +1163,15 @@
     "saved": "Сохранено",
     "error": "Не удалось сохранить",
     "retry": "Повторить",
-    "conflict": "Изменён вне Canopi"
+    "conflict": "Изменён вне Canopi",
+    "detailsUnknown": "Canopi не удалось записать файл.",
+    "detailsTitle": "Не удалось сохранить последние изменения",
+    "detailsReason": "Canopi не удалось записать файл: {{reason}}",
+    "details": "Подробнее…",
+    "draft": "Черновик",
+    "detailsSafe": "Пока Canopi открыт, ваша работа в безопасности. Повторите попытку или сохраните в другом месте.",
+    "saveAs": "Сохранить как…",
+    "resolve": "Разрешить…"
   },
   "saveProblem": {
     "flushFailedTitle": "Не удалось сохранить изменения",
@@ -1169,9 +1195,12 @@
   },
   "drafts": {
     "title": "Черновики",
-    "delete": "Удалить черновик: {{name}}",
-    "confirmDelete": "Удалить этот черновик?",
-    "confirmDeleteAction": "Удалить"
+    "confirmDelete": "Удалить «{{name}}»? Он ни разу не сохранялся в файл, восстановить его нельзя.",
+    "confirmDeleteAction": "Удалить черновик",
+    "intro": "Canopi сохраняет каждое изменение по ходу работы. Дизайн, который ни разу не сохранялся в файл, остаётся здесь, пока вы его не сохраните или не удалите.",
+    "deleteItem": "Удалить черновик…",
+    "neverSaved": "Черновик, не сохранён в файл",
+    "actions": "Действия для «{{name}}»"
   },
   "plantFinder": {
     "label": "Найти растения",
@@ -1283,5 +1312,66 @@
       "coverage": "Опубликовано ячеек: {{cells}}",
       "noOutputs": "Ничего не опубликовано"
     }
+  },
+  "panelRail": {
+    "label": "Панели",
+    "canvas": "Холст дизайна",
+    "layers": "Слои",
+    "data": "Библиотека данных",
+    "plants": "Растения в этом дизайне",
+    "catalog": "Каталог растений",
+    "favorites": "Избранное и штампы",
+    "calendar": "Календарь",
+    "budget": "Бюджет",
+    "consortium": "Консорциум",
+    "notebook": "Блокнот дизайнов"
+  },
+  "start": {
+    "region": "Начало",
+    "purpose": "Проектируйте агролесоводство и съедобные леса на карте своего участка.",
+    "more": "Ещё",
+    "searchDesigns": "Поиск по дизайнам",
+    "noMatches": "Нет дизайнов по запросу «{{query}}».",
+    "recentDesigns": "Недавние дизайны",
+    "footerDesktop": "Работает без интернета. Дизайны хранятся на этом компьютере.",
+    "footerWeb": "Дизайны хранятся в этом браузере. Скачайте копию, чтобы сохранить файл.",
+    "plantCount": "Растений: {{plants}}"
+  },
+  "shortcutKeys": {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "delete": "Del",
+    "escape": "Esc",
+    "enter": "Enter"
+  },
+  "siteOnboarding": {
+    "locateTitle": "Где ваш участок?",
+    "locateIntro": "Найдите место или вставьте координаты. Карта переместится туда; пока ничего не размещается.",
+    "placeNamesCredit": "Названия мест © участники OpenStreetMap",
+    "skip": "Пропустить, найду на карте",
+    "startTitle": "Начните дизайн",
+    "closeStart": "Закрыть «Начните дизайн»",
+    "stepZone": "Обведите границы участка зоной.",
+    "stepCatalog": "Найдите виды в Каталоге растений и разместите их или перетащите на карту.",
+    "stepSave": "Всё сохраняется по ходу работы. Нажмите на название вверху, чтобы переименовать дизайн, и «Сохранить как…», чтобы сохранить его в файл.",
+    "openCatalog": "Открыть каталог",
+    "drawZone": "Нарисовать зону",
+    "searchAgain": "Искать снова",
+    "noPlace": "Место не выбрано"
+  },
+  "shortcuts": {
+    "title": "Сочетания клавиш",
+    "toolsHeading": "{{menu}} (когда карта в фокусе)",
+    "escape": "Esc делает по одному шагу: закрывает меню или диалог, отменяет рисование, возвращает к выделению, снимает выделение.",
+    "footnote": "Клавиши инструментов работают, когда карта в фокусе."
+  },
+  "settings": {
+    "title": "Настройки",
+    "appearance": "Оформление",
+    "theme": "Тема",
+    "language": "Язык",
+    "toolNames": "Названия инструментов на панели",
+    "toolNamesHint": "Названия и клавиши видны, пока вы не воспользуетесь каждым инструментом."
   }
 }

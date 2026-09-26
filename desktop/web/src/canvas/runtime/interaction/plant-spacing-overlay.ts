@@ -2,7 +2,6 @@ import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
-import { resolveCanvasNoticePlacement } from '../../canvas-notice-layout'
 
 interface PlantSpacingSourceView {
   id: string
@@ -57,37 +56,26 @@ export function createPlantSpacingOverlay(
   events: PlantSpacingOverlayEvents,
   translate: CanvasRuntimeTranslator,
 ): PlantSpacingOverlayController {
-  const hudPlacement = resolveCanvasNoticePlacement('tool-hud', {
-    canvasWidth: container.clientWidth,
-    canvasHeight: container.clientHeight,
-    rulersVisible: true,
-    scaleBarVisible: true,
-  })
   const root = document.createElement('div')
   root.dataset.plantSpacingHud = 'true'
-  root.dataset.canvasNoticePlacement = hudPlacement.placement
-  root.dataset.compact = hudPlacement.compact ? 'true' : 'false'
+  // The tool card slot: top left beside the tool rail, below the title bar.
   root.style.cssText = [
     'position: absolute',
-    `top: ${hudPlacement.topPx}px`,
-    `left: ${hudPlacement.leftPx}px`,
     'z-index: 25',
     'display: none',
-    `min-width: ${Math.min(240, hudPlacement.maxWidthPx)}px`,
-    `max-width: ${Math.min(320, hudPlacement.maxWidthPx)}px`,
-    'padding: var(--space-2)',
-    'background: var(--color-surface)',
-    'border: 1px solid var(--color-border-strong, var(--color-border))',
-    'border-radius: var(--radius-md)',
-    'box-shadow: 0 2px 6px rgba(44, 36, 24, 0.10)',
+    'width: min(320px, calc(100% - var(--canvas-tool-card-left, 76px) - 12px))',
+    'box-sizing: border-box',
+    'padding: var(--space-3)',
+    'background: var(--color-glass)',
+    'border: 1px solid var(--color-border)',
+    'border-radius: var(--radius-lg)',
+    'box-shadow: var(--shadow-float)',
     `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'color: var(--color-text)',
     'pointer-events: auto',
   ].join(';')
-  root.style.top = `${hudPlacement.topPx}px`
-  root.style.left = `${hudPlacement.leftPx}px`
-  root.style.minWidth = `${Math.min(240, hudPlacement.maxWidthPx)}px`
-  root.style.maxWidth = `${Math.min(320, hudPlacement.maxWidthPx)}px`
+  root.style.setProperty('top', 'var(--chrome-rail-top, 72px)')
+  root.style.setProperty('left', 'var(--canvas-tool-card-left, 76px)')
   root.addEventListener('pointerdown', (event) => {
     event.stopPropagation()
   })

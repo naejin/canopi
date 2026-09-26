@@ -723,6 +723,13 @@ export type Settings = {
 	plant_spacing_interval_m: number,
 	// The camera view last shown on a Design; a new Design opens here.
 	last_view: LastView | null,
+	/**
+	 *  Canvas tools used at least once on this device. The tool rail shows
+	 *  names and keys until every tool is in this list.
+	 */
+	used_canvas_tools: string[],
+	// View › Tool names: `None` follows first use, `Some` is the user's choice.
+	tool_names_visible: boolean | null,
 };
 
 export type Sort = "Name" | "Family" | "Height" | "Hardiness" | "GrowthRate" | "Relevance";

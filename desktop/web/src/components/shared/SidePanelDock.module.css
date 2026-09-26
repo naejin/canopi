@@ -1,62 +1,65 @@
-/* Resizable side panel (right side) */
-.sidePanel {
-  width: var(--side-panel-width);
-  flex-shrink: 0;
-  min-height: 0;
-  min-width: 320px;
-  max-width: 90%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--panel-gradient);
-  border-left: 1px solid var(--color-border);
-}
-
-/* Drag handle — doubles as the panel left border */
-.dragHandle {
-  width: 2px;
-  cursor: col-resize;
-  background: var(--color-border-strong);
-  flex-shrink: 0;
-  transition: background-color var(--transition-fast);
-  position: relative;
-}
-
-/* Wider hit target without visual width */
-.dragHandle::before {
-  content: '';
+/* Floating dock: left of the panel rail, between the title bar and the bottom chrome. */
+.dock {
   position: absolute;
-  inset: 0 -4px;
+  top: var(--chrome-rail-top);
+  right: calc(2 * var(--chrome-inset) + var(--chrome-rail-width));
+  bottom: var(--chrome-bottom);
+  z-index: 32;
+  display: flex;
+  width: var(--side-panel-width);
+  min-width: 320px;
+  max-width: calc(100% - 2 * var(--chrome-rail-width) - 5 * var(--chrome-inset));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
 }
 
-.dragHandle:hover {
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+}
+
+/* Resize grip on the dock's left edge: invisible until hovered or focused. */
+.dragHandle {
+  position: absolute;
+  top: var(--space-4);
+  bottom: var(--space-4);
+  left: calc(-1 * var(--space-1));
+  z-index: 1;
+  width: var(--space-2);
+  border-radius: var(--radius-full);
+  cursor: col-resize;
+}
+
+.dragHandle:hover,
+.dragHandle:focus-visible {
   background: var(--color-accent);
-  width: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dragHandle {
-    transition: none;
-  }
 }
 
 .dragHandle:focus-visible {
   outline: 2px solid var(--color-focus);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
-@media (max-width: 860px) {
+
+/* Narrow responsive editions: the dock becomes a bottom sheet above the bottom chrome. */
+@media (max-width: 760px) {
   .responsive {
-    width: 100%;
+    top: auto;
+    right: var(--chrome-inset);
+    left: var(--chrome-inset);
+    width: auto;
     min-width: 0;
-    max-width: 100%;
-    flex: 0 0 42%;
-    border-left: 0;
-    border-top: 1px solid var(--color-border);
+    max-width: none;
+    height: min(55%, 520px);
   }
-  .responsiveLarge {
-    flex: 0 0 min(58%, 480px);
-  }
-  .dragHandle:has(+ .responsive) {
+
+  .responsive .dragHandle {
     display: none;
   }
 }

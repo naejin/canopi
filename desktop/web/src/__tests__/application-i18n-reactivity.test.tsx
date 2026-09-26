@@ -74,6 +74,6 @@ describe('application translation authority', () => {
 
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
       .toBe('Palette de commandes')
-    expect(container.textContent).toContain('Nouveau design')
+    expect(container.textContent).toContain('Nouveau Design')
   })
 })

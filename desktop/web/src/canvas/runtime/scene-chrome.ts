@@ -7,7 +7,7 @@ import {
 import type { CameraViewportSnapshot } from './camera'
 import { getCanvasColor } from '../theme-refresh'
 import { getGuideLineVisual, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
-import { CANVAS_RULER_SIZE_PX } from '../canvas-notice-layout'
+import { CANVAS_RULER_SIZE_PX } from '../rulers'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
 const GRID_Z_INDEX = 4

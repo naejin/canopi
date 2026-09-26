@@ -1,8 +1,8 @@
 /* Status chip for highlighted plants: top centre, over the map. */
 .chip {
   position: absolute;
-  z-index: 5;
-  top: var(--space-7);
+  z-index: 34;
+  top: var(--chrome-rail-top);
   left: 50%;
   transform: translateX(-50%);
   max-width: min(640px, calc(100% - var(--space-8)));
@@ -77,5 +77,5 @@
 }
 
 @media (max-width: 480px) {
-  .chip { top: calc(var(--space-7) + var(--control-size-lg)); }
+  .chip { top: calc(var(--chrome-rail-top) + var(--control-size-3xl) + var(--space-2)); }
 }
