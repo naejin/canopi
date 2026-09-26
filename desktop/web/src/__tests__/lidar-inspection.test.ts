@@ -28,7 +28,7 @@ const { lidarLibrary } = await import('../app/lidar/library-store')
 const {
   beginInspection,
   endInspection,
-  hasInspectionPointerHandler,
+  hasInspectionPointerHandlerForTests,
   inspectionLocation,
   inspectionSample,
   inspectionTarget,
@@ -286,17 +286,17 @@ describe('numeric inspection session state', () => {
     expect(inspectionTarget.value).toBeNull()
     expect(inspectionSample.value.kind).not.toBe('value')
     // The replaced session also releases the canvas gesture it installed.
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
   })
 
   it('releases the canvas gesture when inspection ends or is reconciled away', () => {
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
     endInspection()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
 
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
 
     const design = designWithPresentedLayer() as unknown as {
       lidar: { entries: Array<Record<string, unknown>> }
@@ -309,7 +309,7 @@ describe('numeric inspection session state', () => {
     )
     reconcileInspectionWithPresentation()
     expect(inspectionTarget.value).toBeNull()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
   })
 
   /**
@@ -461,7 +461,7 @@ describe('numeric inspection session state', () => {
     expect(inspectionSample.value).toEqual({ kind: 'stale' })
     // The target stays armed so the user can re-aim for a fresh sample.
     expect(inspectionTarget.value?.id).toBe('lyr-1')
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
   })
 
   it('cancels a pending lookup when the head changes before the answer', async () => {
@@ -529,12 +529,12 @@ describe('numeric inspection session state', () => {
     const { activePanel } = await import('../app/shell/state')
     beginInspection({ kind: 'Source', id: 'lyr-1', name: 'Ground' })
     const reading = sampleInspectionPoint(POINT)
-    expect(hasInspectionPointerHandler()).toBe(true)
+    expect(hasInspectionPointerHandlerForTests()).toBe(true)
 
     activePanel.value = 'plant-db'
     // The observer ends the session without waiting for a later reconcile.
     expect(inspectionTarget.value).toBeNull()
-    expect(hasInspectionPointerHandler()).toBe(false)
+    expect(hasInspectionPointerHandlerForTests()).toBe(false)
 
     pending[0]?.({ Value: { generation_id: 'gen-1', value: 1, units: 'm' } })
     await reading

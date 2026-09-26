@@ -25,7 +25,7 @@ import {
 } from '../web/browser-shell-notice'
 import { BrowserAppShell } from '../web/BrowserAppShell'
 import { createBrowserShellCommandProjection } from '../web/browser-shell-commands'
-import { getAppCommand, getMenuDefinitions } from '../commands/registry'
+import { appCommandGraphChromeProjection } from '../commands/registry'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { designSessionFixture } from './support/design-session-state'
@@ -112,7 +112,7 @@ describe('Desktop GeoJSON file adapter', () => {
 
 describe('Desktop App Command Graph GeoJSON commands', () => {
   it('lists GeoJSON import and export in the File menu, enabled with a mounted Design', () => {
-    const fileMenuIds = () => getMenuDefinitions()
+    const fileMenuIds = () => appCommandGraphChromeProjection.value.menus
       .find((menu) => menu.id === 'file')!
       .items.flatMap((entry) => entry.type === 'action' ? [{ id: entry.id, disabled: entry.disabled }] : [])
       .filter((entry) => entry.id.includes('GeoJson'))
@@ -136,7 +136,9 @@ describe('Desktop App Command Graph GeoJSON commands', () => {
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
     tauri.open.mockResolvedValue(null)
 
-    getAppCommand('file.importGeoJson')!.action()
+    appCommandGraphChromeProjection.value.paletteCommands
+      .find((command) => command.id === 'file.importGeoJson')!
+      .action()
     await vi.waitFor(() => expect(tauri.open).toHaveBeenCalledOnce())
     expect(tauri.invoke).not.toHaveBeenCalled()
   })

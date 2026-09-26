@@ -15,21 +15,12 @@ import type {
 } from '../generated/contracts'
 
 export type {
-  LidarDisplayAsset,
   LidarDisplayDescriptor,
-  LidarDisplayState,
   LidarLayerCollection,
-  LidarLayerSource,
   LidarAnalysisSummary,
   LidarLayerSummary,
   LidarDeleteImpact,
-  LidarEngineStatus,
-  LidarImportJob,
   LidarImportReceipt,
-  LidarAnalysisReceipt,
-  LidarAnalysisKind,
-  LidarAnalysisParameters,
-  LidarLibrarySnapshot,
   LidarMeasurementKind,
 } from '../generated/contracts'
 

@@ -109,7 +109,7 @@ describe('settings platform adapters', () => {
     expect(loaded).not.toHaveProperty('satellite_provider')
   })
 
-  it('merges legacy locale and theme browser settings with complete defaults', async () => {
+  it('completes partial locale and theme browser settings with defaults', async () => {
     const adapter = createBrowserSettingsPlatformAdapter({
       loadSettings: () => ({ locale: 'it', theme: 'dark' }),
       saveSettings: vi.fn(),

@@ -71,12 +71,6 @@ export function getStackBadgeOffsetPx(radiusScreenPx: number): ScenePoint {
   return { x: offset, y: -offset }
 }
 
-export interface PlantPresentationSnapshot {
-  entries: PlantPresentationEntry[]
-  layout: PlantLayoutResult
-  stackBadges: PlantStackBadgeDecision[]
-}
-
 export interface PlantWorldBounds {
   x: number
   y: number
@@ -248,19 +242,6 @@ export function resolveStackBadgeDecisions(
   }
 
   return decisions
-}
-
-export function buildPlantPresentationSnapshot(
-  plants: readonly ScenePlantEntity[],
-  context: PlantPresentationContext,
-  selectedPlantIds: ReadonlySet<string>,
-): PlantPresentationSnapshot {
-  const entries = buildPlantPresentationEntries(plants, context, selectedPlantIds)
-  return {
-    entries,
-    layout: layoutPlantPresentation(entries, context.viewport.scale),
-    stackBadges: resolveStackBadgeDecisions(entries),
-  }
 }
 
 const SYMBOLIC_PLANT_MIN_SCREEN_PX = 2

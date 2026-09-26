@@ -17,7 +17,7 @@ vi.mock('../components/canvas/InspectionLens', () => ({ InspectionLens: () => nu
 vi.mock('../components/canvas/SpeciesFocusChip', () => ({ SpeciesFocusChip: () => null }))
 vi.mock('../components/canvas/ZoomControls', () => ({ ZoomControls: () => null }))
 vi.mock('../canvas/runtime/scene-runtime', () => ({ SceneCanvasRuntime: class {} }))
-vi.mock('../canvas/runtime/host', () => ({ createSceneCanvasRuntimeHost: vi.fn() }))
+vi.mock('../../ui-gallery/scene-canvas-runtime-host', () => ({ createSceneCanvasRuntimeHost: vi.fn() }))
 vi.mock('../app/canvas-runtime/app-adapter', () => ({ createAppCanvasRuntimeAppAdapter: vi.fn() }))
 vi.mock('../app/saved-object-stamps', () => ({
   savedObjectStampWorkbench: { saveSelection: vi.fn() },

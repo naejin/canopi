@@ -10,7 +10,7 @@ import {
 import { locale } from '../app/settings/state'
 import {
   budgetPriceDraftValue,
-  parseBudgetPriceDraft,
+  validateBudgetPriceDraft,
 } from '../app/budget/workbench'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -78,10 +78,10 @@ describe('Budget Item workbench', () => {
   })
 
   it('parses zero-price drafts without conflating them with an empty draft', () => {
-    expect(parseBudgetPriceDraft('0')).toBe(0)
-    expect(parseBudgetPriceDraft('0.00')).toBe(0)
-    expect(parseBudgetPriceDraft('')).toBeNull()
-    expect(parseBudgetPriceDraft('  ')).toBeNull()
+    expect(validateBudgetPriceDraft('0')).toEqual({ valid: true, value: 0 })
+    expect(validateBudgetPriceDraft('0.00')).toEqual({ valid: true, value: 0 })
+    expect(validateBudgetPriceDraft('')).toEqual({ valid: false })
+    expect(validateBudgetPriceDraft('  ')).toEqual({ valid: false })
     expect(budgetPriceDraftValue(0)).toBe('0')
     expect(budgetPriceDraftValue(undefined)).toBe('')
   })

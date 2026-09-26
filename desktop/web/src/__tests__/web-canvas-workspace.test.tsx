@@ -7,7 +7,7 @@ import {
   layerVisibility,
 } from '../app/canvas-settings/signals'
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
-import { currentCanvasReady, currentCanvasSession } from '../canvas/session'
+import { currentCanvasSession } from '../canvas/session'
 import { CanvasRuntimeCleanupError } from '../canvas/runtime/cleanup'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 import type {
@@ -183,14 +183,14 @@ describe('Web Edition canvas workspace', () => {
     } as unknown as typeof ResizeObserver
     let releasedFirst = false
     const disposePublicationEffect = effect(() => {
+      const published = currentCanvasSession.value
       if (
         !releasedFirst
-        && currentCanvasSession.value === first.composition.surfaces
+        && published === first.composition.surfaces
       ) {
         releasedFirst = true
         render(null, container)
       }
-      void currentCanvasReady.value
     })
     await controller.newDesign()
 
@@ -215,7 +215,6 @@ describe('Web Edition canvas workspace', () => {
       expect(observe.mock.invocationCallOrder[0]).toBeLessThan(destroyOrder)
       expect(disconnect).toHaveBeenCalledOnce()
       expect(currentCanvasSession.value).toBeNull()
-      expect(currentCanvasReady.value).toBe(false)
 
       await act(async () => {
         render(

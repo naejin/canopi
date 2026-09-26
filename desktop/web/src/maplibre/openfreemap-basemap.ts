@@ -12,9 +12,6 @@ export const OPENFREEMAP_BASEMAPS: Readonly<Record<BasemapStyle, { readonly name
   dark: { name: 'Dark', styleUrl: 'https://tiles.openfreemap.org/styles/dark' },
 }
 
-/** Required credit; the OpenFreeMap TileJSON carries the linked version. */
-export const OPENFREEMAP_ATTRIBUTION = 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap'
-
 export const OPENFREEMAP_LAYER_PREFIX = 'ofm:'
 export const OPENFREEMAP_SOURCE_PREFIX = 'ofm-'
 

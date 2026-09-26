@@ -51,8 +51,7 @@
 .filterRow,
 .editorTitle,
 .editorActions,
-.checkboxLabel,
-.targetModes {
+.checkboxLabel {
   display: flex;
   align-items: center;
   gap: var(--space-2);

@@ -1,10 +1,10 @@
 import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { reconcileCurrentDesign } from '../app/design-edit'
 import {
-  beginDesignArrayEdit,
   DesignEditBusyError,
-  reconcileCurrentDesign,
-} from '../app/design-edit'
+  designEditAuthorityCapability,
+} from '../app/design-edit/authority-capability'
 import { createDesignSessionPersistence } from '../app/document-session/persistence'
 import { designSessionStore } from '../app/document-session/store'
 import { prepareDesignWriteDestination } from '../app/document-session/write-admission'
@@ -65,6 +65,24 @@ function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
   }
 }
 
+/** Preview one Design array slice through the store's Design Edit authority. */
+function beginArrayPreview<K extends 'timeline' | 'consortiums'>(key: K) {
+  const transaction = designEditAuthorityCapability(designSessionStore).beginPreview(`Design ${key} preview`)
+  return {
+    get hasMutated() {
+      return transaction.hasMutated
+    },
+    preview(updater: (items: CanopiFile[K]) => CanopiFile[K]) {
+      transaction.preview((design) => {
+        const next = updater(design[key])
+        return next === design[key] ? design : { ...design, [key]: next }
+      })
+    },
+    commit: () => transaction.commit(),
+    abort: () => transaction.abort(),
+  }
+}
+
 beforeEach(() => {
   designSessionFixture.nonCanvasRevision = 0
   designSessionFixture.nonCanvasSavedRevision = 0
@@ -73,11 +91,11 @@ beforeEach(() => {
   designSessionFixture.name = 'test'
 })
 
-describe('Design Edit array transactions', () => {
+describe('Design Edit preview transactions', () => {
   it('persists committed content while a preview stays visible and later commits dirty', async () => {
     const persistence = createDesignSessionPersistence({ store: designSessionStore })
     const written: CanopiFile[] = []
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     try {
       edit.preview((timeline) => timeline.map((action) => (
         action.id === 'a' ? { ...action, description: 'preview' } : action
@@ -111,7 +129,7 @@ describe('Design Edit array transactions', () => {
   it('stays clean when a visible preview aborts after committed content was saved', async () => {
     const persistence = createDesignSessionPersistence({ store: designSessionStore })
     const written: CanopiFile[] = []
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     try {
       edit.preview((timeline) => timeline.map((action) => (
         action.id === 'a' ? { ...action, description: 'preview' } : action
@@ -138,7 +156,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('aborts only the preview while preserving a committed reconciliation', () => {
-    const edit = beginDesignArrayEdit('consortiums')
+    const edit = beginArrayPreview('consortiums')
     edit.preview((consortiums) => consortiums.map((entry) => ({
       ...entry,
       start_phase: 1,
@@ -165,7 +183,7 @@ describe('Design Edit array transactions', () => {
 
   it('publishes no committed or visible state when preview replay fails', () => {
     const persistence = createDesignSessionPersistence({ store: designSessionStore })
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     let replayFails = false
     try {
       edit.preview((timeline) => {
@@ -192,7 +210,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('rejects a competing preview before changing either Design projection', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     try {
       edit.preview((timeline) => timeline.map((action) => (
         action.id === 'a' ? { ...action, description: 'preview' } : action
@@ -200,7 +218,7 @@ describe('Design Edit array transactions', () => {
 
       let failure: unknown
       try {
-        beginDesignArrayEdit('consortiums')
+        beginArrayPreview('consortiums')
       } catch (error) {
         failure = error
       }
@@ -220,7 +238,7 @@ describe('Design Edit array transactions', () => {
     const guard = persistence.beginReplacementGuard().guard
     expect(guard?.isCurrent()).toBe(true)
 
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     try {
       expect(guard?.isCurrent()).toBe(false)
 
@@ -240,7 +258,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('keeps late preview callbacks inert after a replacement Design is installed', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'predecessor preview' } : action
     )))
@@ -268,7 +286,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('invalidates the predecessor before reactive successor publication', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'predecessor preview' } : action
     )))
@@ -306,7 +324,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('previews document array updates without advancing the non-canvas revision', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
 
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'preview' } : action
@@ -320,7 +338,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('commits one dirty revision after one or many preview mutations', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
 
     edit.preview((timeline) => timeline.map((action) => (
       action.id === 'a' ? { ...action, description: 'preview 1' } : action
@@ -336,7 +354,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('does not dirty when a committed transaction never mutates', () => {
-    const edit = beginDesignArrayEdit('timeline')
+    const edit = beginArrayPreview('timeline')
 
     edit.preview((timeline) => timeline)
     edit.commit()
@@ -347,7 +365,7 @@ describe('Design Edit array transactions', () => {
 
   it('aborts by restoring the original document slice without dirtying the document', () => {
     const original = currentDesign.value!.consortiums
-    const edit = beginDesignArrayEdit('consortiums')
+    const edit = beginArrayPreview('consortiums')
 
     edit.preview((consortiums) => [...consortiums, consortium('Acer campestre')])
     edit.abort()
@@ -359,7 +377,7 @@ describe('Design Edit array transactions', () => {
   })
 
   it('keeps commit and abort cleanup idempotent after a transaction closes', () => {
-    const edit = beginDesignArrayEdit('consortiums')
+    const edit = beginArrayPreview('consortiums')
 
     edit.preview((consortiums) => [...consortiums, consortium('Acer campestre')])
     edit.commit()

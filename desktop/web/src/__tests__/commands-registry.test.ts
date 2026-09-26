@@ -21,21 +21,33 @@ import {
   appCommandGraphChromeProjection,
   appCommandGraphPanelProjection,
   appCommandGraphToolbarProjection,
-  commands,
-  getAppCommand,
-  getMenuDefinitions,
   handleAppCommandKeyDown,
-  runAppCommand,
-  type AppCommandId,
 } from '../commands/registry'
-import { EDIT_SHORTCUTS, TOOL_SHORTCUTS } from '../shortcuts/definitions'
+import type { AppCommandId } from '../commands/graph/catalog'
+import { CANVAS_HISTORY_SHORTCUTS, CANVAS_TOOL_SHORTCUTS } from '../app/canvas-commands'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
 } from './support/canvas-runtime-surfaces'
 
+function paletteCommands() {
+  return appCommandGraphChromeProjection.value.paletteCommands
+}
+
+function menus() {
+  return appCommandGraphChromeProjection.value.menus
+}
+
+function runPanelCommand(commandId: string): void {
+  const projection = appCommandGraphPanelProjection.value
+  const command = [...projection.primary, ...projection.design, ...projection.side]
+    .find((entry) => entry.commandId === commandId)
+  if (!command) throw new Error(`Missing panel command ${commandId}`)
+  command.action()
+}
+
 function getCommand(id: string) {
-  const command = commands.find((entry) => entry.id === id)
+  const command = paletteCommands().find((entry) => entry.id === id)
   if (!command) throw new Error(`Missing command ${id}`)
   return command
 }
@@ -200,9 +212,9 @@ describe('command registry canvas tool switching', () => {
     expect(getCommand('nav.canvas').shortcut).toBe('Ctrl+1')
     expect(getCommand('nav.plantDb').shortcut).toBe('Ctrl+2')
     expect(getCommand('nav.designNotebook').shortcut).toBeUndefined()
-    expect(getCommand('canvas.tool.select').shortcut).toBe(TOOL_SHORTCUTS.select)
-    expect(getCommand('canvas.tool.line').shortcut).toBe(TOOL_SHORTCUTS.line)
-    expect(getCommand('canvas.tool.text').shortcut).toBe(TOOL_SHORTCUTS.text)
+    expect(getCommand('canvas.tool.select').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.select)
+    expect(getCommand('canvas.tool.line').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.line)
+    expect(getCommand('canvas.tool.text').shortcut).toBe(CANVAS_TOOL_SHORTCUTS.text)
   })
 
   it('routes file commands through document-session actions', () => {
@@ -243,17 +255,16 @@ describe('command registry canvas tool switching', () => {
   })
 
   it('does not expose Design Report PDF export from the command graph', () => {
-    expect(commands.some((command) => String(command.id) === 'file.exportDesignReportPdf')).toBe(false)
-    expect(getMenuDefinitions().some((menu) =>
+    expect(paletteCommands().some((command) => String(command.id) === 'file.exportDesignReportPdf')).toBe(false)
+    expect(menus().some((menu) =>
       menu.items.some((entry) => entry.type === 'action' && entry.id === 'file.exportDesignReportPdf'),
     )).toBe(false)
   })
 
   it('enables Save for any open Design, clean or not', () => {
-    const saveCommand = getAppCommand('file.save')
+    const saveCommand = getCommand('file.save')
     const saveSpy = vi.spyOn(documentActions, 'saveCurrentDesign').mockResolvedValue(true)
 
-    if (!saveCommand) throw new Error('Missing file.save command')
     expect(saveCommand.disabled()).toBe(true)
 
     designSessionFixture.file = {
@@ -284,9 +295,8 @@ describe('command registry canvas tool switching', () => {
   })
 
   it('projects menu entries from the same command graph', () => {
-    const menus = getMenuDefinitions()
-    const commandIds = new Set(commands.map((command) => command.id))
-    const menuCommandIds = menus
+    const commandIds = new Set(paletteCommands().map((command) => command.id))
+    const menuCommandIds = menus()
       .flatMap((menu) => menu.items)
       .flatMap((entry) => entry.type === 'action' ? [entry.id] : [])
 
@@ -365,19 +375,19 @@ describe('command registry canvas tool switching', () => {
       disabled: true,
       active: false,
     })
-    expect(runAppCommand('nav.designNotebook')).toBe(true)
+    runPanelCommand('nav.designNotebook')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('design-notebook')
     expect(panelCommand('design-notebook')).toMatchObject({ disabled: false, active: true })
-    expect(runAppCommand('nav.designNotebook')).toBe(true)
+    runPanelCommand('nav.designNotebook')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
 
-    expect(runAppCommand('nav.plantDb')).toBe(true)
+    runPanelCommand('nav.plantDb')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
     expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: true })
-    expect(runAppCommand('nav.plantDb')).toBe(true)
+    runPanelCommand('nav.plantDb')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
 
@@ -401,12 +411,12 @@ describe('command registry canvas tool switching', () => {
     }
 
     expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: false })
-    expect(runAppCommand('nav.plantDb')).toBe(true)
+    runPanelCommand('nav.plantDb')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe('plant-db')
     expect(panelCommand('plant-db')).toMatchObject({ disabled: false, active: true })
 
-    expect(runAppCommand('nav.plantDb')).toBe(true)
+    runPanelCommand('nav.plantDb')
     expect(activePanel.value).toBe('canvas')
     expect(sidePanel.value).toBe(null)
   })
@@ -433,30 +443,30 @@ describe('command registry canvas tool switching', () => {
       commandId: 'canvas.tool.select',
       active: true,
       disabled: false,
-      shortcut: TOOL_SHORTCUTS.select,
+      shortcut: CANVAS_TOOL_SHORTCUTS.select,
     })
     expect(creationTool('line')).toMatchObject({
       commandId: 'canvas.tool.line',
       active: false,
       disabled: false,
-      shortcut: TOOL_SHORTCUTS.line,
+      shortcut: CANVAS_TOOL_SHORTCUTS.line,
     })
     expect(creationTool('ellipse')).toMatchObject({
       commandId: 'canvas.tool.ellipse',
       active: false,
       disabled: false,
-      shortcut: TOOL_SHORTCUTS.ellipse,
+      shortcut: CANVAS_TOOL_SHORTCUTS.ellipse,
     })
     expect(reuseTool('plant-spacing')).toMatchObject({
       commandId: 'canvas.tool.plantSpacing',
       active: false,
       disabled: false,
-      shortcut: TOOL_SHORTCUTS.plantSpacing,
+      shortcut: CANVAS_TOOL_SHORTCUTS.plantSpacing,
     })
     expect(historyAction('undo')).toMatchObject({
       commandId: 'edit.undo',
       disabled: true,
-      shortcut: EDIT_SHORTCUTS.undo,
+      shortcut: CANVAS_HISTORY_SHORTCUTS.undo,
     })
     expect(settingToggle('grid')).toMatchObject({
       commandId: 'canvas.toggleGrid',
@@ -580,7 +590,7 @@ describe('command registry canvas tool switching', () => {
 
     expect(problemReportDialogOpen.value).toBe(true)
 
-    const help = getMenuDefinitions().find((menu) => menu.id === 'help')
+    const help = menus().find((menu) => menu.id === 'help')
     expect(help?.items.some((entry) => entry.type === 'action' && entry.id === 'help.reportProblem')).toBe(true)
   })
 

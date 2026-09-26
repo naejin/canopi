@@ -8,7 +8,7 @@ import {
 } from '../canvas/plant-stamp-source'
 import {
   clearSavedObjectStampSource,
-  selectSavedObjectStampSource,
+  selectSavedObjectStampSourceForTests,
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
@@ -9155,7 +9155,7 @@ describe('SceneInteractionSession', () => {
   })
 
   it('places Saved Object Stamps with full ghost preview and selected unlocked copies', () => {
-    selectSavedObjectStampSource({
+    selectSavedObjectStampSourceForTests({
       version: 1,
       anchor: { x: 12, y: 24 },
       plants: [{
@@ -9274,7 +9274,7 @@ describe('SceneInteractionSession', () => {
         layer.name === 'zones' ? { ...layer, locked: true } : layer,
       )
     })
-    selectSavedObjectStampSource({
+    selectSavedObjectStampSourceForTests({
       version: 1,
       anchor: { x: 0, y: 0 },
       plants: [],

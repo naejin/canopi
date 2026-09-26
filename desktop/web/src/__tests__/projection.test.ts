@@ -7,10 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   LOCAL_MERCATOR_PROJECTION_ID,
-  mercatorToWorld,
-  worldToMercator,
   worldToGeo,
-  geoToWorld,
   stageScaleToMapZoom,
   viewportCenterGeo,
   viewportCornerGeoPoints,
@@ -47,87 +44,6 @@ describe('worldToGeo', () => {
     const result = worldToGeo(100, 0, 45.52, -122.68)
     expect(result.lng).toBeGreaterThan(-122.68)
     expect(result.lat).toBeCloseTo(45.52, 10)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// geoToWorld
-// ---------------------------------------------------------------------------
-describe('geoToWorld', () => {
-  it('returns 0,0 when geo coords equal origin', () => {
-    const result = geoToWorld(-122.68, 45.52, 45.52, -122.68)
-    expect(result.x).toBeCloseTo(0, 10)
-    expect(result.y).toBeCloseTo(0, 10)
-  })
-
-  it('east of origin gives positive x', () => {
-    const result = geoToWorld(1, 0, 0, 0)
-    expect(result.x).toBeGreaterThan(100000)
-    expect(result.y).toBeCloseTo(0, 2)
-  })
-
-  it('north of origin gives negative y in canvas coordinates', () => {
-    // 1 degree north of origin
-    const result = geoToWorld(0, 1, 0, 0)
-    expect(result.x).toBeCloseTo(0, 2)
-    expect(result.y).toBeCloseTo(-111200.726, 3)
-  })
-
-  it('south of origin gives positive y', () => {
-    const result = geoToWorld(0, -1, 0, 0)
-    expect(result.x).toBeCloseTo(0, 2)
-    expect(result.y).toBeCloseTo(111200.726, 3)
-  })
-
-  it('at 60N, 1 degree longitude is ~55660m', () => {
-    const result = geoToWorld(1, 60, 60, 0)
-    expect(result.x).toBeGreaterThan(55000)
-    expect(result.x).toBeLessThan(56000)
-    expect(result.y).toBeCloseTo(0, 2)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// worldToGeo + geoToWorld round-trip
-// ---------------------------------------------------------------------------
-describe('worldToGeo / geoToWorld round-trip', () => {
-  const cases: Array<{ name: string; x: number; y: number; originLat: number; originLon: number }> = [
-    { name: 'equator origin, 1km east', x: 1000, y: 0, originLat: 0, originLon: 0 },
-    { name: 'equator origin, 1km north', x: 0, y: -1000, originLat: 0, originLon: 0 },
-    { name: 'Portland, diagonal displacement', x: 300, y: -700, originLat: 45.52, originLon: -122.68 },
-    { name: '60N, south-west displacement', x: -2000, y: 1500, originLat: 60, originLon: 10 },
-    { name: 'southern hemisphere', x: 800, y: 200, originLat: -33.87, originLon: 151.21 },
-    { name: 'zero displacement', x: 0, y: 0, originLat: 51.5, originLon: -0.12 },
-  ]
-
-  for (const c of cases) {
-    it(`round-trips within 0.01m: ${c.name}`, () => {
-      const geo = worldToGeo(c.x, c.y, c.originLat, c.originLon)
-      const world = geoToWorld(geo.lng, geo.lat, c.originLat, c.originLon)
-      expect(world.x).toBeCloseTo(c.x, 2)
-      expect(world.y).toBeCloseTo(c.y, 2)
-    })
-  }
-
-  it('geoToWorld then worldToGeo round-trips within 1e-8 degrees', () => {
-    const lng = -122.7
-    const lat = 45.55
-    const originLat = 45.52
-    const originLon = -122.68
-    const world = geoToWorld(lng, lat, originLat, originLon)
-    const geo = worldToGeo(world.x, world.y, originLat, originLon)
-    expect(geo.lng).toBeCloseTo(lng, 8)
-    expect(geo.lat).toBeCloseTo(lat, 8)
-  })
-})
-
-describe('worldToMercator / mercatorToWorld round-trip', () => {
-  it('preserves local meters through the canonical Mercator operations', () => {
-    const mercator = worldToMercator(325.5, -149.25, 45.52, -122.68)
-    const world = mercatorToWorld(mercator.x, mercator.y, 45.52, -122.68)
-
-    expect(world.x).toBeCloseTo(325.5, 6)
-    expect(world.y).toBeCloseTo(-149.25, 6)
   })
 })
 

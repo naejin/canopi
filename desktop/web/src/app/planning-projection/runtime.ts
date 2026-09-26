@@ -47,7 +47,7 @@ export interface ConsortiumPlanningSurface {
   readonly activeLocale: string
 }
 
-export function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasSnapshot {
+function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasSnapshot {
   const session = currentCanvasQuerySurface.value
   const sceneRevision = session?.revision.scene.value ?? 0
   const plantNamesRevision = session?.revision.plantNames.value ?? 0
@@ -65,7 +65,7 @@ export function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasS
   }), [session, sceneRevision, plantNamesRevision, selection, activeLocale])
 }
 
-export function useBudgetPlanningProjection({
+function useBudgetPlanningProjection({
   budget,
   currency,
   locale,
@@ -148,7 +148,7 @@ export function useCalendarPlanningSurface(options: {
   }
 }
 
-export function useConsortiumPlanningProjection({
+function useConsortiumPlanningProjection({
   consortiums,
 }: {
   readonly consortiums: readonly Consortium[]

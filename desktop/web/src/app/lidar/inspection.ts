@@ -458,7 +458,7 @@ export function releaseInspectionPointerHandler(): void {
 }
 
 /** Whether a canvas gesture handler is currently installed. */
-export function hasInspectionPointerHandler(): boolean {
+export function hasInspectionPointerHandlerForTests(): boolean {
   return pointerHandler !== null
 }
 

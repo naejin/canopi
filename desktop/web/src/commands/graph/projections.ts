@@ -118,13 +118,7 @@ function commandProjection(command: AppCommandDefinition): Command {
   }
 }
 
-export function getAppCommand(id: AppCommandId): Command | null {
-  const command = getAppCommandDefinition(id)
-  if (!command?.label) return null
-  return commandProjection(command)
-}
-
-export const commands: Command[] = APP_COMMANDS
+const commands: Command[] = APP_COMMANDS
   .filter((command) => command.palette && command.label)
   .map(commandProjection)
 
@@ -175,7 +169,7 @@ export const appCommandGraphToolbarProjection = computed<AppCommandGraphToolbarP
   return createDesktopCanvasCommandProjection(state)
 })
 
-export function getMenuDefinitions(): MenuDefinition[] {
+function getMenuDefinitions(): MenuDefinition[] {
   const separator: MenuSeparator = { type: 'separator' }
 
   return MENU_ORDER.map((menuId): MenuDefinition => {

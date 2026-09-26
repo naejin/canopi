@@ -30,7 +30,7 @@ export function readSavedObjectStampSource(): SavedObjectStampPayload | null {
   return selectedSavedObjectStampSource.value
 }
 
-export function selectSavedObjectStampSource(
+export function selectSavedObjectStampSourceForTests(
   source: SavedObjectStampPayload,
 ): SavedObjectStampPayload | null {
   const normalized = normalizeSavedObjectStampPayload(source)

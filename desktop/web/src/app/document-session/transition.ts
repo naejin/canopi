@@ -1,6 +1,4 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
-import type { CanopiFile } from "../../types/design";
-import type { DesignTemplateEnvelope } from "../design-template-import/types";
 import * as designIpc from "../../ipc/design";
 import {
   createDesignSessionStateMachine,
@@ -10,23 +8,9 @@ import {
   type TeardownDesignSessionOptions,
 } from "./state-machine";
 import type { DesignSaveSettlement } from "./persistence";
-import {
-  setPendingDesignPath,
-  setPendingTemplateImport,
-} from "./store";
+import { setPendingDesignPath } from "./store";
 
-export {
-  createDesignSessionStateMachine,
-  isCancelled,
-  nameFromPath,
-  type DesignSessionState,
-  type DesignSessionStateMachineDeps,
-  type DesignSessionStateStatus,
-  type DocumentTransitionResult,
-  type QueuedDocumentLoadOptions,
-  type SaveCurrentDesignOptions,
-  type TeardownDesignSessionOptions,
-} from "./state-machine";
+export { type DocumentTransitionResult } from "./state-machine";
 
 const designSessionStateMachine = createDesignSessionStateMachine();
 
@@ -58,10 +42,6 @@ export function abortFailedAttachedDesignSessionStart(
     runtimeInitialized: false,
     logError,
   });
-}
-
-export function beginEmptyDocumentSession(session: CanvasDocumentSurface): void {
-  designSessionStateMachine.beginEmptyDocumentSession(session);
 }
 
 export function consumeQueuedDocumentLoad(
@@ -129,34 +109,6 @@ export function openDesignSessionFromPath(
   });
 }
 
-export function openTemplateDesignSession(
-  template: DesignTemplateEnvelope,
-  options: DesignSessionLoadOptions = {},
-): Promise<DocumentTransitionResult> {
-  const envelope = {
-    identity: Object.freeze({}),
-    file: cloneDocument(template.file),
-    name: template.name,
-  };
-  const draftId = createDraftId();
-  return designSessionStateMachine.transitionDocument({
-    source: "template",
-    dirtyGuard: "flush",
-    session: options.session,
-    load: async () => ({
-      file: cloneDocument(envelope.file),
-      path: null,
-      name: envelope.name,
-      draftId,
-      writePending: true,
-    }),
-    isCancelled: options.isCancelled,
-    deferWhenDetachedAndEmpty: () => {
-      setPendingTemplateImport(envelope);
-    },
-  });
-}
-
 export function createNewDesignSession(): Promise<DocumentTransitionResult> {
   const draftId = createDraftId();
   return designSessionStateMachine.transitionDocument({
@@ -184,10 +136,6 @@ export function openDesignDraftSession(id: string): Promise<DocumentTransitionRe
 
 export function teardownAttachedDesignSession(options: TeardownDesignSessionOptions): void {
   designSessionStateMachine.teardownAttachedDesignSession(options);
-}
-
-function cloneDocument(file: CanopiFile): CanopiFile {
-  return JSON.parse(JSON.stringify(file)) as CanopiFile;
 }
 
 function createDraftId(): string {

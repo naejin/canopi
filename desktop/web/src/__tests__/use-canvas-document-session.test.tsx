@@ -81,7 +81,6 @@ vi.mock("../app/document-session/transition", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../app/document-session/transition")>();
   return {
     ...actual,
-    beginEmptyDocumentSession: mocks.beginEmptyDocumentSession,
     consumeQueuedDocumentLoad: mocks.consumeQueuedDocumentLoad,
     startAttachedDesignSession: mocks.startAttachedDesignSession,
     teardownAttachedDesignSession: mocks.teardownAttachedDesignSession,
@@ -97,7 +96,6 @@ import { useCanvasDocumentSession } from "../app/document-session/use-canvas-doc
 import { createDesktopWorkspaceRuntimeComposition } from "../app/canvas-map-surface/desktop-workspace-runtime";
 import {
   currentCanvasDocumentSurface,
-  currentCanvasReady,
   currentCanvasSession,
   setCurrentCanvasSession,
 } from "../canvas/session";
@@ -252,16 +250,16 @@ describe("useCanvasDocumentSession", () => {
   it("does not continue initialization after publication synchronously releases the runtime", async () => {
     let releasedFirst = false;
     const disposePublicationEffect = effect(() => {
+      const published = currentCanvasSession.value;
       const firstSurfaces = mocks.runtimeInstances[0]?.host.surfaces;
       if (
         !releasedFirst
         && firstSurfaces
-        && currentCanvasSession.value === firstSurfaces
+        && published === firstSurfaces
       ) {
         releasedFirst = true;
         render(null, container);
       }
-      void currentCanvasReady.value;
     });
 
     try {
@@ -281,7 +279,6 @@ describe("useCanvasDocumentSession", () => {
       expect(mocks.consumeQueuedDocumentLoad.mock.invocationCallOrder[0])
         .toBeLessThan(destroyOrder);
       expect(currentCanvasSession.value).toBeNull();
-      expect(currentCanvasReady.value).toBe(false);
 
       await mountHarness(container);
       expect(mocks.runtimeInstances).toHaveLength(2);

@@ -32,7 +32,6 @@ export interface SessionPlaneTransform {
 }
 
 export const SESSION_PLANE_REORIGIN_DISTANCE_METERS = 10_000
-export const GEO_DEGREE_PRECISION = 1e-9
 export const DEFAULT_NEW_DESIGN_VIEW = Object.freeze({ lon: 13.0, lat: 23.0, zoom: 4 })
 
 export interface SessionPlane {
@@ -79,13 +78,6 @@ export function createSessionPlane(origin: GeoPosition): SessionPlane {
       }
     },
   })
-}
-
-export function applyPlaneTransform(transform: SessionPlaneTransform, point: PlanePoint): PlanePoint {
-  return {
-    x: point.x * transform.scale + transform.offsetX,
-    y: point.y * transform.scale + transform.offsetY,
-  }
 }
 
 // Canonical 1e-9 degree (about 0.1 mm) rounding for changed positions.

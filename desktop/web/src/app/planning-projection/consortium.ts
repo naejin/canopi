@@ -170,7 +170,7 @@ function groupConsortiumRows(rows: readonly ConsortiumPlanningRow[]): Consortium
 }
 
 
-export function filterActiveConsortiumEntries(
+function filterActiveConsortiumEntries(
   entries: readonly Consortium[],
   plants: readonly PlacedPlant[],
 ): Consortium[] {

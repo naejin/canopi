@@ -198,7 +198,7 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     expect(after).not.toEqual(before)
   })
 
-  it('routes attached navigation into the map and returns to Canvas2D after detach', () => {
+  it('routes attached navigation into the map and returns to the owned camera after detach', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })
     const map = new FakeMap()
@@ -300,7 +300,7 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     expect(owner.returnFromTemporaryFocus()).toBe(false)
   })
 
-  it('replays a failed attached return through the Canvas2D fallback', () => {
+  it('replays a failed attached return through the owned camera', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })
     const map = new FakeMap()

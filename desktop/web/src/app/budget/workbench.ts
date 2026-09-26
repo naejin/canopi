@@ -60,11 +60,6 @@ export function validateBudgetPriceDraft(value: string): BudgetPriceDraftResult 
   return { valid: true, value: parsed }
 }
 
-export function parseBudgetPriceDraft(value: string): number | null {
-  const result = validateBudgetPriceDraft(value)
-  return result.valid ? result.value : null
-}
-
 export function budgetPriceDraftValue(price: number | null | undefined): string {
   return price == null ? '' : String(price)
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptySpeciesFilter, createSpeciesCatalogWorkbench } from '../app/plant-browser'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
+import { createReducedSpeciesCatalogAdapters } from '../web/reduced-species-catalog'
 import {
   createInMemoryReducedSpeciesCatalogReader,
-  createReducedSpeciesCatalogAdapters,
   type ReducedSpeciesCatalogData,
-} from '../web/reduced-species-catalog'
+} from './support/in-memory-reduced-species-catalog'
 import type { FilterOptions, SpeciesSearchRequest } from '../types/species'
 
 describe('Web Edition reduced Species Catalog adapter', () => {

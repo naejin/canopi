@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildBudgetPlanningProjection,
   buildBudgetListProjection,
-  buildCalendarPlanningProjection,
   buildConsortiumListProjection,
-  buildConsortiumPlanningProjection,
 } from '../app/planning-projection'
+import { buildBudgetPlanningProjection } from '../app/planning-projection/budget'
+import { buildCalendarPlanningProjection } from '../app/planning-projection/calendar'
+import { buildConsortiumPlanningProjection } from '../app/planning-projection/consortium'
 import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../target'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 

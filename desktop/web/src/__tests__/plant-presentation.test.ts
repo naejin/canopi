@@ -2,9 +2,25 @@ import { describe, expect, it } from 'vitest'
 import type { ScenePlantEntity, SceneViewportState } from '../canvas/runtime/scene'
 import {
   buildPlantPresentationEntries,
-  buildPlantPresentationSnapshot,
   getPlantScreenHitBounds,
+  layoutPlantPresentation,
+  resolveStackBadgeDecisions,
+  type PlantPresentationContext,
 } from '../canvas/runtime/plant-presentation'
+
+/** The renderer's composition: entries, then layout and stack badges from them. */
+function buildPlantPresentationSnapshot(
+  plants: readonly ScenePlantEntity[],
+  context: PlantPresentationContext,
+  selectedPlantIds: ReadonlySet<string>,
+) {
+  const entries = buildPlantPresentationEntries(plants, context, selectedPlantIds)
+  return {
+    entries,
+    layout: layoutPlantPresentation(entries, context.viewport.scale),
+    stackBadges: resolveStackBadgeDecisions(entries),
+  }
+}
 
 function createViewport(overrides: Partial<SceneViewportState> = {}): SceneViewportState {
   return {

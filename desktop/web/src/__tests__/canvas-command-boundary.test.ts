@@ -1,17 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
-import {
-  CANVAS_HISTORY_SHORTCUTS,
-  CANVAS_TOOL_SHORTCUTS,
-  canvasCommandDefinitions,
-  canvasToolShortcutKeys,
-} from '../app/canvas-commands'
-import {
-  EDIT_SHORTCUTS,
-  TOOL_SHORTCUTS,
-  canvasToolKeys,
-} from '../shortcuts/definitions'
+import { canvasCommandDefinitions } from '../app/canvas-commands'
 import {
   createTypeScriptSourceGraph,
   discoverTypeScriptSourceGraph,
@@ -54,7 +44,6 @@ const CANVAS_COMMAND_BOUNDARY_POLICIES = [
     kind: 'require-imports',
     name: 'Canvas command consumers use the neutral catalog',
     from: [
-      'src/shortcuts/definitions.ts',
       'src/commands/graph/catalog.ts',
       'src/commands/graph/shortcuts.ts',
       'src/web/WebCanvasToolbar.tsx',
@@ -149,11 +138,7 @@ describe('Canvas Command Projection boundaries', () => {
     )).toEqual([])
   }, 20_000)
 
-  it('owns shortcut compatibility and every projected command identity exhaustively', () => {
-    expect(EDIT_SHORTCUTS).toBe(CANVAS_HISTORY_SHORTCUTS)
-    expect(TOOL_SHORTCUTS).toBe(CANVAS_TOOL_SHORTCUTS)
-    expect(canvasToolKeys).toBe(canvasToolShortcutKeys)
-
+  it('owns every projected command identity exhaustively', () => {
     const commandIds = canvasCommandDefinitions.map((definition) => definition.commandId)
     expect(new Set(commandIds).size).toBe(commandIds.length)
     expect(commandIds).toEqual([

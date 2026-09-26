@@ -42,9 +42,7 @@ export type DocumentTransitionSource =
   | "new"
   | "open-path"
   | "open-dialog"
-  | "template"
   | "queued-path"
-  | "queued-template"
   | "open-draft"
   | "revert"
   | "mount-existing";
@@ -656,30 +654,6 @@ export class DesignSessionStateMachine {
     session: CanvasDocumentSurface,
     options: QueuedDocumentLoadOptions = {},
   ): () => void {
-    const queuedTemplate = this.deps.store.readPendingTemplateImport();
-    if (queuedTemplate) {
-      return this.startQueuedDocumentLoad({
-        session,
-        options,
-        source: "queued-template",
-        label: queuedTemplate.name,
-        load: async () => ({
-          file: cloneDocument(queuedTemplate.file),
-          path: null,
-          name: queuedTemplate.name,
-          draftId: this.deps.createDraftId(),
-          writePending: true,
-        }),
-        isStillPending: () =>
-          this.deps.store.readPendingTemplateImport()?.identity === queuedTemplate.identity,
-        clearPending: () => {
-          if (this.deps.store.readPendingTemplateImport()?.identity === queuedTemplate.identity) {
-            this.deps.store.setPendingTemplateImport(null);
-          }
-        },
-      });
-    }
-
     const queuedPath = this.deps.store.readPendingDesignPath();
     if (!queuedPath) return () => {};
 
@@ -943,10 +917,6 @@ export class DesignSessionStateMachine {
   }
 }
 
-function cloneDocument(file: CanopiFile): CanopiFile {
-  return JSON.parse(JSON.stringify(file)) as CanopiFile;
-}
-
 export function createDesignSessionStateMachine(
   deps: Partial<DesignSessionStateMachineDeps> = {},
 ): DesignSessionStateMachine {
@@ -962,7 +932,7 @@ export function createDesignSessionStateMachine(
 interface QueuedDocumentLoadRequest {
   session: CanvasDocumentSurface;
   options: QueuedDocumentLoadOptions;
-  source: "queued-path" | "queued-template";
+  source: "queued-path";
   label: string;
   load: () => Promise<DocumentTransitionLoadResult>;
   isStillPending: () => boolean;

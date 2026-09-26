@@ -9,7 +9,7 @@ import {
 } from './coordinator'
 import type { DesignTemplateEnvelope, DesignTemplateImportResult } from './types'
 
-export type DesignTemplateOpenResult = 'opened' | 'queued' | 'cancelled'
+export type DesignTemplateOpenResult = 'opened' | 'cancelled'
 
 export interface StaticTemplateAssetResponse {
   readonly ok: boolean

@@ -117,7 +117,7 @@ describe('browser app data store', () => {
     expect(storage.writes).toEqual([V2_KEYS.settings])
   })
 
-  it('reopens a partial migration without reparsing an already-published Draft partition', () => {
+  it('reopens app data without reparsing an already-published Draft partition', () => {
     const storage = memoryStorage()
     const firstStore = createBrowserAppDataStore({ storage })
     expect(firstStore.saveDraft({

@@ -34,11 +34,6 @@ describe('Design Edit authority', () => {
       canvasClean: false,
       detachedCanvasDirty: true,
       pendingDesignPath: '/queued.canopi',
-      pendingTemplateImport: {
-        identity: Object.freeze({}),
-        file: design('Template'),
-        name: 'Template',
-      },
     })
 
     fixture.reset({
@@ -58,7 +53,6 @@ describe('Design Edit authority', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(store.committedDesignRevision.value).toBe(0)
     expect(store.readPendingDesignPath()).toBe(null)
-    expect(store.readPendingTemplateImport()).toBe(null)
 
     const successorEdit = designEditAuthorityCapability(store).beginPreview('Successor edit')
     successorEdit.preview((current) => ({ ...current, description: 'committed' }))

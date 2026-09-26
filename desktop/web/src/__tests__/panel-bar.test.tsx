@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PanelBar } from '../components/panels/PanelBar'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
-import { runAppCommand } from '../commands/registry'
+import { appCommandGraphPanelProjection } from '../commands/registry'
 import { designSessionFixture } from './support/design-session-state'
 
 describe('PanelBar', () => {
@@ -108,7 +108,10 @@ describe('PanelBar', () => {
 
   it('keeps an active no-design Plant Database panel button enabled so it can close the panel', async () => {
     designSessionFixture.file = null
-    runAppCommand('nav.plantDb')
+    const panels = appCommandGraphPanelProjection.value
+    const plantDb = [...panels.primary, ...panels.design, ...panels.side]
+      .find((command) => command.commandId === 'nav.plantDb')!
+    plantDb.action()
 
     await act(async () => {
       render(<PanelBar />, container)

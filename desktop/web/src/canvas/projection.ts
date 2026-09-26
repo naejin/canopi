@@ -52,7 +52,7 @@ export function mercatorToGeo(x: number, y: number): { lng: number; lat: number 
   }
 }
 
-export function worldToMercator(
+function worldToMercator(
   x: number,
   y: number,
   originLat: number,
@@ -66,20 +66,6 @@ export function worldToMercator(
   }
 }
 
-export function mercatorToWorld(
-  x: number,
-  y: number,
-  originLat: number,
-  originLon: number,
-): { x: number; y: number } {
-  const origin = geoToMercator(originLon, originLat)
-  const mercatorUnitsPerMeter = mercatorUnitsPerMeterAtLat(originLat)
-  return {
-    x: (x - origin.x) / mercatorUnitsPerMeter,
-    y: (y - origin.y) / mercatorUnitsPerMeter,
-  }
-}
-
 export function worldToGeo(
   x: number,
   y: number,
@@ -88,16 +74,6 @@ export function worldToGeo(
 ): { lng: number; lat: number } {
   const mercator = worldToMercator(x, y, originLat, originLon)
   return mercatorToGeo(mercator.x, mercator.y)
-}
-
-export function geoToWorld(
-  lng: number,
-  lat: number,
-  originLat: number,
-  originLon: number,
-): { x: number; y: number } {
-  const mercator = geoToMercator(lng, lat)
-  return mercatorToWorld(mercator.x, mercator.y, originLat, originLon)
 }
 
 /**

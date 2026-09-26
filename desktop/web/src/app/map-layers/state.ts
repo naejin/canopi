@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals'
+import { signal } from '@preact/signals'
 import type { BasemapStyle } from '../../generated/contracts'
 import { DEFAULT_SETTINGS, SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 
@@ -60,8 +60,6 @@ export function mapBackgroundOf(state: MapLayersState): MapBackground {
   if (state.satellite.visible) return 'satellite'
   return state.basemap.visible ? 'basemap' : 'none'
 }
-
-export const mapBackground = computed(() => mapBackgroundOf(mapLayers.value))
 
 export function hasVisibleMapLayer(state: MapLayersState): boolean {
   return mapBackgroundOf(state) !== 'none' || state.contours.visible || state.hillshade.visible

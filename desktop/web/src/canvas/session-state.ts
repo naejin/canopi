@@ -1,7 +1,6 @@
 import { computed, signal } from '@preact/signals'
 
 export const activeTool = signal<string>('select')
-export const canvasReady = signal<boolean>(false)
 export const selectedObjectIds = signal<Set<string>>(new Set())
 
 // UI mirror state only. SceneCanvasRuntime owns authoritative canvas selection.
@@ -30,16 +29,5 @@ export function setCanvasSelection(
 
 export { selectedObjectIds as canvasSelectionState }
 
-export function clearCanvasSelection(): void {
-  if (selectedObjectIds.value.size === 0) return
-  selectedObjectIds.value = new Set()
-}
-
 // Derived value — genuinely needs computed() since it maps Set → boolean.
 export const canvasHasSelectionState = computed(() => selectedObjectIds.value.size > 0)
-
-export function setCanvasReadyState(ready: boolean): void {
-  canvasReady.value = ready
-}
-
-export { canvasReady as canvasReadyState }

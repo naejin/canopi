@@ -13,12 +13,6 @@ import {
   type DesignSessionPersistenceCapture,
 } from './persistence-capability'
 
-export interface PendingTemplateImport {
-  readonly identity: object
-  readonly file: CanopiFile
-  readonly name: string
-}
-
 export interface DesignSessionIdentity {
   readonly file: CanopiFile | null
   readonly path: string | null
@@ -54,8 +48,6 @@ export interface DesignSessionStore {
 
   readPendingDesignPath(): string | null
   setPendingDesignPath(path: string | null): void
-  readPendingTemplateImport(): PendingTemplateImport | null
-  setPendingTemplateImport(template: PendingTemplateImport | null): void
 }
 
 declare const persistenceCapableDesignSessionStoreBrand: unique symbol
@@ -74,7 +66,6 @@ interface DesignSessionStoreSignals {
   readonly canvasClean: Signal<boolean>
   readonly detachedCanvasDirty: Signal<boolean>
   readonly pendingDesignPath: Signal<string | null>
-  readonly pendingTemplateImport: Signal<PendingTemplateImport | null>
   readonly canvasDirty: ReadonlySignal<boolean>
   readonly designDirty: ReadonlySignal<boolean>
 }
@@ -86,7 +77,6 @@ export interface DesignSessionStoreTestState extends Partial<DesignSessionIdenti
   readonly canvasClean?: boolean
   readonly detachedCanvasDirty?: boolean
   readonly pendingDesignPath?: string | null
-  readonly pendingTemplateImport?: PendingTemplateImport | null
 }
 
 export interface DesignSessionStoreTestFixture {
@@ -96,7 +86,6 @@ export interface DesignSessionStoreTestFixture {
   readonly canvasClean: ReadonlySignal<boolean>
   readonly detachedCanvasDirty: ReadonlySignal<boolean>
   readonly pendingDesignPath: ReadonlySignal<string | null>
-  readonly pendingTemplateImport: ReadonlySignal<PendingTemplateImport | null>
   reset(initial?: DesignSessionStoreTestState): void
   setState(state: DesignSessionStoreTestState): void
   markSaved(): void
@@ -117,7 +106,6 @@ function createDesignSessionStore(
   const canvasClean = signal(true)
   const detachedCanvasDirty = signal(false)
   const pendingDesignPath = signal<string | null>(null)
-  const pendingTemplateImport = signal<PendingTemplateImport | null>(null)
   const canvasDirty = computed(() => detachedCanvasDirty.value || !canvasClean.value)
   const designDirty = computed(() =>
     canvasDirty.value
@@ -134,7 +122,6 @@ function createDesignSessionStore(
     canvasClean,
     detachedCanvasDirty,
     pendingDesignPath,
-    pendingTemplateImport,
     canvasDirty,
     designDirty,
   }
@@ -387,16 +374,6 @@ function createDesignSessionStore(
     setPendingDesignPath(path) {
       signals.pendingDesignPath.value = path
     },
-
-    readPendingTemplateImport() {
-      return signals.pendingTemplateImport.value
-    },
-
-    setPendingTemplateImport(template) {
-      signals.pendingTemplateImport.value = template
-        ? { ...template, file: cloneDocument(template.file) }
-        : null
-    },
   } as PersistenceCapableDesignSessionStore
 
   registerDesignEditAuthorityCapability(
@@ -485,7 +462,6 @@ function createDesignSessionStore(
     canvasClean: signals.canvasClean,
     detachedCanvasDirty: signals.detachedCanvasDirty,
     pendingDesignPath: signals.pendingDesignPath,
-    pendingTemplateImport: signals.pendingTemplateImport,
     reset(state: DesignSessionStoreTestState = {}) {
       lifetime = Object.freeze({})
       sessionGeneration = 0
@@ -507,7 +483,6 @@ function createDesignSessionStore(
         signals.canvasClean.value = state.canvasClean ?? true
         signals.detachedCanvasDirty.value = state.detachedCanvasDirty ?? false
         signals.pendingDesignPath.value = state.pendingDesignPath ?? null
-        signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
         committedDesignRevision.value = 0
       })
     },
@@ -545,9 +520,6 @@ function createDesignSessionStore(
         }
         if (has('pendingDesignPath')) {
           signals.pendingDesignPath.value = state.pendingDesignPath ?? null
-        }
-        if (has('pendingTemplateImport')) {
-          signals.pendingTemplateImport.value = state.pendingTemplateImport ?? null
         }
       })
     },
@@ -604,8 +576,6 @@ export const markCanvasDetachedDirty = (dirty: boolean) =>
 export const setCanvasClean = (clean: boolean) => designSessionStore.setCanvasClean(clean)
 export const setPendingDesignPath = (path: string | null) =>
   designSessionStore.setPendingDesignPath(path)
-export const setPendingTemplateImport = (template: PendingTemplateImport | null) =>
-  designSessionStore.setPendingTemplateImport(template)
 
 function cloneDocument(file: CanopiFile): CanopiFile {
   return JSON.parse(JSON.stringify(file)) as CanopiFile

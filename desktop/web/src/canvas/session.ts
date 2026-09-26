@@ -1,11 +1,8 @@
-import { batch, computed, signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import {
   canvasHasSelectionState,
-  canvasReadyState,
   canvasSelectionState,
   canvasToolState,
-  getCanvasTool,
-  setCanvasReadyState,
   setCanvasTool,
 } from './session-state'
 import type {
@@ -51,7 +48,6 @@ export const currentCanvasDocumentSurface = computed<CanvasDocumentSurface | nul
 export const currentCanvasTool = canvasToolState
 export const currentCanvasSelection = canvasSelectionState
 export const currentCanvasHasSelection = canvasHasSelectionState
-export const currentCanvasReady = canvasReadyState
 
 export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
   return currentCanvasSession.value
@@ -59,10 +55,6 @@ export function getCurrentCanvasSession(): CanvasRuntimeSurfaces | null {
 
 export function getCurrentCanvasCommandSurface(): CanvasCommandSurface | null {
   return currentCanvasCommandSurface.value
-}
-
-export function getCurrentCanvasToolCommandSurface(): CanvasToolCommandSurface | null {
-  return currentCanvasToolCommandSurface.value
 }
 
 export function getCurrentCanvasViewportCommandSurface(): CanvasViewportCommandSurface | null {
@@ -78,10 +70,7 @@ export function getCurrentCanvasDocumentSurface(): CanvasDocumentSurface | null 
 }
 
 export function setCanvasRuntimeSurfaces(surfaces: CanvasRuntimeSurfaces | null): void {
-  batch(() => {
-    currentCanvasSession.value = surfaces
-    setCanvasReadyState(surfaces !== null)
-  })
+  currentCanvasSession.value = surfaces
 }
 
 export function setCurrentCanvasSession(session: CanvasRuntimeSurfaces | null): void {
@@ -105,10 +94,6 @@ export function setCurrentCanvasTool(name: string): void {
     return
   }
   setCanvasTool(name)
-}
-
-export function getCurrentCanvasTool(): string {
-  return getCanvasTool()
 }
 
 function isCanvasRuntimeSurfaces(value: unknown): value is CanvasRuntimeSurfaces {

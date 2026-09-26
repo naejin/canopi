@@ -607,7 +607,7 @@ export function installSettingsProjection(
   }
 }
 
-export function hydrateSettingsProjection(settings: Settings): void {
+export function hydrateSettingsProjectionForTests(settings: Settings): void {
   const projection = activeSettingsProjection
   clearQueuedPersist(projection)
   const normalizedSettings = projectSettingsToSignals(settings)

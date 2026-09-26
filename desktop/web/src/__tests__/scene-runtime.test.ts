@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { clearCanvasSelection, selectedObjectIds } from '../canvas/session-state'
+import { selectedObjectIds, setCanvasSelection } from '../canvas/session-state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../app/canvas-runtime/desktop-adapter'
 import type { CanopiFile } from '../types/design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
@@ -120,7 +120,7 @@ function createRuntimeHostWithAppComposition() {
 
 describe('Canvas runtime surfaces', () => {
   beforeEach(() => {
-    clearCanvasSelection()
+    setCanvasSelection([])
   })
 
   it('pastes copied Design Objects one meter to the right and advances repeated pastes', () => {

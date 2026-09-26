@@ -3,7 +3,6 @@ import {
   upsertLidarEntry,
   patchLidarEntryById,
   removeLidarEntries,
-  readLidarEntries,
   moveLidarEntry,
 } from '../app/design-edit/lidar'
 import {
@@ -35,6 +34,10 @@ function design(name: string): CanopiFile {
     updated_at: '',
     extra: {},
   }
+}
+
+function readLidarEntries(file: CanopiFile) {
+  return file.lidar?.entries ?? []
 }
 
 /** Entries in the order the panel displays them, lowest order first. */

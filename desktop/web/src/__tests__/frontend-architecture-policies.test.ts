@@ -97,28 +97,10 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Scene Canvas Runtime host stays in runtime core',
-    from: ['src/canvas/runtime/host.ts'],
-    targets: ['@tauri-apps/**', 'src/app/**', 'src/web/**', 'src/ipc/**'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Production workspace mounts do not restore standalone Canvas hosts or surfaces',
-    from: [
-      'src/app/document-session/lifecycle.ts',
-      'src/app/canvas-map-surface/desktop-workspace-runtime.ts',
-      'src/web/WebCanvasWorkspace.tsx',
-      'src/web/browser-workspace-runtime.ts',
-    ],
-    targets: [
-      'src/canvas/runtime/host.ts',
-      'src/app/canvas-runtime/host.ts',
-      'src/components/canvas/MapLibreCanvasSurface.tsx',
-      'src/components/canvas/maplibre-surface-controller.ts',
-      'src/app/canvas-map-surface/lifecycle.ts',
-      'src/app/canvas-map-surface/snapshot.ts',
-      'src/app/canvas-map-surface/reconciliation.ts',
-    ],
+    name: 'Production code does not import the UI gallery',
+    from: ['src/**'],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['ui-gallery/**'],
   },
   {
     kind: 'forbid-imports',
@@ -211,7 +193,7 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/canvas/runtime/**/*.test.tsx',
       'src/canvas/runtime/scene-runtime/scene-sync.ts',
     ],
-    targets: ['src/canvas/scene-metadata-state.ts', 'src/canvas/runtime-mirror-state.ts'],
+    targets: ['src/canvas/scene-metadata-state.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -228,18 +210,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/__tests__/frontend-architecture-policies.test.ts',
     ],
     targets: ['src/canvas/runtime/scene-runtime.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Layer Panel renders Canvas Layer Presentation',
-    from: ['src/components/canvas/LayerPanel.tsx'],
-    targets: ['src/app/canvas-settings/state.ts', 'src/app/canvas-settings/controller.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Planning Projection does not depend on Canvas2D renderers',
-    from: ['src/app/planning-projection/consortium.ts'],
-    targets: ['src/canvas/consortium-renderer.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -344,7 +314,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/components/panels/ConsortiumPanel.tsx',
     ],
     targets: [
-      'src/canvas/runtime-mirror-state.ts',
       'src/canvas/session.ts',
       'src/app/document-session/store.ts',
     ],
@@ -355,7 +324,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/components/panels/BudgetPanel.tsx'],
     targets: [
       'src/app/planning-projection/**',
-      'src/app/budget/controller.ts',
       'src/app/budget/export.ts',
     ],
   },
@@ -367,24 +335,11 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Planning Projection runtime does not use retired mirrors',
-    from: ['src/app/planning-projection/runtime.ts'],
-    targets: ['src/canvas/runtime-mirror-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'App presentation layers do not import retired runtime mirrors',
-    from: ['src/app/**', 'src/components/**', 'src/maplibre/**'],
-    targets: ['src/canvas/runtime-mirror-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'Document Session workflows do not own stores or Canvas sessions',
     from: ['src/app/document-session/workflows.ts'],
     targets: [
       '@preact/signals',
       'src/canvas/session.ts',
-      'src/app/document/controller.ts',
       'src/app/document-session/store.ts',
       'src/app/consortium/time-model.ts',
     ],
@@ -398,25 +353,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/state-machine.ts',
       'src/app/document-session/workflows.ts',
     ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Non-canvas Design writes do not use retired controller seams',
-    from: ['src/app/**', 'src/components/**'],
-    exceptFrom: ['src/app/design-edit/**'],
-    targets: [
-      'src/app/document/controller.ts',
-      'src/app/document/edit-transaction.ts',
-      'src/app/budget/controller.ts',
-      'src/app/timeline/controller.ts',
-      'src/app/consortium/controller.ts',
-    ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Planning Projection does not own Target presentation lifecycle',
-    from: ['src/app/planning-projection/index.ts'],
-    targets: ['src/app/planning-projection/target-presentation.ts'],
   },
   {
     kind: 'forbid-imports',
@@ -530,7 +466,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/app/document-session/use-canvas-document-session.ts'],
     targets: [
       'src/canvas/runtime/scene-runtime.ts',
-      'src/canvas/runtime/surfaces.ts',
       'src/app/document-session/transition.ts',
       'src/app/document-session/persistence.ts',
       'src/app/document-session/state-machine.ts',
@@ -543,7 +478,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
     from: ['src/app/document-session/lifecycle.ts'],
     targets: [
       'src/canvas/runtime/scene-runtime.ts',
-      'src/canvas/runtime/surfaces.ts',
       'src/app/document-session/persistence.ts',
       'src/app/document-session/state-machine.ts',
     ],
@@ -625,7 +559,6 @@ const CONFINED_IMPORTER_POLICIES = [
     targets: ['src/app/design-edit/authority-capability.ts'],
     allowedFrom: [
       'src/app/design-edit/core.ts',
-      'src/app/design-edit/index.ts',
       'src/app/document-session/store.ts',
       ...TEST_SOURCE_PATTERNS,
     ],
@@ -647,7 +580,7 @@ const REQUIRED_IMPORT_POLICIES = [
     name: 'Species Search consumers delegate shared normalization',
     from: [
       'src/app/plant-browser/search-session.ts',
-      'src/web/reduced-species-catalog.ts',
+      'src/__tests__/support/in-memory-reduced-species-catalog.ts',
       'src/web/duckdb-wasm-catalog.ts',
       'src/components/plant-db/favorite-species-presentation.ts',
     ],
@@ -787,10 +720,9 @@ const REQUIRED_IMPORT_POLICIES = [
   },
   {
     kind: 'require-imports',
-    name: 'Command graph composes its catalog and projections',
+    name: 'Command graph composes its projections and shortcuts',
     from: ['src/commands/graph/index.ts'],
     targets: [
-      'src/commands/graph/catalog.ts',
       'src/commands/graph/projections.ts',
       'src/commands/graph/shortcuts.ts',
     ],
@@ -1298,6 +1230,17 @@ const SOURCE_TOMBSTONE_POLICIES = [
       'src/web/browser-theme.ts',
       'src/web/browser-shell-projection.ts',
       'src/state/design.ts',
+      'src/canvas/runtime/host.ts',
+      'src/canvas/runtime/surfaces.ts',
+      'src/canvas/timeline-math.ts',
+      'src/app/canvas-runtime/host.ts',
+      'src/components/canvas/MapLibreCanvasSurface.tsx',
+      'src/components/canvas/maplibre-surface-controller.ts',
+      'src/app/canvas-map-surface/lifecycle.ts',
+      'src/app/canvas-map-surface/snapshot.ts',
+      'src/app/canvas-map-surface/reconciliation.ts',
+      'src/app/canvas-settings/state.ts',
+      'src/app/canvas-settings/controller.ts',
       // Canopi v2 (ADR 0001): Location placement, spatial frame and
       // coordinated Design history are gone.
       'src/spatial-frame.ts',
@@ -1352,6 +1295,24 @@ const SYMBOL_OWNERSHIP_POLICIES = [
       'FILE_SHORTCUTS',
       'PANEL_SHORTCUTS',
     ],
+  },
+  {
+    kind: 'forbid-exports',
+    name: 'Command Registry exposes projections, not raw command execution',
+    from: ['src/commands/registry.ts', 'src/commands/graph/index.ts', 'src/commands/graph/projections.ts'],
+    names: ['runAppCommand', 'isAppCommandDisabled', 'getAppCommand', 'commands', 'getMenuDefinitions'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Production Web catalog does not carry the in-memory test reader',
+    from: ['src/web/**'],
+    names: ['createInMemoryReducedSpeciesCatalogReader'],
+  },
+  {
+    kind: 'forbid-source-symbols',
+    name: 'Shortcut definitions do not re-export Canvas command shortcuts',
+    from: ['src/shortcuts/definitions.ts'],
+    names: ['EDIT_SHORTCUTS', 'TOOL_SHORTCUTS', 'canvasToolKeys'],
   },
   {
     kind: 'forbid-source-symbols',

@@ -1,7 +1,6 @@
 import {
   createDesignSessionStoreTestFixture,
   designSessionStore,
-  type DesignSessionStoreTestState,
 } from '../../app/document-session/store'
 import type { CanopiFile } from '../../types/design'
 
@@ -13,13 +12,9 @@ export const currentDesign = designSessionStore.currentDesign
 export const designPath = designSessionStore.designPath
 export const designName = designSessionStore.designName
 export const pendingDesignPath = fixture.pendingDesignPath
-export const pendingTemplateImport = fixture.pendingTemplateImport
 
 export const nonCanvasRevision = fixture.nonCanvasRevision
-export const nonCanvasSavedRevision = fixture.nonCanvasSavedRevision
-export const persistenceDiverged = fixture.persistenceDiverged
 export const canvasClean = fixture.canvasClean
-export const detachedCanvasDirty = fixture.detachedCanvasDirty
 export const canvasDirty = designSessionStore.canvasDirty
 export const designDirty = designSessionStore.designDirty
 
@@ -35,11 +30,6 @@ export const designSessionFixture = {
   },
   set pendingDesignPath(path: string | null) {
     fixture.setState({ pendingDesignPath: path })
-  },
-  set pendingTemplateImport(
-    template: DesignSessionStoreTestState['pendingTemplateImport'],
-  ) {
-    fixture.setState({ pendingTemplateImport: template })
   },
   set nonCanvasRevision(revision: number) {
     fixture.setState({ nonCanvasRevision: revision })

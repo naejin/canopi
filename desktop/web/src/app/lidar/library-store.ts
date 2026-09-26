@@ -245,11 +245,6 @@ export function analysisName(
   return `${sourceLayerName} · ${kind}`
 }
 
-/** Slice 1 ships one style per entity kind; restyling lands with legends. */
-export function styleForKind(kind: LidarPresentationEntryKind): string {
-  return kind === 'Analysis' ? 'slope' : 'elevation'
-}
-
 /**
  * Presentation join for the current Design and the latest library snapshot;
  * this seam owns the design read so map snapshot code never bypasses it.

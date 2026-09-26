@@ -20,7 +20,7 @@ import {
 } from '../app/settings/state'
 import {
   flushSettingsProjection,
-  hydrateSettingsProjection,
+  hydrateSettingsProjectionForTests,
   installSettingsProjection,
   mutateSettingsProjection,
   resetSettingsProjectionForTests,
@@ -106,7 +106,7 @@ afterEach(() => {
 
 describe('settings projection', () => {
   it('hydrates, snapshots and normalizes the last view', () => {
-    hydrateSettingsProjection(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
+    hydrateSettingsProjectionForTests(baseSettings({ last_view: { lon: 2.3522, lat: 48.8566, zoom: 17.5 } }))
     expect(lastView.value).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
     expect(snapshotSettingsProjection().last_view).toEqual({ lon: 2.3522, lat: 48.8566, zoom: 17.5 })
 
@@ -122,7 +122,7 @@ describe('settings projection', () => {
   })
 
   it('hydrates platform settings into the frontend projection without persisting', () => {
-    hydrateSettingsProjection(baseSettings({
+    hydrateSettingsProjectionForTests(baseSettings({
       locale: 'fr',
       theme: 'dark',
       snap_to_grid: true,
@@ -159,7 +159,7 @@ describe('settings projection', () => {
   })
 
   it('snapshots the projection back to the shared Settings contract', () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'de'
@@ -202,7 +202,7 @@ describe('settings projection', () => {
   })
 
   it('persists the device-local Google key trimmed, and only on an explicit save', () => {
-    hydrateSettingsProjection(baseSettings({ google_maps_api_key: '  stored-key  ' }))
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: '  stored-key  ' }))
     // Hydration keeps the stored value reachable rather than dropping it.
     expect(snapshotSettingsProjection().google_maps_api_key).toBe('stored-key')
 
@@ -226,7 +226,7 @@ describe('settings projection', () => {
   })
 
   it('keeps the Google key out of the design-facing settings it does not belong to', () => {
-    hydrateSettingsProjection(baseSettings({ google_maps_api_key: 'device-key' }))
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key' }))
     // The key is device-local configuration. It travels with Settings, which is
     // never written into a Design, and no layer identity depends on it: the
     // satellite module chooses keyless or official tiles from the key alone.
@@ -238,7 +238,7 @@ describe('settings projection', () => {
   })
 
   it('normalizes theme, map layer choices, opacities, and contour interval at the seam', () => {
-    hydrateSettingsProjection(baseSettings({
+    hydrateSettingsProjectionForTests(baseSettings({
       theme: 'neon' as Theme,
       basemap_style: 'street' as BasemapStyle,
       basemap_opacity: 2,
@@ -289,7 +289,7 @@ describe('settings projection', () => {
   })
 
   it('persists immediate mutations against the latest normalized snapshot', async () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'es'
@@ -305,7 +305,7 @@ describe('settings projection', () => {
   })
 
   it('debounces queued persistence and writes the latest projection', async () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'fr'
@@ -332,7 +332,7 @@ describe('settings projection', () => {
   it('flushes queued persistence immediately and waits for durable settlement', async () => {
     const pendingSave = deferred<void>()
     saveSettings.mockImplementationOnce(() => pendingSave.promise)
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.mapLayers = { ...settings.mapLayers, contours: { ...settings.mapLayers.contours, intervalMeters: 24 } }
@@ -375,7 +375,7 @@ describe('settings projection', () => {
   })
 
   it('avoids persistence when a mutation leaves the settings snapshot unchanged', () => {
-    hydrateSettingsProjection(baseSettings())
+    hydrateSettingsProjectionForTests(baseSettings())
 
     mutateSettingsProjection((settings) => {
       settings.locale = 'en'
@@ -564,7 +564,7 @@ describe('settings projection', () => {
   })
 
   it('uses the normalized hydrated snapshot as the durable no-op baseline', () => {
-    hydrateSettingsProjection(baseSettings({
+    hydrateSettingsProjectionForTests(baseSettings({
       basemap_opacity: 4,
       contour_interval: 12.7,
       saved_stamps_frame_height: 80,

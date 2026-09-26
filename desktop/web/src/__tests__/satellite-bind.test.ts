@@ -4,7 +4,7 @@ import {
   MAPLIBRE_SATELLITE_LAYER_ID,
   MAPLIBRE_SATELLITE_SOURCE_ID,
 } from '../maplibre/config'
-import { applySatelliteVisibility, bindSatelliteImagery } from '../maplibre/satellite-bind'
+import { bindSatelliteImagery } from '../maplibre/satellite-bind'
 import type { SatelliteReconcileTarget } from '../maplibre/satellite-contribution'
 import { BasemapTileAuth } from '../maplibre/basemap-tile-auth'
 import { GOOGLE_KEYLESS_TILES, GOOGLE_SESSION_TILES } from '../maplibre/satellite-provider'
@@ -167,11 +167,6 @@ describe('satellite provider binding', () => {
     })
 
     expect(map.layout.get(`${MAPLIBRE_SATELLITE_LAYER_ID}:visibility`)).toBe('none')
-
-    // Hiding is a layout change only: it must not re-request tiles or drop the
-    // source, so the provider session survives hidden imagery.
-    applySatelliteVisibility(map.target, true)
-    expect(map.layout.get(`${MAPLIBRE_SATELLITE_LAYER_ID}:visibility`)).toBe('visible')
 
     const afterDispose = map.calls.length
     dispose()

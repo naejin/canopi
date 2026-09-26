@@ -9,7 +9,6 @@ import {
 import {
   createDefaultMapLayers,
   hasVisibleMapLayer,
-  mapBackground,
   mapBackgroundOf,
   mapLayers,
   normalizeMapLayers,
@@ -66,7 +65,7 @@ describe('map layer store', () => {
     expect(mapLayers.value.satellite).toEqual({ visible: false, opacity: 1 })
     expect(mapLayers.value.contours.visible).toBe(false)
     expect(mapLayers.value.hillshade.visible).toBe(false)
-    expect(mapBackground.value).toBe('basemap')
+    expect(mapBackgroundOf(mapLayers.value)).toBe('basemap')
     expect(hasVisibleMapLayer(mapLayers.value)).toBe(true)
   })
 
@@ -124,24 +123,24 @@ describe('map layer store', () => {
   it('lets Satellite hide the Basemap and restores it when Satellite is off', () => {
     setMapLayerVisible('satellite', true)
 
-    expect(mapBackground.value).toBe('satellite')
+    expect(mapBackgroundOf(mapLayers.value)).toBe('satellite')
     // The Basemap keeps its own visibility; Satellite only covers it.
     expect(mapLayers.value.basemap.visible).toBe(true)
 
     setMapLayerVisible('satellite', false)
 
-    expect(mapBackground.value).toBe('basemap')
+    expect(mapBackgroundOf(mapLayers.value)).toBe('basemap')
     expect(mapLayers.value.basemap.visible).toBe(true)
   })
 
   it('leaves a hidden Basemap hidden after Satellite turns off', () => {
     setMapLayerVisible('basemap', false)
     setMapLayerVisible('satellite', true)
-    expect(mapBackground.value).toBe('satellite')
+    expect(mapBackgroundOf(mapLayers.value)).toBe('satellite')
 
     setMapLayerVisible('satellite', false)
 
-    expect(mapBackground.value).toBe('none')
+    expect(mapBackgroundOf(mapLayers.value)).toBe('none')
     expect(mapLayers.value.basemap.visible).toBe(false)
   })
 

@@ -398,31 +398,6 @@ describe("continuous save conflicts", () => {
 });
 
 describe("continuous save homes", () => {
-  it("gives a template a new Draft home that it writes without an edit", async () => {
-    resetMachine({ file: null, path: null, name: "Untitled" });
-    const session = makeSession();
-    machine.beginEmptyDocumentSession(session);
-    await machine.transitionDocument({
-      source: "template",
-      dirtyGuard: "flush",
-      session,
-      load: async () => ({
-        file: makeFile("Template"),
-        path: null,
-        name: "Template",
-        draftId: "draft-template",
-        writePending: true,
-      }),
-    });
-
-    await expect(machine.continuousSave.flush()).resolves.toBe(true);
-
-    expect(mocks.saveDesignDraft).toHaveBeenCalledWith(
-      "draft-template",
-      expect.objectContaining({ name: "Template" }),
-    );
-  });
-
   it("turns Save on a Draft home into Save As and deletes the Draft", async () => {
     resetMachine({ file: makeFile("Draft Garden"), path: null, name: "Draft Garden" });
     markDesignSessionDirtyForTest(store);
@@ -2171,27 +2146,6 @@ describe("document session transition", () => {
       operation: "open-path",
       error,
     });
-  });
-
-  it("applies templates as unsaved documents with their requested display name", async () => {
-    const session = makeSession();
-
-    const result = await machine.transitionDocument({
-      source: "template",
-      dirtyGuard: "skip",
-      session,
-      load: async () => ({
-        file: makeFile("Downloaded Template"),
-        path: null,
-        name: "Forest Edge",
-      }),
-    });
-
-    expect(result.status).toBe("applied");
-    expect(store.readCurrentDesign()?.name).toBe("Downloaded Template");
-    expect(store.readDesignName()).toBe("Forest Edge");
-    expect(store.readDesignPath()).toBe(null);
-    expect(store.designDirty.value).toBe(false);
   });
 
   it("applies detached replacements without requiring a canvas session", async () => {

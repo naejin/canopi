@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { aboutCanopiDialogOpen, closeAboutCanopiDialog } from '../app/about/state'
 import { CANOPI_LICENSE, CANOPI_VERSION } from '../app/about/metadata'
 import { locale } from '../app/settings/state'
-import { runAppCommand } from '../commands/registry'
+import { appCommandGraphChromeProjection } from '../commands/registry'
 import { AboutCanopiDialog } from '../components/shared/AboutCanopiDialog'
 import tauriConfigText from '../../../tauri.conf.json?raw'
 
@@ -32,7 +32,10 @@ describe('AboutCanopiDialog', () => {
   })
 
   it('opens from the Help command and shows standard app information', async () => {
-    runAppCommand('help.aboutCanopi')
+    const help = appCommandGraphChromeProjection.value.menus.find((menu) => menu.id === 'help')!
+    const about = help.items.find((entry) => entry.type === 'action' && entry.id === 'help.aboutCanopi')
+    if (about?.type !== 'action') throw new Error('Missing About Canopi menu action')
+    about.action()
 
     await act(async () => {
       render(<AboutCanopiDialog />, container)

@@ -75,7 +75,6 @@ describe('i18n completeness', () => {
     expect(fr.savedObjectStamps.rename).toContain('planche')
     expect(fr.canvas.selectionActions.saveObjectStamp).toBe('Enregistrer comme planche')
     expect(fr.canvas.contextMenu.saveObjectStamp).toBe('Enregistrer comme planche')
-    expect(fr.canvas.tools.plantStamp).toContain('Tampon')
     expect(fr.canvas.tools.objectStamp).toContain('Tampon')
   })
 })

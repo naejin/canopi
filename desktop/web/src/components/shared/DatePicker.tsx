@@ -4,9 +4,16 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import type { RefObject } from 'preact'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
-import { toISODate } from '../../canvas/timeline-math'
 import { computeFloatingDirection, shouldAlignRight } from '../../utils/floating-position'
 import styles from './DatePicker.module.css'
+
+/** Format a Date as ISO 8601 date string (YYYY-MM-DD). */
+function toISODate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 // ---------------------------------------------------------------------------
 // Intl.DateTimeFormat cache

@@ -258,7 +258,7 @@ export function designFixture(state = 'populated'): CanopiFile {
     consortiums: [
       ...activeSpecies.map((canonicalName, index) => ({
         target: { kind: 'species' as const, canonical_name: canonicalName },
-        stratum: ['emergent', 'high', 'medium', 'low', 'unassigned', 'legacy-layer'][index]!,
+        stratum: ['emergent', 'high', 'medium', 'low', 'unassigned', 'unknown-stratum'][index]!,
         start_phase: Math.min(index, 3),
         end_phase: Math.min(6, index + 2),
       })),

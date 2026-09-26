@@ -15,7 +15,7 @@ import {
   setCanvasLayerPresentationOpacity,
   setCanvasLayerPresentationVisibility,
 } from '../app/canvas-layer-presentation/presentation'
-import { flushSettingsProjection, hydrateSettingsProjection } from '../app/settings/projection'
+import { flushSettingsProjection, hydrateSettingsProjectionForTests } from '../app/settings/projection'
 import { googleMapsApiKey, locale } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture } from './support/design-session-state'
@@ -45,7 +45,7 @@ describe('Canvas Layer Presentation', () => {
       zones: 0.35,
       annotations: 1,
     }
-    hydrateSettingsProjection({
+    hydrateSettingsProjectionForTests({
       locale: 'en',
       theme: 'light',
       snap_to_grid: true,

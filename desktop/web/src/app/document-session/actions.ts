@@ -1,5 +1,4 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
-import type { DesignTemplateEnvelope } from "../design-template-import/types";
 import { computed } from "@preact/signals";
 import {
   type DocumentTransitionResult,
@@ -9,7 +8,6 @@ import {
   openDesignDraftSession,
   openDesignSessionFromDialog,
   openDesignSessionFromPath,
-  openTemplateDesignSession,
   resolveDesignSaveConflict,
   revertDesignSessionToOpenedVersion,
   saveCurrentDesign,
@@ -20,8 +18,6 @@ interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
   isCancelled?: () => boolean;
 }
-
-export type TemplateOpenResult = "opened" | "queued" | "cancelled";
 
 export {
   consumeQueuedDocumentLoad,
@@ -73,21 +69,6 @@ export async function openDesignFromPath(
   });
 
   throwIfFailed(result);
-}
-
-/** Open a decoded template as a new unsaved design through the shared guard. */
-export async function openDesignAsTemplate(
-  envelope: DesignTemplateEnvelope,
-  options: DocumentLoadOptions = {},
-): Promise<TemplateOpenResult> {
-  const result = await openTemplateDesignSession(envelope, {
-    session: options.session,
-    isCancelled: options.isCancelled,
-  });
-
-  throwIfFailed(result);
-  if (result.status === "queued") return "queued";
-  return result.status === "applied" ? "opened" : "cancelled";
 }
 
 /** Create a new blank design through the shared replacement guard. */

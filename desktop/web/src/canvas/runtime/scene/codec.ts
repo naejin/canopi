@@ -69,10 +69,6 @@ export function hydrateSceneFromDesign(
   return { persisted: hydrateScenePersistedStateInFrame(file, geo), geo }
 }
 
-export function hydrateScenePersistedState(file: CanopiFile): ScenePersistedState {
-  return hydrateSceneFromDesign(file).persisted
-}
-
 export function hydrateScenePersistedStateInFrame(file: CanopiFile, geo: SceneGeoFrame): ScenePersistedState {
   return {
     plantSpeciesColors: { ...file.plant_species_colors },

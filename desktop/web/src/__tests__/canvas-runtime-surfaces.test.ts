@@ -5,12 +5,11 @@ import {
   currentCanvasCommandSurface,
   currentCanvasDocumentSurface,
   currentCanvasQuerySurface,
-  getCurrentCanvasTool,
+  currentCanvasTool,
   setCanvasRuntimeSurfaces,
   setCurrentCanvasSession,
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
-import { createCanvasRuntimeSurfaces } from '../canvas/runtime/surfaces'
 import {
   createDefaultScenePersistedState,
   createSceneGeoFrame,
@@ -21,6 +20,7 @@ import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
   CanvasQuerySurface,
+  CanvasRuntimeSurfaces,
 } from '../canvas/runtime/runtime'
 import { createCanvasDocumentReplacementToken } from '../canvas/runtime/runtime'
 
@@ -162,6 +162,14 @@ function createDocumentSurface() {
   } satisfies CanvasDocumentSurface
 }
 
+function createCanvasRuntimeSurfaces(runtime: SceneCanvasRuntime): CanvasRuntimeSurfaces {
+  return {
+    commands: runtime.commandSurface,
+    queries: runtime.querySurface,
+    documents: runtime.documentSurface,
+  }
+}
+
 function readPackageSource(path: string): string {
   const sourcePath = new URL(path, import.meta.url).pathname
   return readFileSync(sourcePath.startsWith('/src/') ? `.${sourcePath}` : sourcePath, 'utf8')
@@ -172,8 +180,8 @@ describe('canvas runtime surfaces', () => {
     setCurrentCanvasSession(null)
   })
 
-  it('composes internal role modules behind the public runtime surface factory', () => {
-    const surfacesSource = readPackageSource('../canvas/runtime/surfaces.ts')
+  it('composes workspace surfaces from the runtime role modules', () => {
+    const surfacesSource = readPackageSource('../app/canvas-map-surface/workspace-runtime-composition.ts')
 
     expect(surfacesSource).toContain('commands: runtime.commandSurface')
     expect(surfacesSource).toContain('queries: runtime.querySurface')
@@ -350,7 +358,7 @@ describe('canvas runtime surfaces', () => {
       surfaces.commands.tools.setTool('hand')
       surfaces.documents.loadDocument(file)
 
-      expect(getCurrentCanvasTool()).toBe('hand')
+      expect(currentCanvasTool.value).toBe('hand')
       expect(surfaces.documents.hasLoadedDocument()).toBe(true)
       expect(surfaces.queries.getSceneSnapshot()).toEqual(createDefaultScenePersistedState())
     } finally {

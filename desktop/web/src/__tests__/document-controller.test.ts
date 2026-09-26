@@ -3,7 +3,7 @@ import {
   editCurrentDesign,
   editDesignArray,
   reconcileCurrentDesign,
-} from '../app/design-edit'
+} from '../app/design-edit/core'
 import { speciesBudgetTarget } from '../target'
 import {
   designSessionFixture,

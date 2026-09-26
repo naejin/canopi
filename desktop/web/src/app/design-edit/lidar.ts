@@ -1,4 +1,3 @@
-import type { CanopiFile } from '../../types/design'
 import type {
   LidarPresentationEntry,
   LidarPresentationEntryKind,
@@ -11,18 +10,8 @@ const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
 
 import { editCurrentDesign } from './core'
 
-export type { LidarPresentationEntry, LidarPresentationSection, LidarPresentationEntryKind }
-
 function emptySection(): LidarPresentationSection {
   return { schema_version: LIDAR_PRESENTATION_SCHEMA_VERSION, entries: [] }
-}
-
-export function readLidarSection(design: CanopiFile): LidarPresentationSection | null {
-  return design.lidar ?? null
-}
-
-export function readLidarEntries(design: CanopiFile): LidarPresentationEntry[] {
-  return design.lidar?.entries ?? []
 }
 
 /** Immutable patch of one entry; entries are matched by stable library id. */

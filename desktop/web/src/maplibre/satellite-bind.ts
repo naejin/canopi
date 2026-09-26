@@ -198,20 +198,6 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
 }
 
 /**
- * Re-apply visibility alone.
- *
- * Hiding the basemap must not disturb the provider session or re-request tiles,
- * so this touches only the layer's layout property. The caller supplies
- * effective visibility (user visibility AND provider renderability).
- */
-export function applySatelliteVisibility(
-  map: SatelliteReconcileTarget,
-  visible: boolean,
-): void {
-  setSatelliteContributionVisibility(map, visible)
-}
-
-/**
  * Map-owned attribution control seam for production MapLibre maps.
  *
  * Reuses the public add/remove-control APIs. Replacing the owned control is

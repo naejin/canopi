@@ -1,6 +1,6 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
-import { beginTimelineActionEdit } from '../app/design-edit'
+import { designEditAuthorityCapability } from '../app/design-edit/authority-capability'
 import { composeDocumentForSave } from '../app/contracts/document'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import {
@@ -105,7 +105,7 @@ describe('browser Design Session lifecycle', () => {
     expect(secondLayer.visible).toBe(false)
   })
 
-  it('composes a new browser Design as v7 without a spatial frame through draft and download', async () => {
+  it('composes a new browser Design as v7 through draft and download', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const downloadCanopiFile = vi.fn<(download: BrowserCanopiDownload) => Promise<void>>(
@@ -862,16 +862,14 @@ describe('browser Design Session lifecycle', () => {
     })
     expect(controller.restoreLatestDraft()).toBe(true)
     const uninstall = controller.installContinuousSave(testPage())
-    const edit = beginTimelineActionEdit({
-      type: 'move',
-      actionId: 'timeline-preview',
-      originalStartMs: new Date('2026-04-01T00:00:00.000Z').getTime(),
-      durationMs: 2 * 86400000,
-      pxPerDaySnapshot: 10,
-    })
+    const edit = designEditAuthorityCapability(designSessionStore).beginPreview('Timeline move')
+    const previewDates = (start_date: string, end_date: string) => edit.preview((design) => ({
+      ...design,
+      timeline: design.timeline.map((action) => ({ ...action, start_date, end_date })),
+    }))
 
     try {
-      edit.applyPixelDelta(10)
+      previewDates('2026-04-02', '2026-04-04')
       await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
 
       expect(designSessionStore.readCurrentDesign()?.timeline[0]).toMatchObject({
@@ -880,7 +878,7 @@ describe('browser Design Session lifecycle', () => {
       })
       expect(saveDraft).not.toHaveBeenCalled()
 
-      edit.applyPixelDelta(20)
+      previewDates('2026-04-03', '2026-04-05')
       await vi.advanceTimersByTimeAsync(CONTINUOUS_SAVE_DELAY_MS * 2)
       expect(saveDraft).not.toHaveBeenCalled()
 
@@ -1307,7 +1305,7 @@ describe('browser Design Session lifecycle', () => {
   })
 
   it('writes again when an intervening draft acknowledgement publishes a newer edit', async () => {
-    const initial = makeCanopiFile({ name: 'Autosave Garden' })
+    const initial = makeCanopiFile({ name: 'Continuous Save Garden' })
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({
@@ -1358,7 +1356,7 @@ describe('browser Design Session lifecycle', () => {
   })
 
   it('writes again when an intervening acknowledgement commits a Canvas-only edit', async () => {
-    const initial = makeCanopiFile({ name: 'Canvas Autosave Garden' })
+    const initial = makeCanopiFile({ name: 'Canvas Continuous Save Garden' })
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const controller = createBrowserDesignSessionController({

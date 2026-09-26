@@ -133,7 +133,7 @@ export function buildCalendarPlanningProjection(options: {
   }
 }
 
-export function projectCalendarAction(
+function projectCalendarAction(
   action: TimelineAction,
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
@@ -170,7 +170,7 @@ export function projectCalendarAction(
   }
 }
 
-export function compareCalendarActions(
+function compareCalendarActions(
   left: CalendarPlanningAction,
   right: CalendarPlanningAction,
 ): number {
