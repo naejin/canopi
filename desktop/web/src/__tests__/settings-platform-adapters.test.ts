@@ -67,6 +67,7 @@ describe('settings platform adapters', () => {
       new_design_satellite: true,
       new_design_symbol_scale: 1.5,
       new_design_labels: 'codes',
+      satellite_source: 'google_key',
     })
     const adapter = createBrowserSettingsPlatformAdapter({
       loadSettings: () => stored,
@@ -151,6 +152,7 @@ describe('settings platform adapters', () => {
         new_design_satellite: 1,
         new_design_symbol_scale: '1.5',
         new_design_labels: 'all',
+        satellite_source: 'bing',
         unknown_setting: true,
       }),
       saveSettings: vi.fn(),

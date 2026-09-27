@@ -4,6 +4,7 @@ import {
   SETTINGS_BASEMAP_STYLES,
   SETTINGS_LOCALES,
   SETTINGS_PLANT_LABELS,
+  SETTINGS_SATELLITE_SOURCES,
   SETTINGS_THEMES,
 } from '../generated/settings'
 import type { Settings } from '../types/settings'
@@ -52,6 +53,10 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       value.google_maps_api_key,
       DEFAULT_SETTINGS.google_maps_api_key ?? null,
     ),
+    satellite_source: typeof value.satellite_source === 'string'
+      && (SETTINGS_SATELLITE_SOURCES as readonly string[]).includes(value.satellite_source)
+      ? value.satellite_source as Settings['satellite_source']
+      : null,
     contour_visible: readBoolean(value.contour_visible, DEFAULT_SETTINGS.contour_visible),
     contour_opacity: readFiniteNumber(value.contour_opacity, DEFAULT_SETTINGS.contour_opacity),
     contour_interval: readU32(value.contour_interval, DEFAULT_SETTINGS.contour_interval),

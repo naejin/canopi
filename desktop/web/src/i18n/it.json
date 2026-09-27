@@ -1712,7 +1712,8 @@
     "showFolderFailed": "Impossibile aprire la cartella.",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "Informazioni su Canopi…",
-    "mapStyle": "Stile della mappa"
+    "mapStyle": "Stile della mappa",
+    "googleKeyKept": "La tua chiave Google resta salvata su questo dispositivo, inutilizzata. Scegli La mia chiave Google per usarla di nuovo."
   },
   "savedViews": {
     "defaultName": "Vista {{number}}",

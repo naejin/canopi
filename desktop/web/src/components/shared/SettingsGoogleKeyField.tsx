@@ -1,11 +1,10 @@
 import { useId, useRef, useState } from 'preact/hooks'
-import { saveGoogleMapsApiKey } from '../../app/map-layers/actions'
-import { googleMapsApiKey } from '../../app/settings/state'
+import { saveGoogleMapsApiKey, setSatelliteSource } from '../../app/map-layers/actions'
+import { googleMapsApiKey, satelliteSource } from '../../app/settings/state'
+import type { SatelliteSource } from '../../generated/contracts'
 import { t } from '../../i18n'
 import { SegmentedControl } from './SegmentedControl'
 import styles from './SettingsDialog.module.css'
-
-type SatelliteSource = 'free' | 'google'
 
 /** Stands in for a saved key while it is masked; never derived from the key. */
 const SAVED_KEY_MASK = '••••••••••••••••'
@@ -17,18 +16,17 @@ const SAVED_KEY_MASK = '••••••••••••••••'
  * The key is a device-local credential. It is never rendered anywhere but
  * inside this input, and there only while Show is pressed: masked, the input
  * stays empty and a stored key is only hinted by the placeholder. Choosing
- * Free imagery forgets the key, like Remove key.
+ * Free imagery keeps a saved key (the map just stops using it); only Remove
+ * key forgets it.
  */
 export function SettingsGoogleKeyField() {
   const stored = googleMapsApiKey.value?.trim() ? googleMapsApiKey.value : null
-  const [chosen, setChosen] = useState<SatelliteSource>(stored ? 'google' : 'free')
   const [shown, setShown] = useState(false)
   const [draft, setDraft] = useState<string | null>(null)
   const [status, setStatus] = useState<'saved' | 'removed' | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const id = useId()
-  // A key saved elsewhere (the Layers panel) means the Google source.
-  const source: SatelliteSource = stored ? 'google' : chosen
+  const source = satelliteSource.value
   const pending = draft?.trim() ?? ''
   const canSave = pending !== '' && pending !== stored
 
@@ -55,17 +53,27 @@ export function SettingsGoogleKeyField() {
           value={source}
           options={[
             { value: 'free', label: t('settings.satelliteFree') },
-            { value: 'google', label: t('settings.satelliteGoogle') },
+            { value: 'google_key', label: t('settings.satelliteGoogle') },
           ]}
           onChange={(next) => {
-            setChosen(next)
-            if (next === 'free' && stored) removeKey()
-            if (next === 'google') queueMicrotask(() => input.current?.focus())
+            setStatus(null)
+            setShown(false)
+            setDraft(null)
+            setSatelliteSource(next)
+            if (next === 'google_key' && !stored) queueMicrotask(() => input.current?.focus())
           }}
         />
         <span className={styles.hint}>{t('settings.satelliteHint')}</span>
       </div>
-      {source === 'google' && (
+      {source === 'free' && stored && (
+        <div className={styles.keyRow}>
+          <span className={styles.hint}>{t('settings.googleKeyKept')}</span>
+          <button type="button" className={styles.ghostButton} onClick={removeKey}>
+            {t('settings.removeKey')}
+          </button>
+        </div>
+      )}
+      {source === 'google_key' && (
         <form
           className={styles.field}
           onSubmit={(event) => {

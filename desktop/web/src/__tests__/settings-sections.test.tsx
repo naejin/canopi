@@ -11,6 +11,8 @@ import {
   googleMapsApiKey,
   locale,
   newDesignDefaults,
+  satelliteSource,
+  activeGoogleMapsApiKey,
   singleKeyShortcuts,
 } from '../app/settings/state'
 import {
@@ -68,6 +70,7 @@ beforeEach(() => {
   document.body.appendChild(container)
   locale.value = 'en'
   googleMapsApiKey.value = null
+  satelliteSource.value = 'free'
   mapLayers.value = createDefaultMapLayers()
   newDesignDefaults.value = DEFAULT_NEW_DESIGNS
   singleKeyShortcuts.value = true
@@ -104,6 +107,7 @@ describe('Settings sections', () => {
 describe('Settings › Map and imagery: the Google key', () => {
   it('keeps a saved key masked and out of the page until Show, then only inside the input', async () => {
     googleMapsApiKey.value = FAKE_KEY
+    satelliteSource.value = 'google_key'
     await openSection('map')
 
     expect(radio('My Google key').getAttribute('aria-checked')).toBe('true')
@@ -150,13 +154,32 @@ describe('Settings › Map and imagery: the Google key', () => {
     expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
   })
 
-  it('choosing Free imagery forgets a saved key', async () => {
+  it('keeps a saved key when switching to Free imagery and back; only Remove key forgets it', async () => {
     googleMapsApiKey.value = FAKE_KEY
+    satelliteSource.value = 'google_key'
     await openSection('map')
+    expect(activeGoogleMapsApiKey.value).toBe(FAKE_KEY)
+
     await act(async () => { radio('Free imagery').click() })
-    expect(googleMapsApiKey.value).toBeNull()
+    expect(satelliteSource.value).toBe('free')
+    expect(googleMapsApiKey.value).toBe(FAKE_KEY)
+    // The provider stops using it.
+    expect(activeGoogleMapsApiKey.value).toBeNull()
     expect(keyInput()).toBeNull()
+    expect(dialog().textContent).toContain('Your Google key stays saved on this device, unused.')
     expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+
+    await act(async () => { radio('My Google key').click() })
+    expect(satelliteSource.value).toBe('google_key')
+    expect(googleMapsApiKey.value).toBe(FAKE_KEY)
+    expect(activeGoogleMapsApiKey.value).toBe(FAKE_KEY)
+    expect(keyInput()!.value).toBe('')
+    expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+
+    await act(async () => { radio('Free imagery').click() })
+    await act(async () => { button('Remove key').click() })
+    expect(googleMapsApiKey.value).toBeNull()
+    expect(satelliteSource.value).toBe('free')
   })
 
   it('sets the map style and Soften background for this device', async () => {

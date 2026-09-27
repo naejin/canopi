@@ -1731,7 +1731,8 @@ describe('WorkspaceMapControls Google satellite', () => {
         maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     }) as unknown as typeof fetch)
-    const { googleMapsApiKey } = await import('../../app/settings/state')
+    const { googleMapsApiKey, satelliteSource } = await import('../../app/settings/state')
+    satelliteSource.value = 'google_key'
     googleMapsApiKey.value = 'fake-canvas-google-key'
 
     try {
@@ -1782,12 +1783,14 @@ describe('WorkspaceMapControls Google satellite', () => {
       expect(JSON.stringify(attributions[0]?.options)).not.toContain('fake-canvas-google-key')
     } finally {
       googleMapsApiKey.value = null
+      satelliteSource.value = 'free'
     }
   })
 
   it('shows Google keyless imagery without a session request when no key is set', async () => {
-    const { googleMapsApiKey } = await import('../../app/settings/state')
+    const { googleMapsApiKey, satelliteSource } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
+    satelliteSource.value = 'free'
     const { controls, maps } = createControls({
       background: background({}, { visible: true }),
     })
@@ -1818,8 +1821,9 @@ describe('WorkspaceMapControls Google satellite', () => {
         maxZoomRects: [{ north: 90, south: -90, east: 180, west: -180, maxZoom: 20 }],
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     }) as unknown as typeof fetch)
-    const { googleMapsApiKey } = await import('../../app/settings/state')
+    const { googleMapsApiKey, satelliteSource } = await import('../../app/settings/state')
     googleMapsApiKey.value = null
+    satelliteSource.value = 'free'
     try {
       const { controls, maps } = createControls()
       const acquisition = controls.createMap(new AbortController().signal)
@@ -1828,6 +1832,7 @@ describe('WorkspaceMapControls Google satellite', () => {
       await acquisition
       expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toMatchObject({ tiles: [GOOGLE_KEYLESS_TILES] })
 
+      satelliteSource.value = 'google_key'
       googleMapsApiKey.value = 'fake-canvas-google-key'
 
       await vi.waitFor(() => expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID))
@@ -1837,6 +1842,7 @@ describe('WorkspaceMapControls Google satellite', () => {
       expect(map.remove).not.toHaveBeenCalled()
     } finally {
       googleMapsApiKey.value = null
+      satelliteSource.value = 'free'
     }
   })
 })

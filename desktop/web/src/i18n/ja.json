@@ -1712,7 +1712,8 @@
     "showFolderFailed": "フォルダーを開けませんでした。",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "Canopi について…",
-    "mapStyle": "地図のスタイル"
+    "mapStyle": "地図のスタイル",
+    "googleKeyKept": "Google キーはこのデバイスに保存されたまま、使われていません。もう一度使うには「自分の Google キー」を選んでください。"
   },
   "savedViews": {
     "defaultName": "ビュー {{number}}",

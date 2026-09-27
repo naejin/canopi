@@ -714,6 +714,12 @@ export type RichTextSpan = {
 	link: string | null,
 };
 
+/**
+ *  Satellite imagery: Google's free tiles, or the official Map Tiles API
+ *  with the device's own key.
+ */
+export type SatelliteSource = "free" | "google_key";
+
 export type SavedObjectStamp = {
 	id: string,
 	name: string,
@@ -783,6 +789,13 @@ export type Settings = {
 	 *  text or log. Without a key the Satellite row uses Google's keyless tiles.
 	 */
 	google_maps_api_key?: string | null,
+	/**
+	 *  Settings › Map and imagery: which satellite imagery the map uses.
+	 *  `None` (a record saved before the choice existed) means the Google key
+	 *  when one is saved, otherwise the free imagery. Choosing the free
+	 *  imagery keeps the key; only Remove key forgets it.
+	 */
+	satellite_source: SatelliteSource | null,
 	contour_visible: boolean,
 	contour_opacity: number,
 	contour_interval: number,

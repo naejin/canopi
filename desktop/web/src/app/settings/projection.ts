@@ -1,5 +1,5 @@
 import { batch } from '@preact/signals'
-import type { LastView } from '../../generated/contracts'
+import type { LastView, SatelliteSource } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
@@ -23,6 +23,7 @@ import {
   locale,
   newDesignDefaults,
   plantSpacingIntervalM,
+  satelliteSource,
   savedStampsFrameHeight,
   singleKeyShortcuts,
   theme,
@@ -38,6 +39,7 @@ export interface SettingsProjectionDraft {
   locale: Locale
   theme: Theme
   googleMapsApiKey: string | null
+  satelliteSource: SatelliteSource
   snapToGrid: boolean
   snapToGuides: boolean
   plantSpacingIntervalM: number
@@ -126,6 +128,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
     locale: locale.value,
     theme: theme.value,
     googleMapsApiKey: googleMapsApiKey.value,
+    satelliteSource: satelliteSource.value,
     snapToGrid: snapToGridEnabled.value,
     snapToGuides: snapToGuidesEnabled.value,
     plantSpacingIntervalM: plantSpacingIntervalM.value,
@@ -164,6 +167,7 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
     // The key is stored exactly as typed; the explicit save action is what
     // trims it, so partial editing never silently rewrites the credential.
     googleMapsApiKey: draft.googleMapsApiKey,
+    satelliteSource: draft.satelliteSource === 'google_key' ? 'google_key' : 'free',
     snapToGrid: draft.snapToGrid,
     snapToGuides: draft.snapToGuides,
     plantSpacingIntervalM: normalizePositiveMeters(
@@ -196,6 +200,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     locale.value = draft.locale
     theme.value = draft.theme
     googleMapsApiKey.value = draft.googleMapsApiKey
+    satelliteSource.value = draft.satelliteSource
     snapToGridEnabled.value = draft.snapToGrid
     snapToGuidesEnabled.value = draft.snapToGuides
     plantSpacingIntervalM.value = draft.plantSpacingIntervalM
@@ -226,6 +231,7 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     satellite_visible: draft.mapLayers.satellite.visible,
     satellite_opacity: draft.mapLayers.satellite.opacity,
     google_maps_api_key: trimmedKey(draft.googleMapsApiKey),
+    satellite_source: draft.satelliteSource,
     contour_visible: draft.mapLayers.contours.visible,
     contour_opacity: draft.mapLayers.contours.opacity,
     contour_interval: draft.mapLayers.contours.intervalMeters,
@@ -289,6 +295,8 @@ function projectSettingsToSignals(settings: Settings): Settings {
     locale: settings.locale,
     theme: settings.theme,
     googleMapsApiKey: settings.google_maps_api_key ?? null,
+    // A record from before the choice existed uses a saved key.
+    satelliteSource: settings.satellite_source ?? (trimmedKey(settings.google_maps_api_key ?? null) ? 'google_key' : 'free'),
     snapToGrid: settings.snap_to_grid,
     snapToGuides: settings.snap_to_guides,
     plantSpacingIntervalM: settings.plant_spacing_interval_m,

@@ -82,6 +82,7 @@ function build(
     readonly openPlantAppearance?: CanvasContextMenuEntryOptions['openPlantAppearance']
     readonly returnFocus?: () => void
     readonly summary?: MapSelectionSummary | null
+    readonly characterKeyShortcuts?: boolean
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
@@ -100,6 +101,7 @@ function build(
   }
   const entries = buildCanvasContextMenuEntries(request, {
     translate: t,
+    ...(options.characterKeyShortcuts === undefined ? {} : { characterKeyShortcuts: options.characterKeyShortcuts }),
     openPlantAppearance,
     summary: options.summary === undefined ? (model ? APPLE_SUMMARY : null) : options.summary,
     openSpeciesDetail,
@@ -180,6 +182,16 @@ describe('canvas context menu entries', () => {
     expect(item(entries, 'delete').shortcut).toBe('Del')
     expect(item(entries, 'delete').keyShortcuts).toBe('Delete Backspace')
     expect(item(entries, 'copy').keyShortcuts).toBe('Control+C Meta+C')
+  })
+
+  it('hides single-key shortcuts that Settings › Keyboard turned off', () => {
+    const { entries } = build(TWO_APPLES, { characterKeyShortcuts: false })
+
+    expect(item(entries, 'bring-to-front').shortcut).toBeUndefined()
+    expect(item(entries, 'bring-to-front').keyShortcuts).toBeUndefined()
+    expect(item(entries, 'send-to-back').shortcut).toBeUndefined()
+    expect(item(entries, 'copy').shortcut).toBe('Ctrl C')
+    expect(item(entries, 'delete').shortcut).toBe('Del')
   })
 
   it('leaves plant commands out for zones', () => {

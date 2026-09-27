@@ -1712,7 +1712,8 @@
     "showFolderFailed": "无法打开该文件夹。",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "关于 Canopi…",
-    "mapStyle": "地图样式"
+    "mapStyle": "地图样式",
+    "googleKeyKept": "你的 Google 密钥仍保存在此设备上，但未使用。选择“我的 Google 密钥”即可再次使用。"
   },
   "savedViews": {
     "defaultName": "视图 {{number}}",

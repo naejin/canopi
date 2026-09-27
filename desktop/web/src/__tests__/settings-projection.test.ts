@@ -18,6 +18,8 @@ import {
   googleMapsApiKey,
   lastView,
   newDesignDefaults,
+  satelliteSource,
+  activeGoogleMapsApiKey,
   singleKeyShortcuts,
 } from '../app/settings/state'
 import {
@@ -56,6 +58,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     new_design_satellite: false,
     new_design_symbol_scale: 1,
     new_design_labels: 'names',
+    satellite_source: null,
     ...overrides,
   }
 }
@@ -218,8 +221,22 @@ describe('settings projection', () => {
       new_design_satellite: false,
       new_design_symbol_scale: 1,
       new_design_labels: 'names',
+      satellite_source: 'free',
     })
     expect(saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('derives the satellite source from a saved key for an older record, then keeps the choice', () => {
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key', satellite_source: null }))
+    expect(satelliteSource.value).toBe('google_key')
+    expect(activeGoogleMapsApiKey.value).toBe('device-key')
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: null, satellite_source: null }))
+    expect(satelliteSource.value).toBe('free')
+
+    hydrateSettingsProjectionForTests(baseSettings({ google_maps_api_key: 'device-key', satellite_source: 'free' }))
+    expect(satelliteSource.value).toBe('free')
+    expect(activeGoogleMapsApiKey.value).toBeNull()
+    expect(snapshotSettingsProjection()).toMatchObject({ google_maps_api_key: 'device-key', satellite_source: 'free' })
   })
 
   it('persists the device-local Google key trimmed, and only on an explicit save', () => {

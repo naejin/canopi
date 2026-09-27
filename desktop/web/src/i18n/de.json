@@ -1712,7 +1712,8 @@
     "showFolderFailed": "Der Ordner konnte nicht geöffnet werden.",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "Über Canopi…",
-    "mapStyle": "Kartenstil"
+    "mapStyle": "Kartenstil",
+    "googleKeyKept": "Ihr Google-Schlüssel bleibt auf diesem Gerät gespeichert, aber ungenutzt. Wählen Sie Mein Google-Schlüssel, um ihn wieder zu nutzen."
   },
   "savedViews": {
     "defaultName": "Ansicht {{number}}",

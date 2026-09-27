@@ -1,5 +1,5 @@
-import { signal } from '@preact/signals'
-import type { LastView, Locale, PlantLabels, Theme } from '../../generated/contracts'
+import { computed, signal } from '@preact/signals'
+import type { LastView, Locale, PlantLabels, SatelliteSource, Theme } from '../../generated/contracts'
 import { DEFAULT_SETTINGS } from '../../generated/settings'
 
 export const locale = signal<Locale>(DEFAULT_SETTINGS.locale)
@@ -13,6 +13,17 @@ export const theme = signal<Theme>(DEFAULT_SETTINGS.theme)
  */
 export const googleMapsApiKey = signal<string | null>(
   DEFAULT_SETTINGS.google_maps_api_key ?? null,
+)
+
+/**
+ * Settings › Map and imagery: the free imagery or the device's Google key.
+ * Choosing the free imagery keeps a saved key; only Remove key forgets it.
+ */
+export const satelliteSource = signal<SatelliteSource>('free')
+
+/** The key the satellite provider uses: the saved key while the Google source is chosen, else none. */
+export const activeGoogleMapsApiKey = computed<string | null>(() =>
+  satelliteSource.value === 'google_key' ? googleMapsApiKey.value : null,
 )
 
 /** The camera view last shown on a Design; a new Design opens here. */

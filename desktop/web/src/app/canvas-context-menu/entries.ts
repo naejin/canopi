@@ -1,9 +1,11 @@
 import {
+  canvasCommandAriaKeys,
   canvasCommandDefinitions,
+  canvasCommandDisplayKey,
   type CanvasEditAction,
   type CanvasEditCommandDefinition,
 } from '../canvas-commands'
-import { ariaKeyShortcuts, formatShortcut } from '../shell-commands/shortcut-text'
+import { formatShortcut } from '../shell-commands/shortcut-text'
 import type { CanvasContextMenuRequest } from '../../canvas/runtime/app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../../canvas/runtime/runtime'
 import {
@@ -55,6 +57,8 @@ export type CanvasContextMenuEntry =
 
 export interface CanvasContextMenuEntryOptions {
   readonly translate: (key: string) => string
+  /** Settings › Keyboard: false hides character-key shortcuts (`]`, `[`), which no longer work. */
+  readonly characterKeyShortcuts?: boolean
   openPlantAppearance(kind: PlantAppearanceKind, anchor: PlantAppearanceAnchor): void
   /** What the selection chip says about the selection (its species); null on the empty map. */
   readonly summary: MapSelectionSummary | null
@@ -79,7 +83,7 @@ export function buildCanvasContextMenuEntries(
 ): readonly CanvasContextMenuEntry[] {
   const { commands, selection, world } = request
   const edit = (id: CanvasEditAction, disabled: boolean, run: () => void, extra: Partial<CanvasContextMenuCommand> = {}) =>
-    editCommand(id, disabled, run, options.translate, extra)
+    editCommand(id, disabled, run, options.translate, options.characterKeyShortcuts ?? true, extra)
   const paste = edit('paste', !commands.canPaste(), () => commands.pasteAt(world))
 
   if (!selection) {
@@ -219,20 +223,22 @@ function editCommand(
   disabled: boolean,
   run: () => void,
   translate: (key: string) => string,
+  characterKeys: boolean,
   extra: Partial<CanvasContextMenuCommand>,
 ): CanvasContextMenuCommand {
   const definition = canvasCommandDefinitions.find(
     (candidate): candidate is CanvasEditCommandDefinition => candidate.kind === 'edit' && candidate.id === id,
   )
   if (!definition) throw new Error(`Missing Canvas edit command '${id}'`)
-  const shortcut = definition.shortcuts?.[0]
+  // Only real shortcuts: Deselect's Esc hint belongs to the map, not this menu.
+  const shortcut = definition.shortcuts ? canvasCommandDisplayKey(definition, { characterKeys }) : undefined
   return {
     id,
     label: translate(definition.labelKey),
     ...(shortcut
       ? {
           shortcut: formatShortcut(shortcut, translate),
-          keyShortcuts: definition.shortcuts?.map(ariaKeyShortcuts).join(' '),
+          keyShortcuts: canvasCommandAriaKeys(definition, { characterKeys }),
         }
       : {}),
     disabled,

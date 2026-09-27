@@ -1712,7 +1712,8 @@
     "showFolderFailed": "The folder couldn’t be opened.",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "About Canopi…",
-    "mapStyle": "Map style"
+    "mapStyle": "Map style",
+    "googleKeyKept": "Your Google key stays saved on this device, unused. Choose My Google key to use it again."
   },
   "savedViews": {
     "defaultName": "View {{number}}",

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { signal } from '@preact/signals'
-import { googleMapsApiKey } from '../app/settings/state'
+import { googleMapsApiKey, satelliteSource } from '../app/settings/state'
 import { MAPLIBRE_SATELLITE_LAYER_ID, MAPLIBRE_SATELLITE_SOURCE_ID } from '../maplibre/config'
 import { mountMapBackground, type MapBackgroundPresentation } from '../maplibre/map-background'
 import type { VectorStyleDocument } from '../maplibre/openfreemap-basemap'
@@ -98,6 +98,7 @@ const ids = (map: ReturnType<typeof createMap>) => map.layers.map((layer) => Str
 
 afterEach(() => {
   googleMapsApiKey.value = null
+  satelliteSource.value = 'free'
   vi.unstubAllGlobals()
 })
 
@@ -147,10 +148,29 @@ describe('map background band', () => {
 
     // The key reaches the live mount through its settings observer, with no
     // presentation change and no map recreation.
+    satelliteSource.value = 'google_key'
     googleMapsApiKey.value = 'SECRET-KEY'
     await settle()
     expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
     expect(map.setStyle).not.toHaveBeenCalled()
+    background.dispose()
+  })
+
+  it('keeps the free imagery while a saved key is not the chosen source, and switches on choosing it', async () => {
+    const fetchStub = vi.fn(async () => new Response('{}', { status: 403 }))
+    vi.stubGlobal('fetch', fetchStub)
+    satelliteSource.value = 'free'
+    googleMapsApiKey.value = 'SECRET-KEY'
+    const { map, background } = mount()
+    background.update(presentation({ satelliteVisible: true }))
+    await settle()
+    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([GOOGLE_KEYLESS_TILES])
+    expect(fetchStub).not.toHaveBeenCalled()
+
+    satelliteSource.value = 'google_key'
+    await settle()
+    expect(map.sources.has(MAPLIBRE_SATELLITE_SOURCE_ID)).toBe(false)
+    expect(fetchStub).toHaveBeenCalled()
     background.dispose()
   })
 
@@ -243,6 +263,7 @@ describe('map background band', () => {
   })
 
   it('never puts the Google key into map state', async () => {
+    satelliteSource.value = 'google_key'
     googleMapsApiKey.value = 'SECRET-KEY'
     const fetchStub = vi.fn(async () => new Response(JSON.stringify({ session: 'S', expiry: '9999999999' }), { status: 200 }))
     vi.stubGlobal('fetch', fetchStub)

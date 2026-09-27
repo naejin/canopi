@@ -8,7 +8,7 @@ import { requestBudgetPrice } from '../../app/budget/price-request'
 import { useMapSelectionSummary } from '../../app/map-selection/summary'
 import { mapSelectionHeading } from '../../app/map-selection/summary-text'
 import { openSpeciesDetail } from '../../app/plant-detail/actions'
-import { locale } from '../../app/settings/state'
+import { locale, singleKeyShortcuts } from '../../app/settings/state'
 import { requestCalendarAdd } from '../../app/timeline/calendar-request'
 import type { CanvasContextMenuRequest } from '../../canvas/runtime/app-adapter'
 import { t } from '../../i18n'
@@ -33,6 +33,7 @@ function OpenCanvasContextMenu({ request }: { readonly request: CanvasContextMen
   const heading = summary ? mapSelectionHeading(summary, locale.value) : null
   const entries = buildCanvasContextMenuEntries(request, {
     translate: t,
+    characterKeyShortcuts: singleKeyShortcuts.value,
     openPlantAppearance,
     summary,
     openSpeciesDetail,

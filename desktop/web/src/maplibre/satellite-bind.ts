@@ -3,7 +3,7 @@ import type { SatelliteImageryProvider, SatelliteState, SatelliteViewport } from
 import { SatelliteImageryProvider as Provider } from './satellite-provider-session'
 import { createBrowserSatelliteHttp } from './satellite-http.browser'
 import { BasemapTileAuth } from './basemap-tile-auth'
-import { googleMapsApiKey, locale } from '../app/settings/state'
+import { activeGoogleMapsApiKey, locale } from '../app/settings/state'
 import {
   reconcileSatelliteContribution,
   setSatelliteContributionVisibility,
@@ -270,7 +270,8 @@ export function createSatelliteImagery(
   return new Provider(
     createBrowserSatelliteHttp(),
     () => ({
-      googleMapsApiKey: googleMapsApiKey.value,
+      // The saved key only while Settings › Map and imagery chooses it.
+      googleMapsApiKey: activeGoogleMapsApiKey.value,
       locale: locale.value,
     }),
     () => Date.now(),
@@ -293,7 +294,7 @@ export function installSatelliteConfigObserver(
   let mounted = false
   return effect(() => {
     // Subscribe to every configuration identity input.
-    void googleMapsApiKey.value
+    void activeGoogleMapsApiKey.value
     void locale.value
     // The caller already applied the initial configuration; only later
     // configuration identity changes update the already mounted provider.

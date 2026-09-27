@@ -48,6 +48,11 @@ pub struct Settings {
     /// text or log. Without a key the Satellite row uses Google's keyless tiles.
     #[serde(default)]
     pub google_maps_api_key: Option<String>,
+    /// Settings › Map and imagery: which satellite imagery the map uses.
+    /// `None` (a record saved before the choice existed) means the Google key
+    /// when one is saved, otherwise the free imagery. Choosing the free
+    /// imagery keeps the key; only Remove key forgets it.
+    pub satellite_source: Option<SatelliteSource>,
     pub contour_visible: bool,
     pub contour_opacity: f32,
     pub contour_interval: u32,
@@ -117,6 +122,7 @@ impl Default for Settings {
             satellite_visible: false,
             satellite_opacity: 1.0,
             google_maps_api_key: None,
+            satellite_source: None,
             contour_visible: false,
             contour_opacity: 1.0,
             contour_interval: 0,
@@ -171,6 +177,17 @@ settings_enum! {
 }
 
 settings_enum! {
+    /// Satellite imagery: Google's free tiles, or the official Map Tiles API
+    /// with the device's own key.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+    #[serde(rename_all = "snake_case")]
+    pub enum SatelliteSource {
+        Free,
+        GoogleKey,
+    }
+}
+
+settings_enum! {
     /// Plant labels on the map: none, species codes or names.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
     #[serde(rename_all = "lowercase")]
@@ -193,7 +210,7 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, PlantLabels, Settings};
+    use super::{BasemapStyle, LastView, PlantLabels, SatelliteSource, Settings};
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -285,6 +302,29 @@ mod tests {
         assert_eq!(value["new_design_labels"], serde_json::json!("codes"));
         assert!(
             serde_json::from_value::<Settings>(serde_json::json!({ "new_design_labels": "all" }))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn satellite_source_is_absent_in_an_older_record_and_round_trips() {
+        let older: Settings =
+            serde_json::from_value(serde_json::json!({ "google_maps_api_key": "k" }))
+                .expect("a record without a satellite source should load");
+        assert_eq!(older.satellite_source, None);
+        assert_eq!(older.google_maps_api_key.as_deref(), Some("k"));
+
+        let chosen: Settings = serde_json::from_value(serde_json::json!({
+            "google_maps_api_key": "k",
+            "satellite_source": "free"
+        }))
+        .expect("an explicit satellite source should load");
+        assert_eq!(chosen.satellite_source, Some(SatelliteSource::Free));
+        assert_eq!(chosen.google_maps_api_key.as_deref(), Some("k"));
+        let value = serde_json::to_value(&chosen).expect("settings should serialize");
+        assert_eq!(value["satellite_source"], serde_json::json!("free"));
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({ "satellite_source": "bing" }))
                 .is_err()
         );
     }

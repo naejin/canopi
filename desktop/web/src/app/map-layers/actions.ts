@@ -1,4 +1,4 @@
-import type { BasemapStyle } from '../../generated/contracts'
+import type { BasemapStyle, SatelliteSource } from '../../generated/contracts'
 import { mutateSettingsProjection, type SettingsPersistMode } from '../settings/projection'
 import { normalizeMapLayers, type MapBackground, type MapLayersState } from './state'
 
@@ -56,6 +56,15 @@ export function saveGoogleMapsApiKey(key: string | null): void {
   const trimmed = key?.trim() ?? ''
   mutateSettingsProjection((settings) => {
     settings.googleMapsApiKey = trimmed || null
+    // Saving a key chooses it; Remove key (null) is the only way to forget one.
+    settings.satelliteSource = trimmed ? 'google_key' : 'free'
+  }, { persist: 'immediate' })
+}
+
+/** Settings › Map and imagery › Satellite imagery. Never touches a saved key. */
+export function setSatelliteSource(source: SatelliteSource): void {
+  mutateSettingsProjection((settings) => {
+    settings.satelliteSource = source
   }, { persist: 'immediate' })
 }
 

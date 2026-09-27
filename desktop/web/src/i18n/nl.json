@@ -1712,7 +1712,8 @@
     "showFolderFailed": "De map kon niet worden geopend.",
     "aboutVersion": "Canopi {{version}}",
     "aboutCanopi": "Over Canopi…",
-    "mapStyle": "Kaartstijl"
+    "mapStyle": "Kaartstijl",
+    "googleKeyKept": "Je Google-sleutel blijft opgeslagen op dit apparaat, maar wordt niet gebruikt. Kies Mijn Google-sleutel om hem weer te gebruiken."
   },
   "savedViews": {
     "defaultName": "Weergave {{number}}",

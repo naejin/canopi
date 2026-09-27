@@ -58,6 +58,7 @@ function baseSettings(): Settings {
     new_design_satellite: false,
     new_design_symbol_scale: 1,
     new_design_labels: 'names',
+    satellite_source: null,
   }
 }
 

@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { googleMapsApiKey } from '../app/settings/state'
+import { googleMapsApiKey, satelliteSource } from '../app/settings/state'
 import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../app/map-layers/state'
 import { readWorkspaceBackgroundPresentation } from '../app/canvas-map-surface/workspace-activation-snapshot'
 import { WorldMapSurface } from '../components/world-map/WorldMapSurface'
@@ -335,6 +335,7 @@ describe('WorldMapSurface', () => {
           { north: 90, south: -90, west: -180, east: 180, maxZoom: moving ? 16 : 18 },
         ] } }
     })
+    satelliteSource.value = 'google_key'
     googleMapsApiKey.value = 'synthetic-test-key'
     setMapLayers({ satellite: { visible: true } })
     try {
@@ -367,6 +368,7 @@ describe('WorldMapSurface', () => {
     } finally {
       render(null, container)
       googleMapsApiKey.value = null
+      satelliteSource.value = 'free'
     }
   })
 
