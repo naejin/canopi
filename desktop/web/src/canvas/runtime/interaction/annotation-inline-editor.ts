@@ -1,5 +1,6 @@
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getAnnotationScreenFrame } from '../annotation-layout'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { SceneAnnotationEntity, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -13,6 +14,7 @@ export interface AnnotationInlineEditorContext {
   readonly refreshSelectionDependent: () => void
   /** Focus the map host once a focused editor closes. */
   readonly focusHost: () => void
+  readonly translate: CanvasRuntimeTranslator
 }
 
 export interface AnnotationInlineEditorController {
@@ -52,6 +54,7 @@ export function createAnnotationInlineEditor(
     const textarea = document.createElement('textarea')
     textarea.value = annotation.text
     textarea.dataset.annotationInlineEditor = 'true'
+    textarea.setAttribute('aria-label', context.translate('canvas.tools.text'))
     textarea.dataset.preserveOverlays = 'true'
     active = {
       annotationId,

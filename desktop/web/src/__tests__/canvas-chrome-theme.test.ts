@@ -123,6 +123,7 @@ describe('canvas chrome fonts', () => {
       canEditAnnotation: () => true,
       refreshSelectionDependent: vi.fn(),
       focusHost: vi.fn(),
+      translate: (key) => key,
     })
     expect(editor.start('note')).toBe(true)
 

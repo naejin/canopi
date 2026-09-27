@@ -652,6 +652,9 @@
     "map": {
       "label": "Mappa del progetto",
       "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione."
+    },
+    "textNote": {
+      "placeholder": "Scrivi la nota"
     }
   },
   "worldMap": {

@@ -10382,4 +10382,35 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+  describe('text note editor', () => {
+    it('names the new note field and prompts for the text, as the tool card does', () => {
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+      session.setTool('text')
+
+      events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      expect(textarea.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
+      expect(textarea.placeholder).toBe(t('canvas.textNote.placeholder'))
+      expect(t('canvas.tools.text')).toBe('Text note')
+      expect(t('canvas.textNote.placeholder')).toBe('Type the note')
+      session.dispose()
+    })
+
+    it('names the field that edits a note in place', () => {
+      store.updatePersisted((draft) => {
+        draft.annotations = [makeTextAnnotation('note-1', { x: 40, y: 40 }, 'Old')]
+      })
+      const deps = createInteractionDeps(container, store, camera)
+      const session = createTestSession(deps)
+      session.setTool('select')
+      deps.setSelection([annotationTarget('note-1')])
+      container.focus()
+
+      events.keyDown({ key: 'Enter', target: container })
+
+      expect(container.querySelector('textarea')?.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
+      session.dispose()
+    })
+  })
 })

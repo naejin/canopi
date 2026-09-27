@@ -652,6 +652,9 @@
     "map": {
       "label": "设计地图",
       "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。"
+    },
+    "textNote": {
+      "placeholder": "输入备注"
     }
   },
   "worldMap": {

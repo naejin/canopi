@@ -254,6 +254,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         sceneEdits: this._deps.sceneEdits,
         canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
         focusHost: () => this._focusInteractionHost(),
+        translate: this._deps.translate,
         refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
       }), (editor) => editor.dispose())
       this._sharedGestures = own(createSceneInteractionSharedGestures({

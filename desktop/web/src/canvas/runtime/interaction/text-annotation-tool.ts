@@ -1,4 +1,5 @@
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
+import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint, SceneStateReader } from '../scene'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
@@ -9,6 +10,7 @@ import { isSceneLayerOpenForCreation } from './layer-guards'
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
   readonly focusHost: () => void
+  readonly translate: CanvasRuntimeTranslator
   readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
@@ -40,6 +42,8 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
 
   function spawnTextarea(world: ScenePoint): void {
     const nextTextarea = document.createElement('textarea')
+    nextTextarea.setAttribute('aria-label', context.translate('canvas.tools.text'))
+    nextTextarea.placeholder = context.translate('canvas.textNote.placeholder')
     const screen = context.camera.worldToScreen(world)
     textarea = nextTextarea
 

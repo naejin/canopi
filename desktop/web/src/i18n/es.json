@@ -652,6 +652,9 @@
     "map": {
       "label": "Mapa del diseño",
       "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección."
+    },
+    "textNote": {
+      "placeholder": "Escribe la nota"
     }
   },
   "worldMap": {

@@ -82,6 +82,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     const textTool = own(createTextAnnotationTool({
       container: context.container,
       focusHost: context.focusHost,
+      translate: context.translate,
       camera: context.camera,
       getSceneStore: context.getSceneStore,
       sceneEdits: context.sceneEdits,
