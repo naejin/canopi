@@ -1,4 +1,4 @@
-import { getCanvasColor, isThemeManagedZoneFill } from '../theme-refresh'
+import { getCanvasColor, isThemeManagedZoneFill, markCanvasPaintChanged } from '../theme-refresh'
 import { contrastRatio } from '../plant-colors'
 import type {
   ScenePersistedState,
@@ -126,6 +126,7 @@ let mapBackdrop: CanvasMapBackdrop = 'basemap'
 export function setCanvasMapBackdrop(backdrop: CanvasMapBackdrop): boolean {
   if (backdrop === mapBackdrop) return false
   mapBackdrop = backdrop
+  markCanvasPaintChanged()
   return true
 }
 

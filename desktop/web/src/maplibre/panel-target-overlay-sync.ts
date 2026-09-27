@@ -15,6 +15,7 @@ export interface MapLibreOverlayMap {
   addLayer(layer: Record<string, unknown>): void
   getLayer(id: string): unknown
   removeLayer(id: string): void
+  setPaintProperty?(layerId: string, name: string, value: unknown): void
 }
 
 export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) {
@@ -63,6 +64,11 @@ export function syncPanelTargetMapOverlay(
   for (const layer of overlay.layers) {
     if (!map.getLayer(layer.id)) {
       map.addLayer(layer as unknown as Record<string, unknown>)
+      continue
     }
+    // The contract reads the current canvas colours; a layer added under
+    // another theme or backdrop takes them without being re-added. MapLibre
+    // ignores a paint value equal to the current one.
+    for (const [name, value] of Object.entries(layer.paint)) map.setPaintProperty?.(layer.id, name, value)
   }
 }

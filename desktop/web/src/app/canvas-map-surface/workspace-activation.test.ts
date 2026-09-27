@@ -235,7 +235,7 @@ describe('WorkspaceActivationCoordinator', () => {
     const contribution: WorkspaceMapContributionSnapshot = {
       sessionIdentity: activation.sessionIdentity, lidar: [],
       terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [] },
+      overlays: { runtime: null, location: null, hoveredTargets: [], selectedTargets: [], paintRevision: 0 },
       frame: null,
     }
     f.coordinator.updateMapContributions(contribution)

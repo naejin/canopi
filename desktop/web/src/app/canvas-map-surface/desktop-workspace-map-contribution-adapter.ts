@@ -5,6 +5,7 @@ import { lidarDisplayDescriptors, lidarDisplayLayers } from '../lidar/display'
 import { publishLidarMapViewBounds } from '../lidar/camera-request'
 import { readPanelTargetOverlaySnapshot } from '../panel-targets/presentation'
 import { theme } from '../settings/state'
+import { canvasPaintRevision } from '../../canvas/theme-refresh'
 import { loadMapLibreTerrainSupport } from '../../maplibre/terrain-loader'
 import { createRasterDisplay } from '../../maplibre/raster-display/adapter'
 import { resolveMapLibreSurfaceFrame } from '../../maplibre/canvas-surface-camera'
@@ -33,6 +34,7 @@ export function createDesktopWorkspaceMapContributionAdapter(): WorkspaceMapCont
           location: anchor,
           hoveredTargets: overview ? [] : panelTargets.hoveredTargets,
           selectedTargets: overview ? [] : panelTargets.selectedTargets,
+          paintRevision: canvasPaintRevision.value,
         },
         frame: resolveMapLibreSurfaceFrame(runtime, anchor),
       })

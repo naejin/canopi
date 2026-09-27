@@ -6,7 +6,12 @@
 //
 // Text, halos, badges and the grid drawn over the map do not follow the UI
 // theme: `runtime/scene-visuals.ts` resolves them from the map backdrop.
+//
+// `canvasPaintRevision` moves whenever either source changes, so paint kept
+// outside the renderer (the panel Target overlays on the map) can re-read it.
 // ---------------------------------------------------------------------------
+
+import { signal } from '@preact/signals'
 
 type CanvasColorName =
   | 'background'
@@ -79,11 +84,24 @@ export function getCanvasColor(name: CanvasColorName): string {
   return _colors[name]
 }
 
+/** Moves when a canvas colour or the map backdrop changes. */
+export const canvasPaintRevision = signal(0)
+
+/** Tells paint readers outside the renderer that canvas colours changed. */
+export function markCanvasPaintChanged(): void {
+  canvasPaintRevision.value += 1
+}
+
 export function refreshCanvasColorCache(container: HTMLElement): void {
   const cs = getComputedStyle(container)
+  let changed = false
 
   for (const key of Object.keys(_colors) as CanvasColorName[]) {
     const value = cs.getPropertyValue(CANVAS_COLOR_CSS_VARS[key]).trim()
-    if (value) _colors[key] = value
+    if (value && value !== _colors[key]) {
+      _colors[key] = value
+      changed = true
+    }
   }
+  if (changed) markCanvasPaintChanged()
 }

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { clearPanelOriginTargets, setHoveredPanelTargets } from '../app/panel-targets/presentation'
 import { createTestCanvasQuerySurface } from '../__tests__/support/canvas-query-surface'
 import type { SceneViewportState } from '../canvas/runtime/scene'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createBrowserWorkspaceMapContributionAdapter } from './browser-workspace-map-contribution-adapter'
+import { setCanvasMapBackdrop } from '../canvas/runtime/scene-visuals'
 
 afterEach(clearPanelOriginTargets)
 
@@ -66,5 +67,22 @@ describe('browser workspace map contribution adapter', () => {
     expect(snapshot.overlays.hoveredTargets).toEqual([])
     clearPanelOriginTargets()
     expect(snapshot.overlays.hoveredTargets).toEqual([])
+  })
+
+  it('reads again when the canvas paint changes, so overlays already on the map repaint', () => {
+    const adapter = createBrowserWorkspaceMapContributionAdapter({
+      sessionIdentity: signal({}), hasCurrentDesign: () => true,
+    })
+    const runtime = runtimeWithPlane(createSessionPlane({ lat: 48, lon: 2 }))
+    const revisions: number[] = []
+    const stop = effect(() => { revisions.push(adapter.read(runtime)!.overlays.paintRevision) })
+    try {
+      setCanvasMapBackdrop('satellite')
+      expect(revisions).toHaveLength(2)
+      expect(revisions[1]).toBeGreaterThan(revisions[0]!)
+    } finally {
+      stop()
+      setCanvasMapBackdrop('basemap')
+    }
   })
 })

@@ -12,6 +12,8 @@ export interface CanvasMapSurfaceOverlaySnapshot {
   readonly location: { readonly lat: number; readonly lon: number } | null
   readonly hoveredTargets: readonly PanelTarget[]
   readonly selectedTargets: readonly PanelTarget[]
+  /** `canvasPaintRevision` when read: a new value repaints overlays already on the map. */
+  readonly paintRevision: number
 }
 
 export function clearCanvasMapSurfaceOverlays(map: MapLibreOverlayMap): void {
