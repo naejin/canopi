@@ -787,6 +787,36 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('keeps the rotation handle inside the visible map area, clear of the tool rail and title bar', () => {
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 10, y: 40 },
+        { x: 70, y: 90 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([zoneTarget('zone-1')])
+    session.refreshMeasurements()
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    // Without chrome it sits centred above the selection.
+    expect(Number.parseFloat(handle.style.left)).toBe(26)
+    expect(Number.parseFloat(handle.style.top)).toBe(8)
+
+    // The labelled tool rail covers 240 px on the left, the title bar 60 px on top.
+    camera.setFrameInsets({ top: 60, right: 0, bottom: 0, left: 240 })
+    session.refreshMeasurements()
+
+    expect(Number.parseFloat(handle.style.left)).toBe(248)
+    expect(Number.parseFloat(handle.style.top)).toBe(68)
+    session.dispose()
+  })
+
   it('refreshes Plant Spacing translations without resetting its phase, interval, count, or field', () => {
     let language = 'en'
     const translate = (key: string, options?: Readonly<Record<string, unknown>>): string =>

@@ -524,6 +524,11 @@ function radiansToDegrees(radians: number): number {
   return (radians * 180) / Math.PI
 }
 
+/**
+ * Centred above the selection, kept inside the visible map area: the camera's
+ * frame insets are the floating chrome (title bar, tool rail, open dock), so
+ * the handle never slides under the tool rail near the map's left edge.
+ */
 function resolveHandlePlacement(
   bounds: SceneBounds,
   camera: WorkspaceCameraFrameReader,
@@ -534,16 +539,19 @@ function resolveHandlePlacement(
   const rect = normalizeRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y)
   const containerWidth = rootFallbackNumber(container.clientWidth, container.getBoundingClientRect().width)
   const containerHeight = rootFallbackNumber(container.clientHeight, container.getBoundingClientRect().height)
+  const insets = camera.frameInsets
+  const minLeft = insets.left + HANDLE_MARGIN_PX
+  const minTop = insets.top + HANDLE_MARGIN_PX
   return {
     left: clamp(
       rect.left + rect.width / 2 - HANDLE_SIZE_PX / 2,
-      HANDLE_MARGIN_PX,
-      Math.max(HANDLE_MARGIN_PX, containerWidth - HANDLE_SIZE_PX - HANDLE_MARGIN_PX),
+      minLeft,
+      Math.max(minLeft, containerWidth - insets.right - HANDLE_SIZE_PX - HANDLE_MARGIN_PX),
     ),
     top: clamp(
       rect.top - HANDLE_GAP_PX - HANDLE_SIZE_PX,
-      HANDLE_MARGIN_PX,
-      Math.max(HANDLE_MARGIN_PX, containerHeight - HANDLE_SIZE_PX - HANDLE_MARGIN_PX),
+      minTop,
+      Math.max(minTop, containerHeight - insets.bottom - HANDLE_SIZE_PX - HANDLE_MARGIN_PX),
     ),
   }
 }

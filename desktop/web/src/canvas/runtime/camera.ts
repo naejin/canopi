@@ -86,6 +86,8 @@ export interface WorkspaceCameraFrameReader {
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot>
   readonly viewport: SceneViewportState
   readonly screenSize: CameraScreenSize
+  /** Screen edges covered by floating chrome; canvas affordances stay inside them. */
+  readonly frameInsets: CameraFrameInsets
   worldToScreen(point: ScenePoint): ScenePoint
   screenToWorld(point: ScenePoint): ScenePoint
 }
@@ -167,7 +169,7 @@ export class CameraController implements
     revision: 0,
   }))
   private temporaryFocusBookmark: SceneViewportState | null = null
-  private frameInsets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS
+  private _frameInsets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS
   private _policy: WorkspaceCameraPolicy
 
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot> = this._snapshot
@@ -274,19 +276,23 @@ export class CameraController implements
     ))
   }
 
+  get frameInsets(): CameraFrameInsets {
+    return this._frameInsets
+  }
+
   setFrameInsets(insets: CameraFrameInsets): void {
     const valid = [insets.top, insets.right, insets.bottom, insets.left]
       .every((edge) => Number.isFinite(edge) && edge >= 0)
-    this.frameInsets = valid ? { ...insets } : NO_CAMERA_FRAME_INSETS
+    this._frameInsets = valid ? { ...insets } : NO_CAMERA_FRAME_INSETS
   }
 
   zoomToFit(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
-    return this.setViewport(fitCameraViewport(this._snapshot.peek(), scene, options, this.frameInsets))
+    return this.setViewport(fitCameraViewport(this._snapshot.peek(), scene, options, this._frameInsets))
   }
 
   returnToDesign(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
     const snapshot = this._snapshot.peek()
-    const fitted = fitCameraViewport(snapshot, scene, options, this.frameInsets)
+    const fitted = fitCameraViewport(snapshot, scene, options, this._frameInsets)
     if (
       fitted.scale >= snapshot.overviewScaleThreshold
       && !sameViewport(fitted, snapshot.viewport)
@@ -316,7 +322,7 @@ export class CameraController implements
     bounds: SceneBounds,
     options: TemporaryBoundsFocusOptions,
   ): boolean {
-    const focusedViewport = fitTemporaryBoundsViewport(this._snapshot.peek(), bounds, options, this.frameInsets)
+    const focusedViewport = fitTemporaryBoundsViewport(this._snapshot.peek(), bounds, options, this._frameInsets)
     if (!focusedViewport) return false
     if (!this.temporaryFocusBookmark) this.temporaryFocusBookmark = { ...this._snapshot.peek().viewport }
     this.setViewport(focusedViewport)
