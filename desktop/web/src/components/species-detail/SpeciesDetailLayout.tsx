@@ -1,0 +1,128 @@
+import type { ComponentChildren } from 'preact'
+import { useLayoutEffect, useRef } from 'preact/hooks'
+import { t } from '../../i18n'
+import { selectSpeciesPlants, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
+import { currentCanvasToolCommandSurface } from '../../canvas/session'
+import { beginPlantStampFromSpecies, type PlantStampSourceInput } from '../../canvas/plant-stamp-source'
+import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
+import { useCatalogDesignSpecies } from '../plant-db/design-species'
+import { catalogHabitSymbol } from '../plant-db/habit-symbol'
+import { ButtonTooltip } from '../shared/ButtonTooltip'
+import { ControlIcon } from '../shared/ControlIcon'
+import { closeDockPanel } from '../shared/DockPanelHeader'
+import row from '../shared/species-row.module.css'
+import styles from './SpeciesDetail.module.css'
+
+export interface SpeciesDetailIdentity {
+  readonly canonicalName: string
+  /** The name in the interface language, when the catalog has one. */
+  readonly commonName: string | null
+  /** Shown, marked "(en)", when there is no name in the interface language. */
+  readonly englishName: string | null
+  readonly family: string | null
+  /** The catalog habit key (`Tree`, …) that picks the glyph of a species not in the Design. */
+  readonly habitKey: string | null
+}
+
+/**
+ * Species detail in both editions: Back, favourite star and Close; the glyph, names and
+ * code; a scrolling body; and a footer with the species' plants in this Design (Select
+ * them, Zoom to them) and Place. Each edition loads its own data and fills the body.
+ */
+export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBack, place, children }: {
+  readonly identity: SpeciesDetailIdentity
+  readonly favorite: boolean
+  readonly onToggleFavorite: () => void
+  readonly onBack: () => void
+  /** The species to place; null until the detail has loaded. */
+  readonly place: PlantStampSourceInput | null
+  readonly children: ComponentChildren
+}) {
+  const backRef = useRef<HTMLButtonElement>(null)
+  const inDesign = useCatalogDesignSpecies().get(identity.canonicalName)
+  const { canonicalName, commonName, englishName, family } = identity
+  const englishFallback = !commonName && Boolean(englishName)
+  const title = commonName || englishName || canonicalName
+  const titleIsScientific = title === canonicalName
+  const favoriteLabel = favorite
+    ? t('plantDb.removeFavoriteNamed', { name: title })
+    : t('plantDb.addFavoriteNamed', { name: title })
+
+  // Opening the detail moves focus to Back, whichever list opened it.
+  useLayoutEffect(() => { backRef.current?.focus({ preventScroll: true }) }, [])
+
+  return (
+    <article className={styles.detail} aria-label={title} data-testid="species-detail">
+      <header className={styles.header}>
+        <div className={styles.toolbar}>
+          <button ref={backRef} type="button" data-detail-back className={styles.iconButton} aria-label={t('plantDetail.back')} onClick={onBack}>
+            <ControlIcon name="chevron-left" size={18} />
+            <ButtonTooltip label={t('plantDetail.back')} side="right" />
+          </button>
+          <span className={styles.toolbarSpacer} />
+          <button
+            type="button"
+            className={`${styles.iconButton} ${favorite ? styles.favoriteOn : ''}`}
+            aria-label={favoriteLabel}
+            aria-pressed={favorite}
+            onClick={onToggleFavorite}
+          >
+            <ControlIcon name={favorite ? 'star' : 'star-outline'} size={18} />
+            <ButtonTooltip label={favoriteLabel} side="left" />
+          </button>
+          <button type="button" className={styles.iconButton} aria-label={t('sidebar.close')} onClick={closeDockPanel}>
+            <ControlIcon name="close" size={18} />
+            <ButtonTooltip label={t('sidebar.close')} side="left" />
+          </button>
+        </div>
+        <div className={styles.identity}>
+          <span className={`${styles.glyph} ${inDesign ? '' : styles.glyphMuted}`} style={inDesign ? { color: inDesign.color } : undefined} aria-hidden="true">
+            <PlantSymbolGlyph symbol={inDesign?.symbol ?? catalogHabitSymbol(identity.habitKey)} size={28} />
+          </span>
+          <div className={styles.names}>
+            <h2 className={styles.title} lang={titleIsScientific ? 'la' : englishFallback ? 'en' : undefined}>
+              {titleIsScientific ? <i>{title}</i> : title}
+              {englishFallback && (
+                <>
+                  {' '}<span className={styles.fallbackMark} aria-hidden="true">(en)</span>
+                  <span className={row.srOnly}>{t('plantDetail.englishFallbackNote')}</span>
+                </>
+              )}
+            </h2>
+            {(!titleIsScientific || family) && (
+              <p className={styles.subtitle}>
+                {!titleIsScientific && <i lang="la">{canonicalName}</i>}
+                {!titleIsScientific && family && ' · '}
+                {family}
+              </p>
+            )}
+          </div>
+          {inDesign && <span className={styles.code} title={t('plantDetail.codeInDesign')}>{inDesign.code}</span>}
+        </div>
+      </header>
+      <div className={styles.body}>{children}</div>
+      <footer className={styles.footer}>
+        {inDesign && (
+          <div className={styles.inDesign}>
+            <span className={styles.inDesignCount}>{t('plantDetail.inThisDesign', { count: inDesign.count })}</span>
+            <button type="button" className={styles.footerLink} onClick={() => selectSpeciesPlants([canonicalName])}>
+              {t('plantDetail.selectThem', { count: inDesign.count })}
+            </button>
+            <button type="button" className={styles.footerLink} onClick={() => { zoomToSpeciesPlants([canonicalName]) }}>
+              {t('speciesKey.zoomToThem')}
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className={styles.primary}
+          disabled={place === null}
+          aria-label={t('plantDb.placeSpecies', { name: title })}
+          onClick={() => { if (place) beginPlantStampFromSpecies(place, currentCanvasToolCommandSurface.value) }}
+        >
+          {t('plantDb.place')}
+        </button>
+      </footer>
+    </article>
+  )
+}

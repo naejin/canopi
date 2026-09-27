@@ -288,3 +288,54 @@ export function designFixture(state = 'populated'): CanopiFile {
     ],
   }
 }
+
+/**
+ * Species detail fixtures: a full catalog record for Apple (values as the plant DB serves
+ * them), French names for some species (the rest show the English fallback), and three
+ * photos for Apple drawn locally so the gallery stays offline.
+ */
+export const appleDetail: SpeciesDetail = {
+  ...detail,
+  common_name: 'Apple', family: 'Rosaceae', genus: 'Malus',
+  height_max_m: 15, width_max_m: 8, hardiness_zone_min: 3, hardiness_zone_max: 8,
+  growth_rate: 'Medium', is_annual: false, is_biennial: false, is_perennial: true,
+  deciduous_evergreen: 'Deciduous', habit: 'Tree', growth_form_type: 'Tree', woody: true,
+  bloom_period: 'Mid Spring', flower_color: 'White', pollinators: 'Insects',
+  tolerates_full_sun: true, tolerates_semi_shade: true, tolerates_full_shade: false, frost_tender: false,
+  drought_tolerance: 'Medium', soil_ph_min: 5, soil_ph_max: 7.5, well_drained: true, heavy_clay: true,
+  tolerates_light_soil: true, tolerates_medium_soil: true, tolerates_heavy_soil: true,
+  fertility_requirement: 'Medium', moisture_use: 'Medium', root_depth_min_cm: 243.84,
+  stratum: 'high', succession_stage: 'secondary_ii', nitrogen_fixer: false, attracts_wildlife: true,
+  edibility_rating: 5, medicinal_rating: 2, other_uses_rating: 4,
+  uses: [
+    { use_category: 'Edible fruit', use_description: 'Fruit eaten raw, cooked or dried; juice made into cider.' },
+    { use_category: 'Medicinal', use_description: 'The fruit is mildly laxative.' },
+    { use_category: 'Wood', use_description: 'Hard, fine-grained wood used for turnery and firewood.' },
+  ],
+  propagated_by_seed: true, propagated_by_cuttings: false,
+  fruit_type: 'Pome', seed_mass_mg: 22.36,
+  biogeographic_status: 'Introduced', introduced_distribution: 'Alabama, Arkansas, Armenia, Australia, British Columbia, California, Canada',
+  climate_zones: 'Continental, Temperate, Subtropical, Arid, Mediterranean',
+}
+
+export const frenchNames: Readonly<Record<string, string>> = {
+  'Malus domestica': 'Pommier cultivé',
+  'Lavandula angustifolia': 'Lavande vraie',
+  'Corylus avellana': 'Noisetier',
+}
+
+export const applePhotos = [
+  'http://commons.wikimedia.org/wiki/Special:FilePath/Tree%20with%20red%20apples.jpg',
+  'https://inaturalist-open-data.s3.amazonaws.com/photos/471845/medium.jpg',
+  'https://inaturalist-open-data.s3.amazonaws.com/photos/585657/medium.jpg',
+]
+
+/** A drawn stand-in for a cached photo: sky, grass and one tree, tinted per photo. */
+export function drawnPhoto(url: string): string {
+  const hue = [95, 120, 70][Math.max(0, applePhotos.indexOf(url))] ?? 95
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400"><defs><linearGradient id="s" x2="0" y2="1"><stop offset="0" stop-color="hsl(205 60% 78%)"/><stop offset="1" stop-color="hsl(45 60% 90%)"/></linearGradient></defs>`
+    + `<rect width="600" height="400" fill="url(#s)"/><rect y="290" width="600" height="110" fill="hsl(${hue} 35% 42%)"/>`
+    + `<rect x="285" y="200" width="30" height="110" fill="hsl(25 35% 30%)"/><circle cx="300" cy="170" r="110" fill="hsl(${hue} 40% 35%)"/>`
+    + `<circle cx="260" cy="150" r="12" fill="hsl(5 70% 48%)"/><circle cx="330" cy="190" r="12" fill="hsl(5 70% 48%)"/><circle cx="300" cy="120" r="12" fill="hsl(5 70% 48%)"/></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}

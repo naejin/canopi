@@ -102,4 +102,28 @@ describe('Species Catalog lookups for plant lists', () => {
     workbench.dispose()
     expect(await workbench.searchCloseMatches('pommier', 4)).toEqual([])
   })
+
+  it('resolves an English fallback name for a detail without a name in the interface language', async () => {
+    const locale = signal('fr')
+    const detail = (commonName: string | null) => ({
+      canonical_name: 'Ribes nigrum', common_name: commonName, common_names: commonName ? [commonName] : [],
+      climate_zones: [], habit: null, growth_form: null, life_cycles: [], image: null,
+    })
+    const getSpeciesDetail = vi.fn(async () => detail(null))
+    const resolveCommonNames = vi.fn(async () => ({ 'Ribes nigrum': 'Blackcurrant' }))
+    const workbench = createSpeciesCatalogWorkbench({ locale, getSpeciesDetail, resolveCommonNames })
+    const stop = workbench.mount('favorites')
+    workbench.selectSpecies('Ribes nigrum')
+    await vi.waitFor(() => expect(workbench.detail.value.loading).toBe(false))
+    expect(resolveCommonNames).toHaveBeenCalledWith(['Ribes nigrum'], 'en')
+    expect(workbench.detail.value.englishName).toBe('Blackcurrant')
+
+    getSpeciesDetail.mockResolvedValue(detail('Cassis'))
+    resolveCommonNames.mockClear()
+    workbench.selectSpecies('Ribes nigrum')
+    await vi.waitFor(() => expect(workbench.detail.value.detail?.common_name).toBe('Cassis'))
+    expect(resolveCommonNames).not.toHaveBeenCalled()
+    expect(workbench.detail.value.englishName).toBeNull()
+    stop(); workbench.dispose()
+  })
 })

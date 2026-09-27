@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
   beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
-import type { SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
+import type { SpeciesCatalogDetail, SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
 import { t } from '../i18n'
 import { locale } from '../app/settings/state'
 import type { SpeciesListItem } from '../types/species'
@@ -18,6 +18,12 @@ import {
 import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
 import { DockPanelHeader } from '../components/shared/DockPanelHeader'
 import { SurfaceSearch } from '../components/shared/SurfaceSearch'
+import { FactsGrid, OtherNames } from '../components/species-detail/FactsGrid'
+import type { SpeciesPhoto } from '../components/species-detail/photo-attribution'
+import { PhotoViewer, usePhotoList } from '../components/species-detail/PhotoViewer'
+import { formatList, joinRecorded, type SpeciesFact } from '../components/species-detail/species-facts'
+import { SpeciesDetailLayout } from '../components/species-detail/SpeciesDetailLayout'
+import detailStyles from '../components/species-detail/SpeciesDetail.module.css'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
 interface WebSpeciesCatalogPanelProps {
@@ -74,97 +80,69 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
       )}
       </div>
       {showingDetail && <div ref={detailRef} className={styles.fullDetail}>
-        <button type="button" data-detail-back className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
-        <div className={styles.detailScroll}><WebSpeciesDetail view={detailView} showBack={false} /></div>
+        <WebSpeciesDetail view={detailView} />
       </div>}
     </section>
   )
 }
 
-function WebSpeciesDetail({ view, showBack = true }: { readonly view: SpeciesCatalogDetailView; readonly showBack?: boolean }) {
-  const imageUrl = view.detail?.image?.url ?? null
-  const [imageFailed, setImageFailed] = useState(false)
-
-  useEffect(() => {
-    setImageFailed(false)
-  }, [imageUrl])
+function WebSpeciesDetail({ view }: { readonly view: SpeciesCatalogDetailView }) {
+  const detail = view.detail
+  const photos = useMemo<SpeciesPhoto[]>(() => detail?.image
+    ? [{
+        url: detail.image.url,
+        source: detail.image.source,
+        sourcePageUrl: detail.image.source_page_url,
+        credit: detail.image.credit,
+        license: detail.image.license,
+      }]
+    : [], [detail?.image])
+  const photoModel = usePhotoList(photos)
+  const [namesExpanded, setNamesExpanded] = useState(false)
 
   if (!view.canonicalName) return null
 
-  if (view.loading) {
-    return <div className={styles.detailShell}>{t('plantDetail.loading')}</div>
-  }
-
-  if (view.error) {
-    return <div className={styles.detailShell} role="alert">{view.error}</div>
-  }
-
-  if (!view.detail) return null
-
-  const detail = view.detail
-  const title = detail.common_name ?? detail.canonical_name
-  const commonNames = detail.common_names.filter((name) => name !== title)
-  const formValues = [...new Set([
-    ...compact([detail.habit, detail.growth_form]),
-  ])]
-  const showImage = detail.image !== null && !imageFailed
+  const commonName = detail?.common_name?.trim() || null
+  const englishName = view.englishName ?? null
+  const title = commonName ?? englishName ?? view.canonicalName
+  const favorite = speciesCatalogWorkbench.sidebar.value.favoriteNames.includes(view.canonicalName)
+  const canonicalName = view.canonicalName
 
   return (
-    <article className={styles.detailShell} data-testid="web-species-detail">
-      <div className={styles.detailHero}>
-        {showImage ? (
-          <img
-            src={detail.image!.url}
-            alt={title}
-            loading="lazy"
-            className={styles.detailImage}
-            onError={() => setImageFailed(true)}
-            data-testid="web-species-detail-image"
+    <SpeciesDetailLayout
+      identity={{ canonicalName, commonName, englishName, family: null, habitKey: detail?.habit ?? null }}
+      favorite={favorite}
+      onToggleFavorite={() => { void speciesCatalogWorkbench.toggleFavorite(canonicalName) }}
+      onBack={() => speciesCatalogWorkbench.closeSpeciesDetail()}
+      place={detail ? { canonical_name: detail.canonical_name, common_name: detail.common_name, stratum: null, width_max_m: null } : null}
+    >
+      {view.loading && <p className={detailStyles.status} aria-live="polite" aria-busy="true">{t('plantDetail.loading')}</p>}
+      {view.error && <p className={detailStyles.statusError} role="alert">{view.error}</p>}
+      {detail && (
+        <>
+          <PhotoViewer model={photoModel} name={title} linkSources={true} />
+          <OtherNames
+            names={detail.common_names.filter((name) => name !== title)}
+            expanded={namesExpanded}
+            onToggle={() => setNamesExpanded(!namesExpanded)}
           />
-        ) : (
-          <div className={styles.detailImageFallback}>{t('plantDetail.noPhotos')}</div>
-        )}
-      </div>
-      <div className={styles.detailBody}>
-        <div className={styles.detailTitleRow}>
-          <div className={styles.detailNames}>
-            <h3 className={styles.detailTitle}>{title}</h3>
-            <p className={styles.detailBotanical}>{detail.canonical_name}</p>
-          </div>
-          {showBack && <button
-            type="button"
-            className={styles.detailClose}
-            onClick={() => { speciesCatalogWorkbench.closeSpeciesDetail() }}
-            aria-label={t('plantDetail.back')}
-          >
-            ×
-          </button>}
-        </div>
-        {commonNames.length > 0 && (
-          <Field label={t('webSpeciesDetail.commonNames')} values={commonNames} />
-        )}
-        <Field label={t('plantDetail.climateZones')} values={detail.climate_zones} />
-        <Field label={t('plantDetail.growthForm')} values={formValues} />
-        <Field label={t('filters.lifecycle')} values={detail.life_cycles} />
-      </div>
-    </article>
+          <FactsGrid facts={webSpeciesFacts(detail, locale.value)} />
+        </>
+      )}
+    </SpeciesDetailLayout>
   )
 }
 
-function Field({
-  label,
-  values,
-}: {
-  readonly label: string
-  readonly values: readonly string[]
-}) {
-  if (values.length === 0) return null
-  return (
-    <div className={styles.detailField}>
-      <span className={styles.detailFieldLabel}>{label}</span>
-      <span className={styles.detailFieldValue}>{values.join(' · ')}</span>
-    </div>
-  )
+/** The Web catalog carries only form, life cycle and climate zone (see the species catalog guide). */
+function webSpeciesFacts(detail: SpeciesCatalogDetail, currentLocale: string): SpeciesFact[] {
+  const habit = detail.habit ? t(`filters.habit_${detail.habit}`, detail.habit) : null
+  const lifeCycles = detail.life_cycles.map((value) => t(`filters.lifeCycle_${value}`, value))
+  const zones = detail.climate_zones.map((value) => t(`filters.climateZone_${value}`, value))
+  return [
+    { id: 'habit', label: t('plantDetail.habit'), value: joinRecorded([habit, detail.growth_form]) },
+    { id: 'lifeCycle', label: t('filters.lifecycle'), value: lifeCycles.length > 0 ? formatList(lifeCycles, currentLocale) : null },
+    { id: 'climateZones', label: t('plantDetail.climateZones'), value: zones.length > 0 ? formatList(zones, currentLocale) : null },
+  ]
 }
 
 function SpeciesList({
@@ -285,14 +263,7 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
   )
 }
 
-function compact(values: readonly (string | null | undefined)[]): string[] {
-  return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-}
-
 export function WebSpeciesKeyPanel() {
   const view = speciesCatalogWorkbench.detail.value
-  return <SpeciesKeyPanel renderDetail={() => <div className={styles.panel}>
-    <button type="button" className={styles.backButton} onClick={() => speciesCatalogWorkbench.closeSpeciesDetail()}>{t('plantDetail.back')}</button>
-    <WebSpeciesDetail view={view} />
-  </div>} />
+  return <SpeciesKeyPanel renderDetail={() => <div className={styles.panel}><WebSpeciesDetail view={view} /></div>} />
 }

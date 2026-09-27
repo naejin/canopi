@@ -396,6 +396,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       detail,
       loading: false,
       error: null,
+      englishName: null,
     })
   })
 
@@ -426,6 +427,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       detail,
       loading: false,
       error: null,
+      englishName: null,
     })
   })
 

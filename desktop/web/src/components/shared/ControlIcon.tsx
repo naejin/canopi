@@ -6,6 +6,7 @@ const dot = (x: number, y: number, r = 1.35) => `M${x + r} ${y}a${r} ${r} 0 1 1-
 const STROKED = {
   'chevron-down': 'M5 8l5 5 5-5',
   'chevron-right': 'M8 5l5 5-5 5',
+  'chevron-left': 'M12 5l-5 5 5 5',
   check: 'M4 10.5l4 4 8-9',
   close: 'M5 5l10 10M15 5L5 15',
   search: 'M9 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM17 17l-3.8-3.8',
@@ -25,6 +26,7 @@ const STROKED = {
   bug: 'M7 7.5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM7 10H3.5M16.5 10H13M7.3 14l-2.8 2M12.7 14l2.8 2M7.3 6.5L5 4.5M12.7 6.5L15 4.5M10 9v6',
   trash: 'M4 6h12M8 6V4.5h4V6M6 6l.8 10.5h6.4L14 6',
   sun: 'M10 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM10 2v1.5M10 16.5V18M2 10h1.5M16.5 10H18M4.3 4.3l1.1 1.1M14.6 14.6l1.1 1.1M4.3 15.7l1.1-1.1M14.6 5.4l1.1-1.1',
+  image: 'M3 4.5h14v11H3zM3 13l4-4 3.5 3.5 2-2 4.5 4.5M12.5 8.2h.01',
   'window-minimize': 'M5 10h10',
   'window-maximize': 'M5 5h10v10H5z',
   // The outline of the filled star (favourite off).

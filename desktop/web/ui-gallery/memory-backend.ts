@@ -10,7 +10,7 @@ import type {
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../src/generated/contracts'
-import { detail, designFixture, species, specimens } from './fixtures'
+import { appleDetail, applePhotos, detail, designFixture, drawnPhoto, frenchNames, species, specimens } from './fixtures'
 
 const state = new URLSearchParams(location.search).get('state') ?? 'populated'
 const favoriteNames = new Set(state === 'empty' ? [] : species.map(plant => plant.canonical_name))
@@ -168,14 +168,21 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       if (favoriteNames.has(canonicalName)) favoriteNames.delete(canonicalName)
       else favoriteNames.add(canonicalName)
       result = favoriteNames.has(canonicalName); break
-    case 'get_species_detail': result = { ...detail, canonical_name: canonicalName, common_name: plant.common_name }; break
+    case 'get_species_detail': result = {
+      ...(canonicalName === 'Malus domestica' ? appleDetail : detail),
+      canonical_name: canonicalName,
+      common_name: args.locale === 'fr' ? frenchNames[canonicalName] ?? null : plant.common_name,
+    }; break
     case 'get_species_batch': result = species.map(plant => ({ ...detail, ...plant })); break
     // Wild strawberry has no catalog habit, so the PDF key shows the Other group.
     case 'get_species_habits': result = Object.fromEntries(specimens.flatMap(([name, , symbol]): [string, string][] =>
       symbol === 'canopy' ? [[name, 'Tree']] : symbol === 'shrub' ? [[name, 'Shrub']] : symbol === 'herb' ? [[name, 'Herbaceous']] : [])); break
-    case 'get_common_names': result = Object.fromEntries(species.map(plant => [plant.canonical_name, plant.common_name])); break
+    case 'get_common_names': result = args.locale === 'fr' ? frenchNames : Object.fromEntries(species.map(plant => [plant.canonical_name, plant.common_name])); break
+    case 'get_species_images': result = canonicalName === 'Malus domestica'
+      ? applePhotos.map((url, sort_order) => ({ id: `photo-${sort_order}`, species_id: 'apple', url, sort_order }))
+      : []; break
+    case 'get_cached_image_path': result = drawnPhoto(String(args.url)); break
     case 'get_locale_common_names':
-    case 'get_species_images':
     case 'get_dynamic_filter_options': result = []; break
     case 'get_filter_options': result = {
       families: [], growth_rates: [], climate_zones: ['Temperate', 'Mediterranean', 'Continental'], habits: ['Tree', 'Shrub', 'Herbaceous', 'Climber'],

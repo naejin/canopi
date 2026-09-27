@@ -460,7 +460,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(mockWorkbench.selectSpecies).not.toHaveBeenCalled()
   })
 
-  it('renders reduced Species detail with a lazy hero image', async () => {
+  it('renders reduced Species detail with a lazy, attributed hero image', async () => {
     mockWorkbench.detail.value = {
       canonicalName: 'Malus domestica',
       detail: {
@@ -487,7 +487,7 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    const image = requiredElement<HTMLImageElement>('[data-testid="web-species-detail-image"]')
+    const image = requiredElement<HTMLImageElement>('[data-testid="species-photo"]')
     expect(image.getAttribute('src')).toBe('https://images.example.test/apple.jpg')
     expect(image.getAttribute('loading')).toBe('lazy')
     expect(container.textContent).toContain('Apple')
@@ -497,9 +497,44 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Tree')
     expect(container.textContent).toContain('Woody perennial')
     expect(container.textContent).toContain('Perennial')
-    expect(container.textContent).not.toContain('Wikimedia Commons')
-    expect(container.textContent).not.toContain('Jane Gardener')
-    expect(container.textContent).not.toContain('CC BY-SA 4.0')
+    const attribution = requiredElement<HTMLElement>('[data-testid="species-photo-attribution"]')
+    expect(attribution.textContent).toBe('Photo: Jane Gardener · Wikimedia Commons · CC BY-SA 4.0')
+    expect(attribution.querySelector('a')?.getAttribute('href')).toBe('https://commons.example.test/apple')
+    expect(attribution.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer')
+    // The Web catalog carries no heights or ratings: only its own facts show.
+    expect(Array.from(container.querySelectorAll('[data-fact]')).map((cell) => (cell as HTMLElement).dataset.fact))
+      .toEqual(['habit', 'lifeCycle', 'climateZones'])
+  })
+
+  it('marks an English fallback title and shows the scientific name under it', async () => {
+    locale.value = 'fr'
+    mockWorkbench.detail.value = {
+      canonicalName: 'Ribes nigrum',
+      detail: {
+        canonical_name: 'Ribes nigrum',
+        common_name: null,
+        common_names: [],
+        climate_zones: [],
+        habit: null,
+        growth_form: null,
+        life_cycles: [],
+        image: null,
+      },
+      loading: false,
+      error: null,
+      englishName: 'Blackcurrant',
+    }
+
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const title = requiredElement<HTMLHeadingElement>('[data-testid="species-detail"] h2')
+    expect(title.textContent).toContain('Blackcurrant')
+    expect(title.textContent).toContain('(en)')
+    expect(container.querySelector('[data-testid="species-detail"] p i[lang="la"]')?.textContent).toBe('Ribes nigrum')
+    expect(Array.from(container.querySelectorAll('[data-fact] dd')).map((cell) => cell.textContent))
+      .toEqual(['Non renseigné', 'Non renseigné', 'Non renseigné'])
   })
 
   it('renders a clean fallback when image metadata is missing', async () => {
@@ -523,7 +558,7 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    expect(container.querySelector('[data-testid="web-species-detail-image"]')).toBeNull()
+    expect(container.querySelector('[data-testid="species-photo"]')).toBeNull()
     expect(container.textContent).toContain('No photos available')
   })
 
@@ -555,12 +590,12 @@ describe('Web Edition Species Catalog panel', () => {
     })
 
     await act(async () => {
-      requiredElement<HTMLImageElement>('[data-testid="web-species-detail-image"]')
+      requiredElement<HTMLImageElement>('[data-testid="species-photo"]')
         .dispatchEvent(new Event('error'))
     })
 
-    expect(container.querySelector('[data-testid="web-species-detail-image"]')).toBeNull()
-    expect(container.textContent).toContain('No photos available')
+    expect(container.querySelector('[data-testid="species-photo"]')).toBeNull()
+    expect(container.textContent).toContain('This photo could not load')
   })
 
   function requiredButton(name: string): HTMLButtonElement {

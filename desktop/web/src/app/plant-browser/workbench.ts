@@ -86,6 +86,8 @@ export interface SpeciesCatalogDetailView {
   readonly detail: SpeciesCatalogDetail | null
   readonly loading: boolean
   readonly error: string | null
+  /** The English name shown, marked "(en)", when the species has none in the interface language. */
+  readonly englishName?: string | null
 }
 
 export interface SpeciesCatalogWorkbench {
@@ -506,6 +508,16 @@ export function createSpeciesCatalogWorkbench({
     }
   }
 
+  async function resolveEnglishName(canonicalName: string): Promise<string | null> {
+    try {
+      const names = await resolveCommonNamesAdapter([canonicalName], 'en')
+      return names[canonicalName]?.trim() || null
+    } catch {
+      // Without an English name the title falls back to the scientific name.
+      return null
+    }
+  }
+
   async function loadSpeciesDetail(canonicalName: string): Promise<void> {
     if (disposed) return
     const generation = ++detailGeneration
@@ -520,11 +532,16 @@ export function createSpeciesCatalogWorkbench({
     try {
       const nextDetail = await getSpeciesDetailAdapter(canonicalName, requestedLocale)
       if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
+      const englishName = nextDetail && !nextDetail.common_name?.trim() && requestedLocale.split('-')[0] !== 'en'
+        ? await resolveEnglishName(canonicalName)
+        : null
+      if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
       detail.value = {
         canonicalName,
         detail: nextDetail,
         loading: false,
         error: null,
+        englishName,
       }
     } catch (error) {
       if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return

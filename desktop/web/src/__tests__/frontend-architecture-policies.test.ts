@@ -187,6 +187,12 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Shared Species detail presentation stays edition-neutral',
+    from: ['src/components/species-detail/**'],
+    targets: ['@tauri-apps/**', 'src/ipc/**', 'src/web/**', 'src/app/plant-detail/**', 'src/components/plant-detail/**'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Workflow components do not import Design IPC',
     from: ['src/components/shared/WelcomeScreen.tsx', 'src/components/panels/BudgetPanel.tsx'],
     targets: ['src/ipc/design.ts'],

@@ -87,33 +87,9 @@ const STRUCTURAL_SPACING_EXCEPTIONS = [
 ] as const
 
 const STRUCTURAL_FONT_EXCEPTIONS = [
-  {
-    file: 'src/components/plant-detail/PhotoCarousel.module.css',
-    rule: '.navBtn',
-    atRules: [],
-    property: 'font-size',
-    value: '22px',
-    reason: 'The character is a chevron icon whose font size controls glyph geometry, not text hierarchy.',
-  },
 ] as const
 
 const REVIEWED_TRANSITION_EXCEPTIONS = [
-  {
-    file: 'src/components/plant-detail/PhotoCarousel.module.css',
-    rule: '.image',
-    atRules: [],
-    property: 'transition',
-    value: 'opacity 350ms ease',
-    reason: 'Image decoding uses a deliberately slower opacity reveal than interactive controls.',
-  },
-  {
-    file: 'src/components/plant-detail/PhotoCarousel.module.css',
-    rule: '.navBtn',
-    atRules: [],
-    property: 'transition',
-    value: 'opacity 200ms ease',
-    reason: 'Carousel controls need a local fade between the normal and image-load transition speeds.',
-  },
 ] as const
 
 const CSS_MODULE_POLICIES: readonly CssDeclarationPolicy[] = [

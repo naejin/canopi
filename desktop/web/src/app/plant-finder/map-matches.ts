@@ -63,16 +63,26 @@ export function countPlantsOfSpecies(scene: ScenePersistedState, canonicalNames:
 /** Frames the matching plants; objects never move. */
 export function zoomToPlantFinderMatches(): boolean {
   const matches = plantFinderMapMatches.peek()
-  const queries = currentCanvasQuerySurface.peek()
-  const viewport = currentCanvasViewportCommandSurface.peek()
-  if (!matches || !queries || !viewport) return false
-  const bounds = speciesPlantBounds(queries.getSceneSnapshot(), matches.canonicalNames)
-  return bounds ? viewport.focusTemporaryBounds(bounds, { paddingCssPx: ZOOM_PADDING_CSS_PX }) : false
+  return matches ? zoomToSpeciesPlants(matches.canonicalNames) : false
 }
 
 export function selectPlantFinderMatches(): void {
   const matches = plantFinderMapMatches.peek()
-  if (matches) currentCanvasSceneEditCommandSurface.peek()?.selectSpecies(matches.canonicalNames)
+  if (matches) selectSpeciesPlants(matches.canonicalNames)
+}
+
+/** Frames every plant of these species (Species detail's "Zoom to them"); objects never move. */
+export function zoomToSpeciesPlants(canonicalNames: readonly string[]): boolean {
+  const queries = currentCanvasQuerySurface.peek()
+  const viewport = currentCanvasViewportCommandSurface.peek()
+  if (!queries || !viewport) return false
+  const bounds = speciesPlantBounds(queries.getSceneSnapshot(), canonicalNames)
+  return bounds ? viewport.focusTemporaryBounds(bounds, { paddingCssPx: ZOOM_PADDING_CSS_PX }) : false
+}
+
+/** Selects every plant of these species through the runtime selection command. */
+export function selectSpeciesPlants(canonicalNames: readonly string[]): void {
+  currentCanvasSceneEditCommandSurface.peek()?.selectSpecies(canonicalNames)
 }
 
 export function speciesPlantBounds(

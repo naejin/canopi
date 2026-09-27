@@ -7,22 +7,14 @@ import {
   beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
-import type { PlantSymbolId } from '../../canvas/runtime/scene'
 import type { SpeciesListItem } from '../../types/species'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { ControlIcon } from '../shared/ControlIcon'
 import row from '../shared/species-row.module.css'
 import { secondaryCommonNameForDisplay } from './common-name-display'
 import type { CatalogDesignSpecies } from './design-species'
+import { catalogHabitSymbol } from './habit-symbol'
 import styles from './PlantDb.module.css'
-
-/** A catalog species without plants in the Design takes the symbol of its growth habit. */
-const HABIT_SYMBOLS: Readonly<Record<string, PlantSymbolId>> = {
-  Tree: 'canopy',
-  Shrub: 'shrub',
-  Herbaceous: 'herb',
-  Climber: 'climber',
-}
 
 interface Props {
   plant: SpeciesListItem
@@ -74,10 +66,11 @@ export function PlantRow({ plant, inDesign, highlight }: Props) {
         type="button"
         className={`${row.main} ${styles.catalogRowMain}`}
         aria-label={t('plantDb.details', { name })}
+        data-species-detail={plant.canonical_name}
         onClick={() => speciesCatalogWorkbench.selectSpecies(plant.canonical_name)}
       >
         <span className={`${row.glyph} ${inDesign ? '' : styles.catalogGlyph}`} style={inDesign ? { color: inDesign.color } : undefined} aria-hidden="true">
-          <PlantSymbolGlyph symbol={inDesign?.symbol ?? HABIT_SYMBOLS[plant.habit ?? ''] ?? 'round'} size={22} />
+          <PlantSymbolGlyph symbol={inDesign?.symbol ?? catalogHabitSymbol(plant.habit)} size={22} />
         </span>
         <span className={styles.rowNames}>
           <strong className={plant.is_name_fallback ? styles.nameFallback : undefined}>
