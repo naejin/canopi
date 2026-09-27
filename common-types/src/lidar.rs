@@ -282,6 +282,15 @@ pub struct LidarPresentationSection {
     pub entries: Vec<LidarPresentationEntry>,
 }
 
+/// Import › "Covers your site": where the chosen files lie, read before import.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct LidarImportCoverage {
+    /// WGS84 `[west, south, east, north]` around every file whose extent was read.
+    pub bounds: Option<[f64; 4]>,
+    /// Files whose geographic extent could not be read.
+    pub unreadable_files: u32,
+}
+
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarPresentationEntryKind {

@@ -6,6 +6,7 @@ import type {
   LibrarySnapshot,
   LidarDisplayDescriptor,
   LidarDisplayRequest,
+  LidarImportCoverage,
   LidarImportReceipt,
   LidarLayerCollection,
   LidarSampleOutcome,
@@ -62,6 +63,16 @@ export async function lidarDismissImport(layerId: string): Promise<void> {
 /** Rename one library item, source or derived. */
 export async function lidarRenameItem(itemId: string, name: string): Promise<void> {
   return invoke('lidar_rename_item', { itemId, name })
+}
+
+/** Import › "Covers your site": the box around the chosen files, read before import. */
+export async function lidarImportCoverage(paths: readonly string[]): Promise<LidarImportCoverage> {
+  return invoke('lidar_import_coverage', { paths })
+}
+
+/** Bytes the Data library occupies on this device. */
+export async function lidarLibraryDiskUsage(): Promise<number> {
+  return invoke('lidar_library_disk_usage')
 }
 
 export async function lidarDeleteImpact(itemId: string): Promise<LibraryDeleteImpact> {

@@ -278,7 +278,6 @@
       "unlockLayer": "Разблокировать слой",
       "opacity": "Непрозрачность",
       "mapSection": "Слои карты",
-      "basemap": "Базовая карта",
       "basemapLoading": "Загрузка базовой карты…",
       "mapUnavailable": "Карта недоступна",
       "layerSkipped": "Не удалось показать слой карты",
@@ -289,7 +288,10 @@
       "satellite": "Спутник",
       "design": "Проект",
       "siteData": "Данные участка",
-      "background": "Фон"
+      "background": "Фон",
+      "backgroundMap": "Карта",
+      "backgroundNone": "Нет",
+      "backgroundPlainPaper": "Чистый лист"
     },
     "timeline": {
       "actionType": "Тип действия",
@@ -557,7 +559,7 @@
         "showResults": "Показать результаты",
         "deleteBody": "Данные будут удалены из библиотеки.",
         "deleteBodyInDesign": "Данные будут удалены из библиотеки и из этого проекта.",
-        "deleteOtherDesigns": "Другие проекты, использующие их, покажут их как недоступные.",
+        "deleteOtherDesigns": "Canopi не отслеживает, какие другие проекты их используют. Проекты, которые их используют, покажут их как недоступные.",
         "deleteNoUndo": "Это действие нельзя отменить.",
         "previewPreparing": "Подготовка превью",
         "previewUnavailable": "Превью недоступно",
@@ -579,6 +581,8 @@
         "itemCount_few": "Элементов: {{count, number}}",
         "itemCount_many": "Элементов: {{count, number}}",
         "itemCount_other": "Элементов: {{count, number}}",
+        "onThisComputer": "{{size}} на этом компьютере",
+        "showInFolder": "Показать в папке",
         "done": "Готово",
         "removeHint": "Если убрать элемент из одного проекта, он останется в библиотеке. Если удалить его здесь, он исчезнет из всех проектов.",
         "deleteEverywhere": "Удалить везде",
@@ -601,6 +605,7 @@
         "openInLibrary": "Открыть в библиотеке данных",
         "removeFromDesign": "Убрать из проекта",
         "fromFiles": "Рельеф или высота из файлов…",
+        "fromGeoJson": "Объекты проекта из GeoJSON…",
         "fromLibrary": "Из вашей библиотеки",
         "libraryEmpty": "В вашей библиотеке пока нет данных",
         "inThisDesign": "{{name}} · в этом проекте",
@@ -608,6 +613,10 @@
         "emptyImport": "Импортировать файлы…",
         "emptyLibrary": "Открыть библиотеку данных",
         "fromItem": "из {{name}}",
+        "resultCount_one": "{{count, number}} результат",
+        "resultCount_few": "{{count, number}} результата",
+        "resultCount_many": "{{count, number}} результатов",
+        "resultCount_other": "{{count, number}} результата",
         "importing": "Импорт",
         "calculationAria": "Ход расчёта {{name}}",
         "cancelImport": "Отменить импорт",
@@ -646,7 +655,15 @@
         "submit_one": "Импортировать {{count, number}} файл",
         "submit_few": "Импортировать файлы: {{count, number}}",
         "submit_many": "Импортировать файлы: {{count, number}}",
-        "submit_other": "Импортировать файлы: {{count, number}}"
+        "submit_other": "Импортировать файлы: {{count, number}}",
+        "coverage": {
+          "coversTitle": "Покрывает ваш участок.",
+          "partialTitle": "Покрывает часть вашего участка.",
+          "partialBody": "Часть этого проекта лежит за пределами файлов.",
+          "span": "Файлы охватывают {{width}} × {{height}}.",
+          "apartTitle": "Эти файлы не покрывают ваш участок.",
+          "apartBody": "Они находятся в {{distance}} от этого проекта. Их всё равно можно импортировать в библиотеку."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Светлый",
         "dark": "Тёмный"
-      },
-      "hiddenBySatellite": "Скрыта, пока включён спутник."
+      }
     },
     "rasterSample": {
       "title": "Значение в точке",

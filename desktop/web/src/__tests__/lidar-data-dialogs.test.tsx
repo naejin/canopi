@@ -15,10 +15,12 @@ const actions = vi.hoisted(() => ({
   deleteLibraryItem: vi.fn().mockResolvedValue(undefined),
   dismissLibraryImport: vi.fn().mockResolvedValue(undefined),
   fetchDeleteImpact: vi.fn(),
+  fetchLibraryDiskUsage: vi.fn().mockResolvedValue(1_240_000_000),
   fetchItemSources: vi.fn().mockResolvedValue({ sources: [] }),
   importLibraryItem: vi.fn().mockResolvedValue({ layer_id: 'new', job_id: 'job' }),
   renameLibraryItem: vi.fn().mockResolvedValue(undefined),
   retryLibraryImport: vi.fn().mockResolvedValue(undefined),
+  showDataLibraryFolder: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../app/shell/modal-layer', () => ({
@@ -27,6 +29,9 @@ vi.mock('../app/shell/modal-layer', () => ({
 }))
 
 vi.mock('../app/lidar/actions', () => actions)
+
+const coverage = vi.hoisted(() => ({ check: vi.fn().mockResolvedValue(null) }))
+vi.mock('../app/lidar/import-coverage', () => ({ checkImportCoverage: coverage.check, coverageCanvas: () => null }))
 
 vi.mock('../app/lidar/library-store', async () => {
   const { signal } = await import('@preact/signals')
@@ -56,6 +61,7 @@ import { activeLayerName } from '../app/canvas-settings/signals'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { dropdownTrigger } from './support/dropdown-trigger'
+import { formatDiskSize } from '../components/panels/lidar/item-text'
 
 function layer(id: string, name: string, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
   return sourceItem(id, name, { resolution_m: 0.5, value_range: [1, 2], ...overrides })
@@ -174,6 +180,47 @@ describe('Data library, Import and Analyze dialogs', () => {
     expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
   })
 
+  it('says whether the chosen files cover the Design before import', async () => {
+    coverage.check.mockResolvedValueOnce({ kind: 'covers', widthM: 2000, heightM: 1000 })
+    await act(async () => {
+      dataDialog.value = { kind: 'import', paths: ['/d/one.tif', '/d/two.tif'], attach: true, returnTo: null }
+      render(<DataDialogs />, container)
+    })
+    await act(async () => { await Promise.resolve() })
+    expect(coverage.check).toHaveBeenCalledWith(['/d/one.tif', '/d/two.tif'])
+    expect(container.textContent).toContain('Covers your site. The files span 2 km × 1 km.')
+
+    // Removing a file checks again; files away from the Design warn.
+    coverage.check.mockResolvedValueOnce({ kind: 'apart', distanceM: 12_400.4 })
+    await click(button('Remove two.tif'))
+    await act(async () => { await Promise.resolve() })
+    expect(coverage.check).toHaveBeenLastCalledWith(['/d/one.tif'])
+    const warning = container.querySelector('[data-notice-tone="warning"]')!
+    expect(warning.textContent).toContain('These files don’t cover your site. They lie 12 km from this Design.')
+    // The import itself stays possible.
+    await chooseFrom('What the values measure', 'Ground elevation')
+    expect(button('Import 1 file').disabled).toBe(false)
+  })
+
+  it('says when the files cover only part of the Design', async () => {
+    coverage.check.mockResolvedValueOnce({ kind: 'partial', widthM: 800, heightM: 450 })
+    await act(async () => {
+      dataDialog.value = { kind: 'import', paths: ['/d/one.tif'], attach: true, returnTo: null }
+      render(<DataDialogs />, container)
+    })
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).toContain('Covers part of your site. The files span 800 m × 450 m. Part of this Design lies outside the files.')
+  })
+
+  it('counts the library, says its size on this computer and shows its folder', async () => {
+    lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
+    mount()
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).toContain('2 items · 1.2 GB on this computer')
+    await click(button(/^Show in folder$/))
+    expect(actions.showDataLibraryFolder).toHaveBeenCalledOnce()
+  })
+
   it('refuses a name the library already uses and suggests a free one', async () => {
     lidarLibrary.value = library([layer('a', 'Terrain')])
     act(() => {
@@ -265,6 +312,8 @@ describe('Data library, Import and Analyze dialogs', () => {
     mount()
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
+    // The library does not know which other Designs use an item, and says so.
+    expect(container.textContent).toContain('Canopi doesn’t keep track of which other Designs use it.')
     await click(button(/^Delete everywhere$/))
     expect(actions.deleteLibraryItem).toHaveBeenCalledWith('s')
   })
@@ -487,5 +536,14 @@ describe('Data library, Import and Analyze dialogs', () => {
     const row = button('Stopped').closest('li')!
     expect(row.textContent).toContain('Cancelled')
     expect(row.textContent).not.toContain('Calculation failed')
+  })
+})
+
+describe('Data library size', () => {
+  it('reads as kilobytes, megabytes or gigabytes', () => {
+    expect(formatDiskSize(0, 'en')).toBe('0 kB')
+    expect(formatDiskSize(12_345, 'en')).toBe('12.3 kB')
+    expect(formatDiskSize(340_000_000, 'en')).toBe('340 MB')
+    expect(formatDiskSize(1_240_000_000, 'en')).toBe('1.2 GB')
   })
 })

@@ -122,6 +122,8 @@ pub fn run() {
             commands::lidar::lidar_list_library,
             commands::lidar::lidar_rename_item,
             commands::lidar::lidar_delete_impact,
+            commands::lidar::lidar_import_coverage,
+            commands::lidar::lidar_library_disk_usage,
             commands::lidar::lidar_delete_item,
             commands::lidar::lidar_cancel_import,
             commands::lidar::lidar_create_analysis,

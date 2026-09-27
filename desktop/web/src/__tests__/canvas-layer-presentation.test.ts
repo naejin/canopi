@@ -183,7 +183,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'basemap',
-        label: 'Basemap',
+        label: 'Map',
         authority: 'map-layers',
         active: true,
         visible: false,
@@ -194,7 +194,7 @@ describe('Canvas Layer Presentation', () => {
           type: 'basemap',
           style: 'positron',
           styles: ['liberty', 'positron', 'bright', 'dark'],
-          hiddenBySatellite: false,
+          softenBackground: false,
         },
       },
       {
@@ -209,6 +209,7 @@ describe('Canvas Layer Presentation', () => {
         detail: {
           type: 'satellite',
           hasGoogleKey: false,
+          softenBackground: false,
         },
       },
       {
@@ -240,12 +241,13 @@ describe('Canvas Layer Presentation', () => {
     expect(presentation.hasVisibleMapLayer).toBe(true)
   })
 
-  it('reports Satellite hiding the Basemap and a saved Google key without exposing it', () => {
+  it('reports the background choices, Soften background and a saved Google key without exposing it', () => {
     googleMapsApiKey.value = 'secret-google-key'
     mapLayers.value = {
       ...mapLayers.value,
       basemap: { ...mapLayers.value.basemap, visible: true },
       satellite: { ...mapLayers.value.satellite, visible: true },
+      softenBackground: true,
     }
 
     const presentation = readCanvasLayerPresentation()
@@ -253,8 +255,8 @@ describe('Canvas Layer Presentation', () => {
     const satellite = presentation.rows.find((row) => row.id === 'satellite')
 
     expect(basemap?.visible).toBe(true)
-    expect(basemap?.detail).toEqual(expect.objectContaining({ type: 'basemap', hiddenBySatellite: true }))
-    expect(satellite?.detail).toEqual({ type: 'satellite', hasGoogleKey: true })
+    expect(basemap?.detail).toEqual(expect.objectContaining({ type: 'basemap', softenBackground: true }))
+    expect(satellite?.detail).toEqual({ type: 'satellite', hasGoogleKey: true, softenBackground: true })
     expect(JSON.stringify(presentation)).not.toContain('secret-google-key')
     googleMapsApiKey.value = null
   })

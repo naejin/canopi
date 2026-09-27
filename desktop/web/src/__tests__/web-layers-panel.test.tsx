@@ -35,7 +35,7 @@ describe('Web Layers', () => {
     act(() => { render(<WebLayersPanel />, container) })
   }
 
-  it('keeps Background to Basemap and Satellite and says why Site data is empty', () => {
+  it('offers Satellite, Map or None as the background and says why Site data is empty', () => {
     mount(null)
     const site = container.querySelector('section[aria-labelledby="layers-site"]')!
     expect(site.textContent).toContain('Terrain and height data need Canopi Desktop.')
@@ -43,8 +43,8 @@ describe('Web Layers', () => {
     expect(container.textContent).not.toContain('Contour lines')
     expect(container.textContent).not.toContain('Hillshading')
     const background = container.querySelector('section[aria-labelledby="layers-background"]')!
-    expect(Array.from(background.querySelectorAll('[role="listitem"]')).map((row) => row.textContent))
-      .toEqual([expect.stringContaining('Basemap'), expect.stringContaining('Satellite')])
+    expect(Array.from(background.querySelectorAll('[role="radio"], input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
+      .toEqual(['satellite', 'basemap', 'none'])
   })
 
   it('counts the terrain layers a Design keeps for Desktop', () => {

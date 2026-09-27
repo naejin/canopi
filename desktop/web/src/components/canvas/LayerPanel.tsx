@@ -8,6 +8,8 @@ import { Dropdown } from '../shared/Dropdown'
 import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import type { BasemapStyle } from '../../generated/contracts'
+import type { MapBackground } from '../../app/map-layers/state'
+import { Switch } from '../shared/Switch'
 import styles from './LayerPanel.module.css'
 
 function LayerIcon({ id }: { id: string }) {
@@ -68,11 +70,25 @@ export interface LayerPanelActions {
   contourInterval?(meters: number): void
   basemapStyle?(style: BasemapStyle): void
   saveGoogleKey?(key: string | null): void
+  /** Background › Satellite, Map or None. */
+  background?(choice: MapBackground): void
+  /** Soften background: dims the chosen background under the Design. */
+  softenBackground?(soften: boolean): void
+}
+
+/** Background sources are proper names, the same in every language. */
+const BACKGROUND_SOURCES = { satellite: 'Google', basemap: 'OpenFreeMap' } as const
+
+/** Which background the map draws: Satellite hides the Basemap under it. */
+function chosenBackground(background: readonly CanvasLayerPresentationRow[]): MapBackground {
+  if (background.find((row) => row.id === 'satellite')?.visible) return 'satellite'
+  return background.find((row) => row.id === 'basemap')?.visible ? 'basemap' : 'none'
 }
 
 /**
  * The Layers panel of both editions, front to back in three sections: the
- * Design's own objects, its site data, and the background. `siteData` is the
+ * Design's own objects, its site data, and the background (one choice of
+ * Satellite, Map or None; the chosen one's settings show in the footer). `siteData` is the
  * edition's part of Site data (Desktop: the Design's terrain and height items
  * with their results; Web: why they are not shown) and `siteAction` its Add
  * data entry. The online-elevation terrain rows follow, nested under the
@@ -86,10 +102,12 @@ export function LayerPanel({ rows, actions, siteData, siteAction, siteFooter }: 
   readonly siteAction?: ComponentChildren
   readonly siteFooter?: ComponentChildren
 }) {
-  const active = rows.find(row => row.active)
   const inGroup = (group: CanvasLayerPresentationRow['group']) => rows.filter((row) => row.group === group)
   const terrain = inGroup('site')
   const background = inGroup('background')
+  const choice = chosenBackground(background)
+  // A background that is not drawn has no settings to show.
+  const active = rows.find(row => row.active && (row.group !== 'background' || row.id === choice))
   const footer = active
     ? (
       <section className={styles.inspector} aria-label={active.label}>
@@ -125,12 +143,59 @@ export function LayerPanel({ rows, actions, siteData, siteAction, siteFooter }: 
         {background.length > 0 && (
           <section className={styles.section} aria-labelledby="layers-background">
             <div className={styles.groupHeading}><h3 id="layers-background">{t('canvas.layers.background')}</h3></div>
-            <div role="list">{background.map((row) => <LayerRow key={row.id} row={row} actions={actions} />)}</div>
+            <BackgroundChoice rows={background} choice={choice} actions={actions} />
           </section>
         )}
       </div>
       {footer && <div className={styles.footer}>{footer}</div>}
     </aside>
+  )
+}
+
+/**
+ * Background as one choice: Satellite, Map or None. Choosing Satellite or Map
+ * (or choosing it again) shows its settings in the footer: opacity, Soften
+ * background, and the map style or satellite key.
+ */
+function BackgroundChoice({ rows, choice, actions }: {
+  readonly rows: readonly CanvasLayerPresentationRow[]
+  readonly choice: MapBackground
+  readonly actions: LayerPanelActions
+}) {
+  const options: { value: MapBackground; label: string; source: string; row?: CanvasLayerPresentationRow }[] = [
+    { value: 'satellite', label: t('canvas.layers.satellite'), source: BACKGROUND_SOURCES.satellite, row: rows.find((row) => row.id === 'satellite') },
+    { value: 'basemap', label: t('canvas.layers.backgroundMap'), source: BACKGROUND_SOURCES.basemap, row: rows.find((row) => row.id === 'basemap') },
+    { value: 'none', label: t('canvas.layers.backgroundNone'), source: t('canvas.layers.backgroundPlainPaper') },
+  ]
+  return (
+    <div role="radiogroup" aria-labelledby="layers-background" className={styles.backgroundChoice}>
+      {options.filter((option) => option.value === 'none' || option.row).map((option) => (
+        <label
+          key={option.value}
+          className={styles.backgroundOption}
+          data-active={option.row?.active && option.value === choice ? 'true' : 'false'}
+        >
+          <input
+            type="radio"
+            name="layers-background"
+            value={option.value}
+            checked={option.value === choice}
+            onChange={() => {
+              actions.background?.(option.value)
+              if (option.row) actions.active(option.row.id)
+            }}
+            onClick={() => {
+              // Choosing the current background again brings back its settings.
+              if (option.value === choice && option.row) actions.active(option.row.id)
+            }}
+          />
+          <span className={styles.nameText}>
+            <span>{option.label}</span>
+            <small className={styles.caption}>{option.source}</small>
+          </span>
+        </label>
+      ))}
+    </div>
   )
 }
 
@@ -241,8 +306,8 @@ function BasemapLayerDetail({ row, detail, actions }: {
           floating
         />
       </div>
-      {detail.hiddenBySatellite && <p className={styles.layerNote}>{t('canvas.basemap.hiddenBySatellite')}</p>}
       <OpacitySlider actions={actions} row={row} />
+      <SoftenBackgroundSwitch soften={detail.softenBackground} actions={actions} />
     </div>
   )
 }
@@ -256,7 +321,19 @@ function SatelliteLayerDetail({ row, detail, actions }: {
     <div className={styles.layerDetail}>
       <GoogleKeyForm hasKey={detail.hasGoogleKey} onSave={(key) => actions.saveGoogleKey?.(key)} />
       <OpacitySlider actions={actions} row={row} />
+      <SoftenBackgroundSwitch soften={detail.softenBackground} actions={actions} />
     </div>
+  )
+}
+
+function SoftenBackgroundSwitch({ soften, actions }: { soften: boolean; actions: LayerPanelActions }) {
+  return (
+    <Switch
+      label={t('speciesKey.softenBackground')}
+      hint={t('speciesKey.softenBackgroundHint')}
+      checked={soften}
+      onChange={(next) => actions.softenBackground?.(next)}
+    />
   )
 }
 

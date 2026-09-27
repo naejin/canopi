@@ -278,7 +278,6 @@
       "unlockLayer": "Laag ontgrendelen",
       "opacity": "Dekking",
       "mapSection": "Kaartlagen",
-      "basemap": "Basiskaart",
       "basemapLoading": "Basiskaart laden…",
       "mapUnavailable": "Kaart niet beschikbaar",
       "layerSkipped": "Een kaartlaag kon niet worden weergegeven",
@@ -289,7 +288,10 @@
       "satellite": "Satelliet",
       "design": "Ontwerp",
       "siteData": "Terreindata",
-      "background": "Achtergrond"
+      "background": "Achtergrond",
+      "backgroundMap": "Kaart",
+      "backgroundNone": "Geen",
+      "backgroundPlainPaper": "Blanco papier"
     },
     "timeline": {
       "actionType": "Actietype",
@@ -557,7 +559,7 @@
         "showResults": "Resultaten tonen",
         "deleteBody": "De data wordt uit de bibliotheek verwijderd.",
         "deleteBodyInDesign": "De data wordt uit de bibliotheek en uit dit ontwerp verwijderd.",
-        "deleteOtherDesigns": "Andere ontwerpen die ze gebruiken, tonen ze als niet beschikbaar.",
+        "deleteOtherDesigns": "Canopi houdt niet bij welke andere ontwerpen ze gebruiken. Ontwerpen die ze gebruiken, tonen ze als niet beschikbaar.",
         "deleteNoUndo": "Dit kan niet ongedaan worden gemaakt.",
         "previewPreparing": "Voorbeeld voorbereiden",
         "previewUnavailable": "Voorbeeld niet beschikbaar",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} items",
         "itemCount_many": "{{count, number}} items",
         "itemCount_other": "{{count, number}} items",
+        "onThisComputer": "{{size}} op deze computer",
+        "showInFolder": "Tonen in map",
         "done": "Klaar",
         "removeHint": "Een item uit één ontwerp verwijderen houdt het in de bibliotheek. Hier verwijderen haalt het uit elk ontwerp.",
         "deleteEverywhere": "Overal verwijderen",
@@ -601,6 +605,7 @@
         "openInLibrary": "Openen in de databibliotheek",
         "removeFromDesign": "Uit het ontwerp verwijderen",
         "fromFiles": "Terrein of hoogte uit bestanden…",
+        "fromGeoJson": "Ontwerpobjecten uit GeoJSON…",
         "fromLibrary": "Uit je bibliotheek",
         "libraryEmpty": "Je bibliotheek heeft nog geen data",
         "inThisDesign": "{{name}} · in dit ontwerp",
@@ -608,6 +613,10 @@
         "emptyImport": "Bestanden importeren…",
         "emptyLibrary": "De databibliotheek openen",
         "fromItem": "uit {{name}}",
+        "resultCount_one": "{{count, number}} resultaat",
+        "resultCount_few": "{{count, number}} resultaten",
+        "resultCount_many": "{{count, number}} resultaten",
+        "resultCount_other": "{{count, number}} resultaten",
         "importing": "Bezig met importeren",
         "calculationAria": "Rekenvoortgang van {{name}}",
         "cancelImport": "Import annuleren",
@@ -646,7 +655,15 @@
         "submit_one": "{{count, number}} bestand importeren",
         "submit_few": "{{count, number}} bestanden importeren",
         "submit_many": "{{count, number}} bestanden importeren",
-        "submit_other": "{{count, number}} bestanden importeren"
+        "submit_other": "{{count, number}} bestanden importeren",
+        "coverage": {
+          "coversTitle": "Dekt je terrein.",
+          "partialTitle": "Dekt een deel van je terrein.",
+          "partialBody": "Een deel van dit ontwerp ligt buiten de bestanden.",
+          "span": "De bestanden beslaan {{width}} × {{height}}.",
+          "apartTitle": "Deze bestanden dekken je terrein niet.",
+          "apartBody": "Ze liggen {{distance}} van dit ontwerp. Je kunt ze toch in je bibliotheek importeren."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Licht",
         "dark": "Donker"
-      },
-      "hiddenBySatellite": "Verborgen zolang Satelliet aan staat."
+      }
     },
     "rasterSample": {
       "title": "Waarde op punt",

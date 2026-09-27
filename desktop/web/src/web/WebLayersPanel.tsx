@@ -6,7 +6,7 @@ import { currentDesign } from '../app/document-session/store'
 import { t } from '../i18n'
 import styles from './web-layers-panel.module.css'
 
-/** Web has no local terrain or LiDAR, so its Background is Basemap and Satellite only. */
+/** Web has no local terrain or LiDAR: its map rows are the Background (Satellite, Map or None). */
 const WEB_REFERENCE_ROWS: ReadonlySet<string> = new Set(['basemap', 'satellite'])
 
 /**

@@ -264,6 +264,44 @@ pub async fn lidar_import_item(
         .await
 }
 
+/// Import › "Covers your site": the WGS84 box around the chosen files, read
+/// from their metadata before anything is imported.
+#[tauri::command]
+pub async fn lidar_import_coverage(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+    paths: Vec<String>,
+) -> Result<common_types::lidar::LidarImportCoverage, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Local,
+            "lidar import coverage",
+            move || {
+                let paths: Vec<std::path::PathBuf> =
+                    paths.into_iter().map(std::path::PathBuf::from).collect();
+                library.import_coverage(&paths)
+            },
+        )
+        .await
+}
+
+/// Data library footer: bytes the library occupies on this device.
+#[tauri::command]
+pub async fn lidar_library_disk_usage(
+    library: State<'_, LidarLibrary>,
+    executor: State<'_, NativeOperationExecutor>,
+) -> Result<u64, String> {
+    let library = library.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Local,
+            "lidar library size",
+            move || library.disk_usage(),
+        )
+        .await
+}
+
 /// Retry a failed or cancelled import with its saved selection, keeping the
 /// same library item. A published item cannot be retried.
 #[tauri::command]

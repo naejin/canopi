@@ -1,10 +1,13 @@
-import { useId, useState } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 import { importLibraryItem } from '../../../app/lidar/actions'
+import { checkImportCoverage, coverageCanvas, type ImportCoverage } from '../../../app/lidar/import-coverage'
 import { IMPORTABLE_QUANTITIES, RASTER_QUANTITIES } from '../../../app/lidar/item-types'
 import { suggestedItemName, uniqueItemName } from '../../../app/lidar/library-items'
 import { libraryItemName, lidarLibrary } from '../../../app/lidar/library-store'
+import { locale } from '../../../app/settings/state'
 import type { RasterQuantity } from '../../../generated/contracts'
 import { t } from '../../../i18n'
+import { formatDistance } from '../../canvas/ZoomControls'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { ControlIcon } from '../../shared/ControlIcon'
 import { Dropdown } from '../../shared/Dropdown'
@@ -15,8 +18,9 @@ import styles from './data-library.module.css'
 /**
  * Import terrain or height data: what Canopi accepts, the item's name (a name
  * the library already uses is refused with a free one suggested), what the
- * values measure, and the files in priority order. The files were chosen in
- * the native picker first, so cancelling here creates nothing.
+ * values measure, the files in priority order, and whether they cover the
+ * open Design's site. The files were chosen in the native picker first, so
+ * cancelling here creates nothing.
  */
 export function ImportDataDialog({ paths, attach, onClose }: {
   readonly paths: readonly string[]
@@ -32,6 +36,7 @@ export function ImportDataDialog({ paths, attach, onClose }: {
   const [unitUnknown, setUnitUnknown] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [coverage, setCoverage] = useState<ImportCoverage | null>(null)
   const library = lidarLibrary.value
   const taken = new Set((library?.items ?? []).map((item) => libraryItemName(item, library).trim().toLocaleLowerCase()))
   const trimmed = name.trim()
@@ -45,6 +50,15 @@ export function ImportDataDialog({ paths, attach, onClose }: {
     next.splice(index + by, 0, moved!)
     setFiles(next)
   }
+
+  const filesKey = files.join('\n')
+  const canvas = coverageCanvas()
+  useEffect(() => {
+    let current = true
+    setCoverage(null)
+    void checkImportCoverage(files).then((next) => { if (current) setCoverage(next) })
+    return () => { current = false }
+  }, [filesKey, canvas])
 
   const submit = async () => {
     if (!ready || !quantity) return
@@ -150,9 +164,32 @@ export function ImportDataDialog({ paths, attach, onClose }: {
           </ol>
           {files.length > 1 && <span className={styles.fieldHint}>{t('canvas.lidar.library.priorityNote')}</span>}
         </div>
+        {coverage && <CoverageNotice coverage={coverage} />}
         <p className={styles.fieldHint}>{attach ? t('canvas.lidar.import.toDesign') : t('canvas.lidar.import.toLibrary')}</p>
         {error && <p className={styles.error} role="alert">{error}</p>}
       </form>
     </WorkspaceDialog>
+  )
+}
+
+/** "Covers your site": where the chosen files lie against the open Design. */
+function CoverageNotice({ coverage }: { readonly coverage: ImportCoverage }) {
+  // Rough ground sizes: whole metres ("891 m"), tenths of a kilometre ("2.1 km"), whole kilometres from 10 km.
+  const distance = (metres: number) =>
+    formatDistance(metres >= 10_000 ? Math.round(metres / 1000) * 1000 : Math.max(1, Math.round(metres)), locale.value)
+  if (coverage.kind === 'apart') {
+    return (
+      <Notice tone="warning">
+        <strong>{t('canvas.lidar.import.coverage.apartTitle')}</strong>{' '}
+        {t('canvas.lidar.import.coverage.apartBody', { distance: distance(coverage.distanceM) })}
+      </Notice>
+    )
+  }
+  const span = t('canvas.lidar.import.coverage.span', { width: distance(coverage.widthM), height: distance(coverage.heightM) })
+  return (
+    <Notice tone="info">
+      <strong>{t(coverage.kind === 'covers' ? 'canvas.lidar.import.coverage.coversTitle' : 'canvas.lidar.import.coverage.partialTitle')}</strong>{' '}
+      {coverage.kind === 'covers' ? span : `${span} ${t('canvas.lidar.import.coverage.partialBody')}`}
+    </Notice>
   )
 }

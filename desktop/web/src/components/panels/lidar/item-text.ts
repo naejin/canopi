@@ -37,3 +37,20 @@ export function itemStatusLabel(row: LibraryItem): string {
   if (row.importJob?.state === 'Cancelled' || row.run?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
   return row.role === 'Derived' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
 }
+
+/** "1.2 GB", "340 MB", "12 kB": the space the library takes on this computer. */
+export function formatDiskSize(bytes: number, activeLocale: string): string {
+  const units = ['kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
+  let value = Math.max(0, bytes) / 1000
+  let unit = 0
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000
+    unit += 1
+  }
+  return new Intl.NumberFormat(activeLocale, {
+    style: 'unit',
+    unit: units[unit],
+    unitDisplay: 'short',
+    maximumFractionDigits: value >= 100 ? 0 : 1,
+  }).format(value)
+}

@@ -19,6 +19,7 @@ import {
   lidarDismissImport,
   lidarImportItem,
   lidarLayerCollection,
+  lidarLibraryDiskUsage,
   lidarProcessingHistory,
   lidarRenameItem,
   lidarRerunAnalysis,
@@ -26,6 +27,7 @@ import {
   type LidarImportReceipt,
   type LidarLayerCollection,
 } from '../../ipc/lidar'
+import { showAppFolder } from '../../ipc/settings'
 import {
   patchLidarEntryById,
   setLidarEntryOrders,
@@ -114,6 +116,16 @@ export async function dismissLibraryImport(layerId: string): Promise<void> {
 export async function renameLibraryItem(id: string, name: string): Promise<void> {
   await withLidarError(() => lidarRenameItem(id, name))
   await refreshLidarLibrary()
+}
+
+/** Data library footer: the bytes the library occupies on this device. */
+export async function fetchLibraryDiskUsage(): Promise<number> {
+  return lidarLibraryDiskUsage()
+}
+
+/** Data library › Show in folder: the same reveal as Settings › Files and data. */
+export async function showDataLibraryFolder(): Promise<void> {
+  return showAppFolder('data_library')
 }
 
 export async function fetchDeleteImpact(id: string): Promise<LibraryDeleteImpact> {

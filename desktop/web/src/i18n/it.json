@@ -278,7 +278,6 @@
       "unlockLayer": "Sblocca livello",
       "opacity": "Opacità",
       "mapSection": "Livelli della mappa",
-      "basemap": "Mappa base",
       "basemapLoading": "Caricamento mappa base…",
       "mapUnavailable": "Mappa non disponibile",
       "layerSkipped": "Impossibile mostrare un livello della mappa",
@@ -289,7 +288,10 @@
       "satellite": "Satellite",
       "design": "Progetto",
       "siteData": "Dati del sito",
-      "background": "Sfondo"
+      "background": "Sfondo",
+      "backgroundMap": "Mappa",
+      "backgroundNone": "Nessuno",
+      "backgroundPlainPaper": "Carta semplice"
     },
     "timeline": {
       "actionType": "Tipo di azione",
@@ -557,7 +559,7 @@
         "showResults": "Mostra risultati",
         "deleteBody": "I dati verranno rimossi dalla libreria.",
         "deleteBodyInDesign": "I dati verranno rimossi dalla libreria e da questo progetto.",
-        "deleteOtherDesigns": "Gli altri progetti che li usano li mostreranno come non disponibili.",
+        "deleteOtherDesigns": "Canopi non tiene traccia di quali altri progetti li usano. Quelli che li usano li mostreranno come non disponibili.",
         "deleteNoUndo": "Questa azione non può essere annullata.",
         "previewPreparing": "Anteprima in preparazione",
         "previewUnavailable": "Anteprima non disponibile",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} elementi",
         "itemCount_many": "{{count, number}} elementi",
         "itemCount_other": "{{count, number}} elementi",
+        "onThisComputer": "{{size}} su questo computer",
+        "showInFolder": "Mostra nella cartella",
         "done": "Fine",
         "removeHint": "Rimuovere un elemento da un progetto lo lascia nella libreria. Eliminarlo qui lo rimuove da ogni progetto.",
         "deleteEverywhere": "Elimina ovunque",
@@ -601,6 +605,7 @@
         "openInLibrary": "Apri nella libreria dati",
         "removeFromDesign": "Rimuovi dal progetto",
         "fromFiles": "Terreno o altezza da file…",
+        "fromGeoJson": "Oggetti del progetto da GeoJSON…",
         "fromLibrary": "Dalla tua libreria",
         "libraryEmpty": "La tua libreria non contiene ancora dati",
         "inThisDesign": "{{name}} · in questo progetto",
@@ -608,6 +613,10 @@
         "emptyImport": "Importa file…",
         "emptyLibrary": "Apri la libreria dati",
         "fromItem": "da {{name}}",
+        "resultCount_one": "{{count, number}} risultato",
+        "resultCount_few": "{{count, number}} risultati",
+        "resultCount_many": "{{count, number}} risultati",
+        "resultCount_other": "{{count, number}} risultati",
         "importing": "Importazione in corso",
         "calculationAria": "Avanzamento del calcolo di {{name}}",
         "cancelImport": "Annulla importazione",
@@ -646,7 +655,15 @@
         "submit_one": "Importa {{count, number}} file",
         "submit_few": "Importa {{count, number}} file",
         "submit_many": "Importa {{count, number}} file",
-        "submit_other": "Importa {{count, number}} file"
+        "submit_other": "Importa {{count, number}} file",
+        "coverage": {
+          "coversTitle": "Copre il tuo terreno.",
+          "partialTitle": "Copre parte del tuo terreno.",
+          "partialBody": "Parte di questo progetto è fuori dai file.",
+          "span": "I file coprono {{width}} × {{height}}.",
+          "apartTitle": "Questi file non coprono il tuo terreno.",
+          "apartBody": "Si trovano a {{distance}} da questo progetto. Puoi comunque importarli nella tua libreria."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Chiaro",
         "dark": "Scuro"
-      },
-      "hiddenBySatellite": "Nascosta mentre Satellite è attivo."
+      }
     },
     "rasterSample": {
       "title": "Valore nel punto",

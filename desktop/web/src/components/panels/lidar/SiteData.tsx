@@ -12,7 +12,9 @@ import {
   setLidarEntryOpacity,
   setLidarEntryVisibility,
 } from '../../../app/lidar/actions'
+import { siteDataLines } from '../../../app/lidar/analysis-groups'
 import { lidarDisplayStyle, readLidarDisplay } from '../../../app/lidar/display'
+import { analysisTitle, findAnalysis } from '../../../app/analyses/registry'
 import { formatLegendValue, formatRasterRange, legendGradient } from '../../../app/lidar/display-legend'
 import { itemTypeLabel } from '../../../app/lidar/item-types'
 import { libraryItems } from '../../../app/lidar/library-items'
@@ -60,10 +62,11 @@ function rowLabel(item: LidarPresentationItem): string {
 
 /**
  * "Add data": the one entry point for site data. Files open the native picker
- * then Import (the item joins this Design once published); library items are
- * added directly; the Data library opens for everything else.
+ * then Import (the item joins this Design once published); Design objects
+ * from GeoJSON run the File › Import GeoJSON command; library items are added
+ * directly; the Data library opens for everything else.
  */
-export function AddDataMenu() {
+export function AddDataMenu({ importGeoJson }: { readonly importGeoJson: () => void }) {
   const library = libraryItems(lidarLibrary.value).filter((item) => item.status === 'ready')
   const inDesign = new Set((currentDesign.value?.lidar?.entries ?? []).map((entry) => entry.id))
   const fromLibrary: ActionMenuEntry[] = library.length === 0
@@ -85,6 +88,7 @@ export function AddDataMenu() {
       iconSize={18}
       items={[
         { label: t('canvas.lidar.layers.fromFiles'), opensDialog: true, run: () => { void beginDataImport() } },
+        { label: t('canvas.lidar.layers.fromGeoJson'), opensDialog: true, run: importGeoJson },
         { label: t('canvas.lidar.layers.fromLibrary'), submenu: fromLibrary },
         { separator: true },
         { label: t('canvas.lidar.layers.openLibrary'), opensDialog: true, run: () => openDataLibrary() },
@@ -121,7 +125,9 @@ export function SiteDataRows() {
       )}
       {rows.length > 0 && (
         <ul className={styles.list}>
-          {rows.map((row) => <SiteDataRow key={row.id} row={row} active={row.id === active} />)}
+          {siteDataLines(rows).map((line) => line.kind === 'analysis'
+            ? <AnalysisGroupRow key={`analysis:${line.definitionId}`} members={line.members} depth={line.depth} />
+            : <SiteDataRow key={line.row.id} row={line.row} depth={line.depth} grouped={line.grouped} active={line.row.id === active} />)}
         </ul>
       )}
       {pending.map((entry) => {
@@ -149,7 +155,43 @@ export function SiteDataRows() {
   )
 }
 
-function SiteDataRow({ row, active }: { row: SiteRow; active: boolean }) {
+/**
+ * The parent line of an analysis with several outputs in this Design: its
+ * title, where it comes from and how many results it has. Its eye shows or
+ * hides every output; each output keeps its own row, settings and order.
+ */
+function AnalysisGroupRow({ members, depth }: { members: readonly SiteRow[]; depth: number }) {
+  const first = members[0]!
+  const label = first.analysisId ? analysisTitle(first.analysisId) : rowLabel(first)
+  const visible = members.some((member) => member.visible)
+  const visibilityLabel = visible
+    ? t('canvas.lidar.layers.hide', { name: label })
+    : t('canvas.lidar.layers.show', { name: label })
+  const caption = [
+    first.inputId ? t('canvas.lidar.layers.fromItem', { name: nameOfItem(first.inputId) }) : null,
+    t('canvas.lidar.layers.resultCount', { count: members.length }),
+  ].filter(Boolean).join(' · ')
+  return (
+    <li className={styles.row} data-hidden={!visible} data-depth={Math.min(depth, 3)} data-analysis-group>
+      <button
+        type="button"
+        className={styles.eye}
+        aria-pressed={visible}
+        aria-label={visibilityLabel}
+        onClick={() => { for (const member of members) setLidarEntryVisibility(member.id, !visible) }}
+      >
+        <LayerVisibilityIcon open={visible} />
+        <ButtonTooltip label={visibilityLabel} side="left" />
+      </button>
+      <span className={styles.groupName}>
+        <strong>{label}</strong>
+        <small>{caption}</small>
+      </span>
+    </li>
+  )
+}
+
+function SiteDataRow({ row, depth, grouped, active }: { row: SiteRow; depth: number; grouped: boolean; active: boolean }) {
   const label = rowLabel(row)
   const visibilityLabel = row.visible
     ? t('canvas.lidar.layers.hide', { name: label })
@@ -159,7 +201,7 @@ function SiteDataRow({ row, active }: { row: SiteRow; active: boolean }) {
       className={styles.row}
       data-active={active}
       data-hidden={!row.visible}
-      data-depth={Math.min(row.depth, 3)}
+      data-depth={Math.min(depth, 3)}
     >
       <button
         type="button"
@@ -184,7 +226,7 @@ function SiteDataRow({ row, active }: { row: SiteRow; active: boolean }) {
         }}
       >
         <strong>{label}</strong>
-        <small>{rowCaption(row)}</small>
+        <small>{rowCaption(row, grouped)}</small>
       </button>
       {isStale(row) && (
         isRefreshing(row)
@@ -251,12 +293,18 @@ function refresh(item: LidarPresentationItem): void {
 }
 
 /**
- * What a row is: a source's type and range, or where a result comes from.
- * Preparing and failing display states follow.
+ * What a row is: a source's type and range, or where a result comes from;
+ * under its analysis line, which output it is. Preparing and failing display
+ * states follow.
  */
-function rowCaption(item: LidarPresentationItem): string {
+function rowCaption(item: LidarPresentationItem, grouped: boolean): string {
   if (item.state === 'unavailable' || !item.itemType) return t('canvas.lidar.library.dataUnavailable')
-  const what = item.inputId
+  const output = grouped && item.analysisId
+    ? findAnalysis(item.analysisId)?.outputs.find((candidate) => candidate.key === item.outputKey)
+    : undefined
+  const what = output
+    ? [t(output.labelKey), unitWords(item.units)].filter(Boolean).join(' · ')
+    : item.inputId
     ? [t('canvas.lidar.layers.fromItem', { name: nameOfItem(item.inputId) }), unitWords(item.units)].filter(Boolean).join(' · ')
     : [itemTypeLabel(item.itemType), item.displayRange ? formatRasterRange(item.displayRange, item.units, locale.value) : null]
       .filter(Boolean).join(' · ')

@@ -278,7 +278,6 @@
       "unlockLayer": "Unlock layer",
       "opacity": "Opacity",
       "mapSection": "Map layers",
-      "basemap": "Basemap",
       "basemapLoading": "Loading basemap…",
       "mapUnavailable": "Map unavailable",
       "layerSkipped": "A map layer couldn’t be shown",
@@ -289,7 +288,10 @@
       "satellite": "Satellite",
       "design": "Design",
       "siteData": "Site data",
-      "background": "Background"
+      "background": "Background",
+      "backgroundMap": "Map",
+      "backgroundNone": "None",
+      "backgroundPlainPaper": "Plain paper"
     },
     "timeline": {
       "actionType": "Action type",
@@ -557,7 +559,7 @@
         "showResults": "Show results",
         "deleteBody": "The data will be removed from the library.",
         "deleteBodyInDesign": "The data will be removed from the library and from this Design.",
-        "deleteOtherDesigns": "Other Designs that use it will show it as unavailable.",
+        "deleteOtherDesigns": "Canopi doesn’t keep track of which other Designs use it. Any that do will show it as unavailable.",
         "deleteNoUndo": "This cannot be undone.",
         "previewPreparing": "Preparing preview",
         "previewUnavailable": "Preview unavailable",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} items",
         "itemCount_many": "{{count, number}} items",
         "itemCount_other": "{{count, number}} items",
+        "onThisComputer": "{{size}} on this computer",
+        "showInFolder": "Show in folder",
         "done": "Done",
         "removeHint": "Removing an item from one Design keeps it in the library. Deleting it here removes it from every Design.",
         "deleteEverywhere": "Delete everywhere",
@@ -601,6 +605,7 @@
         "openInLibrary": "Open in the Data library",
         "removeFromDesign": "Remove from Design",
         "fromFiles": "Terrain or height from files…",
+        "fromGeoJson": "Design objects from GeoJSON…",
         "fromLibrary": "From your library",
         "libraryEmpty": "Your library has no data yet",
         "inThisDesign": "{{name}} · in this Design",
@@ -608,6 +613,10 @@
         "emptyImport": "Import files…",
         "emptyLibrary": "Open the Data library",
         "fromItem": "from {{name}}",
+        "resultCount_one": "{{count, number}} result",
+        "resultCount_few": "{{count, number}} results",
+        "resultCount_many": "{{count, number}} results",
+        "resultCount_other": "{{count, number}} results",
         "importing": "Importing",
         "calculationAria": "Calculation progress for {{name}}",
         "cancelImport": "Cancel import",
@@ -646,7 +655,15 @@
         "submit_one": "Import {{count, number}} file",
         "submit_few": "Import {{count, number}} files",
         "submit_many": "Import {{count, number}} files",
-        "submit_other": "Import {{count, number}} files"
+        "submit_other": "Import {{count, number}} files",
+        "coverage": {
+          "coversTitle": "Covers your site.",
+          "partialTitle": "Covers part of your site.",
+          "partialBody": "Part of this Design lies outside the files.",
+          "span": "The files span {{width}} × {{height}}.",
+          "apartTitle": "These files don’t cover your site.",
+          "apartBody": "They lie {{distance}} from this Design. You can still import them to your library."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Bright",
         "dark": "Dark"
-      },
-      "hiddenBySatellite": "Hidden while Satellite is on."
+      }
     },
     "rasterSample": {
       "title": "Value at point",

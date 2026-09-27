@@ -65,6 +65,7 @@ function baseSettings(): Settings {
 describe('LayerPanel', () => {
   let container: HTMLDivElement
   const saveSettings = vi.fn(async (_settings: Settings): Promise<void> => {})
+  const importGeoJson = vi.fn()
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -119,49 +120,86 @@ describe('LayerPanel', () => {
     resetSettingsProjectionForTests()
   })
 
-  it('toggles the Basemap row through the map layer store', async () => {
+  it('chooses the background as Satellite, Map or None and persists it', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
-    const rows = Array.from(container.querySelectorAll('[role="listitem"]'))
-    const basemapRow = rows.find((row) => row.textContent?.includes('Basemap'))
-    expect(basemapRow).toBeTruthy()
+    const group = container.querySelector('[role="radiogroup"][aria-labelledby="layers-background"]')!
+    const radio = (label: string) => Array.from(group.querySelectorAll('label'))
+      .find((option) => option.textContent?.startsWith(label))!.querySelector('input')!
+    expect(Array.from(group.querySelectorAll('label')).map((option) => option.textContent))
+      .toEqual(['SatelliteGoogle', 'MapOpenFreeMap', 'NonePlain paper'])
+    expect(radio('Map').checked).toBe(true)
     // The rows show how many layers there are; the header carries no bare count.
     expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
-    expect(container.querySelector('input[aria-label="Opacity: Basemap"]')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeTruthy()
+    // Background has no eye toggles: it is one choice.
+    expect(container.querySelector('button[aria-label="Toggle visibility: Map"]')).toBeNull()
 
-    const basemapToggle = basemapRow?.querySelector('button')
-    expect(basemapToggle).toBeTruthy()
-
-    await act(async () => {
-      basemapToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
+    await act(async () => { radio('None').click() })
     expect(mapLayers.value.basemap.visible).toBe(false)
+    expect(mapLayers.value.satellite.visible).toBe(false)
+    expect(radio('None').checked).toBe(true)
+    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeNull()
     await Promise.resolve()
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ basemap_visible: false }))
+
+    await act(async () => { radio('Satellite').click() })
+    expect(mapLayers.value.satellite.visible).toBe(true)
+    expect(container.querySelector('input[aria-label="Opacity: Satellite"]')).toBeTruthy()
+
+    await act(async () => { radio('Map').click() })
+    expect(mapLayers.value.satellite.visible).toBe(false)
+    expect(mapLayers.value.basemap.visible).toBe(true)
+  })
+
+  it('keeps opacity and Soften background with the chosen background', async () => {
+    await act(async () => {
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
+    })
+    const soften = () => Array.from(container.querySelectorAll<HTMLInputElement>('input[role="switch"]'))
+      .find((input) => input.closest('label')?.textContent?.includes('Soften background'))
+
+    expect(soften()?.checked).toBe(false)
+    await act(async () => { soften()?.click() })
+    expect(mapLayers.value.softenBackground).toBe(true)
+
+    // Satellite keeps the Map choice underneath and shows its own settings.
+    const satellite = Array.from(container.querySelectorAll('label'))
+      .find((option) => option.textContent?.startsWith('Satellite'))!.querySelector('input')!
+    await act(async () => { satellite.click() })
+    expect(mapLayers.value.basemap.visible).toBe(true)
+    expect(soften()?.checked).toBe(true)
+    expect(container.querySelector('input[type="password"]')).toBeTruthy()
+
+    // Choosing a row elsewhere hides the background settings; choosing the
+    // background again brings them back.
+    await act(async () => { activeLayerName.value = 'plants' })
+    expect(soften()).toBeUndefined()
+    await act(async () => { satellite.click() })
+    expect(soften()).toBeTruthy()
   })
 
   it('updates mounted Layer chrome when only the locale changes', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Layers')
-    expect(container.textContent).toContain('Basemap')
+    expect(container.textContent).toContain('Plain paper')
 
     await act(async () => {
       locale.value = 'fr'
     })
 
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Calques')
-    expect(container.textContent).toContain('Fond de carte')
+    expect(container.textContent).toContain('Papier uni')
   })
 
   it('chooses the Basemap style from the Basemap row and persists it', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     const styleTrigger = dropdownTrigger(container, 'Style')
@@ -182,38 +220,11 @@ describe('LayerPanel', () => {
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ basemap_style: 'positron' }))
   })
 
-  it('hides the Basemap while Satellite is on and restores it when Satellite is off', async () => {
-    await act(async () => {
-      render(<LayerPanel />, container)
-    })
-
-    const satelliteToggle = () => container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Toggle visibility: Satellite"]',
-    )
-    expect(satelliteToggle()?.getAttribute('aria-pressed')).toBe('false')
-    expect(container.textContent).not.toContain('Hidden while Satellite is on.')
-
-    await act(async () => {
-      satelliteToggle()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mapLayers.value.satellite.visible).toBe(true)
-    expect(mapLayers.value.basemap.visible).toBe(true)
-    expect(container.textContent).toContain('Hidden while Satellite is on.')
-
-    await act(async () => {
-      satelliteToggle()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mapLayers.value.satellite.visible).toBe(false)
-    expect(mapLayers.value.basemap.visible).toBe(true)
-    expect(container.textContent).not.toContain('Hidden while Satellite is on.')
-  })
-
   it('shows the optional Google key field without any imagery choice', async () => {
     await act(async () => {
       activeLayerName.value = 'satellite'
-      render(<LayerPanel />, container)
+      mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     expect(container.querySelector('button[aria-label="Imagery"]')).toBeNull()
@@ -227,7 +238,8 @@ describe('LayerPanel', () => {
   it('saves the Google key trimmed without echoing it and clears it', async () => {
     await act(async () => {
       activeLayerName.value = 'satellite'
-      render(<LayerPanel />, container)
+      mapLayers.value = { ...createDefaultMapLayers(), satellite: { visible: true, opacity: 1 } }
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     const keyInput = container.querySelector<HTMLInputElement>('input[type="password"]')
@@ -263,13 +275,13 @@ describe('LayerPanel', () => {
 
   it('shows map layer detail controls without a Design Location action', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     const hasLocationButton = () => Array.from(container.querySelectorAll('button'))
       .some((button) => button.textContent === 'Design Location')
     expect(hasLocationButton()).toBe(false)
-    expect(container.querySelector('input[aria-label="Opacity: Basemap"]')).toBeTruthy()
+    expect(container.querySelector('input[aria-label="Opacity: Map"]')).toBeTruthy()
 
     await act(async () => {
       activeLayerName.value = 'contours'
@@ -318,7 +330,7 @@ describe('LayerPanel', () => {
     }))
 
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     const plantsLock = Array.from(container.querySelectorAll('button'))
@@ -339,7 +351,7 @@ describe('LayerPanel', () => {
 
   it('lists the Design, its site data and the background as sections', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
     const sections = Array.from(container.querySelectorAll('section h3')).map((heading) => heading.textContent)
     expect(sections.slice(0, 3)).toEqual(['Design', 'Site data', 'Background'])
@@ -352,13 +364,13 @@ describe('LayerPanel', () => {
     expect(site.textContent).toContain('No site data yet')
     expect(site.querySelector('button[aria-haspopup="menu"]')?.textContent).toContain('Add data')
     const background = container.querySelector('section[aria-labelledby="layers-background"]')!
-    expect(background.textContent).toContain('Basemap')
-    expect(background.textContent).toContain('Satellite')
+    expect(Array.from(background.querySelectorAll('input[type="radio"]')).map((input) => (input as HTMLInputElement).value))
+      .toEqual(['satellite', 'basemap', 'none'])
   })
 
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {
     await act(async () => {
-      render(<LayerPanel />, container)
+      render(<LayerPanel importGeoJson={importGeoJson} />, container)
     })
 
     // Toggle contours visibility via eye button

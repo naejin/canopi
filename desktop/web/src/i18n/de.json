@@ -278,7 +278,6 @@
       "unlockLayer": "Ebene entsperren",
       "opacity": "Deckkraft",
       "mapSection": "Kartenebenen",
-      "basemap": "Basiskarte",
       "basemapLoading": "Basiskarte wird geladen…",
       "mapUnavailable": "Karte nicht verfügbar",
       "layerSkipped": "Eine Kartenebene konnte nicht angezeigt werden",
@@ -289,7 +288,10 @@
       "satellite": "Satellit",
       "design": "Design",
       "siteData": "Standortdaten",
-      "background": "Hintergrund"
+      "background": "Hintergrund",
+      "backgroundMap": "Karte",
+      "backgroundNone": "Keiner",
+      "backgroundPlainPaper": "Leeres Papier"
     },
     "timeline": {
       "actionType": "Aktionstyp",
@@ -557,7 +559,7 @@
         "showResults": "Ergebnisse anzeigen",
         "deleteBody": "Die Daten werden aus der Bibliothek entfernt.",
         "deleteBodyInDesign": "Die Daten werden aus der Bibliothek und aus diesem Design entfernt.",
-        "deleteOtherDesigns": "Andere Designs, die sie verwenden, zeigen sie als nicht verfügbar an.",
+        "deleteOtherDesigns": "Canopi verfolgt nicht, welche anderen Designs sie verwenden. Designs, die sie verwenden, zeigen sie als nicht verfügbar an.",
         "deleteNoUndo": "Dies kann nicht rückgängig gemacht werden.",
         "previewPreparing": "Vorschau wird vorbereitet",
         "previewUnavailable": "Vorschau nicht verfügbar",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} Elemente",
         "itemCount_many": "{{count, number}} Elemente",
         "itemCount_other": "{{count, number}} Elemente",
+        "onThisComputer": "{{size}} auf diesem Computer",
+        "showInFolder": "Im Ordner zeigen",
         "done": "Fertig",
         "removeHint": "Wenn Sie ein Element aus einem Design entfernen, bleibt es in der Bibliothek. Wenn Sie es hier löschen, wird es aus jedem Design entfernt.",
         "deleteEverywhere": "Überall löschen",
@@ -601,6 +605,7 @@
         "openInLibrary": "In der Datenbibliothek öffnen",
         "removeFromDesign": "Aus dem Design entfernen",
         "fromFiles": "Gelände oder Höhe aus Dateien…",
+        "fromGeoJson": "Design-Objekte aus GeoJSON…",
         "fromLibrary": "Aus Ihrer Bibliothek",
         "libraryEmpty": "Ihre Bibliothek enthält noch keine Daten",
         "inThisDesign": "{{name}} · in diesem Design",
@@ -608,6 +613,10 @@
         "emptyImport": "Dateien importieren…",
         "emptyLibrary": "Datenbibliothek öffnen",
         "fromItem": "aus {{name}}",
+        "resultCount_one": "{{count, number}} Ergebnis",
+        "resultCount_few": "{{count, number}} Ergebnisse",
+        "resultCount_many": "{{count, number}} Ergebnisse",
+        "resultCount_other": "{{count, number}} Ergebnisse",
         "importing": "Wird importiert",
         "calculationAria": "Berechnungsfortschritt für {{name}}",
         "cancelImport": "Import abbrechen",
@@ -646,7 +655,15 @@
         "submit_one": "{{count, number}} Datei importieren",
         "submit_few": "{{count, number}} Dateien importieren",
         "submit_many": "{{count, number}} Dateien importieren",
-        "submit_other": "{{count, number}} Dateien importieren"
+        "submit_other": "{{count, number}} Dateien importieren",
+        "coverage": {
+          "coversTitle": "Deckt Ihr Grundstück ab.",
+          "partialTitle": "Deckt einen Teil Ihres Grundstücks ab.",
+          "partialBody": "Ein Teil dieses Designs liegt außerhalb der Dateien.",
+          "span": "Die Dateien umfassen {{width}} × {{height}}.",
+          "apartTitle": "Diese Dateien decken Ihr Grundstück nicht ab.",
+          "apartBody": "Sie liegen {{distance}} von diesem Design entfernt. Sie können sie trotzdem in Ihre Bibliothek importieren."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Hell",
         "dark": "Dunkel"
-      },
-      "hiddenBySatellite": "Ausgeblendet, solange Satellit aktiv ist."
+      }
     },
     "rasterSample": {
       "title": "Wert am Punkt",

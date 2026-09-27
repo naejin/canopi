@@ -5,7 +5,7 @@ import {
   setCanvasLayerPresentationOpacity,
   setCanvasLayerPresentationVisibility,
 } from './presentation'
-import { saveGoogleMapsApiKey, setBasemapStyle } from '../map-layers/actions'
+import { saveGoogleMapsApiKey, setBasemapStyle, setMapBackground, setSoftenBackground } from '../map-layers/actions'
 
 /**
  * Layer actions shared by both editions' Layers panels. Edition-neutral:
@@ -19,4 +19,6 @@ export const LAYER_PANEL_ACTIONS = {
   contourInterval: setCanvasLayerPresentationContourIntervalMeters,
   basemapStyle: setBasemapStyle,
   saveGoogleKey: saveGoogleMapsApiKey,
+  background: setMapBackground,
+  softenBackground: setSoftenBackground,
 } as const

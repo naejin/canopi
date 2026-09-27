@@ -30,12 +30,12 @@ export type CanvasLayerPresentationDetail =
       readonly type: 'basemap'
       readonly style: BasemapStyle
       readonly styles: readonly BasemapStyle[]
-      /** Satellite is on, so the Basemap is not drawn whatever its toggle says. */
-      readonly hiddenBySatellite: boolean
+      readonly softenBackground: boolean
     }
   | {
       readonly type: 'satellite'
       readonly hasGoogleKey: boolean
+      readonly softenBackground: boolean
     }
   | {
       readonly type: 'contours'
@@ -107,15 +107,16 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
         detail: { type: 'scene' as const },
       }
     }),
-    mapRow('basemap', t('canvas.layers.basemap'), layers.basemap, {
+    mapRow('basemap', t('canvas.layers.backgroundMap'), layers.basemap, {
       type: 'basemap',
       style: layers.basemap.style,
       styles: SETTINGS_BASEMAP_STYLES,
-      hiddenBySatellite: layers.satellite.visible,
+      softenBackground: layers.softenBackground,
     }),
     mapRow('satellite', t('canvas.layers.satellite'), layers.satellite, {
       type: 'satellite',
       hasGoogleKey: Boolean(googleMapsApiKey.value?.trim()),
+      softenBackground: layers.softenBackground,
     }),
     mapRow('contours', t('canvas.terrain.contours'), layers.contours, {
       type: 'contours',

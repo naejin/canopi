@@ -59,6 +59,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::lidar::LidarDisplayRequest>()
         .register::<common_types::lidar::LidarDisplayState>()
         .register::<common_types::lidar::LidarEngineStatus>()
+        .register::<common_types::lidar::LidarImportCoverage>()
         .register::<common_types::lidar::LidarImportJob>()
         .register::<common_types::lidar::LidarImportReceipt>()
         .register::<common_types::lidar::LidarImportJobState>()

@@ -53,6 +53,7 @@ import type { Signal } from '@preact/signals'
 const library = librarySnapshot
 
 let container: HTMLDivElement
+const importGeoJson = vi.fn()
 
 function setDesign(entries: Array<{ kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
   (currentDesign as unknown as { value: unknown }).value = {
@@ -77,7 +78,7 @@ async function click(target: HTMLElement): Promise<void> {
 
 function mount(): void {
   act(() => {
-    render(<><AddDataMenu /><SiteDataRows /><SiteDataInspector /></>, container)
+    render(<><AddDataMenu importGeoJson={importGeoJson} /><SiteDataRows /><SiteDataInspector /></>, container)
   })
 }
 
@@ -136,6 +137,49 @@ describe('Layers site data', () => {
     await click(button('Canopy', submenu))
     expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'b')
     expect(activeLayerName.value).toBe('site:b')
+  })
+
+  it('offers Design objects from GeoJSON through the GeoJSON import command', async () => {
+    mount()
+    await click(button(/^Add data/))
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
+    expect(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent?.trim()).slice(0, 2))
+      .toEqual(['Terrain or height from files…', 'Design objects from GeoJSON…'])
+    await click(button('Design objects from GeoJSON…', menu))
+    expect(importGeoJson).toHaveBeenCalledOnce()
+  })
+
+  it('gathers the outputs of one analysis under a parent row', async () => {
+    const output = (id: string, key: string) => slopeItem(id, 'a', {
+      provenance: { ...slopeItem(id, 'a').provenance!, definition_id: 'flow-def', output_key: key },
+    })
+    lidarLibrary.value = library([sourceItem('a', 'Ground'), output('o1', 'slope'), output('o2', 'other'), slopeItem('s', 'a')])
+    setDesign([
+      { kind: 'Source', id: 'a', order: 0 },
+      { kind: 'Derived', id: 'o1', order: 3 },
+      { kind: 'Derived', id: 'o2', order: 2 },
+      { kind: 'Derived', id: 's', order: 1 },
+    ])
+    mount()
+
+    expect(rowNames()).toEqual([
+      ['Ground', '0'],
+      ['Slope', '1'],
+      ['Ground · Slope', '2'],
+      ['Ground · Slope', '2'],
+      ['Ground · Slope', '1'],
+    ])
+    const parent = container.querySelector<HTMLElement>('[data-analysis-group]')!
+    expect(parent.textContent).toContain('from Ground · 2 results')
+    // Each output says which one it is; a lone result still says where it comes from.
+    const rows = Array.from(container.querySelectorAll('li'))
+    expect(rows[2]!.textContent).toContain('Slope · degrees')
+    expect(rows[4]!.textContent).toContain('from Ground · degrees')
+
+    await click(button('Hide Slope', parent))
+    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('o1', false)
+    expect(actions.setLidarEntryVisibility).toHaveBeenCalledWith('o2', false)
+    expect(actions.setLidarEntryVisibility).not.toHaveBeenCalledWith('s', false)
   })
 
   it('nests a result under its source and says where it comes from', () => {

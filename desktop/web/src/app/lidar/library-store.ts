@@ -137,8 +137,11 @@ export interface LidarPresentationItem {
   /** Stretch domain in the stored units, when known. */
   displayRange: [number, number] | null
   freshness: Freshness
-  /** The definition a derived item belongs to, for Refresh. */
+  /** The definition a derived item belongs to, for Refresh and grouping in Layers. */
   definitionId: string | null
+  /** The registry analysis and output a derived item is; null for a source. */
+  analysisId: string | null
+  outputKey: string | null
   /** The latest run of a derived item, for Refresh progress. */
   run: AnalysisRunStatus | null
   /** The item a derived result was calculated from (its first input). */
@@ -194,6 +197,8 @@ export function readLidarPresentation(
           displayRange: itemDisplayRange(item),
           freshness: item.freshness,
           definitionId: item.provenance?.definition_id ?? null,
+          analysisId: item.provenance?.analysis_id ?? null,
+          outputKey: item.provenance?.output_key ?? null,
           run: item.run,
           inputId: item.provenance?.inputs[0]?.item_id ?? null,
         }
@@ -208,6 +213,8 @@ export function readLidarPresentation(
           displayRange: null,
           freshness: { state: 'Current' },
           definitionId: null,
+          analysisId: null,
+          outputKey: null,
           run: null,
           inputId: null,
         })

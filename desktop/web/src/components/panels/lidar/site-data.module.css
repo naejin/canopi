@@ -27,6 +27,11 @@
 .name strong { font-size: var(--text-sm); font-weight: 400; overflow-wrap: anywhere; }
 .row[data-active='true'] .name strong { font-weight: 600; }
 .name small { font-size: var(--text-xs); color: var(--color-text-muted); overflow-wrap: anywhere; }
+/* An analysis with several outputs: a heading line over its nested results, not a selectable item. */
+.groupName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0-5); padding: var(--space-1); line-height: 1.25; }
+.groupName strong { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.groupName small { font-size: var(--text-xs); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.row[data-hidden='true'] .groupName strong { color: var(--color-text-muted); }
 .stale { flex-shrink: 0; border-color: var(--color-warning-line); background: var(--color-warning-bg); }
 .badge { flex-shrink: 0; font-size: var(--text-xs); color: var(--color-text-muted); }
 

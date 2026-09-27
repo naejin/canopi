@@ -278,7 +278,6 @@
       "unlockLayer": "レイヤーのロックを解除",
       "opacity": "不透明度",
       "mapSection": "地図レイヤー",
-      "basemap": "ベースマップ",
       "basemapLoading": "ベースマップを読み込み中…",
       "mapUnavailable": "地図を利用できません",
       "layerSkipped": "地図レイヤーを表示できませんでした",
@@ -289,7 +288,10 @@
       "satellite": "衛星写真",
       "design": "デザイン",
       "siteData": "敷地データ",
-      "background": "背景"
+      "background": "背景",
+      "backgroundMap": "地図",
+      "backgroundNone": "なし",
+      "backgroundPlainPaper": "無地"
     },
     "timeline": {
       "actionType": "作業の種類",
@@ -557,7 +559,7 @@
         "showResults": "結果を表示",
         "deleteBody": "データはライブラリから削除されます。",
         "deleteBodyInDesign": "データはライブラリとこのデザインから削除されます。",
-        "deleteOtherDesigns": "これを使う他のデザインでは利用不可と表示されます。",
+        "deleteOtherDesigns": "Canopi は他のどのデザインがこれを使っているか記録していません。使っているデザインでは利用不可と表示されます。",
         "deleteNoUndo": "この操作は元に戻せません。",
         "previewPreparing": "プレビューを準備中",
         "previewUnavailable": "プレビューを利用できません",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} 項目",
         "itemCount_many": "{{count, number}} 項目",
         "itemCount_other": "{{count, number}} 項目",
+        "onThisComputer": "このコンピューター上で {{size}}",
+        "showInFolder": "フォルダーに表示",
         "done": "完了",
         "removeHint": "デザインから項目を外してもライブラリには残ります。ここで削除すると、すべてのデザインから削除されます。",
         "deleteEverywhere": "すべてから削除",
@@ -601,6 +605,7 @@
         "openInLibrary": "データライブラリで開く",
         "removeFromDesign": "デザインから削除",
         "fromFiles": "ファイルから地形または高さ…",
+        "fromGeoJson": "GeoJSON からデザインオブジェクト…",
         "fromLibrary": "ライブラリから",
         "libraryEmpty": "ライブラリにはまだデータがありません",
         "inThisDesign": "{{name}} · このデザイン内",
@@ -608,6 +613,10 @@
         "emptyImport": "ファイルをインポート…",
         "emptyLibrary": "データライブラリを開く",
         "fromItem": "{{name}}から",
+        "resultCount_one": "{{count, number}} 件の結果",
+        "resultCount_few": "{{count, number}} 件の結果",
+        "resultCount_many": "{{count, number}} 件の結果",
+        "resultCount_other": "{{count, number}} 件の結果",
         "importing": "インポート中",
         "calculationAria": "{{name}}の計算進行状況",
         "cancelImport": "インポートをキャンセル",
@@ -646,7 +655,15 @@
         "submit_one": "{{count, number}} 個のファイルをインポート",
         "submit_few": "{{count, number}} 個のファイルをインポート",
         "submit_many": "{{count, number}} 個のファイルをインポート",
-        "submit_other": "{{count, number}} 個のファイルをインポート"
+        "submit_other": "{{count, number}} 個のファイルをインポート",
+        "coverage": {
+          "coversTitle": "敷地をカバーしています。",
+          "partialTitle": "敷地の一部をカバーしています。",
+          "partialBody": "このデザインの一部はファイルの範囲外です。",
+          "span": "ファイルの範囲は {{width}} × {{height}} です。",
+          "apartTitle": "これらのファイルは敷地をカバーしていません。",
+          "apartBody": "このデザインから {{distance}} 離れています。ライブラリにはインポートできます。"
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "明るい",
         "dark": "ダーク"
-      },
-      "hiddenBySatellite": "衛星写真の表示中は非表示です。"
+      }
     },
     "rasterSample": {
       "title": "地点の値",

@@ -439,6 +439,14 @@ export type LidarEngineStatus = {
 	detail: string | null,
 };
 
+// Import › "Covers your site": where the chosen files lie, read before import.
+export type LidarImportCoverage = {
+	// WGS84 `[west, south, east, north]` around every file whose extent was read.
+	bounds: [number, number, number, number] | null,
+	// Files whose geographic extent could not be read.
+	unreadable_files: number,
+};
+
 export type LidarImportJob = {
 	job_id: string,
 	layer_id: string,

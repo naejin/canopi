@@ -530,7 +530,7 @@ impl LidarLibrary {
                 }
             }
         }
-        let bounds = match wgs84_extent(engine, &staged, cancel) {
+        let bounds = match super::raster_info::wgs84_extent(engine, &staged, cancel) {
             Ok(bounds) => bounds,
             Err(error) => {
                 let _ = std::fs::remove_file(&staged);
@@ -764,53 +764,6 @@ fn display_arguments(nodata: Option<f32>) -> Vec<String> {
         args.push(format!("{:?}", f64::from(nodata)));
     }
     args
-}
-
-/// WGS84 footprint of a written derivative, as GDAL reports it.
-fn wgs84_extent(
-    engine: &super::engine::GdalEngine,
-    path: &Path,
-    cancel: &AtomicBool,
-) -> Result<[f64; 4], String> {
-    let output = engine.run(
-        super::engine::GdalProgram::Info,
-        &[
-            "-json".to_string(),
-            "--config".to_string(),
-            "GDAL_PAM_ENABLED".to_string(),
-            "NO".to_string(),
-            path.display().to_string(),
-        ],
-        Some(cancel),
-    )?;
-    let info: serde_json::Value = serde_json::from_str(&output.stdout)
-        .map_err(|e| format!("Unreadable display derivative metadata: {e}"))?;
-    let ring = info
-        .pointer("/wgs84Extent/coordinates/0")
-        .and_then(|ring| ring.as_array())
-        .ok_or_else(|| "the display derivative has no geographic extent".to_string())?;
-    let mut bounds = [
-        f64::INFINITY,
-        f64::INFINITY,
-        f64::NEG_INFINITY,
-        f64::NEG_INFINITY,
-    ];
-    for point in ring {
-        let (Some(lon), Some(lat)) = (
-            point.get(0).and_then(|value| value.as_f64()),
-            point.get(1).and_then(|value| value.as_f64()),
-        ) else {
-            continue;
-        };
-        bounds[0] = bounds[0].min(lon);
-        bounds[1] = bounds[1].min(lat);
-        bounds[2] = bounds[2].max(lon);
-        bounds[3] = bounds[3].max(lat);
-    }
-    if !bounds.iter().all(|value| value.is_finite()) {
-        return Err("the display derivative has no geographic extent".to_string());
-    }
-    Ok(bounds)
 }
 
 /// Remove staging leftovers and published files the registry does not own.

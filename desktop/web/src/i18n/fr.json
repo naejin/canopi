@@ -278,7 +278,6 @@
       "unlockLayer": "Déverrouiller le calque",
       "opacity": "Opacité",
       "mapSection": "Calques de la carte",
-      "basemap": "Fond de carte",
       "basemapLoading": "Chargement du fond de carte…",
       "mapUnavailable": "Carte indisponible",
       "layerSkipped": "Un calque de la carte n’a pas pu être affiché",
@@ -289,7 +288,10 @@
       "satellite": "Satellite",
       "design": "Design",
       "siteData": "Données du site",
-      "background": "Arrière-plan"
+      "background": "Arrière-plan",
+      "backgroundMap": "Carte",
+      "backgroundNone": "Aucun",
+      "backgroundPlainPaper": "Papier uni"
     },
     "timeline": {
       "actionType": "Type d’action",
@@ -557,7 +559,7 @@
         "showResults": "Afficher les résultats",
         "deleteBody": "Les données seront retirées de la bibliothèque.",
         "deleteBodyInDesign": "Les données seront retirées de la bibliothèque et de ce Design.",
-        "deleteOtherDesigns": "Les autres Designs qui les utilisent les afficheront comme indisponibles.",
+        "deleteOtherDesigns": "Canopi ne sait pas quels autres Designs les utilisent. Ceux qui les utilisent les afficheront comme indisponibles.",
         "deleteNoUndo": "Cette action est irréversible.",
         "previewPreparing": "Préparation de l’aperçu",
         "previewUnavailable": "Aperçu indisponible",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} éléments",
         "itemCount_many": "{{count, number}} éléments",
         "itemCount_other": "{{count, number}} éléments",
+        "onThisComputer": "{{size}} sur cet ordinateur",
+        "showInFolder": "Afficher dans le dossier",
         "done": "Terminé",
         "removeHint": "Retirer un élément d’un Design le conserve dans la bibliothèque. Le supprimer ici le retire de tous les Designs.",
         "deleteEverywhere": "Supprimer partout",
@@ -601,6 +605,7 @@
         "openInLibrary": "Ouvrir dans la bibliothèque de données",
         "removeFromDesign": "Retirer du Design",
         "fromFiles": "Terrain ou hauteur depuis des fichiers…",
+        "fromGeoJson": "Objets du Design depuis du GeoJSON…",
         "fromLibrary": "Depuis votre bibliothèque",
         "libraryEmpty": "Votre bibliothèque ne contient pas encore de données",
         "inThisDesign": "{{name}} · dans ce Design",
@@ -608,6 +613,10 @@
         "emptyImport": "Importer des fichiers…",
         "emptyLibrary": "Ouvrir la bibliothèque de données",
         "fromItem": "depuis {{name}}",
+        "resultCount_one": "{{count, number}} résultat",
+        "resultCount_few": "{{count, number}} résultats",
+        "resultCount_many": "{{count, number}} résultats",
+        "resultCount_other": "{{count, number}} résultats",
         "importing": "Import en cours",
         "calculationAria": "Progression du calcul de {{name}}",
         "cancelImport": "Annuler l’import",
@@ -646,7 +655,15 @@
         "submit_one": "Importer {{count, number}} fichier",
         "submit_few": "Importer {{count, number}} fichiers",
         "submit_many": "Importer {{count, number}} fichiers",
-        "submit_other": "Importer {{count, number}} fichiers"
+        "submit_other": "Importer {{count, number}} fichiers",
+        "coverage": {
+          "coversTitle": "Couvre votre site.",
+          "partialTitle": "Couvre une partie de votre site.",
+          "partialBody": "Une partie de ce Design est hors des fichiers.",
+          "span": "Les fichiers couvrent {{width}} × {{height}}.",
+          "apartTitle": "Ces fichiers ne couvrent pas votre site.",
+          "apartBody": "Ils sont à {{distance}} de ce Design. Vous pouvez quand même les importer dans votre bibliothèque."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "Clair",
         "dark": "Sombre"
-      },
-      "hiddenBySatellite": "Masqué tant que Satellite est affiché."
+      }
     },
     "rasterSample": {
       "title": "Valeur au point",

@@ -16,6 +16,7 @@
 .dialogButton { min-height: var(--control-size-lg); font-size: var(--text-base); }
 .primary { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-on-accent); }
 .primary:hover:not(:disabled) { border-color: var(--color-primary-hover); background: var(--color-primary-hover); }
+.ghost { border-color: transparent; background: transparent; }
 .danger { border-color: var(--color-danger); background: transparent; color: var(--color-danger); }
 .link { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--color-accent-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-align: left; cursor: pointer; }
 .back { align-self: flex-start; padding: var(--space-1) 0; border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer; }

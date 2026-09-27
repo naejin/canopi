@@ -278,7 +278,6 @@
       "unlockLayer": "解锁图层",
       "opacity": "不透明度",
       "mapSection": "地图图层",
-      "basemap": "底图",
       "basemapLoading": "正在加载底图…",
       "mapUnavailable": "地图不可用",
       "layerSkipped": "无法显示某个地图图层",
@@ -289,7 +288,10 @@
       "satellite": "卫星",
       "design": "设计",
       "siteData": "场地数据",
-      "background": "背景"
+      "background": "背景",
+      "backgroundMap": "地图",
+      "backgroundNone": "无",
+      "backgroundPlainPaper": "空白纸张"
     },
     "timeline": {
       "actionType": "任务类型",
@@ -557,7 +559,7 @@
         "showResults": "显示结果",
         "deleteBody": "数据将从数据资料库中移除。",
         "deleteBodyInDesign": "数据将从数据资料库和此设计中移除。",
-        "deleteOtherDesigns": "使用该数据的其他设计将显示其不可用。",
+        "deleteOtherDesigns": "Canopi 不记录哪些其他设计使用了该数据。使用它的设计将显示其不可用。",
         "deleteNoUndo": "此操作无法撤销。",
         "previewPreparing": "正在准备预览",
         "previewUnavailable": "预览不可用",
@@ -579,6 +581,8 @@
         "itemCount_few": "{{count, number}} 项",
         "itemCount_many": "{{count, number}} 项",
         "itemCount_other": "{{count, number}} 项",
+        "onThisComputer": "在此电脑上占用 {{size}}",
+        "showInFolder": "在文件夹中显示",
         "done": "完成",
         "removeHint": "从某个设计中移除项目后，它仍保留在数据资料库中。在此处删除会将其从所有设计中移除。",
         "deleteEverywhere": "全部删除",
@@ -601,6 +605,7 @@
         "openInLibrary": "在数据资料库中打开",
         "removeFromDesign": "从设计中移除",
         "fromFiles": "从文件添加地形或高度…",
+        "fromGeoJson": "从 GeoJSON 导入设计对象…",
         "fromLibrary": "来自您的数据资料库",
         "libraryEmpty": "您的数据资料库中还没有数据",
         "inThisDesign": "{{name}} · 在此设计中",
@@ -608,6 +613,10 @@
         "emptyImport": "导入文件…",
         "emptyLibrary": "打开数据资料库",
         "fromItem": "来自{{name}}",
+        "resultCount_one": "{{count, number}} 个结果",
+        "resultCount_few": "{{count, number}} 个结果",
+        "resultCount_many": "{{count, number}} 个结果",
+        "resultCount_other": "{{count, number}} 个结果",
         "importing": "正在导入",
         "calculationAria": "{{name}}的计算进度",
         "cancelImport": "取消导入",
@@ -646,7 +655,15 @@
         "submit_one": "导入 {{count, number}} 个文件",
         "submit_few": "导入 {{count, number}} 个文件",
         "submit_many": "导入 {{count, number}} 个文件",
-        "submit_other": "导入 {{count, number}} 个文件"
+        "submit_other": "导入 {{count, number}} 个文件",
+        "coverage": {
+          "coversTitle": "覆盖您的场地。",
+          "partialTitle": "覆盖您场地的一部分。",
+          "partialBody": "此设计的一部分位于文件范围之外。",
+          "span": "文件范围为 {{width}} × {{height}}。",
+          "apartTitle": "这些文件未覆盖您的场地。",
+          "apartBody": "它们距离此设计 {{distance}}。您仍可以将其导入数据资料库。"
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "明亮",
         "dark": "深色"
-      },
-      "hiddenBySatellite": "开启卫星图层时隐藏。"
+      }
     },
     "rasterSample": {
       "title": "点值",
@@ -1560,7 +1576,7 @@
       "ValuesNotMetres": "需要以米为单位的数值；此数据的单位为 {{units}}。",
       "GridNotProjectedMetres": "需要以米为单位的投影格网。",
       "EngineMissing": "不可用：缺少 GeoLibre 引擎。",
-      "NeedsDesktop": "需要 Canopi 桌面版。",
+      "NeedsDesktop": "需要 Canopi Desktop。",
       "AlreadyInLayers": "已在图层中。"
     },
     "stale": {

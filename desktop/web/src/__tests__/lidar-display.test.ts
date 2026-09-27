@@ -24,6 +24,8 @@ function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentation
     displayRange: [104, 132],
     freshness: { state: 'Current' },
     definitionId: null,
+    analysisId: null,
+    outputKey: null,
     run: null,
     inputId: null,
     parentId: null,

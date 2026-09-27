@@ -12,6 +12,7 @@ pub(crate) mod analyses;
 mod analysis_registry_generated;
 pub mod catalogue;
 mod collection;
+mod coverage;
 mod display_cog;
 #[cfg(test)]
 mod e2e;
@@ -96,6 +97,32 @@ struct DisplayAdmission {
 ///
 /// An unrecognised or absent label is read as `Exact`: that is the conservative
 /// reading, because a range presented as measured never claims more than it is.
+/// Total size of the regular files under `root`; symbolic links are not
+/// followed, and a file removed during the walk is skipped.
+fn directory_size(root: &std::path::Path) -> std::io::Result<u64> {
+    let mut total = 0u64;
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let entries = match std::fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if metadata.is_dir() {
+                pending.push(entry.path());
+            } else if metadata.is_file() {
+                total = total.saturating_add(metadata.len());
+            }
+        }
+    }
+    Ok(total)
+}
+
 pub(crate) fn display_range_basis(
     stored: Option<&str>,
 ) -> common_types::lidar::LidarDisplayRangeBasis {
@@ -465,6 +492,22 @@ impl LidarLibrary {
                 detail: Some(error),
             },
         }
+    }
+
+    /// Import › "Covers your site": the WGS84 box around the chosen files.
+    /// Reads metadata only; nothing is copied or recorded.
+    pub fn import_coverage(
+        &self,
+        paths: &[std::path::PathBuf],
+    ) -> Result<common_types::lidar::LidarImportCoverage, String> {
+        coverage::import_coverage(&self.inner.engine, paths)
+    }
+
+    /// Bytes the Data library folder occupies on this device: sources,
+    /// prepared data, results, display files and the catalogue.
+    pub fn disk_usage(&self) -> Result<u64, String> {
+        directory_size(self.inner.paths.root())
+            .map_err(|error| format!("Canopi could not measure the Data library: {error}"))
     }
 
     pub fn library_snapshot(&self) -> Result<LidarSnapshot, String> {
@@ -1451,6 +1494,25 @@ mod fixed_library_tests;
 #[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_library_size_counts_files_in_every_folder() {
+        let root = std::env::temp_dir().join(super::new_id("canopi-library-size"));
+        std::fs::create_dir_all(root.join("sources").join("abc")).unwrap();
+        std::fs::write(root.join("lidar-library.sqlite"), vec![0u8; 100]).unwrap();
+        std::fs::write(
+            root.join("sources").join("abc").join("original.tif"),
+            vec![0u8; 23],
+        )
+        .unwrap();
+        assert_eq!(super::directory_size(&root).unwrap(), 123);
+        assert_eq!(
+            super::directory_size(&root.join("absent")).unwrap(),
+            0,
+            "a library never used has nothing on disk"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     use super::*;
 
     fn row_count(connection: &Connection, table: &str) -> i64 {

@@ -343,6 +343,14 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       updateItem(args.itemId, item => ({ ...item, name: String(args.name) }))
       result = undefined
       break
+    case 'lidar_import_coverage': {
+      // The chosen tiles span a little more than the sample Design.
+      const lons = file.plants.map(plant => plant.position.lon)
+      const lats = file.plants.map(plant => plant.position.lat)
+      result = { bounds: [Math.min(...lons) - 0.01, Math.min(...lats) - 0.004, Math.max(...lons) + 0.01, Math.max(...lats) + 0.004], unreadable_files: 0 }
+      break
+    }
+    case 'lidar_library_disk_usage': result = 1_240_000_000; break
     case 'lidar_delete_impact':
       result = {
         dependent_item_ids: lidarItems

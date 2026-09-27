@@ -278,7 +278,6 @@
       "unlockLayer": "레이어 잠금 해제",
       "opacity": "불투명도",
       "mapSection": "지도 레이어",
-      "basemap": "기본 지도",
       "basemapLoading": "기본 지도를 불러오는 중…",
       "mapUnavailable": "지도를 사용할 수 없음",
       "layerSkipped": "지도 레이어를 표시할 수 없습니다",
@@ -289,7 +288,10 @@
       "satellite": "위성",
       "design": "디자인",
       "siteData": "부지 데이터",
-      "background": "배경"
+      "background": "배경",
+      "backgroundMap": "지도",
+      "backgroundNone": "없음",
+      "backgroundPlainPaper": "빈 종이"
     },
     "timeline": {
       "actionType": "작업 유형",
@@ -557,7 +559,7 @@
         "showResults": "결과 표시",
         "deleteBody": "데이터가 라이브러리에서 제거됩니다.",
         "deleteBodyInDesign": "데이터가 라이브러리와 이 디자인에서 제거됩니다.",
-        "deleteOtherDesigns": "이 데이터를 사용하는 다른 디자인에는 사용할 수 없음으로 표시됩니다.",
+        "deleteOtherDesigns": "Canopi는 어떤 다른 디자인이 이 데이터를 사용하는지 기록하지 않습니다. 사용하는 디자인에는 사용할 수 없음으로 표시됩니다.",
         "deleteNoUndo": "이 작업은 되돌릴 수 없습니다.",
         "previewPreparing": "미리보기 준비 중",
         "previewUnavailable": "미리보기를 사용할 수 없음",
@@ -579,6 +581,8 @@
         "itemCount_few": "항목 {{count, number}}개",
         "itemCount_many": "항목 {{count, number}}개",
         "itemCount_other": "항목 {{count, number}}개",
+        "onThisComputer": "이 컴퓨터에서 {{size}}",
+        "showInFolder": "폴더에서 보기",
         "done": "완료",
         "removeHint": "한 디자인에서 항목을 제거해도 라이브러리에는 남습니다. 여기서 삭제하면 모든 디자인에서 제거됩니다.",
         "deleteEverywhere": "모든 곳에서 삭제",
@@ -601,6 +605,7 @@
         "openInLibrary": "데이터 라이브러리에서 열기",
         "removeFromDesign": "디자인에서 제거",
         "fromFiles": "파일에서 지형 또는 높이…",
+        "fromGeoJson": "GeoJSON에서 디자인 객체…",
         "fromLibrary": "내 라이브러리에서",
         "libraryEmpty": "라이브러리에 아직 데이터가 없습니다",
         "inThisDesign": "{{name}} · 이 디자인에 있음",
@@ -608,6 +613,10 @@
         "emptyImport": "파일 가져오기…",
         "emptyLibrary": "데이터 라이브러리 열기",
         "fromItem": "{{name}}에서",
+        "resultCount_one": "결과 {{count, number}}개",
+        "resultCount_few": "결과 {{count, number}}개",
+        "resultCount_many": "결과 {{count, number}}개",
+        "resultCount_other": "결과 {{count, number}}개",
         "importing": "가져오는 중",
         "calculationAria": "{{name}} 계산 진행률",
         "cancelImport": "가져오기 취소",
@@ -646,7 +655,15 @@
         "submit_one": "파일 {{count, number}}개 가져오기",
         "submit_few": "파일 {{count, number}}개 가져오기",
         "submit_many": "파일 {{count, number}}개 가져오기",
-        "submit_other": "파일 {{count, number}}개 가져오기"
+        "submit_other": "파일 {{count, number}}개 가져오기",
+        "coverage": {
+          "coversTitle": "부지를 덮습니다.",
+          "partialTitle": "부지의 일부를 덮습니다.",
+          "partialBody": "이 디자인의 일부가 파일 범위 밖에 있습니다.",
+          "span": "파일 범위는 {{width}} × {{height}}입니다.",
+          "apartTitle": "이 파일은 부지를 덮지 않습니다.",
+          "apartBody": "이 디자인에서 {{distance}} 떨어져 있습니다. 라이브러리로는 가져올 수 있습니다."
+        }
       }
     },
     "basemap": {
@@ -661,8 +678,7 @@
         "positron": "Positron",
         "bright": "밝게",
         "dark": "어둡게"
-      },
-      "hiddenBySatellite": "위성이 켜져 있는 동안 숨겨집니다."
+      }
     },
     "rasterSample": {
       "title": "지점 값",

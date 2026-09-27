@@ -7,9 +7,11 @@ import {
   deleteLibraryItem,
   dismissLibraryImport,
   fetchDeleteImpact,
+  fetchLibraryDiskUsage,
   renameLibraryItem,
   rerunAnalysis,
   retryLibraryImport,
+  showDataLibraryFolder,
 } from '../../../app/lidar/actions'
 import { findAnalysis } from '../../../app/analyses/registry'
 import {
@@ -29,7 +31,7 @@ import { Dropdown, type DropdownItem } from '../../shared/Dropdown'
 import { SurfaceSearch } from '../../shared/SurfaceSearch'
 import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
 import { ItemDetails } from './ItemDetails'
-import { isRunning, isStale, itemStatusLabel, itemSummary } from './item-text'
+import { formatDiskSize, isRunning, isStale, itemStatusLabel, itemSummary } from './item-text'
 import { LibraryPreview, usePreviewClient } from './LibraryPreview'
 import styles from './data-library.module.css'
 
@@ -44,7 +46,8 @@ type View =
  * are session view state and never enter a Design. Library work keeps running
  * when the dialog closes or the Design changes; only an explicit Cancel stops
  * it. Deleting here removes an item from every Design; removing it from a
- * Design (in Layers) never deletes it.
+ * Design (in Layers) never deletes it. The footer counts the items, says how
+ * much space the library takes on this computer and opens its folder.
  */
 export function DataLibraryDialog({ focusId }: { readonly focusId: string | null }) {
   useEffect(() => installLidarLibraryObserver(), [])
@@ -58,10 +61,19 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
   const [relatedTo, setRelatedTo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [diskUsage, setDiskUsage] = useState<number | null>(null)
   const body = useRef<HTMLDivElement>(null)
   const savedScroll = useRef(0)
   const restoreFocusId = useRef<string | null>(null)
   const restoringList = useRef(false)
+
+  // Measured again when the items change (an import, a result, a deletion).
+  const itemsKey = items.map((row) => `${row.id}:${row.generationId ?? ''}`).join(',')
+  useEffect(() => {
+    let current = true
+    void fetchLibraryDiskUsage().then((bytes) => { if (current) setDiskUsage(bytes) }, () => {})
+    return () => { current = false }
+  }, [itemsKey])
 
   const visible = filterLibraryItems(items, query, type, relatedTo)
   const item = 'id' in view ? items.find((candidate) => candidate.id === view.id) ?? null : null
@@ -238,7 +250,13 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
       onClose={closeDataDialog}
       wide
       footer={<>
-        <span className={styles.footerNote}>{t('canvas.lidar.library.itemCount', { count })}</span>
+        <span className={styles.footerNote}>
+          {t('canvas.lidar.library.itemCount', { count })}
+          {diskUsage !== null && ` · ${t('canvas.lidar.library.onThisComputer', { size: formatDiskSize(diskUsage, locale.value) })}`}
+        </span>
+        <button type="button" className={`${styles.dialogButton} ${styles.ghost}`} onClick={() => void run(showDataLibraryFolder)}>
+          {t('canvas.lidar.library.showInFolder')}
+        </button>
         <button type="button" className={styles.dialogButton} onClick={closeDataDialog}>{t('canvas.lidar.library.done')}</button>
       </>}
     >
