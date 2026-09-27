@@ -20,6 +20,8 @@ export interface SceneZoneVisual {
 
 export type CanvasInteractionVisualState =
   | 'hover'
+  /** A plant a panel points at (finder matches, panel hover and selection). */
+  | 'highlight'
   | 'selected'
   | 'locked-design-object'
   | 'locked-layer'
@@ -163,6 +165,8 @@ export function getCanvasInteractionStrokeVisual(
   // Selected: 2.5 px ochre over a 5.5 px casing; every state keeps its casing
   // so rings and outlines read on satellite imagery and plain basemaps alike.
   if (state === 'selected') return interactionStroke('selection-stroke', 2.5, 1, 5.5)
+  // Highlight rings must read at any zoom and on any backdrop: solid ochre on a full halo.
+  if (state === 'highlight') return interactionStroke('selection-stroke', 2, 1, 5)
   if (state === 'locked-design-object') return interactionStroke('locked-object-stroke', 2.25, 0.86, 4.25)
   if (state === 'locked-layer') return interactionStroke('locked-layer-stroke', 2.25, 0.9, 4.25)
   return interactionStroke('hover-stroke', 2, 0.72, 4)

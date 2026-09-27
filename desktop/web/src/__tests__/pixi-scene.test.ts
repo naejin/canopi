@@ -532,6 +532,36 @@ describe('createPixiScenePresentation', () => {
     renderer.dispose()
   })
 
+  it('rings highlighted plants at a readable size at any zoom, solid over a wider halo, without moving them', async () => {
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{ circle: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }>
+      }
+    }
+    const renderer = mountPresentation(document.createElement('div'))
+    const plant = createPlant({ id: 'a', symbol: 'round', position: { x: 10, y: 10 } })
+
+    // The whole-Design zoom of a 70 m site: plants are dots of a pixel or two.
+    for (const scale of [0.25, 4]) {
+      vi.clearAllMocks()
+      const snapshot = createRendererSnapshot({ plants: [plant], viewport: { x: 0, y: 0, scale } })
+      renderer.renderScene({ ...snapshot, highlightedPlantIds: new Set(['a']) })
+      const graphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 1)!
+      const radii = graphic.circle.mock.calls.map((call) => call[2] as number)
+      const glyphRadius = Math.min(...radii)
+      const ringRadius = Math.max(...radii)
+      expect(ringRadius, `scale ${scale}`).toBeGreaterThanOrEqual(8)
+      expect(ringRadius, `scale ${scale}`).toBeGreaterThan(glyphRadius + 2)
+      const [casing, stroke] = graphic.stroke.mock.calls.slice(-2).map((call) => call[0] as { width: number; alpha: number })
+      expect(stroke!.alpha).toBe(1)
+      expect(stroke!.width).toBeGreaterThanOrEqual(2)
+      expect(casing!.width).toBeGreaterThanOrEqual(stroke!.width + 2)
+      expect(casing!.alpha).toBe(1)
+    }
+    expect(plant.position).toEqual({ x: 10, y: 10 })
+    renderer.dispose()
+  })
+
   it('draws curved plant symbol recipes with native Pixi curves', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {

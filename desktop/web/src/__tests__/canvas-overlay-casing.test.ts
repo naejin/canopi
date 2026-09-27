@@ -31,7 +31,7 @@ describe('overlay stroke casing', () => {
   })
 
   it('gives every interaction stroke a wider casing in its theme contrast colour', () => {
-    for (const state of ['hover', 'selected', 'locked-design-object', 'locked-layer'] as const) {
+    for (const state of ['hover', 'highlight', 'selected', 'locked-design-object', 'locked-layer'] as const) {
       const visual = getCanvasInteractionStrokeVisual(state)
       expect(visual.casingColor, state).toBe(getCanvasColor('interaction-casing'))
       expect(visual.casingWidthPx, state).toBeGreaterThanOrEqual(visual.widthPx + 2)

@@ -54,6 +54,8 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const ZONE_STROKE_PX = 2
 const MEASUREMENT_GUIDE_STROKE_PX = 1.5
+/** Plant rings never shrink below this on screen, so a ring reads at the whole-Design zoom. */
+const MIN_PLANT_RING_RADIUS_PX = 8
 const graphicsKeys = new WeakMap<Graphics, string>()
 
 type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
@@ -796,8 +798,7 @@ function plantGeometryKey(
   glyphOpacity: number,
 ): string {
   const selected = entry.selected
-  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
-  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
+  const interactionState = resolvePlantInteractionState(entry, hoveredCanonicalName, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const edgeColor = getPlantSymbolEdgeColor(entry.color)
@@ -817,8 +818,7 @@ function drawPlantGeometry(
   glyphOpacity: number,
 ): void {
   const selected = entry.selected
-  const sameSpeciesHover = Boolean(hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName)
-  const interactionState = resolveInteractionState(selected, highlighted || sameSpeciesHover, hoverState)
+  const interactionState = resolvePlantInteractionState(entry, hoveredCanonicalName, highlighted, hoverState)
   const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
   const x = 0
   const y = 0
@@ -829,7 +829,7 @@ function drawPlantGeometry(
   if (interactionVisual) {
     // Plants draw in the CSS-pixel layer, so ring widths need no camera scaling.
     const ring = casedStroke(interactionVisual, 1)
-    const ringRadius = selected ? r : r * 1.4
+    const ringRadius = selected ? r : Math.max(r * 1.4, MIN_PLANT_RING_RADIUS_PX)
     graphics.circle(x, y, ringRadius).stroke(ring.casing)
     graphics.circle(x, y, ringRadius).stroke(ring.stroke)
   }
@@ -1136,6 +1136,22 @@ function toPixiColor(color: string | null | undefined, fallback: string | number
   const normalized = color.replace('#', '')
   const parsed = Number.parseInt(normalized, 16)
   return Number.isFinite(parsed) ? parsed : value
+}
+
+/**
+ * A plant's ring state: selection first, then the map hover, then a panel's
+ * highlight, then the species under the pointer.
+ */
+function resolvePlantInteractionState(
+  entry: PlantPresentationEntry,
+  hoveredCanonicalName: string | null,
+  highlighted: boolean,
+  hoverState: SceneRendererHoverState | null,
+): CanvasInteractionVisualState | null {
+  if (entry.selected) return 'selected'
+  if (hoverState) return hoverState
+  if (highlighted) return 'highlight'
+  return hoveredCanonicalName && entry.plant.canonicalName === hoveredCanonicalName ? 'hover' : null
 }
 
 function resolveInteractionState(
