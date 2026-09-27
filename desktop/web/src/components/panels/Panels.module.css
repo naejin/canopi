@@ -24,13 +24,14 @@
   --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-named-width));
 }
 
-/* Rulers start below the floating title bar; they pass under the rails. */
+/* Rulers start below the floating title bar and right of the tool rail
+   (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
 .rulerOverlay {
   position: absolute;
   top: calc(var(--chrome-top) + var(--title-bar-height) + var(--space-1));
   right: 0;
   bottom: 0;
-  left: 0;
+  left: var(--map-inset-left, 0px);
   z-index: 15;
   pointer-events: none;
 }
@@ -118,4 +119,32 @@
   .basemapFeedback {
     bottom: calc(2 * var(--chrome-inset) + var(--control-size-3xl));
   }
+}
+
+/* The map attribution pill sits immediately left of the zoom group, bottom
+   aligned with it, and wraps rather than running under the view chip. On a
+   map 640 px wide or narrower MapLibre folds it into an (i) button. */
+.canvasArea :global(.maplibregl-ctrl-bottom-right) {
+  right: calc(var(--zoom-group-width, 0px) + var(--chrome-inset) + var(--space-2));
+  bottom: var(--chrome-inset);
+  max-width: calc(100% - var(--zoom-group-width, 0px) - var(--view-chip-width, 0px) - 2 * var(--chrome-inset) - 2 * var(--space-2));
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib) {
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--line-height-tight);
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib a) {
+  color: inherit;
+}
+
+.canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib:not(.maplibregl-compact)) {
+  padding: var(--space-0-5) var(--space-2);
 }

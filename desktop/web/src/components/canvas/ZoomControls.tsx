@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { CanvasToolbarActionCommand } from '../../app/canvas-commands'
 import { locale } from '../../app/settings/state'
 import {
@@ -14,6 +14,7 @@ import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon, type ControlIconName } from '../shared/ControlIcon'
+import { useMapOccluder, usePublishedWidth } from '../shared/useMapChrome'
 import styles from './ZoomControls.module.css'
 
 const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
@@ -29,6 +30,7 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
  */
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
   const group = useRef<HTMLDivElement>(null)
+  useMapOccluder(group, 'bottom')
   const frame = currentCanvasQuerySurface.value?.viewport.value
   const command = (id: string) => viewActions.find((action) => action.id === id)
   const zoomIn = command('zoom-in')
@@ -40,19 +42,7 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
   const bar = frame ? getScaleBarDisplay(1 / groundMetersPerCssPixel(frame)) : null
 
   // The attribution pill is placed against this group's measured width.
-  useLayoutEffect(() => {
-    const element = group.current
-    const host = element?.parentElement
-    if (!element || !host || typeof ResizeObserver === 'undefined') return
-    const publish = () => host.style.setProperty('--zoom-group-width', `${element.offsetWidth}px`)
-    publish()
-    const observer = new ResizeObserver(publish)
-    observer.observe(element)
-    return () => {
-      observer.disconnect()
-      host.style.removeProperty('--zoom-group-width')
-    }
-  }, [])
+  usePublishedWidth(group, '--zoom-group-width')
 
   return (
     <div ref={group} className={styles.group} role="group" aria-label={t('canvas.grid.zoom')} data-zoom-group>

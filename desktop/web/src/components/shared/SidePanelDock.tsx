@@ -4,6 +4,7 @@ import { sidePanelWidth } from '../../app/shell/state'
 import { commitSidePanelWidth } from '../../app/shell/controller'
 import { t } from '../../i18n'
 import { usePointerResize } from './usePointerResize'
+import { useMapOccluder } from './useMapChrome'
 import styles from './SidePanelDock.module.css'
 
 const MIN_SIDEBAR_WIDTH = 320
@@ -39,6 +40,7 @@ export function SidePanelDock({
   readonly onManualResize?: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
+  useMapOccluder(panelRef)
   const width = sidePanelWidth.value
   const baseWidth = width === null ? `${wide ? DEFAULT_WIDE_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH}px` : `${width}px`
   return (

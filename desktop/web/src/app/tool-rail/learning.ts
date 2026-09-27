@@ -3,6 +3,7 @@ import { canvasCommandDefinitions, type CanvasToolId } from '../canvas-commands'
 import { currentCanvasTool } from '../../canvas/session'
 import { mutateSettingsProjection } from '../settings/projection'
 import { toolNamesVisible, usedCanvasTools } from '../settings/state'
+import { toolRailCrowdsMap, visibleMapFrame } from '../shell/visible-map-area'
 
 /** Every tool on the rail; names show until each has been used once on this device. */
 export const RAIL_TOOL_IDS: readonly CanvasToolId[] = canvasCommandDefinitions.flatMap(
@@ -16,6 +17,26 @@ export const toolRailShowsNames = computed(() => {
   const used = usedCanvasTools.value
   return !RAIL_TOOL_IDS.every((tool) => used.includes(tool))
 })
+
+/**
+ * Whether the rail shows names on this map: the setting above, unless the
+ * labelled rail would leave too little map beside the right chrome (a narrow
+ * window with a dock open). Then it keeps to icons with labelled tooltips.
+ */
+export const toolRailShowsNamesOnMap = computed(() => (
+  toolRailShowsNames.value && !toolRailCrowdsMap(visibleMapFrame.value, labelledToolRailEdgePx())
+))
+
+/** Where the labelled rail's right edge sits from the map's left edge: `--chrome-inset` + `--chrome-rail-named-width`. */
+function labelledToolRailEdgePx(): number {
+  const style = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const length = (name: string, fallback: number) => {
+    const value = Number.parseFloat(style?.getPropertyValue(name) ?? '')
+    return Number.isFinite(value) ? value : fallback
+  }
+  // Fallbacks mirror styles/global.css for environments without its tokens.
+  return length('--chrome-inset', 12) + length('--chrome-rail-named-width', 224)
+}
 
 /** View › Tool names: pins the current opposite, so the choice outlives first use. */
 export function toggleToolNames(): void {

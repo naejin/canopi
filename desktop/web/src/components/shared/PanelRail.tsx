@@ -1,5 +1,7 @@
 import { ButtonTooltip } from './ButtonTooltip'
 import { PanelIcon, type PanelIconName } from './PanelIcon'
+import { useRef } from 'preact/hooks'
+import { useMapOccluder } from './useMapChrome'
 import styles from './PanelRail.module.css'
 
 /** One panel entry as the command projection hands it over. */
@@ -25,8 +27,10 @@ export function PanelRail({ groups, label }: {
   readonly label: string
 }) {
   const visibleGroups = groups.filter((group) => group.length > 0)
+  const rail = useRef<HTMLElement>(null)
+  useMapOccluder(rail, 'right')
   return (
-    <nav className={styles.rail} aria-label={label} data-panel-rail>
+    <nav ref={rail} className={styles.rail} aria-label={label} data-panel-rail>
       {visibleGroups.map((group, index) => (
         <div key={index} className={styles.group}>
           {index > 0 && <div className={styles.rule} role="separator" />}

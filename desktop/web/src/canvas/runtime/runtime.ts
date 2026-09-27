@@ -18,6 +18,7 @@ import type {
   CameraViewportSnapshot,
   SceneBounds,
   TemporaryBoundsFocusOptions,
+  CameraFrameInsets,
 } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
@@ -73,6 +74,11 @@ export interface CanvasViewportCommandSurface {
   returnToDesign(): void
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
+  /**
+   * Screen edges covered by the workspace's floating chrome. Fit to Design,
+   * Return to Design and temporary focus frame into the visible map area.
+   */
+  setFramingInsets(insets: CameraFrameInsets): void
   /**
    * Moves the view to a place; design objects never move. `fly` animates the
    * move on the map; the default jumps.

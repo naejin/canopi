@@ -1,6 +1,8 @@
 import type { CanvasToolbarActionCommand } from '../../app/canvas-commands'
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
+import { useRef } from 'preact/hooks'
+import { useMapOccluder, usePublishedWidth } from '../shared/useMapChrome'
 import styles from './ViewChip.module.css'
 
 /**
@@ -8,8 +10,12 @@ import styles from './ViewChip.module.css'
  * toggles. A pressed toggle shows a check, so its state never rests on colour.
  */
 export function ViewChip({ toggles }: { readonly toggles: readonly CanvasToolbarActionCommand[] }) {
+  const chip = useRef<HTMLDivElement>(null)
+  useMapOccluder(chip, 'bottom')
+  // The attribution pill keeps clear of the chip.
+  usePublishedWidth(chip, '--view-chip-width')
   return (
-    <div className={styles.chip} role="group" aria-label={t('canvas.viewChip')} data-view-chip>
+    <div ref={chip} className={styles.chip} role="group" aria-label={t('canvas.viewChip')} data-view-chip>
       {toggles.map((toggle) => (
         <button
           key={toggle.id}

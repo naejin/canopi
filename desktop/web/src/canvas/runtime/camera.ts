@@ -17,11 +17,34 @@ const ZOOM_REFERENCE_SCALE = 20
 const DEFAULT_FIT_PADDING = 0.1
 const FIT_MAX_ITERATIONS = 20
 const FIT_CONVERGENCE_THRESHOLD = 0.0001
+/** Below this visible width or height, framing ignores the insets and uses the whole screen. */
+const MIN_FRAMING_EXTENT_CSS_PX = 120
 const ZOOM_FACTOR = 1.1
 const DEFAULT_CAMERA_POLICY = createWorkspaceCameraPolicy()
 const DEFAULT_SCALE_BOUNDS = cameraScaleBoundsForPolicy(DEFAULT_CAMERA_POLICY)
 
 export type WorkspaceCameraMode = 'site' | 'overview'
+
+/**
+ * CSS-pixel edges of the screen covered by floating chrome (title bar, rails,
+ * the open dock). Fitting and temporary focus frame into what is left.
+ */
+export interface CameraFrameInsets {
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly left: number
+}
+
+export const NO_CAMERA_FRAME_INSETS: CameraFrameInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+
+/** The screen rectangle fitting frames into, in CSS pixels. */
+interface CameraFramingRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
 
 export interface CameraScreenSize {
   width: number
@@ -79,6 +102,8 @@ export interface WorkspaceCameraNavigation {
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
   clearTemporaryFocus(): void
+  /** Screen edges covered by floating chrome; fitting and temporary focus frame inside them. */
+  setFrameInsets(insets: CameraFrameInsets): void
   /** Keeps the same view after the session plane moved: next = previous * scale + offset. */
   reprojectViewport(transform: SessionPlaneTransform): SceneViewportState
   /**
@@ -142,6 +167,7 @@ export class CameraController implements
     revision: 0,
   }))
   private temporaryFocusBookmark: SceneViewportState | null = null
+  private frameInsets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS
   private _policy: WorkspaceCameraPolicy
 
   readonly snapshot: ReadonlySignal<CameraViewportSnapshot> = this._snapshot
@@ -248,13 +274,19 @@ export class CameraController implements
     ))
   }
 
+  setFrameInsets(insets: CameraFrameInsets): void {
+    const valid = [insets.top, insets.right, insets.bottom, insets.left]
+      .every((edge) => Number.isFinite(edge) && edge >= 0)
+    this.frameInsets = valid ? { ...insets } : NO_CAMERA_FRAME_INSETS
+  }
+
   zoomToFit(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
-    return this.setViewport(fitCameraViewport(this._snapshot.peek(), scene, options))
+    return this.setViewport(fitCameraViewport(this._snapshot.peek(), scene, options, this.frameInsets))
   }
 
   returnToDesign(scene: ScenePersistedState, options: SceneBoundsOptions = {}): SceneViewportState {
     const snapshot = this._snapshot.peek()
-    const fitted = fitCameraViewport(snapshot, scene, options)
+    const fitted = fitCameraViewport(snapshot, scene, options, this.frameInsets)
     if (
       fitted.scale >= snapshot.overviewScaleThreshold
       && !sameViewport(fitted, snapshot.viewport)
@@ -284,7 +316,7 @@ export class CameraController implements
     bounds: SceneBounds,
     options: TemporaryBoundsFocusOptions,
   ): boolean {
-    const focusedViewport = fitTemporaryBoundsViewport(this._snapshot.peek(), bounds, options)
+    const focusedViewport = fitTemporaryBoundsViewport(this._snapshot.peek(), bounds, options, this.frameInsets)
     if (!focusedViewport) return false
     if (!this.temporaryFocusBookmark) this.temporaryFocusBookmark = { ...this._snapshot.peek().viewport }
     this.setViewport(focusedViewport)
@@ -475,9 +507,10 @@ export function fitCameraViewport(
   snapshot: CameraViewportSnapshot,
   scene: ScenePersistedState,
   options: SceneBoundsOptions = {},
+  insets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS,
 ): SceneViewportState {
-  const screen = snapshot.screenSize
-  if (screen.width <= 0 || screen.height <= 0) return { ...snapshot.viewport }
+  if (snapshot.screenSize.width <= 0 || snapshot.screenSize.height <= 0) return { ...snapshot.viewport }
+  const screen = cameraFramingRect(snapshot.screenSize, insets)
 
   // Annotations and default-mode plants have screen-space dimensions, so their
   // world-space footprint is inversely proportional to scale. Computing bounds
@@ -510,10 +543,28 @@ export function fitCameraViewport(
   const contentWidth = Math.max(finalBounds.maxX - finalBounds.minX, 1)
   const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
   return {
-    x: (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
-    y: (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
+    x: screen.x + (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
+    y: screen.y + (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
     scale,
   }
+}
+
+/**
+ * The part of the screen not covered by floating chrome. When the insets leave
+ * too little room (or are invalid), the whole screen is the frame.
+ */
+export function cameraFramingRect(
+  screen: CameraScreenSize,
+  insets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS,
+): CameraFramingRect {
+  const width = screen.width - insets.left - insets.right
+  const height = screen.height - insets.top - insets.bottom
+  if (
+    ![width, height].every(Number.isFinite)
+    || width < MIN_FRAMING_EXTENT_CSS_PX
+    || height < MIN_FRAMING_EXTENT_CSS_PX
+  ) return { x: 0, y: 0, width: screen.width, height: screen.height }
+  return { x: insets.left, y: insets.top, width, height }
 }
 
 /**
@@ -525,8 +576,12 @@ export function fitTemporaryBoundsViewport(
   snapshot: CameraViewportSnapshot,
   bounds: SceneBounds,
   options: TemporaryBoundsFocusOptions,
+  insets: CameraFrameInsets = NO_CAMERA_FRAME_INSETS,
 ): SceneViewportState | null {
-  const { width, height } = snapshot.screenSize
+  const { width: screenWidth, height: screenHeight } = snapshot.screenSize
+  if (!Number.isFinite(screenWidth) || !Number.isFinite(screenHeight) || screenWidth <= 0 || screenHeight <= 0) return null
+  const frame = cameraFramingRect(snapshot.screenSize, insets)
+  const { width, height } = frame
   const { minX, minY, maxX, maxY } = bounds
   const padding = options.paddingCssPx
   const maximumScale = options.maximumScale ?? snapshot.scaleBounds.maximum
@@ -552,8 +607,8 @@ export function fitTemporaryBoundsViewport(
   if (!Number.isFinite(scale) || scale > maximumScale) return null
 
   return {
-    x: width / 2 - ((minX + maxX) / 2) * scale,
-    y: height / 2 - ((minY + maxY) / 2) * scale,
+    x: frame.x + width / 2 - ((minX + maxX) / 2) * scale,
+    y: frame.y + height / 2 - ((minY + maxY) / 2) * scale,
     scale,
   }
 }

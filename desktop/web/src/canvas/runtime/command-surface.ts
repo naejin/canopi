@@ -59,7 +59,7 @@ interface SceneCanvasCommandSurfaceOptions {
   readonly camera: Pick<WorkspaceCameraFrameReader, 'viewport' | 'screenSize'>
   readonly cameraNavigation: Pick<
     WorkspaceCameraNavigation,
-    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn'
+    'zoomIn' | 'zoomOut' | 'zoomAroundScreenPoint' | 'zoomToFit' | 'returnToDesign' | 'focusTemporaryBounds' | 'returnFromTemporaryFocus' | 'centerOn' | 'setFrameInsets'
   >
   readonly history: SceneHistoryCommands
   readonly commandAdmission: SceneCommandAdmission
@@ -165,6 +165,11 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
       showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
+      setFramingInsets: (insets) => {
+        this.options.cameraNavigation.setFrameInsets(insets)
+        // Chrome placed inside the visible map area (rulers) redraws against the new edges.
+        this.options.invalidate('viewport')
+      },
     }
     this.history = {
       canUndo,

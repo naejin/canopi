@@ -18,6 +18,7 @@ import {
 import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
 import type { MapLibreCanvasSurfaceState } from '../maplibre/canvas-surface-state'
 import { WebWelcomeScreen } from './WebWelcomeScreen'
+import { useMapArea } from '../components/shared/useMapChrome'
 
 interface WebCanvasWorkspaceProps {
   readonly controller?: BrowserDesignSessionController
@@ -40,6 +41,7 @@ export function WebCanvasWorkspace({
 }: WebCanvasWorkspaceProps) {
   const hasDesign = store.currentDesign.value !== null
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+  useMapArea(canvasAreaRef)
   const containerRef = useRef<HTMLDivElement>(null)
   const rulerOverlayRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<MountedRuntime | null>(null)

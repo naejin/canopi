@@ -92,6 +92,7 @@ function createCommandSurface() {
       returnFromTemporaryFocus: () => false,
       showPlace: () => false,
       zoomBy: () => {},
+      setFramingInsets: () => {},
     },
     history: {
       canUndo: signal(false),

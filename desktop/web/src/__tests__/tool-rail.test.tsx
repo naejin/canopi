@@ -10,7 +10,9 @@ import {
   RAIL_TOOL_IDS,
   toggleToolNames,
   toolRailShowsNames,
+  toolRailShowsNamesOnMap,
 } from '../app/tool-rail/learning'
+import { visibleMapFrame } from '../app/shell/visible-map-area'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
@@ -28,7 +30,7 @@ import {
 
 /** The rail as both editions mount it: the shared projection and the first-use setting. */
 function Rail() {
-  return <ToolRail projection={workspaceCanvasCommandProjection.value} showNames={toolRailShowsNames.value} />
+  return <ToolRail projection={workspaceCanvasCommandProjection.value} showNames={toolRailShowsNamesOnMap.value} />
 }
 
 function Chip() {
@@ -150,6 +152,24 @@ describe('ToolRail', () => {
     await act(async () => { toggleToolNames() })
     expect(toolNamesVisible.value).toBe(true)
     expect(container.querySelector('[data-tool-rail="named"]')).not.toBeNull()
+  })
+
+  it('keeps to icons with labelled tooltips when names would crowd the map beside an open dock', async () => {
+    try {
+      // 720 × 800 window with a 380 px dock open: the labelled rail would leave about 30 px of map.
+      visibleMapFrame.value = { width: 720, height: 800, top: 60, right: 456, bottom: 56, left: 236 }
+      await mount()
+      expect(toolRailShowsNames.value).toBe(true)
+      expect(container.querySelector('[data-tool-rail="icons"]')).not.toBeNull()
+      const select = container.querySelector<HTMLButtonElement>('[data-command="canvas.tool.select"]')!
+      expect(select.getAttribute('aria-label')).toMatch(/Select/)
+
+      // Closing the dock gives the room back, and the names return.
+      await act(async () => { visibleMapFrame.value = { width: 720, height: 800, top: 60, right: 76, bottom: 56, left: 64 } })
+      expect(container.querySelector('[data-tool-rail="named"]')).not.toBeNull()
+    } finally {
+      visibleMapFrame.value = { width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 }
+    }
   })
 
   it('presses the active tool and groups tools as the Menus board does', async () => {

@@ -43,6 +43,7 @@ export function createTestCanvasCommandSurface(
       focusTemporaryBounds: () => false,
       returnFromTemporaryFocus: () => false,
       showPlace: () => false,
+      setFramingInsets: () => {},
     },
     history: {
       canUndo: signal(false),

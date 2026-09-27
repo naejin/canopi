@@ -4,10 +4,11 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 ## Chrome
 
-- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right. The labelled rail is a fixed 224 px so it does not jump between tools. Plant colour and symbol are not on the rail; they open from the right-click menu.
+- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right. The labelled rail is a fixed 224 px so it does not jump between tools. When the labelled rail would leave less than 360 px of map before the right chrome (a narrow window with a dock open), it keeps to icons with labelled tooltips until there is room again; View › Tool names stays the preference. Plant colour and symbol are not on the rail; they open from the right-click menu.
 - View chip (bottom left): Grid, Snap to grid, Rulers as pressed toggles with a check icon; off by default except Snap.
-- Zoom group (bottom right): scale bar, zoom out, scale ratio (a menu of common scales), zoom in, Fit to Design (Shift F). The attribution pill sits immediately left of the group so it never collides with panels. Below 0.1 px/m the Design is shown as one pin ("Return to …"), editing tools are disabled and a top-centre chip says "Zoom in to edit" with Return to Design.
-- The map is always the background; there is no grid or ruler frame unless turned on.
+- Zoom group (bottom right): scale bar, zoom out, scale ratio (a menu of common scales), zoom in, Fit to Design (Shift F). The attribution pill sits immediately left of the group, bottom-aligned, and wraps before it reaches the view chip; it stays expanded (imagery terms require it) and folds into an (i) button only on a map 640 px wide or narrower. Below 0.1 px/m the Design is shown as one pin ("Return to …"), editing tools are disabled and a top-centre chip says "Zoom in to edit" with Return to Design.
+- The map is always the background; there is no grid or ruler frame unless turned on. Rulers start right of the tool rail and below the title bar.
+- The visible map area is what the title bar, rails, open dock and bottom chrome leave uncovered. Fit to Design, Zoom to them and Return to Design frame into it, and top-centre status chips centre in it, wrapping when it is narrow.
 
 ## Map annotations
 

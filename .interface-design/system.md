@@ -26,7 +26,7 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 - Left: tool rail. Select, Pan · Place plants, Plant a row, Place a stamp · Zones (Polygon, Rectangle, Ellipse, Line) · Text note, Measure · Undo, Redo. Labelled with keys until each tool has been used once, then icons with labelled tooltips.
 - Right: panel rail (Ctrl 1–8) and one panel at a time: 380 px, or 440 px for Budget and Consortium; Calendar and Consortium can Expand.
 - Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design).
-- Tool cards sit top-left beside the rail (320 px): tool name, the instruction, then quiet key hints ending with the Esc meaning. Status chips (highlight, search results, selection) sit top-centre or bottom-centre at 40 px.
+- Tool cards sit top-left beside the rail (320 px): tool name, the instruction, then quiet key hints ending with the Esc meaning. Status chips (highlight, search results, selection) sit top-centre or bottom-centre of the visible map area (between the rails and the open dock) at 40 px.
 
 ## Tokens
 

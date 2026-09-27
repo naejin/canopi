@@ -1,11 +1,15 @@
-/* Status chip for highlighted plants: top centre, over the map. */
+/* Status chip for highlighted plants: top centre of the visible map, between
+   the tool rail and the panel rail or open dock (`--map-inset-*`, published by
+   app/shell/visible-map-area.ts). It wraps when that area is narrow. */
 .chip {
   position: absolute;
   z-index: 34;
   top: var(--chrome-rail-top);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(640px, calc(100% - var(--space-8)));
+  right: calc(var(--map-inset-right, 0px) + var(--space-4));
+  left: calc(var(--map-inset-left, 0px) + var(--space-4));
+  width: fit-content;
+  max-width: 640px;
+  margin-inline: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

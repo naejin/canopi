@@ -6,6 +6,7 @@ import type {
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ToolIcon, type ToolIconName } from './toolbar-icons'
+import { useMapOccluder } from '../shared/useMapChrome'
 import styles from './ToolRail.module.css'
 
 interface ToolRailProps {
@@ -21,6 +22,7 @@ interface ToolRailProps {
  */
 export function ToolRail({ projection, showNames }: ToolRailProps) {
   const rail = useRef<HTMLDivElement>(null)
+  useMapOccluder(rail, 'left')
   const tools = projection.toolGroups.flatMap((group) => group.tools)
   const focusTarget = tools.find((command) => command.active)?.commandId ?? tools[0]?.commandId
 

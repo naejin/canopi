@@ -12,6 +12,7 @@ import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
 import { InspectionStatus } from '../canvas/InspectionStatus'
+import { useMapArea } from '../shared/useMapChrome'
 import styles from './Panels.module.css'
 
 /** Desktop canvas: the full-bleed map with the shared floating chrome, or the start screen. */
@@ -23,6 +24,7 @@ export function CanvasPanel() {
     () => IDLE_MAPLIBRE_CANVAS_SURFACE_STATE,
   )
 
+  useMapArea(canvasAreaRef)
   useCanvasDocumentSession({
     canvasAreaRef,
     containerRef,

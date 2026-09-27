@@ -1,7 +1,7 @@
 import type { ComponentChildren, RefObject } from 'preact'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
-import { toolRailShowsNames } from '../../app/tool-rail/learning'
+import { toolRailShowsNamesOnMap } from '../../app/tool-rail/learning'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { CanvasOverview } from './CanvasOverview'
 import { DisplayLegend } from './DisplayLegend'
@@ -29,7 +29,7 @@ export function CanvasChrome({ projection, canvasRef, children }: {
   const locating = siteLocateOpen.value
   return (
     <>
-      {!locating && <ToolRail projection={projection} showNames={toolRailShowsNames.value} />}
+      {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
       <ViewChip toggles={projection.settingsToggles} />
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />

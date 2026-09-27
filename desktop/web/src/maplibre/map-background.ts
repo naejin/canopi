@@ -226,7 +226,9 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   let credit = ''
   const mount = () => {
     if (!Control || !map.addControl) return
-    control = new Control({ compact: true, ...(credit ? { customAttribution: credit } : {}) })
+    // No `compact`: MapLibre folds the credits into an (i) button only on a map
+    // 640 px wide or narrower, so imagery terms stay readable elsewhere.
+    control = new Control(credit ? { customAttribution: credit } : {})
     map.addControl(control, 'bottom-right')
   }
   const unmount = () => {

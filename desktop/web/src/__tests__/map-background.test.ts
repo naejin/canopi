@@ -165,6 +165,16 @@ describe('map background band', () => {
     expect(background.isApplied()).toBe(false)
   })
 
+  it('keeps the credits expanded: the attribution control collapses only on a narrow map', async () => {
+    const { map, background } = mount()
+    background.update(presentation())
+    await settle()
+    // compact: true would fold the credits into an (i) after the first drag;
+    // left unset, MapLibre folds them only when the map is 640 px or narrower.
+    expect(map.controls[0]!.options.compact).toBeUndefined()
+    background.dispose()
+  })
+
   it('adds no remote source when every background row is hidden', async () => {
     const { map, background } = mount()
     background.update(presentation({ basemapVisible: false }))

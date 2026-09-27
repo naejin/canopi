@@ -4,6 +4,8 @@ import { t } from '../../i18n'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { MenuBar } from './MenuBar'
+import { useRef } from 'preact/hooks'
+import { useMapOccluder } from './useMapChrome'
 import styles from './WorkspaceTitleBar.module.css'
 
 /** A title-bar command button: label, shortcut and action come from the command projection. */
@@ -45,8 +47,10 @@ export function WorkspaceTitleBar({
   windowControls,
   onMouseDown,
 }: WorkspaceTitleBarProps) {
+  const titleBar = useRef<HTMLElement>(null)
+  useMapOccluder(titleBar, 'top')
   return (
-    <header className={styles.titleBar} onMouseDown={onMouseDown} data-workspace-title-bar>
+    <header ref={titleBar} className={styles.titleBar} onMouseDown={onMouseDown} data-workspace-title-bar>
       <img
         src={new URL('../../assets/canopi-logo.svg', import.meta.url).href}
         className={styles.logo}

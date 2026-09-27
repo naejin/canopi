@@ -69,10 +69,11 @@ describe('Web Edition canvas workspace', () => {
       })
       const runtime = fakeRuntimeComposition(outcome)
       const attachCanvasSession = vi.spyOn(controller, 'attachCanvasSession')
+      // Only the workspace's observer of the canvas area; floating chrome has its own.
       const observe = vi.fn<(target: Element) => void>()
       const OriginalResizeObserver = globalThis.ResizeObserver
       globalThis.ResizeObserver = class {
-        observe = observe
+        observe = (target: Element) => { if (isCanvasArea(target)) observe(target) }
         unobserve() {}
         disconnect() {}
       } as unknown as typeof ResizeObserver
@@ -178,13 +179,19 @@ describe('Web Edition canvas workspace', () => {
     })
     const first = fakeRuntimeComposition()
     const second = fakeRuntimeComposition()
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     const observe = vi.fn()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
-      observe = observe
+      private watchesCanvasArea = false
+      observe = (target: Element) => {
+        if (!isCanvasArea(target)) return
+        this.watchesCanvasArea = true
+        observe(target)
+      }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     let releasedFirst = false
     const disposePublicationEffect = effect(() => {
@@ -651,10 +658,12 @@ describe('Web Edition canvas workspace', () => {
     const second = fakeRuntimeComposition()
     const disconnect = vi.fn()
     const OriginalResizeObserver = globalThis.ResizeObserver
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     globalThis.ResizeObserver = class {
-      observe() {}
+      private watchesCanvasArea = false
+      observe(target: Element) { if (isCanvasArea(target)) this.watchesCanvasArea = true }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     await controller.newDesign()
 
@@ -733,10 +742,12 @@ describe('Web Edition canvas workspace', () => {
       throw destroyError
     })
     const OriginalResizeObserver = globalThis.ResizeObserver
+    // Only the workspace's observer of the canvas area; floating chrome has its own.
     globalThis.ResizeObserver = class {
-      observe() {}
+      private watchesCanvasArea = false
+      observe(target: Element) { if (isCanvasArea(target)) this.watchesCanvasArea = true }
       unobserve() {}
-      disconnect = disconnect
+      disconnect = () => { if (this.watchesCanvasArea) disconnect() }
     } as unknown as typeof ResizeObserver
     const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await controller.newDesign()
@@ -869,6 +880,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       returnFromTemporaryFocus: vi.fn(() => false),
       showPlace: vi.fn(() => false),
       zoomBy: vi.fn(),
+      setFramingInsets: vi.fn(),
     },
     history: {
       canUndo: signal(false),
@@ -979,4 +991,8 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
     .find((candidate) => candidate.textContent?.trim() === text)
   if (!button) throw new Error(`Missing button ${text}`)
   return button
+}
+
+function isCanvasArea(target: Element): boolean {
+  return target.firstElementChild?.getAttribute('data-testid') === 'web-canvas-workspace-surface'
 }
