@@ -4,6 +4,7 @@ import { t } from '../../i18n'
 import { ActionMenu } from './ActionMenu'
 import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { visibleDesignName } from './DesignNameField'
+import { EmptyState } from './EmptyState'
 import { formatRelativeDate } from './relative-date'
 import styles from './StartScreen.module.css'
 
@@ -20,7 +21,6 @@ export interface StartScreenLink extends StartScreenAction {
 export interface StartScreenDesign {
   readonly id: string
   readonly name: string
-  readonly plantCount?: number
   readonly updatedAt: string
   open(): void
 }
@@ -41,14 +41,17 @@ interface StartScreenProps {
   /** Null when the edition keeps no recent files (Web). */
   readonly recent: readonly StartScreenDesign[] | null
   readonly drafts: readonly StartScreenDraft[]
+  /** True until the edition has listed its Designs, so first run does not flash the empty state. */
+  readonly loading?: boolean
 }
 
 /**
  * The start screen both editions share: purpose and the two ways in on the
- * left; recent Designs and Drafts on the right, searchable. Deleting a Draft
- * confirms inline and names it, because a Draft cannot be recovered.
+ * left; recent Designs and Drafts on the right, searchable. With nothing saved
+ * yet, the right column says where Designs will appear and offers New Design.
+ * Deleting a Draft confirms inline and names it, because a Draft cannot be recovered.
  */
-export function StartScreen({ newDesign, openDesign, links, footer, recent, drafts }: StartScreenProps) {
+export function StartScreen({ newDesign, openDesign, links, footer, recent, drafts, loading = false }: StartScreenProps) {
   const [query, setQuery] = useState('')
   const searchId = useId()
   const needle = fold(query.trim())
@@ -56,6 +59,7 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
   const visibleRecent = recent?.filter((design) => matches(design.name)) ?? null
   const visibleDrafts = drafts.filter((draft) => matches(draft.name))
   const nothingMatches = needle !== '' && (visibleRecent?.length ?? 0) === 0 && visibleDrafts.length === 0
+  const nothingSaved = (recent?.length ?? 0) === 0 && drafts.length === 0
 
   return (
     <div className={styles.start} role="region" aria-label={t('start.region')} data-start-screen>
@@ -92,58 +96,70 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
         <p className={styles.footer}>{footer}</p>
       </div>
 
-      <div className={styles.library}>
-        <label className={styles.search} htmlFor={searchId}>
-          <ControlIcon name="search" />
-          <input
-            id={searchId}
-            type="search"
-            className={styles.searchInput}
-            value={query}
-            placeholder={t('start.searchDesigns')}
-            aria-label={t('start.searchDesigns')}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && query) {
-                event.preventDefault()
-                setQuery('')
-              }
-            }}
-          />
-        </label>
-        {nothingMatches && <p className={styles.empty} role="status">{t('start.noMatches', { query: query.trim() })}</p>}
-
-        {visibleRecent && visibleRecent.length > 0 && (
-          <section className={styles.section} aria-labelledby={`${searchId}-recent`}>
-            <h2 className={styles.sectionTitle} id={`${searchId}-recent`}>{t('start.recentDesigns')}</h2>
-            <ul className={styles.rows}>
-              {visibleRecent.map((design) => (
-                <li key={design.id} className={styles.row}>
-                  <button type="button" className={styles.rowButton} onClick={design.open}>
-                    <span className={styles.thumb} aria-hidden="true"><ControlIcon name="pin" size={20} /></span>
-                    <span className={styles.rowText}>
-                      <span className={styles.rowName}>{visibleDesignName(design.name)}</span>
-                      {design.plantCount !== undefined && (
-                        <span className={styles.rowMeta}>{t('start.plantCount', { plants: new Intl.NumberFormat(locale.value).format(design.plantCount) })}</span>
-                      )}
-                    </span>
-                    <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+      <div className={styles.library} data-start-library>
+        {loading ? null : nothingSaved ? (
+          <section className={styles.section} aria-labelledby={`${searchId}-empty`}>
+            <h2 className={styles.sectionTitle} id={`${searchId}-empty`}>
+              {t(recent ? 'start.recentDesigns' : 'drafts.title')}
+            </h2>
+            <EmptyState
+              icon={<ControlIcon name={recent ? 'pin' : 'draft'} size={20} />}
+              action={{ label: newDesign.label, onClick: newDesign.run }}
+            >
+              {t(recent ? 'start.emptyDesktop' : 'start.emptyWeb')}
+            </EmptyState>
           </section>
-        )}
+        ) : <>
+          <label className={styles.search} htmlFor={searchId}>
+            <ControlIcon name="search" />
+            <input
+              id={searchId}
+              type="search"
+              className={styles.searchInput}
+              value={query}
+              placeholder={t('start.searchDesigns')}
+              aria-label={t('start.searchDesigns')}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query) {
+                  event.preventDefault()
+                  setQuery('')
+                }
+              }}
+            />
+          </label>
+          {nothingMatches && <p className={styles.empty} role="status">{t('start.noMatches', { query: query.trim() })}</p>}
 
-        {visibleDrafts.length > 0 && (
-          <section className={styles.section} aria-labelledby={`${searchId}-drafts`} data-design-drafts>
-            <h2 className={styles.sectionTitle} id={`${searchId}-drafts`}>{t('drafts.title')}</h2>
-            <p className={styles.sectionIntro}>{t('drafts.intro')}</p>
-            <ul className={styles.rows}>
-              {visibleDrafts.map((draft) => <DraftRow key={draft.id} draft={draft} />)}
-            </ul>
-          </section>
-        )}
+          {visibleRecent && visibleRecent.length > 0 && (
+            <section className={styles.section} aria-labelledby={`${searchId}-recent`}>
+              <h2 className={styles.sectionTitle} id={`${searchId}-recent`}>{t('start.recentDesigns')}</h2>
+              <ul className={styles.rows}>
+                {visibleRecent.map((design) => (
+                  <li key={design.id} className={styles.row}>
+                    <button type="button" className={styles.rowButton} onClick={design.open}>
+                      <span className={styles.thumb} aria-hidden="true"><ControlIcon name="pin" size={20} /></span>
+                      {/* Recent files do not know their plant count or place yet (canopi-h90p.23); show neither rather than a wrong "0 plants". */}
+                      <span className={styles.rowText}>
+                        <span className={styles.rowName}>{visibleDesignName(design.name)}</span>
+                      </span>
+                      <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {visibleDrafts.length > 0 && (
+            <section className={styles.section} aria-labelledby={`${searchId}-drafts`} data-design-drafts>
+              <h2 className={styles.sectionTitle} id={`${searchId}-drafts`}>{t('drafts.title')}</h2>
+              <p className={styles.sectionIntro}>{t('drafts.intro')}</p>
+              <ul className={styles.rows}>
+                {visibleDrafts.map((draft) => <DraftRow key={draft.id} draft={draft} />)}
+              </ul>
+            </section>
+          )}
+        </>}
       </div>
     </div>
   )

@@ -4,7 +4,7 @@ Read the [design system](../system.md) first. Canvas boards: DesignSystem, Rules
 
 ## Title bar and menus
 
-- Floating title bar (see the design system). The Design name is a button that renames (F2). Save status is a live region: Saved, Saving… (not announced), Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and a Download a copy link; the file actions are icons (Open a .canopi file).
+- Floating title bar (see the design system). The place field searches only on Enter (the public geocoder forbids search-as-you-type); while a place name waits, its popup says "Press Enter to search" (the field's description). Coordinates go straight there. The Design name is a button that renames (F2). Save status is a live region: Saved, Saving… (not announced), Draft with Save as…, Couldn't save (alert) with Details… (the reason and Retry / Save as…), Changed outside Canopi (alert) with Resolve…. Web shows "Saved in this browser" and a Download a copy link; the file actions are icons (Open a .canopi file).
 - Menus (native on macOS): File (New, Open…, Open recent ▸, Rename…, Save as…, Revert…, Add data…, Data library…, Import GeoJSON…, Export ▸ Planting plan (PDF)…, GeoJSON…, Budget as CSV…, Settings…, Close, Quit), Edit (history, clipboard, selection, species commands, grouping, Rotate…, lock, stamps), View (zoom, fit, place search, Saved views ▸, Save current view…, Manage views…, Grid/Snap/Rulers/Labels/Tool names as checkable items, panels Ctrl 1–8, Background, Theme), Tools (every tool with its key), Help (Keyboard shortcuts F1, Getting started, Report a problem…, About). Checkable items are `menuitemcheckbox`; a check column is reserved when a menu has any.
 
 Shipped so far (canopi-h90p app frame): File keeps Save (Ctrl S) beside Save as…; Edit adds Find plants (Ctrl F) and uses Lock Ctrl L / Unlock rather than Unlock all; Close, Getting started, Add data…, Budget as CSV…, Rotate… and View › Labels (N) are not in the menus yet. Below 760 px the menubar becomes one Menu button with submenus inline, and Help, Settings and the Web file icons move into it.
@@ -12,6 +12,8 @@ Shipped so far (canopi-h90p app frame): File keeps Save (Ctrl S) beside Save as�
 ## Start and new Designs
 
 - Start: left column with logo, one line of purpose, New Design (Ctrl N, primary) and Open Design… (Ctrl O), a drop hint, Settings, Keyboard shortcuts, Report a problem…. Right: Search your Designs, Recent Designs (thumbnail, name, place name, counts, relative date; the row opens; More), Drafts (dashed tile; deleting confirms inline and names the draft).
+- First run (nothing recent, no Drafts): the right column has no search; its section title (Recent Designs, or Drafts on Web) sits over an `EmptyState` that says where Designs will appear and offers New Design. Nothing shows until the lists have loaded, so the empty state never flashes.
+- Shipped so far: Recent Designs rows show name and relative date only. Recent files do not know their plant count or place yet (canopi-h90p.23), and a row never shows "0 plants" for an unknown count.
 - New Design opens "Where is your site?" over the world map: a combobox with results (coordinates offered only when the input reads as coordinates), attribution, and Skip. Then "Start your Design" beside the labelled tool rail: draw a zone, open the catalog, rename and Save as….
 
 ## Dialogs, notices and states
@@ -19,6 +21,7 @@ Shipped so far (canopi-h90p app frame): File keeps Save (Ctrl S) beside Save as�
 - Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus.
 - Saved views (`SavedViewDialogs.tsx`): Save current view… has Name (selected, default "View n") and an optional Title, then Cancel and Save view. Manage views… lists each view with Go to, Rename (in place: Enter keeps, Esc cancels only the rename) and Delete; a view that stories show asks first in an inline danger box listing the stories, with focus on Cancel. The Undo toast sits in the dialog while it is open and floats bottom-centre after it closes.
 - Notices: info (surface-2), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and do not time out while hovered or focused.
+- Notices never cover controls. An app-wide notice (the plant database is missing or corrupt, `DegradedBanner`) takes its own row under the title bar, as wide as the title bar, and lowers `--chrome-rail-top` on its container while it shows, so rails, the dock, tool cards, chips and both Start columns move down below it.
 - Empty states say what goes here and give the one action to start. Loading keeps the frame: inline "Searching…", row skeletons, a progress bar for long opens. Errors say what happened, what is safe and the next step ("Restart Canopi" on Desktop, "Reload" on Web).
 
 ## Settings

@@ -1,11 +1,12 @@
-/* A floating notice below the title bar, centred between the rails. */
+/* A row of its own below the title bar, as wide as the title bar; the chrome below moves down. */
 .banner {
   position: absolute;
-  top: var(--chrome-rail-top);
-  left: 50%;
+  top: calc(var(--chrome-top) + var(--title-bar-height) + var(--space-2));
+  right: var(--chrome-inset);
+  left: var(--chrome-inset);
   z-index: 38;
-  width: max-content;
-  max-width: calc(100% - 2 * var(--chrome-rail-width) - 6 * var(--chrome-inset));
+}
+
+.notice {
   box-shadow: var(--shadow-float);
-  transform: translateX(-50%);
 }

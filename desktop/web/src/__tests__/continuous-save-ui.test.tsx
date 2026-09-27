@@ -263,14 +263,13 @@ describe('StartScreen', () => {
     return { id, name, updatedAt: new Date().toISOString(), open: vi.fn(), delete: vi.fn(), ...overrides }
   }
 
-  it('lists recent Designs as buttons with their plant count and date', async () => {
+  it('lists recent Designs as buttons with their date', async () => {
     const open = vi.fn()
     await act(async () => {
-      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', plantCount: 2201, updatedAt: new Date().toISOString(), open }])
+      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open }])
     })
     expect(container.textContent).toContain('Recent Designs')
     const row = buttons().find((button) => button.textContent?.includes('Orchard'))!
-    expect(row.textContent).toContain('2,201 plants')
     expect(row.textContent).toMatch(/Today, /)
     row.click()
     expect(open).toHaveBeenCalledOnce()

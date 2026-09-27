@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect, useMemo, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import {
   newDesignAction,
@@ -17,11 +17,16 @@ import { StartScreen } from './StartScreen'
 export function WelcomeScreen() {
   const recentFilesController = useMemo(() => createRecentFilesController(), [])
   const draftsController = useMemo(() => createDesignDraftsController(), [])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    void recentFilesController.load()
-    void draftsController.load()
+    let live = true
+    // Both loads settle (they fall back to empty lists), so first run shows its empty state once.
+    void Promise.all([recentFilesController.load(), draftsController.load()]).then(() => {
+      if (live) setLoaded(true)
+    })
     return () => {
+      live = false
       recentFilesController.dispose()
       draftsController.dispose()
     }
@@ -37,10 +42,10 @@ export function WelcomeScreen() {
         { icon: 'bug', label: t('menu.help.reportProblem'), run: openProblemReportDialog },
       ]}
       footer={t('start.footerDesktop')}
+      loading={!loaded}
       recent={recentFilesController.recentFiles.value.map((file) => ({
         id: file.path,
         name: file.name,
-        plantCount: file.plant_count,
         updatedAt: file.updated_at,
         open: () => { void openDesignFromPath(file.path).catch(logWelcomeError) },
       }))}
