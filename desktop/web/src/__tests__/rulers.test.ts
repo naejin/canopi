@@ -305,6 +305,37 @@ describe('RulerOverlay', () => {
     overlay.destroy()
   })
 
+  it('draws tick labels at 12 px or more and leaves out labels that would touch', () => {
+    const host = document.createElement('div')
+    const context = createContextStub()
+    const fonts: string[] = []
+    vi.mocked(context.fillText).mockImplementation(() => { fonts.push(context.font) })
+    ;(context as unknown as { measureText: (text: string) => { width: number } }).measureText =
+      (text: string) => ({ width: text.length * 7 })
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+
+    for (const scale of [0.12, 0.9, 3, 17, 60, 240, 900, 1900]) {
+      vi.mocked(context.fillText).mockClear()
+      fonts.length = 0
+      overlay.update({
+        camera: cameraSnapshot({ scale, width: 1400, revision: scale }),
+        chromeVisible: true,
+        rulersVisible: true,
+      })
+      expect(fonts.length).toBeGreaterThan(0)
+      for (const font of fonts) expect(Number.parseFloat(font)).toBeGreaterThanOrEqual(12)
+      const horizontal = vi.mocked(context.fillText).mock.calls
+        .filter(([, , y]) => y !== 0)
+        .map(([text, x]) => ({ start: x - text.length * 3.5, end: x + text.length * 3.5 }))
+        .sort((a, b) => a.start - b.start)
+      for (let index = 1; index < horizontal.length; index += 1) {
+        expect(horizontal[index]!.start).toBeGreaterThanOrEqual(horizontal[index - 1]!.end)
+      }
+    }
+    overlay.destroy()
+  })
+
   it('owns visibility and dpr-aware sizing without exposing raw lifecycle parts', () => {
     const host = document.createElement('div')
     const ctx = createContextStub()

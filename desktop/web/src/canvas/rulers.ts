@@ -6,6 +6,10 @@ import { getCanvasColor } from './theme-refresh'
 /** Ruler band thickness in CSS px. */
 export const CANVAS_RULER_SIZE_PX = 24
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
+/** Tick labels keep the 12 px type floor; they are digits and units, never CJK text. */
+export const CANVAS_RULER_LABEL_FONT_SIZE_PX = 12
+/** Clear space between neighbouring tick labels; a label that would come closer is left out. */
+const RULER_LABEL_GAP_PX = 6
 
 export type RulerAxis = 'h' | 'v'
 
@@ -29,14 +33,14 @@ interface RulerPalette {
   readonly background: string
   readonly text: string
   readonly border: string
-  readonly font10: string
+  readonly labelFont: string
 }
 
 const DEFAULT_PALETTE: RulerPalette = {
   background: getCanvasColor('ruler-bg'),
   text: getCanvasColor('ruler-text'),
   border: 'rgba(58, 46, 28, 0.14)',
-  font10: `10px ${CANVAS_CHROME_FONT_FAMILY}`,
+  labelFont: `${CANVAS_RULER_LABEL_FONT_SIZE_PX}px ${CANVAS_CHROME_FONT_FAMILY}`,
 }
 
 export function createRulerOverlay(
@@ -249,7 +253,7 @@ function readRulerPalette(container: HTMLElement): RulerPalette {
     background: style.getPropertyValue('--canvas-ruler-bg').trim() || DEFAULT_PALETTE.background,
     text,
     border: style.getPropertyValue('--color-border').trim() || DEFAULT_PALETTE.border,
-    font10: DEFAULT_PALETTE.font10,
+    labelFont: DEFAULT_PALETTE.labelFont,
   }
 }
 
@@ -294,9 +298,10 @@ function drawHorizontalRuler(
   const worldLeft = (screenOffsetX - viewport.x) / scale
   const worldRight = (screenOffsetX + cssWidth - viewport.x) / scale
   const startWorld = Math.floor(worldLeft / tickInterval) * tickInterval
+  const labels = new RulerLabelSpacing()
 
   context.fillStyle = palette.text
-  context.font = palette.font10
+  context.font = palette.labelFont
   context.textAlign = 'center'
   context.textBaseline = 'bottom'
   context.strokeStyle = palette.text
@@ -312,7 +317,10 @@ function drawHorizontalRuler(
     context.moveTo(canvasX, cssHeight - tickHeight)
     context.lineTo(canvasX, cssHeight)
     context.stroke()
-    if (isMajor) context.fillText(formatDistance(world), canvasX, cssHeight - 10)
+    if (isMajor) {
+      const label = formatDistance(world)
+      if (labels.admit(context, label, canvasX)) context.fillText(label, canvasX, cssHeight - 9)
+    }
   }
 }
 
@@ -352,9 +360,10 @@ function drawVerticalRuler(
   const worldTop = (screenOffsetY - viewport.y) / scale
   const worldBottom = (screenOffsetY + cssHeight - viewport.y) / scale
   const startWorld = Math.floor(worldTop / tickInterval) * tickInterval
+  const labels = new RulerLabelSpacing()
 
   context.fillStyle = palette.text
-  context.font = palette.font10
+  context.font = palette.labelFont
   context.strokeStyle = palette.text
   context.lineWidth = 1
 
@@ -368,16 +377,35 @@ function drawVerticalRuler(
     context.moveTo(cssWidth - tickWidth, canvasY)
     context.lineTo(cssWidth, canvasY)
     context.stroke()
-    if (isMajor) {
+    const label = isMajor ? formatDistance(world) : null
+    if (label !== null && labels.admit(context, label, canvasY)) {
       context.save()
-      context.translate(cssWidth - 10, canvasY)
+      context.translate(cssWidth - 15, canvasY)
       context.rotate(-Math.PI / 2)
       context.textAlign = 'center'
       context.textBaseline = 'middle'
-      context.fillText(formatDistance(world), 0, 0)
+      context.fillText(label, 0, 0)
       context.restore()
     }
   }
+}
+
+/** Admits centred labels along one axis only when they keep clear of the previous one. */
+class RulerLabelSpacing {
+  private _previousEnd = Number.NEGATIVE_INFINITY
+
+  admit(context: CanvasRenderingContext2D, label: string, center: number): boolean {
+    const half = measureRulerLabel(context, label) / 2
+    if (center - half < this._previousEnd + RULER_LABEL_GAP_PX) return false
+    this._previousEnd = center + half
+    return true
+  }
+}
+
+function measureRulerLabel(context: CanvasRenderingContext2D, label: string): number {
+  const measured = typeof context.measureText === 'function' ? context.measureText(label).width : NaN
+  // Without metrics (no layout engine) assume a generous 0.6 em per character.
+  return Number.isFinite(measured) && measured > 0 ? measured : label.length * CANVAS_RULER_LABEL_FONT_SIZE_PX * 0.6
 }
 
 const RULER_DISTANCES = NICE_DISTANCES.filter((distance) => distance >= 0.1)

@@ -19,7 +19,8 @@ import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
   layoutPlantPresentation,
-  STACK_BADGE_RADIUS_PX,
+  STACK_BADGE_FONT_SIZE_PX,
+  getStackBadgeSizePx,
   type PlantPresentationEntry,
 } from '../plant-presentation'
 import {
@@ -725,7 +726,7 @@ function syncPlants(
         plantBadgeGraphicsById.set(entry.plant.id, badge)
         overlay.addChild(badge)
       }
-      drawStackBadge(badge, entry)
+      drawStackBadge(badge, entry, stackCount)
       badge.visible = true
 
       const badgeText = plantBadgeTextById.get(entry.plant.id) ?? createText()
@@ -870,13 +871,17 @@ function screenPxToWorldPx(px: number, viewportScale: number): number {
 function drawStackBadge(
   badge: Graphics,
   entry: ReturnType<typeof buildPlantPresentationEntries>[number],
+  stackCount: number,
 ): void {
   const offset = getStackBadgeOffsetPx(entry.radiusScreenPx)
+  const size = getStackBadgeSizePx(String(stackCount))
   badge.clear()
-  badge.circle(
-    entry.screenPoint.x + offset.x,
-    entry.screenPoint.y + offset.y,
-    STACK_BADGE_RADIUS_PX,
+  badge.roundRect(
+    entry.screenPoint.x + offset.x - size.width / 2,
+    entry.screenPoint.y + offset.y - size.height / 2,
+    size.width,
+    size.height,
+    size.height / 2,
   ).fill({ color: toPixiColor(getStackBadgeBackgroundColor(), 0), alpha: 1 })
 }
 
@@ -889,7 +894,7 @@ function drawStackBadgeText(
   badgeText.text = String(stackCount)
   setTextStyle(badgeText, {
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
-    fontSize: 9,
+    fontSize: STACK_BADGE_FONT_SIZE_PX,
     fill: toPixiColor(getStackBadgeTextColor(), 0),
   })
   badgeText.position.set(

@@ -111,7 +111,9 @@ describe('drawInspectionLensScene', () => {
     const badgeText = canvas.texts.find((entry) => entry.text === '2')!
     expect(badgeText.originCss.x).toBeGreaterThan(plantCenter.x)
     expect(badgeText.originCss.y).toBeLessThan(plantCenter.y)
-    expect(Math.max(...canvas.arcs.map((entry) => entry.radiusCss))).toBe(7)
+    // The count keeps the 12 px type floor, on an 18 px badge that stays screen-sized.
+    expect(Number.parseFloat(badgeText.font)).toBeGreaterThanOrEqual(12)
+    expect(canvas.roundRects).toEqual([expect.objectContaining({ widthCss: 18, heightCss: 18 })])
   })
 
   it('rings the hovered lens plant with the shared hover visual', () => {
@@ -201,6 +203,7 @@ function createMockCanvasContext() {
     stroke: vi.fn(),
     setLineDash: vi.fn(),
     arc: vi.fn(),
+    roundRect: vi.fn(),
     save: vi.fn(),
     restore: vi.fn(),
     strokeRect: vi.fn(),
@@ -222,6 +225,7 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
   let transform: Transform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const stack: Transform[] = []
   const arcs: Array<{ centerCss: { x: number; y: number }; radiusCss: number }> = []
+  const roundRects: Array<{ originCss: { x: number; y: number }; widthCss: number; heightCss: number }> = []
   const texts: Array<{ text: string; alpha: number; font: string; originCss: { x: number; y: number } }> = []
   const toCssPoint = (x: number, y: number) => ({
     x: (transform.a * x + transform.c * y + transform.e) / backingStoreScale,
@@ -259,6 +263,10 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
         radiusCss: Math.hypot(transform.a, transform.b) * radius / backingStoreScale,
       })
     }),
+    roundRect: vi.fn((x: number, y: number, width: number, height: number) => {
+      const scale = Math.hypot(transform.a, transform.b) / backingStoreScale
+      roundRects.push({ originCss: toCssPoint(x, y), widthCss: width * scale, heightCss: height * scale })
+    }),
     fillText: vi.fn((text: string, x: number, y: number) => {
       texts.push({ text, alpha: context.globalAlpha, font: context.font, originCss: toCssPoint(x, y) })
     }),
@@ -267,6 +275,7 @@ function createTransformTrackingCanvasContext(backingStoreScale: number) {
   return {
     context,
     arcs,
+    roundRects,
     texts,
     clearDraws() {
       arcs.length = 0

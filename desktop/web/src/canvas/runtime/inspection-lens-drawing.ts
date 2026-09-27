@@ -3,7 +3,8 @@ import {
   buildPlantPresentationEntries,
   getStackBadgeOffsetPx,
   layoutPlantPresentation,
-  STACK_BADGE_RADIUS_PX,
+  STACK_BADGE_FONT_SIZE_PX,
+  getStackBadgeSizePx,
   type PlantPresentationEntry,
 } from './plant-presentation'
 import {
@@ -242,11 +243,12 @@ function drawStackBadge(
   const y = entry.screenPoint.y + offset.y
   ctx.globalAlpha = opacity
   ctx.fillStyle = getStackBadgeBackgroundColor(lensPaper())
+  const size = getStackBadgeSizePx(String(count))
   ctx.beginPath()
-  ctx.arc(x, y, STACK_BADGE_RADIUS_PX, 0, Math.PI * 2)
+  ctx.roundRect(x - size.width / 2, y - size.height / 2, size.width, size.height, size.height / 2)
   ctx.fill()
   ctx.fillStyle = getStackBadgeTextColor(lensPaper())
-  ctx.font = `9px ${CANVAS_CHROME_FONT_FAMILY}`
+  ctx.font = `${STACK_BADGE_FONT_SIZE_PX}px ${CANVAS_CHROME_FONT_FAMILY}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(String(count), x, y)

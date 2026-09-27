@@ -16,8 +16,14 @@ import type { SpeciesCacheEntry } from './species-cache'
 import { nearestPlantSpacing } from '../plant-spacing'
 import { getCanvasPlantDisplay, resolveDisplayedPlantColor, type PlantDisplay } from './plant-display'
 
-export const STACK_BADGE_RADIUS_PX = 7
+/** Stack badge count text: the 12 px type floor (digits only, so no CJK raise). */
+export const STACK_BADGE_FONT_SIZE_PX = 12
+/** Badge height; it is a circle for one digit and a pill for more. */
+export const STACK_BADGE_HEIGHT_PX = 18
 export const STACK_BADGE_GAP_PX = 2
+// A 12 px Source Sans 3 digit is about 6.1 px wide; 7 keeps a margin for fallback fonts.
+const STACK_BADGE_DIGIT_WIDTH_PX = 7
+const STACK_BADGE_PADDING_PX = 5
 
 export interface PlantPresentationContext {
   viewport: SceneViewportState
@@ -65,6 +71,14 @@ export interface PlantStackBadgeDecision {
   text: string
   anchorScreenPoint: ScenePoint
   badgeCenterScreenPoint: ScenePoint
+}
+
+/** Screen size of the badge that shows `text` (the stack count). */
+export function getStackBadgeSizePx(text: string): { width: number; height: number } {
+  return {
+    width: Math.max(STACK_BADGE_HEIGHT_PX, text.length * STACK_BADGE_DIGIT_WIDTH_PX + STACK_BADGE_PADDING_PX * 2),
+    height: STACK_BADGE_HEIGHT_PX,
+  }
 }
 
 export function getStackBadgeOffsetPx(radiusScreenPx: number): ScenePoint {

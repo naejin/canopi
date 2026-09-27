@@ -37,6 +37,7 @@ vi.mock('pixi.js', () => {
     private owners = new Set<MockGraphics>()
     clear = vi.fn(() => this)
     circle = vi.fn((...args: unknown[]) => this.record('circle', args))
+    roundRect = vi.fn((...args: unknown[]) => this.record('roundRect', args))
     rect = vi.fn((...args: unknown[]) => this.record('rect', args))
     ellipse = vi.fn((...args: unknown[]) => this.record('ellipse', args))
     moveTo = vi.fn((...args: unknown[]) => this.record('moveTo', args))
@@ -66,6 +67,7 @@ vi.mock('pixi.js', () => {
     alpha = 1
     clear = vi.fn(() => this)
     circle = vi.fn(() => this)
+    roundRect = vi.fn(() => this)
     rect = vi.fn(() => this)
     ellipse = vi.fn(() => this)
     moveTo = vi.fn(() => this)
@@ -456,7 +458,7 @@ describe('createPixiScenePresentation', () => {
   it('renders precision glyphs and stack badges in CSS pixels', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
-        graphics: Array<{ circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> } }>;
+        graphics: Array<{ circle: ReturnType<typeof vi.fn>; roundRect: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; position: { set: ReturnType<typeof vi.fn> } }>;
         texts: Array<{ text: string; style: { options: { fontSize: number } } }>;
       }
     }
@@ -468,7 +470,11 @@ describe('createPixiScenePresentation', () => {
     const glyph = pixi.__pixiMockState.graphics.find(graphics => graphics.circle.mock.calls.some(([x, y, radius]) => x === 0 && y === 0 && radius > 4.8 && radius < 5.6))!
     expect(glyph).toBeDefined()
     expect(glyph.position.set).toHaveBeenLastCalledWith(100, 100)
-    expect(pixi.__pixiMockState.texts.find((text) => text.text === '2')?.style.options.fontSize).toBe(9)
+    // Stack counts keep the 12 px type floor on a badge sized for them.
+    expect(pixi.__pixiMockState.texts.find((text) => text.text === '2')?.style.options.fontSize).toBeGreaterThanOrEqual(12)
+    const badgeRects = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.roundRect.mock.calls)
+    expect(badgeRects).toHaveLength(1)
+    expect(badgeRects[0]!.slice(2, 4)).toEqual([18, 18])
     renderer.dispose()
   })
 

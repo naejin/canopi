@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ScenePlantEntity, SceneViewportState } from '../canvas/runtime/scene'
 import {
   buildPlantPresentationEntries,
+  getStackBadgeSizePx,
+  STACK_BADGE_FONT_SIZE_PX,
   getPlantScreenHitBounds,
   layoutPlantPresentation,
   resolveStackBadgeDecisions,
@@ -254,5 +256,17 @@ describe('plant presentation service', () => {
     expect(snapshot.layout).toHaveProperty('lod')
     expect(snapshot.layout).toHaveProperty('stackCounts')
     expect(snapshot.layout).not.toHaveProperty('visibleLabelIds')
+  })
+})
+
+describe('stack badge size', () => {
+  it('fits the count at the 12 px floor, a circle for one digit and a pill for more', () => {
+    expect(STACK_BADGE_FONT_SIZE_PX).toBeGreaterThanOrEqual(12)
+    expect(getStackBadgeSizePx('2')).toEqual({ width: 18, height: 18 })
+    const two = getStackBadgeSizePx('12')
+    const three = getStackBadgeSizePx('120')
+    expect(two.width).toBeGreaterThanOrEqual(2 * 0.6 * STACK_BADGE_FONT_SIZE_PX + 6)
+    expect(three.width).toBeGreaterThan(two.width)
+    expect(three.width).toBeGreaterThanOrEqual(3 * 0.6 * STACK_BADGE_FONT_SIZE_PX + 6)
   })
 })
