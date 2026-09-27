@@ -53,14 +53,6 @@ const STRUCTURAL_SPACING_EXCEPTIONS = [
     reason: 'The structural grid gap must equal the locally defined grip-dot diameter.',
   },
   {
-    file: 'src/components/plant-db/PlantDb.module.css',
-    rule: '.searchInput',
-    atRules: [],
-    property: 'padding-right',
-    value: 'var(--control-size-md)',
-    reason: 'Reserves the exact width of the overlaid search control rather than visual spacing.',
-  },
-  {
     file: 'src/components/plant-db/RangeSlider.module.css',
     rule: '.input::-webkit-slider-thumb',
     atRules: [],

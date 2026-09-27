@@ -4,13 +4,16 @@ import { formatCount } from '../../utils/format-count'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
 import type { StripControlField } from '../../app/plant-browser'
+import { ControlIcon } from '../shared/ControlIcon'
 import { FilterChip } from './FilterChip'
 import { ThresholdSlider } from './ThresholdSlider'
 import { toggleArrayValue } from './filter-utils'
 import styles from './PlantDb.module.css'
 
-export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
+/** Every filter the edition's catalog serves, one row each; "More filters" opens the rest (Desktop). */
+export function FilterStrip({ onMoreFilters }: { onMoreFilters?: () => void }) {
   const filterStrip = speciesCatalogWorkbench.filterStrip.value;
+  const extraCount = speciesCatalogWorkbench.intent.value.extraFilters.length;
 
   return (
     <div className={styles.filterStrip}>
@@ -23,18 +26,15 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
         />
       ))}
 
-      <div className={styles.filterActions}>
-        <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters}>
-          {t('filters.moreFilters')}
-          {filterStrip.activeCount > 0 && <span className={styles.filterBadge}>{formatCount(filterStrip.activeCount, locale.value)}</span>}
-          <span aria-hidden="true">{'\u203A'}</span>
-        </button>
-        {filterStrip.hasActive && (
-          <button type="button" className={styles.clearAllBtn} onClick={speciesCatalogWorkbench.clearFilters}>
-            {t('filters.clearAll')}
+      {onMoreFilters && (
+        <div className={styles.filterActions}>
+          <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters} data-preserve-overlays="true">
+            {t('filters.moreFilters')}
+            {extraCount > 0 && <span className={styles.filterBadge}>{formatCount(extraCount, locale.value)}</span>}
+            <ControlIcon name="chevron-right" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

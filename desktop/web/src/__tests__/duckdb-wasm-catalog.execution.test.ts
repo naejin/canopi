@@ -147,6 +147,33 @@ describe('DuckDB-WASM Species Catalog executable SQL', () => {
     }
   })
 
+  it('browses species named in the interface language first under Recommended', async () => {
+    const duckdb = await createExecutableDuckDb()
+    const reader = createDuckDbReducedSpeciesCatalogReader({
+      catalogBaseUrl: new URL('https://catalog.example.test/canopi-catalog/'),
+      fetchJson: async () => validWebCatalogManifest(),
+      createDatabase: async () => duckdb,
+    })
+
+    try {
+      const browse = (sort: 'Recommended' | 'Name') => reader.searchSpecies({
+        text: '',
+        filters: createEmptySpeciesFilter(),
+        cursor: null,
+        limit: 10,
+        sort,
+        locale: 'en',
+        include_total: true,
+      }, new Set())
+      const names = async (sort: 'Recommended' | 'Name') => (await browse(sort)).items.map((item) => item.canonical_name)
+
+      await expect(names('Recommended')).resolves.toEqual(['Malus domestica', 'Pyrus communis', 'Ar alpha', 'Ar beta', 'Prunus armeniaca'])
+      await expect(names('Name')).resolves.toEqual(['Ar alpha', 'Ar beta', 'Malus domestica', 'Prunus armeniaca', 'Pyrus communis'])
+    } finally {
+      await reader.dispose()
+    }
+  })
+
   it.each([
     { locale: 'en', text: 'pear', canonicalName: 'Pyrus communis', commonName: 'Pear', matchedName: 'Pear' },
     { locale: 'fr', text: 'arbre', canonicalName: 'Prunus armeniaca', commonName: 'Arbre fruitier', matchedName: 'Arbre fruitier' },

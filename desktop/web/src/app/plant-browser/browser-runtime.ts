@@ -41,6 +41,8 @@ export function createBrowserSpeciesCatalogRuntime({
   }
   const workbench = createSpeciesCatalogWorkbench({
     resolveCommonNames,
+    // The Web artifact carries no ratings or heights (see the species catalog guide).
+    browseSorts: ['Recommended', 'Name'],
     favoritesIncludeRecentlyViewed: true,
     search: catalogAdapters.search,
     loadDynamicFilterOptions: catalogAdapters.loadDynamicFilterOptions,

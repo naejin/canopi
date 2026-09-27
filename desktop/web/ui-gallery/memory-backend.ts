@@ -7,6 +7,8 @@ import type {
   LidarImportJob,
   ProcessingRun,
   RasterQuantity,
+  SpeciesListItem,
+  SpeciesSearchRequest,
 } from '../src/generated/contracts'
 import { detail, designFixture, species, specimens } from './fixtures'
 
@@ -118,6 +120,37 @@ let drafts = state === 'empty' ? [] : [
   { id: 'draft-untitled', name: 'Untitled', updated_at: hoursAgo(24 * 3) },
   { id: 'draft-haie-sud', name: 'Haie sud, essai', updated_at: hoursAgo(24 * 5) },
 ]
+/** The gallery catalog: a few designer species in the Recommended order, then obscure ones. */
+const catalogSpecies: SpeciesListItem[] = state === 'empty' ? [] : ([
+  ['Malus domestica', 'Apple', 'Tree', 10, 4, 8, 5, 'Temperate'],
+  ['Corylus avellana', 'Hazel', 'Shrub', 6, 4, 8, 5, 'Temperate'],
+  ['Juglans regia', 'Walnut', 'Tree', 25, 5, 9, 5, 'Temperate'],
+  ['Fragaria vesca', 'Wild strawberry', 'Herbaceous', 0.3, 5, 9, 4, 'Temperate'],
+  ['Elaeagnus umbellata', 'Autumn olive', 'Shrub', 4.5, 3, 8, 4, 'Continental'],
+  ['Mentha spicata', 'Spearmint', 'Herbaceous', 0.9, 3, 7, 3, 'Temperate'],
+  ['Robinia pseudoacacia', 'Black locust', 'Tree', 25, 3, 8, 2, 'Temperate'],
+  ['Lavandula angustifolia', 'English lavender', 'Shrub', 0.6, 5, 8, 2, 'Mediterranean'],
+  ['Actinidia arguta', 'Hardy kiwi', 'Climber', 12, 4, 8, 5, 'Temperate'],
+  ['Achillea millefolium', 'Common yarrow', 'Herbaceous', 0.6, 2, 9, null, 'Temperate'],
+  ['Aa achalensis', null, null, null, null, null, null, 'Tropical'],
+] as const).map(([canonical_name, common_name, habit, height, zoneMin, zoneMax, edibility, zone]) => ({
+  ...species[0]!, canonical_name, slug: canonical_name.toLowerCase().replace(/ /g, '-'), common_name, is_name_fallback: false,
+  habit, height_max_m: height, hardiness_zone_min: zoneMin, hardiness_zone_max: zoneMax, edibility_rating: edibility,
+  climate_zones: [zone], family: null, stratum: null, is_favorite: favoriteNames.has(canonical_name),
+}))
+const fold = (text: string) => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+function searchCatalog(request: SpeciesSearchRequest) {
+  const text = fold(request.text.trim())
+  const { habit, edibility_min: edibilityMin, climate_zones: zones } = request.filters
+  const items = catalogSpecies.filter(plant => (!text || fold(`${plant.common_name ?? ''} ${plant.canonical_name}`).includes(text))
+    && (!habit || habit.includes(plant.habit ?? ''))
+    && (edibilityMin == null || (plant.edibility_rating ?? -1) >= edibilityMin)
+    && (!zones || zones.some(zone => plant.climate_zones.includes(zone))))
+  const sorted = request.sort === 'Name' ? [...items].sort((a, b) => a.canonical_name.localeCompare(b.canonical_name))
+    : request.sort === 'Height' ? [...items].sort((a, b) => (b.height_max_m ?? -1) - (a.height_max_m ?? -1))
+      : items
+  return { items: sorted, total_estimate: request.include_total ? sorted.length : 0, next_cursor: null }
+}
 export function convertFileSrc(path: string) { return path }
 export async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const canonicalName = String(args.canonicalName ?? '')
@@ -144,9 +177,12 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     case 'get_locale_common_names':
     case 'get_species_images':
     case 'get_dynamic_filter_options': result = []; break
-    case 'get_filter_options': result = { families: [], growth_rates: [], climate_zones: [], habits: [], life_cycles: [], sun_tolerances: [], soil_tolerances: [] }; break
+    case 'get_filter_options': result = {
+      families: [], growth_rates: [], climate_zones: ['Temperate', 'Mediterranean', 'Continental'], habits: ['Tree', 'Shrub', 'Herbaceous', 'Climber'],
+      life_cycles: ['Annual', 'Perennial'], sun_tolerances: ['full_sun', 'semi_shade', 'full_shade'], soil_tolerances: [],
+    }; break
     case 'supersede_species_search': result = undefined; break
-    case 'search_species': result = { items: species, total: species.length, next_cursor: null }; break
+    case 'search_species': result = searchCatalog(args.request as SpeciesSearchRequest); break
     case 'get_saved_object_stamps': result = stamps; break
     case 'create_saved_object_stamp':
       result = { id: `stamp-${sequence++}`, name: String(args.name), payload_json: String(args.payloadJson), sort_order: stamps.length, created_at: file.created_at, updated_at: file.updated_at }

@@ -315,6 +315,7 @@ class DuckDbParquetReducedSpeciesCatalogReader implements ReducedSpeciesCatalogR
         namesTable,
         whereSql,
         searchText,
+        sort: request.sort,
       })}
       LIMIT ${queryLimit}
       OFFSET ${offset}
@@ -792,11 +793,13 @@ function speciesProjectionSql({
   namesTable,
   whereSql,
   searchText,
+  sort = 'Name',
 }: {
   readonly speciesTable: string
   readonly namesTable: string
   readonly whereSql: string
   readonly searchText: NormalizedSearchText
+  readonly sort?: SpeciesSearchRequest['sort']
 }): string {
   const matchPredicate = searchText.text
     ? nameMatchCondition('normalized_name', searchText)
@@ -867,7 +870,7 @@ function speciesProjectionSql({
     LEFT JOIN primary_names ON primary_names.species_id = s.id
     LEFT JOIN matched_names ON matched_names.species_id = s.id
     ${whereSql}
-    ${speciesOrderBySql(searchText)}
+    ${speciesOrderBySql(searchText, sort)}
   `
 }
 
@@ -906,7 +909,12 @@ function searchPredicateSql(searchText: NormalizedSearchText): string {
   `
 }
 
-function speciesOrderBySql(searchText: NormalizedSearchText): string {
+function speciesOrderBySql(searchText: NormalizedSearchText, sort: SpeciesSearchRequest['sort']): string {
+  // The artifact has no ratings or heights, so Recommended browses species named in
+  // the interface language first; the workbench offers only Recommended and Name here.
+  if (!searchText.text && sort === 'Recommended') {
+    return 'ORDER BY primary_names.species_id IS NULL, s.canonical_name, s.id'
+  }
   if (!searchText.text) return 'ORDER BY s.canonical_name, s.id'
   const primaryName = 'primary_names.normalized_name'
   return `ORDER BY CASE

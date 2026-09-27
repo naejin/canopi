@@ -5,14 +5,12 @@ import {
   beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
-import type {
-  SpeciesCatalogDetailView,
-  SpeciesCatalogFilterStripView,
-} from '../app/plant-browser/workbench'
+import type { SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
 import { t } from '../i18n'
-import type { FilterOptions, SpeciesFilter, SpeciesListItem } from '../types/species'
-import type { StripChoiceField, StripControlField } from '../app/plant-browser'
-import { toggleArrayValue } from '../components/plant-db/filter-utils'
+import { locale } from '../app/settings/state'
+import type { SpeciesListItem } from '../types/species'
+import { CatalogBrowser } from '../components/plant-db/CatalogBrowser'
+import { interfaceLanguageName } from '../components/plant-db/language-name'
 import {
   filterFavoriteSpecies,
   useFavoriteSpeciesDetailNavigation,
@@ -22,32 +20,24 @@ import { DockPanelHeader } from '../components/shared/DockPanelHeader'
 import { SurfaceSearch } from '../components/shared/SurfaceSearch'
 import styles from './WebSpeciesCatalogPanel.module.css'
 
-const MOBILE_FILTER_COLLAPSE_QUERY = '(max-width: 860px)'
-
 interface WebSpeciesCatalogPanelProps {
   readonly mode: 'catalog' | 'favorites'
 }
 
 export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const [favoriteSearch, setFavoriteSearch] = useState('')
-  const intent = speciesCatalogWorkbench.intent.value
-  const results = speciesCatalogWorkbench.results.value
-  const filterStrip = speciesCatalogWorkbench.filterStrip.value
   const favoritesView = speciesCatalogWorkbench.favorites.value
   const sidebar = speciesCatalogWorkbench.sidebar.value
   const detailView = speciesCatalogWorkbench.detail.value
   const isCatalog = mode === 'catalog'
-  const searching = speciesCatalogWorkbench.isSearchLoading(results.status)
-  const visibleItems = isCatalog
-    ? results.items
-    : filterFavoriteSpecies(favoritesView.items, favoriteSearch)
-  const title = isCatalog ? t('nav.plantDb') : t('nav.favorites')
+  const visibleItems = filterFavoriteSpecies(favoritesView.items, favoriteSearch)
+  const title = isCatalog ? t('plantDb.title') : t('nav.favorites')
 
   const mainRef = useRef<HTMLDivElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
-  const showingDetail = !isCatalog && detailView.canonicalName !== null
+  const showingDetail = detailView.canonicalName !== null
   useFavoriteSpeciesDetailNavigation({
-    active: !isCatalog,
+    active: true,
     canonicalName: showingDetail ? detailView.canonicalName : null,
     detailRef,
     mainRef,
@@ -58,61 +48,29 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   return (
     <section className={styles.panel} data-testid={`web-species-${mode}-panel`} data-mode={mode} aria-label={title}>
       <div ref={mainRef} className={styles.main} hidden={showingDetail} inert={showingDetail} data-favorites-main={!isCatalog || undefined}>
-      {!isCatalog && <DockPanelHeader title={title} />}
-      {!isCatalog && <div className={styles.header}><SurfaceSearch value={favoriteSearch} onChange={setFavoriteSearch} label={t('favorites.search')} /></div>}
-      {isCatalog && <header className={styles.header}>
-        <div className={styles.titleRow}>
-          <h2 className={styles.title}>{title}</h2>
-          <span className={styles.count}>
-            {t('plantDb.resultsCount', { count: results.totalEstimate || visibleItems.length })}
-          </span>
-        </div>
-        {isCatalog && (
-          <input
-            type="search"
-            className={styles.searchInput}
-            value={intent.text}
-            placeholder={t('plantDb.searchPlaceholder')}
-            onInput={(event) => { speciesCatalogWorkbench.setSearchText(event.currentTarget.value) }}
-            data-testid="web-species-search"
-          />
-        )}
-      </header>}
-
-      {isCatalog && (
-        <WebFilterRegion filterStrip={filterStrip} />
-      )}
-
-      {isCatalog && <WebSpeciesDetail view={detailView} />}
-
+      <DockPanelHeader title={title} />
       {isCatalog ? (
-        <SpeciesList
-          items={visibleItems}
-          loading={searching}
-          error={results.error}
-          emptyLabel={t('plantDb.noResults')}
-          hasMore={results.nextCursor !== null}
-        />
+        <CatalogBrowser searchScope={t('plantDb.searchScopeWeb', { language: interfaceLanguageName(locale.value) })} />
       ) : (
-        <div className={styles.list}>
-          <h3 className={styles.sectionTitle}>{t('canvas.layers.plants')}</h3>
-          <SpeciesList
-            items={visibleItems}
-            favorites
-            loading={favoritesView.loading}
-            error={null}
-            emptyLabel={t(favoriteSearch ? 'speciesKey.noResults' : 'plantDb.noFavorites')}
-            hasMore={false}
-          />
-          <h3 className={styles.sectionTitle}>{t('plantDb.recentlyViewed')}</h3>
-          <div className={styles.recentList} role="list">
-            {sidebar.recentlyViewed.length === 0 ? (
-              <div className={styles.empty}>{t('plantDb.noRecentlyViewed')}</div>
-            ) : (
-              sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} favorites />)
-            )}
+        <>
+          <div className={styles.header}><SurfaceSearch value={favoriteSearch} onChange={setFavoriteSearch} label={t('favorites.search')} /></div>
+          <div className={styles.list}>
+            <h3 className={styles.sectionTitle}>{t('canvas.layers.plants')}</h3>
+            <SpeciesList
+              items={visibleItems}
+              loading={favoritesView.loading}
+              emptyLabel={t(favoriteSearch ? 'speciesKey.noResults' : 'plantDb.noFavorites')}
+            />
+            <h3 className={styles.sectionTitle}>{t('plantDb.recentlyViewed')}</h3>
+            <div className={styles.recentList} role="list">
+              {sidebar.recentlyViewed.length === 0 ? (
+                <div className={styles.empty}>{t('plantDb.noRecentlyViewed')}</div>
+              ) : (
+                sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
       </div>
       {showingDetail && <div ref={detailRef} className={styles.fullDetail}>
@@ -120,184 +78,6 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
         <div className={styles.detailScroll}><WebSpeciesDetail view={detailView} showBack={false} /></div>
       </div>}
     </section>
-  )
-}
-
-function WebFilterRegion({
-  filterStrip,
-}: {
-  readonly filterStrip: SpeciesCatalogFilterStripView
-}) {
-  const isCompactFilterLayout = useSmallSpeciesFilterLayout()
-  const [expanded, setExpanded] = useState(false)
-  const controls = filterStrip.controls.filter((control): control is StripChoiceField => (
-    control.kind === 'choice' && (filterStrip.options?.[control.optionsKey] ?? []).length > 0
-  ))
-
-  if (controls.length === 0) return null
-
-  const collapsed = isCompactFilterLayout && !expanded
-  const summary = filterStrip.hasActive
-    ? t('plantDb.filterSummaryActive', { count: filterStrip.activeCount })
-    : t('plantDb.filterSummaryInactive')
-
-  return (
-    <div
-      className={`${styles.filterRegion} ${collapsed ? styles.filterRegionCollapsed : ''}`}
-      data-collapsed={collapsed ? 'true' : 'false'}
-    >
-      {isCompactFilterLayout && (
-        <button
-          type="button"
-          className={styles.filterSummaryButton}
-          aria-expanded={!collapsed}
-          data-testid="web-species-filter-summary"
-          onClick={() => setExpanded((current) => !current)}
-        >
-          <span className={styles.filterSummaryTitle}>{t('plantDb.filters')}</span>
-          <span className={styles.filterSummaryStatus}>{summary}</span>
-          <span className={styles.filterSummaryChevron} aria-hidden="true">
-            {collapsed ? '+' : '-'}
-          </span>
-        </button>
-      )}
-      {!collapsed && (
-        <>
-          <div className={styles.filterRows}>
-            {controls.map((control) => (
-              <WebFilterControl
-                key={control.filterKey}
-                control={control}
-                filters={filterStrip.filters}
-                options={filterStrip.options}
-              />
-            ))}
-          </div>
-          {filterStrip.hasActive && (
-            <div className={styles.activeFilters}>
-              <WebActiveFilterChips
-                controls={controls}
-                filters={filterStrip.filters}
-              />
-              <button
-                type="button"
-                className={styles.clearFiltersButton}
-                data-testid="web-species-clear-filters"
-                onClick={() => { speciesCatalogWorkbench.clearFilters() }}
-              >
-                {t('filters.clearAll')}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function useSmallSpeciesFilterLayout(): boolean {
-  const [isSmall, setIsSmall] = useState(() => matchesSmallSpeciesFilterLayout())
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-
-    const media = window.matchMedia(MOBILE_FILTER_COLLAPSE_QUERY)
-    const update = () => setIsSmall(media.matches)
-    update()
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', update)
-      return () => media.removeEventListener('change', update)
-    }
-    media.addListener?.(update)
-    return () => {
-      media.removeListener?.(update)
-    }
-  }, [])
-
-  return isSmall
-}
-
-function matchesSmallSpeciesFilterLayout(): boolean {
-  return typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia(MOBILE_FILTER_COLLAPSE_QUERY).matches
-}
-
-function WebFilterControl({
-  control,
-  filters,
-  options,
-}: {
-  readonly control: StripChoiceField
-  readonly filters: SpeciesFilter
-  readonly options: FilterOptions | null
-}) {
-  const values = options?.[control.optionsKey] ?? []
-  if (values.length === 0) return null
-  const activeValues = (filters[control.filterKey] as string[] | null) ?? []
-
-  return (
-    <div className={styles.filterRow} data-testid={`web-species-filter-${control.filterKey}`}>
-      <span className={styles.filterLabel}>{t(control.labelI18nKey, control.fallbackLabel)}</span>
-      <div className={styles.filterChoices}>
-        {values.map((value) => {
-          const active = activeValues.includes(value)
-          return (
-            <button
-              key={value}
-              type="button"
-              className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
-              aria-pressed={active}
-              data-testid={`web-species-filter-${control.filterKey}-${value}`}
-              onClick={() => {
-                speciesCatalogWorkbench.patchFilters({
-                  [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, value),
-                } as Partial<SpeciesFilter>)
-              }}
-            >
-              {translateChoiceValue(control, value)}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function WebActiveFilterChips({
-  controls,
-  filters,
-}: {
-  readonly controls: readonly StripControlField[]
-  readonly filters: SpeciesFilter
-}) {
-  const chips = controls.flatMap((control) => {
-    if (control.kind !== 'choice') return []
-    const values = filters[control.filterKey] as string[] | null
-    return (values ?? []).map((value) => ({ control, value }))
-  })
-
-  if (chips.length === 0) return null
-
-  return (
-    <div className={styles.activeChips} aria-label={t('filters.activeFilters', 'Active filters')}>
-      {chips.map(({ control, value }) => (
-        <button
-          key={`${control.filterKey}-${value}`}
-          type="button"
-          className={styles.activeChip}
-          data-testid={`web-species-active-filter-${control.filterKey}-${value}`}
-          onClick={() => {
-            speciesCatalogWorkbench.patchFilters({
-              [control.filterKey]: toggleArrayValue(filters[control.filterKey] as string[] | null, value),
-            } as Partial<SpeciesFilter>)
-          }}
-        >
-          {translateChoiceValue(control, value)}
-          <span aria-hidden="true">×</span>
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -390,36 +170,14 @@ function Field({
 function SpeciesList({
   items,
   loading,
-  error,
   emptyLabel,
-  hasMore,
-  favorites = false,
 }: {
   readonly items: readonly SpeciesListItem[]
   readonly loading: boolean
-  readonly error: string | null
   readonly emptyLabel: string
-  readonly favorites?: boolean
-  readonly hasMore: boolean
 }) {
   if (loading && items.length === 0) {
     return <div className={styles.loading}>{t('plantDb.loading')}</div>
-  }
-
-  if (error !== null && items.length === 0) {
-    return (
-      <div className={styles.error} role="alert">
-        <span>{error}</span>
-        <button
-          type="button"
-          className={styles.retryButton}
-          onClick={() => { speciesCatalogWorkbench.retrySearch() }}
-          data-testid="web-species-retry"
-        >
-          {t('plantDb.retry')}
-        </button>
-      </div>
-    )
   }
 
   if (items.length === 0) {
@@ -427,28 +185,18 @@ function SpeciesList({
   }
 
   return (
-    <div className={styles.list} role={favorites ? 'list' : undefined}>
-      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} favorites={favorites} />)}
-      {hasMore && (
-        <button
-          type="button"
-          className={styles.loadMoreButton}
-          onClick={() => { void speciesCatalogWorkbench.loadNextPage() }}
-          data-testid="web-species-load-more"
-        >
-          {t('plantDb.loadMore')}
-        </button>
-      )}
+    <div className={styles.list} role="list">
+      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)}
     </div>
   )
 }
 
-function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListItem; readonly favorites?: boolean }) {
+/** A Favorites or Recently viewed row: names, Place, star and Details. */
+function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
   const commandSurface = currentCanvasToolCommandSurface.value
   const commonName = item.common_name?.trim() ?? ''
   const displayName = commonName.length > 0 ? commonName : item.canonical_name
   const showCanonicalName = displayName !== item.canonical_name
-  const metadata = metadataLabel(item)
   const handleDragStart = (event: DragEvent) => {
     writePlantStampDragData(event.dataTransfer, item)
     const preview = document.createElement('div')
@@ -484,15 +232,8 @@ function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListIte
       className={styles.row}
       draggable={true}
       onDragStart={handleDragStart}
-      onClick={favorites ? undefined : () => { speciesCatalogWorkbench.selectSpecies(item.canonical_name) }}
-      onKeyDown={(event) => {
-        if (favorites || event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
-        event.preventDefault()
-        speciesCatalogWorkbench.selectSpecies(item.canonical_name)
-      }}
-      role={favorites ? 'listitem' : 'button'}
-      tabIndex={favorites ? undefined : 0}
-      data-favorite-row={favorites || undefined}
+      role="listitem"
+      data-favorite-row
       data-testid="web-species-row"
     >
       <span className={styles.nameBlock}>
@@ -505,9 +246,6 @@ function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListIte
             </>
           )}
         </span>
-        {!favorites && metadata.length > 0 && (
-          <span className={styles.metadata} data-testid="web-species-row-metadata">{metadata}</span>
-        )}
       </span>
       <span className={styles.rowActions}>
         <button
@@ -537,31 +275,18 @@ function SpeciesRow({ item, favorites = false }: { readonly item: SpeciesListIte
         >
           {item.is_favorite ? '★' : '☆'}
         </button>
-        {favorites && <button type="button" className={styles.favoriteButton} data-species-detail={item.canonical_name}
+        <button type="button" className={styles.favoriteButton} data-species-detail={item.canonical_name}
           aria-label={t('speciesKey.details', { name: displayName })}
           onClick={() => speciesCatalogWorkbench.selectSpecies(item.canonical_name)}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
-        </button>}
+        </button>
       </span>
     </div>
   )
 }
 
-function metadataLabel(item: SpeciesListItem): string {
-  return [
-    ...item.climate_zones,
-    ...item.life_cycles,
-  ].join(' · ')
-}
-
 function compact(values: readonly (string | null | undefined)[]): string[] {
   return values.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-}
-
-function translateChoiceValue(control: StripChoiceField, value: string): string {
-  const key = `${control.valueI18nPrefix}${value}`
-  const translated = t(key)
-  return translated === key ? value : translated
 }
 
 export function WebSpeciesKeyPanel() {

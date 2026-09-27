@@ -31,6 +31,8 @@ export function PlantFinder({
   selectedOnMap,
   filters,
   summary,
+  summaryActions,
+  children,
   correction,
   inputRef,
   onKeyDown,
@@ -46,6 +48,10 @@ export function PlantFinder({
   readonly filters?: ComponentChildren
   /** The live count line, e.g. "2 species · 7 plants". */
   readonly summary?: ComponentChildren
+  /** Controls on the count line after the count, e.g. the catalog's Sort and Clear filters. */
+  readonly summaryActions?: ComponentChildren
+  /** Between the quick filters and the count line, e.g. the catalog's filter rows and active filters. */
+  readonly children?: ComponentChildren
   /** The words searched instead of a typo, from the matcher. */
   readonly correction?: string | null
   readonly inputRef?: Ref<HTMLInputElement | null>
@@ -59,6 +65,12 @@ export function PlantFinder({
     input.current?.select()
   }), [])
   const hasFilters = Boolean(selectedOnMap) || Boolean(filters)
+  const status = (
+    <p className={styles.status} role="status">
+      {correction && <>{renderWithTerm(t('plantFinder.showingResultsFor', { term: TERM }), correction)}{summary ? ' · ' : ''}</>}
+      {summary}
+    </p>
+  )
   return (
     <div className={styles.finder}>
       <SurfaceSearch
@@ -86,10 +98,10 @@ export function PlantFinder({
           {filters}
         </div>
       )}
-      <p className={styles.status} role="status">
-        {correction && <>{renderWithTerm(t('plantFinder.showingResultsFor', { term: TERM }), correction)}{summary ? ' · ' : ''}</>}
-        {summary}
-      </p>
+      {children}
+      {summaryActions
+        ? <div className={styles.statusRow}>{status}{summaryActions}</div>
+        : status}
     </div>
   )
 }

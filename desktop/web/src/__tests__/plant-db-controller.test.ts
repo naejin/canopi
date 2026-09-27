@@ -324,7 +324,7 @@ describe('Species Catalog Workbench lifecycle', () => {
       filters: expect.any(Object),
       cursor: 'offset:50',
       limit: 50,
-      sort: 'Name',
+      sort: 'Recommended',
       locale: 'en',
       include_total: false,
     }))

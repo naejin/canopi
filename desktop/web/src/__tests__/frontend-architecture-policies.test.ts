@@ -846,21 +846,19 @@ const REQUIRED_IMPORT_POLICIES = [
     from: [
       'src/components/panels/PlantDbPanel.tsx',
       'src/components/panels/FavoritesPanel.tsx',
-      'src/components/plant-db/SearchBar.tsx',
+      'src/components/plant-db/CatalogBrowser.tsx',
       'src/components/plant-db/ResultsList.tsx',
       'src/components/plant-db/FilterStrip.tsx',
       'src/components/plant-db/ActiveChips.tsx',
       'src/components/plant-db/MoreFiltersPanel.tsx',
       'src/components/plant-db/PlantRow.tsx',
-      'src/components/plant-db/PlantCard.tsx',
-      'src/components/plant-db/ViewModeToggle.tsx',
     ],
     targets: ['src/app/plant-browser/index.ts'],
   },
   {
     kind: 'require-imports',
-    name: 'Plant cards use the shared stamp source',
-    from: ['src/components/plant-db/PlantRow.tsx', 'src/components/plant-db/PlantCard.tsx'],
+    name: 'Catalog rows use the shared stamp source',
+    from: ['src/components/plant-db/PlantRow.tsx'],
     targets: ['src/canvas/plant-stamp-source.ts'],
   },
   {
@@ -1146,7 +1144,7 @@ const NAMED_IMPORT_POLICIES = [
   {
     kind: 'named-imports',
     name: 'Plant database rows use tool commands only',
-    from: ['src/components/plant-db/PlantRow.tsx', 'src/components/plant-db/PlantCard.tsx'],
+    from: ['src/components/plant-db/PlantRow.tsx'],
     target: 'src/canvas/session.ts',
     requiredNames: ['currentCanvasToolCommandSurface'],
     allowedNames: ['currentCanvasToolCommandSurface'],

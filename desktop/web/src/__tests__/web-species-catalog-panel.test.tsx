@@ -23,7 +23,10 @@ const mockCanvasSession = vi.hoisted(() => {
 })
 
 const mockWorkbench = vi.hoisted(() => ({
-  intent: { value: { text: '', filters: emptyFilters(), extraFilters: [], sort: 'Name', locale: 'en' } },
+  intent: { value: { text: '', filters: emptyFilters(), extraFilters: [], sort: 'Recommended', browseSort: 'Recommended', locale: 'en' } },
+  hasActiveFilters: { value: false },
+  browseSorts: ['Recommended', 'Name'],
+  dynamicOptions: { value: { cache: {}, pending: {}, errors: {} } },
   results: {
     value: {
       items: [makeSpeciesListItem('Malus domestica', 'Apple')],
@@ -85,27 +88,49 @@ const mockWorkbench = vi.hoisted(() => ({
   toggleFavorite: vi.fn(async () => {}),
   loadNextPage: vi.fn(async () => {}),
   isSearchLoading: vi.fn(() => false),
+  isActiveSearchText: vi.fn((text: string) => text.trim().length > 1),
+  setBrowseSort: vi.fn(),
+  loadDynamicOptions: vi.fn(async () => {}),
+  removeExtraFilter: vi.fn(),
 }))
 
-vi.mock('../app/plant-browser', () => ({
+vi.mock('@tanstack/virtual-core', () => ({
+  // jsdom has no layout: show every row.
+  Virtualizer: class {
+    constructor(private options: { count: number; onChange?: (instance: unknown) => void }) {}
+    setOptions(options: { count: number; onChange?: (instance: unknown) => void }) { this.options = options }
+    measure() {}
+    _didMount() { return () => {} }
+    _willUpdate() { this.options.onChange?.(this) }
+    getVirtualItems() {
+      return Array.from({ length: this.options.count }, (_, index) => ({ index, key: index, size: 62, start: index * 62 }))
+    }
+    getTotalSize() { return this.options.count * 62 }
+  },
+  observeElementRect: vi.fn(),
+  observeElementOffset: vi.fn(),
+  elementScroll: vi.fn(),
+}))
+
+vi.mock('../app/plant-browser', async () => ({
   speciesCatalogWorkbench: mockWorkbench,
+  plantFilterCatalog: (await vi.importActual<typeof import('../app/plant-browser/plant-filter-model')>('../app/plant-browser/plant-filter-model')).plantFilterCatalog,
 }))
 
 vi.mock('../canvas/session', () => ({
   currentCanvasToolCommandSurface: mockCanvasSession.currentToolCommandSurface,
+  currentCanvasQuerySurface: { value: null },
 }))
 
 import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'
 
 describe('Web Edition Species Catalog panel', () => {
   let container: HTMLDivElement
-  let originalMatchMedia: typeof window.matchMedia | undefined
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.innerHTML = ''
     document.body.appendChild(container)
-    originalMatchMedia = window.matchMedia
     locale.value = 'en'
     resetWorkbench()
     clearPlantStampSource()
@@ -116,15 +141,6 @@ describe('Web Edition Species Catalog panel', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
-    if (originalMatchMedia) {
-      Object.defineProperty(window, 'matchMedia', {
-        configurable: true,
-        writable: true,
-        value: originalMatchMedia,
-      })
-    } else {
-      Reflect.deleteProperty(window, 'matchMedia')
-    }
   })
 
   it('keeps Favorites behind a full dock detail with Back available while loading', async () => {
@@ -140,55 +156,64 @@ describe('Web Edition Species Catalog panel', () => {
     })
 
     expect(container.querySelector('[data-testid="web-species-catalog-panel"]')).not.toBeNull()
+    expect(container.querySelector('h2')?.textContent).toBe('Plant catalog')
     expect(mockWorkbench.mount).toHaveBeenCalledOnce()
     expect(mockWorkbench.mount).toHaveBeenCalledWith('catalog')
 
-    const search = requiredElement<HTMLInputElement>('[data-testid="web-species-search"]')
+    const search = requiredElement<HTMLInputElement>('input[aria-label="Search the plant catalog"]')
+    expect(search.getAttribute('aria-keyshortcuts')).toBe('Control+F')
     await act(async () => {
       search.value = 'apple'
       search.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(mockWorkbench.setSearchText).toHaveBeenCalledWith('apple')
 
-    expect(container.querySelector('[data-testid="web-species-filter-woody"]')).toBeNull()
+    // Filters stay behind "Filters" until asked for; unsupported Desktop filters never show.
+    expect(container.textContent).not.toContain('Climate zone')
+    const filtersToggle = requiredButton('Filters')
+    expect(filtersToggle.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { filtersToggle.click() })
+    expect(filtersToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(container.textContent).toContain('Climate zone')
     expect(container.textContent).not.toContain('Woody')
+    expect(container.textContent).not.toContain('More filters')
 
-    const climate = requiredElement<HTMLButtonElement>(
-      '[data-testid="web-species-filter-climate_zones-Temperate"]',
-    )
-    await act(async () => {
-      climate.click()
-    })
+    const climate = Array.from(container.querySelectorAll<HTMLElement>('[role="button"]'))
+      .find((chip) => chip.textContent === 'Temperate')!
+    await act(async () => { climate.click() })
     expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: ['Temperate'] })
 
     await act(async () => {
-      requiredElement<HTMLElement>('[data-testid="web-species-row"]').click()
+      requiredElement<HTMLButtonElement>('button[aria-label="Details for Apple"]').click()
     })
     expect(mockWorkbench.selectSpecies).toHaveBeenCalledWith('Malus domestica')
 
     await act(async () => {
-      requiredElement<HTMLButtonElement>('[aria-label="Add to favorites"]').click()
+      requiredElement<HTMLButtonElement>('[aria-label="Add Apple to favorites"]').click()
     })
     expect(mockWorkbench.toggleFavorite).toHaveBeenCalledWith('Malus domestica')
-
-    await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-load-more"]').click()
-    })
-    expect(mockWorkbench.loadNextPage).toHaveBeenCalledOnce()
   })
 
-  it('renders active Web filter chips and clears them through Workbench patches', async () => {
+  it('offers only the browse orders the Web catalog serves', async () => {
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
+    })
+
+    const sort = requiredElement<HTMLButtonElement>('button[aria-haspopup="listbox"]')
+    expect(sort.textContent).toContain('Sort: Recommended')
+    await act(async () => { sort.click() })
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+      .map((option) => option.textContent)
+    expect(options).toEqual(['Recommended', 'Name'])
+  })
+
+  it('renders active Web filters as removable tokens and clears them through Workbench patches', async () => {
     const filters = {
       ...emptyFilters(),
       climate_zones: ['Temperate'],
     }
-    mockWorkbench.intent.value = {
-      text: '',
-      filters,
-      extraFilters: [],
-      sort: 'Name',
-      locale: 'en',
-    }
+    mockWorkbench.intent.value = { ...mockWorkbench.intent.value, filters }
+    mockWorkbench.hasActiveFilters.value = true
     mockWorkbench.filterStrip.value = {
       ...mockWorkbench.filterStrip.value,
       filters,
@@ -200,69 +225,13 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    const activeChip = requiredElement<HTMLButtonElement>(
-      '[data-testid="web-species-active-filter-climate_zones-Temperate"]',
-    )
-    expect(activeChip.textContent).toContain('Temperate')
-
-    await act(async () => {
-      activeChip.click()
-    })
+    expect(requiredButton('Filters').textContent).toContain('1')
+    const remove = requiredElement<HTMLButtonElement>('button[aria-label="Remove filter: Temperate"]')
+    await act(async () => { remove.click() })
     expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: null })
 
-    await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-clear-filters"]').click()
-    })
+    await act(async () => { requiredButton('Clear filters').click() })
     expect(mockWorkbench.clearFilters).toHaveBeenCalledOnce()
-  })
-
-  it('collapses supported filters behind a mobile summary without hiding the Species list', async () => {
-    setSmallScreenMatch(true)
-    const filters = {
-      ...emptyFilters(),
-      climate_zones: ['Temperate'],
-    }
-    mockWorkbench.intent.value = {
-      text: '',
-      filters,
-      extraFilters: [],
-      sort: 'Name',
-      locale: 'en',
-    }
-    mockWorkbench.filterStrip.value = {
-      ...mockWorkbench.filterStrip.value,
-      filters,
-      hasActive: true,
-      activeCount: 1,
-    }
-
-    await act(async () => {
-      render(<WebSpeciesCatalogPanel mode="catalog" />, container)
-    })
-
-    expect(window.matchMedia).toHaveBeenCalledWith('(max-width: 860px)')
-    const summary = requiredElement<HTMLButtonElement>('[data-testid="web-species-filter-summary"]')
-    expect(summary.getAttribute('aria-expanded')).toBe('false')
-    expect(summary.textContent).toContain('Filters')
-    expect(summary.textContent).toContain('1 active')
-    expect(requiredElement<HTMLElement>('[data-testid="web-species-row"]').textContent).toContain('Apple')
-    expect(container.querySelector('[data-testid="web-species-filter-climate_zones-Temperate"]')).toBeNull()
-
-    await act(async () => {
-      summary.click()
-    })
-
-    expect(summary.getAttribute('aria-expanded')).toBe('true')
-    const climate = requiredElement<HTMLButtonElement>(
-      '[data-testid="web-species-filter-climate_zones-Temperate"]',
-    )
-    expect(climate.getAttribute('aria-pressed')).toBe('true')
-
-    await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-active-filter-climate_zones-Temperate"]')
-        .click()
-    })
-    expect(mockWorkbench.patchFilters).toHaveBeenCalledWith({ climate_zones: null })
   })
 
   it('renders browser-local favorites and recently viewed Species', async () => {
@@ -333,28 +302,16 @@ describe('Web Edition Species Catalog panel', () => {
     expect(search.value).toBe('pecher')
   })
 
-  it('renders Species row names on one line with separate metadata', async () => {
-    mockWorkbench.results.value = {
-      ...mockWorkbench.results.value,
-      items: [
-        {
-          ...makeSpeciesListItem('Malus domestica', 'Apple'),
-          climate_zones: ['Temperate', 'Mediterranean'],
-          life_cycles: ['Perennial'],
-        },
-      ],
-    }
-
+  it('renders the common name over the italic scientific name', async () => {
     await act(async () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    const nameLine = requiredElement<HTMLElement>('[data-testid="web-species-name-line"]')
-    expect(nameLine.textContent).toContain('Apple')
-    expect(nameLine.textContent).toContain('Malus domestica')
-
-    const metadata = requiredElement<HTMLElement>('[data-testid="web-species-row-metadata"]')
-    expect(metadata.textContent).toBe('Temperate · Mediterranean · Perennial')
+    const row = requiredElement<HTMLElement>('[data-testid="catalog-species-row"]')
+    expect(row.querySelector('strong')?.textContent).toBe('Apple')
+    const scientific = row.querySelector('em')!
+    expect(scientific.textContent).toBe('Malus domestica')
+    expect(scientific.getAttribute('lang')).toBe('la')
   })
 
   it('does not duplicate Canonical Name when a Species row has no Common Name', async () => {
@@ -372,8 +329,9 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    const nameLine = requiredElement<HTMLElement>('[data-testid="web-species-name-line"]')
-    expect(nameLine.textContent).toBe('Malus domestica')
+    const row = requiredElement<HTMLElement>('[data-testid="catalog-species-row"]')
+    expect(row.querySelector('strong')?.textContent).toBe('Malus domestica')
+    expect(row.querySelector('em')).toBeNull()
   })
 
   it('writes desktop Plant Stamp drag payloads from catalog rows', async () => {
@@ -381,7 +339,7 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="catalog" />, container)
     })
 
-    const row = requiredElement<HTMLElement>('[data-testid="web-species-row"]')
+    const row = requiredElement<HTMLElement>('[data-testid="catalog-species-row"]')
     const dataTransfer = fakeDataTransfer()
     expect(row.draggable).toBe(true)
 
@@ -404,7 +362,7 @@ describe('Web Edition Species Catalog panel', () => {
     })
 
     await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-place"]').click()
+      requiredElement<HTMLButtonElement>('button[aria-label="Place Apple"]').click()
     })
 
     expect(readPlantStampSource()).toEqual({
@@ -436,9 +394,7 @@ describe('Web Edition Species Catalog panel', () => {
       'Failed to load Web Edition Species Catalog manifest.',
     )
 
-    await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-retry"]').click()
-    })
+    await act(async () => { requiredButton('Retry').click() })
 
     expect(mockWorkbench.retrySearch).toHaveBeenCalledOnce()
   })
@@ -496,7 +452,7 @@ describe('Web Edition Species Catalog panel', () => {
     })
 
     await act(async () => {
-      requiredElement<HTMLButtonElement>('[data-testid="web-species-place"]').click()
+      requiredElement<HTMLButtonElement>('button[aria-label="Place Apple"]').click()
     })
 
     expect(readPlantStampSource()?.canonical_name).toBe('Malus domestica')
@@ -607,6 +563,13 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('No photos available')
   })
 
+  function requiredButton(name: string): HTMLButtonElement {
+    const button = Array.from(container.querySelectorAll('button'))
+      .find((candidate) => candidate.textContent?.trim().startsWith(name))
+    if (!button) throw new Error(`Missing button ${name}`)
+    return button
+  }
+
   function requiredElement<T extends Element>(selector: string): T {
     const element = container.querySelector<T>(selector)
     if (!element) throw new Error(`Missing element ${selector}`)
@@ -616,7 +579,8 @@ describe('Web Edition Species Catalog panel', () => {
 
 function resetWorkbench(): void {
   vi.clearAllMocks()
-  mockWorkbench.intent.value = { text: '', filters: emptyFilters(), extraFilters: [], sort: 'Name', locale: 'en' }
+  mockWorkbench.intent.value = { text: '', filters: emptyFilters(), extraFilters: [], sort: 'Recommended', browseSort: 'Recommended', locale: 'en' }
+  mockWorkbench.hasActiveFilters.value = false
   mockWorkbench.results.value = {
     items: [makeSpeciesListItem('Malus domestica', 'Apple')],
     nextCursor: 'offset:1',
@@ -692,23 +656,6 @@ function supportedFilterControls() {
       source: 'adapter',
     },
   ] as const
-}
-
-function setSmallScreenMatch(matches: boolean): void {
-  Object.defineProperty(window, 'matchMedia', {
-    configurable: true,
-    writable: true,
-    value: vi.fn((query: string) => ({
-      matches,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  })
 }
 
 function emptyFilters(): SpeciesFilter {

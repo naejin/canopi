@@ -97,10 +97,6 @@ vi.mock('../components/plant-db/PlantRow', () => ({
   PlantRow: ({ plant }: { plant: SpeciesListItem }) => <div>{plant.canonical_name}</div>,
 }))
 
-vi.mock('../components/plant-db/PlantCard', () => ({
-  PlantCard: ({ plant }: { plant: SpeciesListItem }) => <div>{plant.canonical_name}</div>,
-}))
-
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
@@ -135,7 +131,6 @@ describe('ResultsList', () => {
       locale,
       search: async () => searchResponses.shift() ?? emptySpeciesSearchResult(),
     })
-    workbench.setViewMode('list')
     vi.doMock('../app/plant-browser', async () => {
       const actual = await vi.importActual<typeof import('../app/plant-browser')>('../app/plant-browser')
       return {
@@ -171,7 +166,7 @@ describe('ResultsList', () => {
     await flushMicrotasks()
 
     await act(async () => {
-      render(<ResultsList />, container)
+      render(<ResultsList designSpecies={new Map()} />, container)
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)
@@ -206,7 +201,7 @@ describe('ResultsList', () => {
     await flushMicrotasks()
 
     await act(async () => {
-      render(<ResultsList />, container)
+      render(<ResultsList designSpecies={new Map()} />, container)
     })
 
     expect(virtualCoreMocks.instances).toHaveLength(1)

@@ -13,6 +13,7 @@ import {
   isActiveSpeciesSearchText,
   isPlantSearchLoading,
   type DynamicFilterOptionsAdapter,
+  type SpeciesBrowseSort,
   type PlantSearchAdapter,
   type PlantSearchIntent,
   type PlantSearchResultState,
@@ -22,8 +23,10 @@ import {
 import { plantFilterCatalog, plantFilterModel, type StripControlField } from './plant-filter-model'
 
 export { DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR }
+export type { SpeciesBrowseSort }
 
-export type ViewMode = 'list' | 'card'
+/** Every browse order, in menu order; an edition offers the ones its catalog can serve. */
+export const SPECIES_BROWSE_SORTS: readonly SpeciesBrowseSort[] = ['Recommended', 'Name', 'Height', 'Edibility']
 
 type FilterOptionsAdapter = () => Promise<FilterOptions | null>
 type SupportedFilterFieldsAdapter = () => Promise<readonly string[] | null>
@@ -89,7 +92,8 @@ export interface SpeciesCatalogWorkbench {
   readonly intent: ReadonlySignal<PlantSearchIntent>
   readonly results: ReadonlySignal<PlantSearchResultState>
   readonly selectedCanonicalName: ReadonlySignal<string | null>
-  readonly viewMode: ReadonlySignal<ViewMode>
+  /** Browse orders this edition's catalog serves, in menu order. */
+  readonly browseSorts: readonly SpeciesBrowseSort[]
   readonly hasActiveFilters: ReadonlySignal<boolean>
   readonly filterStrip: ReadonlySignal<SpeciesCatalogFilterStripView>
   readonly favorites: ReadonlySignal<SpeciesCatalogFavoritesView>
@@ -105,7 +109,7 @@ export interface SpeciesCatalogWorkbench {
   clearSearchText(): void
   retrySearch(): void
   loadNextPage(): Promise<void>
-  setViewMode(mode: ViewMode): void
+  setBrowseSort(sort: SpeciesBrowseSort): void
   patchFilters(patch: Partial<SpeciesFilter>): void
   clearFilters(): void
   addExtraFilter(field: string, op: FilterOp, values: string[]): void
@@ -139,6 +143,8 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly resolveCommonNames?: CommonNamesAdapter
   readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
+  /** Browse orders the search adapter serves; defaults to all of them. */
+  readonly browseSorts?: readonly SpeciesBrowseSort[]
   readonly favoritesIncludeRecentlyViewed?: boolean
   readonly pageSize?: number
   readonly textDebounceMs?: number
@@ -169,6 +175,7 @@ export function createSpeciesCatalogWorkbench({
   resolveCommonNames: resolveCommonNamesAdapter = emptyCommonNamesAdapter,
   onSpeciesSelected,
   locale: localeSignal = locale,
+  browseSorts = SPECIES_BROWSE_SORTS,
   favoritesIncludeRecentlyViewed = false,
   pageSize,
   textDebounceMs,
@@ -209,11 +216,14 @@ export function createSpeciesCatalogWorkbench({
     pageSize,
     textDebounceMs,
   })
+  const defaultBrowseSort = browseSorts[0]
+  if (defaultBrowseSort && !browseSorts.includes(plantSearchSession.intent.peek().browseSort)) {
+    plantSearchSession.setBrowseSort(defaultBrowseSort)
+  }
   const filterOptions = signal<FilterOptions | null>(null)
   const supportedFilterFields = signal<ReadonlySet<string> | null>(
     getSupportedFilterFieldsAdapter ? new Set() : null,
   )
-  const viewMode = signal<ViewMode>('list')
   const selectedCanonicalName = signal<string | null>(null)
   const detail = signal<SpeciesCatalogDetailView>({
     canonicalName: null,
@@ -253,7 +263,6 @@ export function createSpeciesCatalogWorkbench({
   })
 
   const selectedCanonical = computed(() => selectedCanonicalName.value)
-  const currentViewMode = computed(() => viewMode.value)
 
   const filterStrip = computed<SpeciesCatalogFilterStripView>(() => ({
     options: filterOptions.value,
@@ -560,7 +569,7 @@ export function createSpeciesCatalogWorkbench({
     intent: plantSearchSession.intent,
     results: projectedResults,
     selectedCanonicalName: selectedCanonical,
-    viewMode: currentViewMode,
+    browseSorts,
     hasActiveFilters,
     filterStrip,
     favorites,
@@ -622,9 +631,9 @@ export function createSpeciesCatalogWorkbench({
       return plantSearchSession.loadNextPage()
     },
 
-    setViewMode(mode) {
-      if (disposed) return
-      viewMode.value = mode
+    setBrowseSort(sort) {
+      if (disposed || !browseSorts.includes(sort)) return
+      plantSearchSession.setBrowseSort(sort)
     },
 
     patchFilters(patch) {

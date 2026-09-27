@@ -1,16 +1,17 @@
 import { useEffect } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
+import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
-import { SearchBar } from '../plant-db/SearchBar'
-import { FilterStrip } from '../plant-db/FilterStrip'
-import { ActiveChips } from '../plant-db/ActiveChips'
-import { ResultsList } from '../plant-db/ResultsList'
-import { ViewModeToggle } from '../plant-db/ViewModeToggle'
+import { CatalogBrowser } from '../plant-db/CatalogBrowser'
 import { MoreFiltersPanel } from '../plant-db/MoreFiltersPanel'
+import { interfaceLanguageName } from '../plant-db/language-name'
 import { PlantDetailCard } from '../plant-detail/PlantDetailCard'
+import { DockPanelHeader } from '../shared/DockPanelHeader'
 import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import styles from '../plant-db/PlantDb.module.css'
 
+/** The Desktop Plant catalog (Ctrl 3): the shared catalog list, More filters and species detail. */
 export function PlantDbPanel() {
   const selected = speciesCatalogWorkbench.selectedCanonicalName.value
   const moreFiltersOpen = useSignal(false)
@@ -18,42 +19,27 @@ export function PlantDbPanel() {
   useEffect(() => speciesCatalogWorkbench.mount('catalog'), [])
 
   return (
-    <div className={styles.panel}>
-      {/* Search + filters + results */}
+    <section className={styles.panel} aria-label={t('plantDb.title')}>
       <div
         className={`${styles.main} ${selected !== null ? plantDetailStyles.detailHidden : ''}`}
         aria-hidden={selected !== null}
       >
-        {/* Search header */}
-        <div className={styles.searchHeader}>
-          <SearchBar />
-          <ViewModeToggle />
-        </div>
-
-        <div className={styles.filterRegion}>
-          {/* Always-visible filter rows */}
-          <FilterStrip onMoreFilters={() => { moreFiltersOpen.value = !moreFiltersOpen.value }} />
-
-          {/* Active filter chips */}
-          <ActiveChips />
-        </div>
-
-        {/* Results */}
-        <ResultsList />
-
-        {/* More Filters overlay */}
+        <DockPanelHeader title={t('plantDb.title')} />
+        <CatalogBrowser
+          onMoreFilters={() => { moreFiltersOpen.value = !moreFiltersOpen.value }}
+          searchScope={t('plantDb.searchScopeDesktop', { language: interfaceLanguageName(locale.value) })}
+        />
         <MoreFiltersPanel
           open={moreFiltersOpen.value}
           onClose={() => { moreFiltersOpen.value = false }}
         />
       </div>
 
-      {/* Detail card */}
       {selected !== null && (
         <div className={plantDetailStyles.detailVisible}>
           <PlantDetailCard canonicalName={selected} />
         </div>
       )}
-    </div>
+    </section>
   )
 }
