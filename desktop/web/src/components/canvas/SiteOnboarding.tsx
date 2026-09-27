@@ -52,7 +52,7 @@ function SiteLocateDialog() {
         autoFocus
         label={t('canvas.placeSearch.placeholder')}
         onPick={(result, label) => {
-          currentCanvasViewportCommandSurface.peek()?.showPlace(result, PLACE_SEARCH_ZOOM)
+          currentCanvasViewportCommandSurface.peek()?.showPlace(result, PLACE_SEARCH_ZOOM, { motion: 'fly' })
           finishSiteLocate(label)
         }}
       />

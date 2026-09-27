@@ -197,7 +197,10 @@ describe('New Design site guidance', () => {
       field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
     })
 
-    expect(showPlace).toHaveBeenCalledWith(expect.objectContaining({ lat: 48.2201, lon: 0.0351 }), PLACE_SEARCH_ZOOM)
+    // The new Design opened at an overview: picking the site flies there.
+    expect(showPlace).toHaveBeenCalledWith(
+      expect.objectContaining({ lat: 48.2201, lon: 0.0351 }), PLACE_SEARCH_ZOOM, { motion: 'fly' },
+    )
     expect(container.querySelector('[data-site-locate]')).toBeNull()
     expect(container.querySelector('[data-start-design]')?.textContent).toContain('Start your Design')
     expect(container.querySelector('[data-found-site]')?.textContent).toContain('48.2201° N, 0.0351° E')
