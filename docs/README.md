@@ -12,6 +12,7 @@ Start with the narrowest authority for the task. Code shows current behaviour; t
 | `.canopi` format, lifecycle, GeoJSON, Design Edit, settings | [Design document](guides/design-document.md) |
 | LiDAR Data Library | [Data library](guides/data-library.md) |
 | Frontend structure, commands, localization, tests | [Frontend](guides/frontend.md) |
+| Core terms per locale, copy rules | [UI glossary](guides/ui-glossary.md) |
 | Desktop, Web and UI gallery development | [Editions](guides/editions.md) |
 | Plant DB, search, Web catalog publication | [Species catalog](guides/species-catalog.md) |
 | Canvas PDF | [PDF export](guides/pdf-export.md) |

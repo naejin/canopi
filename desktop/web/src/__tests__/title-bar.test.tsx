@@ -114,7 +114,7 @@ describe('TitleBar', () => {
 
     // With no continuous-save session in this fixture, the Design reads as saved.
     expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved')
-    expect(container.querySelector('input[role="combobox"]')?.getAttribute('placeholder')).toBe('Search a place or coordinates')
+    expect(container.querySelector('input[role="combobox"]')?.getAttribute('placeholder')).toBe('Place or coordinates')
   })
 
   it('renames the Design with one click or F2 without persisting unchanged fallback text', async () => {

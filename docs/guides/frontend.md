@@ -87,6 +87,7 @@ Every resource (runtime, renderer, MapLibre instance, timer, listener, observer,
 ## Localization
 
 - Every user-visible string goes through `t()` from `i18n`. Add each key to all 11 locale files in `desktop/web/src/i18n/`: en, fr, es, pt, it, zh, de, ja, ko, nl, ru. Use proper diacritics.
+- Use the [UI glossary](ui-glossary.md) terms for core concepts, tools and panels in every locale. English is sentence case, placeholders stay within their field's budget, and `i18n-copy.test.ts` checks both.
 - `t()` observes `locale` itself, so components do not read `locale.value` just to re-render text. Read it only to select localized data, drive searches or format dates (`Intl.DateTimeFormat`, `Intl.RelativeTimeFormat`).
 - Runtime chrome gets translation through `CanvasRuntimeAppAdapter.translate`. Drawing code (rulers, inspection lens, PDF) receives `t` as a parameter. Runtime modules never import `i18n`.
 - Unit abbreviations such as "yr", "d" and "in" need keys. Scientific units do not. CSV and file export headers reuse the UI table keys.

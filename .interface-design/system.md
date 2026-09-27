@@ -59,7 +59,7 @@ Every plant list uses the shared finder: search (Ctrl F) over names in every lan
 - Destructive actions confirm and name what is lost, or show an Undo toast (also Ctrl Z). Toasts do not time out while hovered or focused.
 - Keyboard: every pointer action has a keyboard path (rows are buttons, Move up/down with Alt ↑/↓, Rotate… Ctrl Alt R, zone corners with arrows and Enter). Esc closes a menu or dialog → cancels a gesture → returns to Select → clears the selection. Single-key tool shortcuts work only while the map has focus and can be turned off.
 - Popups anchor to their trigger, fit the viewport and never cover it: a menu too tall for the room below its trigger flips above when that fits, or caps its height and scrolls, with keyboard focus kept in view. Dialogs are modal, trap focus and return it.
-- Locale: numbers, dates, currency and units through `Intl`; message formats for plurals and names inside sentences; buttons, footers and segments wrap instead of clipping.
+- Locale: numbers, dates, currency and units through `Intl`; message formats for plurals and names inside sentences; buttons, footers and segments wrap instead of clipping; core terms and copy rules from the [UI glossary](../docs/guides/ui-glossary.md).
 
 ## Reuse before adding a pattern
 

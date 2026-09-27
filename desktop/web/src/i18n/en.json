@@ -36,7 +36,7 @@
   },
   "plantDb": {
     "title": "Plant catalog",
-    "searchPlaceholder": "Search by common or scientific name",
+    "searchPlaceholder": "Common or scientific name",
     "loading": "Loading…",
     "loadingMore": "Loading more…",
     "noFavorites": "No favorites yet.",
@@ -221,7 +221,7 @@
       "applySelection": "Apply to {{count}} selected"
     },
     "placeSearch": {
-      "placeholder": "Search a place or coordinates",
+      "placeholder": "Place or coordinates",
       "searching": "Searching…",
       "noResults": "No places found",
       "error": "Place search failed",
@@ -362,7 +362,7 @@
       "speciesChosen_many": "{{count, number}} species chosen",
       "speciesChosen_other": "{{count, number}} species chosen",
       "showChosen": "Show chosen",
-      "addSpeciesPlaceholder": "Add species: name, scientific name or code",
+      "addSpeciesPlaceholder": "Add species by name or code",
       "speciesMatch_one": "{{count, number}} species matches “{{query}}”",
       "speciesMatch_few": "{{count, number}} species match “{{query}}”",
       "speciesMatch_many": "{{count, number}} species match “{{query}}”",
@@ -1381,7 +1381,7 @@
   },
   "plantFinder": {
     "label": "Find plants",
-    "placeholder": "Find plants: name, scientific name or code",
+    "placeholder": "Name, scientific name or code",
     "shortcut": "Ctrl F",
     "quickFilters": "Quick filters",
     "selectedOnMap": "Selected on map",

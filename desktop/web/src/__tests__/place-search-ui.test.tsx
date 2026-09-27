@@ -70,7 +70,7 @@ describe('Place search field', () => {
     expect(input().getAttribute('aria-expanded')).toBe('false')
     expect(input().getAttribute('aria-controls')).toBe(container.querySelector('[role="listbox"]')!.id)
     expect(input().getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K')
-    expect(input().placeholder).toBe('Search a place or coordinates')
+    expect(input().placeholder).toBe('Place or coordinates')
 
     await act(async () => { requestPlaceSearchFocus() })
     expect(document.activeElement).toBe(input())
