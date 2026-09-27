@@ -2,6 +2,7 @@ import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
 import { useEffect, useMemo } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
+import { siteLocateOpen } from '../../app/site-onboarding/state'
 import type { ShellPanelBarProjection } from '../../app/shell-commands'
 import {
   activePanel,
@@ -49,7 +50,11 @@ export function WorkspaceComposition({
   const primary = registrations.primary.has(currentPrimary)
     ? currentPrimary as PrimaryPanel
     : 'canvas'
+  // "Where is your site?" is the one task: the dock steps aside, as the tool
+  // rail does, and comes back once the site is found or skipped.
+  const locating = siteLocateOpen.value
   const mountedSide = primary === 'canvas'
+    && !locating
     && requestedSide
     && registrations.side.has(requestedSide)
       ? requestedSide

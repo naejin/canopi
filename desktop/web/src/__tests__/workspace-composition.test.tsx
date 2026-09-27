@@ -10,6 +10,15 @@ import {
 } from '../components/workspace/WorkspaceComposition'
 import { activePanel, navigateTo, sidePanel, type Panel } from '../app/shell/state'
 
+const locating = vi.hoisted(() => ({ open: null as null | { value: boolean } }))
+vi.mock('../app/site-onboarding/state', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../app/site-onboarding/state')>()
+  const { signal } = await import('@preact/signals')
+  const open = signal(false)
+  locating.open = open
+  return { ...original, siteLocateOpen: open }
+})
+
 function projection({
   primary = ['canvas'],
   design = [],
@@ -139,6 +148,29 @@ describe('shared edition workspace composition', () => {
 
     await act(async () => { navigateTo('canvas') })
     expect(container.querySelector('[data-testid="canvas"]')).not.toBeNull()
+  })
+
+  it('hides the open dock panel while "Where is your site?" is showing, and keeps it for afterwards', async () => {
+    sidePanel.value = 'layers'
+    const Layers = () => <p data-testid="layers">Layers</p>
+    await act(async () => {
+      render(
+        <WorkspaceComposition
+          panelProjection={projection({ design: ['layers'] })}
+          surfaces={{ primary: { canvas: Canvas }, side: { layers: Layers } }}
+        />,
+        container,
+      )
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="layers"]')).not.toBeNull()
+
+    await act(async () => { locating.open!.value = true })
+    expect(container.querySelector('[data-workspace-side-panel]')).toBeNull()
+    expect(sidePanel.value).toBe('layers')
+
+    await act(async () => { locating.open!.value = false })
+    expect(container.querySelector('[data-testid="layers"]')).not.toBeNull()
   })
 
   it('closes a stale side-panel selection that the active edition does not support', async () => {

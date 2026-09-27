@@ -25,7 +25,9 @@
   border-radius: var(--radius-panel);
 }
 
-/* Resize grip on the dock's left edge: invisible until hovered or focused. */
+/* Resize grip on the dock's left edge: an 8 px hit area that draws nothing at
+   rest; hover shows a thin ochre line and keyboard focus adds the focus ring.
+   The line is a pseudo-element so the hit area never paints as a bar. */
 .dragHandle {
   position: absolute;
   top: var(--space-4);
@@ -34,12 +36,31 @@
   z-index: 1;
   width: var(--space-2);
   border-radius: var(--radius-full);
+  background: transparent;
   cursor: col-resize;
 }
 
-.dragHandle:hover,
-.dragHandle:focus-visible {
+.dragHandle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  transition: background var(--transition-fast), width var(--transition-fast), left var(--transition-fast);
+}
+
+.dragHandle:hover::before,
+.dragHandle:focus-visible::before {
+  left: calc(50% - var(--space-0-5));
+  width: var(--space-1);
   background: var(--color-accent);
+}
+
+.dragHandle:focus {
+  outline: none;
 }
 
 .dragHandle:focus-visible {
