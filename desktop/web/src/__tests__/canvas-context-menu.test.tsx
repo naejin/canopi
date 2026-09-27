@@ -216,14 +216,16 @@ describe('CanvasContextMenu', () => {
     expect(menu.style.left).toBe('800px')
     expect(menu.style.top).toBe('400px')
 
-    // Too tall to open below or above the pointer: it shifts up just enough to fit.
+    // Too tall to open below or above the pointer: it takes the roomier side,
+    // capped to that room, and scrolls instead of covering the pointer.
     menu = await open(request({ anchor: { left: 120, top: 200, right: 120, bottom: 200 } }))
     expect(menu.style.top).toBe('200px')
     const innerHeight = window.innerHeight
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
     try {
       menu = await open(request({ anchor: { left: 120, top: 250, right: 120, bottom: 250 } }))
-      expect(menu.style.top).toBe('192px')
+      expect(menu.style.top).toBe('250px')
+      expect(menu.style.maxHeight).toBe('242px')
     } finally {
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
     }

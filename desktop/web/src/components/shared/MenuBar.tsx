@@ -3,10 +3,14 @@ import { useSignal, useSignalEffect } from '@preact/signals'
 import { flattenMenuActions, type MenuAction, type MenuDefinition, type MenuEntry } from '../../app/shell-commands/menus'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
+import { focusMenuItem, placeSidePopupVertically } from '../../utils/floating-position'
 import styles from './MenuBar.module.css'
 
 const wrapPrev = (i: number, len: number) => i > 0 ? i - 1 : len - 1
 const wrapNext = (i: number, len: number) => i < len - 1 ? i + 1 : 0
+/** The CSS gap between a menu button and its menu, and the margin kept from the window edge. */
+const MENU_GAP_PX = 8
+const VIEWPORT_MARGIN_PX = 8
 
 interface MenuBarProps {
   readonly menus: readonly MenuDefinition[]
@@ -61,13 +65,13 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
       const menuEl = barRef.current?.querySelector<HTMLElement>('[data-menu-popup="root"]')
       if (!menuEl) return
       const items = rootItems(menuEl)
-      ;(position === 'first' ? items[0] : items.at(-1))?.focus()
+      focusMenuItem(position === 'first' ? items[0] : items.at(-1))
     })
   }
 
   function focusFirstSubmenuItemAfterRender(submenuId: string): void {
     requestAnimationFrame(() => {
-      submenuRefs.current.get(submenuId)?.querySelector<HTMLButtonElement>('button')?.focus()
+      focusMenuItem(submenuRefs.current.get(submenuId)?.querySelector<HTMLButtonElement>('button'))
     })
   }
 
@@ -105,19 +109,19 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
-        items[wrapNext(index, items.length)]?.focus()
+        focusMenuItem(items[wrapNext(index, items.length)])
         break
       case 'ArrowUp':
         event.preventDefault()
-        items[wrapPrev(index < 0 ? 0 : index, items.length)]?.focus()
+        focusMenuItem(items[wrapPrev(index < 0 ? 0 : index, items.length)])
         break
       case 'Home':
         event.preventDefault()
-        items[0]?.focus()
+        focusMenuItem(items[0])
         break
       case 'End':
         event.preventDefault()
-        items.at(-1)?.focus()
+        focusMenuItem(items.at(-1))
         break
       case 'ArrowLeft':
         event.preventDefault()
@@ -151,10 +155,10 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
     const index = items.indexOf(document.activeElement as HTMLButtonElement)
     const stop = () => { event.preventDefault(); event.stopPropagation() }
     switch (event.key) {
-      case 'ArrowDown': stop(); items[wrapNext(index, items.length)]?.focus(); break
-      case 'ArrowUp': stop(); items[wrapPrev(index < 0 ? 0 : index, items.length)]?.focus(); break
-      case 'Home': stop(); items[0]?.focus(); break
-      case 'End': stop(); items.at(-1)?.focus(); break
+      case 'ArrowDown': stop(); focusMenuItem(items[wrapNext(index, items.length)]); break
+      case 'ArrowUp': stop(); focusMenuItem(items[wrapPrev(index < 0 ? 0 : index, items.length)]); break
+      case 'Home': stop(); focusMenuItem(items[0]); break
+      case 'End': stop(); focusMenuItem(items.at(-1)); break
       case 'ArrowLeft':
       case 'Escape':
         stop()
@@ -228,12 +232,61 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
     )
   }
 
-  function renderEntry(entry: MenuEntry, index: number, checkable: boolean) {
+  /** Caps a root menu to the room below its menu button; the menu scrolls inside. */
+  function placeRootMenu(element: HTMLDivElement | null, key: string): void {
+    const trigger = element && triggerRefs.current.get(key)
+    if (!element || !trigger) return
+    const room = window.innerHeight - trigger.getBoundingClientRect().bottom - MENU_GAP_PX - VIEWPORT_MARGIN_PX
+    element.style.maxHeight = `${Math.max(0, room)}px`
+  }
+
+  /**
+   * Places a submenu beside its item, outside the root menu's scrolling list so
+   * the list cannot clip it: level with the item, moved up to end inside the
+   * window, capped to the window and flipped left when there is no room right.
+   */
+  function placeSubmenu(element: HTMLDivElement | null, submenuId: string): void {
+    const root = element?.parentElement
+    const item = submenuTriggerRefs.current.get(submenuId)
+    if (!element || !root || !item) return
+    element.style.maxHeight = ''
+    const rootBounds = root.getBoundingClientRect()
+    const size = element.getBoundingClientRect()
+    const { top, maxHeight } = placeSidePopupVertically(
+      item.getBoundingClientRect().top - 4,
+      size.height,
+      window.innerHeight,
+      { margin: VIEWPORT_MARGIN_PX },
+    )
+    element.style.top = `${top - rootBounds.top}px`
+    element.style.maxHeight = `${maxHeight}px`
+    element.dataset.side = rootBounds.right + 4 + size.width <= window.innerWidth - VIEWPORT_MARGIN_PX ? 'right' : 'left'
+  }
+
+  function renderSubmenuPopup(entry: Extract<MenuEntry, { type: 'submenu' }>, inline: boolean) {
+    const submenuCheckable = entry.items.some((item) => item.check)
+    return (
+      <div
+        ref={(element) => {
+          if (element) submenuRefs.current.set(entry.id, element)
+          else submenuRefs.current.delete(entry.id)
+          if (!inline) placeSubmenu(element, entry.id)
+        }}
+        className={`${styles.menu} ${styles.submenu}`}
+        role="menu"
+        aria-label={entry.label}
+        onKeyDown={(event) => handleSubmenuKeyDown(event, entry.id)}
+      >
+        {entry.items.map((item) => renderAction(item, false, submenuCheckable))}
+      </div>
+    )
+  }
+
+  function renderEntry(entry: MenuEntry, index: number, checkable: boolean, inlineSubmenus: boolean) {
     if (entry.type === 'separator') return <div key={`sep-${index}`} className={styles.separator} role="separator" />
     if (entry.type === 'label') return <div key={`label-${index}`} className={styles.heading} role="presentation">{entry.label}</div>
     if (entry.type === 'action') return renderAction(entry, true, checkable)
     const submenuOpen = openSubmenuId.value === entry.id && !entry.disabled
-    const submenuCheckable = entry.items.some((item) => item.check)
     return (
       <div key={entry.id} className={styles.submenuWrap} onMouseEnter={() => { if (!entry.disabled) openSubmenuId.value = entry.id }}>
         <button
@@ -260,20 +313,7 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
           <span className={styles.itemLabel}>{entry.label}</span>
           <ControlIcon name="chevron-right" className={styles.submenuChevron} />
         </button>
-        {submenuOpen && (
-          <div
-            ref={(element) => {
-              if (element) submenuRefs.current.set(entry.id, element)
-              else submenuRefs.current.delete(entry.id)
-            }}
-            className={`${styles.menu} ${styles.submenu}`}
-            role="menu"
-            aria-label={entry.label}
-            onKeyDown={(event) => handleSubmenuKeyDown(event, entry.id)}
-          >
-            {entry.items.map((item) => renderAction(item, false, submenuCheckable))}
-          </div>
-        )}
+        {submenuOpen && inlineSubmenus && renderSubmenuPopup(entry, true)}
       </div>
     )
   }
@@ -314,13 +354,25 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
           </button>
           {isOpen && (
             <div
-              className={styles.menu}
+              ref={(element) => placeRootMenu(element, key)}
+              className={`${styles.menu} ${styles.rootMenu}`}
               role="menu"
               aria-label={menu.label}
               data-menu-popup="root"
               onKeyDown={(event) => handleMenuKeyDown(event, menu)}
             >
-              {menu.items.map((entry, index) => renderEntry(entry, index, checkable))}
+              <div
+                className={styles.menuScroll}
+                data-menu-scroll
+                onScroll={() => { if (!compact && openSubmenuId.peek() !== null) openSubmenuId.value = null }}
+              >
+                {menu.items.map((entry, index) => renderEntry(entry, index, checkable, compact))}
+              </div>
+              {!compact && menu.items.map((entry) => (
+                entry.type === 'submenu' && !entry.disabled && openSubmenuId.value === entry.id
+                  ? renderSubmenuPopup(entry, false)
+                  : null
+              ))}
             </div>
           )}
         </div>

@@ -37,6 +37,8 @@
   .submenu {
     position: static;
     min-width: 0;
+    max-height: none;
+    overflow: visible;
     margin-left: var(--space-3);
     border: 0;
     box-shadow: none;
@@ -83,6 +85,25 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-float);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A root menu is capped to the room below its button (inline max-height); its
+   list scrolls and its submenus open beside it, outside the scrolling list. */
+.rootMenu {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: visible;
+}
+
+.menuScroll {
+  min-height: 0;
+  padding: var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: inherit;
 }
 
 .submenuWrap {
@@ -90,9 +111,14 @@
 }
 
 .submenu {
-  top: calc(-1 * var(--space-1));
+  top: 0;
   left: calc(100% + var(--space-1));
   min-width: 220px;
+}
+
+.submenu[data-side="left"] {
+  right: calc(100% + var(--space-1));
+  left: auto;
 }
 
 .item {

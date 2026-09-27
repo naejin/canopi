@@ -2,6 +2,7 @@ import { createPortal } from 'preact/compat'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
+import { focusMenuItem, placePopupVertically, placeSidePopupVertically } from '../../utils/floating-position'
 import styles from './ActionMenu.module.css'
 
 export interface ActionMenuCommand {
@@ -166,25 +167,29 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
     const popup = menu.current
     if (!popup) return
     const bounds = anchor.getBoundingClientRect()
+    popup.style.maxHeight = ''
     const rect = popup.getBoundingClientRect()
     const maxLeft = window.innerWidth - rect.width - VIEWPORT_MARGIN
-    const maxTop = window.innerHeight - rect.height - VIEWPORT_MARGIN
+    const vertical = placement === 'side'
+      ? placeSidePopupVertically(bounds.top - 5, rect.height, window.innerHeight, { margin: VIEWPORT_MARGIN })
+      : placePopupVertically(bounds, rect.height, window.innerHeight, {
+        gap: placement === 'point' ? 0 : 4,
+        margin: VIEWPORT_MARGIN,
+      })
+    let left: number
     if (placement === 'point') {
-      // Below and right of the anchor; else above or left of it; else as far as the viewport allows.
-      const left = bounds.left <= maxLeft ? bounds.left
+      // Right of the anchor; else left of it; else as far as the viewport allows.
+      left = bounds.left <= maxLeft ? bounds.left
         : bounds.right - rect.width >= VIEWPORT_MARGIN ? bounds.right - rect.width : maxLeft
-      const top = bounds.bottom <= maxTop ? bounds.bottom
-        : bounds.top - rect.height >= VIEWPORT_MARGIN ? bounds.top - rect.height : maxTop
-      popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft))}px`
-      popup.style.top = `${Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop))}px`
     } else if (placement === 'below') {
-      popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(bounds.right - rect.width, maxLeft))}px`
-      popup.style.top = `${Math.max(VIEWPORT_MARGIN, bounds.bottom + rect.height + VIEWPORT_MARGIN <= window.innerHeight ? bounds.bottom + 4 : bounds.top - rect.height - 4)}px`
+      left = Math.min(bounds.right - rect.width, maxLeft)
     } else {
       const right = bounds.right + 2
-      popup.style.left = `${Math.max(VIEWPORT_MARGIN, right <= maxLeft ? right : bounds.left - rect.width - 2)}px`
-      popup.style.top = `${Math.max(VIEWPORT_MARGIN, Math.min(bounds.top - 5, maxTop))}px`
+      left = right <= maxLeft ? right : bounds.left - rect.width - 2
     }
+    popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft))}px`
+    popup.style.top = `${vertical.top}px`
+    popup.style.maxHeight = `${vertical.maxHeight}px`
     items.current.find(Boolean)?.focus()
   }, [])
 
@@ -227,7 +232,7 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
           event.preventDefault()
           const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
             : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-          buttons[next]?.focus()
+          focusMenuItem(buttons[next])
         }
       }}>
       {entries.map((entry, index) => {
