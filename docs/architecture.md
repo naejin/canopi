@@ -71,7 +71,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 | Geocoding registry | `packages/core/src/geocoding.ts` | Copy into `app/geocoding/` |
 | Basemap presets | `packages/core/src/types.ts` (`OPENFREEMAP_BASEMAPS`) | Copy |
 | Layer sync pattern | `packages/map/src/layer-sync.ts` | Pattern only (store-driven, idempotent sync); no code copied |
-| Evaluated, not adopted (V7) | `packages/map/src/{layer-sync,terrain-control,cog-dem-source,cog-imagery,fill-patterns,map-capture,collapsed-attribution-control,map-resize,map-bounds}.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | None would make Canopi code smaller or clearly better; reasons in the [map workspace guide](guides/map-workspace.md#geolibre-reuse-decisions). Re-evaluate map capture and print layout when PDF maps return (ADR 0008) |
+| Evaluated, not adopted (V7) | `packages/map/src/{layer-sync,terrain-control,cog-dem-source,cog-imagery,fill-patterns,map-capture,collapsed-attribution-control,map-resize,map-bounds}.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | None would make Canopi code smaller or clearly better; reasons in the [map workspace guide](guides/map-workspace.md#geolibre-reuse-decisions). |
 
 Every copied file keeps an MIT header naming its source path and commit and gets an entry in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). `@geolibre/map` is not a dependency (it pulls Cesium and React); `@geolibre/core` may be used for types only if it adds no heavy runtime.
 
@@ -81,7 +81,7 @@ Every copied file keeps an MIT header naming its source path and commit and gets
 - **Web** is a static app with browser-local data, geocoding through the shared registry, no problem reports and `.canopi` plus PDF plus GeoJSON as its file outputs. See [ADR 0005](adr/0005-web-edition-scope.md).
 - **Species catalog:** Desktop reads SQLite through Rust; Web reads generated Parquet through DuckDB-WASM. See [ADR 0006](adr/0006-species-catalog-storage.md).
 - **Personal libraries:** saved object stamps and the Design Notebook live in the Desktop user DB; Web keeps stamps browser-local. See [ADR 0007](adr/0007-design-objects-and-personal-libraries.md).
-- **PDF:** one browser-compatible layout and encoder for every edition, without map backgrounds in v2.0. See [ADR 0008](adr/0008-canvas-pdf-export.md).
+- **PDF:** one browser-compatible layout and encoder for every edition, never with map backgrounds. See [ADR 0008](adr/0008-canvas-pdf-export.md).
 - **Saving:** always-on continuous save to each Design's home (a file or a Design Draft), with conflict detection and no unsaved-changes prompts. See [ADR 0009](adr/0009-continuous-save.md).
 - **Interface:** a map-first Field Atlas interface with floating chrome, menus for every command, one plant finder and one species row everywhere. See [ADR 0010](adr/0010-map-first-interface.md).
 - **Analyses and stories:** analyses come from a registry over typed library items with recorded provenance; Designs hold saved views and stories presented inside Canopi. See [ADR 0011](adr/0011-analyses-provenance-and-stories.md). The registry is an authored contract (`common-types/analysis-registry.json`) generated into Rust and TypeScript; what each analysis is lives there, how it runs is a handwritten executor in `desktop/src/services/lidar/analyses/`, and the Analyze dialog is generated from it. Eligibility has one authority, the native offers in the library snapshot. See [data library](guides/data-library.md#analyze).

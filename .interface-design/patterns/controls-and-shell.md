@@ -27,7 +27,7 @@ A dialog with sections: Appearance (theme, language), Map and imagery (satellite
 
 ## Export planting plan
 
-A side sheet beside the live preview: title on the sheet, paper, scale, area, background (None, Map, Satellite) and Fade, plant colours (As in the Design, Grayscale, Black), symbol size in mm, Include (codes, zones and notes, site data, north and scale), species key on the plan or on page 2 (default when there are many species), page thumbnails as buttons, Save PDF…. The printed key never truncates: names wrap and continued columns repeat their heading.
+A side sheet beside the live preview (canopi-h90p.31): title on the sheet, paper, scale, area and field sheets, split sheets, plant colours (As in the Design, Grayscale, Black), Include (zones and notes, site data, north arrow and scale), page thumbnails as buttons with page editing on the selected page, Save PDF…. No map backgrounds and no manual symbol size (ADR 0008; symbol size stays automatic and collision-tested). The key stays automatic (on the sheet when it fits, otherwise on following pages), is grouped by plant habit (Tree, Shrub, Herbaceous, Climber, then Other), marks names missing in the chosen language as "(en)", and never truncates: names wrap and continued columns repeat their heading. Page 1 carries a legend of the symbols used.
 
 Shipped so far: the Settings dialog has Appearance only (theme, language, tool names); the other sections are follow-up work.
 

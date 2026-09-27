@@ -1,6 +1,6 @@
 # PDF export
 
-Canvas PDF is a derived, printable view of a Design. It is identical on Linux, macOS, Windows and Web. The scope decision is [ADR 0008](../adr/0008-canvas-pdf-export.md): no map backgrounds in v2.0 and no network requests during export. Code lives in `desktop/web/src/app/canvas-pdf/` and `desktop/web/src/components/canvas-pdf/`.
+Canvas PDF is a derived, printable view of a Design. It is identical on Linux, macOS, Windows and Web. The scope decision is [ADR 0008](../adr/0008-canvas-pdf-export.md): no map backgrounds and no network requests during export. Code lives in `desktop/web/src/app/canvas-pdf/` and `desktop/web/src/components/canvas-pdf/`.
 
 ## Acceptance behaviour
 
