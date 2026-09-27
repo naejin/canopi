@@ -21,7 +21,7 @@ import {
   clearSavedObjectStampSource,
   selectSavedObjectStampSourceForTests,
 } from '../saved-object-stamp-source'
-import { activeTool, selectedObjectIds } from '../session-state'
+import { activeTool, canvasToolGuidanceState as currentCanvasToolGuidance, selectedObjectIds } from '../session-state'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
@@ -479,16 +479,15 @@ describe('scene canvas runtime', () => {
     })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     runtime.commandSurface.tools.setTool('plant-spacing')
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
 
-    expect(hud.textContent).toContain('en:canvas.plantSpacing.selectSource')
+    // The map host is named by the runtime's translator.
+    expect(container.getAttribute('aria-label')).toBe('en:canvas.map.label')
 
     language = 'fr'
     notifyLocale()
 
-    expect(container.querySelector('[data-plant-spacing-hud]')).toBe(hud)
-    expect(hud.style.display).toBe('block')
-    expect(hud.textContent).toContain('fr:canvas.plantSpacing.selectSource')
+    expect(container.getAttribute('aria-label')).toBe('fr:canvas.map.label')
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'pick' })
     runtime.destroy()
   })
 
@@ -826,9 +825,8 @@ describe('scene canvas runtime', () => {
     expect(() => runtime.commandSurface.tools.setTool('select'))
       .toThrow('selection refresh failed')
     expect(activeTool.value).toBe('plant-spacing')
-    const plantSpacingHud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
-    expect(plantSpacingHud?.style.display).toBe('block')
-    expect(plantSpacingHud?.textContent).toContain('Click a placed plant to repeat it along a row')
+    // The tool card still explains Plant a row.
+    expect(currentCanvasToolGuidance.value.plantRow).toMatchObject({ phase: 'pick', plantName: null })
 
     selection.mockRestore()
     clickAt(events, { x: 10, y: 10 })

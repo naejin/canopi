@@ -71,6 +71,12 @@ export class SceneCanvasRuntime {
       setInteractionTool: (name) => {
         this._interaction?.setTool(name)
       },
+      plantRowSpacing: {
+        input: (text) => this._interaction?.plantRowSpacing.input(text),
+        commit: (text) => this._interaction?.plantRowSpacing.commit(text),
+        blur: (text) => this._interaction?.plantRowSpacing.blur(text),
+        cancel: () => this._interaction?.plantRowSpacing.cancel(),
+      },
     })
     this._cameraMode = this._camera.snapshot.peek().mode
     this._installEffects()

@@ -870,7 +870,7 @@ function fakeRuntimeComposition(
 function fakeCommandSurface(): CanvasCommandSurface {
   return {
     speciesFocus: { focus: () => {}, showCodes: () => {} },
-    tools: { setTool: vi.fn() },
+    tools: { setTool: vi.fn(), plantRowSpacing: { input: vi.fn(), commit: vi.fn(), blur: vi.fn(), cancel: vi.fn() } },
     viewport: {
       zoomIn: vi.fn(),
       zoomOut: vi.fn(),

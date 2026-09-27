@@ -31,16 +31,16 @@ export interface ToolCardContent {
   readonly hints: string
   /** Place plants offers Change species. */
   readonly changeSpecies: boolean
+  /** Plant a row: how many plants the drawn row adds, and how dense it is. */
+  readonly rowCount: { readonly text: string; readonly density: 'normal' | 'dense' | 'blocked' } | null
 }
 
-/**
- * Tools without a card: Select and Pan need no guidance, and Plant a row keeps
- * its own runtime card because it owns the spacing field.
- */
-const NO_CARD = new Set(['select', 'hand', 'plant-spacing'])
+/** Tools without a card: Select and Pan need no guidance. */
+const NO_CARD = new Set(['select', 'hand'])
 
 const TITLE_KEYS: Readonly<Record<string, string>> = {
   'plant-stamp': 'canvas.tools.plantStamp',
+  'plant-spacing': 'canvas.tools.plantSpacing',
   'object-stamp': 'canvas.tools.objectStamp',
   'saved-object-stamp': 'canvas.tools.objectStamp',
   polygon: 'canvas.tools.polygon',
@@ -71,6 +71,7 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
     instruction,
     hints: hintText,
     changeSpecies: tool === 'plant-stamp',
+    rowCount: null,
   })
 
   switch (tool) {
@@ -85,6 +86,20 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
     case 'saved-object-stamp': {
       const stamp = input.savedStamp
       return card(stamp?.name ?? null, stamp ? stampInstruction(stamp, translate) : translate('canvas.toolCard.stampPlace'))
+    }
+    case 'plant-spacing': {
+      const row = guidance.plantRow
+      if (row?.phase !== 'row') {
+        return card(null, translate(row?.phase === 'missed' ? 'canvas.plantSpacing.sourceMissed' : 'canvas.plantSpacing.selectSource'))
+      }
+      const counted = translate('canvas.plantSpacing.generatedCount', { count: row.count ?? 0 })
+      return {
+        ...card(row.plantName, translate('canvas.plantSpacing.dragAlong'), hints('canvas.toolCard.rowKeys')),
+        rowCount: row.count === null ? null : {
+          text: row.density === 'blocked' ? `${counted} · ${translate('canvas.plantSpacing.commitLimitWarning')}` : counted,
+          density: row.density,
+        },
+      }
     }
     case 'polygon':
       return card(null, translate('canvas.toolCard.polygon'), hints('canvas.toolCard.polygonKeys'))

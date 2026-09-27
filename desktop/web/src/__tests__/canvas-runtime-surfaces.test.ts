@@ -83,6 +83,7 @@ function createCommandSurface() {
     speciesFocus: { focus: () => {}, showCodes: () => {} },
     tools: {
       setTool: (_name: string) => {},
+      plantRowSpacing: { input: () => {}, commit: () => {}, blur: () => {}, cancel: () => {} },
     },
     viewport: {
       zoomIn: () => {},

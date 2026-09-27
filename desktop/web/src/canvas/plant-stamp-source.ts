@@ -64,7 +64,7 @@ export function clearPlantStampSource(): void {
 
 export function beginPlantStampFromSpecies(
   source: PlantStampSourceInput,
-  commandSurface: CanvasToolCommandSurface | null | undefined,
+  commandSurface: Pick<CanvasToolCommandSurface, 'setTool'> | null | undefined,
 ): PlantStampSource {
   const next = selectPlantStampSource(source)
   commandSurface?.setTool('plant-stamp')

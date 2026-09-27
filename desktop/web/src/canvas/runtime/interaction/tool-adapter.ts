@@ -1,4 +1,5 @@
 import type { CanvasToolGuidance } from '../../session-state'
+import type { CanvasPlantRowSpacingField } from '../runtime'
 import type { ScenePoint } from '../scene'
 
 export interface SceneToolPointerEvent {
@@ -37,6 +38,8 @@ export interface SceneToolAdapter {
    * active Scene Edit) and a stamp pick.
    */
   readonly describeGuidance?: () => Partial<CanvasToolGuidance>
+  /** The tool card's spacing field (Plant a row). */
+  readonly spacingField?: CanvasPlantRowSpacingField
   readonly shouldIgnorePointerEvent?: (target: EventTarget | null) => boolean
   readonly shouldIgnorePointerUpWithoutCapture?: () => boolean
   readonly shouldPreserveTransientOnPan?: () => boolean

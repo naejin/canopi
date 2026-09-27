@@ -26,7 +26,8 @@ import {
 } from './plant-spacing-overlay'
 import { constrainPointTo45Degrees, isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
-import type { CanvasRuntimeTranslator } from '../app-adapter'
+import type { CanvasPlantRowGuidance } from '../../session-state'
+import type { CanvasPlantRowSpacingField } from '../runtime'
 
 const PLANT_SPACING_DENSE_WARNING_THRESHOLD = 100
 const PLANT_SPACING_PREVIEW_POSITION_LIMIT = 250
@@ -52,7 +53,6 @@ export interface PlantSpacingToolContext {
   readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   readonly readPlantSpacingIntervalMeters: () => number
   readonly commitPlantSpacingIntervalMeters: (meters: number) => void
-  readonly translate: CanvasRuntimeTranslator
   readonly sceneEdits: SceneEditCoordinator
   readonly switchTool: (name: string) => void
   readonly focusHost: () => void
@@ -62,9 +62,13 @@ export interface PlantSpacingToolContext {
 
 export interface PlantSpacingTool {
   readonly hasSource: () => boolean
-  readonly isHudTarget: (target: EventTarget | null) => boolean
+  /** What the tool card shows: the step, the picked plant, the spacing field and the row's count. */
+  readonly describe: () => CanvasPlantRowGuidance
+  /** The tool card's spacing field. */
+  readonly spacingField: CanvasPlantRowSpacingField
+  readonly isToolCardTarget: (target: EventTarget | null) => boolean
   readonly showState: () => void
-  readonly clear: (options?: { hide?: boolean }) => void
+  readonly clear: () => void
   readonly cancel: () => void
   readonly pointerDown: (
     event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>,
@@ -75,7 +79,6 @@ export interface PlantSpacingTool {
   readonly beginDrag: () => void
   readonly commitDragFromEvent: (event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>) => void
   readonly refreshViewportDependent: () => void
-  readonly refreshTranslations: () => void
   readonly dispose: () => void
 }
 
@@ -87,23 +90,47 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   let previewPointer: { screen: ScenePoint; shiftKey: boolean } | null = null
   let generatedPositions: ScenePoint[] = []
   let generatedCount = 0
+  let missed = false
+  let shownCount: { readonly count: number; readonly density: CanvasPlantRowGuidance['density'] } | null = null
+  let focusRequest = 0
 
-  const overlay: PlantSpacingOverlayController = createPlantSpacingOverlay(
-    context.container,
-    {
-      onCancel: () => {
-        cancel()
-        context.focusHost()
-      },
-      onIntervalInput: (value) => handleIntervalInput(value),
-      onIntervalCommit: (value) => commitIntervalInput(value),
-      onIntervalBlur: (value) => commitIntervalInput(value, {
-        focusCanvasOnValid: false,
-        focusInputOnInvalid: false,
-      }),
+  const overlay: PlantSpacingOverlayController = createPlantSpacingOverlay(context.container)
+
+  const spacingField: CanvasPlantRowSpacingField = {
+    input: (value) => handleIntervalInput(value),
+    commit: (value) => commitIntervalInput(value),
+    blur: (value) => commitIntervalInput(value, { focusCanvasOnValid: false, focusInputOnInvalid: false }),
+    cancel: () => {
+      cancel()
+      context.focusHost()
     },
-    context.translate,
-  )
+  }
+
+  function describe(): CanvasPlantRowGuidance {
+    return {
+      phase: source ? 'row' : missed ? 'missed' : 'pick',
+      plantName: source?.label ?? null,
+      interval: intervalText,
+      intervalValid,
+      count: source ? shownCount?.count ?? null : null,
+      density: source ? shownCount?.density ?? 'normal' : 'normal',
+      focusRequest,
+    }
+  }
+
+  function showSourcePicking(reason: 'select-source' | 'source-missed' = 'select-source'): void {
+    missed = reason === 'source-missed'
+    shownCount = null
+    overlay.hide()
+  }
+
+  function setGeneratedCount(count: number, options: { dense?: boolean; blocked?: boolean }): void {
+    shownCount = { count, density: options.blocked ? 'blocked' : options.dense ? 'dense' : 'normal' }
+  }
+
+  function focusIntervalInput(): void {
+    focusRequest += 1
+  }
 
   function pointerDown(
     event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>,
@@ -126,13 +153,13 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     )
 
     if (!hit || hit.kind !== 'plant' || isSceneDesignObjectLocked(scene, hit)) {
-      overlay.showSourcePicking('source-missed')
+      showSourcePicking('source-missed')
       return { clearPointerGesture: true }
     }
 
     const plant = scene.plants.find((entry) => entry.id === hit.id)
     if (!plant) {
-      overlay.showSourcePicking('source-missed')
+      showSourcePicking('source-missed')
       return { clearPointerGesture: true }
     }
 
@@ -143,8 +170,10 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     }
     intervalText = formatPlantSpacingIntervalInput(context.readPlantSpacingIntervalMeters())
     intervalValid = true
+    missed = false
+    shownCount = null
     showState()
-    overlay.focusIntervalInput()
+    focusIntervalInput()
     return { clearPointerGesture: false }
   }
 
@@ -156,33 +185,21 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     context.switchTool('select')
   }
 
-  function clear(options: { hide?: boolean } = {}): void {
+  function clear(): void {
     source = null
     endpoint = null
     previewPointer = null
     generatedPositions = []
     generatedCount = 0
-    if (options.hide) {
-      overlay.hide()
-      return
-    }
-    overlay.showSourcePicking()
+    showSourcePicking()
   }
 
   function showState(): void {
     if (!source) {
-      overlay.showSourcePicking()
+      showSourcePicking()
       return
     }
-
-    overlay.showSourceSelected(
-      sourceView(source),
-      context.camera,
-      {
-        value: intervalText,
-        valid: intervalValid,
-      },
-    )
+    overlay.showSource(sourceView(source), context.camera)
   }
 
   function updatePreviewFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): void {
@@ -209,7 +226,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       nextEndpoint.x - source.plant.position.x,
       nextEndpoint.y - source.plant.position.y,
     )
-    overlay.setGeneratedCount(generatedCount, {
+    setGeneratedCount(generatedCount, {
       dense: generatedCount > PLANT_SPACING_DENSE_WARNING_THRESHOLD,
       blocked: generatedCount > PLANT_SPACING_COMMIT_POSITION_LIMIT,
     })
@@ -234,15 +251,13 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     updatePreview(nextEndpoint)
     const parsed = parsePlantSpacingIntervalInput(intervalText)
     if (!intervalValid || !parsed.valid) {
-      overlay.focusIntervalInput()
+      focusIntervalInput()
       return
     }
 
     if (generatedCount === 0) return
     if (generatedCount > PLANT_SPACING_COMMIT_POSITION_LIMIT) {
-      overlay.setGeneratedCount(generatedCount, {
-        blocked: true,
-      })
+      setGeneratedCount(generatedCount, { blocked: true })
       return
     }
 
@@ -293,7 +308,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
         draft.plants = [...draft.plants, ...generated]
       })
       tx.setSelection([activeSource.sourceId, ...generatedIds].map((id) => ({ kind: 'plant', id })))
-    }, { onCommitted: clear })
+    }, { onCommitted: () => clear() })
   }
 
   function canUseSource(candidate: PlantSpacingSource): boolean {
@@ -311,13 +326,12 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
 
   function clearUnavailableSource(): void {
     clear()
-    overlay.showSourcePicking('source-missed')
+    showSourcePicking('source-missed')
   }
 
   function handleIntervalInput(value: string): void {
     intervalText = value
     intervalValid = parsePlantSpacingIntervalInput(value).valid
-    overlay.setIntervalValidity(intervalValid)
     if (endpoint) updatePreview(endpoint)
   }
 
@@ -330,10 +344,9 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     intervalText = value
     const parsed = parsePlantSpacingIntervalInput(value)
     intervalValid = parsed.valid
-    overlay.setIntervalValidity(parsed.valid)
 
     if (!parsed.valid) {
-      if (focusInputOnInvalid) overlay.focusIntervalInput()
+      if (focusInputOnInvalid) focusIntervalInput()
       return
     }
 
@@ -348,10 +361,9 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     if (endpoint) updatePreview(endpoint)
   }
 
-  function sourceView(candidate: PlantSpacingSource): { id: string; label: string; bounds: { x: number; y: number; width: number; height: number } } {
+  function sourceView(candidate: PlantSpacingSource): { id: string; bounds: { x: number; y: number; width: number; height: number } } {
     return {
       id: candidate.sourceId,
-      label: candidate.label,
       bounds: getPlantWorldBounds(
         candidate.plant,
         context.getPlantPresentationContext(context.camera.viewport.scale),
@@ -410,7 +422,9 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
 
   return {
     hasSource: () => source !== null,
-    isHudTarget: isPlantSpacingHudTarget,
+    describe,
+    spacingField,
+    isToolCardTarget,
     showState,
     clear,
     cancel,
@@ -420,7 +434,6 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     beginDrag,
     commitDragFromEvent,
     refreshViewportDependent,
-    refreshTranslations: overlay.refreshTranslations,
     dispose,
   }
 }
@@ -431,9 +444,11 @@ export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneTool
       tool.showState()
     },
     onDeactivate() {
-      tool.clear({ hide: true })
+      tool.clear()
     },
-    shouldIgnorePointerEvent: tool.isHudTarget,
+    describeGuidance: () => ({ gesture: tool.hasSource(), plantRow: tool.describe() }),
+    spacingField: tool.spacingField,
+    shouldIgnorePointerEvent: tool.isToolCardTarget,
     shouldSuppressHover: tool.hasSource,
     pointerDown({ event, rawWorld, clearPointerGesture }) {
       event.preventDefault()
@@ -456,7 +471,7 @@ export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneTool
       beginDrag({
         update: ({ event }) => tool.updatePreviewFromEvent(event),
         commit: ({ event }) => {
-          if (!tool.isHudTarget(event.target)) {
+          if (!tool.isToolCardTarget(event.target)) {
             tool.commitDragFromEvent(event)
           }
         },
@@ -472,7 +487,6 @@ export function createPlantSpacingToolAdapter(tool: PlantSpacingTool): SceneTool
       return true
     },
     refreshViewportDependent: tool.refreshViewportDependent,
-    refreshTranslations: tool.refreshTranslations,
     dispose: tool.dispose,
   }
 }
@@ -485,7 +499,8 @@ function clonePlantForPlantSpacing(plant: ScenePlantEntity): ScenePlantEntity {
   }
 }
 
-function isPlantSpacingHudTarget(target: EventTarget | null): boolean {
+/** The shared tool card, which holds the spacing field: pointer events there are not map input. */
+function isToolCardTarget(target: EventTarget | null): boolean {
   return target instanceof Element
-    && target.closest('[data-plant-spacing-hud]') !== null
+    && target.closest('[data-tool-card]') !== null
 }

@@ -1,7 +1,8 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { locale } from '../app/settings/state'
+import { t } from '../i18n'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { ToolCard } from '../components/canvas/ToolCard'
 import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-stamp-source'
@@ -14,6 +15,7 @@ import {
   IDLE_CANVAS_TOOL_GUIDANCE,
   setCanvasTool,
   setCanvasToolGuidance,
+  type CanvasPlantRowGuidance,
   type CanvasToolGuidance,
 } from '../canvas/session-state'
 import {
@@ -177,9 +179,122 @@ describe('Tool card', () => {
     expect(lines()).toEqual(['Place a stamp', 'Guilde pommier · 3 plants · 2 species · click to place', 'Esc to stop placing'])
   })
 
-  it('leaves Plant a row to its own runtime card', async () => {
-    await choose('plant-spacing')
-    expect(card()).toBeNull()
+  describe('Plant a row', () => {
+    const ROW: CanvasPlantRowGuidance = {
+      phase: 'row', plantName: 'Apple', interval: '50 cm', intervalValid: true, count: null, density: 'normal', focusRequest: 1,
+    }
+    const field = () => container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')
+    const count = () => container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')
+    let spacing: {
+      input: Mock<(text: string) => void>
+      commit: Mock<(text: string) => void>
+      blur: Mock<(text: string) => void>
+      cancel: Mock<() => void>
+    }
+
+    beforeEach(async () => {
+      spacing = { input: vi.fn(), commit: vi.fn(), blur: vi.fn(), cancel: vi.fn() }
+      await act(() => {
+        setCanvasRuntimeSurfaces({
+          commands: createTestCanvasCommandSurface({ tools: { plantRowSpacing: spacing } }),
+          queries: createTestCanvasQuerySurface(),
+          documents: createTestCanvasDocumentSurface(),
+        })
+      })
+    })
+
+    it('asks for a plant to repeat in the shared card, then says a missed click needs a usable plant', async () => {
+      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'pick', plantName: null, focusRequest: 0 } })
+      expect(card()!.getAttribute('data-tool-card')).toBe('plant-spacing')
+      expect(lines()).toEqual(['Plant a row', 'Click a placed plant to repeat it along a row', 'Esc to go back to Select'])
+      expect(field()).toBeNull()
+
+      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'missed', plantName: null, focusRequest: 0 } })
+      expect(lines()).toEqual(['Plant a row', 'Click a visible, unlocked placed plant', 'Esc to go back to Select'])
+    })
+
+    it('names the picked plant, holds the spacing field and counts the row with its density', async () => {
+      await choose('plant-spacing', { gesture: true, plantRow: ROW })
+      expect(live().textContent).toContain('Apple · drag along the row')
+      expect(live().querySelector('b')?.textContent).toBe('Apple')
+      expect(live().textContent).toContain('Shift keeps 45° angles · Esc to cancel')
+      const input = field()!
+      expect(input.value).toBe('50 cm')
+      expect(input.getAttribute('inputmode')).toBe('decimal')
+      expect(input.getAttribute('aria-invalid')).toBe('false')
+      expect(container.querySelector(`label[for="${input.id}"]`)?.textContent).toBe('Interval')
+      expect(count()).toBeNull()
+
+      await choose('plant-spacing', { gesture: true, plantRow: { ...ROW, count: 3 } })
+      expect(count()!.textContent).toBe('3 generated')
+      expect(count()!.dataset.density).toBe('normal')
+      // The count changes with every pointer move, so it is not announced.
+      expect(count()!.closest('[aria-live="off"]')).not.toBeNull()
+
+      await choose('plant-spacing', { gesture: true, plantRow: { ...ROW, count: 140, density: 'dense' } })
+      expect(count()!.dataset.density).toBe('dense')
+
+      await choose('plant-spacing', { gesture: true, plantRow: { ...ROW, count: 6000, density: 'blocked', intervalValid: false } })
+      expect(count()!.textContent).toBe('6000 generated · Increase interval or shorten the line')
+      expect(count()!.dataset.density).toBe('blocked')
+      expect(field()!.getAttribute('aria-invalid')).toBe('true')
+    })
+
+    it('focuses the spacing field on request and drives it from the keyboard', async () => {
+      await choose('plant-spacing', { gesture: true, plantRow: ROW })
+      const input = field()!
+      expect(document.activeElement).toBe(input)
+
+      input.value = '0,75m'
+      await act(() => { input.dispatchEvent(new Event('input', { bubbles: true })) })
+      expect(spacing.input).toHaveBeenCalledWith('0,75m')
+
+      const onWindowKeyDown = vi.fn()
+      window.addEventListener('keydown', onWindowKeyDown)
+      try {
+        await act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+        expect(spacing.commit).toHaveBeenCalledWith('0,75m')
+        await act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+        expect(spacing.cancel).toHaveBeenCalledOnce()
+        // Enter and Esc belong to the field; other keys (Ctrl S) still reach the shortcuts.
+        expect(onWindowKeyDown).not.toHaveBeenCalled()
+        await act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true })) })
+        expect(onWindowKeyDown).toHaveBeenCalledOnce()
+      } finally {
+        window.removeEventListener('keydown', onWindowKeyDown)
+      }
+
+      // Leaving the field keeps a valid spacing without moving focus.
+      const typed = input.value
+      await act(() => { input.blur() })
+      expect(spacing.blur).toHaveBeenCalledWith(typed)
+
+      // An invalid spacing kept on Enter asks for the field again.
+      const other = document.createElement('button')
+      document.body.append(other)
+      other.focus()
+      await choose('plant-spacing', { gesture: true, plantRow: { ...ROW, intervalValid: false, focusRequest: 2 } })
+      expect(document.activeElement).toBe(field())
+      other.remove()
+    })
+
+    it('keeps the field, its text, focus and selection when the language changes', async () => {
+      await choose('plant-spacing', { gesture: true, plantRow: { ...ROW, interval: '2 m', count: 3 } })
+      const input = field()!
+      input.focus()
+      input.setSelectionRange(1, 3)
+
+      await act(() => { locale.value = 'fr' })
+
+      expect(field()).toBe(input)
+      expect(input.value).toBe('2 m')
+      expect(document.activeElement).toBe(input)
+      expect(input.selectionStart).toBe(1)
+      expect(input.selectionEnd).toBe(3)
+      expect(lines()[0]).toBe(t('canvas.tools.plantSpacing'))
+      expect(lines()[0]).not.toBe('Plant a row')
+      expect(count()!.textContent).toBe(t('canvas.plantSpacing.generatedCount', { count: 3 }))
+    })
   })
 
   it('hides while "Where is your site?" shows and in overview', async () => {

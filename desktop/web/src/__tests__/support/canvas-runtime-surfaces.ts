@@ -33,6 +33,7 @@ export function createTestCanvasCommandSurface(
     speciesFocus: { focus: () => {}, showCodes: () => {} },
     tools: {
       setTool: () => {},
+      plantRowSpacing: { input: () => {}, commit: () => {}, blur: () => {}, cancel: () => {} },
     },
     viewport: {
       zoomIn: () => {},
@@ -98,6 +99,7 @@ export function createTestCanvasCommandSurface(
     tools: {
       ...surface.tools,
       ...overrides.tools,
+      plantRowSpacing: { ...surface.tools.plantRowSpacing, ...overrides.tools?.plantRowSpacing },
       setTool: (name) => {
         setTool(name)
         setCanvasTool(name)

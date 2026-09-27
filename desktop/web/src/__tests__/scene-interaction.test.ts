@@ -12,7 +12,19 @@ import {
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
-import { selectedObjectIds, type CanvasToolGuidance } from '../canvas/session-state'
+import {
+  IDLE_CANVAS_TOOL_GUIDANCE,
+  selectedObjectIds,
+  setCanvasTool,
+  setCanvasToolGuidance,
+  type CanvasToolGuidance,
+} from '../canvas/session-state'
+import { h, render as renderPreact } from 'preact'
+import { setupRerender, teardown as teardownPreactTestUtils } from 'preact/test-utils'
+import { ToolCard } from '../components/canvas/ToolCard'
+import { setCanvasRuntimeSurfaces } from '../canvas/session'
+import { createTestCanvasCommandSurface, createTestCanvasDocumentSurface } from './support/canvas-runtime-surfaces'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { t } from '../i18n'
@@ -260,7 +272,7 @@ function createInteractionDeps(
     translate: overrides.translate ?? t,
     setHoveredTarget: overrides.setHoveredTarget ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
-    publishToolGuidance: overrides.publishToolGuidance,
+    publishToolGuidance: overrides.publishToolGuidance ?? setCanvasToolGuidance,
   }
 }
 
@@ -622,10 +634,38 @@ describe('SceneInteractionSession', () => {
   let events: SceneInteractionEventHarness
   let sessions: SceneInteractionSession[]
 
+  let toolCardHost: HTMLDivElement
+  let flushToolCard: () => void
+
   function createTestSession(deps: SceneInteractionSessionDeps): SceneInteractionSession {
     const session = createSceneInteractionSession(deps)
+    // The runtime mirrors the session's tool for the tool card, as the command surface does.
+    const setTool = session.setTool.bind(session)
+    session.setTool = (name) => {
+      setTool(name)
+      setCanvasTool(name)
+    }
     sessions.push(session)
     return session
+  }
+
+  /** The shared tool card, rendered beside the map as the workspace does. */
+  function toolCard(): HTMLElement | null {
+    flushToolCard()
+    return document.querySelector<HTMLElement>('[data-tool-card]')
+  }
+
+  /** Plant a row's spacing field in the tool card. */
+  function spacingInput(): HTMLInputElement | null {
+    return toolCard()?.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]') ?? null
+  }
+
+  /** Types into the spacing field as a user does. */
+  function typeSpacing(value: string): void {
+    const input = spacingInput()!
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    flushToolCard()
   }
 
   function openContextMenu(screen: ScenePoint): MouseEvent {
@@ -643,6 +683,25 @@ describe('SceneInteractionSession', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     events = createSceneInteractionEventHarness(container)
+    flushToolCard = setupRerender()
+    const latest = () => sessions[sessions.length - 1]?.plantRowSpacing
+    setCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({
+        tools: {
+          plantRowSpacing: {
+            input: (text) => latest()?.input(text),
+            commit: (text) => latest()?.commit(text),
+            blur: (text) => latest()?.blur(text),
+            cancel: () => latest()?.cancel(),
+          },
+        },
+      }),
+      queries: createTestCanvasQuerySurface(),
+      documents: createTestCanvasDocumentSurface(),
+    })
+    toolCardHost = document.createElement('div')
+    document.body.appendChild(toolCardHost)
+    renderPreact(h(ToolCard, { canvasRef: { current: container } }), toolCardHost)
     contextMenuHost.reset()
 
     camera = new CameraController()
@@ -726,7 +785,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('refreshes Plant Spacing translations without resetting its phase, interval, count, or input selection', () => {
+  it('refreshes Plant Spacing translations without resetting its phase, interval, count, or field', () => {
     let language = 'en'
     const translate = (key: string, options?: Readonly<Record<string, unknown>>): string =>
       `${language}:${key}${options?.count === undefined ? '' : `:${String(options.count)}`}`
@@ -734,38 +793,37 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const deps = createInteractionDeps(container, store, camera, { translate })
+    const published: CanvasToolGuidance[] = []
+    const deps = createInteractionDeps(container, store, camera, {
+      translate,
+      publishToolGuidance: (guidance) => {
+        published.push(guidance)
+        setCanvasToolGuidance(guidance)
+      },
+    })
     const session = createTestSession(deps)
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 })
 
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    const input = hud.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    input.value = '2 m'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
+    typeSpacing('2 m')
     events.pointerMove({ x: 26, y: 30 })
+    const input = spacingInput()!
     input.focus()
     input.setSelectionRange(1, 3)
-    const count = hud.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
-    const density = count.dataset.density
+    const before = published[published.length - 1]!.plantRow
 
-    expect(hud.dataset.state).toBe('source-selected')
-    expect(count.textContent).toBe('en:canvas.plantSpacing.generatedCount:3')
+    expect(before).toMatchObject({ phase: 'row', interval: '2 m', count: 3 })
 
     language = 'fr'
     session.refreshTranslations()
 
-    expect(container.querySelector('[data-plant-spacing-hud]')).toBe(hud)
-    expect(hud.querySelector('[data-plant-spacing-interval-input]')).toBe(input)
-    expect(hud.dataset.state).toBe('source-selected')
-    expect(hud.style.display).toBe('block')
+    expect(published[published.length - 1]!.plantRow).toEqual(before)
+    expect(spacingInput()).toBe(input)
     expect(input.value).toBe('2 m')
     expect(document.activeElement).toBe(input)
     expect(input.selectionStart).toBe(1)
     expect(input.selectionEnd).toBe(3)
-    expect(count.textContent).toBe('fr:canvas.plantSpacing.generatedCount:3')
-    expect(count.dataset.density).toBe(density)
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(ghostCount)
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
   })
@@ -780,6 +838,12 @@ describe('SceneInteractionSession', () => {
       }
     }
     events.dispose()
+    renderPreact(null, toolCardHost)
+    toolCardHost.remove()
+    teardownPreactTestUtils()
+    setCanvasRuntimeSurfaces(null)
+    setCanvasTool('select')
+    setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
     container.remove()
     selectedObjectIds.value = new Set()
     clearPlantStampSource()
@@ -2895,7 +2959,7 @@ describe('SceneInteractionSession', () => {
 
     session.setTool('plant-spacing')
 
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
+    const hud = toolCard()
     expect(hud?.textContent).toContain('Click a placed plant to repeat it along a row')
     expect(hud?.textContent).toContain('Esc to go back to Select')
     expect(hud?.textContent).not.toContain('Plant Spacing')
@@ -2904,7 +2968,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-primary]')?.textContent).toBe('Apple')
+    expect(toolCard()?.querySelector('b')?.textContent).toBe('Apple')
     expect(hud?.textContent).toContain('Apple')
     expect(hud?.textContent).toContain('Esc to cancel')
     expect(hud?.textContent).not.toContain('Source selected')
@@ -2941,21 +3005,20 @@ describe('SceneInteractionSession', () => {
     failSceneRead = false
 
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.style.display)
-      .toBe('block')
+    expect(toolCard()?.dataset.toolCard).toBe('plant-spacing')
     session.dispose()
   })
 
-  it('places the Plant Spacing HUD in the tool card slot beside the tool rail', () => {
+  it('explains Plant a row in the shared tool card, with no runtime card of its own', () => {
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
 
     session.setTool('plant-spacing')
 
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    expect(hud.style.top).toBe('var(--chrome-rail-top, 72px)')
-    expect(hud.style.left).toBe('var(--canvas-tool-card-left, 76px)')
-    expect(hud.textContent).toContain('Click a placed plant to repeat it along a row')
+    expect(toolCard()!.dataset.toolCard).toBe('plant-spacing')
+    expect(document.querySelectorAll('[data-tool-card]')).toHaveLength(1)
+    expect(container.querySelector('[data-tool-card]')).toBeNull()
+    expect(toolCard()!.textContent).toContain('Click a placed plant to repeat it along a row')
     session.dispose()
   })
 
@@ -2969,9 +3032,8 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 200, y: 200 }, { button: 0 })
 
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
-    expect(hud?.dataset.state).toBe('source-picking')
-    expect(hud?.textContent).toContain('Click a visible, unlocked placed plant')
+    expect(spacingInput()).toBeNull()
+    expect(toolCard()?.textContent).toContain('Click a visible, unlocked placed plant')
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(deps.clearSelection).not.toHaveBeenCalled()
     expect(deps.setSelection).not.toHaveBeenCalled()
@@ -3101,12 +3163,12 @@ describe('SceneInteractionSession', () => {
 
     events.keyDown({ key: 'Escape' })
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(spacingInput()).toBeNull()
     expect(setTool).not.toHaveBeenCalled()
 
     events.keyDown({ key: 'Escape' })
     expect(setTool).toHaveBeenCalledWith('select')
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.style.display).toBe('none')
+    expect(toolCard()).toBeNull()
     session.dispose()
   })
 
@@ -3140,13 +3202,13 @@ describe('SceneInteractionSession', () => {
 
     session.setTool('select')
 
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.style.display).toBe('none')
+    expect(toolCard()).toBeNull()
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)
 
     session.setTool('plant-spacing')
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(spacingInput()).toBeNull()
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     session.dispose()
   })
@@ -3176,12 +3238,13 @@ describe('SceneInteractionSession', () => {
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
-    expect(container.querySelector('[data-plant-spacing-hud]')).not.toBeNull()
+    expect(spacingInput()).not.toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
 
     session.dispose()
 
-    expect(container.querySelector('[data-plant-spacing-hud]')).toBeNull()
+    // The session publishes idle guidance, so the card drops the spacing field.
+    expect(spacingInput()).toBeNull()
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
     expect(container.querySelector('[data-plant-spacing-length-label]')).toBeNull()
@@ -3210,19 +3273,18 @@ describe('SceneInteractionSession', () => {
     const session = createTestSession(deps)
 
     session.setTool('plant-spacing')
-    const inputBeforeSource = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')
+    const inputBeforeSource = spacingInput()
     expect(document.activeElement).not.toBe(inputBeforeSource)
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const input = spacingInput()!
     expect(input.value).toBe('50 cm')
     expect(document.activeElement).toBe(input)
 
     input.value = '0,75m'
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    expect(hud.dataset.intervalValidity).toBe('valid')
+    expect(spacingInput()!.getAttribute('aria-invalid')).toBe('false')
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
     expect(plantSpacingIntervalM.value).toBe(0.75)
@@ -3258,7 +3320,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     input.value = '0,75m'
     input.dispatchEvent(new Event('input', { bubbles: true }))
     nextControl.focus()
@@ -3297,14 +3359,13 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const input = spacingInput()!
     input.value = '0'
     input.dispatchEvent(new Event('input', { bubbles: true }))
     nextControl.focus()
     input.dispatchEvent(new FocusEvent('blur'))
 
-    expect(hud.dataset.intervalValidity).toBe('invalid')
+    expect(spacingInput()!.getAttribute('aria-invalid')).toBe('true')
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(document.activeElement).toBe(nextControl)
     expect(store.persisted.plants).toHaveLength(1)
@@ -3336,13 +3397,13 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     expect(document.activeElement).toBe(input)
 
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(spacingInput()).toBeNull()
     session.dispose()
   })
 
@@ -3369,7 +3430,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     const onWindowKeyDown = vi.fn()
     window.addEventListener('keydown', onWindowKeyDown)
 
@@ -3410,7 +3471,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     input.dispatchEvent(new MouseEvent('pointerdown', {
       bubbles: true,
       clientX: 26,
@@ -3450,7 +3511,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     const guide = container.querySelector<HTMLElement>('[data-plant-spacing-guide]')!
     const label = container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')!
     const initialGuideWidth = guide.style.width
@@ -3496,7 +3557,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     input.dispatchEvent(new MouseEvent('pointerup', {
       bubbles: true,
       clientX: 120,
@@ -3533,13 +3594,12 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
+    const input = spacingInput()!
     input.value = '0'
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
-    expect(hud.dataset.intervalValidity).toBe('invalid')
+    expect(spacingInput()!.getAttribute('aria-invalid')).toBe('true')
     expect(plantSpacingIntervalM.value).toBe(0.5)
     expect(document.activeElement).toBe(input)
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
@@ -3579,7 +3639,7 @@ describe('SceneInteractionSession', () => {
     const ghost = container.querySelector<HTMLElement>('[data-plant-spacing-ghost]')!
     expect(Number.parseFloat(ghost.style.width)).toBeCloseTo(4.43, 2)
     expect(Number.parseFloat(ghost.style.height)).toBeCloseTo(4.43, 2)
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('3')
+    expect(toolCard()?.textContent).toContain('3')
 
     events.pointerDown({ x: 26, y: 30 }, { button: 0 })
 
@@ -3605,7 +3665,7 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.groups).toEqual([])
     expect(selectedObjectIds.value).toEqual(new Set(store.persisted.plants.map((plant) => plant.id)))
     expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(spacingInput()).toBeNull()
     session.dispose()
   })
 
@@ -3644,8 +3704,8 @@ describe('SceneInteractionSession', () => {
       expect(store.persisted.plants).toHaveLength(expectedPlantCount)
       expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
       expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
-      expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
-      expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('Click a visible, unlocked placed plant')
+      expect(spacingInput()).toBeNull()
+      expect(toolCard()?.textContent).toContain('Click a visible, unlocked placed plant')
       session.dispose()
     }
 
@@ -3702,7 +3762,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 22, y: 30 }, { button: 0 })
 
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('2000')
+    expect(toolCard()?.textContent).toContain('2000')
     const ghostCount = container.querySelectorAll('[data-plant-spacing-ghost]').length
     expect(ghostCount).toBeGreaterThan(0)
     expect(ghostCount).toBeLessThan(2000)
@@ -3735,7 +3795,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 20, y: 10 }, { button: 0 })
 
-    const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
+    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     expect(count.textContent).toContain('10000')
     expect(count.dataset.density).toBe('blocked')
 
@@ -3745,7 +3805,7 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.plants).toHaveLength(1)
     expect(container.querySelector('[data-plant-spacing-guide]')).not.toBeNull()
     expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain(
+    expect(toolCard()?.textContent).toContain(
       'Increase interval or shorten the line',
     )
     session.dispose()
@@ -3777,7 +3837,7 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 15, y: 10 }, { button: 0 })
 
-    const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
+    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
     expect(count.textContent).toContain('5000')
     expect(count.dataset.density).toBe('dense')
     expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
@@ -3894,9 +3954,9 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
     events.pointerMove({ x: 20, y: 30 }, { button: 0 })
 
-    expect(container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')?.value).toBe('50 cm')
+    expect(spacingInput()?.value).toBe('50 cm')
     expect(container.querySelector<HTMLElement>('[data-plant-spacing-length-label]')?.textContent).toBe('0 cm')
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')?.textContent).toContain('0')
+    expect(toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')?.textContent).toContain('0')
     session.dispose()
   })
 
@@ -4139,15 +4199,12 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerMove({ x: 111, y: 10 }, { button: 0 })
 
-    const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
-    const count = container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
-    expect(hud.textContent).toContain('101')
-    expect(hud.textContent).not.toContain('Confirm')
+    const count = toolCard()!.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')!
+    expect(toolCard()!.textContent).toContain('101')
+    expect(toolCard()!.textContent).not.toContain('Confirm')
     expect(container.querySelector('[data-plant-spacing-confirm]')).toBeNull()
     expect(container.querySelector('[data-plant-spacing-cancel-confirm]')).toBeNull()
     expect(count.dataset.density).toBe('dense')
-    expect(count.style.color).toBe('var(--color-primary)')
-    expect(count.style.fontWeight).toBe('600')
 
     events.pointerDown({ x: 111, y: 10 }, { button: 0 })
 
@@ -4216,7 +4273,7 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+    const input = spacingInput()!
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     expect(document.activeElement).not.toBe(input)
     events.pointerUp({ x: 26, y: 30 }, { button: 0 })
@@ -4300,7 +4357,7 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-plant-spacing')
     expect(store.persisted.plants).toHaveLength(102)
     expect(store.persisted.plants[store.persisted.plants.length - 1]?.position).toEqual({ x: 111, y: 10 })
-    expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
+    expect(spacingInput()).toBeNull()
     session.dispose()
   })
 
@@ -4329,15 +4386,14 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    input.value = '0'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
+    typeSpacing('0')
     events.pointerMove({ x: 26, y: 30 }, { button: 0 })
     events.pointerUp({ x: 26, y: 30 }, { button: 0 })
 
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     expect(store.persisted.plants).toHaveLength(1)
     expect(container.querySelector('[data-plant-spacing-source="source"]')).not.toBeNull()
+    const input = spacingInput()
     expect(document.activeElement).toBe(input)
     session.dispose()
   })
@@ -10371,7 +10427,7 @@ describe('SceneInteractionSession', () => {
       session.setTool('plant-spacing')
       events.pointerDown({ x: 20, y: 30 })
       events.pointerUp({ x: 20, y: 30 })
-      const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+      const input = spacingInput()!
       input.focus()
 
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
@@ -10427,7 +10483,7 @@ describe('SceneInteractionSession', () => {
     it('reports a polygon draft as a gesture until it is cancelled', () => {
       const { session, latest } = guidedSession()
       session.setTool('polygon')
-      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false })
+      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false, plantRow: null })
 
       events.pointerDown({ x: 10, y: 10 })
       events.pointerUp({ x: 10, y: 10 })
@@ -10505,7 +10561,7 @@ describe('SceneInteractionSession', () => {
 
       session.dispose()
 
-      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false })
+      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false, plantRow: null })
     })
   })
 

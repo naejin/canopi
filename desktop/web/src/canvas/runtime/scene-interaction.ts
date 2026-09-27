@@ -81,7 +81,7 @@ import {
   prepareInteractionHost,
   type InteractionHostController,
 } from './interaction/interaction-host'
-import type { CanvasDesignObjectSelectionModel } from './runtime'
+import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField } from './runtime'
 import type {
   CanvasContextMenuCommands,
   CanvasRuntimeContextMenuAdapter,
@@ -168,6 +168,8 @@ export interface SceneInteractionSessionDeps {
 
 export interface SceneInteractionSession {
   setTool(name: string): void
+  /** Plant a row's spacing field in the tool card; does nothing under another tool. */
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
   setOverviewMode(enabled: boolean): void
   prepareForDocumentReplacement(): void
   refreshMeasurements(): void
@@ -211,6 +213,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _pendingInteractionHostFocusFrame: number | null = null
   private _overviewMode = false
   private _keyboardContextMenuAt = Number.NEGATIVE_INFINITY
+  readonly plantRowSpacing: CanvasPlantRowSpacingField = {
+    input: (text) => this._runSpacingField((field) => field.input(text)),
+    commit: (text) => this._runSpacingField((field) => field.commit(text)),
+    blur: (text) => this._runSpacingField((field) => field.blur(text)),
+    cancel: () => this._runSpacingField((field) => field.cancel()),
+  }
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
     const rollback: Array<() => void> = []
@@ -640,6 +648,15 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _onPointerMove = (event: PointerEvent): void => {
+    try {
+      this._handlePointerMove(event)
+    } finally {
+      // A tool's live figures (Plant a row's count) follow the pointer; equal guidance publishes nothing.
+      this._publishToolGuidance()
+    }
+  }
+
+  private _handlePointerMove(event: PointerEvent): void {
     if (!this._pointerGesture) {
       if (this._overviewMode) return
       if (this._isOwnedOverlayPointerTarget(event.target)) return
@@ -1097,6 +1114,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  private _runSpacingField(run: (field: CanvasPlantRowSpacingField) => void): void {
+    if (this._disposed) return
+    const field = this._activeToolAdapter()?.spacingField
+    if (!field) return
+    try {
+      run(field)
+    } finally {
+      this._publishToolGuidance()
+    }
+  }
+
   private _publishToolGuidance(): void {
     const publish = this._deps.publishToolGuidance
     if (!publish || this._disposed || !this._toolRegistry) return
@@ -1106,6 +1134,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       gesture: described.gesture ?? adapter?.hasActiveSceneEdit?.() ?? false,
       stamp: described.stamp ?? null,
       promptSpecies: described.promptSpecies ?? false,
+      plantRow: described.plantRow ?? null,
     })
   }
 

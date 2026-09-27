@@ -141,7 +141,6 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       getLocalizedCommonNames: context.getLocalizedCommonNames,
       readPlantSpacingIntervalMeters: context.readPlantSpacingIntervalMeters,
       commitPlantSpacingIntervalMeters: context.commitPlantSpacingIntervalMeters,
-      translate: context.translate,
       sceneEdits: context.sceneEdits,
       switchTool: context.switchTool,
       focusHost: context.focusHost,

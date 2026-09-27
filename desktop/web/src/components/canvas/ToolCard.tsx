@@ -1,5 +1,5 @@
 import type { RefObject } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { readPlantStampSource } from '../../canvas/plant-stamp-source'
@@ -10,8 +10,10 @@ import {
 import {
   currentCanvasQuerySurface,
   currentCanvasTool,
+  currentCanvasToolCommandSurface,
   currentCanvasToolGuidance,
 } from '../../canvas/session'
+import type { CanvasPlantRowGuidance } from '../../canvas/session-state'
 import { t } from '../../i18n'
 import { SpeciesChooser } from './SpeciesChooser'
 import styles from './ToolCard.module.css'
@@ -22,7 +24,8 @@ import styles from './ToolCard.module.css'
  * end with what Esc does now. It hides for Select and Pan, in overview and
  * while "Where is your site?" shows. The text is one polite live region that
  * stays mounted, so choosing a tool is announced. Place plants carries the
- * species chooser while no species is chosen, or after Change species.
+ * species chooser while no species is chosen, or after Change species; Plant a
+ * row carries its spacing field and the row's count once a plant is picked.
  */
 export function ToolCard({ canvasRef }: {
   /** The map host, which takes focus back once a species is chosen. */
@@ -79,6 +82,13 @@ export function ToolCard({ canvasRef }: {
               {content.subject && <><b className={styles.subject}>{content.subject}</b>{' · '}</>}
               {content.instruction}
             </span>
+            {guidance.plantRow?.phase === 'row' && <SpacingField row={guidance.plantRow} />}
+            {content.rowCount && (
+              // Moves with every pointer move, so it is not announced.
+              <span className={styles.count} aria-live="off" data-plant-spacing-generated-count data-density={content.rowCount.density}>
+                {content.rowCount.text}
+              </span>
+            )}
             <span className={styles.hints}>{content.hints}</span>
           </>
         )}
@@ -92,6 +102,52 @@ export function ToolCard({ canvasRef }: {
         />
       )}
     </section>
+  )
+}
+
+/**
+ * Plant a row's spacing: the runtime keeps the text and parses it; Enter keeps
+ * a valid spacing and gives the map focus back, Esc drops the picked plant,
+ * and leaving the field keeps a valid spacing without moving focus.
+ */
+function SpacingField({ row }: { readonly row: CanvasPlantRowGuidance }) {
+  const id = useId()
+  const input = useRef<HTMLInputElement>(null)
+  const focused = useRef(0)
+  const field = currentCanvasToolCommandSurface.value?.plantRowSpacing
+
+  useLayoutEffect(() => {
+    if (row.focusRequest === focused.current) return
+    focused.current = row.focusRequest
+    input.current?.focus({ preventScroll: true })
+  }, [row.focusRequest])
+
+  return (
+    <span className={styles.field}>
+      <label className={styles.fieldLabel} for={id}>{t('canvas.plantSpacing.interval')}</label>
+      <input
+        ref={input}
+        id={id}
+        className={styles.fieldInput}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        spellcheck={false}
+        value={row.interval}
+        aria-invalid={!row.intervalValid}
+        data-plant-spacing-interval-input
+        onInput={(event) => field?.input(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== 'Escape') return
+          if (event.isComposing) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.key === 'Enter') field?.commit(event.currentTarget.value)
+          else field?.cancel()
+        }}
+        onBlur={(event) => field?.blur(event.currentTarget.value)}
+      />
+    </span>
   )
 }
 

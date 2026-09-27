@@ -61,8 +61,21 @@ export interface CanvasQueryRevision {
   readonly plantNames: ReadonlySignal<number>
 }
 
+/** Plant a row's spacing field, which the tool card shows while a plant is picked. */
+export interface CanvasPlantRowSpacingField {
+  /** The text changed: the preview follows a valid spacing. */
+  input(text: string): void
+  /** Enter: keeps a valid spacing and gives the map focus back; an invalid one keeps the field focused. */
+  commit(text: string): void
+  /** The field lost focus: keeps a valid spacing without moving focus. */
+  blur(text: string): void
+  /** Esc in the field: drops the picked plant and gives the map focus back. */
+  cancel(): void
+}
+
 export interface CanvasToolCommandSurface {
   setTool(name: string): void
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
 }
 
 export interface CanvasViewportCommandSurface {

@@ -1,22 +1,15 @@
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
-import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { ScenePoint } from '../scene'
 
 interface PlantSpacingSourceView {
   id: string
-  label: string
   bounds: {
     x: number
     y: number
     width: number
     height: number
   }
-}
-
-interface PlantSpacingIntervalView {
-  value: string
-  valid: boolean
 }
 
 interface PlantSpacingPreviewView {
@@ -28,159 +21,21 @@ interface PlantSpacingPreviewView {
   ghostRadiusPx: number
 }
 
-interface PlantSpacingOverlayEvents {
-  onCancel: () => void
-  onIntervalInput: (value: string) => void
-  onIntervalCommit: (value: string) => void
-  onIntervalBlur: (value: string) => void
-}
-
-type PlantSpacingSourcePickingReason = 'select-source' | 'source-missed'
-
+/**
+ * What Plant a row draws on the map: a ring on the picked plant, the dashed
+ * row guide with its length and the plants the row would add. The tool card
+ * (name, instruction, spacing field, count) is the shared Preact card.
+ */
 export interface PlantSpacingOverlayController {
-  showSourcePicking(reason?: PlantSpacingSourcePickingReason): void
-  showSourceSelected(source: PlantSpacingSourceView, camera: WorkspaceCameraFrameReader, interval: PlantSpacingIntervalView): void
-  setIntervalValidity(valid: boolean): void
-  setGeneratedCount(count: number | null, options?: { dense?: boolean; blocked?: boolean }): void
+  showSource(source: PlantSpacingSourceView, camera: WorkspaceCameraFrameReader): void
   showPreview(preview: PlantSpacingPreviewView, camera: WorkspaceCameraFrameReader): void
   hidePreview(): void
-  focusIntervalInput(): void
   refreshSourceHighlight(source: PlantSpacingSourceView | null, camera: WorkspaceCameraFrameReader): void
-  refreshTranslations(): void
   hide(): void
   dispose(): void
 }
 
-export function createPlantSpacingOverlay(
-  container: HTMLElement,
-  events: PlantSpacingOverlayEvents,
-  translate: CanvasRuntimeTranslator,
-): PlantSpacingOverlayController {
-  const root = document.createElement('div')
-  root.dataset.plantSpacingHud = 'true'
-  // The tool card slot: top left beside the tool rail, below the title bar.
-  // Plant a row keeps this runtime card (it owns the spacing field) in the
-  // shared tool card's format: name, instruction, spacing, then key hints.
-  root.style.cssText = [
-    'position: absolute',
-    'z-index: 25',
-    'display: none',
-    'width: min(320px, calc(100% - var(--canvas-tool-card-left, 76px) - 12px))',
-    'box-sizing: border-box',
-    'padding: var(--space-3) calc(var(--space-3) + var(--space-0-5))',
-    'background: var(--color-glass)',
-    'border: 1px solid var(--color-border)',
-    'border-radius: var(--radius-panel)',
-    'box-shadow: var(--shadow-float)',
-    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
-    'color: var(--color-text)',
-    'pointer-events: auto',
-  ].join(';')
-  root.style.setProperty('top', 'var(--chrome-rail-top, 72px)')
-  root.style.setProperty('left', 'var(--canvas-tool-card-left, 76px)')
-  root.addEventListener('pointerdown', (event) => {
-    event.stopPropagation()
-  })
-  root.addEventListener('pointermove', (event) => {
-    event.stopPropagation()
-  })
-
-  // Title and instruction are a polite live region, so the phase is announced.
-  const statusRegion = document.createElement('div')
-  statusRegion.setAttribute('role', 'status')
-
-  const title = document.createElement('div')
-  title.style.cssText = [
-    'font-size: var(--text-base)',
-    'font-weight: 600',
-    'color: var(--color-text)',
-  ].join(';')
-
-  const line = document.createElement('div')
-  line.style.cssText = [
-    'margin-top: var(--space-1)',
-    'font-size: var(--text-sm)',
-    'color: var(--color-text)',
-    'overflow-wrap: anywhere',
-  ].join(';')
-
-  const status = document.createElement('span')
-  status.dataset.plantSpacingPrimary = 'true'
-
-  const instruction = document.createElement('span')
-
-  const count = document.createElement('div')
-  count.dataset.plantSpacingGeneratedCount = 'true'
-  count.style.cssText = [
-    'display: none',
-    'margin-top: var(--space-1)',
-    'font-size: var(--text-xs)',
-    'font-weight: 400',
-    'color: var(--color-text)',
-    'font-variant-numeric: tabular-nums',
-  ].join(';')
-
-  const intervalRow = document.createElement('label')
-  intervalRow.style.cssText = [
-    'display: none',
-    'margin-top: var(--space-2)',
-    'gap: var(--space-2)',
-    'align-items: center',
-    'font-size: var(--text-xs)',
-    'font-weight: 600',
-    'color: var(--color-text-muted)',
-  ].join(';')
-
-  const intervalLabel = document.createElement('span')
-  intervalLabel.textContent = translate('canvas.plantSpacing.interval')
-
-  const intervalInput = document.createElement('input')
-  intervalInput.type = 'text'
-  intervalInput.dataset.plantSpacingIntervalInput = 'true'
-  intervalInput.inputMode = 'decimal'
-  intervalInput.autocomplete = 'off'
-  intervalInput.spellcheck = false
-  intervalInput.style.cssText = [
-    'width: 84px',
-    'min-height: var(--control-size-md)',
-    'padding: var(--space-1) var(--space-2)',
-    'background: var(--color-surface)',
-    'border: 1px solid var(--color-border-strong, var(--color-border))',
-    'border-radius: var(--radius-md)',
-    'font-size: var(--text-sm)',
-    'font-weight: 600',
-    'font-variant-numeric: tabular-nums',
-    'color: var(--color-text)',
-    'outline: none',
-  ].join(';')
-  intervalInput.addEventListener('input', () => {
-    events.onIntervalInput(intervalInput.value)
-  })
-  intervalInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.stopPropagation()
-      event.preventDefault()
-      events.onIntervalCommit(intervalInput.value)
-      return
-    }
-    if (event.key === 'Escape') {
-      event.stopPropagation()
-      event.preventDefault()
-      events.onCancel()
-    }
-  })
-  intervalInput.addEventListener('blur', () => {
-    events.onIntervalBlur(intervalInput.value)
-  })
-
-  const hint = document.createElement('div')
-  hint.style.cssText = [
-    'margin-top: var(--space-1)',
-    'font-size: var(--text-xs)',
-    'font-weight: 400',
-    'color: var(--color-text-muted)',
-  ].join(';')
-
+export function createPlantSpacingOverlay(container: HTMLElement): PlantSpacingOverlayController {
   const highlight = document.createElement('div')
   highlight.style.cssText = [
     'position: absolute',
@@ -210,6 +65,7 @@ export function createPlantSpacingOverlay(
   lengthLabel.dataset.plantSpacingLengthLabel = 'true'
   lengthLabel.style.cssText = [
     'position: absolute',
+    `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'z-index: 5',
     'display: none',
     'padding: var(--space-1) var(--space-2)',
@@ -231,22 +87,12 @@ export function createPlantSpacingOverlay(
     'pointer-events: none',
   ].join(';')
 
-  line.append(status, instruction)
-  statusRegion.append(title, line)
-  root.appendChild(statusRegion)
-  intervalRow.appendChild(intervalLabel)
-  intervalRow.appendChild(intervalInput)
-  root.appendChild(intervalRow)
-  root.appendChild(count)
-  root.appendChild(hint)
   try {
     container.appendChild(ghosts)
     container.appendChild(guide)
     container.appendChild(lengthLabel)
     container.appendChild(highlight)
-    container.appendChild(root)
   } catch (error) {
-    root.remove()
     guide.remove()
     lengthLabel.remove()
     ghosts.remove()
@@ -254,82 +100,9 @@ export function createPlantSpacingOverlay(
     throw error
   }
 
-  let sourcePickingReason: PlantSpacingSourcePickingReason = 'select-source'
-  let generatedCountView: {
-    readonly count: number
-    readonly dense: boolean
-    readonly blocked: boolean
-  } | null = null
-
-  function refreshTranslations(): void {
-    title.textContent = translate('canvas.tools.plantSpacing')
-    intervalLabel.textContent = translate('canvas.plantSpacing.interval')
-    if (root.dataset.state === 'source-picking') {
-      status.textContent = translate(
-        sourcePickingReason === 'source-missed'
-          ? 'canvas.plantSpacing.sourceMissed'
-          : 'canvas.plantSpacing.selectSource',
-      )
-      status.style.fontWeight = '400'
-      instruction.textContent = ''
-      hint.textContent = translate('canvas.toolCard.escSelect')
-    } else if (root.dataset.state === 'source-selected') {
-      status.style.fontWeight = '600'
-      instruction.textContent = ` · ${translate('canvas.plantSpacing.dragAlong')}`
-      hint.textContent = `${translate('canvas.toolCard.rowKeys')} · ${translate('canvas.toolCard.escCancel')}`
-    }
-    renderGeneratedCount()
-  }
-
-  function show(): void {
-    root.style.display = 'block'
-    root.dataset.toolCard = 'plant-spacing'
-  }
-
   function hideSourceHighlight(): void {
     highlight.style.display = 'none'
     highlight.removeAttribute('data-plant-spacing-source')
-  }
-
-  function setIntervalValidity(valid: boolean): void {
-    root.dataset.intervalValidity = valid ? 'valid' : 'invalid'
-    intervalInput.setAttribute('aria-invalid', valid ? 'false' : 'true')
-    intervalInput.style.borderColor = valid
-      ? 'var(--color-border-strong, var(--color-border))'
-      : 'var(--color-danger, var(--color-primary))'
-  }
-
-  function setGeneratedCount(
-    generatedCount: number | null,
-    options: { dense?: boolean; blocked?: boolean } = {},
-  ): void {
-    generatedCountView = generatedCount === null
-      ? null
-      : {
-          count: generatedCount,
-          dense: options.dense ?? false,
-          blocked: options.blocked ?? false,
-        }
-    renderGeneratedCount()
-  }
-
-  function renderGeneratedCount(): void {
-    if (!generatedCountView) {
-      count.style.display = 'none'
-      count.textContent = ''
-      count.removeAttribute('data-density')
-      return
-    }
-    const { count: generatedCount, dense, blocked } = generatedCountView
-    count.textContent = blocked
-      ? `${translate('canvas.plantSpacing.generatedCount', { count: generatedCount })} · ${translate('canvas.plantSpacing.commitLimitWarning')}`
-      : translate('canvas.plantSpacing.generatedCount', { count: generatedCount })
-    count.dataset.density = blocked ? 'blocked' : (dense ? 'dense' : 'normal')
-    count.style.color = blocked
-      ? 'var(--color-danger, var(--color-primary))'
-      : (dense ? 'var(--color-primary)' : 'var(--color-text)')
-    count.style.fontWeight = dense || blocked ? '600' : '400'
-    count.style.display = 'block'
   }
 
   function updateSourceHighlight(sourceView: PlantSpacingSourceView, camera: WorkspaceCameraFrameReader): void {
@@ -357,29 +130,9 @@ export function createPlantSpacingOverlay(
   }
 
   return {
-    showSourcePicking(reason = 'select-source') {
-      sourcePickingReason = reason
-      root.dataset.state = 'source-picking'
-      setGeneratedCount(null)
-      intervalRow.style.display = 'none'
-      root.removeAttribute('data-interval-validity')
-      hideSourceHighlight()
-      hidePreview()
-      refreshTranslations()
-      show()
-    },
-    showSourceSelected(sourceView, camera, interval) {
-      root.dataset.state = 'source-selected'
-      status.textContent = sourceView.label
-      intervalInput.value = interval.value
-      setIntervalValidity(interval.valid)
-      intervalRow.style.display = 'flex'
+    showSource(sourceView, camera) {
       updateSourceHighlight(sourceView, camera)
-      refreshTranslations()
-      show()
     },
-    setIntervalValidity,
-    setGeneratedCount,
     showPreview(preview, camera) {
       const start = camera.worldToScreen(preview.start)
       const end = camera.worldToScreen(preview.end)
@@ -425,9 +178,6 @@ export function createPlantSpacingOverlay(
       }))
     },
     hidePreview,
-    focusIntervalInput() {
-      intervalInput.focus({ preventScroll: true })
-    },
     refreshSourceHighlight(sourceView, camera) {
       if (!sourceView) {
         hideSourceHighlight()
@@ -435,15 +185,11 @@ export function createPlantSpacingOverlay(
       }
       updateSourceHighlight(sourceView, camera)
     },
-    refreshTranslations,
     hide() {
-      root.style.display = 'none'
-      delete root.dataset.toolCard
       hideSourceHighlight()
       hidePreview()
     },
     dispose() {
-      root.remove()
       guide.remove()
       lengthLabel.remove()
       ghosts.remove()

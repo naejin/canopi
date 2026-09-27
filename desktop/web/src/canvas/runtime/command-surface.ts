@@ -22,6 +22,7 @@ import type {
   CanvasHistoryCommandSurface,
   CanvasLayerCommandSurface,
   CanvasPlantPresentationCommandSurface,
+  CanvasPlantRowSpacingField,
   CanvasSceneEditCommandSurface,
   CanvasToolCommandSurface,
   CanvasViewportCommandSurface,
@@ -112,6 +113,8 @@ interface SceneCanvasCommandSurfaceOptions {
     'toggleGridVisible' | 'toggleSnapToGrid' | 'toggleRulersVisible' | 'layerProjections'
   >
   readonly setInteractionTool: (name: string) => void
+  /** The active interaction session's Plant a row spacing field. */
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly invalidate: (kind: CommandInvalidationKind) => void
   readonly isRuntimeActive: () => boolean
   readonly isSpatialEditingEnabled: () => boolean
@@ -156,6 +159,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.speciesFocus = options.speciesFocus
     this.tools = {
       setTool: (name) => this.setTool(name),
+      plantRowSpacing: options.plantRowSpacing,
     }
     this.viewport = {
       zoomIn: () => this.zoomIn(),

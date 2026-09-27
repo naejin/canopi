@@ -49,7 +49,6 @@ function createPlantSpacingAdapter(
     getLocalizedCommonNames: () => new Map(),
     readPlantSpacingIntervalMeters: options.readPlantSpacingIntervalMeters,
     commitPlantSpacingIntervalMeters: options.commitPlantSpacingIntervalMeters,
-    translate: (key) => key,
     sceneEdits: createSceneEdits(store),
     switchTool: () => {},
     focusHost: () => {},
@@ -132,15 +131,14 @@ describe('Plant Spacing tool adapter', () => {
     adapter.onActivate?.()
     dispatchPointerDown(adapter, events, camera, { x: 20, y: 30 })
 
-    const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
-    expect(input.value).toBe('1.25 m')
+    expect(adapter.describeGuidance?.().plantRow).toMatchObject({ phase: 'row', interval: '1.25 m', intervalValid: true })
 
-    input.value = '0.75m'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    adapter.spacingField!.input('0.75m')
+    adapter.spacingField!.commit('0.75m')
 
     expect(commitPlantSpacingIntervalMeters).toHaveBeenCalledWith(0.75)
     expect(adapterInterval).toBe(0.75)
+    expect(adapter.describeGuidance?.().plantRow).toMatchObject({ phase: 'row', interval: '75 cm', intervalValid: true })
     expect(store.persisted.plants).toHaveLength(1)
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
 

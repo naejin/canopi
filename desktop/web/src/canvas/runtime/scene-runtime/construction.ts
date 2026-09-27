@@ -22,6 +22,7 @@ import type {
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasPlantRowSpacingField,
   CanvasQueryRevision,
   CanvasQuerySurface,
 } from '../runtime'
@@ -91,6 +92,7 @@ export interface SceneRuntimeConstructionCallbacks {
   readonly undoTransientHistory: () => boolean
   readonly redoTransientHistory: () => boolean
   readonly setInteractionTool: (name: string) => void
+  readonly plantRowSpacing: CanvasPlantRowSpacingField
   readonly disposeInteraction: () => void
 }
 
@@ -298,6 +300,7 @@ export function createSceneRuntimeConstruction(
     presentation,
     settings: appAdapter.settings,
     setInteractionTool: callbacks.setInteractionTool,
+    plantRowSpacing: callbacks.plantRowSpacing,
     invalidate: callbacks.invalidate,
     isRuntimeActive: () => runtimeActive,
     isSpatialEditingEnabled: () => camera.snapshot.peek().mode === 'site',
