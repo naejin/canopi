@@ -128,13 +128,12 @@
       "plantStamp": "Pflanzen setzen"
     },
     "plantSpacing": {
-      "selectSource": "Platzierte Pflanze auswählen",
-      "sourceMissed": "Wähle eine sichtbare, nicht gesperrte platzierte Pflanze",
-      "escToExit": "Esc zum Beenden",
-      "escToCancel": "Esc zum Abbrechen",
+      "selectSource": "Klicken Sie auf eine gesetzte Pflanze, um sie in einer Reihe zu wiederholen",
+      "sourceMissed": "Klicken Sie auf eine sichtbare, nicht gesperrte gesetzte Pflanze",
       "interval": "Intervall",
       "generatedCount": "{{count}} erzeugt",
-      "commitLimitWarning": "Intervall erhöhen oder Linie verkürzen"
+      "commitLimitWarning": "Intervall erhöhen oder Linie verkürzen",
+      "dragAlong": "ziehen Sie entlang der Reihe"
     },
     "lockedObject": {
       "locked": "Gesperrt",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Notiz eingeben"
+    },
+    "toolCard": {
+      "placeOne": "klicken Sie auf die Karte, um eine zu setzen",
+      "changeSpecies": "Art ändern",
+      "escStopPlacing": "Esc beendet das Setzen",
+      "escCancel": "Esc bricht ab",
+      "escSelect": "Esc kehrt zu Auswählen zurück",
+      "stampPick": "Klicken Sie auf eine Pflanze, Zone, Notiz oder Gruppe, um sie zu kopieren",
+      "stampPlace": "klicken zum Setzen",
+      "stampZone": "Zone",
+      "stampGroup": "Gruppe",
+      "polygon": "Klicken Sie, um Ecken hinzuzufügen. Klicken Sie auf die erste Ecke oder drücken Sie Eingabe, um abzuschließen.",
+      "polygonKeys": "Rücktaste entfernt die letzte Ecke · Umschalt hält 45°-Winkel",
+      "rectangle": "Ziehen Sie über die Karte, um das Rechteck zu zeichnen.",
+      "ellipse": "Ziehen Sie über die Karte, um die Ellipse zu zeichnen.",
+      "line": "Ziehen Sie über die Karte, um die Linie zu zeichnen.",
+      "textPlace": "Klicken Sie auf die Karte, wo die Notiz hin soll.",
+      "textType": "Geben Sie die Notiz ein. Eingabe zum Abschließen.",
+      "textKeys": "Umschalt Eingabe für eine neue Zeile",
+      "measure": "Ziehen Sie von einem Punkt zum anderen, um zu messen. Die Linie bleibt als Hilfslinie.",
+      "rowKeys": "Umschalt hält 45°-Winkel",
+      "plants_one": "{{count, number}} Pflanze",
+      "species_one": "{{count, number}} Art",
+      "plants_few": "{{count, number}} Pflanzen",
+      "species_few": "{{count, number}} Arten",
+      "plants_many": "{{count, number}} Pflanzen",
+      "species_many": "{{count, number}} Arten",
+      "plants_other": "{{count, number}} Pflanzen",
+      "species_other": "{{count, number}} Arten"
     }
   },
   "worldMap": {

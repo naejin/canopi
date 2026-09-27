@@ -128,13 +128,12 @@
       "plantStamp": "Placer des plantes"
     },
     "plantSpacing": {
-      "selectSource": "Sélectionnez une plante placée",
-      "sourceMissed": "Sélectionnez une plante placée visible et déverrouillée",
-      "escToExit": "Échap pour quitter",
-      "escToCancel": "Échap pour annuler",
+      "selectSource": "Cliquez sur une plante placée pour la répéter en rangée",
+      "sourceMissed": "Cliquez sur une plante placée, visible et non verrouillée",
       "interval": "Intervalle",
       "generatedCount": "{{count}} générées",
-      "commitLimitWarning": "Augmentez l'intervalle ou raccourcissez la ligne"
+      "commitLimitWarning": "Augmentez l'intervalle ou raccourcissez la ligne",
+      "dragAlong": "faites glisser le long de la rangée"
     },
     "lockedObject": {
       "locked": "Verrouillé",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Saisissez la note"
+    },
+    "toolCard": {
+      "placeOne": "cliquez sur la carte pour en placer une",
+      "changeSpecies": "Changer d’espèce",
+      "escStopPlacing": "Échap pour arrêter de placer",
+      "escCancel": "Échap pour annuler",
+      "escSelect": "Échap pour revenir à Sélection",
+      "stampPick": "Cliquez sur une plante, une zone, une note ou un groupe pour le copier",
+      "stampPlace": "cliquez pour placer",
+      "stampZone": "Zone",
+      "stampGroup": "Groupe",
+      "polygon": "Cliquez pour ajouter des sommets. Cliquez sur le premier sommet ou appuyez sur Entrée pour terminer.",
+      "polygonKeys": "Retour arrière retire le dernier sommet · Maj garde des angles de 45°",
+      "rectangle": "Faites glisser sur la carte pour tracer le rectangle.",
+      "ellipse": "Faites glisser sur la carte pour tracer l’ellipse.",
+      "line": "Faites glisser sur la carte pour tracer la ligne.",
+      "textPlace": "Cliquez sur la carte à l’endroit de la note.",
+      "textType": "Saisissez la note. Entrée pour terminer.",
+      "textKeys": "Maj Entrée pour une nouvelle ligne",
+      "measure": "Faites glisser d’un point à un autre pour mesurer. La ligne reste comme repère.",
+      "rowKeys": "Maj garde des angles de 45°",
+      "plants_one": "{{count, number}} plante",
+      "species_one": "{{count, number}} espèce",
+      "plants_few": "{{count, number}} plantes",
+      "species_few": "{{count, number}} espèces",
+      "plants_many": "{{count, number}} de plantes",
+      "species_many": "{{count, number}} d’espèces",
+      "plants_other": "{{count, number}} plantes",
+      "species_other": "{{count, number}} espèces"
     }
   },
   "worldMap": {

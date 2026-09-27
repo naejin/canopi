@@ -128,13 +128,12 @@
       "plantStamp": "植物を配置"
     },
     "plantSpacing": {
-      "selectSource": "配置済みの植物を選択",
-      "sourceMissed": "表示中でロックされていない配置済み植物を選択",
-      "escToExit": "Esc で終了",
-      "escToCancel": "Esc でキャンセル",
+      "selectSource": "配置済みの植物をクリックして列に並べます",
+      "sourceMissed": "表示中でロックされていない配置済みの植物をクリックしてください",
       "interval": "間隔",
       "generatedCount": "{{count}} 生成",
-      "commitLimitWarning": "間隔を広げるか線を短くしてください"
+      "commitLimitWarning": "間隔を広げるか線を短くしてください",
+      "dragAlong": "列に沿ってドラッグ"
     },
     "lockedObject": {
       "locked": "ロック中",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "メモを入力"
+    },
+    "toolCard": {
+      "placeOne": "地図をクリックして 1 株配置",
+      "changeSpecies": "種を変更",
+      "escStopPlacing": "Esc で配置を終了",
+      "escCancel": "Esc で取り消し",
+      "escSelect": "Esc で選択ツールに戻る",
+      "stampPick": "コピーする植物、ゾーン、メモ、グループをクリック",
+      "stampPlace": "クリックして配置",
+      "stampZone": "ゾーン",
+      "stampGroup": "グループ",
+      "polygon": "クリックで頂点を追加。最初の頂点をクリックするか Enter で完了。",
+      "polygonKeys": "Backspace で最後の頂点を削除 · Shift で 45° に固定",
+      "rectangle": "地図上をドラッグして長方形を描きます。",
+      "ellipse": "地図上をドラッグして楕円を描きます。",
+      "line": "地図上をドラッグして線を描きます。",
+      "textPlace": "メモを置く場所で地図をクリックします。",
+      "textType": "メモを入力。Enter で完了。",
+      "textKeys": "Shift Enter で改行",
+      "measure": "2 点間をドラッグして測ります。線はガイドとして残ります。",
+      "rowKeys": "Shift で 45° に固定",
+      "plants_one": "{{count, number}} 株",
+      "species_one": "{{count, number}} 種",
+      "plants_few": "{{count, number}} 株",
+      "species_few": "{{count, number}} 種",
+      "plants_many": "{{count, number}} 株",
+      "species_many": "{{count, number}} 種",
+      "plants_other": "{{count, number}} 株",
+      "species_other": "{{count, number}} 種"
     }
   },
   "worldMap": {

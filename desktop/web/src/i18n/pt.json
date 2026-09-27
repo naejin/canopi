@@ -128,13 +128,12 @@
       "plantStamp": "Colocar plantas"
     },
     "plantSpacing": {
-      "selectSource": "Selecione uma planta colocada",
-      "sourceMissed": "Selecione uma planta colocada visível e desbloqueada",
-      "escToExit": "Esc para sair",
-      "escToCancel": "Esc para cancelar",
+      "selectSource": "Clique numa planta colocada para a repetir numa fila",
+      "sourceMissed": "Clique numa planta colocada, visível e não bloqueada",
       "interval": "Intervalo",
       "generatedCount": "{{count}} geradas",
-      "commitLimitWarning": "Aumente o intervalo ou encurte a linha"
+      "commitLimitWarning": "Aumente o intervalo ou encurte a linha",
+      "dragAlong": "arraste ao longo da fila"
     },
     "lockedObject": {
       "locked": "Bloqueado",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Escreva a nota"
+    },
+    "toolCard": {
+      "placeOne": "clique no mapa para colocar uma",
+      "changeSpecies": "Mudar espécie",
+      "escStopPlacing": "Esc para parar de colocar",
+      "escCancel": "Esc para cancelar",
+      "escSelect": "Esc para voltar a Selecionar",
+      "stampPick": "Clique numa planta, zona, nota ou grupo para o copiar",
+      "stampPlace": "clique para colocar",
+      "stampZone": "Zona",
+      "stampGroup": "Grupo",
+      "polygon": "Clique para adicionar vértices. Clique no primeiro vértice ou prima Enter para terminar.",
+      "polygonKeys": "Retrocesso remove o último vértice · Shift mantém ângulos de 45°",
+      "rectangle": "Arraste no mapa para desenhar o retângulo.",
+      "ellipse": "Arraste no mapa para desenhar a elipse.",
+      "line": "Arraste no mapa para desenhar a linha.",
+      "textPlace": "Clique no mapa onde fica a nota.",
+      "textType": "Escreva a nota. Enter para terminar.",
+      "textKeys": "Shift Enter para uma nova linha",
+      "measure": "Arraste de um ponto a outro para medir. A linha fica como guia.",
+      "rowKeys": "Shift mantém ângulos de 45°",
+      "plants_one": "{{count, number}} planta",
+      "species_one": "{{count, number}} espécie",
+      "plants_few": "{{count, number}} plantas",
+      "species_few": "{{count, number}} espécies",
+      "plants_many": "{{count, number}} de plantas",
+      "species_many": "{{count, number}} de espécies",
+      "plants_other": "{{count, number}} plantas",
+      "species_other": "{{count, number}} espécies"
     }
   },
   "worldMap": {

@@ -2,6 +2,7 @@ import { computed, signal } from '@preact/signals'
 import {
   canvasHasSelectionState,
   canvasSelectionState,
+  canvasToolGuidanceState,
   canvasToolState,
   setCanvasTool,
 } from './session-state'
@@ -46,6 +47,8 @@ export const currentCanvasDocumentSurface = computed<CanvasDocumentSurface | nul
   documentSurfaceFrom(currentCanvasSession.value),
 )
 export const currentCanvasTool = canvasToolState
+/** The active tool's gesture and stamp state, for the tool card. */
+export const currentCanvasToolGuidance = canvasToolGuidanceState
 export const currentCanvasSelection = canvasSelectionState
 export const currentCanvasHasSelection = canvasHasSelectionState
 

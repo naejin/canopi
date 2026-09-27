@@ -10,12 +10,13 @@ import { PlantAppearancePopovers } from './PlantAppearancePopovers'
 import { SelectionChip } from './SelectionChip'
 import { SiteOnboarding } from './SiteOnboarding'
 import { SpeciesFocusChip } from './SpeciesFocusChip'
+import { ToolCard } from './ToolCard'
 import { ToolRail } from './ToolRail'
 import { ViewChip } from './ViewChip'
 import { ZoomControls } from './ZoomControls'
 
 /**
- * The floating chrome over the map that both editions share: tool rail, view
+ * The floating chrome over the map that both editions share: tool rail, tool card, view
  * chip, zoom group, the highlight and selection status chips, right-click menu, plant appearance popovers, overview,
  * inspection and New-Design guidance. The edition
  * hands over its canvas command projection.
@@ -31,6 +32,7 @@ export function CanvasChrome({ projection, canvasRef, children }: {
   return (
     <>
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
+      <ToolCard />
       <ViewChip toggles={projection.settingsToggles} />
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />

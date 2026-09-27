@@ -10,6 +10,7 @@ import { isSceneLayerOpenForCreation } from './layer-guards'
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
   readonly focusHost: () => void
+  readonly notifyGuidanceChange: () => void
   readonly translate: CanvasRuntimeTranslator
   readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
@@ -69,6 +70,7 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
     })
 
     context.container.appendChild(nextTextarea)
+    context.notifyGuidanceChange()
     requestAnimationFrame(() => {
       if (textarea !== nextTextarea) return
       nextTextarea.focus()
@@ -126,10 +128,12 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
     // Removing a focused field drops focus to the page; the map keeps it so
     // the next Esc reaches the Esc chain.
     const hadFocus = textarea !== null && textarea === document.activeElement
+    const hadEditor = textarea !== null
     textarea?.remove()
     textarea = null
     textWorldPosition = null
     if (hadFocus) context.focusHost()
+    if (hadEditor) context.notifyGuidanceChange()
   }
 
   function isAnnotationsLayerOpen(): boolean {
@@ -148,6 +152,7 @@ export function createTextAnnotationToolAdapter(tool: TextAnnotationTool): Scene
   return {
     onDeactivate: tool.cancel,
     shouldSuppressSharedKeyboard: tool.hasActiveEditor,
+    describeGuidance: () => ({ gesture: tool.hasActiveEditor() }),
     pointerDown({ event, rawWorld }) {
       event.preventDefault()
       tool.pointerDown(rawWorld)

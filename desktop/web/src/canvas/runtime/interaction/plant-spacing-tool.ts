@@ -24,7 +24,7 @@ import {
   createPlantSpacingOverlay,
   type PlantSpacingOverlayController,
 } from './plant-spacing-overlay'
-import { isEditableTarget } from './pointer-utils'
+import { constrainPointTo45Degrees, isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 
@@ -482,20 +482,6 @@ function clonePlantForPlantSpacing(plant: ScenePlantEntity): ScenePlantEntity {
     ...plant,
     pinnedName: false,
     position: { ...plant.position },
-  }
-}
-
-function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): ScenePoint {
-  const dx = point.x - origin.x
-  const dy = point.y - origin.y
-  const length = Math.hypot(dx, dy)
-  if (length <= 0.000001) return { ...origin }
-
-  const angle = Math.atan2(dy, dx)
-  const constrainedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
-  return {
-    x: origin.x + Math.cos(constrainedAngle) * length,
-    y: origin.y + Math.sin(constrainedAngle) * length,
   }
 }
 

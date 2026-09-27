@@ -28,7 +28,7 @@ import {
   appendRectangleZoneToDraft,
 } from './tool-actions'
 import { getRectangularZoneCorners } from '../zone-geometry'
-import { isEditableTarget } from './pointer-utils'
+import { constrainPointTo45Degrees, isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
 import { isSceneLayerOpenForCreation } from './layer-guards'
 
@@ -60,8 +60,9 @@ export interface ZoneDrawingTool {
   readonly beginDrag: (mode: DragZoneMode, world: ScenePoint) => void
   readonly updateDrag: (rawWorld: ScenePoint) => void
   readonly commitDrag: (rawWorld: ScenePoint) => void
-  readonly handlePolygonPointerDown: (world: ScenePoint) => void
-  readonly updatePolygonPointerMove: (rawWorld: ScenePoint) => void
+  /** `keep45` (Shift) keeps the new edge on a 45° direction from the last corner. */
+  readonly handlePolygonPointerDown: (world: ScenePoint, keep45?: boolean) => void
+  readonly updatePolygonPointerMove: (rawWorld: ScenePoint, keep45?: boolean) => void
   readonly handlePolygonKeyDown: (event: KeyboardEvent) => boolean
   readonly canUndoPolygonDraft: () => boolean
   readonly canRedoPolygonDraft: () => boolean
@@ -164,19 +165,20 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     activeDrag = null
   }
 
-  function handlePolygonPointerDown(world: ScenePoint): void {
+  function handlePolygonPointerDown(world: ScenePoint, keep45 = false): void {
     if (!isZonesLayerOpen()) {
       cancelPolygonDraft()
       return
     }
-    const point = context.applySnapping(world)
+    const snapped = context.applySnapping(world)
     activeDrag = null
     zoneMeasurements.hide()
 
-    if (shouldClosePolygonAt(point)) {
+    if (shouldClosePolygonAt(snapped)) {
       commitPolygonDraft()
       return
     }
+    const point = constrainPolygonPoint(snapped, keep45)
 
     const last = polygonDraftVertices[polygonDraftVertices.length - 1]
     if (last && pointsEqual(last, point)) {
@@ -198,8 +200,13 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     context.notifyTransientHistoryChange()
   }
 
-  function updatePolygonPointerMove(rawWorld: ScenePoint): void {
-    polygonActiveWorld = context.applySnapping(rawWorld)
+  function constrainPolygonPoint(point: ScenePoint, keep45: boolean): ScenePoint {
+    const last = polygonDraftVertices[polygonDraftVertices.length - 1]
+    return keep45 && last ? constrainPointTo45Degrees(last, point) : point
+  }
+
+  function updatePolygonPointerMove(rawWorld: ScenePoint, keep45 = false): void {
+    polygonActiveWorld = constrainPolygonPoint(context.applySnapping(rawWorld), keep45)
     polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
     updateDraftPolygonMeasurements()
   }
@@ -493,15 +500,16 @@ export function createZoneDrawingToolAdapters(tool: ZoneDrawingTool): ZoneDrawin
       onDeactivate: () => tool.cancelTransient(),
       shouldIgnorePointerUpWithoutCapture: tool.hasPolygonDraft,
       shouldPreserveTransientOnPan: tool.hasPolygonDraft,
+      describeGuidance: () => ({ gesture: tool.hasPolygonDraft() }),
       pointerDown({ event, rawWorld, clearPointerGesture }) {
         event.preventDefault()
         clearPointerGesture()
-        tool.handlePolygonPointerDown(rawWorld)
+        tool.handlePolygonPointerDown(rawWorld, event.shiftKey)
         return true
       },
-      pointerMoveWithoutCapture({ rawWorld }) {
+      pointerMoveWithoutCapture({ event, rawWorld }) {
         if (!tool.hasPolygonDraft()) return false
-        tool.updatePolygonPointerMove(rawWorld)
+        tool.updatePolygonPointerMove(rawWorld, event.shiftKey)
         return true
       },
       keyDown(event) {

@@ -29,7 +29,7 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 ## Tools
 
-- Tool cards (top left, 320 px): tool name, the instruction first ("Pommier cultivé · click the map to place one"), then key hints ending with the Esc meaning ("Esc to stop placing" for repeating tools, "Esc to cancel" while a gesture is in progress). Placing tools offer Change species / Change stamp.
+- Tool cards (top left beside the rail, 320 px): tool name, the instruction first ("Pommier cultivé · click the map to place one"), then quiet key hints ending with the Esc meaning ("Esc to stop placing" for placing tools, "Esc to cancel" while a gesture is in progress, otherwise "Esc to go back to Select"). Placing tools offer Change species / Change stamp. The card hides for Select and Pan, in overview and while "Where is your site?" shows; its text is a polite live region, so a tool change is announced. The highlight chip starts right of it. Plant a row's card is the runtime's, since it holds the spacing field, in the same format.
 - Place plants shows the mature width ring (typical) and the distance to the nearest plant. Plant a row shows spacing and the live plant count; previews use the real symbol size at 85% opacity. Place a stamp previews the whole group; [ and ] rotate by 15°.
 - Zones: click adds corners, first corner or Enter finishes, Backspace removes the last corner, Shift keeps 45°. Live edge lengths and area. A selected zone shows a sheet beside it: name, colour (radio swatches), fill, area and perimeter, Lock, Delete zone.
 - Text note: click places a field; Enter finishes (never while an input method composes), Shift Enter breaks a line, Esc restores. Measure: click two points; the result stays as a guide.

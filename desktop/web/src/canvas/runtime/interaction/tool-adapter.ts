@@ -1,3 +1,4 @@
+import type { CanvasToolGuidance } from '../../session-state'
 import type { ScenePoint } from '../scene'
 
 export interface SceneToolPointerEvent {
@@ -31,6 +32,11 @@ export interface SceneToolAdapter {
   readonly onActivate?: () => void
   readonly onDeactivate?: () => void
   readonly hasActiveSceneEdit?: () => boolean
+  /**
+   * What the tool card explains: a gesture in progress (defaults to an
+   * active Scene Edit) and a stamp pick.
+   */
+  readonly describeGuidance?: () => Partial<CanvasToolGuidance>
   readonly shouldIgnorePointerEvent?: (target: EventTarget | null) => boolean
   readonly shouldIgnorePointerUpWithoutCapture?: () => boolean
   readonly shouldPreserveTransientOnPan?: () => boolean

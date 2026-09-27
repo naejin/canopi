@@ -128,13 +128,12 @@
       "plantStamp": "Place plants"
     },
     "plantSpacing": {
-      "selectSource": "Select a placed plant",
-      "sourceMissed": "Select a visible, unlocked placed plant",
-      "escToExit": "Esc to exit",
-      "escToCancel": "Esc to cancel",
+      "selectSource": "Click a placed plant to repeat it along a row",
+      "sourceMissed": "Click a visible, unlocked placed plant",
       "interval": "Interval",
       "generatedCount": "{{count}} generated",
-      "commitLimitWarning": "Increase interval or shorten the line"
+      "commitLimitWarning": "Increase interval or shorten the line",
+      "dragAlong": "drag along the row"
     },
     "lockedObject": {
       "locked": "Locked",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Type the note"
+    },
+    "toolCard": {
+      "placeOne": "click the map to place one",
+      "changeSpecies": "Change species",
+      "escStopPlacing": "Esc to stop placing",
+      "escCancel": "Esc to cancel",
+      "escSelect": "Esc to go back to Select",
+      "stampPick": "Click a plant, zone, note or group to copy it",
+      "stampPlace": "click to place",
+      "stampZone": "Zone",
+      "stampGroup": "Group",
+      "polygon": "Click to add corners. Click the first corner or press Enter to finish.",
+      "polygonKeys": "Backspace removes the last corner · Shift keeps 45° angles",
+      "rectangle": "Drag across the map to draw the rectangle.",
+      "ellipse": "Drag across the map to draw the ellipse.",
+      "line": "Drag along the map to draw the line.",
+      "textPlace": "Click the map where the note goes.",
+      "textType": "Type the note. Enter to finish.",
+      "textKeys": "Shift Enter for a new line",
+      "measure": "Drag from one point to another to measure. The line stays as a guide.",
+      "rowKeys": "Shift keeps 45° angles",
+      "plants_one": "{{count, number}} plant",
+      "species_one": "{{count, number}} species",
+      "plants_few": "{{count, number}} plants",
+      "species_few": "{{count, number}} species",
+      "plants_many": "{{count, number}} plants",
+      "species_many": "{{count, number}} species",
+      "plants_other": "{{count, number}} plants",
+      "species_other": "{{count, number}} species"
     }
   },
   "worldMap": {

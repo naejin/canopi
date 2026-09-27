@@ -128,13 +128,12 @@
       "plantStamp": "Planten plaatsen"
     },
     "plantSpacing": {
-      "selectSource": "Selecteer een geplaatste plant",
-      "sourceMissed": "Selecteer een zichtbare, ontgrendelde geplaatste plant",
-      "escToExit": "Esc om af te sluiten",
-      "escToCancel": "Esc om te annuleren",
+      "selectSource": "Klik op een geplaatste plant om die in een rij te herhalen",
+      "sourceMissed": "Klik op een zichtbare, niet-vergrendelde geplaatste plant",
       "interval": "Interval",
       "generatedCount": "{{count}} gegenereerd",
-      "commitLimitWarning": "Vergroot het interval of verkort de lijn"
+      "commitLimitWarning": "Vergroot het interval of verkort de lijn",
+      "dragAlong": "sleep langs de rij"
     },
     "lockedObject": {
       "locked": "Vergrendeld",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Typ de notitie"
+    },
+    "toolCard": {
+      "placeOne": "klik op de kaart om er een te plaatsen",
+      "changeSpecies": "Soort wijzigen",
+      "escStopPlacing": "Esc om te stoppen met plaatsen",
+      "escCancel": "Esc om te annuleren",
+      "escSelect": "Esc om terug te gaan naar Selecteren",
+      "stampPick": "Klik op een plant, zone, notitie of groep om die te kopiëren",
+      "stampPlace": "klik om te plaatsen",
+      "stampZone": "Zone",
+      "stampGroup": "Groep",
+      "polygon": "Klik om hoeken toe te voegen. Klik op de eerste hoek of druk op Enter om te voltooien.",
+      "polygonKeys": "Backspace verwijdert de laatste hoek · Shift houdt hoeken van 45°",
+      "rectangle": "Sleep over de kaart om de rechthoek te tekenen.",
+      "ellipse": "Sleep over de kaart om de ellips te tekenen.",
+      "line": "Sleep over de kaart om de lijn te tekenen.",
+      "textPlace": "Klik op de kaart waar de notitie komt.",
+      "textType": "Typ de notitie. Enter om te voltooien.",
+      "textKeys": "Shift Enter voor een nieuwe regel",
+      "measure": "Sleep van het ene punt naar het andere om te meten. De lijn blijft als hulplijn staan.",
+      "rowKeys": "Shift houdt hoeken van 45°",
+      "plants_one": "{{count, number}} plant",
+      "species_one": "{{count, number}} soort",
+      "plants_few": "{{count, number}} planten",
+      "species_few": "{{count, number}} soorten",
+      "plants_many": "{{count, number}} planten",
+      "species_many": "{{count, number}} soorten",
+      "plants_other": "{{count, number}} planten",
+      "species_other": "{{count, number}} soorten"
     }
   },
   "worldMap": {

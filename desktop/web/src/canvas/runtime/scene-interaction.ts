@@ -98,6 +98,10 @@ import {
 } from './scene/locks'
 import type { ScenePersistedState } from './scene'
 import {
+  IDLE_CANVAS_TOOL_GUIDANCE,
+  type CanvasToolGuidance,
+} from '../session-state'
+import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
 } from './cleanup'
@@ -158,6 +162,8 @@ export interface SceneInteractionSessionDeps {
   setHoveredTarget: (target: SceneDesignObjectTarget | null) => void
   getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   notifyTransientHistoryChange?: () => void
+  /** Mirrors the active tool's gesture and stamp state for the tool card. */
+  publishToolGuidance?: (guidance: CanvasToolGuidance) => void
 }
 
 export interface SceneInteractionSession {
@@ -246,6 +252,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         applySnapping: (point) => this._applySnapping(point),
         getContainerRect: () => this._currentContainerRect(),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
+        notifyGuidanceChange: () => this._publishToolGuidance(),
       }), disposeSceneToolRegistry)
       this._annotationEditor = own(createAnnotationInlineEditor({
         container: this._deps.container,
@@ -364,6 +371,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
       this._deps.container.style.cursor = cursorForTool(name)
       this._refreshSelectionDependentMeasurements()
+      this._publishToolGuidance()
     } catch (error) {
       const errors: unknown[] = [error]
       const attempt = (rollback: () => void): void => {
@@ -447,6 +455,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._tooltip.dispose())
     attempt(() => this._deps.setHoveredTarget(null))
     attempt(() => this._host.dispose())
+    attempt(() => this._deps.publishToolGuidance?.(IDLE_CANVAS_TOOL_GUIDANCE))
 
     throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
   }
@@ -492,9 +501,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._annotationEditor.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
 
-    this._runAdmittedSceneEvent(event, () => {
-      this._pointerDownWhenSettled(event)
-    }, { resumePending: true })
+    try {
+      this._runAdmittedSceneEvent(event, () => {
+        this._pointerDownWhenSettled(event)
+      }, { resumePending: true })
+    } finally {
+      this._publishToolGuidance()
+    }
   }
 
   private _pointerDownWhenSettled(event: PointerEvent): void {
@@ -698,6 +711,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const screen = this._screenPoint(event)
     const rawWorld = this._deps.camera.screenToWorld(screen)
 
+    try {
+      this._finishPointerUpGesture(event, screen, rawWorld)
+    } finally {
+      this._publishToolGuidance()
+    }
+  }
+
+  private _finishPointerUpGesture(event: PointerEvent, screen: ScenePoint, rawWorld: ScenePoint): void {
     try {
       let preserveActiveDraft = false
       try {
@@ -992,6 +1013,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
+    try {
+      this._handleKeyDown(event)
+    } finally {
+      this._publishToolGuidance()
+    }
+  }
+
+  private _handleKeyDown(event: KeyboardEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
     if (
       !this._pointerGesture
@@ -1063,7 +1092,20 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     } catch (error) {
       this._transientCancellationPending = this._hasActiveSceneEdit()
       throw error
+    } finally {
+      this._publishToolGuidance()
     }
+  }
+
+  private _publishToolGuidance(): void {
+    const publish = this._deps.publishToolGuidance
+    if (!publish || this._disposed || !this._toolRegistry) return
+    const adapter = this._activeToolAdapter()
+    const described = adapter?.describeGuidance?.() ?? {}
+    publish({
+      gesture: described.gesture ?? adapter?.hasActiveSceneEdit?.() ?? false,
+      stamp: described.stamp ?? null,
+    })
   }
 
   private _refreshViewportDependentMeasurements(): void {

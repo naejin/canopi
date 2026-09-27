@@ -828,7 +828,7 @@ describe('scene canvas runtime', () => {
     expect(activeTool.value).toBe('plant-spacing')
     const plantSpacingHud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
     expect(plantSpacingHud?.style.display).toBe('block')
-    expect(plantSpacingHud?.textContent).toContain('Select a placed plant')
+    expect(plantSpacingHud?.textContent).toContain('Click a placed plant to repeat it along a row')
 
     selection.mockRestore()
     clickAt(events, { x: 10, y: 10 })

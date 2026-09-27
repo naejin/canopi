@@ -33,6 +33,7 @@ import {
 } from './overlay-ui'
 import { isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'
+import type { CanvasStampGuidance } from '../../session-state'
 
 interface ObjectStampPlantSource {
   kind: 'plant'
@@ -75,6 +76,7 @@ export interface ObjectStampToolContext {
   readonly preview: HTMLDivElement
   readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
+  readonly getLocalizedCommonNames: () => ReadonlyMap<string, string | null>
   readonly getSpeciesCache: () => ReadonlyMap<string, SpeciesCacheEntry>
   readonly getPlantPresentationContext: (viewportScale: number) => PlantPresentationContext
   readonly sceneEdits: SceneEditCoordinator
@@ -83,6 +85,8 @@ export interface ObjectStampToolContext {
 
 export interface ObjectStampTool {
   readonly hasSource: () => boolean
+  /** The picked object as the tool card names it, or null before a pick. */
+  readonly describeSource: () => CanvasStampGuidance | null
   readonly pointerDown: (world: ScenePoint) => void
   readonly updatePreview: (world: ScenePoint) => void
   readonly clear: () => void
@@ -320,8 +324,28 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     hideInteractionPreview(context.preview)
   }
 
+  function describeSource(): CanvasStampGuidance | null {
+    const source = objectStampSource
+    if (!source) return null
+    const plantName = (plant: ScenePlantEntity): string =>
+      context.getLocalizedCommonNames().get(plant.canonicalName) ?? plant.commonName ?? plant.canonicalName
+    if (source.kind === 'plant') {
+      return { kind: 'plant', name: plantName(source.plant), plants: 1, species: 1 }
+    }
+    if (source.kind === 'group') {
+      return {
+        kind: 'group',
+        name: source.group.name?.trim() || null,
+        plants: source.plants.length,
+        species: new Set(source.plants.map((plant) => plant.canonicalName)).size,
+      }
+    }
+    return { kind: source.kind, name: null, plants: 0, species: 0 }
+  }
+
   return {
     hasSource: () => objectStampSource !== null,
+    describeSource,
     pointerDown,
     updatePreview,
     clear,
@@ -340,6 +364,7 @@ export function createObjectStampToolAdapter(
   return {
     onDeactivate: tool.clear,
     shouldSuppressHover: tool.hasSource,
+    describeGuidance: () => ({ stamp: tool.describeSource() }),
     pointerDown({ event, rawWorld, clearPointerGesture }) {
       event.preventDefault()
       tool.pointerDown(rawWorld)

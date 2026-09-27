@@ -128,13 +128,12 @@
       "plantStamp": "Разместить растения"
     },
     "plantSpacing": {
-      "selectSource": "Выберите размещенное растение",
-      "sourceMissed": "Выберите видимое незаблокированное размещенное растение",
-      "escToExit": "Esc, чтобы выйти",
-      "escToCancel": "Esc, чтобы отменить",
+      "selectSource": "Щёлкните посаженное растение, чтобы повторить его рядом",
+      "sourceMissed": "Щёлкните видимое незаблокированное посаженное растение",
       "interval": "Интервал",
       "generatedCount": "{{count}} создано",
-      "commitLimitWarning": "Увеличьте интервал или укоротите линию"
+      "commitLimitWarning": "Увеличьте интервал или укоротите линию",
+      "dragAlong": "протяните вдоль ряда"
     },
     "lockedObject": {
       "locked": "Заблокировано",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Введите заметку"
+    },
+    "toolCard": {
+      "placeOne": "щёлкните по карте, чтобы посадить одно",
+      "changeSpecies": "Сменить вид",
+      "escStopPlacing": "Esc — прекратить размещение",
+      "escCancel": "Esc — отменить",
+      "escSelect": "Esc — вернуться к выделению",
+      "stampPick": "Щёлкните растение, зону, заметку или группу, чтобы скопировать",
+      "stampPlace": "щёлкните, чтобы разместить",
+      "stampZone": "Зона",
+      "stampGroup": "Группа",
+      "polygon": "Щёлкайте, чтобы добавить углы. Щёлкните первый угол или нажмите Enter, чтобы завершить.",
+      "polygonKeys": "Backspace удаляет последний угол · Shift держит углы 45°",
+      "rectangle": "Протяните по карте, чтобы нарисовать прямоугольник.",
+      "ellipse": "Протяните по карте, чтобы нарисовать эллипс.",
+      "line": "Протяните по карте, чтобы нарисовать линию.",
+      "textPlace": "Щёлкните по карте там, где будет заметка.",
+      "textType": "Введите заметку. Enter — завершить.",
+      "textKeys": "Shift Enter — новая строка",
+      "measure": "Протяните от точки к точке, чтобы измерить. Линия останется как направляющая.",
+      "rowKeys": "Shift держит углы 45°",
+      "plants_one": "{{count, number}} растение",
+      "species_one": "{{count, number}} вид",
+      "plants_few": "{{count, number}} растения",
+      "species_few": "{{count, number}} вида",
+      "plants_many": "{{count, number}} растений",
+      "species_many": "{{count, number}} видов",
+      "plants_other": "{{count, number}} растения",
+      "species_other": "{{count, number}} вида"
     }
   },
   "worldMap": {

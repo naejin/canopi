@@ -63,6 +63,8 @@ export interface SceneToolRegistryContext {
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly getContainerRect: () => DOMRect
   readonly notifyTransientHistoryChange: () => void
+  /** A tool's guidance changed outside a map event (a note field closed). */
+  readonly notifyGuidanceChange: () => void
 }
 
 export interface SceneToolRegistry {
@@ -82,6 +84,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     const textTool = own(createTextAnnotationTool({
       container: context.container,
       focusHost: context.focusHost,
+      notifyGuidanceChange: context.notifyGuidanceChange,
       translate: context.translate,
       camera: context.camera,
       getSceneStore: context.getSceneStore,
@@ -107,6 +110,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     }), (tool) => tool.clear())
     const objectStampTool = own(createObjectStampTool({
       preview: context.preview,
+      getLocalizedCommonNames: context.getLocalizedCommonNames,
       camera: context.camera,
       getSceneStore: context.getSceneStore,
       getSpeciesCache: context.getSpeciesCache,

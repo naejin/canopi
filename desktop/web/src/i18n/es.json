@@ -128,13 +128,12 @@
       "plantStamp": "Colocar plantas"
     },
     "plantSpacing": {
-      "selectSource": "Selecciona una planta colocada",
-      "sourceMissed": "Selecciona una planta colocada visible y desbloqueada",
-      "escToExit": "Esc para salir",
-      "escToCancel": "Esc para cancelar",
+      "selectSource": "Haz clic en una planta colocada para repetirla en hilera",
+      "sourceMissed": "Haz clic en una planta colocada, visible y no bloqueada",
       "interval": "Intervalo",
       "generatedCount": "{{count}} generadas",
-      "commitLimitWarning": "Aumenta el intervalo o acorta la línea"
+      "commitLimitWarning": "Aumenta el intervalo o acorta la línea",
+      "dragAlong": "arrastra a lo largo de la hilera"
     },
     "lockedObject": {
       "locked": "Bloqueado",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Escribe la nota"
+    },
+    "toolCard": {
+      "placeOne": "haz clic en el mapa para colocar una",
+      "changeSpecies": "Cambiar especie",
+      "escStopPlacing": "Esc para dejar de colocar",
+      "escCancel": "Esc para cancelar",
+      "escSelect": "Esc para volver a Seleccionar",
+      "stampPick": "Haz clic en una planta, zona, nota o grupo para copiarlo",
+      "stampPlace": "haz clic para colocar",
+      "stampZone": "Zona",
+      "stampGroup": "Grupo",
+      "polygon": "Haz clic para añadir vértices. Haz clic en el primer vértice o pulsa Intro para terminar.",
+      "polygonKeys": "Retroceso quita el último vértice · Mayús mantiene ángulos de 45°",
+      "rectangle": "Arrastra sobre el mapa para dibujar el rectángulo.",
+      "ellipse": "Arrastra sobre el mapa para dibujar la elipse.",
+      "line": "Arrastra sobre el mapa para dibujar la línea.",
+      "textPlace": "Haz clic en el mapa donde va la nota.",
+      "textType": "Escribe la nota. Intro para terminar.",
+      "textKeys": "Mayús Intro para una línea nueva",
+      "measure": "Arrastra de un punto a otro para medir. La línea queda como guía.",
+      "rowKeys": "Mayús mantiene ángulos de 45°",
+      "plants_one": "{{count, number}} planta",
+      "species_one": "{{count, number}} especie",
+      "plants_few": "{{count, number}} plantas",
+      "species_few": "{{count, number}} especies",
+      "plants_many": "{{count, number}} de plantas",
+      "species_many": "{{count, number}} de especies",
+      "plants_other": "{{count, number}} plantas",
+      "species_other": "{{count, number}} especies"
     }
   },
   "worldMap": {

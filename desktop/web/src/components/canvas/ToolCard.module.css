@@ -1,0 +1,76 @@
+/* The tool card: top left beside the tool rail, in the slot the Panels
+   stylesheet publishes (`--canvas-tool-card-left`), below the title bar. */
+.card {
+  position: absolute;
+  z-index: 25;
+  top: var(--chrome-rail-top);
+  left: var(--canvas-tool-card-left);
+  width: min(320px, calc(100% - var(--canvas-tool-card-left) - var(--chrome-inset)));
+  box-sizing: border-box;
+  padding: var(--space-3) calc(var(--space-3) + var(--space-0-5));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-glass);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(16px);
+  color: var(--color-text);
+}
+
+/* No card: the live region stays mounted but takes no room. */
+.idle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.title {
+  display: block;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.instruction {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.subject {
+  font-weight: 600;
+}
+
+.hints {
+  display: block;
+  margin-top: var(--space-1-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Change species: a quiet link in the title row. */
+.link {
+  float: right;
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2)) 0 var(--space-2);
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link:hover {
+  background: var(--color-control-hover);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

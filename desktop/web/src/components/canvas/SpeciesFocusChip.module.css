@@ -1,12 +1,14 @@
 /* Status chip for highlighted plants: top centre of the visible map, between
    the tool rail and the panel rail or open dock (`--map-inset-*`, published by
-   app/shell/visible-map-area.ts). It wraps when that area is narrow. */
+   app/shell/visible-map-area.ts), and right of the tool card. It wraps when
+   that area is narrow. */
 .chip {
   position: absolute;
   z-index: 34;
   top: var(--chrome-rail-top);
   right: calc(var(--map-inset-right, 0px) + var(--space-4));
-  left: calc(var(--map-inset-left, 0px) + var(--space-4));
+  /* Right of the tool card while one shows (`--tool-card-reserve`). */
+  left: max(calc(var(--map-inset-left, 0px) + var(--space-4)), var(--tool-card-reserve, 0px));
   width: fit-content;
   max-width: 640px;
   margin-inline: auto;

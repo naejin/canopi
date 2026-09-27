@@ -1,3 +1,5 @@
+import type { ScenePoint } from '../scene'
+
 export function cursorForTool(tool: string): string {
   if (tool === 'hand') return 'grab'
   if (tool === 'line') return 'crosshair'
@@ -29,4 +31,19 @@ export function allowsNativeContextMenuTarget(target: EventTarget | null): boole
   if (!element) return false
   if (isEditableTarget(element)) return true
   return element.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], dialog') !== null
+}
+
+/** Shift while drawing: the point along the nearest 45° direction from `origin`. */
+export function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): ScenePoint {
+  const dx = point.x - origin.x
+  const dy = point.y - origin.y
+  const length = Math.hypot(dx, dy)
+  if (length <= 0.000001) return { ...origin }
+
+  const angle = Math.atan2(dy, dx)
+  const constrainedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
+  return {
+    x: origin.x + Math.cos(constrainedAngle) * length,
+    y: origin.y + Math.sin(constrainedAngle) * length,
+  }
 }

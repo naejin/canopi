@@ -24,6 +24,11 @@
   --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-named-width));
 }
 
+/* While a tool card shows, top chips start right of it. */
+.canvasArea:has([data-tool-card]) {
+  --tool-card-reserve: calc(var(--canvas-tool-card-left) + 320px + var(--space-2));
+}
+
 /* Rulers start below the floating title bar (and any notice) and right of the tool rail
    (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
 .rulerOverlay {

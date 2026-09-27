@@ -128,13 +128,12 @@
       "plantStamp": "Colloca piante"
     },
     "plantSpacing": {
-      "selectSource": "Seleziona una pianta posizionata",
-      "sourceMissed": "Seleziona una pianta posizionata visibile e sbloccata",
-      "escToExit": "Esc per uscire",
-      "escToCancel": "Esc per annullare",
+      "selectSource": "Fai clic su una pianta posizionata per ripeterla in fila",
+      "sourceMissed": "Fai clic su una pianta posizionata, visibile e non bloccata",
       "interval": "Intervallo",
       "generatedCount": "{{count}} generate",
-      "commitLimitWarning": "Aumenta l'intervallo o accorcia la linea"
+      "commitLimitWarning": "Aumenta l'intervallo o accorcia la linea",
+      "dragAlong": "trascina lungo la fila"
     },
     "lockedObject": {
       "locked": "Bloccato",
@@ -655,6 +654,35 @@
     },
     "textNote": {
       "placeholder": "Scrivi la nota"
+    },
+    "toolCard": {
+      "placeOne": "fai clic sulla mappa per posizionarne una",
+      "changeSpecies": "Cambia specie",
+      "escStopPlacing": "Esc per smettere di posizionare",
+      "escCancel": "Esc per annullare",
+      "escSelect": "Esc per tornare a Seleziona",
+      "stampPick": "Fai clic su una pianta, zona, nota o gruppo per copiarlo",
+      "stampPlace": "fai clic per posizionare",
+      "stampZone": "Zona",
+      "stampGroup": "Gruppo",
+      "polygon": "Fai clic per aggiungere vertici. Fai clic sul primo vertice o premi Invio per finire.",
+      "polygonKeys": "Backspace rimuove l’ultimo vertice · Maiusc mantiene angoli di 45°",
+      "rectangle": "Trascina sulla mappa per disegnare il rettangolo.",
+      "ellipse": "Trascina sulla mappa per disegnare l’ellisse.",
+      "line": "Trascina sulla mappa per disegnare la linea.",
+      "textPlace": "Fai clic sulla mappa dove va la nota.",
+      "textType": "Scrivi la nota. Invio per finire.",
+      "textKeys": "Maiusc Invio per una nuova riga",
+      "measure": "Trascina da un punto all’altro per misurare. La linea resta come guida.",
+      "rowKeys": "Maiusc mantiene angoli di 45°",
+      "plants_one": "{{count, number}} pianta",
+      "species_one": "{{count, number}} specie",
+      "plants_few": "{{count, number}} piante",
+      "species_few": "{{count, number}} specie",
+      "plants_many": "{{count, number}} di piante",
+      "species_many": "{{count, number}} di specie",
+      "plants_other": "{{count, number}} piante",
+      "species_other": "{{count, number}} specie"
     }
   },
   "worldMap": {

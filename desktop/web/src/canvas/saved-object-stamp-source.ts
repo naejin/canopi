@@ -24,10 +24,16 @@ type DragDataTypes = {
 type ReadableDragData = Pick<DataTransfer, 'getData'> & DragDataTypes
 
 const selectedSavedObjectStampSource = signal<SavedObjectStampPayload | null>(null)
+const selectedSavedObjectStampName = signal<string | null>(null)
 const activeSavedObjectStampDragSource = signal<SavedObjectStampPayload | null>(null)
 
 export function readSavedObjectStampSource(): SavedObjectStampPayload | null {
   return selectedSavedObjectStampSource.value
+}
+
+/** The armed saved stamp's name, for the tool card. */
+export function readSavedObjectStampName(): string | null {
+  return selectedSavedObjectStampSource.value ? selectedSavedObjectStampName.value : null
 }
 
 export function selectSavedObjectStampSourceForTests(
@@ -40,6 +46,7 @@ export function selectSavedObjectStampSourceForTests(
 
 export function clearSavedObjectStampSource(): void {
   selectedSavedObjectStampSource.value = null
+  selectedSavedObjectStampName.value = null
 }
 
 export function beginSavedObjectStampPlacement(
@@ -49,6 +56,7 @@ export function beginSavedObjectStampPlacement(
   const payload = parseSavedObjectStampPayload(stamp.payload_json)
   if (!payload || !commandSurface) return false
   selectedSavedObjectStampSource.value = payload
+  selectedSavedObjectStampName.value = stamp.name.trim() || null
   commandSurface.setTool('saved-object-stamp')
   return true
 }

@@ -12,7 +12,7 @@ import {
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
 import { guides } from '../canvas/scene-metadata-state'
-import { selectedObjectIds } from '../canvas/session-state'
+import { selectedObjectIds, type CanvasToolGuidance } from '../canvas/session-state'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../app/canvas-settings/signals'
 import { plantSpacingIntervalM } from '../app/settings/state'
 import { t } from '../i18n'
@@ -165,6 +165,7 @@ function createInteractionDeps(
     | 'commitPlantSpacingIntervalMeters'
     | 'translate'
     | 'contextMenu'
+    | 'publishToolGuidance'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
@@ -259,6 +260,7 @@ function createInteractionDeps(
     translate: overrides.translate ?? t,
     setHoveredTarget: overrides.setHoveredTarget ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
+    publishToolGuidance: overrides.publishToolGuidance,
   }
 }
 
@@ -2894,8 +2896,8 @@ describe('SceneInteractionSession', () => {
     session.setTool('plant-spacing')
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
-    expect(hud?.textContent).toContain('Select a placed plant')
-    expect(hud?.textContent).toContain('Esc to exit')
+    expect(hud?.textContent).toContain('Click a placed plant to repeat it along a row')
+    expect(hud?.textContent).toContain('Esc to go back to Select')
     expect(hud?.textContent).not.toContain('Plant Spacing')
     expect(hud?.querySelector('button')).toBeNull()
 
@@ -2953,7 +2955,7 @@ describe('SceneInteractionSession', () => {
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')!
     expect(hud.style.top).toBe('var(--chrome-rail-top, 72px)')
     expect(hud.style.left).toBe('var(--canvas-tool-card-left, 76px)')
-    expect(hud.textContent).toContain('Select a placed plant')
+    expect(hud.textContent).toContain('Click a placed plant to repeat it along a row')
     session.dispose()
   })
 
@@ -2969,7 +2971,7 @@ describe('SceneInteractionSession', () => {
 
     const hud = container.querySelector<HTMLElement>('[data-plant-spacing-hud]')
     expect(hud?.dataset.state).toBe('source-picking')
-    expect(hud?.textContent).toContain('Select a visible, unlocked placed plant')
+    expect(hud?.textContent).toContain('Click a visible, unlocked placed plant')
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(deps.clearSelection).not.toHaveBeenCalled()
     expect(deps.setSelection).not.toHaveBeenCalled()
@@ -3643,7 +3645,7 @@ describe('SceneInteractionSession', () => {
       expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
       expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
       expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.dataset.state).toBe('source-picking')
-      expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('Select a visible, unlocked placed plant')
+      expect(container.querySelector<HTMLElement>('[data-plant-spacing-hud]')?.textContent).toContain('Click a visible, unlocked placed plant')
       session.dispose()
     }
 
@@ -10412,5 +10414,115 @@ describe('SceneInteractionSession', () => {
       expect(container.querySelector('textarea')?.getAttribute('aria-label')).toBe(t('canvas.tools.text'))
       session.dispose()
     })
+  })
+  describe('tool guidance for the tool card', () => {
+    function guidedSession(): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, latest: () => CanvasToolGuidance } {
+      const published: CanvasToolGuidance[] = []
+      const deps = createInteractionDeps(container, store, camera, {
+        publishToolGuidance: (guidance) => { published.push(guidance) },
+      })
+      return { session: createTestSession(deps), deps, latest: () => published.at(-1)! }
+    }
+
+    it('reports a polygon draft as a gesture until it is cancelled', () => {
+      const { session, latest } = guidedSession()
+      session.setTool('polygon')
+      expect(latest()).toEqual({ gesture: false, stamp: null })
+
+      events.pointerDown({ x: 10, y: 10 })
+      events.pointerUp({ x: 10, y: 10 })
+      expect(latest().gesture).toBe(true)
+
+      events.keyDown({ key: 'Escape', target: container })
+      expect(latest().gesture).toBe(false)
+      session.dispose()
+    })
+
+    it('reports a zone drag as a gesture while the pointer is down', () => {
+      const { session, latest } = guidedSession()
+      session.setTool('rectangle')
+
+      events.pointerDown({ x: 10, y: 10 })
+      events.pointerMove({ x: 60, y: 40 })
+      expect(latest().gesture).toBe(true)
+
+      events.pointerUp({ x: 60, y: 40 })
+      expect(latest().gesture).toBe(false)
+      session.dispose()
+    })
+
+    it('reports an open text note field as a gesture until it closes', () => {
+      const { session, latest } = guidedSession()
+      session.setTool('text')
+
+      events.pointerDown({ x: 24, y: 32 })
+      expect(latest().gesture).toBe(true)
+
+      container.querySelector('textarea')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      expect(latest().gesture).toBe(false)
+      session.dispose()
+    })
+
+    it('names a picked plant and counts a picked group for Place a stamp', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [
+          makePlant('apple', 'Malus domestica', { x: 20, y: 30 }),
+          makePlant('pear-1', 'Pyrus communis', { x: 200, y: 200 }),
+          makePlant('pear-2', 'Pyrus communis', { x: 210, y: 200 }),
+          makePlant('plum', 'Prunus domestica', { x: 220, y: 200 }),
+        ]
+        draft.groups = [{
+          kind: 'group',
+          id: 'guild',
+          locked: false,
+          name: 'Pear guild',
+          members: [
+            { kind: 'plant', id: 'pear-1' },
+            { kind: 'plant', id: 'pear-2' },
+            { kind: 'plant', id: 'plum' },
+          ],
+        }]
+      })
+      const { session, latest } = guidedSession()
+      session.setTool('object-stamp')
+      expect(latest().stamp).toBeNull()
+
+      events.pointerDown({ x: 20, y: 30 })
+      expect(latest().stamp).toEqual({ kind: 'plant', name: 'Malus domestica', plants: 1, species: 1 })
+
+      session.setTool('select')
+      session.setTool('object-stamp')
+      events.pointerDown({ x: 200, y: 200 })
+      expect(latest().stamp).toEqual({ kind: 'group', name: 'Pear guild', plants: 3, species: 2 })
+      session.dispose()
+    })
+
+    it('goes idle when the session ends', () => {
+      const { session, latest } = guidedSession()
+      session.setTool('polygon')
+      events.pointerDown({ x: 10, y: 10 })
+
+      session.dispose()
+
+      expect(latest()).toEqual({ gesture: false, stamp: null })
+    })
+  })
+
+  it('keeps a polygon edge on 45° angles while Shift is held', () => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
+    session.setTool('polygon')
+
+    events.pointerDown({ x: 10, y: 10 })
+    events.pointerDown({ x: 60, y: 14 }, { shiftKey: true })
+    events.pointerDown({ x: 60, y: 50 })
+    events.keyDown({ key: 'Enter' })
+
+    const [first, second, third] = store.persisted.zones[0]!.points
+    expect(first).toEqual({ x: 10, y: 10 })
+    expect(second!.y).toBeCloseTo(10)
+    expect(second!.x).toBeCloseTo(Math.hypot(50, 4) + 10)
+    expect(third).toEqual({ x: 60, y: 50 })
+    session.dispose()
   })
 })

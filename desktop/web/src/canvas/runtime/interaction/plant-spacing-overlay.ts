@@ -59,16 +59,18 @@ export function createPlantSpacingOverlay(
   const root = document.createElement('div')
   root.dataset.plantSpacingHud = 'true'
   // The tool card slot: top left beside the tool rail, below the title bar.
+  // Plant a row keeps this runtime card (it owns the spacing field) in the
+  // shared tool card's format: name, instruction, spacing, then key hints.
   root.style.cssText = [
     'position: absolute',
     'z-index: 25',
     'display: none',
     'width: min(320px, calc(100% - var(--canvas-tool-card-left, 76px) - 12px))',
     'box-sizing: border-box',
-    'padding: var(--space-3)',
+    'padding: var(--space-3) calc(var(--space-3) + var(--space-0-5))',
     'background: var(--color-glass)',
     'border: 1px solid var(--color-border)',
-    'border-radius: var(--radius-lg)',
+    'border-radius: var(--radius-panel)',
     'box-shadow: var(--shadow-float)',
     `font-family: ${CANVAS_CHROME_FONT_FAMILY}`,
     'color: var(--color-text)',
@@ -83,16 +85,29 @@ export function createPlantSpacingOverlay(
     event.stopPropagation()
   })
 
-  const status = document.createElement('div')
-  status.dataset.plantSpacingPrimary = 'true'
-  status.style.cssText = [
-    'font-size: var(--text-sm)',
+  // Title and instruction are a polite live region, so the phase is announced.
+  const statusRegion = document.createElement('div')
+  statusRegion.setAttribute('role', 'status')
+
+  const title = document.createElement('div')
+  title.style.cssText = [
+    'font-size: var(--text-base)',
     'font-weight: 600',
     'color: var(--color-text)',
-    'overflow: hidden',
-    'text-overflow: ellipsis',
-    'white-space: nowrap',
   ].join(';')
+
+  const line = document.createElement('div')
+  line.style.cssText = [
+    'margin-top: var(--space-1)',
+    'font-size: var(--text-sm)',
+    'color: var(--color-text)',
+    'overflow-wrap: anywhere',
+  ].join(';')
+
+  const status = document.createElement('span')
+  status.dataset.plantSpacingPrimary = 'true'
+
+  const instruction = document.createElement('span')
 
   const count = document.createElement('div')
   count.dataset.plantSpacingGeneratedCount = 'true'
@@ -216,7 +231,9 @@ export function createPlantSpacingOverlay(
     'pointer-events: none',
   ].join(';')
 
-  root.appendChild(status)
+  line.append(status, instruction)
+  statusRegion.append(title, line)
+  root.appendChild(statusRegion)
   intervalRow.appendChild(intervalLabel)
   intervalRow.appendChild(intervalInput)
   root.appendChild(intervalRow)
@@ -245,6 +262,7 @@ export function createPlantSpacingOverlay(
   } | null = null
 
   function refreshTranslations(): void {
+    title.textContent = translate('canvas.tools.plantSpacing')
     intervalLabel.textContent = translate('canvas.plantSpacing.interval')
     if (root.dataset.state === 'source-picking') {
       status.textContent = translate(
@@ -252,15 +270,20 @@ export function createPlantSpacingOverlay(
           ? 'canvas.plantSpacing.sourceMissed'
           : 'canvas.plantSpacing.selectSource',
       )
-      hint.textContent = translate('canvas.plantSpacing.escToExit')
+      status.style.fontWeight = '400'
+      instruction.textContent = ''
+      hint.textContent = translate('canvas.toolCard.escSelect')
     } else if (root.dataset.state === 'source-selected') {
-      hint.textContent = translate('canvas.plantSpacing.escToCancel')
+      status.style.fontWeight = '600'
+      instruction.textContent = ` · ${translate('canvas.plantSpacing.dragAlong')}`
+      hint.textContent = `${translate('canvas.toolCard.rowKeys')} · ${translate('canvas.toolCard.escCancel')}`
     }
     renderGeneratedCount()
   }
 
   function show(): void {
     root.style.display = 'block'
+    root.dataset.toolCard = 'plant-spacing'
   }
 
   function hideSourceHighlight(): void {
@@ -415,6 +438,7 @@ export function createPlantSpacingOverlay(
     refreshTranslations,
     hide() {
       root.style.display = 'none'
+      delete root.dataset.toolCard
       hideSourceHighlight()
       hidePreview()
     },

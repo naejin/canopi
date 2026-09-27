@@ -1,4 +1,4 @@
-import { setCanvasSelection } from '../session-state'
+import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { setCanvasMapBackdrop } from './scene-visuals'
 import { createUuid } from '../../utils/ids'
@@ -202,6 +202,7 @@ export class SceneCanvasRuntime {
         translate: this._appAdapter.translate,
         getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
         notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
+        publishToolGuidance: setCanvasToolGuidance,
         setHoveredTarget: (target) => {
           this._setHoveredTarget(target)
         },
