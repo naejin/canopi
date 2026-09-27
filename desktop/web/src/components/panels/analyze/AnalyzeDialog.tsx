@@ -25,6 +25,7 @@ import { locale } from '../../../app/settings/state'
 import { t } from '../../../i18n'
 import { Notice } from '../../shared/Notice'
 import { Switch } from '../../shared/Switch'
+import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
 import { paramErrorText, unavailableText } from './analysis-text'
 import styles from './analyze-dialog.module.css'
 
@@ -72,6 +73,7 @@ export function AnalyzeDialog({
 }) {
   const language = locale.value
   const titleId = useId()
+  const formId = `${titleId}-form`
   const root = useRef<HTMLFormElement>(null)
   const options = useMemo(
     () => analysisOptions(item, context, language, registry, groups),
@@ -147,20 +149,30 @@ export function AnalyzeDialog({
   const listOutputs = entry ? entry.outputs.length > 1 || entry.outputs.some((output) => output.optional) : false
 
   return (
+    <WorkspaceDialog
+      title={t('analyses.dialog.title', { name: item.name })}
+      onClose={onCancel}
+      footer={<>
+        <button type="button" className={styles.button} onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
+        {existing?.inDesign
+          ? <button type="submit" form={formId} className={`${styles.button} ${styles.primary}`}>{t('analyses.dialog.showInLayers')}</button>
+          : (
+            <button type="submit" form={formId} className={`${styles.button} ${styles.primary}`} disabled={busy || !entry || blocked}>
+              {existing ? t('analyses.dialog.runAgain') : t('analyses.dialog.run')}
+            </button>
+          )}
+      </>}
+    >
     <form
+      id={formId}
       ref={root}
       className={styles.dialog}
-      aria-labelledby={titleId}
       noValidate
       onSubmit={(event) => { event.preventDefault(); submit() }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return
-        event.preventDefault()
-        event.stopPropagation()
-        onCancel()
-      }}
     >
-      <h3 id={titleId}>{t('analyses.dialog.title', { name: item.name })}</h3>
+      <p className={styles.intro}>
+        {t(attach ? 'analyses.dialog.introLayers' : 'analyses.dialog.introLibrary', { name: item.name })}
+      </p>
       {options.map((group) => (
         <fieldset key={group.key} className={styles.entries}>
           <legend>{t(group.labelKey)}</legend>
@@ -234,22 +246,10 @@ export function AnalyzeDialog({
               {t('analyses.dialog.existingInLibrary')}
             </Notice>
           )}
-        {!existing?.inDesign && (
-          <p className={styles.muted}>{attach ? t('analyses.dialog.attachNote') : t('analyses.dialog.libraryNote')}</p>
-        )}
       </>}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <div className={styles.actions}>
-        <button type="button" onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
-        {existing?.inDesign
-          ? <button type="submit" className={styles.primary}>{t('analyses.dialog.showInLayers')}</button>
-          : (
-            <button type="submit" className={styles.primary} disabled={busy || !entry || blocked}>
-              {existing ? t('analyses.dialog.runAgain') : t('analyses.dialog.run')}
-            </button>
-          )}
-      </div>
     </form>
+    </WorkspaceDialog>
   )
 }
 

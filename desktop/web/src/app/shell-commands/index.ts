@@ -24,7 +24,6 @@ export type ShellCommandIdByCapability = {
   readonly navigateCanvas: 'nav.canvas'
   readonly navigateTemplates: 'nav.templates'
   readonly navigateLayers: 'nav.layers'
-  readonly navigateData: 'nav.data'
   readonly navigateSpeciesKey: 'nav.speciesKey'
   readonly navigatePlantDatabase: 'nav.plantDb'
   readonly navigateFavorites: 'nav.favorites'
@@ -187,7 +186,6 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'navigateCanvas', id: 'nav.canvas', family: 'navigation', labelKey: 'panelRail.canvas', palette: false, panel: panel('canvas', 'primary', 0) },
   { capabilityId: 'navigateTemplates', id: 'nav.templates', family: 'navigation', labelKey: 'worldMap.title', palette: false, panel: panel('templates', 'primary', 1) },
   { capabilityId: 'navigateLayers', id: 'nav.layers', family: 'navigation', labelKey: 'panelRail.layers', shortcut: 'Ctrl+1', palette: true, panel: panel('layers', 'design', 0) },
-  { capabilityId: 'navigateData', id: 'nav.data', family: 'navigation', labelKey: 'panelRail.data', palette: true, panel: panel('data', 'design', 1) },
   { capabilityId: 'navigateSpeciesKey', id: 'nav.speciesKey', family: 'navigation', labelKey: 'panelRail.plants', shortcut: 'Ctrl+2', palette: true, panel: panel('species-key', 'design', 2) },
   { capabilityId: 'navigatePlantDatabase', id: 'nav.plantDb', family: 'navigation', labelKey: 'panelRail.catalog', shortcut: 'Ctrl+3', palette: true, panel: panel('plant-db', 'design', 3) },
   { capabilityId: 'navigateFavorites', id: 'nav.favorites', family: 'navigation', labelKey: 'panelRail.favorites', shortcut: 'Ctrl+4', palette: true, panel: panel('favorites', 'design', 4) },

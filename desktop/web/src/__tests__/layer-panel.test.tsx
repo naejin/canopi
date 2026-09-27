@@ -330,6 +330,25 @@ describe('LayerPanel', () => {
     expect(layerCommands.setSceneLayerLocked).toHaveBeenCalledWith('plants', false)
   })
 
+  it('lists the Design, its site data and the background as sections', async () => {
+    await act(async () => {
+      render(<LayerPanel />, container)
+    })
+    const sections = Array.from(container.querySelectorAll('section h3')).map((heading) => heading.textContent)
+    expect(sections.slice(0, 3)).toEqual(['Design', 'Site data', 'Background'])
+    const site = container.querySelector('section[aria-labelledby="layers-site"]')!
+    // Contour lines and hillshading say which elevation they come from.
+    expect(site.textContent).toContain('Online elevation')
+    expect(site.textContent).toContain('Contour lines')
+    expect(site.textContent).toContain('from online elevation · spacing follows zoom')
+    expect(site.textContent).toContain('Hillshading')
+    expect(site.textContent).toContain('No site data yet')
+    expect(site.querySelector('button[aria-haspopup="menu"]')?.textContent).toContain('Add data')
+    const background = container.querySelector('section[aria-labelledby="layers-background"]')!
+    expect(background.textContent).toContain('Basemap')
+    expect(background.textContent).toContain('Satellite')
+  })
+
   it('exposes terrain controls without coupling them to the basemap toggle', async () => {
     await act(async () => {
       render(<LayerPanel />, container)
@@ -349,7 +368,7 @@ describe('LayerPanel', () => {
 
     // Click the contours name to make it active and reveal controls
     const contourName = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Contour lines')
+      .find((button) => button.textContent?.startsWith('Contour lines'))
     expect(contourName).toBeTruthy()
     await act(async () => {
       contourName?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -363,6 +382,7 @@ describe('LayerPanel', () => {
       contourSlider.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(mapLayers.value.contours.intervalMeters).toBe(25)
+    expect(container.textContent).toContain('from online elevation · every 25 m')
     vi.runAllTimers()
     await Promise.resolve()
     expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
@@ -381,7 +401,7 @@ describe('LayerPanel', () => {
 
     // Click hillshading name to make it active and reveal controls
     const hillshadeName = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Hillshading')
+      .find((button) => button.textContent?.startsWith('Hillshading'))
     expect(hillshadeName).toBeTruthy()
     await act(async () => {
       hillshadeName?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

@@ -25,6 +25,9 @@ function item(overrides: Partial<LidarPresentationItem> = {}): LidarPresentation
     freshness: { state: 'Current' },
     definitionId: null,
     run: null,
+    inputId: null,
+    parentId: null,
+    depth: 0,
     ...overrides,
   }
 }

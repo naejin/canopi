@@ -83,7 +83,7 @@ describe('Web Edition shell projection', () => {
     expect(disabled.get('file.exportGeoJson')).toBe(true)
     expect(projection.panelBar.primary.map((command) => command.id)).toEqual(['nav.canvas'])
     expect(projection.panelBar.design.map((command) => command.id)).toEqual([
-      'nav.layers', 'nav.data', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
+      'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
     ])
     expect(projection.panelBar.planning.map((command) => command.id)).toEqual([
       'nav.calendar', 'nav.budget', 'nav.consortium',

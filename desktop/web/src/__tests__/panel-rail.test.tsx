@@ -69,7 +69,7 @@ describe('Panel rail', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width'))
-    expect(strokes).toEqual(Array(9).fill('1.6'))
+    expect(strokes).toEqual(Array(8).fill('1.6'))
   })
 
   it('orders panels as the rail groups them, with Ctrl 1–8', async () => {
@@ -79,7 +79,6 @@ describe('Panel rail', () => {
 
     expect(panelButtonLabels()).toEqual([
       'Layers',
-      'Data library',
       'Plants in this Design',
       'Plant catalog',
       'Favorites and stamps',
@@ -91,7 +90,6 @@ describe('Panel rail', () => {
     expect(container.querySelectorAll('[role="separator"]')).toHaveLength(1)
     expect(panelButton('Layers').getAttribute('aria-keyshortcuts')).toBe('Control+1 Meta+1')
     expect(panelButton('Design notebook').querySelector('[role="tooltip"]')?.textContent).toContain('Ctrl 8')
-    expect(panelButton('Data library').hasAttribute('aria-keyshortcuts')).toBe(false)
   })
 
   it('does not render a Design Location or canvas entry point', async () => {
@@ -248,12 +246,11 @@ describe('Panel rail', () => {
       expect(container.querySelector('[data-panel-rail-more]')).toBeNull()
 
       await act(async () => {
-        panelRailRoom.value = 260
+        panelRailRoom.value = 220
         await Promise.resolve()
       })
       expect(panelButtonLabels()).toEqual([
         'Layers',
-        'Data library',
         'Plants in this Design',
         'Plant catalog',
         'Favorites and stamps',
@@ -289,7 +286,7 @@ describe('Panel rail', () => {
         await Promise.resolve()
       })
       expect(container.querySelector('[data-panel-rail-more]')).toBeNull()
-      expect(panelButtonLabels()).toHaveLength(9)
+      expect(panelButtonLabels()).toHaveLength(8)
     })
   })
 })

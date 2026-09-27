@@ -17,6 +17,13 @@ const MAP_LAYER_ROW_IDS: ReadonlySet<string> = new Set<MapLayerId>(['basemap', '
 
 export type CanvasLayerPresentationAuthority = 'scene' | 'map-layers'
 
+/**
+ * The Layers section a row belongs to: the Design's own objects, site data
+ * (the Design's LiDAR items and the online-elevation terrain rows), and the
+ * background the map draws under everything.
+ */
+export type CanvasLayerPresentationGroup = 'design' | 'site' | 'background'
+
 export type CanvasLayerPresentationDetail =
   | { readonly type: 'scene' }
   | {
@@ -40,6 +47,7 @@ export interface CanvasLayerPresentationRow {
   readonly id: string
   readonly label: string
   readonly authority: CanvasLayerPresentationAuthority
+  readonly group: CanvasLayerPresentationGroup
   readonly active: boolean
   readonly visible: boolean
   readonly opacity: number
@@ -73,6 +81,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
     id,
     label,
     authority: 'map-layers',
+    group: id === 'basemap' || id === 'satellite' ? 'background' : 'site',
     active: active === id,
     visible: state.visible,
     opacity: state.opacity,
@@ -88,6 +97,7 @@ export function readCanvasLayerPresentation(): CanvasLayerPresentation {
         id,
         label: t(`canvas.layers.${id}`),
         authority: 'scene' as const,
+        group: 'design' as const,
         count: (id === 'measurement-guides' ? scene?.measurementGuides : scene?.[id])?.length ?? 0,
         active: active === id,
         visible: sceneLayer?.visible ?? visibility[id] ?? true,

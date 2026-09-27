@@ -157,7 +157,6 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('button[aria-label="Open a .canopi file"]')).not.toBeNull()
     expect(panelBarCommandIds(container)).toEqual([
       'nav.layers',
-      'nav.data',
       'nav.speciesKey',
       'nav.plantDb',
       'nav.favorites',
@@ -265,7 +264,6 @@ describe('Web Edition Browser App Shell', () => {
       'nav.canvas',
       'nav.templates',
       'nav.layers',
-      'nav.data',
       'nav.speciesKey',
       'nav.plantDb',
       'nav.favorites',
@@ -277,7 +275,6 @@ describe('Web Edition Browser App Shell', () => {
       'Design canvas',
       'World map',
       'Layers',
-      'Data library',
       'Plants in this Design',
       'Plant catalog',
       'Favorites and stamps',

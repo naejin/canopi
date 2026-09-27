@@ -56,7 +56,6 @@ type DesktopShellCapabilityId =
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigateLayers'
-  | 'navigateData'
   | 'navigateSpeciesKey'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
@@ -180,7 +179,6 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
     execute: () => navigateTo('canvas'),
   },
   navigateLayers: designPanel('layers'),
-  navigateData: designPanel('data'),
   navigateSpeciesKey: designPanel('species-key'),
   navigatePlantDatabase: {
     // The catalog runs from the start screen; the rail offers it with a Design.

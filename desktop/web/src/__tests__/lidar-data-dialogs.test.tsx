@@ -21,6 +21,11 @@ const actions = vi.hoisted(() => ({
   retryLibraryImport: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('../app/shell/modal-layer', () => ({
+  holdModalLayer: () => () => {},
+  registerModalInertRegion: () => () => {},
+}))
+
 vi.mock('../app/lidar/actions', () => actions)
 
 vi.mock('../app/lidar/library-store', async () => {
@@ -43,10 +48,11 @@ vi.mock('../components/panels/lidar/LibraryPreview', () => ({
   LibraryPreview: () => <span data-preview="true" />,
 }))
 
-import { DataLibraryPanel } from '../components/panels/lidar/DataLibraryPanel'
+import { DataDialogs } from '../components/panels/lidar/DataDialogs'
 import { lidarLibrary } from '../app/lidar/library-store'
 import { currentDesign } from '../app/document-session/store'
-import { libraryAnalyzeRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
+import { analyzeItem, dataDialog, openDataLibrary } from '../app/lidar/library-navigation'
+import { activeLayerName } from '../app/canvas-settings/signals'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
 import { dropdownTrigger } from './support/dropdown-trigger'
@@ -100,11 +106,20 @@ async function chooseFrom(label: string, option: string): Promise<void> {
 
 function mount(): void {
   act(() => {
-    render(<DataLibraryPanel />, container)
+    openDataLibrary()
+    render(<DataDialogs />, container)
   })
 }
 
-describe('Data Library panel', () => {
+async function focusItem(id: string): Promise<void> {
+  await act(async () => { openDataLibrary(id) })
+}
+
+function title(): string | null | undefined {
+  return container.querySelector('h2')?.textContent
+}
+
+describe('Data library, Import and Analyze dialogs', () => {
   beforeEach(() => {
     locale.value = 'en'
     vi.clearAllMocks()
@@ -117,26 +132,33 @@ describe('Data Library panel', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    dataDialog.value = null
   })
 
   it('offers import from an empty library and creates nothing when the chooser is cancelled', async () => {
     actions.chooseImportFiles.mockResolvedValue(null)
     mount()
-    await click(button('Import data'))
+    expect(container.textContent).toContain('No data yet')
+    expect(container.textContent).toContain('IGN LiDAR HD')
+    await click(button(/^Import…$/))
 
     expect(actions.chooseImportFiles).toHaveBeenCalledTimes(1)
     expect(actions.importLibraryItem).not.toHaveBeenCalled()
-    expect(container.querySelector('form')).toBeNull()
+    expect(dataDialog.value?.kind).toBe('library')
   })
 
   it('requires a measurement, then imports the files in order into the library only', async () => {
     actions.chooseImportFiles.mockResolvedValue(['/d/tile_02.tif', '/d/tile_01.tif'])
     mount()
-    await click(button('Import data'))
+    await click(button(/^Import…$/))
 
-    const submit = button('Import files (2)')
+    expect(title()).toBe('Import terrain or height data')
+    expect(container.textContent).toContain('Single-band GeoTIFF rasters.')
+    const submit = button('Import 2 files')
     expect(submit.disabled).toBe(true)
     expect(container.textContent).toContain('the first file in the list wins')
+    await click(button('Move tile_01.tif up'))
+    expect(Array.from(container.querySelectorAll('ol li > span:first-child')).map((row) => row.textContent)).toEqual(['tile_01.tif', 'tile_02.tif'])
     expect(container.querySelector('select')).toBeNull()
     expect(dropdownTrigger(container, 'What the values measure')?.textContent).toContain('Choose a measurement')
     await chooseFrom('What the values measure', 'Ground elevation')
@@ -146,9 +168,28 @@ describe('Data Library panel', () => {
     })
 
     expect(actions.importLibraryItem).toHaveBeenCalledWith(
-      ['/d/tile_02.tif', '/d/tile_01.tif'], 'tile_0', 'GroundElevation', { label: null, unknown: false })
+      ['/d/tile_01.tif', '/d/tile_02.tif'], 'tile_0', 'GroundElevation', { label: null, unknown: false }, false)
     expect(actions.addToDesign).not.toHaveBeenCalled()
-    expect(container.querySelector('form')).toBeNull()
+    // Started from the library, Import returns to it.
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
+  })
+
+  it('refuses a name the library already uses and suggests a free one', async () => {
+    lidarLibrary.value = library([layer('a', 'Terrain')])
+    act(() => {
+      dataDialog.value = { kind: 'import', paths: ['/d/one.tif'], attach: true, returnTo: null }
+      render(<DataDialogs />, container)
+    })
+    const name = container.querySelector<HTMLInputElement>('input[required]')!
+    await act(async () => {
+      name.value = 'terrain'
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await chooseFrom('What the values measure', 'Ground elevation')
+    expect(container.textContent).toContain('already has data named “terrain”')
+    expect(container.textContent).toContain('“terrain (2)”')
+    expect(button('Import 1 file').disabled).toBe(true)
+    expect(container.textContent).toContain('added to this Design when it is ready')
   })
 
   it('adds a ready item to the Design and marks items the Design already uses', async () => {
@@ -158,8 +199,11 @@ describe('Data Library panel', () => {
 
     // The rows already show how many items there are; the header carries no bare count.
     expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
+    expect(container.querySelector('footer')?.textContent).toContain('2 items')
 
-    expect(button('Canopy is in this Design').disabled).toBe(true)
+    const canopy = button('Canopy').closest('li')!
+    expect(canopy.textContent).toContain('In this Design')
+    expect(canopy.querySelector('[aria-label="Add Canopy to this Design"]')).toBeNull()
     await click(button('Add Ground to this Design'))
     expect(actions.addToDesign).toHaveBeenCalledWith('Source', 'a')
   })
@@ -207,7 +251,7 @@ describe('Data Library panel', () => {
 
     expect(actions.fetchDeleteImpact).toHaveBeenCalledWith('a')
     expect(container.textContent).toContain('Saved results depend on this data (1)')
-    expect(() => button(/^Delete from library$/)).toThrow()
+    expect(() => button(/^Delete everywhere$/)).toThrow()
     await click(button('Show results'))
 
     const names = Array.from(container.querySelectorAll('li strong')).map((node) => node.textContent)
@@ -221,7 +265,7 @@ describe('Data Library panel', () => {
     mount()
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Delete from library"]')!)
-    await click(button(/^Delete from library$/))
+    await click(button(/^Delete everywhere$/))
     expect(actions.deleteLibraryItem).toHaveBeenCalledWith('s')
   })
 
@@ -230,9 +274,7 @@ describe('Data Library panel', () => {
       generation_id: null, state: 'Failed', name: 'Steepness', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' },
     })])
     mount()
-    await act(async () => {
-      libraryFocusRequest.value = 's'
-    })
+    await focusItem('s')
 
     expect(container.querySelector('h3')?.textContent).toBe('Steepness')
     expect(container.textContent).toContain('engine stopped')
@@ -262,7 +304,8 @@ describe('Data Library panel', () => {
     mount()
     await openAnalyze('Ground')
 
-    expect(container.querySelector('h3')?.textContent).toBe('Analyze Ground')
+    expect(title()).toBe('Analyze Ground')
+    expect(container.textContent).toContain('saved to your library')
     const name = container.querySelector<HTMLInputElement>('form input:not([type])')!
     expect(name.value).toBe('Ground · Slope')
     await submit()
@@ -278,7 +321,8 @@ describe('Data Library panel', () => {
       outputs: ['slope'],
       name: 'Ground · Slope',
     }, false)
-    expect(container.querySelector('form')).toBeNull()
+    await act(async () => {})
+    expect(dataDialog.value).toEqual({ kind: 'library', focusId: null })
   })
 
   it('explains by name why an analysis cannot run', async () => {
@@ -294,7 +338,7 @@ describe('Data Library panel', () => {
     expect(container.textContent).toContain('Needs Ground elevation.')
     expect(button(/^Run$/).disabled).toBe(true)
 
-    await click(button('Back'))
+    await click(button(/^Cancel$/))
     await openAnalyze('Ground')
     expect(container.textContent).toContain('Unavailable: the GeoLibre engine is missing. (not installed)')
     expect(button(/^Run$/).disabled).toBe(true)
@@ -304,8 +348,8 @@ describe('Data Library panel', () => {
   it('attaches a Layers-initiated analysis to the asking Design', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')])
     mount()
-    await act(async () => { libraryAnalyzeRequest.value = { itemId: 'a', analysisId: 'terrain.slope' } })
-    expect(container.textContent).toContain('added to this Design when it is ready')
+    await act(async () => { analyzeItem('a', { attach: true, analysisId: 'terrain.slope' }) })
+    expect(container.textContent).toContain('added under it in Layers')
     await choose('Degrees')
     await submit()
     expect(actions.runAnalysis).toHaveBeenCalledWith(expect.objectContaining({ analysis_id: 'terrain.slope' }), true)
@@ -320,6 +364,8 @@ describe('Data Library panel', () => {
     expect(container.textContent).toContain('Already in Layers.')
     await click(button('Show in Layers'))
     expect(sidePanel.value).toBe('layers')
+    expect(activeLayerName.value).toBe('site:s')
+    expect(dataDialog.value).toBeNull()
     expect(actions.runAnalysis).not.toHaveBeenCalled()
   })
 
@@ -340,7 +386,7 @@ describe('Data Library panel', () => {
     await click(button('Actions for Steepness'))
     await click(document.querySelector<HTMLButtonElement>('[role="menu"] [aria-label="Run again with changes…"]')!)
 
-    expect(container.querySelector('h3')?.textContent).toBe('Analyze Ground')
+    expect(title()).toBe('Analyze Ground')
     const degrees = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       .find((candidate) => candidate.closest('label')?.textContent === 'Degrees')!
     expect(degrees.checked).toBe(true)
@@ -367,15 +413,12 @@ describe('Data Library panel', () => {
   it('describes a result by its provenance', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('new', 'a', { name: 'New' })])
     mount()
-    await act(async () => { libraryFocusRequest.value = 'new' })
+    await focusItem('new')
     const facts = container.querySelector('dl')!.textContent
-    expect(facts).toContain('AnalysisSlope')
-    expect(facts).toContain('Version 1')
+    expect(facts).toContain('AnalysisSlope · Version 1')
     expect(facts).toContain('UnitDegrees')
     expect(facts).toContain('Calculated fromGround')
-    expect(facts).toContain('geolibre-cli 1.5.3')
-    expect(facts).toContain('aac2b7439786')
-    expect(facts).not.toContain('aac2b74397861')
+    expect(facts).toContain('geolibre-cli 1.5.3 (aac2b7439786)')
     await click(button(/^Ground$/))
     expect(container.querySelector('h3')?.textContent).toBe('Ground')
   })
@@ -394,12 +437,12 @@ describe('Data Library panel', () => {
     await click(button('Refresh Steepness'))
     expect(actions.rerunAnalysis).toHaveBeenCalledWith('s-def')
 
-    await act(async () => { libraryFocusRequest.value = 's' })
+    await focusItem('s')
     expect(container.textContent).toContain('Ground has changed since this was calculated.')
     expect(container.textContent).toContain('A different engine build is installed (geolibre-cli 1.5.3).')
   })
 
-  it('pages processing history when it is opened', async () => {
+  it('shows processing history with a result and pages it', async () => {
     const run = (job: string) => ({
       job_id: job, state: 'Complete' as const, message: null, recipe_version: 1, tool: null, inputs: [],
       created_at: '1790000000000', finished_at: null, outputs: [{ item_id: 's', generation_id: 'g', coverage_cells: '1200' }],
@@ -409,15 +452,10 @@ describe('Data Library panel', () => {
       .mockResolvedValueOnce({ definition_id: 's-def', runs: [{ ...run('j1'), state: 'Failed', message: 'engine stopped', outputs: [] }], next_cursor: null })
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a', { name: 'Steepness' })])
     mount()
-    await act(async () => { libraryFocusRequest.value = 's' })
-    expect(actions.fetchProcessingHistory).not.toHaveBeenCalled()
-
-    const history = Array.from(container.querySelectorAll('details')).find((node) => node.textContent?.includes('Processing history'))!
-    await act(async () => {
-      history.open = true
-      history.dispatchEvent(new Event('toggle'))
-    })
+    await focusItem('s')
+    await act(async () => {})
     expect(actions.fetchProcessingHistory).toHaveBeenCalledWith('s-def', null)
+    const history = container.querySelector('section[aria-label="Processing history"]')!
     expect(history.textContent).toContain('Completed')
     expect(history.textContent).toContain('1,200 cells published')
     await act(async () => {})
@@ -437,7 +475,7 @@ describe('Data Library panel', () => {
     })])
     mount()
     expect(container.textContent).toContain('Calculating')
-    await click(button(/^Cancel$/))
+    await click(button(/^Cancel calculation$/))
     expect(actions.cancelAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ id: 's', run: expect.objectContaining({ job_id: 'job-1' }) }))
   })
 

@@ -661,7 +661,7 @@ describe('command registry canvas tool switching', () => {
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers', 'view.toggleToolNames',
-      'nav.layers', 'nav.data', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
+      'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook',
       'view.backgroundSatellite', 'view.backgroundMap', 'view.backgroundNone', 'view.toggleTheme',
     ])

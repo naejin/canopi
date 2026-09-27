@@ -71,85 +71,140 @@ export interface LayerPanelActions {
 }
 
 /**
- * `referenceItems` (the Design's LiDAR items) render inside Site references,
- * between Satellite and Contours, matching the map's band order.
+ * The Layers panel of both editions, front to back in three sections: the
+ * Design's own objects, its site data, and the background. `siteData` is the
+ * edition's part of Site data (Desktop: the Design's terrain and height items
+ * with their results; Web: why they are not shown) and `siteAction` its Add
+ * data entry. The online-elevation terrain rows follow, nested under the
+ * source they come from. The footer shows the active row's settings, or
+ * `siteFooter` when the active row is a site data item.
  */
-export function LayerPanel({ rows, actions, referenceItems }: {
+export function LayerPanel({ rows, actions, siteData, siteAction, siteFooter }: {
   readonly rows: readonly CanvasLayerPresentationRow[]
   readonly actions: LayerPanelActions
-  readonly referenceItems?: ComponentChildren
+  readonly siteData?: ComponentChildren
+  readonly siteAction?: ComponentChildren
+  readonly siteFooter?: ComponentChildren
 }) {
-
   const active = rows.find(row => row.active)
-  const firstReference = rows.find(row => row.detail.type !== 'scene')?.id
-  return (
-    <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
-      <DockPanelHeader title={t('canvas.layers.layerPanel')} />
-      <div className={styles.groupHeading}><h3>{t('canvas.layers.sceneStack')}</h3><span>{t('canvas.layers.topToBottom')}</span></div>
-      <div role="list">
-        {rows.map((row) => {
-          const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
-          return (
-            <div key={row.id}>
-              {row.id === firstReference && <div className={styles.groupHeading}><h3>{t('canvas.layers.references')}</h3></div>}
-              <div
-                role="listitem"
-                className={styles.layerRow}
-                data-active={row.active ? 'true' : 'false'}
-                data-hidden={row.visible ? 'false' : 'true'}
-                data-locked={row.locked ? 'true' : 'false'}
-              >
-                <button
-                  type="button"
-                  className={styles.toggleBtn}
-                  aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
-                  aria-pressed={row.visible}
-                  onClick={() => {
-                    actions.visibility(row.id, !row.visible)
-                  }}
-                >
-                  <LayerVisibilityIcon open={row.visible} />
-                  <ButtonTooltip label={`${t('canvas.layers.visibility')}: ${row.label}`} side="left" />
-                </button>
-                <button
-                  type="button"
-                  className={styles.layerName}
-                  aria-current={row.active ? 'true' : undefined}
-                  title={row.label}
-                  onClick={() => actions.active(row.id)}
-                >
-                  <LayerIcon id={row.id} /><span>{row.label}</span>
-                  {row.count !== undefined && <span className={styles.count}>{formatCount(row.count, locale.value)}</span>}
-                </button>
-                {row.canLock ? (
-                  <button
-                    type="button"
-                    className={styles.lockBtn}
-                    aria-label={`${lockLabel}: ${row.label}`}
-                    aria-pressed={row.locked}
-                    onClick={() => {
-                      actions.locked(row.id, !row.locked)
-                    }}
-                  >
-                    <LockIcon locked={row.locked} />
-                    <ButtonTooltip label={lockLabel} side="left" />
-                  </button>
-                ) : (
-                  <span className={styles.lockSlot} aria-hidden="true" />
-                )}
-              </div>
-              {row.id === 'satellite' && referenceItems}
-            </div>
-          )
-        })}
-      </div>
-      {firstReference && <p className={styles.referenceHint}>{t('canvas.layers.referenceOrder')}</p>}
-      {active && <section className={styles.inspector} aria-label={active.label}>
+  const inGroup = (group: CanvasLayerPresentationRow['group']) => rows.filter((row) => row.group === group)
+  const terrain = inGroup('site')
+  const background = inGroup('background')
+  const footer = active
+    ? (
+      <section className={styles.inspector} aria-label={active.label}>
         <div className={styles.inspectorHeading}><LayerIcon id={active.id} /><h3>{active.label}</h3>
           <span>{t(active.visible ? 'canvas.layers.visible' : 'canvas.layers.hidden')}{active.canLock && ` · ${t(active.locked ? 'canvas.layers.locked' : 'canvas.layers.unlocked')}`}</span></div>
         <LayerDetail row={active} actions={actions} />
-      </section>}
+      </section>
+    )
+    : siteFooter
+  return (
+    <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
+      <DockPanelHeader title={t('canvas.layers.layerPanel')} />
+      <div className={styles.scroll}>
+        <section className={styles.section} aria-labelledby="layers-design">
+          <div className={styles.groupHeading}><h3 id="layers-design">{t('canvas.layers.design')}</h3></div>
+          <div role="list">{inGroup('design').map((row) => <LayerRow key={row.id} row={row} actions={actions} />)}</div>
+        </section>
+        {(siteData || terrain.length > 0) && (
+          <section className={styles.section} aria-labelledby="layers-site">
+            <div className={styles.groupHeading}><h3 id="layers-site">{t('canvas.layers.siteData')}</h3>{siteAction}</div>
+            {siteData}
+            {terrain.length > 0 && <>
+              <div className={styles.sourceHeading}>
+                <strong>{t('canvas.terrain.onlineElevation')}</strong>
+                <span>{t('canvas.terrain.onlineElevationNote')}</span>
+              </div>
+              <div role="list">
+                {terrain.map((row) => <LayerRow key={row.id} row={row} actions={actions} nested caption={terrainCaption(row)} />)}
+              </div>
+            </>}
+          </section>
+        )}
+        {background.length > 0 && (
+          <section className={styles.section} aria-labelledby="layers-background">
+            <div className={styles.groupHeading}><h3 id="layers-background">{t('canvas.layers.background')}</h3></div>
+            <div role="list">{background.map((row) => <LayerRow key={row.id} row={row} actions={actions} />)}</div>
+          </section>
+        )}
+      </div>
+      {footer && <div className={styles.footer}>{footer}</div>}
     </aside>
+  )
+}
+
+/** Contour lines and hillshading say which elevation they are drawn from. */
+function terrainCaption(row: CanvasLayerPresentationRow): string {
+  if (row.detail.type === 'contours') {
+    return row.detail.contourIntervalMeters > 0
+      ? t('canvas.terrain.contoursEvery', {
+        interval: new Intl.NumberFormat(locale.value).format(row.detail.contourIntervalMeters),
+      })
+      : t('canvas.terrain.contoursByZoom')
+  }
+  return t('canvas.terrain.fromOnlineElevation')
+}
+
+function LayerRow({ row, actions, nested = false, caption }: {
+  readonly row: CanvasLayerPresentationRow
+  readonly actions: LayerPanelActions
+  readonly nested?: boolean
+  readonly caption?: string
+}) {
+  const lockLabel = row.locked ? t('canvas.layers.unlockLayer') : t('canvas.layers.lockLayer')
+  return (
+    <div
+      role="listitem"
+      className={styles.layerRow}
+      data-active={row.active ? 'true' : 'false'}
+      data-hidden={row.visible ? 'false' : 'true'}
+      data-locked={row.locked ? 'true' : 'false'}
+      data-nested={nested ? 'true' : undefined}
+    >
+      <button
+        type="button"
+        className={styles.toggleBtn}
+        aria-label={`${t('canvas.layers.visibility')}: ${row.label}`}
+        aria-pressed={row.visible}
+        onClick={() => {
+          actions.visibility(row.id, !row.visible)
+        }}
+      >
+        <LayerVisibilityIcon open={row.visible} />
+        <ButtonTooltip label={`${t('canvas.layers.visibility')}: ${row.label}`} side="left" />
+      </button>
+      <button
+        type="button"
+        className={styles.layerName}
+        aria-current={row.active ? 'true' : undefined}
+        title={row.label}
+        onClick={() => actions.active(row.id)}
+      >
+        <LayerIcon id={row.id} />
+        <span className={styles.nameText}>
+          <span>{row.label}</span>
+          {caption && <small className={styles.caption}>{caption}</small>}
+        </span>
+        {row.count !== undefined && <span className={styles.count}>{formatCount(row.count, locale.value)}</span>}
+      </button>
+      {row.canLock ? (
+        <button
+          type="button"
+          className={styles.lockBtn}
+          aria-label={`${lockLabel}: ${row.label}`}
+          aria-pressed={row.locked}
+          onClick={() => {
+            actions.locked(row.id, !row.locked)
+          }}
+        >
+          <LockIcon locked={row.locked} />
+          <ButtonTooltip label={lockLabel} side="left" />
+        </button>
+      ) : (
+        <span className={styles.lockSlot} aria-hidden="true" />
+      )}
+    </div>
   )
 }
 

@@ -11,6 +11,10 @@ export const GALLERY_SURFACES = {
   symbols: 'Symbol sheet',
   key: 'Species key',
   layers: 'Layers',
+  'site-details': 'Site data details',
+  library: 'Data library',
+  import: 'Import data',
+  analyze: 'Analyze',
   calendar: 'Calendar',
   'calendar-expanded': 'Calendar expanded',
   budget: 'Budget',
@@ -35,7 +39,11 @@ export function selectGalleryPanel(surface: GallerySurface): void {
 function panelForGallerySurface(surface: GallerySurface): Panel {
   switch (surface) {
     case 'key': return 'species-key'
-    case 'layers': return 'layers'
+    case 'layers':
+    case 'site-details':
+    case 'library':
+    case 'import':
+    case 'analyze': return 'layers'
     case 'favorites': return 'favorites'
     case 'notebook': return 'design-notebook'
     case 'calendar':

@@ -79,7 +79,7 @@ const viewport = signal<CameraViewportSnapshot>({
 
 function row(id: string, overrides: Partial<CanvasLayerPresentationRow>): CanvasLayerPresentationRow {
   return {
-    id, label: id, authority: 'scene', active: false, visible: true, opacity: 1, locked: false,
+    id, label: id, authority: 'scene', group: 'design', active: false, visible: true, opacity: 1, locked: false,
     canLock: true, detail: { type: 'scene' }, ...overrides,
   }
 }

@@ -17,6 +17,7 @@ const refreshMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const ensurePollingMock = vi.hoisted(() => vi.fn())
 const reconcileInspectionMock = vi.hoisted(() => vi.fn())
 const sessionIdentity = vi.hoisted(() => ({ value: 'design-a' as string | null }))
+const presentation = vi.hoisted(() => ({ value: [] as Array<{ id: string; order: number; parentId: string | null }> }))
 
 vi.mock('../ipc/lidar', () => ({
   lidarCancelAnalysisJob: cancelAnalysisMock,
@@ -34,7 +35,7 @@ vi.mock('../ipc/lidar', () => ({
 }))
 
 vi.mock('../app/design-edit/lidar', () => ({
-  moveLidarEntry: moveMock,
+  setLidarEntryOrders: moveMock,
   patchLidarEntryById: patchMock,
   removeLidarEntries: removeMock,
   upsertLidarEntry: upsertMock,
@@ -46,6 +47,7 @@ vi.mock('../app/lidar/library-store', async () => {
     ensureLidarPolling: ensurePollingMock,
     lidarStatusMessage: makeSignal<string | null>(null),
     presentationEntryKind: (role: string) => (role === 'Derived' ? 'Analysis' : 'Source'),
+    readCurrentLidarPresentation: () => presentation.value,
     refreshLidarLibrary: refreshMock,
   }
 })
@@ -77,10 +79,13 @@ import {
   retryLibraryImport,
   runAnalysis,
   setLidarEntryVisibility,
+  attachmentFailure,
+  dismissAttachmentFailure,
+  pendingAttachments,
   settleResultAttachments,
 } from '../app/lidar/actions'
 import { lidarStatusMessage } from '../app/lidar/library-store'
-import { librarySnapshot, slopeItem } from './support/library-fixtures'
+import { librarySnapshot, slopeItem, sourceItem } from './support/library-fixtures'
 
 interface Deferred<T> {
   readonly promise: Promise<T>
@@ -105,8 +110,43 @@ describe('Data Library actions', () => {
 
   it('creates nothing when the file chooser is cancelled', async () => {
     vi.mocked(open).mockResolvedValue(null)
-    await expect(chooseImportFiles('Choose')).resolves.toBeNull()
+    await expect(chooseImportFiles('Choose', 'GeoTIFF')).resolves.toBeNull()
     expect(importItemMock).not.toHaveBeenCalled()
+  })
+
+  it('offers GeoTIFF files in the chooser', async () => {
+    vi.mocked(open).mockResolvedValue(['/a.tif'])
+    await expect(chooseImportFiles('Choose', 'GeoTIFF rasters')).resolves.toEqual(['/a.tif'])
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({
+      multiple: true,
+      filters: [{ name: 'GeoTIFF rasters', extensions: ['tif', 'tiff'] }],
+    }))
+  })
+
+  it('adds an import started from Layers to the asking Design once it is published', async () => {
+    importItemMock.mockResolvedValue({ layer_id: 'layer-9', job_id: 'job-9' })
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    const importing = librarySnapshot([sourceItem('layer-9', 'Ground', {
+      state: 'Preparing', generation_id: null,
+      import_job: { job_id: 'job-9', layer_id: 'layer-9', state: 'Staging', message: null, progress: null },
+    })])
+    settleResultAttachments(importing)
+    expect(upsertMock).not.toHaveBeenCalled()
+
+    settleResultAttachments(librarySnapshot([sourceItem('layer-9', 'Ground')]))
+    expect(upsertMock).toHaveBeenCalledWith('Source', 'layer-9')
+  })
+
+  it('reports an import from Layers that failed and never adds it', async () => {
+    dismissAttachmentFailure()
+    importItemMock.mockResolvedValue({ layer_id: 'layer-8', job_id: 'job-8' })
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    settleResultAttachments(librarySnapshot([sourceItem('layer-8', 'Ground', {
+      state: 'Failed', generation_id: null,
+      import_job: { job_id: 'job-8', layer_id: 'layer-8', state: 'Failed', message: 'not a raster', progress: null },
+    })]))
+    expect(attachmentFailure.value).toEqual({ itemId: 'layer-8', message: 'not a raster' })
+    expect(upsertMock).not.toHaveBeenCalled()
   })
 
   it('imports into the library only, in the listed priority order', async () => {
@@ -197,10 +237,20 @@ describe('Design data references', () => {
     expect(reconcileInspectionMock).toHaveBeenCalled()
   })
 
-  it('maps front and back onto the saved back-to-front order', () => {
-    moveReference('layer-1', 'front')
-    moveReference('layer-1', 'back')
-    expect(moveMock.mock.calls).toEqual([['layer-1', 'down'], ['layer-1', 'up']])
+  it('moves a reference among its siblings and saves every order in one edit', () => {
+    presentation.value = [
+      { id: 'ground', order: 0, parentId: null },
+      { id: 'slope', order: 1, parentId: 'ground' },
+      { id: 'canopy', order: 2, parentId: null },
+    ]
+    moveReference('ground', 'front')
+    expect(moveMock).toHaveBeenCalledTimes(1)
+    expect([...moveMock.mock.calls[0]![0] as Map<string, number>]).toEqual([['canopy', 0], ['ground', 1], ['slope', 2]])
+
+    moveMock.mockClear()
+    moveReference('canopy', 'front')
+    moveReference('slope', 'back')
+    expect(moveMock).not.toHaveBeenCalled()
   })
 })
 
@@ -286,6 +336,20 @@ describe('analysis runs', () => {
     settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Failed', run: { job_id: 'j', state: 'Cancelled', message: null } }))
     settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Ready', generation_id: 'agen-9' }))
     expect(upsertMock).not.toHaveBeenCalled()
+  })
+
+  it('lists work waiting to join the Design and reports a failure, never a cancel', async () => {
+    dismissAttachmentFailure()
+    const { item_ids: [failed] } = await runAnalysis(SLOPE_REQUEST, true)
+    expect(pendingAttachments.value.map((entry) => entry.itemIds)).toContainEqual([failed])
+    settleResultAttachments(snapshotWith({ id: failed!, state: 'Failed', run: { job_id: 'j', state: 'Failed', message: 'engine stopped' } }))
+    expect(pendingAttachments.value).toEqual([])
+    expect(attachmentFailure.value).toEqual({ itemId: failed, message: 'engine stopped' })
+
+    dismissAttachmentFailure()
+    const { item_ids: [cancelled] } = await runAnalysis(SLOPE_REQUEST, true)
+    settleResultAttachments(snapshotWith({ id: cancelled!, state: 'Failed', run: { job_id: 'j', state: 'Cancelled', message: null } }))
+    expect(attachmentFailure.value).toBeNull()
   })
 
   it('refreshes or retries a definition in place, without editing the Design', async () => {

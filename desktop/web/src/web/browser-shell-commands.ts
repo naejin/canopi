@@ -35,7 +35,6 @@ type BrowserShellCapabilityId =
   | 'navigateCanvas'
   | 'navigateTemplates'
   | 'navigateLayers'
-  | 'navigateData'
   | 'navigateSpeciesKey'
   | 'navigatePlantDatabase'
   | 'navigateFavorites'
@@ -161,7 +160,6 @@ export function createBrowserShellCatalog(
       ? { navigateTemplates: { execute: () => capabilities.navigate('templates') } }
       : {}),
     navigateLayers: designPanel('layers'),
-    navigateData: designPanel('data'),
     navigateSpeciesKey: designPanel('species-key'),
     navigatePlantDatabase: { execute: () => capabilities.navigate('plant-db') },
     navigateFavorites: { execute: () => capabilities.navigate('favorites') },

@@ -8,8 +8,7 @@ import { DesktopSpeciesKeyPanel } from '../src/components/panels/DesktopSpeciesK
 import { LayersPanel } from '../src/components/panels/LayersPanel'
 import { DesignNotebookPanel } from '../src/components/panels/DesignNotebookPanel'
 import { PlantDbPanel } from '../src/components/panels/PlantDbPanel'
-import { WebLocalRasterPanel } from '../src/web/WebLocalRasterPanel'
-import { DataLibraryPanel } from '../src/components/panels/lidar/DataLibraryPanel'
+import { DataDialogs } from '../src/components/panels/lidar/DataDialogs'
 import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
@@ -27,11 +26,12 @@ import { plantColorMenuOpen } from '../src/canvas/plant-color-menu-state'
 import { plantSymbolMenuOpen } from '../src/canvas/plant-symbol-menu-state'
 import { plantDbStatus } from '../src/app/health/state'
 import { theme, locale } from '../src/app/settings/state'
-import { t } from '../src/i18n'
 import { designFixture } from './fixtures'
 import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
+import { pendingAttachments } from '../src/app/lidar/actions'
+import { closeSiteDataDetails, dataDialog, openSiteDataDetails, selectSiteRow } from '../src/app/lidar/library-navigation'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { PlantSymbolSheet } from './PlantSymbolSheet'
 import { GalleryViewSnapshots } from './GalleryViewSnapshots'
@@ -78,6 +78,14 @@ if (initial !== 'start') designSessionStore.replaceCurrentDesignState(file, null
 lidarMapViewBounds.value = fixtureState === 'located'
   ? [0.02, 48.21, 0.05, 48.23]
   : null
+// Layers-initiated work joining this Design, as its progress rows show it.
+if (fixtureState === 'lidar-progress') {
+  const identity = designSessionStore.sessionIdentity.value
+  pendingAttachments.value = [
+    { key: 'import:lidar-canopy', kind: 'import', identity, itemIds: ['lidar-canopy'] },
+    { key: 'lidar-slope-running-def', kind: 'analysis', identity, itemIds: ['lidar-slope-running'] },
+  ]
+}
 const planningView = readPlanningViewState()
 planningView.calendarMonth.value = '2026-09-01'
 planningView.calendarExpanded.value = initial === 'calendar-expanded'
@@ -95,7 +103,6 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   ? {
       primary: { canvas: GalleryCanvasWorkspace },
       side: {
-        data: () => <WebLocalRasterPanel title={t('canvas.lidar.library.title')} />,
         'species-key': WebSpeciesKeyPanel,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
@@ -108,7 +115,6 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   : {
       primary: { canvas: GalleryCanvasWorkspace },
       side: {
-        data: DataLibraryPanel,
         'species-key': DesktopSpeciesKeyPanel,
         layers: GalleryLayersSurface,
         calendar: CalendarPanel,
@@ -145,6 +151,7 @@ function Gallery() {
       ) : (
         <>
           <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} />
+          <DataDialogs />
           <GalleryDesktopFrame />
           {selectedSurface.value === 'snapshots'
             ? <GalleryViewSnapshots ready={galleryCanvasReady.value} tiles={params.get('tiles') === '1'} />
@@ -182,6 +189,7 @@ function selectGallerySurface(next: GallerySurface): void {
   planningView.calendarExpanded.value = next === 'calendar-expanded'
   plantColorMenuOpen.value = next === 'color'
   plantSymbolMenuOpen.value = next === 'symbol'
+  showGalleryDataSurface(next)
   const url = new URL(location.href)
   url.searchParams.set('surface', next)
   history.replaceState(null, '', url)
@@ -256,6 +264,20 @@ function GalleryWorkspaceCommands({ panelProjection }: { readonly panelProjectio
       ) : null)}
     </nav>
   )
+}
+
+/** The data workflow surfaces: Layers with an active site row, its details, and the three dialogs. */
+function showGalleryDataSurface(next: GallerySurface): void {
+  dataDialog.value = next === 'library'
+    ? { kind: 'library', focusId: null }
+    : next === 'import'
+      ? { kind: 'import', paths: ['/data/LHD_FXX_0470_6800_MNT_O_0M50_LAMB93_IGN69.tif', '/data/LHD_FXX_0470_6801_MNT_O_0M50_LAMB93_IGN69.tif'], attach: true, returnTo: null }
+      : next === 'analyze'
+        ? { kind: 'analyze', itemId: 'lidar-ground', analysisId: null, attach: true, from: null, returnTo: null }
+        : null
+  if (next === 'site-details') openSiteDataDetails('lidar-slope-percent')
+  else closeSiteDataDetails()
+  if (next === 'layers' && edition === 'desktop' && fixtureState !== 'empty') selectSiteRow('lidar-ground')
 }
 
 function GalleryLayersSurface() {

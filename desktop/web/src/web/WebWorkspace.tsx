@@ -2,8 +2,6 @@ import { useMemo } from 'preact/hooks'
 import type { BrowserDesignSessionController } from './browser-design-session'
 import { WebCanvasWorkspace } from './WebCanvasWorkspace'
 import { WebLayersPanel } from './WebLayersPanel'
-import { WebLocalRasterPanel } from './WebLocalRasterPanel'
-import { t } from '../i18n'
 import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from './WebSpeciesCatalogPanel'
 import { BudgetPanel } from '../components/panels/BudgetPanel'
 import { CalendarPanel } from '../components/panels/CalendarPanel'
@@ -31,9 +29,6 @@ export function WebWorkspace({
 }) {
   const surfaces = useMemo<WorkspaceSurfaces>(() => {
     const Canvas = () => <WebCanvasWorkspace controller={controller} />
-    // Web preserves raster references but renders and processes no local
-    // assets, so the Data Library surface states that instead of offering dead controls.
-    const WebData = () => <WebLocalRasterPanel title={t('canvas.lidar.library.title')} />
     return {
       primary: {
         canvas: Canvas,
@@ -41,7 +36,6 @@ export function WebWorkspace({
       },
       side: {
         'species-key': WebSpeciesKeyPanel,
-        data: WebData,
         layers: WebLayersPanel,
         calendar: CalendarPanel,
         budget: BudgetPanel,

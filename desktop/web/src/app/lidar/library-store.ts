@@ -12,6 +12,7 @@ import type {
 import { lidarListLibrary } from '../../ipc/lidar'
 import { derivedItemName } from '../analyses/registry'
 import { currentDesign } from '../document-session/store'
+import { referenceDrawOrder } from './reference-tree'
 
 const LIDAR_POLL_INTERVAL_MS = 1500
 
@@ -140,6 +141,12 @@ export interface LidarPresentationItem {
   definitionId: string | null
   /** The latest run of a derived item, for Refresh progress. */
   run: AnalysisRunStatus | null
+  /** The item a derived result was calculated from (its first input). */
+  inputId: string | null
+  /** `inputId` when that item is in this Design too: the row nests under it. */
+  parentId: string | null
+  /** Nesting depth in Layers: 0 for a top-level row. */
+  depth: number
 }
 
 /** The library role a Design entry names. */
@@ -168,9 +175,10 @@ export function libraryItemName(item: LibraryItemSummary, library: LibrarySnapsh
 }
 
 /**
- * Join library identity/status with document presentation entries, ordered
- * back to front. Unavailable references persist and are flagged instead of
- * dropped, per the plan.
+ * Join library identity/status with document presentation entries, in drawing
+ * order (back to front): results draw over the item they come from
+ * (`reference-tree.ts`). Unavailable references persist and are flagged
+ * instead of dropped.
  */
 export function readLidarPresentation(
   design: {
@@ -179,7 +187,7 @@ export function readLidarPresentation(
   library: LibrarySnapshot | null,
 ): LidarPresentationItem[] {
   const entries = design?.lidar?.entries ?? []
-  const items: LidarPresentationItem[] = []
+  const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
     const role = itemRole(entry.kind)
     const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === role)
@@ -197,6 +205,7 @@ export function readLidarPresentation(
           freshness: item.freshness,
           definitionId: item.provenance?.definition_id ?? null,
           run: item.run,
+          inputId: item.provenance?.inputs[0]?.item_id ?? null,
         }
       : {
           ...presentation,
@@ -210,9 +219,14 @@ export function readLidarPresentation(
           freshness: { state: 'Current' },
           definitionId: null,
           run: null,
+          inputId: null,
         })
   }
-  return items.sort((a, b) => a.order - b.order)
+  const present = new Set(items.map((item) => item.id))
+  return referenceDrawOrder(items.map((item) => ({
+    ...item,
+    parentId: item.inputId !== null && present.has(item.inputId) ? item.inputId : null,
+  })))
 }
 
 interface LidarPresentationDocEntry {

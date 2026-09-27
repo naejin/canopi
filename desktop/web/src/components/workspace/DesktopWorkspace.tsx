@@ -1,4 +1,5 @@
-import { lazy } from 'preact/compat'
+import { lazy, Suspense } from 'preact/compat'
+import { dataDialog } from '../../app/lidar/library-navigation'
 import { appCommandGraphPanelProjection } from '../../commands/registry'
 import { CanvasPanel } from '../panels/CanvasPanel'
 import {
@@ -31,9 +32,9 @@ const LayersPanel = lazy(async () => {
   return { default: module.LayersPanel }
 })
 
-const DataLibraryPanel = lazy(async () => {
-  const module = await import('../panels/lidar/DataLibraryPanel')
-  return { default: module.DataLibraryPanel }
+const DataDialogs = lazy(async () => {
+  const module = await import('../panels/lidar/DataDialogs')
+  return { default: module.DataDialogs }
 })
 
 const BudgetPanel = lazy(async () => {
@@ -59,10 +60,6 @@ function LayersSurface() {
   return <LayersPanel />
 }
 
-function DataSurface() {
-  return <DataLibraryPanel />
-}
-
 const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
   primary: {
     canvas: CanvasPanel,
@@ -72,7 +69,6 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
     favorites: FavoritesPanel,
     'design-notebook': DesignNotebookSurface,
     'species-key': SpeciesKeyPanel,
-    data: DataSurface,
     layers: LayersSurface,
     calendar: CalendarPanel,
     budget: BudgetPanel,
@@ -82,9 +78,17 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
 
 export function DesktopWorkspace() {
   return (
-    <WorkspaceComposition
-      panelProjection={appCommandGraphPanelProjection.value}
-      surfaces={DESKTOP_WORKSPACE_SURFACES}
-    />
+    <>
+      <WorkspaceComposition
+        panelProjection={appCommandGraphPanelProjection.value}
+        surfaces={DESKTOP_WORKSPACE_SURFACES}
+      />
+      {/* The data workflow's dialogs sit outside the composition, which turns inert under them. */}
+      {dataDialog.value && (
+        <Suspense fallback={null}>
+          <DataDialogs />
+        </Suspense>
+      )}
+    </>
   )
 }

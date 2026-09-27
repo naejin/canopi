@@ -146,3 +146,16 @@ export function suggestedItemName(paths: readonly string[]): string {
   const trimmed = prefix.replace(/[\s_\-.]+$/, '')
   return trimmed.length >= 3 ? trimmed : names[0]!
 }
+
+/**
+ * A name no library item uses yet, from `name`: "Terrain (2)", "Terrain (3)"…
+ * `taken` holds used names trimmed and lower-cased. Import refuses a used
+ * name so two items are never told apart by name alone.
+ */
+export function uniqueItemName(name: string, taken: ReadonlySet<string>): string {
+  const base = name.trim().replace(/\s*\(\d+\)$/, '')
+  for (let number = 2; ; number += 1) {
+    const candidate = `${base} (${number})`
+    if (!taken.has(candidate.toLocaleLowerCase())) return candidate
+  }
+}

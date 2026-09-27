@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   AnalysisReceipt,
@@ -26,8 +27,8 @@ import {
   type LidarLayerCollection,
 } from '../../ipc/lidar'
 import {
-  moveLidarEntry,
   patchLidarEntryById,
+  setLidarEntryOrders,
   removeLidarEntries,
   upsertLidarEntry,
 } from '../design-edit/lidar'
@@ -35,8 +36,10 @@ import {
   ensureLidarPolling,
   lidarStatusMessage,
   presentationEntryKind,
+  readCurrentLidarPresentation,
   refreshLidarLibrary,
 } from './library-store'
+import { movedReferenceOrders } from './reference-tree'
 import { designSessionStore } from '../document-session/store'
 import { isPresentableOutput } from '../analyses/registry'
 import { reconcileInspectionWithPresentation } from './inspection'
@@ -57,8 +60,8 @@ import { reconcileInspectionWithPresentation } from './inspection'
  * Cancelling the chooser creates no item, no job and no asset, which is why
  * the chooser comes first and the interpretation is confirmed afterwards.
  */
-export async function chooseImportFiles(title: string): Promise<string[] | null> {
-  const selection = await open({ multiple: true, title })
+export async function chooseImportFiles(title: string, filterName: string): Promise<string[] | null> {
+  const selection = await open({ multiple: true, title, filters: [{ name: filterName, extensions: ['tif', 'tiff'] }] })
   if (selection === null) return null
   const paths = Array.isArray(selection) ? selection : [selection]
   return paths.length > 0 ? paths : null
@@ -68,16 +71,23 @@ export async function chooseImportFiles(title: string): Promise<string[] | null>
  * Import the chosen files as one new library item.
  *
  * The listed order is the item's source priority: the first listed valid
- * value wins where files overlap. Import saves to the library only; it never
- * attaches to a Design or moves the camera.
+ * value wins where files overlap. The item is saved to the library and never
+ * moves the camera. Started from Layers, it also joins the Design session
+ * that asked once it is published, like a Layers-initiated analysis; a
+ * Design switch, failure or cancel drops that attachment.
  */
 export async function importLibraryItem(
   paths: string[],
   name: string,
   quantity: RasterQuantity,
   unit: { label: string | null; unknown: boolean },
+  attachToDesign = false,
 ): Promise<LidarImportReceipt> {
+  const identity = designSessionStore.sessionIdentity.value
   const receipt = await withLidarError(() => lidarImportItem(name, quantity, unit, paths))
+  if (attachToDesign) {
+    requestAttachment({ key: `import:${receipt.layer_id}`, kind: 'import', identity, itemIds: [receipt.layer_id] })
+  }
   await refreshLidarLibrary()
   ensureLidarPolling()
   return receipt
@@ -165,12 +175,14 @@ export function setLidarEntryOpacity(id: string, opacity: number): void {
 }
 
 /**
- * Move one reference one position towards the front or the back of the data
- * band. Display order only: it never changes an item's source priority.
+ * Move one reference one place towards the front or the back among its
+ * siblings in Layers: a top-level item past its neighbour group, a result
+ * among the results of the same source. Display order only: it never changes
+ * an item's source priority.
  */
 export function moveReference(id: string, towards: 'front' | 'back'): void {
-  // Saved order renders back to front, so "front" is a higher order.
-  moveLidarEntry(id, towards === 'front' ? 'down' : 'up')
+  const orders = movedReferenceOrders(readCurrentLidarPresentation(), id, towards)
+  if (orders) setLidarEntryOrders(orders)
 }
 
 /**
@@ -185,7 +197,7 @@ export async function runAnalysis(request: AnalysisRequest, attachToDesign: bool
   const identity = designSessionStore.sessionIdentity.value
   const receipt = await withLidarError(() => lidarCreateAnalysis(request))
   if (attachToDesign) {
-    pendingAttachments.set(receipt.definition_id, { identity, itemIds: receipt.item_ids })
+    requestAttachment({ key: receipt.definition_id, kind: 'analysis', identity, itemIds: receipt.item_ids })
   }
   await refreshLidarLibrary()
   ensureLidarPolling()
@@ -205,33 +217,76 @@ export async function rerunAnalysis(definitionId: string): Promise<AnalysisRecei
   return receipt
 }
 
-/** Layers-initiated results waiting to join the Design session that asked. */
-const pendingAttachments = new Map<string, { readonly identity: object; readonly itemIds: readonly string[] }>()
+/** Library work started from Layers, waiting to join the Design session that asked. */
+export interface PendingAttachment {
+  /** The analysis definition, or `import:<item id>`. */
+  readonly key: string
+  readonly kind: 'import' | 'analysis'
+  readonly identity: unknown
+  readonly itemIds: readonly string[]
+}
 
 /**
- * Attach finished Layers-initiated results to their originating Design
- * session, and drop requests whose session ended or whose run failed.
+ * Pending attachments, read by Layers to show their progress under Site data.
+ * Settled or dropped requests leave the list.
+ */
+export const pendingAttachments = signal<readonly PendingAttachment[]>([])
+
+/**
+ * The last Layers-initiated import or analysis that failed before it could
+ * join its Design, so Layers can say so; a cancel is the user's own choice
+ * and is not reported.
+ */
+export const attachmentFailure = signal<{ readonly itemId: string; readonly message: string | null } | null>(null)
+
+export function dismissAttachmentFailure(): void {
+  attachmentFailure.value = null
+}
+
+function requestAttachment(pending: PendingAttachment): void {
+  pendingAttachments.value = [...pendingAttachments.peek().filter((entry) => entry.key !== pending.key), pending]
+}
+
+/**
+ * Attach finished Layers-initiated work to its originating Design session,
+ * and drop requests whose session ended or whose work failed or was cancelled.
  *
- * Every presentable output of the definition joins, in registry output order,
- * once all of them are published; outputs kept only for provenance never do.
+ * An import joins once it is published. Every presentable output of an
+ * analysis joins, in registry output order, once all of them are published;
+ * outputs kept only for provenance never do.
  */
 export function settleResultAttachments(snapshot: LibrarySnapshot | null): void {
-  if (!snapshot || pendingAttachments.size === 0) return
+  // Peeked: the settling effect depends on the snapshot and session only.
+  const pendingList = pendingAttachments.peek()
+  if (!snapshot || pendingList.length === 0) return
   const current = designSessionStore.sessionIdentity.value
-  for (const [definitionId, pending] of [...pendingAttachments]) {
+  const remaining: PendingAttachment[] = []
+  for (const pending of pendingList) {
     const items = pending.itemIds.map((id) => snapshot.items.find((candidate) => candidate.id === id))
     const settled = items.every((item) => item?.generation_id)
-    if (pending.identity !== current || items.some((item) => !item || (item.state === 'Failed' && !item.generation_id))) {
-      pendingAttachments.delete(definitionId)
-    } else if (settled) {
-      pendingAttachments.delete(definitionId)
-      for (const item of items) {
-        if (item?.provenance && isPresentableOutput(item.provenance.analysis_id, item.provenance.output_key)) {
-          upsertLidarEntry('Analysis', item.id)
-        }
+    if (pending.identity !== current) continue
+    const failed = items.find((item) => !item || (item.state === 'Failed' && !item.generation_id))
+    if (failed !== undefined) {
+      const job = failed?.import_job ?? null
+      const run = failed?.run ?? null
+      if (failed && (job?.state === 'Failed' || run?.state === 'Failed')) {
+        attachmentFailure.value = { itemId: failed.id, message: job?.message ?? run?.message ?? null }
+      }
+      continue
+    }
+    if (!settled) {
+      remaining.push(pending)
+      continue
+    }
+    for (const item of items) {
+      if (pending.kind === 'import') {
+        upsertLidarEntry('Source', item!.id)
+      } else if (item?.provenance && isPresentableOutput(item.provenance.analysis_id, item.provenance.output_key)) {
+        upsertLidarEntry('Analysis', item.id)
       }
     }
   }
+  if (remaining.length !== pendingList.length) pendingAttachments.value = remaining
 }
 
 /** Cancel the running job of one derived item; false when nothing runs. */

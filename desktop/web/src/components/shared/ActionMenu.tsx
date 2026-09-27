@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { createPortal } from 'preact/compat'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { ButtonTooltip } from './ButtonTooltip'
-import { ControlIcon } from './ControlIcon'
+import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { focusMenuItem, placePopupVertically, placeSidePopupVertically } from '../../utils/floating-position'
 import styles from './ActionMenu.module.css'
 
@@ -53,7 +53,7 @@ interface MenuAnchor {
 /** A compact command menu, portalled so scrollable lists cannot clip actions. */
 export function ActionMenu({
   label, items, placement = 'below', triggerClassName, iconSize = 18, triggerData,
-  openKey = 'ArrowDown', tabIndex, tooltipSide = 'left', triggerLabel,
+  openKey = 'ArrowDown', tabIndex, tooltipSide = 'left', triggerLabel, triggerIcon = 'more',
 }: {
   label: string
   items: readonly ActionMenuEntry[]
@@ -71,6 +71,8 @@ export function ActionMenu({
   tooltipSide?: 'left' | 'right'
   /** Visible text beside the icon, shown instead of the tooltip (a labelled rail). */
   triggerLabel?: ComponentChildren
+  /** The trigger's glyph: More by default, Plus for an "Add" menu. */
+  triggerIcon?: ControlIconName
 }) {
   const [open, setOpen] = useState(false)
   const menuId = useId()
@@ -107,7 +109,7 @@ export function ActionMenu({
       {...triggerData} tabIndex={tabIndex}
       onClick={() => setOpen(!open)} onKeyDown={event => {
         if (event.key === openKey) { event.preventDefault(); setOpen(true) }
-      }}><ControlIcon name="more" size={iconSize} />{triggerLabel ?? <ButtonTooltip label={label} side={tooltipSide} />}</button>
+      }}><ControlIcon name={triggerIcon} size={iconSize} />{triggerLabel ?? <ButtonTooltip label={label} side={tooltipSide} />}</button>
     {open && trigger.current && (
       <MenuPopup menuId={menuId} label={label} entries={items} anchor={trigger.current} placement={placement} onClose={close} onBack={close} />
     )}
