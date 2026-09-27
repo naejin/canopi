@@ -69,7 +69,7 @@ export function createPlantDragDistanceOverlay(container: HTMLElement): PlantDra
       const activeScreen = camera.worldToScreen(activePlant.position)
       for (const guide of guides) {
         const neighborScreen = camera.worldToScreen(guide.plant.position)
-        appendGuide(svg, root, activeScreen, neighborScreen, formatMetricDistance(guide.distance))
+        appendDistanceGuide(svg, root, activeScreen, neighborScreen, formatMetricDistance(guide.distance), 'plantDragDistance')
       }
 
       root.style.display = 'block'
@@ -100,17 +100,22 @@ function nearestDistanceGuides(
     .slice(0, MAX_DISTANCE_GUIDES)
 }
 
-function appendGuide(
+/**
+ * A dashed distance line between two screen points with its label at the
+ * middle; `marker` names the data attributes (`<marker>Line`, `<marker>Label`).
+ */
+export function appendDistanceGuide(
   svg: SVGSVGElement,
   root: HTMLElement,
   start: ScenePoint,
   end: ScenePoint,
   text: string,
+  marker: string,
 ): void {
   // Dark casing first so the light distance line reads on any imagery.
   svg.appendChild(createGuideLine(start, end, 'var(--canvas-overlay-casing)', 3.5))
   const line = createGuideLine(start, end, 'var(--canvas-guide-line)', 1.5)
-  line.dataset.plantDragDistanceLine = 'true'
+  line.dataset[`${marker}Line`] = 'true'
   svg.appendChild(line)
 
   const midpoint = {
@@ -118,7 +123,7 @@ function appendGuide(
     y: start.y + (end.y - start.y) / 2,
   }
   const label = document.createElement('div')
-  label.dataset.plantDragDistanceLabel = 'true'
+  label.dataset[`${marker}Label`] = 'true'
   label.textContent = text
   Object.assign(label.style, {
     position: 'absolute',

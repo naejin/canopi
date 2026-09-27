@@ -46,6 +46,8 @@ export interface SceneToolAdapter {
   readonly pointerMoveWithoutCapture?: (context: SceneToolPointerEvent) => boolean
   readonly pointerMoveWithCapture?: (context: SceneToolCapturedPointerContext) => boolean
   readonly keyDown?: (event: KeyboardEvent) => boolean
+  /** Hide a hover preview with the rest of the passive hover (pointer leave, overview, replacement). */
+  readonly clearHoverPreview?: () => void
   readonly canUndoTransientHistory?: () => boolean
   readonly canRedoTransientHistory?: () => boolean
   readonly undoTransientHistory?: () => boolean

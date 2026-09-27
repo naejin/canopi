@@ -2,6 +2,7 @@ import type { PlantStampSource } from '../../plant-stamp-source'
 import {
   resolvePlantSymbolId,
   type ScenePersistedState,
+  type ScenePlantEntity,
   type ScenePoint,
 } from '../scene'
 import { createUuid } from '../../../utils/ids'
@@ -144,34 +145,41 @@ export function appendPlantStampSourceToDraft(
   source: PlantStampSource,
   world: ScenePoint,
 ): string {
-  const id = createUuid()
+  const plant = plantEntityFromStampSource(draft, source, world, createUuid())
+  draft.plants = [...draft.plants, plant]
+  return plant.id
+}
+
+/** The plant a Place plants click would add at `world`, with the species' colour and symbol. Pure. */
+export function plantEntityFromStampSource(
+  scene: Pick<ScenePersistedState, 'plantSpeciesSymbols' | 'plantSpeciesColors'>,
+  source: PlantStampSource,
+  world: ScenePoint,
+  id: string,
+): ScenePlantEntity {
   const hasSpeciesSymbol = Object.prototype.hasOwnProperty.call(
-    draft.plantSpeciesSymbols,
+    scene.plantSpeciesSymbols,
     source.canonical_name,
   )
   const speciesSymbol = hasSpeciesSymbol
-    ? resolvePlantSymbolId(draft.plantSpeciesSymbols[source.canonical_name])
+    ? resolvePlantSymbolId(scene.plantSpeciesSymbols[source.canonical_name])
     : null
-  draft.plants = [
-    ...draft.plants,
-    {
-      kind: 'plant',
-      id,
-      canonicalName: source.canonical_name,
-      commonName: source.common_name,
-      color: draft.plantSpeciesColors[source.canonical_name] ?? null,
-      ...(speciesSymbol ? { symbol: speciesSymbol } : {}),
-      stratum: source.stratum,
-      canopySpreadM: source.width_max_m,
-      position: world,
-      rotationDeg: null,
-      notes: null,
-      plantedDate: null,
-      quantity: 1,
-      locked: false,
-    },
-  ]
-  return id
+  return {
+    kind: 'plant',
+    id,
+    canonicalName: source.canonical_name,
+    commonName: source.common_name,
+    color: scene.plantSpeciesColors[source.canonical_name] ?? null,
+    ...(speciesSymbol ? { symbol: speciesSymbol } : {}),
+    stratum: source.stratum,
+    canopySpreadM: source.width_max_m,
+    position: world,
+    rotationDeg: null,
+    notes: null,
+    plantedDate: null,
+    quantity: 1,
+    locked: false,
+  }
 }
 
 export function appendTextAnnotationToDraft(

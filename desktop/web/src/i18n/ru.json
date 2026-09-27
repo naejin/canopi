@@ -691,6 +691,10 @@
       "openCatalog": "Открыть весь каталог",
       "noSpecies": "Здесь пока нет видов.",
       "noMatch": "Нет видов, подходящих к «{{query}}»."
+    },
+    "placePreview": {
+      "nearest": "{{distance}} до «{{name}}»",
+      "matureWidth": "Ширина взрослого растения до {{width}}"
     }
   },
   "worldMap": {

@@ -691,6 +691,10 @@
       "openCatalog": "Open the full catalog",
       "noSpecies": "No species here yet.",
       "noMatch": "No species match “{{query}}”."
+    },
+    "placePreview": {
+      "nearest": "{{distance}} to {{name}}",
+      "matureWidth": "Mature width up to {{width}}"
     }
   },
   "worldMap": {

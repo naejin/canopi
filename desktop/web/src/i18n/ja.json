@@ -691,6 +691,10 @@
       "openCatalog": "カタログ全体を開く",
       "noSpecies": "まだ種がありません。",
       "noMatch": "「{{query}}」に一致する種はありません。"
+    },
+    "placePreview": {
+      "nearest": "{{name}} まで {{distance}}",
+      "matureWidth": "成木の幅 最大 {{width}}"
     }
   },
   "worldMap": {

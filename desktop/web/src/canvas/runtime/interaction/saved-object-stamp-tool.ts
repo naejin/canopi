@@ -318,18 +318,32 @@ function appendPlantGhost(
   plant: ScenePlantEntity,
   plantContext: PlantPresentationContext,
 ): void {
-  const entry = buildPlantPresentationEntries([plant], plantContext, new Set())[0]
-  if (!entry) return
-
   const group = createSvgElement('g')
   group.dataset.savedObjectStampPart = 'plant-symbol'
+  if (appendPlantSymbolGhost(group, context.camera, plant, plantContext, STAMP_GHOST_OPACITY)) svg.appendChild(group)
+}
+
+/**
+ * Draws a plant as the map would, from the shared symbol contours, into
+ * `group` at `opacity`: stamp ghosts and the Place plants preview. False when
+ * the plant has no presentation.
+ */
+export function appendPlantSymbolGhost(
+  group: SVGGElement,
+  camera: WorkspaceCameraFrameReader,
+  plant: ScenePlantEntity,
+  plantContext: PlantPresentationContext,
+  opacity: number,
+): boolean {
+  const entry = buildPlantPresentationEntries([plant], plantContext, new Set())[0]
+  if (!entry) return false
   setSvgAttributes(group, {
-    opacity: STAMP_GHOST_OPACITY,
+    opacity,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
   })
-  appendPlantSymbolCommands(group, context.camera, entry, renderedPlantSymbol(entry))
-  svg.appendChild(group)
+  appendPlantSymbolCommands(group, camera, entry, renderedPlantSymbol(entry))
+  return true
 }
 
 function renderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {

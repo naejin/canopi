@@ -104,10 +104,15 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
     }), (tool) => tool.dispose())
     const zoneDrawingAdapters = createZoneDrawingToolAdapters(zoneDrawingTool)
     const plantStampTool = own(createPlantStampTool({
+      container: context.container,
+      camera: context.camera,
       getSceneStore: context.getSceneStore,
+      getPlantPresentationContext: context.getPlantPresentationContext,
+      getLocalizedCommonNames: context.getLocalizedCommonNames,
+      translate: context.translate,
       sceneEdits: context.sceneEdits,
       applySnapping: context.applySnapping,
-    }), (tool) => tool.clear())
+    }), (tool) => tool.dispose())
     const objectStampTool = own(createObjectStampTool({
       preview: context.preview,
       getLocalizedCommonNames: context.getLocalizedCommonNames,

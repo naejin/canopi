@@ -691,6 +691,10 @@
       "openCatalog": "De volledige catalogus openen",
       "noSpecies": "Nog geen soorten hier.",
       "noMatch": "Geen soorten komen overeen met ‘{{query}}’."
+    },
+    "placePreview": {
+      "nearest": "{{distance}} tot {{name}}",
+      "matureWidth": "Volgroeide breedte tot {{width}}"
     }
   },
   "worldMap": {

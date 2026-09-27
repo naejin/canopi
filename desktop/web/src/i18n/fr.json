@@ -691,6 +691,10 @@
       "openCatalog": "Ouvrir le catalogue complet",
       "noSpecies": "Aucune espèce ici pour l’instant.",
       "noMatch": "Aucune espèce ne correspond à « {{query}} »."
+    },
+    "placePreview": {
+      "nearest": "{{distance}} de {{name}}",
+      "matureWidth": "Largeur adulte jusqu’à {{width}}"
     }
   },
   "worldMap": {

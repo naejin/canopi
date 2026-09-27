@@ -691,6 +691,10 @@
       "openCatalog": "전체 카탈로그 열기",
       "noSpecies": "아직 종이 없습니다.",
       "noMatch": "“{{query}}”와 일치하는 종이 없습니다."
+    },
+    "placePreview": {
+      "nearest": "{{name}}까지 {{distance}}",
+      "matureWidth": "다 자란 폭 최대 {{width}}"
     }
   },
   "worldMap": {

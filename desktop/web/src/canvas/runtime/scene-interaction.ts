@@ -1162,6 +1162,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._deps.setHoveredTarget(null)
     this._tooltip.hide()
     this._lockedAffordance.hide()
+    this._activeToolAdapter()?.clearHoverPreview?.()
   }
 
   /** Snap a world-space point to grid and/or guides. Used for placement (stamp, text). */

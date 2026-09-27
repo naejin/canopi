@@ -10550,4 +10550,96 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+  describe('Place plants hover preview', () => {
+    const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
+
+    function previewRoot(): HTMLElement | null {
+      return container.querySelector<HTMLElement>('[data-plant-placement-preview]')
+    }
+
+    function previewSession(): SceneInteractionSession {
+      camera.setViewport({ x: 0, y: 0, scale: 10 })
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+      session.setTool('plant-stamp')
+      return session
+    }
+
+    it('shows the species symbol, its mature width and the nearest plant without changing the Design', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [
+          makePlant('pear', 'Pyrus communis', { x: 10, y: 10 }, { commonName: 'Pear' }),
+          makePlant('far', 'Prunus avium', { x: 90, y: 90 }),
+        ]
+      })
+      const before = store.snapshot().persisted
+      selectPlantStampSource(APPLE)
+      const session = previewSession()
+
+      events.pointerMove({ x: 130, y: 140 })
+
+      expect(previewRoot()?.style.display).toBe('block')
+      const glyph = container.querySelector('[data-plant-placement-glyph="Malus domestica"]')
+      expect(glyph?.querySelector('path, circle')).not.toBeNull()
+      expect(container.querySelector('[data-plant-placement-spread]')?.getAttribute('r')).toBe('30')
+      expect(container.querySelector('[data-plant-placement-label="mature-width"]')?.textContent)
+        .toBe('Mature width up to 6 m')
+      expect(container.querySelector('[data-plant-placement-nearest-label]')?.textContent).toBe('5 m to Pear')
+      expect(store.persisted).toEqual(before)
+      session.dispose()
+    })
+
+    it('shows only the symbol when the species has no width, and no line to a far plant', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('far', 'Prunus avium', { x: 90, y: 90 })]
+      })
+      selectPlantStampSource({ ...APPLE, width_max_m: null })
+      const session = previewSession()
+
+      events.pointerMove({ x: 130, y: 140 })
+
+      expect(container.querySelector('[data-plant-placement-glyph]')).not.toBeNull()
+      expect(container.querySelector('[data-plant-placement-spread]')).toBeNull()
+      expect(container.querySelector('[data-plant-placement-label]')).toBeNull()
+      expect(container.querySelector('[data-plant-placement-nearest-label]')).toBeNull()
+      session.dispose()
+    })
+
+    it('shows nothing before a species is chosen', () => {
+      const session = previewSession()
+
+      events.pointerMove({ x: 130, y: 140 })
+
+      expect(previewRoot()?.style.display ?? 'none').toBe('none')
+      session.dispose()
+    })
+
+    it('hides when the pointer leaves the map and when the tool changes', () => {
+      selectPlantStampSource(APPLE)
+      const session = previewSession()
+      events.pointerMove({ x: 130, y: 140 })
+      expect(previewRoot()?.style.display).toBe('block')
+
+      container.dispatchEvent(new PointerEvent('pointerleave'))
+      expect(previewRoot()?.style.display).toBe('none')
+
+      events.pointerMove({ x: 130, y: 140 })
+      expect(previewRoot()?.style.display).toBe('block')
+      session.setTool('select')
+      expect(previewRoot()?.style.display).toBe('none')
+      session.dispose()
+    })
+
+    it('updates the nearest plant after a placement', () => {
+      selectPlantStampSource(APPLE)
+      const session = previewSession()
+
+      events.pointerDown({ x: 100, y: 100 })
+      events.pointerUp({ x: 100, y: 100 })
+      events.pointerMove({ x: 120, y: 100 })
+
+      expect(store.persisted.plants).toHaveLength(1)
+      expect(container.querySelector('[data-plant-placement-nearest-label]')?.textContent).toBe('2 m to Apple')
+      session.dispose()
+    })
+  })
 })

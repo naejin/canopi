@@ -691,6 +691,10 @@
       "openCatalog": "打开完整目录",
       "noSpecies": "这里还没有物种。",
       "noMatch": "没有与“{{query}}”匹配的物种。"
+    },
+    "placePreview": {
+      "nearest": "距 {{name}} {{distance}}",
+      "matureWidth": "成熟冠幅最多 {{width}}"
     }
   },
   "worldMap": {
