@@ -9,6 +9,12 @@ import {
   type BrowserShellCapabilities,
 } from '../web/browser-shell-commands'
 
+const budgetExport = vi.hoisted(() => ({ exportCurrentBudgetCsv: vi.fn(async () => undefined) }))
+vi.mock('../app/budget/export', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../app/budget/export')>(),
+  exportCurrentBudgetCsv: budgetExport.exportCurrentBudgetCsv,
+}))
+
 function canvasProjection(): CanvasCommandProjection {
   return createCanvasCommandProjection({
     state: {
@@ -139,6 +145,9 @@ describe('Web Edition shell projection', () => {
     await Promise.resolve()
     expect(closeDesign).toHaveBeenCalledOnce()
     expect(project(caps).commands.get('file.exportBudgetCsv')).toMatchObject({ submenu: 'export', disabled: false })
+    caps.exportBudgetCsv()
+    await Promise.resolve()
+    expect(budgetExport.exportCurrentBudgetCsv).toHaveBeenCalledOnce()
     expect(project(caps).commands.get('help.gettingStarted')?.disabled).toBe(false)
   })
 
