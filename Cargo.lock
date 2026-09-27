@@ -4596,13 +4596,15 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-mcp-bridge"
-version = "0.10.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b11990bf5e3b26b253e1213f2df2db85d06f32623abd755d3fe1ca942965b0d2"
+checksum = "db0e3b2116693ae3ea616e041d83d8d95898ee2393629b2d1b8ee1d80f2eedb0"
 dependencies = [
  "base64 0.22.1",
  "block2 0.5.1",
+ "cairo-rs",
  "futures-util",
+ "gio",
  "image",
  "jni",
  "objc2 0.5.2",
@@ -4618,6 +4620,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "uuid",
+ "webkit2gtk",
  "webview2-com",
  "windows",
  "windows-core 0.61.2",
