@@ -14,6 +14,7 @@ interface CanvasContextMenuOptions {
   readonly adapter: CanvasRuntimeContextMenuAdapter | undefined
   readonly commands: CanvasContextMenuCommands
   readonly saveSelectionAsObjectStamp?: () => void
+  readonly placePlantsAt?: (world: ScenePoint) => void
   readonly returnFocus: () => void
 }
 
@@ -48,6 +49,7 @@ export function createCanvasContextMenu(options: CanvasContextMenuOptions): Canv
       ...(options.saveSelectionAsObjectStamp
         ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp }
         : {}),
+      ...(options.placePlantsAt ? { placePlantsAt: options.placePlantsAt } : {}),
       returnFocus: options.returnFocus,
     }
     openRequest = request

@@ -65,6 +65,8 @@ export interface SceneToolRegistryContext {
   readonly notifyTransientHistoryChange: () => void
   /** A tool's guidance changed outside a map event (a note field closed). */
   readonly notifyGuidanceChange: () => void
+  /** Runs a Scene edit outside a map event once the Scene is settled. */
+  readonly runWhenSettled: (operation: () => void) => void
 }
 
 export interface SceneToolRegistry {
@@ -112,6 +114,8 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       translate: context.translate,
       sceneEdits: context.sceneEdits,
       applySnapping: context.applySnapping,
+      runWhenSettled: context.runWhenSettled,
+      notifyGuidanceChange: context.notifyGuidanceChange,
     }), (tool) => tool.dispose())
     const objectStampTool = own(createObjectStampTool({
       preview: context.preview,

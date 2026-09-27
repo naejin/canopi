@@ -146,7 +146,8 @@
       "hideName": "Ocultar nome",
       "speciesDetails": "Detalhes da espécie",
       "addToCalendar": "Adicionar ao calendário…",
-      "setUnitCost": "Definir o custo unitário…"
+      "setUnitCost": "Definir o custo unitário…",
+      "placePlantsHere": "Colocar plantas aqui"
     },
     "rotationHandle": {
       "label": "Girar"

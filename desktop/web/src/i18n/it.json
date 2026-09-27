@@ -146,7 +146,8 @@
       "hideName": "Nascondi nome",
       "speciesDetails": "Dettagli della specie",
       "addToCalendar": "Aggiungi al calendario…",
-      "setUnitCost": "Imposta il costo unitario…"
+      "setUnitCost": "Imposta il costo unitario…",
+      "placePlantsHere": "Colloca piante qui"
     },
     "rotationHandle": {
       "label": "Ruota"

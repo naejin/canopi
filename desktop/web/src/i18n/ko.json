@@ -146,7 +146,8 @@
       "hideName": "이름 숨기기",
       "speciesDetails": "종 상세 정보",
       "addToCalendar": "달력에 추가…",
-      "setUnitCost": "단가 설정…"
+      "setUnitCost": "단가 설정…",
+      "placePlantsHere": "여기에 식물 배치"
     },
     "rotationHandle": {
       "label": "회전"

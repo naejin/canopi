@@ -92,6 +92,7 @@ function build(
     selection: model,
     commands,
     ...(options.saveSelectionAsObjectStamp ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp } : {}),
+    placePlantsAt: vi.fn(),
     returnFocus: options.returnFocus ?? vi.fn(),
   }
   const entries = buildCanvasContextMenuEntries(request, {
@@ -188,10 +189,13 @@ describe('canvas context menu entries', () => {
     expect(item(entries, 'group').disabled).toBe(false)
   })
 
-  it('offers only Paste and Select all on the empty map', () => {
-    const { entries, commands } = build(null)
+  it('offers Place plants here, Paste and Select all on the empty map', () => {
+    const { entries, commands, request } = build(null)
 
-    expect(ids(entries)).toEqual(['paste', 'select-all'])
+    expect(ids(entries)).toEqual(['place-plants-here', '—', 'paste', 'select-all'])
+    expect(item(entries, 'place-plants-here').label).toBe('Place plants here')
+    item(entries, 'place-plants-here').run()
+    expect(request.placePlantsAt).toHaveBeenCalledWith({ x: 12, y: 34 })
     item(entries, 'paste').run()
     item(entries, 'select-all').run()
     expect(commands.pasteAt).toHaveBeenCalledWith({ x: 12, y: 34 })

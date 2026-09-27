@@ -279,6 +279,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         getContainerRect: () => this._currentContainerRect(),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
         notifyGuidanceChange: () => this._publishToolGuidance(),
+        runWhenSettled: (operation) => {
+          this._deps.commandAdmission.runWhenSettled(operation, undefined, { resumePending: true })
+        },
       }), disposeSceneToolRegistry)
       this._annotationEditor = own(createAnnotationInlineEditor({
         container: this._deps.container,
@@ -317,6 +320,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         adapter: this._deps.contextMenu,
         commands: this._deps.selectionCommands,
         saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
+        placePlantsAt: (world) => this._placePlantsAt(world),
         returnFocus: () => this._focusInteractionHost(),
       }), (menu) => menu.dispose())
       this._rotationHandle = own(createSelectionRotationHandle({
@@ -1276,6 +1280,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
 
     return next
+  }
+
+  /** Place plants here: arms Place plants, then places at `world` (now, or after a species is chosen). */
+  private _placePlantsAt(world: ScenePoint): void {
+    if (this._disposed || this._overviewMode) return
+    this._deps.commandAdmission.runWhenSettled(() => {
+      this._switchTool('plant-stamp')
+      this._toolRegistry.activeAdapter?.placeAt?.(world)
+    }, undefined, { resumePending: true })
+    this._publishToolGuidance()
   }
 
   private _switchTool(name: string): void {

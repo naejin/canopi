@@ -146,7 +146,8 @@
       "hideName": "Naam verbergen",
       "speciesDetails": "Soortdetails",
       "addToCalendar": "Toevoegen aan kalender…",
-      "setUnitCost": "Eenheidsprijs instellen…"
+      "setUnitCost": "Eenheidsprijs instellen…",
+      "placePlantsHere": "Planten hier plaatsen"
     },
     "rotationHandle": {
       "label": "Draaien"

@@ -90,6 +90,11 @@ export interface CanvasContextMenuRequest {
   readonly commands: CanvasContextMenuCommands
   /** Present only in an edition that keeps saved stamps. */
   readonly saveSelectionAsObjectStamp?: () => void
+  /**
+   * Place plants here (the empty map): arms Place plants and places the
+   * chosen species at `world`, or, with none chosen yet, the next one picked.
+   */
+  readonly placePlantsAt?: (world: ScenePoint) => void
   /** Gives keyboard focus back to the map. */
   returnFocus(): void
 }

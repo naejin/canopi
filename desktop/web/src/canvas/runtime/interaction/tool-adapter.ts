@@ -46,6 +46,8 @@ export interface SceneToolAdapter {
   readonly shouldSuppressHover?: () => boolean
   readonly shouldSuppressSharedKeyboard?: (event: KeyboardEvent) => boolean
   readonly pointerDown?: (context: SceneToolPointerDownContext) => boolean
+  /** Place what the tool holds at a point without a pointer (Place plants here). */
+  readonly placeAt?: (world: ScenePoint) => void
   readonly pointerMoveWithoutCapture?: (context: SceneToolPointerEvent) => boolean
   readonly pointerMoveWithCapture?: (context: SceneToolCapturedPointerContext) => boolean
   readonly keyDown?: (event: KeyboardEvent) => boolean

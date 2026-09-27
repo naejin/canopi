@@ -146,7 +146,8 @@
       "hideName": "Скрыть название",
       "speciesDetails": "Сведения о виде",
       "addToCalendar": "Добавить в календарь…",
-      "setUnitCost": "Задать цену за единицу…"
+      "setUnitCost": "Задать цену за единицу…",
+      "placePlantsHere": "Разместить растения здесь"
     },
     "rotationHandle": {
       "label": "Повернуть"

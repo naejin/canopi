@@ -2491,7 +2491,7 @@ describe('SceneInteractionSession', () => {
     expect(contextMenuHost.current).toBeNull()
   })
 
-  it('opens the empty-map menu with Paste and Select all at the pointer', () => {
+  it('opens the empty-map menu with Place plants here, Paste and Select all at the pointer', () => {
     const pasteAt = vi.fn()
     const selectAll = vi.fn()
     let canPaste = false
@@ -2506,7 +2506,7 @@ describe('SceneInteractionSession', () => {
     expect(request.selection).toBeNull()
     expect(request.anchor).toEqual({ left: 320, top: 260, right: 320, bottom: 260 })
     expect(request.world).toEqual({ x: 320, y: 260 })
-    expect(contextMenuItemIds()).toEqual(['paste', 'select-all'])
+    expect(contextMenuItemIds()).toEqual(['place-plants-here', 'paste', 'select-all'])
     expect(contextMenuCommand('paste').disabled).toBe(true)
     contextMenuCommand('select-all').run()
     expect(selectAll).toHaveBeenCalledOnce()
@@ -10736,6 +10736,71 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+  describe('Place plants here (right-click on the empty map)', () => {
+    const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
+
+    it('arms Place plants and asks for a species, then places the chosen one at the right-clicked point', async () => {
+      const published: CanvasToolGuidance[] = []
+      const tools: string[] = []
+      const deps = createInteractionDeps(container, store, camera, {
+        publishToolGuidance: (guidance) => { published.push(guidance) },
+        setTool: (name: string) => { tools.push(name) },
+      })
+      const session = createTestSession(deps)
+      session.setTool('select')
+
+      openContextMenu({ x: 120, y: 80 })
+      expect(contextMenuHost.current?.selection).toBeNull()
+      contextMenuCommand('place-plants-here').run()
+
+      expect(tools.at(-1)).toBe('plant-stamp')
+      expect(store.persisted.plants).toHaveLength(0)
+      expect(published.at(-1)?.promptSpecies).toBe(true)
+
+      selectPlantStampSource(APPLE)
+      await Promise.resolve()
+
+      expect(store.persisted.plants).toHaveLength(1)
+      expect(store.persisted.plants[0]).toMatchObject({ canonicalName: 'Malus domestica', position: { x: 120, y: 80 } })
+      expect(store.session.selectedTargets).toEqual([plantTarget(store.persisted.plants[0]!.id)])
+      expect(published.at(-1)?.promptSpecies).toBe(false)
+
+      // The pick is spent: choosing another species places nothing more.
+      selectPlantStampSource({ ...APPLE, canonical_name: 'Pyrus communis' })
+      await Promise.resolve()
+      expect(store.persisted.plants).toHaveLength(1)
+      session.dispose()
+    })
+
+    it('places the species already chosen at once', () => {
+      selectPlantStampSource(APPLE)
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+      session.setTool('plant-stamp')
+
+      openContextMenu({ x: 60, y: 40 })
+      contextMenuCommand('place-plants-here').run()
+
+      expect(store.persisted.plants).toHaveLength(1)
+      expect(store.persisted.plants[0]!.position).toEqual({ x: 60, y: 40 })
+      session.dispose()
+    })
+
+    it('forgets the point when the user leaves Place plants before choosing', async () => {
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+      session.setTool('select')
+      openContextMenu({ x: 30, y: 30 })
+      contextMenuCommand('place-plants-here').run()
+
+      session.setTool('select')
+      session.setTool('plant-stamp')
+      selectPlantStampSource(APPLE)
+      await Promise.resolve()
+
+      expect(store.persisted.plants).toHaveLength(0)
+      session.dispose()
+    })
+  })
+
   describe('Place plants hover preview', () => {
     const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 }
 

@@ -23,6 +23,7 @@ export type CanvasContextMenuItemId =
   | 'species-details'
   | 'add-to-calendar'
   | 'set-unit-cost'
+  | 'place-plants-here'
 
 export interface CanvasContextMenuCommand {
   readonly id: CanvasContextMenuItemId
@@ -68,7 +69,19 @@ export function buildCanvasContextMenuEntries(
   const paste = edit('paste', !commands.canPaste(), () => commands.pasteAt(world))
 
   if (!selection) {
-    return [paste, edit('select-all', false, () => commands.selectAll())]
+    const placePlantsAt = request.placePlantsAt
+    return [
+      ...placePlantsAt
+        ? [{
+            id: 'place-plants-here' as const,
+            label: options.translate('canvas.contextMenu.placePlantsHere'),
+            disabled: false,
+            run: () => placePlantsAt(world),
+          }, SEPARATOR]
+        : [],
+      paste,
+      edit('select-all', false, () => commands.selectAll()),
+    ]
   }
 
   const can = selectionCommandAvailability(selection)

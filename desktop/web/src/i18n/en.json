@@ -146,7 +146,8 @@
       "hideName": "Hide name",
       "speciesDetails": "Species details",
       "addToCalendar": "Add to calendar…",
-      "setUnitCost": "Set unit cost…"
+      "setUnitCost": "Set unit cost…",
+      "placePlantsHere": "Place plants here"
     },
     "rotationHandle": {
       "label": "Rotate"

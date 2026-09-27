@@ -1,4 +1,5 @@
-import { clearPlantStampSource, readPlantStampSource } from '../../plant-stamp-source'
+import { effect } from '@preact/signals'
+import { clearPlantStampSource, readPlantStampSource, type PlantStampSource } from '../../plant-stamp-source'
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { PlantPresentationContext } from '../plant-presentation'
@@ -18,10 +19,19 @@ export interface PlantStampToolContext {
   readonly translate: CanvasRuntimeTranslator
   readonly sceneEdits: SceneEditCoordinator
   readonly applySnapping: (point: ScenePoint) => ScenePoint
+  /** Runs a placement outside a map event once the Scene is settled. */
+  readonly runWhenSettled: (operation: () => void) => void
+  /** The tool card's guidance changed outside a map event. */
+  readonly notifyGuidanceChange: () => void
 }
 
 export interface PlantStampTool {
   readonly pointerDown: (world: ScenePoint) => void
+  /**
+   * Place plants here: places the chosen species at `world`; with none chosen
+   * yet, asks for one and places the pick there.
+   */
+  readonly placeAt: (world: ScenePoint) => void
   /** Preview the placement under the pointer; false when there is nothing to place. */
   readonly previewAt: (rawWorld: ScenePoint) => boolean
   readonly refreshPreview: () => void
@@ -37,14 +47,45 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
   const preview = createPlantPlacementPreview(context.container, context.translate)
   let speciesPrompted = false
   let previewWorld: ScenePoint | null = null
+  /** Where Place plants here waits for a species to be chosen. */
+  let pendingWorld: ScenePoint | null = null
+  let disposed = false
+  // The pick that answers Place plants here lands where the user right-clicked.
+  const stopWatchingSource = effect(() => {
+    const source = readPlantStampSource()
+    if (!source || !pendingWorld) return
+    const world = pendingWorld
+    pendingWorld = null
+    // Leave the picker's own update before editing the Scene.
+    queueMicrotask(() => {
+      if (disposed) return
+      context.runWhenSettled(() => place(source, world))
+      context.notifyGuidanceChange()
+    })
+  })
 
   function pointerDown(world: ScenePoint): void {
+    pendingWorld = null
     const source = readPlantStampSource()
     speciesPrompted = source === null
     if (!source) return
-    if (!isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'plants')) return
+    place(source, context.applySnapping(world))
+  }
 
-    const point = context.applySnapping(world)
+  function placeAt(world: ScenePoint): void {
+    const source = readPlantStampSource()
+    speciesPrompted = source === null
+    if (!source) {
+      pendingWorld = context.applySnapping(world)
+      return
+    }
+    pendingWorld = null
+    place(source, context.applySnapping(world))
+  }
+
+  function place(source: PlantStampSource, point: ScenePoint): void {
+    speciesPrompted = false
+    if (!isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'plants')) return
     context.sceneEdits.run('interaction-stamp-plant', (tx) => {
       let placedPlantId = ''
       tx.mutate((draft) => {
@@ -89,12 +130,14 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
 
   function clear(): void {
     speciesPrompted = false
+    pendingWorld = null
     hidePreview()
     clearPlantStampSource()
   }
 
   return {
     pointerDown,
+    placeAt,
     previewAt,
     refreshPreview,
     hidePreview,
@@ -102,6 +145,8 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
     promptsSpecies: () => speciesPrompted && readPlantStampSource() === null,
     clear,
     dispose() {
+      disposed = true
+      stopWatchingSource()
       clear()
       preview.dispose()
     },
@@ -117,6 +162,7 @@ export function createPlantStampToolAdapter(tool: PlantStampTool): SceneToolAdap
       tool.pointerDown(rawWorld)
       return true
     },
+    placeAt: tool.placeAt,
     pointerMoveWithoutCapture({ rawWorld }) {
       return tool.previewAt(rawWorld)
     },

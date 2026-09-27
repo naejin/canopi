@@ -146,7 +146,8 @@
       "hideName": "名前を非表示",
       "speciesDetails": "種の詳細",
       "addToCalendar": "カレンダーに追加…",
-      "setUnitCost": "単価を設定…"
+      "setUnitCost": "単価を設定…",
+      "placePlantsHere": "ここに植物を配置"
     },
     "rotationHandle": {
       "label": "回転"
