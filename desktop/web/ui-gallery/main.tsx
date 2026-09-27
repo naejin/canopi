@@ -53,6 +53,7 @@ import { PlaceSearchField } from '../src/components/canvas/PlaceSearch'
 import { BrowserAppShell } from '../src/web/BrowserAppShell'
 import {
   WorkspaceComposition,
+  WorkspaceDialogs,
   type WorkspacePanelProjection,
   type WorkspaceSurfaces,
 } from '../src/components/workspace/WorkspaceComposition'
@@ -211,6 +212,7 @@ function GalleryDesktopFrame() {
   return <>
     <TitleBar />
     {selectedSurface.value === 'workspace' && <DesktopPanelRail />}
+    {selectedSurface.value === 'workspace' && <WorkspaceDialogs />}
     <SettingsDialog />
     {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} />}
   </>
@@ -226,6 +228,7 @@ function GalleryWebFrame({ children }: { readonly children: preact.ComponentChil
     >
       {children}
     </BrowserAppShell>
+    <WorkspaceDialogs />
     <SettingsDialog />
     {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={projection.workspaceMenus} />}
   </>

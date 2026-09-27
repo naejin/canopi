@@ -1055,7 +1055,6 @@
     "saved": "PDF enregistré.",
     "downloaded": "Téléchargement du PDF demandé.",
     "empty": "Aucun contenu imprimable. Choisissez des calques ou ajoutez une aire d’impression.",
-    "layers": "Calques à imprimer",
     "pageCount": "Page {{page}} sur {{count}}",
     "areaName": "Aire d’impression {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Côtés extérieurs",
     "quantity": "Qté",
     "species": "espèces",
-    "plantKey": "Clé des plantes"
+    "plantKey": "Clé des plantes",
+    "habitTree": "Arbre",
+    "habitShrub": "Arbuste",
+    "habitHerbaceous": "Herbacée",
+    "habitClimber": "Grimpante",
+    "habitOther": "Autre",
+    "continued": "(suite)",
+    "englishFallback": "(en) = pas encore de nom dans cette langue",
+    "symbols": "Symboles",
+    "north": "N",
+    "include": "Inclure",
+    "plantColors": "Couleurs des plantes",
+    "plantColorModes": {
+      "design": "Comme dans le Design",
+      "grayscale": "Niveaux de gris",
+      "black": "Noir"
+    },
+    "northArrow": "Flèche du nord et échelle",
+    "pageOptions": "Page sélectionnée"
   },
   "speciesKey": {
     "title": "Plantes de ce Design",

@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { fixture } from '../../scripts/pdf-validation/fixtures'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
 import { createPdfTextEngine, type PdfFontId } from '../app/canvas-pdf/text'
-import type { PdfInput, PdfLabels } from '../app/canvas-pdf/types'
+import type { PdfInput, PdfLabels, PdfOperation } from '../app/canvas-pdf/types'
 const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')]]), 'en')
 const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants on this page', actualSize: 'Print at actual size' }
+// Symbol legend and north arrow fill in ink; plant marks keep their authored colours.
+const plantFill = (op: PdfOperation) => op.kind === 'path' && !!op.fill && op.fill !== '#24211c'
 const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }]
 function input(): PdfInput {
   return { name: 'Field garden', locale: 'en', commonNames: { 'Malus domestica': 'Apple' }, canvas: {
@@ -22,7 +24,7 @@ describe('Canvas PDF page plan', () => {
     const plan = buildPdfPlan(input(), { paper: 'A4', views: { overview: { orientation: 'landscape', zoom: 300 } }, layers: ['plants'] }, text(), labels)
     expect(plan.pages).toHaveLength(1)
     expect(plan.pages[0]!.legend).toEqual([])
-    expect(plan.pages[0]!.operations.filter(op => op.kind === 'path' && op.fill)).toHaveLength(1)
+    expect(plan.pages[0]!.operations.filter(plantFill)).toHaveLength(1)
   })
   it('excludes distant deselected content from extent and legends without changing visibility', () => {
     const design = input()
@@ -31,7 +33,7 @@ describe('Canvas PDF page plan', () => {
     const before = structuredClone(canvas)
     const plants = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['plants'] }, text(), labels)
     expect(plants.pages[0]!.ground.width).toBeLessThan(100)
-    expect(plants.pages[0]!.operations.filter(op => op.kind === 'path' && op.fill)).toHaveLength(3)
+    expect(plants.pages[0]!.operations.filter(plantFill)).toHaveLength(3)
     const notes = buildPdfPlan({ ...design, canvas }, { paper: 'A4', views: { overview: { orientation: 'portrait' } }, layers: ['annotations'] }, text(), labels)
     expect(notes.pages[0]!.legend).toEqual([])
     expect(notes.pages[0]!.ground.x).toBeGreaterThan(9_000)

@@ -1055,7 +1055,6 @@
     "saved": "PDF opgeslagen.",
     "downloaded": "PDF-download aangevraagd.",
     "empty": "Geen afdrukbare inhoud. Kies lagen of voeg een afdrukgebied toe.",
-    "layers": "Afdruklagen",
     "pageCount": "Pagina {{page}} van {{count}}",
     "areaName": "Afdrukgebied {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Buitenzijden",
     "quantity": "Aantal",
     "species": "soorten",
-    "plantKey": "Plantenlegenda"
+    "plantKey": "Plantenlegenda",
+    "habitTree": "Boom",
+    "habitShrub": "Struik",
+    "habitHerbaceous": "Kruidachtig",
+    "habitClimber": "Klimplant",
+    "habitOther": "Overig",
+    "continued": "(vervolg)",
+    "englishFallback": "(en) = nog geen naam in deze taal",
+    "symbols": "Symbolen",
+    "north": "N",
+    "include": "Opnemen",
+    "plantColors": "Plantkleuren",
+    "plantColorModes": {
+      "design": "Zoals in het Design",
+      "grayscale": "Grijstinten",
+      "black": "Zwart"
+    },
+    "northArrow": "Noordpijl en schaal",
+    "pageOptions": "Geselecteerde pagina"
   },
   "speciesKey": {
     "title": "Planten in dit ontwerp",

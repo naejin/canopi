@@ -1055,7 +1055,6 @@
     "saved": "PDF 已保存。",
     "downloaded": "已请求下载 PDF。",
     "empty": "没有可打印的内容。请选择图层或添加打印区域。",
-    "layers": "打印图层",
     "pageCount": "第 {{page}} 页，共 {{count}} 页",
     "areaName": "打印区域 {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "外侧边长",
     "quantity": "数量",
     "species": "种",
-    "plantKey": "植物图例"
+    "plantKey": "植物图例",
+    "habitTree": "乔木",
+    "habitShrub": "灌木",
+    "habitHerbaceous": "草本",
+    "habitClimber": "攀援植物",
+    "habitOther": "其他",
+    "continued": "（续）",
+    "englishFallback": "(en) = 尚无此语言的名称",
+    "symbols": "符号",
+    "north": "北",
+    "include": "包含",
+    "plantColors": "植物颜色",
+    "plantColorModes": {
+      "design": "与设计一致",
+      "grayscale": "灰度",
+      "black": "黑色"
+    },
+    "northArrow": "指北针和比例尺",
+    "pageOptions": "所选页面"
   },
   "speciesKey": {
     "title": "此设计中的植物",

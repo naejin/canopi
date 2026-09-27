@@ -1,3 +1,4 @@
+import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { expect, it, vi } from 'vitest'
@@ -23,13 +24,24 @@ it('opens with one overview and explicitly adds a whole-design field sheet', asy
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
     const button = (name: string) => Array.from(container.querySelectorAll('button')).find(node => node.textContent === name || node.getAttribute('aria-label') === name)!
+    // Every setup control lives in the side sheet and is reachable with Tab.
+    const inSheet = (node: HTMLElement) => { expect(node.closest('aside')).not.toBeNull(); expect(node.tabIndex).toBeGreaterThanOrEqual(0); return node }
     expect(button('Save PDF').disabled).toBe(false)
+    inSheet(button('Save PDF'))
     expect(button('Add detail page')).toBeUndefined()
     expect(button('Keep text on overview')).toBeUndefined()
     expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(workflow.state.value.result!.plan.pages).toHaveLength(1)
-    await act(async () => { button('Add field sheet').click() })
-    await act(async () => { button('Whole design').click() })
+    await act(async () => { inSheet(button('Add field sheet')).click() })
+    await act(async () => { inSheet(button('Whole design')).click() })
+    for (const name of ['Fit', 'Zoom in', 'Zoom out', 'Automatic', 'Portrait', 'Landscape', 'Split into readable sheets']) inSheet(button(name))
+    inSheet(container.querySelector<HTMLInputElement>('input[aria-label="Canvas zoom (%)"]')!)
+    // Displacement is keyboard-driven on the focusable page editor.
+    const editor = container.querySelector<SVGSVGElement>('[data-pdf-editor]')!
+    expect(editor.getAttribute('tabindex')).toBe('0')
+    const detail = workflow.state.value.result!.plan.pages.find(page => page.kind === 'detail')!.id
+    await act(async () => { editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    expect(workflow.setup.peek().views?.[detail]?.offset?.x).not.toBe(0)
     expect(workflow.state.value.result!.plan.pages.filter(page => page.kind === 'detail')).toHaveLength(1)
     expect(workflow.state.value.result!.plan.pages.flatMap(p => p.annotationIds ?? [])).toEqual(expect.arrayContaining(['0', '1']))
     const original = workflow.setup.peek()
@@ -38,7 +50,8 @@ it('opens with one overview and explicitly adds a whole-design field sheet', asy
     expect(workflow.splitPreview.value!.areas).toHaveLength(2)
     expect(container.querySelector('[data-pdf-editor]')!.getAttribute('width')).toBe('100%')
     expect(button('Save PDF').disabled).toBe(true)
-    await act(async () => { button('Cancel').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
+    inSheet(button('Apply sheets'))
+    await act(async () => { inSheet(button('Cancel')).click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
     expect(workflow.setup.peek()).toBe(original)
     await act(async () => { button('View page: Area 1').click() })
     await act(async () => { button('Split into readable sheets').click(); await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready')) })
@@ -83,14 +96,35 @@ it('offers only printable layers and sends checkbox changes to the export setup'
     delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
   try {
     await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
-    await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="Print layers"]')!.click() })
-    const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+    const boxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:not([role="switch"])')
     expect(boxes).toHaveLength(2)
     expect(boxes[0]!.checked).toBe(true)
     expect(boxes[1]!.checked).toBe(false)
     await act(async () => { boxes[0]!.click(); boxes[1]!.click() })
     expect(workflow.setup.value.layers).toEqual(['annotations'])
     expect(canvas.layers.map((layer) => layer.visible)).toEqual([true, false, true])
+  } finally { render(null, container); workflow.dispose(); container.remove() }
+})
+
+it('sets print-only plant colours and the north arrow from the side sheet', async () => {
+  const container = document.createElement('div'); document.body.append(container)
+  const prepare = vi.fn(async (_preparation: PdfPreparation) => ({ bytes: null, plan: { pages: [], outlines: {}, blocked: 'empty' as const } }))
+  const canvas = { layers: [{ name: 'plants', visible: true, opacity: 1 }], plants: [], zones: [], annotations: [], measurements: [] }
+  const workflow = createPdfWorkflow({ capture: () => ({ identity: canvas, isCurrent: () => true,
+    input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }), prepare, resolveNames: async () => ({}),
+    delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => '' })
+  try {
+    await act(async () => { workflow.show(); render(<CanvasPdfDialog workflow={workflow} />, container) })
+    const radios = container.querySelectorAll<HTMLInputElement>('[role="radiogroup"] input[type="radio"]')
+    expect(Array.from(radios, radio => radio.value)).toEqual(['design', 'grayscale', 'black'])
+    expect(radios[0]!.checked).toBe(true)
+    await act(async () => { radios[1]!.click() })
+    expect(workflow.setup.value.plantColors).toBe('grayscale')
+    const north = container.querySelector<HTMLInputElement>('input[role="switch"]')!
+    expect(north.checked).toBe(true)
+    await act(async () => { north.click() })
+    expect(workflow.setup.value.northArrow).toBe(false)
+    expect(prepare.mock.lastCall![0].setup).toMatchObject({ plantColors: 'grayscale', northArrow: false })
   } finally { render(null, container); workflow.dispose(); container.remove() }
 })
 

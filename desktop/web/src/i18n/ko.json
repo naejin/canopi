@@ -1055,7 +1055,6 @@
     "saved": "PDF가 저장되었습니다.",
     "downloaded": "PDF 다운로드를 요청했습니다.",
     "empty": "인쇄할 내용이 없습니다. 레이어를 선택하거나 인쇄 영역을 추가하세요.",
-    "layers": "인쇄 레이어",
     "pageCount": "{{count}}페이지 중 {{page}}페이지",
     "areaName": "인쇄 영역 {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "바깥쪽 변",
     "quantity": "수량",
     "species": "종",
-    "plantKey": "식물 범례"
+    "plantKey": "식물 범례",
+    "habitTree": "교목",
+    "habitShrub": "관목",
+    "habitHerbaceous": "초본",
+    "habitClimber": "덩굴식물",
+    "habitOther": "기타",
+    "continued": "(계속)",
+    "englishFallback": "(en) = 이 언어의 이름이 아직 없음",
+    "symbols": "기호",
+    "north": "N",
+    "include": "포함",
+    "plantColors": "식물 색상",
+    "plantColorModes": {
+      "design": "디자인과 동일",
+      "grayscale": "회색조",
+      "black": "검정"
+    },
+    "northArrow": "방위표와 축척",
+    "pageOptions": "선택한 페이지"
   },
   "speciesKey": {
     "title": "이 디자인의 식물",

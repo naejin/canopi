@@ -59,6 +59,12 @@ export async function getCommonNames(
   return invoke('get_common_names', { canonicalNames, locale });
 }
 
+/** Batch lookup: returns canonical_name → catalog habit (`Tree`, `Shrub`, ...) where the catalog has one. */
+export async function getSpeciesHabits(canonicalNames: string[]): Promise<Record<string, string>> {
+  if (isDegraded()) return {};
+  return invoke('get_species_habits', { canonicalNames });
+}
+
 /** Batch-fetch full detail records for multiple species. */
 export async function getSpeciesBatch(
   canonicalNames: string[],

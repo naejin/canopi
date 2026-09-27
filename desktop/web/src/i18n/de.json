@@ -1055,7 +1055,6 @@
     "saved": "PDF gespeichert.",
     "downloaded": "PDF-Download angefordert.",
     "empty": "Kein druckbarer Inhalt. Wählen Sie Ebenen oder fügen Sie einen Druckbereich hinzu.",
-    "layers": "Druckebenen",
     "pageCount": "Seite {{page}} von {{count}}",
     "areaName": "Druckbereich {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Außenseiten",
     "quantity": "Anz.",
     "species": "Arten",
-    "plantKey": "Pflanzenlegende"
+    "plantKey": "Pflanzenlegende",
+    "habitTree": "Baum",
+    "habitShrub": "Strauch",
+    "habitHerbaceous": "Krautig",
+    "habitClimber": "Kletterpflanze",
+    "habitOther": "Sonstige",
+    "continued": "(Fortsetzung)",
+    "englishFallback": "(en) = noch kein Name in dieser Sprache",
+    "symbols": "Symbole",
+    "north": "N",
+    "include": "Einbeziehen",
+    "plantColors": "Pflanzenfarben",
+    "plantColorModes": {
+      "design": "Wie im Design",
+      "grayscale": "Graustufen",
+      "black": "Schwarz"
+    },
+    "northArrow": "Nordpfeil und Maßstab",
+    "pageOptions": "Ausgewählte Seite"
   },
   "speciesKey": {
     "title": "Pflanzen in diesem Design",

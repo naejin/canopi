@@ -1,22 +1,25 @@
 import type { PrintBounds, PrintPlant, PrintPoint } from '../../canvas/print'
 import { PdfTextError, type TextLine } from './text'
-import type { PdfInput, PdfLegendEntry, PdfOperation } from './types'
+import type { PdfHabit, PdfInput, PdfLegendEntry, PdfOperation } from './types'
 import { contrastingInk } from '../../canvas/plant-colors'
 
 import { MM, PRINT } from './print-style'
 export { MM, PRINT } from './print-style'
 const IDENTITY = [1, 0, 0, 1, 0, 0] as const
-export function identifyPlants(plants: readonly PrintPlant[], names: Readonly<Record<string, string>>, locale: string): PdfLegendEntry[] {
-  const bySpecies = new Map<string, { canonicalName: string; name: string; code?: string; appearances: PrintPlant[] }>()
+export function identifyPlants(plants: readonly PrintPlant[], input: Pick<PdfInput, 'commonNames' | 'locale' | 'habits' | 'englishFallbacks'>): PdfLegendEntry[] {
+  const bySpecies = new Map<string, { canonicalName: string; name: string; code?: string; appearances: PrintPlant[]; habit: PdfHabit; englishFallback?: true }>()
+  const fallbacks = new Set(input.englishFallbacks)
   for (const plant of plants) {
     let entry = bySpecies.get(plant.canonicalName)
     if (!entry) {
-      entry = { canonicalName: plant.canonicalName, code: plant.speciesCode, name: names[plant.canonicalName]?.trim() || plant.canonicalName, appearances: [] }
+      const name = input.commonNames[plant.canonicalName]?.trim()
+      entry = { canonicalName: plant.canonicalName, code: plant.speciesCode, name: name || plant.canonicalName, appearances: [],
+        habit: input.habits?.[plant.canonicalName] ?? 'other', ...name && fallbacks.has(plant.canonicalName) ? { englishFallback: true as const } : {} }
       bySpecies.set(plant.canonicalName, entry)
     }
     if (!entry.appearances.some((a) => a.symbol === plant.symbol && a.color === plant.color)) entry.appearances.push(plant)
   }
-  const collator = new Intl.Collator(locale)
+  const collator = new Intl.Collator(input.locale)
   return Array.from(bySpecies.values()).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.canonicalName, b.canonicalName))
 }
 interface ExtentAnchor { point: PrintPoint; left: number; top: number; right: number; bottom: number }

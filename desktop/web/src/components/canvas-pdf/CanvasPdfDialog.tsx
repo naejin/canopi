@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { canvasPdf } from '../../app/canvas-pdf/live'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
-import { type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
+import { PDF_PLANT_COLORS, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { PdfPageEditor } from './PdfPageEditor'
@@ -67,40 +67,71 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
   return <div className={styles.overlay}>
     <section ref={root} role="dialog" aria-modal="true" aria-labelledby="canvas-pdf-title" className={styles.workspace}
       data-preserve-overlays="true" onKeyDown={keyDown}>
-      <header className={styles.header}>
-        <button type="button" disabled={delivering} onClick={() => workflow.close()}>← {t('pdf.backToDesign')}</button>
-        <h2 id="canvas-pdf-title">{t('pdf.title')}</h2>
-        <div className={styles.documentTools}>
-          <fieldset disabled={delivering || !!splitPreview} className={styles.toolbarGroup}><Dropdown<PdfPaper> ariaLabel={t('pdf.paper')} trigger={setup.paper} value={setup.paper}
-            items={[{ value: 'A4', label: 'A4' }, { value: 'Letter', label: 'US Letter' }]}
-            onChange={(paper) => workflow.configure({ paper })} preserveOverlays /></fieldset>
-          <LayerSettings workflow={workflow} disabled={delivering || !!splitPreview} />
-        </div>
-        <button type="button" aria-label={t('pdf.export')} className={styles.primary}
-          disabled={preparing || delivering || !!splitPreview || !!plan?.blocked || !state.result?.bytes} onClick={() => void workflow.save()}>
-          {t('pdf.export')} <span aria-hidden="true" className={styles.exportCount}>{plan?.pages.length ?? '·'}</span>
-        </button>
-      </header>
       <div className={styles.body}>
-        <aside className={styles.sidebar}>
-          {adding ? <button type="button" onClick={cancelAdd}>← {t('pdf.cancel')}</button>
-            : <button type="button" className={styles.addPage} aria-label={t('pdf.addPage')} disabled={disabled || !!splitPreview || !plan?.pages.length}
-              onClick={beginAdd}>+ {t('pdf.addPage')}</button>}
-          {adding && <button type="button" disabled={disabled} onClick={() => { const id = workflow.addWholeDesign(); if (id) openCreatedPage(id) }}>{t('pdf.wholeDesign')}</button>}
-          <PdfPageRail plan={plan} setup={setup} selected={pageId} disabled={delivering || !!splitPreview} onSelect={selectPage}
-            onHover={setHoveredPage} onRemove={(id) => { workflow.removeArea(id); if (pageId === id || page?.sourceId === id) selectPage('overview') }} />
+        <aside className={styles.sheet} aria-labelledby="canvas-pdf-title">
+          <div className={styles.sheetScroll}>
+            <header className={styles.sheetHeader}>
+              <button type="button" disabled={delivering} onClick={() => workflow.close()}>← {t('pdf.backToDesign')}</button>
+              <h2 id="canvas-pdf-title">{t('pdf.title')}</h2>
+            </header>
+            <div className={styles.options}>
+              <fieldset disabled={delivering || !!splitPreview} className={styles.option}>
+                <span className={styles.optionLabel}>{t('pdf.paper')}</span>
+                <Dropdown<PdfPaper> ariaLabel={t('pdf.paper')} trigger={setup.paper} value={setup.paper}
+                  items={[{ value: 'A4', label: 'A4' }, { value: 'Letter', label: 'US Letter' }]}
+                  onChange={(paper) => workflow.configure({ paper })} preserveOverlays />
+              </fieldset>
+              <fieldset className={styles.segmented} disabled={delivering || !!splitPreview}>
+                <legend className={styles.optionLabel}>{t('pdf.plantColors')}</legend>
+                <div role="radiogroup" aria-label={t('pdf.plantColors')}>
+                  {PDF_PLANT_COLORS.map((mode) => <label key={mode}>
+                    <input type="radio" name="pdf-plant-colors" value={mode} checked={(setup.plantColors ?? 'design') === mode}
+                      onChange={() => workflow.configure({ plantColors: mode })} />
+                    <span>{t(`pdf.plantColorModes.${mode}`)}</span>
+                  </label>)}
+                </div>
+              </fieldset>
+              <fieldset className={styles.include} disabled={delivering || !!splitPreview}>
+                <legend className={styles.optionLabel}>{t('pdf.include')}</legend>
+                {Array.from(new Set([...workflow.availableLayers.value, ...setup.layers])).map((name) => <label key={name} className={styles.check}>
+                  <input type="checkbox" checked={setup.layers.includes(name)} onChange={(event) => workflow.selectLayer(name, event.currentTarget.checked)} />
+                  <span>{t(`canvas.layers.${name}`, { defaultValue: name })}</span>
+                </label>)}
+                <label className={styles.check}>
+                  <input type="checkbox" role="switch" checked={setup.northArrow !== false}
+                    onChange={(event) => workflow.configure({ northArrow: event.currentTarget.checked })} />
+                  <span>{t('pdf.northArrow')}</span>
+                </label>
+              </fieldset>
+            </div>
+            {splitPreview ? <section className={styles.pageOptions} aria-label={t('pdf.splitSheets')}>
+              <p role="status" className={styles.sheetStatus}>{preparing ? t('pdf.preparing') : t('pdf.splitPreview', { count: plan?.pages.length ?? 0 })}</p>
+              <div className={styles.sheetActions}>
+                <button type="button" className={styles.primary} disabled={disabled || !!state.error} onClick={() => workflow.applySplit()}>{t('pdf.applySheets')}</button>
+                <button type="button" onClick={() => { workflow.cancelSplit(); selectPage('overview') }}>{t('pdf.cancel')}</button>
+              </div>
+            </section>
+              : page && !adding && <PdfPageToolbar key={page.id} page={page} workflow={workflow} disabled={delivering} inspecting={inspecting}
+                onSplit={disabled ? undefined : () => { workflow.previewSplit(page.id); selectPage('overview') }} onInspect={() => setInspecting(!inspecting)} />}
+            <div className={styles.sheetPages}>
+              {adding ? <button type="button" onClick={cancelAdd}>← {t('pdf.cancel')}</button>
+                : <button type="button" className={styles.addPage} aria-label={t('pdf.addPage')} disabled={disabled || !!splitPreview || !plan?.pages.length}
+                  onClick={beginAdd}>+ {t('pdf.addPage')}</button>}
+              {adding && <button type="button" disabled={disabled} onClick={() => { const id = workflow.addWholeDesign(); if (id) openCreatedPage(id) }}>{t('pdf.wholeDesign')}</button>}
+              <PdfPageRail plan={plan} setup={setup} selected={pageId} disabled={delivering || !!splitPreview} onSelect={selectPage}
+                onHover={setHoveredPage} onRemove={(id) => { workflow.removeArea(id); if (pageId === id || page?.sourceId === id) selectPage('overview') }} />
+            </div>
+          </div>
+          <button type="button" aria-label={t('pdf.export')} className={`${styles.primary} ${styles.save}`}
+            disabled={preparing || delivering || !!splitPreview || !!plan?.blocked || !state.result?.bytes} onClick={() => void workflow.save()}>
+            {t('pdf.export')} <span aria-hidden="true" className={styles.exportCount}>{plan?.pages.length ?? '·'}</span>
+          </button>
         </aside>
         <main className={styles.preview}>
           <div className={styles.previewHeading}>
             <strong>{adding ? t('pdf.addPage') : page?.areaName ?? (page?.kind === 'legend' ? (plan?.pages.find((source) => source.id === page.sourceId)?.detailNumber ?? t('pdf.overview')) + ' · ' + t(page.sourceId === 'overview' ? 'pdf.measurementSummary' : 'pdf.keyAndNotes') : t('pdf.overview'))}</strong>
             <span role="status">{preparing ? t('pdf.preparing') : page ? t('pdf.pageCount', { page: page.number, count: plan!.pages.length }) : ''}</span>
           </div>
-          {splitPreview && <div className={styles.notice} role="status">
-            <span>{preparing ? t('pdf.preparing') : t('pdf.splitPreview', { count: plan?.pages.length ?? 0 })}</span>
-            <button type="button" className={styles.primary} disabled={disabled || !!state.error} onClick={() => workflow.applySplit()}>{t('pdf.applySheets')}</button>
-            <button type="button" onClick={() => { workflow.cancelSplit(); selectPage('overview') }}>{t('pdf.cancel')}</button>
-          </div>}
-          {page && !adding && !splitPreview && <PdfPageToolbar key={page.id} page={page} workflow={workflow} disabled={delivering} inspecting={inspecting} onSplit={disabled ? undefined : () => { workflow.previewSplit(page.id); selectPage('overview') }} onInspect={() => setInspecting(!inspecting)} />}
           <p id="pdf-editor-hint" className={styles.editorHint}>{t(splitPreview ? 'pdf.splitHint' : adding ? 'pdf.addHint' : inspecting || page?.kind === 'legend' ? 'pdf.inspectHint' : page?.kind === 'overview' && (setup.areas?.length ?? 0) > 0 ? 'pdf.overviewHint' : 'pdf.frameHint')}</p>
           <div className={styles.paper} aria-busy={preparing}>
             {page && plan && <PdfPageEditor page={page} plan={plan} adding={adding} inspecting={inspecting} navigationOnly={!!splitPreview} disabled={disabled}
@@ -121,31 +152,5 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
         <span role="status">{state.status === 'saved' ? t('pdf.saved') : state.status === 'downloaded' ? t('pdf.downloaded') : ''}</span>
       </footer>
     </section>
-  </div>
-}
-function LayerSettings({ workflow, disabled }: { readonly workflow: PdfWorkflow; readonly disabled: boolean }) {
-  const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  const layers = Array.from(new Set([...workflow.availableLayers.value, ...workflow.setup.value.layers]))
-  useEffect(() => {
-    if (!open) return
-    const close = (event: PointerEvent) => { if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false) }
-    document.addEventListener('pointerup', close)
-    return () => document.removeEventListener('pointerup', close)
-  }, [open])
-  return <div ref={root} className={styles.layerControl} onFocusOut={(event) => {
-    if (!(event.relatedTarget instanceof Node) || !root.current?.contains(event.relatedTarget)) setOpen(false)
-  }} onKeyDown={(event) => {
-    if (open && event.key === 'Escape') { event.stopPropagation(); setOpen(false); root.current?.querySelector('button')?.focus() }
-  }}>
-    <button type="button" aria-label={t('pdf.layers')} aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>
-      {t('pdf.layers')} · {workflow.setup.value.layers.length}
-    </button>
-    {open && <fieldset className={styles.layerPopover} disabled={disabled}><legend>{t('pdf.layers')}</legend>
-      {layers.map((name) => <label key={name} className={styles.check}>
-        <input type="checkbox" checked={workflow.setup.value.layers.includes(name)} onChange={(event) => workflow.selectLayer(name, event.currentTarget.checked)} />
-        <span>{t(`canvas.layers.${name}`, { defaultValue: name })}</span>
-      </label>)}
-    </fieldset>}
   </div>
 }

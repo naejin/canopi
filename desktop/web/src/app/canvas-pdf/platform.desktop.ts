@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
-import { getCommonNames } from '../../ipc/species'
+import { getCommonNames, getSpeciesHabits } from '../../ipc/species'
 import type { PdfDelivery } from './workflow'
 export const resolvePdfNames = (names: readonly string[], locale: string) => getCommonNames([...names], locale)
+export const resolvePdfHabits = (names: readonly string[]) => getSpeciesHabits([...names])
 export function createPdfDelivery(): PdfDelivery {
   return {
     async save(bytes, name, signal) {

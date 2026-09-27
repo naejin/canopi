@@ -1055,7 +1055,6 @@
     "saved": "PDF salvo.",
     "downloaded": "Download do PDF solicitado.",
     "empty": "Nenhum conteúdo imprimível. Escolha camadas ou adicione uma área de impressão.",
-    "layers": "Camadas para imprimir",
     "pageCount": "Página {{page}} de {{count}}",
     "areaName": "Área de impressão {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Lados exteriores",
     "quantity": "Qtd.",
     "species": "espécies",
-    "plantKey": "Legenda das plantas"
+    "plantKey": "Legenda das plantas",
+    "habitTree": "Árvore",
+    "habitShrub": "Arbusto",
+    "habitHerbaceous": "Herbácea",
+    "habitClimber": "Trepadeira",
+    "habitOther": "Outras",
+    "continued": "(continuação)",
+    "englishFallback": "(en) = ainda sem nome neste idioma",
+    "symbols": "Símbolos",
+    "north": "N",
+    "include": "Incluir",
+    "plantColors": "Cores das plantas",
+    "plantColorModes": {
+      "design": "Como no Design",
+      "grayscale": "Escala de cinzentos",
+      "black": "Preto"
+    },
+    "northArrow": "Seta do norte e escala",
+    "pageOptions": "Página selecionada"
   },
   "speciesKey": {
     "title": "Plantas neste design",

@@ -8,21 +8,22 @@ import { fieldKey } from './field-key'
 import { integratedKey } from './integrated-key'
 import { zoneMeasurements } from './zone-measurements'
 import { groupedGuides, overviewMeasurements } from './overview-measurements'
-import { detailFurniture, groundScale } from './page-furniture'
+import { detailFurniture, groundScale, symbolLegend } from './page-furniture'
 import { fieldSummary } from './field-summary'
 import { drawOverviewGuideChain, overviewGuideChain, readableOverviewChain } from './overview-guides'
 import { fieldLabels } from './labels'
 import { contains, rotatedBounds } from './field-geometry'
 import { paperPlantRadius } from './plant-marks'
 import { FieldSpace } from './field-placement'
+import { recolorPlants } from './print-colors'
 import { pdfAreaKey } from './types'
-import type { PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView, PdfLayoutCache, PdfLayoutCacheEntry } from './types'
+import type { PdfPlantColors, PdfInput, PdfLabels, PdfOperation, PdfPage, PdfPlan, PdfSetup, PdfPageView, PdfLayoutCache, PdfLayoutCacheEntry } from './types'
 
 type Geometry = Pick<PdfPage, 'width' | 'height' | 'frame'> & { bodyTop?: number; keyFrame?: PrintBounds }
 const orientations = (view: PdfPageView = {}) => !view.orientation || view.orientation === 'auto' ? ['portrait', 'landscape'] as const : [view.orientation]
-export function printableCanvas(canvas: CanvasPrintSnapshot, layers: readonly string[]): CanvasPrintSnapshot {
+export function printableCanvas(canvas: CanvasPrintSnapshot, layers: readonly string[], plantColors?: PdfPlantColors): CanvasPrintSnapshot {
   const selected = (name: string) => layers.includes(name) && (canvas.layers.find(l => l.name === name)?.opacity ?? 1) > 0
-  return { layers: canvas.layers, plants: selected('plants') ? canvas.plants : [], zones: selected('zones') ? canvas.zones : [],
+  return { layers: canvas.layers, plants: selected('plants') ? recolorPlants(canvas.plants, plantColors) : [], zones: selected('zones') ? canvas.zones : [],
     annotations: selected('annotations') ? canvas.annotations : [], measurements: selected('measurement-guides') ? canvas.measurements : [] }
 }
 
@@ -39,7 +40,7 @@ export function buildPdfPlan(input: PdfInput, setup: PdfSetup, text: PdfTextEngi
 }
 
 function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, labels: PdfLabels, options: PdfLayoutOptions): PdfPlan {
-  const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers) }
+  const selected = { ...input, canvas: printableCanvas(input.canvas, setup.layers, setup.plantColors) }
   const dimensions = zoneMeasurements(selected.canvas.zones)
   const details: PdfPage[] = []
   const empty = !(setup.areas?.length || selected.canvas.plants.length || selected.canvas.zones.length || selected.canvas.annotations.length || selected.canvas.measurements.length)
@@ -78,7 +79,8 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
     return { id, area, geometry, ground, pointsPerMeter, summary }
   })
   if (fittedDetails.length) {
-    const references = fieldReferences(input, fittedDetails.map(p => p.ground))
+    // Identity collisions follow the printed colours, so grayscale and black get enclosures where needed.
+    const references = fieldReferences({ ...input, canvas: { ...input.canvas, plants: recolorPlants(input.canvas.plants, setup.plantColors) } }, fittedDetails.map(p => p.ground))
     references.measurementHomes = new Map(selected.canvas.measurements.flatMap(guide => {
       const home = fittedDetails.filter(p => contains(p.ground, guide.start) && contains(p.ground, guide.end))
         .sort((a, b) => b.pointsPerMeter - a.pointsPerMeter)[0]
@@ -86,7 +88,8 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
     }))
     for (const { id, area, geometry, ground, pointsPerMeter, summary } of [...fittedDetails].sort((a, b) => Number(b.id === options.priority) - Number(a.id === options.priority))) {
       const visible = { ...selected, canvas: visibleFieldCanvas(selected.canvas, ground) }
-      const names = Object.fromEntries(visible.canvas.plants.map(p => [p.canonicalName, input.commonNames[p.canonicalName]]))
+      const names = Object.fromEntries(visible.canvas.plants.map(p => [p.canonicalName,
+        [input.commonNames[p.canonicalName], input.habits?.[p.canonicalName], input.englishFallbacks?.includes(p.canonicalName)]]))
       const key = JSON.stringify([visible.canvas, names, input.locale, geometry, ground, pointsPerMeter, area.name, labels,
         Object.entries(setup.views ?? {}).filter(([key]) => key.startsWith(`${id}:legend:`)),
         [...references.species], [...references.notes], [...references.plants], [...references.measurements], [...references.identities ?? []],
@@ -173,8 +176,10 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
     detailNumber: page.kind === 'overview' || page.sourceId === 'overview' ? undefined : order.get(page.sourceId ?? page.id)! + 1 }))
   if (pages.length > 200) throw new Error('coverage-too-large')
   const byId = new Map(pages.map(page => [page.id, page]))
+  const showScale = setup.northArrow !== false
   const finalized = pages.map((page): PdfPage => {
     const operations = [...page.operations], links = [...page.links ?? []]
+    let legendSymbols: readonly string[] | undefined
     for (const reference of page.pageReferences ?? []) {
       const target = byId.get(reference.target)!
       const { x, y, size } = reference, mid = y - size * .35
@@ -182,7 +187,9 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
       operations.push({ ...textOp(text.line(String(target.detailNumber ?? target.number), size), x + 4 * MM, y, size), color: '#A06B1F' })
     }
     if (page.kind === 'overview') {
-      const heading = text.wrap(input.name, 16, page.width - 20 * MM, true)
+      const symbols = symbolLegend(selected.canvas.plants, page.width, labels, input.locale, text)
+      if (symbols) { operations.push(...symbols.operations); legendSymbols = symbols.symbols }
+      const heading = text.wrap(input.name, 16, Math.max(30 * MM, page.width - 20 * MM - (symbols ? symbols.width + 6 * MM : 0)), true)
       if (heading.length > 2) {
         const second = heading[1]!.runs.map(run => run.text).join('')
         heading[1] = text.line(`${second}…`, 16, true)
@@ -194,19 +201,26 @@ function buildPages(input: PdfInput, setup: PdfSetup, text: PdfTextEngine, label
       const y = page.height - 12 * MM
       operations.push(pathOp(`M${10 * MM} ${y} h${50 * MM} M${10 * MM} ${y - 2} v4 M${60 * MM} ${y - 2} v4`, PRINT.ink, null, .25 * MM))
       operations.push(textOp(text.line('50 mm', 7), 10 * MM, page.height - 6 * MM, 7))
-      operations.push(...groundScale(page, input.locale, text))
+      if (showScale) operations.push(...groundScale(page, input.locale, text, fieldLabels(labels).north))
       const reminder = text.line(`${labels.actualSize} · ${setup.paper}`, 7.5)
       operations.push(textOp(reminder, page.width - 10 * MM - reminder.width, page.height - 8.5 * MM, 7.5))
     } else if (page.kind === 'detail') {
-      operations.push(...detailFurniture(page, input, labels, setup.paper, text))
+      operations.push(...detailFurniture(page, input, labels, setup.paper, text, showScale))
       if (page.continuationIds?.[0]) links.push({ bounds: { x: 8 * MM, y: 8 * MM, width: 13 * MM, height: 11 * MM }, target: `page:${page.continuationIds[0]}` })
     } else {
       const source = byId.get(page.sourceId!)!
       operations.push(textOp(text.line(`${source.detailNumber ?? labels.overview} · ${source.kind === 'overview' ? fieldLabels(labels).measurementSummary : labels.keyAndNotes}`, 16), 10 * MM, 13 * MM, 16))
-      if (source.legend.length) operations.push(textOp(text.line(`${source.legend.reduce((sum, entry) => sum + (entry.count ?? 0), 0)} ${labels.plants}`, 8.5), 10 * MM, 18 * MM, 8.5))
+      if (source.legend.length) {
+        const count = text.line(`${source.legend.reduce((sum, entry) => sum + (entry.count ?? 0), 0)} ${labels.plants}`, 8.5)
+        operations.push(textOp(count, 10 * MM, 18 * MM, 8.5))
+        if (source.legend.some(entry => entry.englishFallback)) {
+          const lines = text.wrap(fieldLabels(labels).englishFallback, 8, page.width - 26 * MM - count.width)
+          lines.forEach((line, i) => operations.push({ ...textOp(line, page.width - 10 * MM - line.width, 18 * MM - (lines.length - 1 - i) * 3.2 * MM, 8), color: '#655f55' }))
+        }
+      }
       links.push({ bounds: { x: 10 * MM, y: 7 * MM, width: 100 * MM, height: 10 * MM }, target: `page:${source.id}` })
     }
-    return { ...page, operations, links }
+    return { ...page, operations, links, ...legendSymbols ? { symbols: legendSymbols } : {} }
   })
   const pickerFits = orientations().map(orientation => {
     const geometry = pageGeometry(setup.paper, orientation, 'detail')

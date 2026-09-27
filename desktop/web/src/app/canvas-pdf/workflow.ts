@@ -2,7 +2,7 @@ import { batch, signal } from '@preact/signals'
 import type { PrintBounds } from '../../canvas/print'
 import { splitFieldBounds } from './split-sheets'
 import { contains } from './field-geometry'
-import { PDF_ZOOM, pdfAreaKey, type PdfPageView } from './types'
+import { PDF_HABITS, PDF_ZOOM, pdfAreaKey, type PdfHabit, type PdfPageView } from './types'
 import type { PdfPreparation } from './prepare'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
 export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
@@ -11,6 +11,8 @@ export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: Abo
 export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null
   resolveNames(names: readonly string[], locale: string): Promise<Record<string, string>>
+  /** Catalog habit (`Tree`, `Shrub`, ...) by canonical name; absent where the edition has none. */
+  resolveHabits?(names: readonly string[]): Promise<Record<string, string>>
   prepare(input: PdfPreparation, signal: AbortSignal, progress?: (plan: PdfPlan) => void): Promise<PreparedPdf>
   readonly delivery: PdfDelivery
   labels(): PdfLabels
@@ -98,9 +100,9 @@ export function createPdfWorkflow(deps: PdfWorkflowDependencies) {
           return choices.views?.[pdfAreaKey(area)] ? true : contains(area.bounds, plant.position)
         })).map(plant => plant.canonicalName))) : []
       // Catalog failure retains full canonical identities on chosen detail sheets.
-      const commonNames = names.length ? await resolvePrintNames(deps.resolveNames, names, next.input.locale, abort.signal) : {}
+      const identities = names.length ? await resolvePrintIdentities(deps, names, next.input.locale, abort.signal) : { commonNames: {} }
       if (!current()) return
-      const result = await deps.prepare({ input: { ...next.input, commonNames }, setup: choices, labels: deps.labels(),
+      const result = await deps.prepare({ input: { ...next.input, ...identities }, setup: choices, labels: deps.labels(),
         fontBaseUrl: deps.fontBaseUrl(), cache, priority }, abort.signal, progress)
       if (!current()) return
       cache = result.layoutCache ?? {}
@@ -196,16 +198,37 @@ export type PdfWorkflow = ReturnType<typeof createPdfWorkflow>
 
 // The catalog reader is shared with the app. Stop waiting without disposing it;
 // a late answer must not keep an export job or its captured Design alive.
-function resolvePrintNames(resolveNames: PdfWorkflowDependencies['resolveNames'], names: readonly string[], locale: string,
-  signal: AbortSignal): Promise<Record<string, string>> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', abort) }
-    const finish = (value: Record<string, string>) => { if (settled) return; settled = true; cleanup(); resolve(value) }
-    const abort = () => { if (settled) return; settled = true; cleanup(); reject(new DOMException('Aborted', 'AbortError')) }
-    const timer = setTimeout(() => finish({}), 30_000)
-    signal.addEventListener('abort', abort, { once: true })
-    if (signal.aborted) { abort(); return }
-    try { void resolveNames(names, locale).then(finish, () => finish({})) } catch { finish({}) }
+type PrintIdentities = Pick<PdfInput, 'commonNames' | 'englishFallbacks' | 'habits'>
+/**
+ * Names in the chosen language, English for the rest (marked as fallbacks), and catalog habits.
+ * One deadline bounds every lookup; a failed or late lookup contributes nothing.
+ */
+async function resolvePrintIdentities(deps: PdfWorkflowDependencies, names: readonly string[], locale: string, signal: AbortSignal): Promise<PrintIdentities> {
+  let timer: ReturnType<typeof setTimeout> | undefined, onAbort = () => {}
+  const expired = new Promise<Record<string, string>>(resolve => { timer = setTimeout(() => resolve({}), 30_000) })
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')) }
+    if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true })
   })
+  aborted.catch(() => {})
+  const bounded = (lookup: () => Promise<Record<string, string>>) =>
+    Promise.race([(async () => { try { return await lookup() } catch { return {} } })(), expired, aborted])
+  try {
+    const [localized, catalogHabits] = await Promise.all([
+      bounded(() => deps.resolveNames(names, locale)),
+      deps.resolveHabits ? bounded(() => deps.resolveHabits!(names)) : Promise.resolve<Record<string, string>>({}),
+    ])
+    const missing = locale.split('-')[0] === 'en' ? [] : names.filter(name => !localized[name]?.trim())
+    const english = missing.length ? await bounded(() => deps.resolveNames(missing, 'en')) : {}
+    const englishFallbacks = missing.filter(name => english[name]?.trim())
+    const habits: Record<string, PdfHabit> = {}
+    for (const [name, habit] of Object.entries(catalogHabits)) {
+      const key = habit.trim().toLowerCase() as PdfHabit
+      if (PDF_HABITS.includes(key)) habits[name] = key
+    }
+    return { commonNames: { ...localized, ...Object.fromEntries(englishFallbacks.map(name => [name, english[name]!])) },
+      ...englishFallbacks.length ? { englishFallbacks } : {}, ...Object.keys(habits).length ? { habits } : {} }
+  } finally {
+    clearTimeout(timer); signal.removeEventListener('abort', onAbort)
+  }
 }

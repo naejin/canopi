@@ -122,7 +122,7 @@ function layoutField(input: PdfInput, frame: PrintBounds, ground: PrintBounds, s
     const key = appearanceKey(plant), peers = codePeers.get(key) ?? []
     peers.push(plant.id); codePeers.set(key, peers)
   }
-  const legend = identifyPlants(canvas.plants, input.commonNames, input.locale).map(entry => ({ ...entry, enclosures: entry.appearances.map(p => identities.get(p.id)!), reference: references.species.get(entry.canonicalName)!,
+  const legend = identifyPlants(canvas.plants, input).map(entry => ({ ...entry, enclosures: entry.appearances.map(p => identities.get(p.id)!), reference: references.species.get(entry.canonicalName)!,
     count: canvas.plants.filter(p => p.canonicalName === entry.canonicalName).length })).sort((a, b) => Number(a.reference) - Number(b.reference))
   operations.push({ kind: 'clip', bounds: frame })
   const zonePaths = new Set<PdfOperation>()

@@ -1055,7 +1055,6 @@
     "saved": "PDF сохранён.",
     "downloaded": "Запрошена загрузка PDF.",
     "empty": "Нет содержимого для печати. Выберите слои или добавьте область печати.",
-    "layers": "Слои для печати",
     "pageCount": "Страница {{page}} из {{count}}",
     "areaName": "Область печати {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Внешние стороны",
     "quantity": "Кол.",
     "species": "видов",
-    "plantKey": "Условные обозначения растений"
+    "plantKey": "Условные обозначения растений",
+    "habitTree": "Дерево",
+    "habitShrub": "Кустарник",
+    "habitHerbaceous": "Травянистое",
+    "habitClimber": "Лиана",
+    "habitOther": "Прочее",
+    "continued": "(продолжение)",
+    "englishFallback": "(en) = пока нет названия на этом языке",
+    "symbols": "Символы",
+    "north": "С",
+    "include": "Включить",
+    "plantColors": "Цвета растений",
+    "plantColorModes": {
+      "design": "Как в дизайне",
+      "grayscale": "Оттенки серого",
+      "black": "Чёрный"
+    },
+    "northArrow": "Стрелка севера и масштаб",
+    "pageOptions": "Выбранная страница"
   },
   "speciesKey": {
     "title": "Растения в этом дизайне",

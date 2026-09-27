@@ -8,7 +8,7 @@ import type {
   ProcessingRun,
   RasterQuantity,
 } from '../src/generated/contracts'
-import { detail, designFixture, species } from './fixtures'
+import { detail, designFixture, species, specimens } from './fixtures'
 
 const state = new URLSearchParams(location.search).get('state') ?? 'populated'
 const favoriteNames = new Set(state === 'empty' ? [] : species.map(plant => plant.canonical_name))
@@ -135,6 +135,9 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = favoriteNames.has(canonicalName); break
     case 'get_species_detail': result = { ...detail, canonical_name: canonicalName, common_name: plant.common_name }; break
     case 'get_species_batch': result = species.map(plant => ({ ...detail, ...plant })); break
+    // Wild strawberry has no catalog habit, so the PDF key shows the Other group.
+    case 'get_species_habits': result = Object.fromEntries(specimens.flatMap(([name, , symbol]): [string, string][] =>
+      symbol === 'canopy' ? [[name, 'Tree']] : symbol === 'shrub' ? [[name, 'Shrub']] : symbol === 'herb' ? [[name, 'Herbaceous']] : [])); break
     case 'get_common_names': result = Object.fromEntries(species.map(plant => [plant.canonical_name, plant.common_name])); break
     case 'get_locale_common_names':
     case 'get_species_images':

@@ -1055,7 +1055,6 @@
     "saved": "PDF salvato.",
     "downloaded": "Download del PDF richiesto.",
     "empty": "Nessun contenuto stampabile. Scegli i livelli o aggiungi un’area di stampa.",
-    "layers": "Livelli da stampare",
     "pageCount": "Pagina {{page}} di {{count}}",
     "areaName": "Area di stampa {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Lati esterni",
     "quantity": "Qtà",
     "species": "specie",
-    "plantKey": "Legenda delle piante"
+    "plantKey": "Legenda delle piante",
+    "habitTree": "Albero",
+    "habitShrub": "Arbusto",
+    "habitHerbaceous": "Erbacea",
+    "habitClimber": "Rampicante",
+    "habitOther": "Altro",
+    "continued": "(segue)",
+    "englishFallback": "(en) = ancora nessun nome in questa lingua",
+    "symbols": "Simboli",
+    "north": "N",
+    "include": "Includi",
+    "plantColors": "Colori delle piante",
+    "plantColorModes": {
+      "design": "Come nel Design",
+      "grayscale": "Scala di grigi",
+      "black": "Nero"
+    },
+    "northArrow": "Freccia del nord e scala",
+    "pageOptions": "Pagina selezionata"
   },
   "speciesKey": {
     "title": "Piante in questo design",

@@ -1055,7 +1055,6 @@
     "saved": "PDF guardado.",
     "downloaded": "Descarga del PDF solicitada.",
     "empty": "No hay contenido imprimible. Elija capas o añada un área de impresión.",
-    "layers": "Capas para imprimir",
     "pageCount": "Página {{page}} de {{count}}",
     "areaName": "Área de impresión {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Lados exteriores",
     "quantity": "Cant.",
     "species": "especies",
-    "plantKey": "Clave de plantas"
+    "plantKey": "Clave de plantas",
+    "habitTree": "Árbol",
+    "habitShrub": "Arbusto",
+    "habitHerbaceous": "Herbácea",
+    "habitClimber": "Trepadora",
+    "habitOther": "Otras",
+    "continued": "(continuación)",
+    "englishFallback": "(en) = aún sin nombre en este idioma",
+    "symbols": "Símbolos",
+    "north": "N",
+    "include": "Incluir",
+    "plantColors": "Colores de las plantas",
+    "plantColorModes": {
+      "design": "Como en el Diseño",
+      "grayscale": "Escala de grises",
+      "black": "Negro"
+    },
+    "northArrow": "Flecha del norte y escala",
+    "pageOptions": "Página seleccionada"
   },
   "speciesKey": {
     "title": "Plantas de este diseño",

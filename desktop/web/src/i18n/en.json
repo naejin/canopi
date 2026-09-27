@@ -1055,7 +1055,6 @@
     "saved": "PDF saved.",
     "downloaded": "PDF download requested.",
     "empty": "No printable content. Choose layers or add a print area.",
-    "layers": "Print layers",
     "pageCount": "Page {{page}} of {{count}}",
     "areaName": "Print area {{number}}",
     "errors": {
@@ -1105,7 +1104,25 @@
     "outerSides": "Exterior sides",
     "quantity": "Qty",
     "species": "species",
-    "plantKey": "Plant key"
+    "plantKey": "Plant key",
+    "habitTree": "Tree",
+    "habitShrub": "Shrub",
+    "habitHerbaceous": "Herbaceous",
+    "habitClimber": "Climber",
+    "habitOther": "Other",
+    "continued": "(continued)",
+    "englishFallback": "(en) = no name in this language yet",
+    "symbols": "Symbols",
+    "north": "N",
+    "include": "Include",
+    "plantColors": "Plant colors",
+    "plantColorModes": {
+      "design": "As in the Design",
+      "grayscale": "Grayscale",
+      "black": "Black"
+    },
+    "northArrow": "North arrow and scale",
+    "pageOptions": "Selected page"
   },
   "speciesKey": {
     "title": "Plants in this Design",

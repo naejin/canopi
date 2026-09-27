@@ -8,13 +8,15 @@ export default defineConfig(({ command }) => {
   return {
     root: path('.'),
     cacheDir: path('../node_modules/.vite-ui-gallery'),
+    // Serves the prepared PDF fonts (`npm run prepare:pdf-fonts`) for the PDF export workspace.
+    publicDir: path('../public'),
     plugins: [preact()],
     resolve: { alias: {
       '@tauri-apps/api/core': path('./memory-backend.ts'),
       '@tauri-apps/plugin-dialog': path('./memory-dialogs.ts'),
       '#species-catalog-live': path('../src/app/plant-browser/live.desktop.ts'),
       '#platform': path('../src/platform/browser.ts'),
-      '#canvas-pdf-platform': path('../src/app/canvas-pdf/platform.browser.ts'),
+      '#canvas-pdf-platform': path('./canvas-pdf-platform.ts'),
       '#budget-export-platform': path('./budget-export.ts'),
       '#geocoding-transport': path('../src/app/geocoding/transport.browser.ts'),
     } },

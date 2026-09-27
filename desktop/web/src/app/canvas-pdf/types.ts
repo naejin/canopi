@@ -2,6 +2,12 @@ import type { CanvasPrintSnapshot, PrintBounds, PrintPlant } from '../../canvas/
 import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
 export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
+/** Print-only plant colouring; the Design is never recoloured. */
+export type PdfPlantColors = 'design' | 'grayscale' | 'black'
+export const PDF_PLANT_COLORS: readonly PdfPlantColors[] = ['design', 'grayscale', 'black']
+/** Key groups in print order; species without a catalog habit are `other`. */
+export type PdfHabit = 'tree' | 'shrub' | 'herbaceous' | 'climber' | 'other'
+export const PDF_HABITS: readonly PdfHabit[] = ['tree', 'shrub', 'herbaceous', 'climber', 'other']
 export const PDF_ZOOM = { min: 1, max: 1000 } as const
 export interface PdfPageView {
   readonly zoom?: number
@@ -16,9 +22,27 @@ export interface PdfSetup {
   readonly layers: readonly string[]
   readonly areas?: readonly PdfPrintArea[]
   readonly views?: Readonly<Record<string, PdfPageView>>
+  /** Defaults to `design`. */
+  readonly plantColors?: PdfPlantColors
+  /** North arrow and ground scale bar on map pages; defaults to on. */
+  readonly northArrow?: boolean
 }
-export interface PdfInput { readonly name: string; readonly locale: string; readonly canvas: CanvasPrintSnapshot; readonly commonNames: Readonly<Record<string, string>> }
-export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelDefaults> { readonly notes: string; readonly observations: string; readonly keyAndNotes: string; readonly overview: string; readonly plants: string; readonly actualSize: string; }
+export interface PdfInput {
+  readonly name: string
+  readonly locale: string
+  readonly canvas: CanvasPrintSnapshot
+  /** Display names by canonical name: the chosen language, else English. */
+  readonly commonNames: Readonly<Record<string, string>>
+  /** Canonical names whose display name is the English fallback, printed with "(en)". */
+  readonly englishFallbacks?: readonly string[]
+  /** Catalog habit by canonical name. */
+  readonly habits?: Readonly<Record<string, PdfHabit>>
+}
+export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelDefaults> {
+  readonly notes: string; readonly observations: string; readonly keyAndNotes: string; readonly overview: string; readonly plants: string; readonly actualSize: string
+  /** Localized plant symbol names by symbol id, for the page 1 symbol legend. */
+  readonly symbolNames?: Readonly<Record<string, string>>
+}
 export type PdfMatrix = readonly [number, number, number, number, number, number]
 export type PdfOperation =
   | { readonly kind: 'path'; readonly d: string; readonly matrix: PdfMatrix; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly opacity: number }
@@ -26,7 +50,13 @@ export type PdfOperation =
   | { readonly kind: 'clip'; readonly bounds: PrintBounds }
   | { readonly kind: 'unclip' }
 export type PdfEnclosure = 'plain' | 'circle' | 'square' | 'diamond' | 'code'
-export interface PdfLegendEntry { readonly reference?: string; readonly count?: number; readonly code?: string; readonly canonicalName: string; readonly name: string; readonly appearances: readonly PrintPlant[]; readonly enclosures?: readonly PdfEnclosure[] }
+export interface PdfLegendEntry {
+  readonly reference?: string; readonly count?: number; readonly code?: string; readonly canonicalName: string; readonly name: string
+  readonly appearances: readonly PrintPlant[]; readonly enclosures?: readonly PdfEnclosure[]
+  readonly habit?: PdfHabit
+  /** The name is the English fallback for a missing chosen-language name. */
+  readonly englishFallback?: boolean
+}
 export interface PdfLink { readonly bounds: PrintBounds; readonly target: string }
 export interface PdfDestination { readonly id: string; readonly bounds?: PrintBounds }
 export interface PdfPageReference { readonly target: string; readonly x: number; readonly y: number; readonly size: number }
@@ -53,6 +83,8 @@ export interface PdfPage {
   readonly pointsPerMeter: number
   readonly operations: readonly PdfOperation[]
   readonly legend: readonly PdfLegendEntry[]
+  /** Symbol ids in the page 1 symbol legend, in printed order. */
+  readonly symbols?: readonly string[]
 }
 export interface PdfPlan {
   /** Fitted navigation surface for adding areas; never encoded as a PDF page. */

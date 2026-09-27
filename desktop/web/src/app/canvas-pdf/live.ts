@@ -1,9 +1,10 @@
 import { effect } from '@preact/signals'
-import { createPdfDelivery, resolvePdfNames } from '#canvas-pdf-platform'
+import { createPdfDelivery, resolvePdfHabits, resolvePdfNames } from '#canvas-pdf-platform'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { designSessionStore } from '../document-session/store'
 import { locale } from '../settings/state'
 import { t } from '../../i18n'
+import { PLANT_SYMBOL_IDS } from '../../generated/known-canopi-keys'
 import { createPdfWorkflow } from './workflow'
 
 export function canExportCanvasPdf(): boolean {
@@ -25,11 +26,15 @@ export const canvasPdf = createPdfWorkflow({
         && query.getSettledPlacedPlants() !== null }
   },
   resolveNames: resolvePdfNames,
+  resolveHabits: resolvePdfHabits,
   prepare: async (input, signal, progress) => (await import('./job')).preparePdfJob(input, signal, progress),
   delivery: createPdfDelivery(),
   labels: () => ({ notes: t('pdf.notes'), observations: t('pdf.observations'), keyAndNotes: t('pdf.keyAndNotes'), overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize'),
     detail: t('pdf.detail'), measurementSummary: t('pdf.measurementSummary'), zone: t('pdf.zone'), longSide: t('pdf.longSide'), width: t('pdf.width'), guides: t('pdf.guides'),
-    metres: t('pdf.metres'), diameters: t('pdf.diameters'), outerSides: t('pdf.outerSides'), quantity: t('pdf.quantity'), species: t('pdf.species'), plantKey: t('pdf.plantKey') }),
+    metres: t('pdf.metres'), diameters: t('pdf.diameters'), outerSides: t('pdf.outerSides'), quantity: t('pdf.quantity'), species: t('pdf.species'), plantKey: t('pdf.plantKey'),
+    habitTree: t('pdf.habitTree'), habitShrub: t('pdf.habitShrub'), habitHerbaceous: t('pdf.habitHerbaceous'), habitClimber: t('pdf.habitClimber'),
+    habitOther: t('pdf.habitOther'), continued: t('pdf.continued'), englishFallback: t('pdf.englishFallback'), symbols: t('pdf.symbols'), north: t('pdf.north'),
+    symbolNames: symbolNames() }),
   namePrintArea: (number) => t('pdf.areaName', { number }),
   fontBaseUrl: () => new URL(`${import.meta.env.BASE_URL}pdf-fonts/`, document.baseURI).href,
 })
@@ -44,4 +49,7 @@ const disposeObservation = effect(() => {
   }
   canvasPdf.synchronize(identity)
 })
+function symbolNames(): Record<string, string> {
+  return Object.fromEntries(PLANT_SYMBOL_IDS.map(symbol => [symbol, t(`canvas.plantSymbol.names.${symbol}`, symbol)]))
+}
 if (import.meta.hot) import.meta.hot.dispose(() => { disposeObservation(); canvasPdf.dispose() })
