@@ -192,6 +192,7 @@ function createInteractionDeps(
     | 'contextMenu'
     | 'publishToolGuidance'
     | 'nudge'
+    | 'readSingleKeyShortcuts'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
@@ -281,6 +282,7 @@ function createInteractionDeps(
     render,
     readSnapToGridEnabled: () => snapToGridEnabled.value,
     readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
+    ...overrides.readSingleKeyShortcuts ? { readSingleKeyShortcuts: overrides.readSingleKeyShortcuts } : {},
     readPlantSpacingIntervalMeters: overrides.readPlantSpacingIntervalMeters ?? (() => plantSpacingIntervalM.value),
     commitPlantSpacingIntervalMeters: overrides.commitPlantSpacingIntervalMeters ?? ((meters) => {
       plantSpacingIntervalM.value = meters
@@ -8042,7 +8044,8 @@ describe('SceneInteractionSession', () => {
 
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
-    expect(preview?.style.borderTop).toContain('solid')
+    // The preview is the stamp itself: the line zone's ghost under the pointer.
+    expect(preview?.querySelector('[data-saved-object-stamp-part="zone"]')?.tagName).toBe('polyline')
 
     events.pointerDown({ x: 120, y: 150 }, { button: 0 })
 
@@ -8090,7 +8093,7 @@ describe('SceneInteractionSession', () => {
     const preview = Array.from(container.children)
       .find((child) => (child as HTMLElement).style.zIndex === '2') as HTMLElement | undefined
     expect(preview?.style.display).toBe('block')
-    expect(preview?.style.width).toBe('8px')
+    expect(preview?.querySelector('[data-saved-object-stamp-part="annotation"], [data-saved-object-stamp-part="annotation-marker"]')).not.toBeNull()
 
     events.pointerDown({ x: 100, y: 110 }, { button: 0 })
 
@@ -8499,6 +8502,124 @@ describe('SceneInteractionSession', () => {
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-saved-object-stamp')
     expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
     session.dispose()
+  })
+
+  describe('stamp rotation', () => {
+    function holdSavedStamp(): void {
+      selectSavedObjectStampSourceForTests({
+        version: 2,
+        anchor: { x: 0, y: 0 },
+        plants: [{
+          id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, symbol: null,
+          position: { x: 10, y: 0 }, rotationDeg: null, scale: null,
+        }],
+        zones: [{
+          id: 'zone-1', name: null, zoneType: 'rect', rotationDeg: 0, fillColor: null,
+          points: [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 }],
+        }],
+        annotations: [{
+          id: 'annotation-1', annotationType: 'text', position: { x: 0, y: 10 }, text: 'Mulch', fontSize: 16, rotationDeg: null,
+        }],
+        groups: [],
+      })
+    }
+
+    function rotationSession(overrides: Parameters<typeof createInteractionDeps>[3] = {}) {
+      const published: CanvasToolGuidance[] = []
+      const deps = createInteractionDeps(container, store, camera, {
+        publishToolGuidance: (guidance) => { published.push(guidance) },
+        ...overrides,
+      })
+      return { session: createTestSession(deps), angle: () => published.at(-1)?.stampRotationDeg }
+    }
+
+    it('turns a held saved stamp by 15° with ] and [, in its preview and in the objects it places', () => {
+      holdSavedStamp()
+      const { session, angle } = rotationSession()
+      session.setTool('saved-object-stamp')
+      events.pointerMove({ x: 100, y: 100 }, { button: 0 })
+      expect(angle()).toBe(0)
+
+      for (let turn = 0; turn < 7; turn += 1) events.keyDown({ key: ']', target: container })
+      events.keyDown({ key: '[', target: container })
+      expect(angle()).toBe(90)
+      // The ghost turns with it: the plant 10 m east of the anchor now shows 10 m south of the pointer.
+      // At this zoom the plant is a dot.
+      const plantGhost = container.querySelector('[data-saved-object-stamp-part="plant-symbol"] circle')
+      expect([plantGhost?.getAttribute('cx'), plantGhost?.getAttribute('cy')]).toEqual(['100', '110'])
+
+      events.pointerDown({ x: 100, y: 100 }, { button: 0 })
+      expect(store.persisted.plants[0]?.position).toEqual({ x: 100, y: 110 })
+      expect(store.persisted.zones[0]?.rotationDeg).toBe(90)
+      expect(store.persisted.annotations[0]).toMatchObject({ position: { x: 90, y: 100 }, rotationDeg: 90 })
+      session.dispose()
+    })
+
+    it('keeps ] and [ to the stamp while one is held, and leaves them to the shortcuts otherwise', () => {
+      const bubbled = vi.fn()
+      document.addEventListener('keydown', bubbled)
+      try {
+        const { session, angle } = rotationSession()
+        session.setTool('object-stamp')
+        // Nothing held yet: ] is still Bring to front.
+        expect(events.keyDown({ key: ']', target: container }).defaultPrevented).toBe(false)
+        expect(bubbled).toHaveBeenCalledOnce()
+
+        store.updatePersisted((draft) => {
+          draft.plants = [{
+            kind: 'plant', locked: false, id: 'plant-1', canonicalName: 'Malus domestica', commonName: 'Apple',
+            color: null, stratum: null, canopySpreadM: 2, position: { x: 50, y: 60 }, rotationDeg: null,
+            notes: null, plantedDate: null, quantity: 1,
+          }]
+        })
+        events.pointerDown({ x: 54, y: 63 }, { button: 0 })
+        const held = events.keyDown({ key: ']', target: container })
+        expect(held.defaultPrevented).toBe(true)
+        expect(bubbled).toHaveBeenCalledOnce()
+        expect(angle()).toBe(15)
+        // Modified brackets and brackets typed in a field are not stamp turns.
+        events.keyDown({ key: ']', ctrlKey: true, target: container })
+        const field = document.createElement('input')
+        container.appendChild(field)
+        events.keyDown({ key: ']', target: field })
+        expect(angle()).toBe(15)
+
+        for (let turn = 0; turn < 5; turn += 1) events.keyDown({ key: ']', target: container })
+        // The sampled plant was picked 4 m east and 3 m south of its centre; at 90° that offset turns too.
+        events.pointerDown({ x: 100, y: 120 }, { button: 0 })
+        expect(store.persisted.plants[1]?.position).toEqual({ x: 103, y: 116 })
+        session.dispose()
+      } finally {
+        document.removeEventListener('keydown', bubbled)
+      }
+    })
+
+    it('with single-key shortcuts off, turns the stamp only while the map has focus', () => {
+      holdSavedStamp()
+      const { session, angle } = rotationSession({ readSingleKeyShortcuts: () => false })
+      session.setTool('saved-object-stamp')
+      events.pointerMove({ x: 100, y: 100 }, { button: 0 })
+
+      expect(events.keyDown({ key: ']' }).defaultPrevented).toBe(false)
+      expect(angle()).toBe(0)
+      events.keyDown({ key: ']', target: container })
+      expect(angle()).toBe(15)
+      session.dispose()
+    })
+
+    it('starts each new stamp upright', () => {
+      holdSavedStamp()
+      const { session, angle } = rotationSession()
+      session.setTool('saved-object-stamp')
+      events.keyDown({ key: ']', target: container })
+      expect(angle()).toBe(15)
+      holdSavedStamp()
+      events.pointerMove({ x: 100, y: 100 }, { button: 0 })
+      expect(angle()).toBe(0)
+      session.setTool('select')
+      expect(angle()).toBeNull()
+      session.dispose()
+    })
   })
 
   it('blocks Saved Object Stamp placement when any target Layer is locked', () => {
@@ -10618,7 +10739,7 @@ describe('SceneInteractionSession', () => {
     it('reports a polygon draft as a gesture until it is cancelled', () => {
       const { session, latest } = guidedSession()
       session.setTool('polygon')
-      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false, plantRow: null })
+      expect(latest()).toEqual({ gesture: false, stamp: null, stampRotationDeg: null, promptSpecies: false, plantRow: null })
 
       events.pointerDown({ x: 10, y: 10 })
       events.pointerUp({ x: 10, y: 10 })
@@ -10696,7 +10817,7 @@ describe('SceneInteractionSession', () => {
 
       session.dispose()
 
-      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false, plantRow: null })
+      expect(latest()).toEqual({ gesture: false, stamp: null, stampRotationDeg: null, promptSpecies: false, plantRow: null })
     })
   })
 

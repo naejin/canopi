@@ -2,6 +2,8 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { WorkspaceRuntimeComposition } from '../src/app/canvas-map-surface/workspace-runtime-composition'
 import { CanvasChrome } from '../src/components/canvas/CanvasChrome'
+import type { StampChooserProps } from '../src/components/canvas/ToolCard'
+import type { FunctionComponent } from 'preact'
 import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
 import panelStyles from '../src/components/panels/Panels.module.css'
 import { CanvasRuntimeCleanupError } from '../src/canvas/runtime/cleanup'
@@ -30,6 +32,8 @@ interface GalleryCanvasSurfaceProps {
   /** Select everything instead of the first species (a fixture without plants). */
   readonly selectAll?: boolean
   readonly onReadyChange: (ready: boolean) => void
+  /** Place a stamp's saved-stamp chooser, as the Desktop canvas hands it over; none on Web. */
+  readonly stampChooser?: FunctionComponent<StampChooserProps>
   readonly createRuntimeComposition?: (options: GalleryWorkspaceRuntimeOptions) => WorkspaceRuntimeComposition
 }
 
@@ -40,6 +44,7 @@ export function GalleryCanvasSurface({
   cameraState = 'site',
   selectAll = false,
   onReadyChange,
+  stampChooser,
   createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
 }: GalleryCanvasSurfaceProps) {
   const canvas = useRef<HTMLDivElement>(null)
@@ -238,6 +243,7 @@ export function GalleryCanvasSurface({
             key={activeSurface.value === 'lens' ? 'lens' : 'other'}
             projection={workspaceCanvasCommandProjection.value}
             canvasRef={canvas}
+            stampChooser={stampChooser}
           />
         ) : null}
       </div>

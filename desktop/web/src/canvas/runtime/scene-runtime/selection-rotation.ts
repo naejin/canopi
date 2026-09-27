@@ -1,6 +1,13 @@
 import type { SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint } from '../scene'
+import {
+  resolveSceneObjectGroupMembers,
+  type SceneAnnotationEntity,
+  type ScenePersistedState,
+  type ScenePlantEntity,
+  type ScenePoint,
+  type SceneZoneEntity,
+} from '../scene'
 
 /**
  * Rotating a selection about a pivot: the rotation handle's drag and the
@@ -159,12 +166,34 @@ export function applyRotationTransformToDraft(
 
 }
 
-function rotateZone(
-  zone: ScenePersistedState['zones'][number],
+/**
+ * Copies of scene objects turned about `pivot` exactly as a selection turns:
+ * plants move and stay upright, notes and oriented zones also turn their
+ * `rotationDeg`, polygonal and linear zones turn their points. Stamps placed
+ * at an angle use it, so a rotated stamp lands as if it had been rotated after.
+ */
+export function rotatePlantAbout<T extends ScenePlantEntity>(plant: T, pivot: ScenePoint, degrees: number): T {
+  return { ...plant, position: rotatePointAround(plant.position, pivot, degrees) }
+}
+
+export function rotateAnnotationAbout<T extends SceneAnnotationEntity>(annotation: T, pivot: ScenePoint, degrees: number): T {
+  return {
+    ...annotation,
+    position: rotatePointAround(annotation.position, pivot, degrees),
+    rotationDeg: normalizeRotationDeg((annotation.rotationDeg ?? 0) + degrees),
+  }
+}
+
+export function rotateZoneAbout<T extends SceneZoneEntity>(zone: T, pivot: ScenePoint, degrees: number): T {
+  return rotateZone(zone, { zoneType: zone.zoneType, points: zone.points, rotationDeg: zone.rotationDeg }, pivot, degrees)
+}
+
+function rotateZone<T extends ScenePersistedState['zones'][number]>(
+  zone: T,
   start: ZoneRotationStart,
   pivot: ScenePoint,
   deltaDeg: number,
-): ScenePersistedState['zones'][number] {
+): T {
   if (start.zoneType === 'ellipse' && start.points.length >= 2) {
     return {
       ...zone,

@@ -139,15 +139,16 @@ describe('Keyboard shortcuts dialog', () => {
       'Map and workspace',
     ])
     expect(sections[1]!.textContent).toBe('FileNew DesignCtrl N')
-    // Keys that are not menu commands: regions and nudges.
+    // Keys that are not menu commands: regions, nudges and turning a stamp.
     expect([...sections[2]!.querySelectorAll('dt')].map((row) => row.textContent)).toEqual([
       'Next area: title bar, tools, map, panel',
       'Previous area',
       'Nudge the selection 10 cm',
       'Nudge the selection 1 m',
+      'Turn the stamp you are placing by 15°',
     ])
     expect([...sections[2]!.querySelectorAll('dd')].map((row) => row.textContent)).toEqual([
-      'F6', 'Shift F6', 'Arrow keys', 'Shift Arrow keys',
+      'F6', 'Shift F6', 'Arrow keys', 'Shift Arrow keys', '[ ]',
     ])
     expect(container.textContent).toContain('Esc does one thing at a time')
     expect(document.activeElement?.textContent).toBe('Close')

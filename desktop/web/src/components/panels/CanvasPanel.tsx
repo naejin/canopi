@@ -12,6 +12,7 @@ import { currentDesign } from '../../app/document-session/store'
 import { appCommandGraphToolbarProjection } from '../../commands/registry'
 import { CanvasChrome } from '../canvas/CanvasChrome'
 import { InspectionStatus } from '../canvas/InspectionStatus'
+import { StampChooser } from '../canvas/StampChooser'
 import { useMapArea } from '../shared/useMapChrome'
 import styles from './Panels.module.css'
 
@@ -50,7 +51,7 @@ export function CanvasPanel() {
         />
         <div ref={rulerOverlayRef} className={styles.rulerOverlay} />
         {hasDesign && (
-          <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef}>
+          <CanvasChrome projection={appCommandGraphToolbarProjection.value} canvasRef={containerRef} stampChooser={StampChooser}>
             {/* Read-only raster inspection; nothing here is document state. */}
             <InspectionStatus />
           </CanvasChrome>

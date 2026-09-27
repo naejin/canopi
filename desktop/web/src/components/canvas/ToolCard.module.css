@@ -248,3 +248,27 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+/* Place a stamp's chooser: saved stamps as rows with the stamp icon. */
+.stampOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.stampGlyph {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}

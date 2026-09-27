@@ -10,7 +10,8 @@ import styles from './KeyboardShortcutsDialog.module.css'
 /**
  * Help › Keyboard shortcuts (F1): every menu command that has a shortcut,
  * grouped by menu, generated from the same menus so it cannot drift, then the
- * keys that are not commands (F6 between areas, arrow-key nudges). With
+ * keys that are not commands (F6 between areas, arrow-key nudges, turning a
+ * stamp). With
  * Settings › Keyboard › Single-key shortcuts off, the menus drop those keys,
  * so the list does too, and the footnote says how to turn them back on.
  */
@@ -29,13 +30,15 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
       ],
     }))
     .filter((section) => section.rows.length > 0)
-  // Keys that are not menu commands: moving between areas (F6) and nudging on the map.
+  // Keys that are not menu commands: moving between areas (F6), nudging on the map and turning a stamp.
   const arrows = t('shortcuts.arrowKeys')
   const workspaceRows = [
     { id: 'next-region', label: t('shortcuts.nextRegion'), shortcut: formatShortcut('F6', t) },
     { id: 'previous-region', label: t('shortcuts.previousRegion'), shortcut: formatShortcut('Shift+F6', t) },
     { id: 'nudge', label: t('shortcuts.nudge'), shortcut: arrows },
     { id: 'nudge-large', label: t('shortcuts.nudgeLarge'), shortcut: `${t('shortcutKeys.shift')} ${arrows}` },
+    // Place a stamp's [ and ]: while the map has focus even with single-key shortcuts off, like the arrows.
+    { id: 'rotate-stamp', label: t('shortcuts.rotateStamp'), shortcut: '[ ]' },
   ]
   const allSections = [...sections, { id: 'workspace', label: t('shortcuts.workspaceHeading'), rows: workspaceRows }]
 

@@ -29,8 +29,11 @@ export interface ToolCardContent {
   readonly subject: string | null
   readonly instruction: string
   readonly hints: string
-  /** Place plants offers Change species. */
-  readonly changeSpecies: boolean
+  /**
+   * The chooser link the card offers: Place plants' species, or Place a stamp's
+   * saved stamps (`stamp` names Change stamp once one is held).
+   */
+  readonly chooser: null | { readonly kind: 'species' } | { readonly kind: 'stamp'; readonly held: boolean }
   /** Plant a row: how many plants the drawn row adds, and how dense it is. */
   readonly rowCount: { readonly text: string; readonly density: 'normal' | 'dense' | 'blocked' } | null
 }
@@ -52,6 +55,7 @@ const TITLE_KEYS: Readonly<Record<string, string>> = {
 }
 
 const PLACING_TOOLS = new Set(['plant-stamp', 'object-stamp', 'saved-object-stamp'])
+const STAMP_TOOLS = new Set(['object-stamp', 'saved-object-stamp'])
 
 export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
   const { tool, guidance, translate } = input
@@ -70,9 +74,12 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
     subject,
     instruction,
     hints: hintText,
-    changeSpecies: tool === 'plant-stamp',
+    chooser: tool === 'plant-stamp' ? { kind: 'species' }
+      : STAMP_TOOLS.has(tool) ? { kind: 'stamp', held: guidance.stamp !== null || (tool === 'saved-object-stamp' && input.savedStamp !== null) }
+        : null,
     rowCount: null,
   })
+  const angle = guidance.stampRotationDeg ?? 0
 
   switch (tool) {
     case 'plant-stamp':
@@ -81,11 +88,13 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
         : card(null, translate(guidance.promptSpecies ? 'canvas.toolCard.chooseFirst' : 'canvas.toolCard.chooseSpecies'))
     case 'object-stamp':
       return guidance.stamp
-        ? card(stampName(guidance.stamp, translate), stampInstruction(guidance.stamp, translate))
+        ? card(stampName(guidance.stamp, translate), stampInstruction(guidance.stamp, angle, translate), hints('canvas.toolCard.stampRotateKeys'))
         : card(null, translate('canvas.toolCard.stampPick'))
     case 'saved-object-stamp': {
       const stamp = input.savedStamp
-      return card(stamp?.name ?? null, stamp ? stampInstruction(stamp, translate) : translate('canvas.toolCard.stampPlace'))
+      return stamp
+        ? card(stamp.name, stampInstruction(stamp, angle, translate), hints('canvas.toolCard.stampRotateKeys'))
+        : card(null, translate('canvas.toolCard.stampPlace'))
     }
     case 'plant-spacing': {
       const row = guidance.plantRow
@@ -127,13 +136,17 @@ function stampName(stamp: CanvasStampGuidance, translate: Translate): string {
   return translate('canvas.toolCard.stampGroup')
 }
 
-/** "10 plants · 4 species · click to place", counts only when the stamp has plants. */
-function stampInstruction(stamp: Pick<CanvasStampGuidance, 'plants' | 'species'>, translate: Translate): string {
+/**
+ * "10 plants · 4 species · turned 30° · click to place": counts only when the
+ * stamp has plants, the angle only once `[` or `]` has turned it.
+ */
+function stampInstruction(stamp: Pick<CanvasStampGuidance, 'plants' | 'species'>, angle: number, translate: Translate): string {
   const parts: string[] = []
   if (stamp.plants > 1) {
     parts.push(translate('canvas.toolCard.plants', { count: stamp.plants }))
     parts.push(translate('canvas.toolCard.species', { count: stamp.species }))
   }
+  if (angle !== 0) parts.push(translate('canvas.toolCard.stampTurned', { degrees: angle }))
   parts.push(translate('canvas.toolCard.stampPlace'))
   return parts.join(' · ')
 }

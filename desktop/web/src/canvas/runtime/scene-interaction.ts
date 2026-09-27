@@ -156,6 +156,8 @@ export interface SceneInteractionSessionDeps {
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
   readSnapToGuidesEnabled: () => boolean
+  /** Settings › Keyboard › Single-key shortcuts; on when absent. */
+  readSingleKeyShortcuts?: () => boolean
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
   translate: CanvasRuntimeTranslator
@@ -276,6 +278,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         switchTool: (name) => this._switchTool(name),
         focusHost: () => this._focusInteractionHost(),
         applySnapping: (point) => this._applySnapping(point),
+        readSingleKeyShortcuts: () => this._deps.readSingleKeyShortcuts?.() ?? true,
         getContainerRect: () => this._currentContainerRect(),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
         notifyGuidanceChange: () => this._publishToolGuidance(),
@@ -1205,6 +1208,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     publish({
       gesture: described.gesture ?? adapter?.hasActiveSceneEdit?.() ?? false,
       stamp: described.stamp ?? null,
+      stampRotationDeg: described.stampRotationDeg ?? null,
       promptSpecies: described.promptSpecies ?? false,
       plantRow: described.plantRow ?? null,
     })

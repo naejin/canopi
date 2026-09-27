@@ -1,4 +1,4 @@
-import type { RefObject } from 'preact'
+import type { FunctionComponent, RefObject } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
@@ -25,18 +25,27 @@ import { ToolIcon } from './toolbar-icons'
 import { displayedPlantColor } from '../../app/plant-display/state'
 import styles from './ToolCard.module.css'
 
+/** What the tool card hands its stamp chooser (`StampChooser`, Desktop). */
+export interface StampChooserProps {
+  onChosen(): void
+  onEscape(): void
+}
+
 /**
  * The tool card, top left beside the tool rail: the tool's name, the live
  * instruction (naming the chosen species or stamp) and quiet key hints that
  * end with what Esc does now. It hides for Select and Pan, in overview and
  * while "Where is your site?" shows. The text is one polite live region that
  * stays mounted, so choosing a tool is announced. Place plants carries the
- * species chooser while no species is chosen, or after Change species; Plant a
- * row carries its spacing field and the row's count once a plant is picked.
+ * species chooser while no species is chosen, or after Change species; Place a
+ * stamp opens its saved stamps with Change stamp; Plant a row carries its
+ * spacing field and the row's count once a plant is picked.
  */
-export function ToolCard({ canvasRef }: {
+export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
   /** The map host, which takes focus back once a species is chosen. */
   readonly canvasRef: RefObject<HTMLElement>
+  /** Place a stamp's saved-stamp chooser; editions without saved stamps offer none. */
+  readonly stampChooser?: FunctionComponent<StampChooserProps>
 }) {
   const tool = currentCanvasTool.value
   const guidance = currentCanvasToolGuidance.value
@@ -45,6 +54,7 @@ export function ToolCard({ canvasRef }: {
   const overview = currentCanvasQuerySurface.value?.viewport.value.mode === 'overview'
   const [changingSpecies, setChangingSpecies] = useState(false)
   const species = usePlantStampSpeciesName(source)
+  const [choosingStamp, setChoosingStamp] = useState(false)
   const content = siteLocateOpen.value || overview
     ? null
     : toolCardContent({
@@ -62,12 +72,16 @@ export function ToolCard({ canvasRef }: {
   if (guidance.promptSpecies && !lastPrompt.current) prompts.current += 1
   lastPrompt.current = guidance.promptSpecies
 
+  const stampChooser = StampChooser && content?.chooser?.kind === 'stamp' ? content.chooser : null
+
   useEffect(() => {
     if (tool !== 'plant-stamp') setChangingSpecies(false)
+    if (tool !== 'object-stamp' && tool !== 'saved-object-stamp') setChoosingStamp(false)
   }, [tool])
 
   function closeChooser(): void {
     setChangingSpecies(false)
+    setChoosingStamp(false)
     canvasRef.current?.focus({ preventScroll: true })
   }
 
@@ -78,9 +92,14 @@ export function ToolCard({ canvasRef }: {
       aria-label={content?.title}
     >
       {/* First in the DOM so the title and instruction wrap around it. */}
-      {content?.changeSpecies && source && !changingSpecies && (
+      {content?.chooser?.kind === 'species' && source && !changingSpecies && (
         <button type="button" className={styles.link} onClick={() => setChangingSpecies(true)}>
           {t('canvas.toolCard.changeSpecies')}
+        </button>
+      )}
+      {stampChooser && !choosingStamp && (
+        <button type="button" className={styles.link} onClick={() => setChoosingStamp(true)}>
+          {t(stampChooser.held ? 'canvas.toolCard.changeStamp' : 'canvas.toolCard.chooseSavedStamp')}
         </button>
       )}
       <div role="status" aria-live="polite">
@@ -120,6 +139,7 @@ export function ToolCard({ canvasRef }: {
           onEscape={closeChooser}
         />
       )}
+      {StampChooser && stampChooser && choosingStamp && <StampChooser onChosen={closeChooser} onEscape={closeChooser} />}
     </section>
   )
 }

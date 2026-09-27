@@ -20,7 +20,15 @@ const file = designFixture()
 let sequence = 3
 let stamps: SavedObjectStamp[] = state === 'empty' ? [] : ['Orchard guild', 'Pollinator border'].map((name, index) => ({
   id: `stamp-${index}`, name: state === 'long' ? name + ' — a reusable arrangement with a particularly long descriptive name' : name, sort_order: index,
-  payload_json: JSON.stringify({ version: 1, anchor: { x: 0, y: 0 }, plants: file.plants.slice(index * 3, index * 3 + 3).map(plant => ({ id: plant.id, canonicalName: plant.canonical_name, commonName: plant.common_name, position: plant.position, color: null, rotationDeg: null, scale: null })), zones: [], annotations: [], groups: [] }),
+  // A current (v2) payload in metres about its anchor: three plants in a bed, so a turned stamp shows its angle.
+  payload_json: JSON.stringify({
+    version: 2,
+    anchor: { x: 0, y: 0 },
+    plants: file.plants.slice(index * 3, index * 3 + 3).map((plant, slot) => ({ id: plant.id, canonicalName: plant.canonical_name, commonName: plant.common_name, position: { x: slot * 1.2 - 1.2, y: (slot % 2) * 0.8 }, color: null, rotationDeg: null, scale: null })),
+    zones: [{ id: `stamp-${index}-bed`, name: null, zoneType: 'rect', points: [{ x: -2, y: -0.8 }, { x: 2, y: -0.8 }, { x: 2, y: 1.6 }, { x: -2, y: 1.6 }], rotationDeg: 0, fillColor: null }],
+    annotations: [],
+    groups: [],
+  }),
   created_at: file.created_at, updated_at: file.updated_at,
 }))
 const lidarBounds: [number, number, number, number] = [-0.427, 48.305, -0.413, 48.314]

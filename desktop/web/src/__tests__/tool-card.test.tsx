@@ -5,6 +5,7 @@ import { locale } from '../app/settings/state'
 import { t } from '../i18n'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { ToolCard } from '../components/canvas/ToolCard'
+import { StampChooser } from '../components/canvas/StampChooser'
 import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-stamp-source'
 import {
   beginSavedObjectStampPlacement,
@@ -33,6 +34,32 @@ vi.mock('../app/site-onboarding/state', async (importOriginal) => {
   locating.open = open
   return { ...original, siteLocateOpen: open }
 })
+
+const savedStamps = vi.hoisted(() => ({ items: [] as import('../types/saved-object-stamps').SavedObjectStamp[] }))
+vi.mock('../ipc/saved-object-stamps', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ipc/saved-object-stamps')>()),
+  getSavedObjectStamps: vi.fn(async () => savedStamps.items),
+}))
+
+function savedStamp(id: string, name: string, canonicalNames: readonly string[]) {
+  return {
+    id,
+    name,
+    sort_order: 0,
+    created_at: '',
+    updated_at: '',
+    payload_json: JSON.stringify({
+      version: 2,
+      anchor: { x: 0, y: 0 },
+      plants: canonicalNames.map((canonicalName, index) => ({
+        id: `${id}-${index}`, canonicalName, commonName: null, color: null, position: { x: index, y: 0 }, rotationDeg: null, scale: null,
+      })),
+      zones: [],
+      annotations: [],
+      groups: [],
+    }),
+  }
+}
 
 const APPLE = { canonical_name: 'Malus domestica', common_name: 'Apple', stratum: 'high', width_max_m: 6 }
 
@@ -213,11 +240,84 @@ describe('Tool card', () => {
     await choose('object-stamp')
     expect(lines()).toEqual(['Place a stamp', 'Click a plant, zone, note or group to copy it', 'Esc to stop placing'])
 
-    await choose('object-stamp', { stamp: { kind: 'group', name: 'Pear guild', plants: 10, species: 4 } })
+    await choose('object-stamp', { stamp: { kind: 'group', name: 'Pear guild', plants: 10, species: 4 }, stampRotationDeg: 0 })
     expect(lines().slice(1, 3)).toEqual(['Pear guild', '10 plants · 4 species · click to place'])
 
     await choose('object-stamp', { stamp: { kind: 'zone', name: null, plants: 0, species: 0 } })
     expect(lines().slice(1, 3)).toEqual(['Zone', 'click to place'])
+  })
+
+  it('tells how to turn a held stamp and shows its angle once turned', async () => {
+    const guild = { kind: 'group', name: 'Pear guild', plants: 10, species: 4 } as const
+    await choose('object-stamp', { stamp: guild, stampRotationDeg: 0 })
+    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · click to place', '[ and ] rotate by 15° · Esc to stop placing'])
+
+    await choose('object-stamp', { stamp: guild, stampRotationDeg: 30 })
+    expect(lines().slice(1)).toEqual(['Pear guild', '10 plants · 4 species · turned 30° · click to place', '[ and ] rotate by 15° · Esc to stop placing'])
+  })
+
+  describe('Change stamp', () => {
+    afterEach(() => { savedStamps.items = [] })
+
+    it('opens a chooser of saved stamps that arms the chosen one and gives the map focus back', async () => {
+      savedStamps.items = [savedStamp('stamp-1', 'Guilde pommier', ['Malus domestica', 'Rubus idaeus']), savedStamp('stamp-2', '', ['Malus domestica'])]
+      const setTool = vi.fn((tool: string) => setCanvasTool(tool))
+      const map = document.createElement('div')
+      map.tabIndex = 0
+      document.body.append(map)
+      setCanvasRuntimeSurfaces({
+        commands: createTestCanvasCommandSurface({ tools: { setTool } }),
+        queries: createTestCanvasQuerySurface(),
+        documents: createTestCanvasDocumentSurface(),
+      })
+      await act(() => render(<ToolCard canvasRef={{ current: map }} stampChooser={StampChooser} />, container))
+      await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
+
+      const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Change stamp')!
+      await act(() => link.click())
+      await vi.waitFor(() => expect(container.querySelectorAll('[data-stamp-option]')).toHaveLength(2))
+      const options = [...container.querySelectorAll<HTMLButtonElement>('[data-stamp-option]')]
+      expect(options.map((option) => option.textContent)).toEqual(['Guilde pommier2 plants · 2 species', 'Untitled stamp1 plant'])
+      expect(document.activeElement).toBe(options[0])
+
+      await act(() => options[0]!.click())
+      expect(setTool).toHaveBeenLastCalledWith('saved-object-stamp')
+      expect(container.querySelector('[data-stamp-chooser]')).toBeNull()
+      expect(document.activeElement).toBe(map)
+      expect(lines()[1]).toBe('Guilde pommier')
+      map.remove()
+    })
+
+    it('is not offered where the edition keeps no saved stamps (Web)', async () => {
+      await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
+      expect([...container.querySelectorAll('button')].map((button) => button.textContent)).not.toContain('Change stamp')
+    })
+
+    it('offers copying an object from the map instead, and closes on Esc', async () => {
+      const setTool = vi.fn((tool: string) => setCanvasTool(tool))
+      setCanvasRuntimeSurfaces({
+        commands: createTestCanvasCommandSurface({ tools: { setTool } }),
+        queries: createTestCanvasQuerySurface(),
+        documents: createTestCanvasDocumentSurface(),
+      })
+      await act(() => render(<ToolCard canvasRef={{ current: null }} stampChooser={StampChooser} />, container))
+      await choose('object-stamp')
+      // Before anything is picked the card offers the saved stamps.
+      const link = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Choose a saved stamp')!
+      await act(() => link.click())
+      await vi.waitFor(() => expect(container.querySelector('[data-stamp-chooser]')?.textContent).toContain('No saved stamps yet'))
+
+      const copy = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Copy an object on the map')!
+      await act(() => copy.click())
+      // Leaving and re-arming Place a stamp drops what it held, so the next click picks again.
+      expect(setTool.mock.calls.map(([tool]) => tool)).toEqual(['select', 'object-stamp'])
+      expect(container.querySelector('[data-stamp-chooser]')).toBeNull()
+
+      await act(() => link.click())
+      const chooser = container.querySelector<HTMLElement>('[data-stamp-chooser]')!
+      await act(() => { chooser.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+      expect(container.querySelector('[data-stamp-chooser]')).toBeNull()
+    })
   })
 
   it('names a saved stamp from Favorites with its counts', async () => {
@@ -244,7 +344,7 @@ describe('Tool card', () => {
       }, { setTool } as never)
     })
 
-    expect(lines()).toEqual(['Place a stamp', 'Guilde pommier', '3 plants · 2 species · click to place', 'Esc to stop placing'])
+    expect(lines()).toEqual(['Place a stamp', 'Guilde pommier', '3 plants · 2 species · click to place', '[ and ] rotate by 15° · Esc to stop placing'])
   })
 
   describe('Plant a row', () => {

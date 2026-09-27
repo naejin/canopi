@@ -70,13 +70,15 @@ export interface CanvasToolGuidance {
   readonly gesture: boolean
   /** Place a stamp: the object picked to copy, once there is one. */
   readonly stamp: CanvasStampGuidance | null
+  /** Place a stamp: the held stamp's angle in degrees (clockwise, `[` and `]` turn it), or null without one. */
+  readonly stampRotationDeg: number | null
   /** Place plants: the map was clicked with no species chosen, so the card points to its chooser. */
   readonly promptSpecies: boolean
   /** Plant a row's step and spacing field. */
   readonly plantRow: CanvasPlantRowGuidance | null
 }
 
-export const IDLE_CANVAS_TOOL_GUIDANCE: CanvasToolGuidance = Object.freeze({ gesture: false, stamp: null, promptSpecies: false, plantRow: null })
+export const IDLE_CANVAS_TOOL_GUIDANCE: CanvasToolGuidance = Object.freeze({ gesture: false, stamp: null, stampRotationDeg: null, promptSpecies: false, plantRow: null })
 
 const toolGuidance = signal<CanvasToolGuidance>(IDLE_CANVAS_TOOL_GUIDANCE)
 
@@ -85,6 +87,7 @@ export function setCanvasToolGuidance(next: CanvasToolGuidance): void {
   if (
     current.gesture === next.gesture
     && current.promptSpecies === next.promptSpecies
+    && current.stampRotationDeg === next.stampRotationDeg
     && stampGuidanceEqual(current.stamp, next.stamp)
     && plantRowGuidanceEqual(current.plantRow, next.plantRow)
   ) return

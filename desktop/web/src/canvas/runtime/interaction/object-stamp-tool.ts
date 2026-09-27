@@ -1,4 +1,3 @@
-import { getAnnotationVisualWorldBounds } from '../annotation-layout'
 import type {
   SceneAnnotationEntity,
   SceneObjectGroupEntity,
@@ -15,11 +14,7 @@ import {
   sceneObjectGroupMemberLayerName,
 } from '../scene'
 import type { WorkspaceCameraFrameReader } from '../camera'
-import {
-  getPlantWorldBounds,
-  type PlantPresentationContext,
-} from '../plant-presentation'
-import { getZoneWorldBounds } from '../zone-geometry'
+import type { PlantPresentationContext } from '../plant-presentation'
 import type { SpeciesCacheEntry } from '../species-cache'
 import {
   createSceneArrangementPlacement,
@@ -27,11 +22,16 @@ import {
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
-import {
-  hideInteractionPreview,
-  showInteractionPreview,
-} from './overlay-ui'
 import { isEditableTarget } from './pointer-utils'
+import { clearSavedObjectStampGhosts, showStampGhosts } from './saved-object-stamp-tool'
+import {
+  rotateArrangementTemplate,
+  rotateStampEntities,
+  stampRotationStep,
+  turnStampRotation,
+  type StampEntities,
+  type StampRotationKeys,
+} from './stamp-rotation'
 import type { SceneToolAdapter } from './tool-adapter'
 import type { CanvasStampGuidance } from '../../session-state'
 
@@ -87,6 +87,10 @@ export interface ObjectStampTool {
   readonly hasSource: () => boolean
   /** The picked object as the tool card names it, or null before a pick. */
   readonly describeSource: () => CanvasStampGuidance | null
+  /** The held stamp's angle in degrees, clockwise; 0 for a new pick. */
+  readonly rotationDeg: () => number
+  /** Turns the held stamp and its preview by `degrees`. */
+  readonly rotateBy: (degrees: number) => void
   readonly pointerDown: (world: ScenePoint) => void
   readonly updatePreview: (world: ScenePoint) => void
   readonly clear: () => void
@@ -96,6 +100,8 @@ export interface ObjectStampTool {
 export function createObjectStampTool(context: ObjectStampToolContext): ObjectStampTool {
   const arrangementPlacement = createSceneArrangementPlacement({ sceneEdits: context.sceneEdits })
   let objectStampSource: ObjectStampSource | null = null
+  let rotationDeg = 0
+  let lastPreviewWorld: ScenePoint | null = null
 
   function pointerDown(world: ScenePoint): void {
     if (!objectStampSource) {
@@ -107,6 +113,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
   }
 
   function sampleObjectStampSource(world: ScenePoint): void {
+    rotationDeg = 0
     const scene = context.getSceneStore().persisted
     const hit = hitTestTopLevel(
       scene,
@@ -184,7 +191,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     const source = objectStampSource
     if (!source || !canUseObjectStampSource(source)) return
     arrangementPlacement.place({
-      template: objectStampArrangementTemplate(source),
+      template: rotateArrangementTemplate(objectStampArrangementTemplate(source), source.anchorWorld, rotationDeg),
       translateBy: objectStampDelta(source, anchorWorld),
       historyType: 'interaction-object-stamp',
       onCommitted: () => previewAtAnchor(anchorWorld),
@@ -221,107 +228,29 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     previewAtAnchor(context.applySnapping(world))
   }
 
+  function rotateBy(degrees: number): void {
+    if (!objectStampSource) return
+    rotationDeg = turnStampRotation(rotationDeg, degrees)
+    if (lastPreviewWorld) previewAtAnchor(lastPreviewWorld)
+  }
+
+  /** Ghosts of what a click would place, the stamp's anchor under the pointer, turned by the held angle. */
   function previewAtAnchor(anchorWorld: ScenePoint): void {
+    lastPreviewWorld = anchorWorld
     const source = objectStampSource
     if (!source) {
-      hideInteractionPreview(context.preview)
+      clearSavedObjectStampGhosts(context.preview)
       return
     }
-
-    if (source.kind === 'plant') {
-      const delta = objectStampDelta(source, anchorWorld)
-      const previewPlant = clonePlantForObjectStamp(source.plant)
-      previewPlant.position = translatePoint(source.plant.position, delta)
-      const bounds = getPlantWorldBounds(
-        previewPlant,
-        context.getPlantPresentationContext(context.camera.viewport.scale),
-      )
-      showInteractionPreview(
-        context.preview,
-        'ellipse',
-        context.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
-        context.camera.worldToScreen({
-          x: bounds.x + bounds.width,
-          y: bounds.y + bounds.height,
-        }),
-      )
-      return
-    }
-
-    if (source.kind === 'zone') {
-      const previewZone = cloneZoneForObjectStamp(source.zone)
-      previewZone.points = translateZonePoints(source.zone, objectStampDelta(source, anchorWorld))
-      if (previewZone.zoneType === 'line' && previewZone.points.length >= 2) {
-        showInteractionPreview(
-          context.preview,
-          'line',
-          context.camera.worldToScreen(previewZone.points[0]!),
-          context.camera.worldToScreen(previewZone.points[1]!),
-        )
-        return
-      }
-      const bounds = getZoneWorldBounds(previewZone)
-      if (!bounds) {
-        hideInteractionPreview(context.preview)
-        return
-      }
-      showInteractionPreview(
-        context.preview,
-        previewZone.zoneType === 'ellipse' ? 'ellipse' : 'rectangle',
-        context.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
-        context.camera.worldToScreen({
-          x: bounds.x + bounds.width,
-          y: bounds.y + bounds.height,
-        }),
-      )
-      return
-    }
-
-    if (source.kind === 'annotation') {
-      const previewAnnotation = cloneAnnotationForObjectStamp(source.annotation)
-      previewAnnotation.position = translatePoint(
-        source.annotation.position,
-        objectStampDelta(source, anchorWorld),
-      )
-      const bounds = getAnnotationVisualWorldBounds(previewAnnotation, context.camera.viewport.scale)
-      showInteractionPreview(
-        context.preview,
-        'rectangle',
-        context.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
-        context.camera.worldToScreen({
-          x: bounds.x + bounds.width,
-          y: bounds.y + bounds.height,
-        }),
-      )
-      return
-    }
-
-    if (source.kind === 'group') {
-      const bounds = objectStampGroupBounds(
-        source,
-        objectStampDelta(source, anchorWorld),
-        context.camera.viewport.scale,
-        context.getPlantPresentationContext(context.camera.viewport.scale),
-      )
-      if (!bounds) {
-        hideInteractionPreview(context.preview)
-        return
-      }
-      showInteractionPreview(
-        context.preview,
-        'rectangle',
-        context.camera.worldToScreen({ x: bounds.x, y: bounds.y }),
-        context.camera.worldToScreen({
-          x: bounds.x + bounds.width,
-          y: bounds.y + bounds.height,
-        }),
-      )
-    }
+    const entities = objectStampEntities(source, objectStampDelta(source, anchorWorld))
+    showStampGhosts(context, rotateStampEntities(entities, anchorWorld, rotationDeg))
   }
 
   function clear(): void {
     objectStampSource = null
-    hideInteractionPreview(context.preview)
+    rotationDeg = 0
+    lastPreviewWorld = null
+    clearSavedObjectStampGhosts(context.preview)
   }
 
   function describeSource(): CanvasStampGuidance | null {
@@ -346,6 +275,8 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
   return {
     hasSource: () => objectStampSource !== null,
     describeSource,
+    rotationDeg: () => rotationDeg,
+    rotateBy,
     pointerDown,
     updatePreview,
     clear,
@@ -355,6 +286,7 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
 
 export interface ObjectStampToolAdapterContext {
   readonly switchTool: (name: string) => void
+  readonly rotationKeys: StampRotationKeys
 }
 
 export function createObjectStampToolAdapter(
@@ -364,7 +296,10 @@ export function createObjectStampToolAdapter(
   return {
     onDeactivate: tool.clear,
     shouldSuppressHover: tool.hasSource,
-    describeGuidance: () => ({ stamp: tool.describeSource() }),
+    describeGuidance: () => ({
+      stamp: tool.describeSource(),
+      stampRotationDeg: tool.hasSource() ? tool.rotationDeg() : null,
+    }),
     pointerDown({ event, rawWorld, clearPointerGesture }) {
       event.preventDefault()
       tool.pointerDown(rawWorld)
@@ -377,6 +312,14 @@ export function createObjectStampToolAdapter(
       return true
     },
     keyDown(event) {
+      const step = tool.hasSource() ? stampRotationStep(event, context.rotationKeys) : null
+      if (step !== null) {
+        // `[` and `]` otherwise send to back and bring to front; while a stamp is held they only turn it.
+        event.preventDefault()
+        event.stopPropagation()
+        tool.rotateBy(step)
+        return true
+      }
       if (event.key !== 'Escape' || isEditableTarget(event.target)) return false
       event.preventDefault()
       context.switchTool('select')
@@ -521,42 +464,26 @@ function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoi
   return zone.points.map((point) => translatePoint(point, delta))
 }
 
-function objectStampGroupBounds(
-  source: ObjectStampGroupSource,
-  delta: ScenePoint,
-  viewportScale: number,
-  plantContext: PlantPresentationContext,
-): { x: number; y: number; width: number; height: number } | null {
-  const bounds: Array<{ x: number; y: number; width: number; height: number }> = []
-
-  for (const plant of source.plants) {
-    const previewPlant = clonePlantForObjectStamp(plant)
-    previewPlant.position = translatePoint(plant.position, delta)
-    bounds.push(getPlantWorldBounds(previewPlant, plantContext))
-  }
-
-  for (const zone of source.zones) {
-    const previewZone = cloneZoneForObjectStamp(zone)
-    previewZone.points = translateZonePoints(zone, delta)
-    const zoneBounds = getZoneWorldBounds(previewZone)
-    if (zoneBounds) bounds.push(zoneBounds)
-  }
-
-  for (const annotation of source.annotations) {
-    const previewAnnotation = cloneAnnotationForObjectStamp(annotation)
-    previewAnnotation.position = translatePoint(annotation.position, delta)
-    bounds.push(getAnnotationVisualWorldBounds(previewAnnotation, viewportScale))
-  }
-
-  if (bounds.length === 0) return null
-  const minX = Math.min(...bounds.map((entry) => entry.x))
-  const minY = Math.min(...bounds.map((entry) => entry.y))
-  const maxX = Math.max(...bounds.map((entry) => entry.x + entry.width))
-  const maxY = Math.max(...bounds.map((entry) => entry.y + entry.height))
+/** The stamp's objects moved by `delta`, as placement would add them. */
+function objectStampEntities(source: ObjectStampSource, delta: ScenePoint): StampEntities {
+  const plant = (entry: ScenePlantEntity): ScenePlantEntity => ({
+    ...clonePlantForObjectStamp(entry),
+    position: translatePoint(entry.position, delta),
+  })
+  const zone = (entry: SceneZoneEntity): SceneZoneEntity => ({
+    ...cloneZoneForObjectStamp(entry),
+    points: translateZonePoints(entry, delta),
+  })
+  const annotation = (entry: SceneAnnotationEntity): SceneAnnotationEntity => ({
+    ...cloneAnnotationForObjectStamp(entry),
+    position: translatePoint(entry.position, delta),
+  })
+  if (source.kind === 'plant') return { plants: [plant(source.plant)], zones: [], annotations: [] }
+  if (source.kind === 'zone') return { plants: [], zones: [zone(source.zone)], annotations: [] }
+  if (source.kind === 'annotation') return { plants: [], zones: [], annotations: [annotation(source.annotation)] }
   return {
-    x: minX,
-    y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
+    plants: source.plants.map(plant),
+    zones: source.zones.map(zone),
+    annotations: source.annotations.map(annotation),
   }
 }

@@ -61,6 +61,8 @@ export interface SceneToolRegistryContext {
   /** Focus the map host, as after a gesture ends from a field it opened. */
   readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
+  /** Settings › Keyboard › Single-key shortcuts, for the stamp's `[` and `]`. */
+  readonly readSingleKeyShortcuts: () => boolean
   readonly getContainerRect: () => DOMRect
   readonly notifyTransientHistoryChange: () => void
   /** A tool's guidance changed outside a map event (a note field closed). */
@@ -83,6 +85,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
   }
 
   try {
+    const rotationKeys = { container: context.container, readSingleKeyShortcuts: context.readSingleKeyShortcuts }
     const textTool = own(createTextAnnotationTool({
       container: context.container,
       focusHost: context.focusHost,
@@ -135,6 +138,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       sceneEdits: context.sceneEdits,
       applySnapping: context.applySnapping,
       switchTool: context.switchTool,
+      rotationKeys,
     }), (tool) => tool.dispose())
     const plantSpacingTool = own(createPlantSpacingTool({
       container: context.container,
@@ -170,9 +174,11 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       ['polygon', zoneDrawingAdapters.polygon],
       ['object-stamp', createObjectStampToolAdapter(objectStampTool, {
         switchTool: context.switchTool,
+        rotationKeys,
       })],
       ['saved-object-stamp', createSavedObjectStampToolAdapter(savedObjectStampTool, {
         switchTool: context.switchTool,
+        rotationKeys,
       })],
       ['plant-spacing', createPlantSpacingToolAdapter(plantSpacingTool)],
     ]))

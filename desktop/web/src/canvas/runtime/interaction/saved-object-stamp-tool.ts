@@ -30,6 +30,14 @@ import { getAnnotationTextColor, getLabelHalo, getPlantSymbolEdgeColor, getPlant
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './layer-guards'
 import { isEditableTarget } from './pointer-utils'
+import {
+  rotateArrangementTemplate,
+  rotateStampEntities,
+  stampRotationStep,
+  turnStampRotation,
+  type StampEntities,
+  type StampRotationKeys,
+} from './stamp-rotation'
 import type { SceneToolAdapter } from './tool-adapter'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -48,10 +56,15 @@ export interface SavedObjectStampPlacementContext {
 
 export interface SavedObjectStampToolContext extends SavedObjectStampPlacementContext {
   readonly switchTool: (name: string) => void
+  readonly rotationKeys: StampRotationKeys
 }
 
 export interface SavedObjectStampTool {
   readonly hasSource: () => boolean
+  /** The held stamp's angle in degrees, clockwise; 0 for a new stamp. */
+  readonly rotationDeg: () => number
+  /** Turns the held stamp and its preview by `degrees`. */
+  readonly rotateBy: (degrees: number) => void
   readonly pointerDown: (world: ScenePoint) => void
   readonly updatePreview: (world: ScenePoint) => void
   readonly clear: () => void
@@ -59,8 +72,25 @@ export interface SavedObjectStampTool {
 }
 
 export function createSavedObjectStampTool(context: SavedObjectStampToolContext): SavedObjectStampTool {
+  let rotation = { source: null as SavedObjectStampPayload | null, degrees: 0 }
+  let lastPreviewWorld: ScenePoint | null = null
+
   function hasSource(): boolean {
     return readSavedObjectStampSource() !== null
+  }
+
+  /** The angle of the stamp held now; choosing another stamp starts it upright. */
+  function rotationDeg(): number {
+    const source = readSavedObjectStampSource()
+    if (rotation.source !== source) rotation = { source, degrees: 0 }
+    return rotation.degrees
+  }
+
+  function rotateBy(degrees: number): void {
+    const source = readSavedObjectStampSource()
+    if (!source) return
+    rotation = { source, degrees: turnStampRotation(rotationDeg(), degrees) }
+    if (lastPreviewWorld) updatePreview(lastPreviewWorld)
   }
 
   function pointerDown(world: ScenePoint): void {
@@ -69,22 +99,27 @@ export function createSavedObjectStampTool(context: SavedObjectStampToolContext)
     placeSavedObjectStampAt(context, source, world, () => {
       clear()
       context.switchTool('select')
-    })
+    }, rotationDeg())
   }
 
   function updatePreview(world: ScenePoint): void {
+    lastPreviewWorld = world
     const source = readSavedObjectStampSource()
     if (!source) clearSavedObjectStampGhosts(context.preview)
-    else previewSavedObjectStampAt(context, source, world)
+    else previewSavedObjectStampAt(context, source, world, rotationDeg())
   }
 
   function clear(): void {
     clearSavedObjectStampSource()
     clearSavedObjectStampGhosts(context.preview)
+    rotation = { source: null, degrees: 0 }
+    lastPreviewWorld = null
   }
 
   return {
     hasSource,
+    rotationDeg,
+    rotateBy,
     pointerDown,
     updatePreview,
     clear,
@@ -94,11 +129,12 @@ export function createSavedObjectStampTool(context: SavedObjectStampToolContext)
 
 export function createSavedObjectStampToolAdapter(
   tool: SavedObjectStampTool,
-  context: Pick<SavedObjectStampToolContext, 'switchTool'>,
+  context: Pick<SavedObjectStampToolContext, 'switchTool' | 'rotationKeys'>,
 ): SceneToolAdapter {
   return {
     onDeactivate: tool.clear,
     shouldSuppressHover: tool.hasSource,
+    describeGuidance: () => ({ stampRotationDeg: tool.hasSource() ? tool.rotationDeg() : null }),
     pointerDown({ event, rawWorld, clearPointerGesture }) {
       event.preventDefault()
       tool.pointerDown(rawWorld)
@@ -111,6 +147,14 @@ export function createSavedObjectStampToolAdapter(
       return true
     },
     keyDown(event) {
+      const step = tool.hasSource() ? stampRotationStep(event, context.rotationKeys) : null
+      if (step !== null) {
+        // `[` and `]` otherwise send to back and bring to front; while a stamp is held they only turn it.
+        event.preventDefault()
+        event.stopPropagation()
+        tool.rotateBy(step)
+        return true
+      }
       if (event.key !== 'Escape' || isEditableTarget(event.target)) return false
       event.preventDefault()
       tool.clear()
@@ -126,11 +170,12 @@ export function placeSavedObjectStampAt(
   source: SavedObjectStampPayload,
   rawAnchorWorld: ScenePoint,
   onCommitted?: () => void,
+  rotationDeg = 0,
 ): boolean {
   if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) return false
   const delta = stampDelta(source, context.applySnapping(rawAnchorWorld))
   return createSceneArrangementPlacement({ sceneEdits: context.sceneEdits }).place({
-    template: savedObjectStampArrangementTemplate(source),
+    template: rotateArrangementTemplate(savedObjectStampArrangementTemplate(source), source.anchor, rotationDeg),
     translateBy: delta,
     historyType: 'interaction-saved-object-stamp',
     onCommitted,
@@ -173,12 +218,19 @@ export function previewSavedObjectStampAt(
   context: SavedObjectStampPlacementContext,
   source: SavedObjectStampPayload,
   rawAnchorWorld: ScenePoint,
+  rotationDeg = 0,
 ): boolean {
   if (!canPlaceSavedObjectStamp(context.getSceneStore().persisted, source)) {
     clearSavedObjectStampGhosts(context.preview)
     return false
   }
-  showSavedObjectStampGhosts(context, source, stampDelta(source, context.applySnapping(rawAnchorWorld)))
+  const anchor = context.applySnapping(rawAnchorWorld)
+  const delta = stampDelta(source, anchor)
+  showStampGhosts(context, rotateStampEntities({
+    plants: source.plants.map((plant) => scenePlantFromSavedPlant(plant, delta)),
+    zones: source.zones.map((zone) => sceneZoneFromSavedZone(zone, delta)),
+    annotations: source.annotations.map((annotation) => sceneAnnotationFromSavedAnnotation(annotation, delta)),
+  }, anchor, rotationDeg))
   return true
 }
 
@@ -195,10 +247,10 @@ function requiredLayers(source: SavedObjectStampPayload): SceneCreationLayerName
   return layers
 }
 
-function showSavedObjectStampGhosts(
-  context: SavedObjectStampPlacementContext,
-  source: SavedObjectStampPayload,
-  delta: ScenePoint,
+/** Draws a stamp's objects where a click would place them, as translucent ghosts over the map. */
+export function showStampGhosts(
+  context: Pick<SavedObjectStampPlacementContext, 'preview' | 'camera' | 'getPlantPresentationContext'>,
+  entities: StampEntities,
 ): void {
   const preview = context.preview
   preview.replaceChildren()
@@ -238,18 +290,12 @@ function showSavedObjectStampGhosts(
   })
   preview.appendChild(svg)
 
-  for (const zone of source.zones) {
-    appendZoneGhost(svg, context, sceneZoneFromSavedZone(zone, delta))
-  }
+  for (const zone of entities.zones) appendZoneGhost(svg, context, zone)
 
   const plantContext = context.getPlantPresentationContext(context.camera.viewport.scale)
-  for (const plant of source.plants) {
-    appendPlantGhost(svg, context, scenePlantFromSavedPlant(plant, delta), plantContext)
-  }
+  for (const plant of entities.plants) appendPlantGhost(svg, context, plant, plantContext)
 
-  for (const annotation of source.annotations) {
-    appendAnnotationGhost(svg, context, sceneAnnotationFromSavedAnnotation(annotation, delta))
-  }
+  for (const annotation of entities.annotations) appendAnnotationGhost(svg, context, annotation)
 }
 
 export function clearSavedObjectStampGhosts(preview: HTMLElement): void {
@@ -259,7 +305,7 @@ export function clearSavedObjectStampGhosts(preview: HTMLElement): void {
 
 function appendZoneGhost(
   svg: SVGSVGElement,
-  context: SavedObjectStampPlacementContext,
+  context: Pick<SavedObjectStampPlacementContext, 'camera'>,
   zone: SceneZoneEntity,
 ): void {
   const visual = resolveZoneVisual(zone)
@@ -314,7 +360,7 @@ function zoneScreenPoints(zone: SceneZoneEntity, camera: WorkspaceCameraFrameRea
 
 function appendPlantGhost(
   svg: SVGSVGElement,
-  context: SavedObjectStampPlacementContext,
+  context: Pick<SavedObjectStampPlacementContext, 'camera'>,
   plant: ScenePlantEntity,
   plantContext: PlantPresentationContext,
 ): void {
@@ -389,7 +435,7 @@ function appendPlantSymbolCommands(
 
 function appendAnnotationGhost(
   svg: SVGSVGElement,
-  context: SavedObjectStampPlacementContext,
+  context: Pick<SavedObjectStampPlacementContext, 'camera'>,
   annotation: SceneAnnotationEntity,
 ): void {
   if (annotation.annotationType !== 'text') return

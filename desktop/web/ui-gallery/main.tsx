@@ -37,6 +37,7 @@ import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { pendingAttachments } from '../src/app/lidar/actions'
 import { closeSiteDataDetails, dataDialog, openSiteDataDetails, selectSiteRow } from '../src/app/lidar/library-navigation'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
+import { StampChooser } from '../src/components/canvas/StampChooser'
 import { PlantSymbolSheet } from './PlantSymbolSheet'
 import { GalleryViewSnapshots } from './GalleryViewSnapshots'
 import { readPlanningViewState } from '../src/app/planning-view/state'
@@ -187,6 +188,7 @@ function GalleryCanvasWorkspace() {
         : fixtureState === 'max-zoom' ? 'maximum' : 'site'}
       selectAll={fixtureState === 'zone'}
       onReadyChange={setGalleryCanvasReady}
+      stampChooser={edition === 'desktop' ? StampChooser : undefined}
     />
   )
 }

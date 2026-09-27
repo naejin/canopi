@@ -117,6 +117,8 @@ export interface CanvasRuntimeSettingsAdapter {
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
+  /** Settings › Keyboard › Single-key shortcuts. */
+  readSingleKeyShortcuts(): boolean
   readPlantSpacingIntervalMeters(): number
   /** Where a new or empty Design opens: an overview of the app's last view (zoom capped by the app), if any. */
   readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
@@ -196,6 +198,7 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
+      readSingleKeyShortcuts: () => true,
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
       commitPlantSpacingIntervalMeters: (meters) => {
         plantSpacingIntervalM = meters

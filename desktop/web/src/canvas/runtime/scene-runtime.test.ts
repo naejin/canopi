@@ -350,6 +350,7 @@ function createTestSettingsAdapter(
     readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
+    readSingleKeyShortcuts: () => true,
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
     commitPlantSpacingIntervalMeters: (meters) => {
       plantSpacingIntervalM = meters
