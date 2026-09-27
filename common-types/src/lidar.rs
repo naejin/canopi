@@ -286,9 +286,8 @@ pub struct LidarPresentationSection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum LidarPresentationEntryKind {
     Source,
-    // A derived library item. Renamed `Derived` when saved views and stories
-    // bump the file version (ADR 0011).
-    Analysis,
+    // A derived library item (an analysis result).
+    Derived,
 }
 
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]

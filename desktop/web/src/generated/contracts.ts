@@ -473,7 +473,7 @@ export type LidarPresentationEntry = {
 	style: string | null,
 };
 
-export type LidarPresentationEntryKind = "Source" | "Analysis";
+export type LidarPresentationEntryKind = "Source" | "Derived";
 
 export type LidarPresentationSection = {
 	schema_version: number,

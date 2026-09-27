@@ -348,7 +348,7 @@ describe('numeric inspection session state', () => {
       lidar: { entries: Array<Record<string, unknown>> }
     }
     design.lidar.entries.push({
-      kind: 'Analysis',
+      kind: 'Derived',
       id: 'adef-absent',
       visible: true,
       opacity: 1,
@@ -362,7 +362,7 @@ describe('numeric inspection session state', () => {
     )
     lidarLibrary.value = libraryWithGeneration('gen-1') as never
 
-    beginInspection({ kind: 'Analysis', id: 'adef-absent', name: 'Absent' })
+    beginInspection({ kind: 'Derived', id: 'adef-absent', name: 'Absent' })
     await sampleInspectionPoint(POINT)
     expect(inspectionSample.value).toEqual({
       kind: 'unavailable',
@@ -375,14 +375,14 @@ describe('numeric inspection session state', () => {
     const design = designWithPresentedLayer() as unknown as {
       lidar: { entries: Array<Record<string, unknown>> }
     }
-    design.lidar.entries.push({ kind: 'Analysis', id: 'slope-1', visible: true, opacity: 1, order: 1, style: null })
+    design.lidar.entries.push({ kind: 'Derived', id: 'slope-1', visible: true, opacity: 1, order: 1, style: null })
     replaceCurrentDesignState(design as unknown as Parameters<typeof replaceCurrentDesignState>[0], null, 'Inspect')
     lidarLibrary.value = librarySnapshot([
       sourceItem('lyr-1', 'Ground', { generation_id: 'gen-1' }),
       slopeItem('slope-1', 'lyr-1', { generation_id: 'sgen-1' }),
     ])
 
-    beginInspection({ kind: 'Analysis', id: 'slope-1', name: 'Slope' })
+    beginInspection({ kind: 'Derived', id: 'slope-1', name: 'Slope' })
     void sampleInspectionPoint(POINT)
     await Promise.resolve()
     expect(samplePixel.mock.calls[0]?.[0]).toMatchObject({ kind: 'Derived', entity_id: 'slope-1', expected_generation_id: 'sgen-1' })

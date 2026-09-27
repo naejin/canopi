@@ -52,7 +52,7 @@ describe('Web Layers', () => {
       schema_version: 1,
       entries: [
         { kind: 'Source', id: 'a', visible: true, opacity: 1, order: 0, style: null },
-        { kind: 'Analysis', id: 's', visible: true, opacity: 1, order: 1, style: null },
+        { kind: 'Derived', id: 's', visible: true, opacity: 1, order: 1, style: null },
       ],
     })
     expect(container.textContent).toContain('This Design has 2 terrain or height layers.')

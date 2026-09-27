@@ -149,16 +149,6 @@ export interface LidarPresentationItem {
   depth: number
 }
 
-/** The library role a Design entry names. */
-export function itemRole(kind: LidarPresentationEntryKind): LibraryItemRole {
-  return kind === 'Analysis' ? 'Derived' : 'Source'
-}
-
-/** The Design entry kind that references an item of this role. */
-export function presentationEntryKind(role: LibraryItemRole): LidarPresentationEntryKind {
-  return role === 'Derived' ? 'Analysis' : 'Source'
-}
-
 /** The range styling and legends use: the labelled display range, else the exact values. */
 export function itemDisplayRange(item: LibraryItemSummary): [number, number] | null {
   return item.display_range ? [item.display_range.min, item.display_range.max] : item.value_range ?? null
@@ -189,7 +179,7 @@ export function readLidarPresentation(
   const entries = design?.lidar?.entries ?? []
   const items: Omit<LidarPresentationItem, 'parentId' | 'depth'>[] = []
   for (const entry of entries) {
-    const role = itemRole(entry.kind)
+    const role = entry.kind
     const item = library?.items.find((candidate) => candidate.id === entry.id && candidate.role === role)
     const presentation = { kind: entry.kind, role, id: entry.id, visible: entry.visible, opacity: entry.opacity, order: entry.order }
     items.push(item

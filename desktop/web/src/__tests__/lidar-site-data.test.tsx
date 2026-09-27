@@ -54,7 +54,7 @@ const library = librarySnapshot
 
 let container: HTMLDivElement
 
-function setDesign(entries: Array<{ kind: 'Source' | 'Analysis'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
+function setDesign(entries: Array<{ kind: 'Source' | 'Derived'; id: string; order: number; visible?: boolean; opacity?: number }>): void {
   (currentDesign as unknown as { value: unknown }).value = {
     lidar: { entries: entries.map((entry) => ({ visible: true, opacity: 1, style: null, ...entry })) },
   }
@@ -142,7 +142,7 @@ describe('Layers site data', () => {
     setDesign([
       { kind: 'Source', id: 'a', order: 0 },
       { kind: 'Source', id: 'b', order: 1 },
-      { kind: 'Analysis', id: 's', order: 2 },
+      { kind: 'Derived', id: 's', order: 2 },
     ])
     mount()
     expect(rowNames()).toEqual([['Canopy', '0'], ['Ground', '0'], ['Ground · Slope', '1']])
@@ -200,7 +200,7 @@ describe('Layers site data', () => {
       sourceItem('a', 'Ground'),
       slopeItem('s', 'a', { freshness: { state: 'Stale', reasons: [{ reason: 'InputUpdated', input_key: 'dem', item_id: 'a' }] } }),
     ])
-    setDesign([{ kind: 'Analysis', id: 's', order: 0 }])
+    setDesign([{ kind: 'Derived', id: 's', order: 0 }])
     mount()
 
     expect(container.querySelector('li')!.textContent).toContain('Out of date')
@@ -220,7 +220,7 @@ describe('Layers site data', () => {
         run: { job_id: 'j', state: 'Preparing', message: null },
       }),
     ])
-    setDesign([{ kind: 'Analysis', id: 's', order: 0 }])
+    setDesign([{ kind: 'Derived', id: 's', order: 0 }])
     mount()
     expect(container.textContent).toContain('Refreshing')
     expect(() => button('Refresh Ground · Slope')).toThrow()

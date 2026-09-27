@@ -3,7 +3,7 @@ import type { LidarPresentationEntryKind, LidarSampleOutcome } from '../../gener
 import { lidarCancelSamplePixel, lidarSamplePixel } from '../../ipc/lidar'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { activePanel } from '../shell/state'
-import { itemRole, readLidarPresentation, lidarLibrary } from './library-store'
+import { readLidarPresentation, lidarLibrary } from './library-store'
 import {
   inspectionPointForScenePoint,
   inspectionViewCentreScenePoint,
@@ -345,7 +345,7 @@ export async function sampleInspectionPoint(point: InspectionPoint): Promise<voi
   let outcome: LidarSampleOutcome
   try {
     outcome = await lidarSamplePixel({
-      kind: itemRole(target.kind),
+      kind: target.kind,
       entity_id: target.id,
       expected_generation_id: expectedGenerationId,
       request_id: requestId,
@@ -403,7 +403,7 @@ export function interpretOutcome(outcome: LidarSampleOutcome): InspectionSample 
 function readCurrentGenerationId(target: InspectionTarget): string | null {
   const library = lidarLibrary.value
   if (!library) return null
-  const role = itemRole(target.kind)
+  const role = target.kind
   const entity = library.items.find((candidate) => candidate.id === target.id && candidate.role === role)
   return entity?.generation_id ?? null
 }

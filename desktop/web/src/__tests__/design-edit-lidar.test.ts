@@ -61,7 +61,7 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
       { kind: 'Source', id: 'lyr-1', visible: false, opacity: 0.5, order: 0, style: null },
     ])
     // Second entry receives the next order value.
-    upsertLidarEntry('Analysis', 'adef-1')
+    upsertLidarEntry('Derived', 'adef-1')
     const entries = readLidarEntries(currentDesign.value as CanopiFile)
     expect(entries).toHaveLength(2)
     expect(entries[1]?.order).toBe(1)
@@ -83,7 +83,7 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
   it('removes entries and drops the whole section when it empties', () => {
     replaceCurrentDesignState(design('Removal'), null, 'Removal')
     upsertLidarEntry('Source', 'lyr-3')
-    upsertLidarEntry('Analysis', 'adef-3')
+    upsertLidarEntry('Derived', 'adef-3')
 
     removeLidarEntries(['adef-3'])
     expect(readLidarEntries(currentDesign.value as CanopiFile)).toHaveLength(1)
@@ -106,7 +106,7 @@ describe('LiDAR presentation entries through the Design Edit seam', () => {
   it('saves new orders in one edit and keeps display settings', () => {
     replaceCurrentDesignState(design('Order'), null, 'Order')
     upsertLidarEntry('Source', 'lyr-a')
-    upsertLidarEntry('Analysis', 'adef-b')
+    upsertLidarEntry('Derived', 'adef-b')
     upsertLidarEntry('Source', 'lyr-c')
     patchLidarEntryById('lyr-a', { opacity: 0.4 })
     expect(displayOrder(currentDesign.value as CanopiFile).map((e) => e.id))

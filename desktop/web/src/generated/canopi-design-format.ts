@@ -213,7 +213,7 @@ export const CANOPI_FILE_SCHEMA = {
     "LidarPresentationEntryKind": {
       "enum": [
         "Source",
-        "Analysis"
+        "Derived"
       ],
       "type": "string"
     },

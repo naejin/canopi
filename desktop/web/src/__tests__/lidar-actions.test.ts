@@ -46,7 +46,6 @@ vi.mock('../app/lidar/library-store', async () => {
   return {
     ensureLidarPolling: ensurePollingMock,
     lidarStatusMessage: makeSignal<string | null>(null),
-    presentationEntryKind: (role: string) => (role === 'Derived' ? 'Analysis' : 'Source'),
     readCurrentLidarPresentation: () => presentation.value,
     refreshLidarLibrary: refreshMock,
   }
@@ -227,7 +226,7 @@ describe('Design data references', () => {
     addToDesign('Derived', 'analysis-1')
     removeFromDesign('analysis-1')
 
-    expect(upsertMock).toHaveBeenCalledWith('Analysis', 'analysis-1')
+    expect(upsertMock).toHaveBeenCalledWith('Derived', 'analysis-1')
     expect(removeMock).toHaveBeenCalledWith(['analysis-1'])
   })
 
@@ -299,7 +298,7 @@ describe('analysis runs', () => {
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     settleResultAttachments(snapshotWith({ id, state: 'Ready', generation_id: 'agen-1' }))
     expect(upsertMock).toHaveBeenCalledTimes(1)
-    expect(upsertMock).toHaveBeenCalledWith('Analysis', id)
+    expect(upsertMock).toHaveBeenCalledWith('Derived', id)
   })
 
   it('attaches every presentable output in order once all are published, never provenance-only ones', async () => {
@@ -315,7 +314,7 @@ describe('analysis runs', () => {
       { ...hidden, state: 'Ready', generation_id: 'g2' },
       { id: 'second', state: 'Ready', generation_id: 'g3' },
     ))
-    expect(upsertMock.mock.calls).toEqual([['Analysis', 'first'], ['Analysis', 'second']])
+    expect(upsertMock.mock.calls).toEqual([['Derived', 'first'], ['Derived', 'second']])
   })
 
   it('never adds the result to a Design opened while it was calculating', async () => {

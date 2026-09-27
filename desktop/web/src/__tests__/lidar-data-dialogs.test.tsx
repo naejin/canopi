@@ -69,7 +69,7 @@ function library(layers: LibraryItemSummary[], analyses: LibraryItemSummary[] = 
   return librarySnapshot([...layers, ...analyses])
 }
 
-function design(entries: { kind: 'Source' | 'Analysis'; id: string }[]) {
+function design(entries: { kind: 'Source' | 'Derived'; id: string }[]) {
   return { lidar: { entries: entries.map((entry, order) => ({ ...entry, order, visible: true, opacity: 1 })) } }
 }
 
@@ -357,7 +357,7 @@ describe('Data library, Import and Analyze dialogs', () => {
 
   it('shows a result the Design already has in Layers instead of calculating it again', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
-    setDesign(design([{ kind: 'Analysis', id: 's' }]))
+    setDesign(design([{ kind: 'Derived', id: 's' }]))
     mount()
     await openAnalyze('Ground')
     await choose('Degrees')
