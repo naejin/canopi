@@ -131,6 +131,13 @@
   font-size: var(--text-sm);
 }
 
+.hint {
+  margin: 0;
+  padding: var(--space-1-5) calc(var(--space-2) + var(--space-0-5));
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 .results {
   display: flex;
   flex-direction: column;

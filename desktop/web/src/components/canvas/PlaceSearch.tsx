@@ -38,7 +38,8 @@ interface PlaceComboboxProps {
 
 /**
  * A place combobox over the app's one place search: Enter searches (never
- * while typing); coordinates go straight there; choosing a result closes the
+ * while typing, which the public geocoder's policy forbids), and a quiet hint
+ * says so while a place name waits; coordinates go straight there; choosing a result closes the
  * list and clears the field; Escape clears it.
  */
 export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = false, label }: PlaceComboboxProps) {
@@ -54,6 +55,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
   }, [autoFocus])
   const listId = useId()
   const optionPrefix = useId()
+  const hintId = useId()
 
   useSignalEffect(() => {
     if (variant !== 'title-bar') return
@@ -90,7 +92,9 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
       : status === 'no-results' ? t('canvas.placeSearch.noResults')
         : status === 'error' ? t('canvas.placeSearch.error')
           : null
-  const listVisible = (variant === 'dialog' || expanded) && (options.length > 0 || statusText !== null)
+  const enterHint = !coordinates && status === 'idle' && query.trim() !== ''
+  const listVisible = (variant === 'dialog' || expanded) && (options.length > 0 || statusText !== null || enterHint)
+  const hintShown = listVisible && enterHint
   // A coordinate row is the answer to what was typed, so it starts active.
   const activeOption = activeIndex >= 0 ? activeIndex : coordinates ? 0 : -1
   const active = activeOption < options.length ? options[activeOption] ?? null : null
@@ -147,6 +151,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={active?.id}
+          aria-describedby={hintShown ? hintId : undefined}
           aria-keyshortcuts={variant === 'title-bar' ? 'Control+K Meta+K' : undefined}
           disabled={disabled}
           spellcheck={false}
@@ -194,6 +199,7 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
       </label>
       <div className={listVisible ? styles.popup : styles.popupHidden}>
         {statusText && <p className={styles.status} role="status">{statusText}</p>}
+        {hintShown && <p id={hintId} className={styles.hint} data-place-search-hint>{t('canvas.placeSearch.enterHint')}</p>}
         <ul id={listId} role="listbox" aria-label={t('canvas.placeSearch.results')} className={styles.results}>
           {options.map((option, index) => (
             <li
