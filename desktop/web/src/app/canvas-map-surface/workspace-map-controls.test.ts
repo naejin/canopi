@@ -287,14 +287,14 @@ describe('WorkspaceMapControls', () => {
     try {
       expect(map.getSource(MAPLIBRE_SATELLITE_SOURCE_ID)).toBeDefined()
       expect(map.options.attributionControl).toBe(false)
-      // One compact control, owned by the background band, at any time.
+      // One control, owned by the background band, at any time; MapLibre folds it only on narrow maps.
       const attribution = () => {
         expect(map.controls.size).toBe(1)
         const [control] = [...map.controls]
         expect(control).toBeInstanceOf(FakeAttributionControl)
         return control as FakeAttributionControl
       }
-      expect(attribution().options?.compact).toBe(true)
+      expect(attribution().options?.compact).toBeUndefined()
       expect(attribution().options?.customAttribution).toBe('&copy; Google')
       expect(map.addControl).toHaveBeenLastCalledWith(attribution(), 'bottom-right')
 
