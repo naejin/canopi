@@ -1,5 +1,5 @@
 use common_types::design::{CanopiFile, DesignSaveOutcome, DesignSummary, LoadedDesign};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::db::UserDb;
 use crate::design::format;
@@ -88,6 +88,42 @@ pub fn get_recent_files(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> 
         }
     }
     Ok(filtered.visible)
+}
+
+/// Start › Recent Designs › Remove from list. The file itself is untouched.
+pub fn remove_recent_design(user_db: &UserDb, path: &str) -> Result<(), String> {
+    let conn = user_db.acquire();
+    crate::db::recent_files::remove_recent_file(&conn, path)
+        .map_err(|error| format!("Failed to remove the Design from Recent Designs: {error}"))
+}
+
+/// The folder holding a Recent Design, for Show in folder. Only a path on the
+/// list is accepted, so the command cannot open an arbitrary folder.
+pub fn recent_design_folder(user_db: &UserDb, path: &str) -> Result<PathBuf, String> {
+    let listed = {
+        let conn = user_db.acquire();
+        crate::db::recent_files::is_recent_file(&conn, path)
+            .map_err(|error| format!("Failed to read Recent Designs: {error}"))?
+    };
+    if !listed {
+        return Err("This Design is not in Recent Designs.".to_owned());
+    }
+    Path::new(path)
+        .parent()
+        .filter(|folder| !folder.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "This Design has no folder to show.".to_owned())
+}
+
+/// Open a Recent Design's folder once it is known to be a folder.
+pub(crate) fn show_design_folder(
+    folder: &Path,
+    revealer: &impl crate::services::folder_reveal::FolderRevealer,
+) -> Result<(), String> {
+    if !folder.is_dir() {
+        return Err("The folder of this Design is not available.".to_owned());
+    }
+    revealer.reveal_folder(folder)
 }
 
 fn try_record_recent(user_db: &UserDb, path: &str, name: &str) {
@@ -220,7 +256,8 @@ pub(crate) fn capture_logs<R>(operation: impl FnOnce() -> R) -> (R, String) {
 mod tests {
     use super::{
         DesignPathAvailability, design_path_availability, export_design_file, get_recent_files,
-        load_design, load_design_file, partition_by_availability, save_design,
+        load_design, load_design_file, partition_by_availability, recent_design_folder,
+        remove_recent_design, save_design, show_design_folder,
     };
     use crate::db::UserDb;
     use common_types::design::{CanopiFile, DesignSaveOutcome, DesignSummary};
@@ -555,6 +592,63 @@ mod tests {
         );
         assert!(get_recent_files(&user_db).unwrap().is_empty());
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    struct RecordingRevealer(std::cell::RefCell<Vec<PathBuf>>);
+
+    impl crate::services::folder_reveal::FolderRevealer for RecordingRevealer {
+        fn reveal_folder(&self, folder: &std::path::Path) -> Result<(), String> {
+            self.0.borrow_mut().push(folder.to_path_buf());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn show_in_folder_opens_the_folder_of_a_listed_design_only() {
+        let user_db = test_user_db();
+        let path = temp_design_path("reveal");
+        save_design(
+            &user_db,
+            path.to_string_lossy().into_owned(),
+            test_design("Reveal"),
+            None,
+        )
+        .unwrap();
+        let listed = path.to_string_lossy().into_owned();
+
+        let folder = recent_design_folder(&user_db, &listed).unwrap();
+        assert_eq!(folder, path.parent().unwrap());
+        let revealer = RecordingRevealer(std::cell::RefCell::new(Vec::new()));
+        show_design_folder(&folder, &revealer).unwrap();
+        assert_eq!(*revealer.0.borrow(), vec![folder]);
+
+        let unlisted = std::env::temp_dir().join("not-a-recent-design.canopi");
+        let error = recent_design_folder(&user_db, &unlisted.to_string_lossy()).unwrap_err();
+        assert!(!error.contains("not-a-recent-design"), "{error}");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_design_folder_that_is_gone_is_reported_without_its_path() {
+        let gone = std::env::temp_dir().join("canopi-gone-folder-for-reveal");
+        let revealer = RecordingRevealer(std::cell::RefCell::new(Vec::new()));
+        let error = show_design_folder(&gone, &revealer).unwrap_err();
+        assert!(!error.contains("canopi-gone-folder"), "{error}");
+        assert!(revealer.0.borrow().is_empty());
+    }
+
+    #[test]
+    fn remove_from_list_forgets_the_design_and_keeps_the_file() {
+        let user_db = test_user_db();
+        let path = temp_design_path("forget");
+        let listed = path.to_string_lossy().into_owned();
+        save_design(&user_db, listed.clone(), test_design("Forget"), None).unwrap();
+        assert_eq!(get_recent_files(&user_db).unwrap().len(), 1);
+
+        remove_recent_design(&user_db, &listed).unwrap();
+        assert!(get_recent_files(&user_db).unwrap().is_empty());
+        assert!(path.is_file(), "the file itself is untouched");
         let _ = std::fs::remove_file(&path);
     }
 }

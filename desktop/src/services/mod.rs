@@ -1,6 +1,8 @@
+pub(crate) mod app_folders;
 pub mod design_files;
 pub mod design_notebook;
 pub mod export;
+pub(crate) mod folder_reveal;
 pub mod geocoding;
 pub mod health;
 pub mod lidar;

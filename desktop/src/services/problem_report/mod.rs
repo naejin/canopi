@@ -9,9 +9,7 @@ mod redactions;
 mod summary;
 mod zip;
 
-#[cfg(test)]
-pub(crate) use folder_reveal::ProblemReportFolderRevealer;
-pub(crate) use folder_reveal::{SystemProblemReportFolderRevealer, show_problem_report_folder};
+pub(crate) use folder_reveal::show_problem_report_folder;
 
 use bundle::build_diagnostic_bundle;
 use redactions::Redactions;
@@ -165,7 +163,7 @@ mod tests {
         }
     }
 
-    impl super::ProblemReportFolderRevealer for RecordingFolderRevealer {
+    impl crate::services::folder_reveal::FolderRevealer for RecordingFolderRevealer {
         fn reveal_folder(&self, folder: &Path) -> Result<(), String> {
             self.opened.borrow_mut().push(folder.to_path_buf());
             Ok(())

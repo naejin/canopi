@@ -81,6 +81,8 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::views::Story>()
         .register::<common_types::views::StoryImage>()
         .register::<common_types::views::StoryStep>()
+        .register::<common_types::settings::AppFolder>()
+        .register::<common_types::settings::AppFolderLocations>()
         .register::<common_types::settings::LastView>()
         .register::<common_types::settings::Locale>()
         .register::<common_types::settings::Settings>()

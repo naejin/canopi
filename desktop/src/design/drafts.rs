@@ -37,10 +37,15 @@ fn draft_path(dir: &Path, id: &str) -> Result<PathBuf, String> {
     Ok(dir.join(format!("{id}.{DRAFT_EXTENSION}")))
 }
 
+/// The Design Drafts folder under the app data directory.
+pub(crate) fn drafts_root(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join(DRAFTS_DIR)
+}
+
 impl DesignDrafts {
     pub fn new(app_data_dir: &Path) -> Self {
         Self {
-            dir: app_data_dir.join(DRAFTS_DIR),
+            dir: drafts_root(app_data_dir),
         }
     }
 

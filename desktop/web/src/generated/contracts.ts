@@ -79,6 +79,18 @@ export type Annotation = {
 	rotation: number | null,
 };
 
+// Settings › Files and data: a folder Canopi keeps in its app data.
+export type AppFolder = "drafts" | "data_library";
+
+/**
+ *  Where this device keeps Canopi's folders. The paths are shown on this
+ *  screen only: they never enter a Design, a log or a Problem Report.
+ */
+export type AppFolderLocations = {
+	drafts: string,
+	data_library: string,
+};
+
 // OpenFreeMap vector styles; Liberty is the default.
 export type BasemapStyle = "liberty" | "positron" | "bright" | "dark";
 
@@ -593,6 +605,9 @@ export type PlacedPlant = {
 
 export type PlantDbStatus = "available" | "missing" | "corrupt";
 
+// Plant labels on the map: none, species codes or names.
+export type PlantLabels = "none" | "codes" | "names";
+
 export type ProblemReportRequest = {
 	description: string,
 	frontend_diagnostics?: FrontendDiagnosticEntry[],
@@ -788,6 +803,21 @@ export type Settings = {
 	used_canvas_tools: string[],
 	// View › Tool names: `None` follows first use, `Some` is the user's choice.
 	tool_names_visible: boolean | null,
+	/**
+	 *  Settings › Keyboard: character-key shortcuts (tool keys such as V or
+	 *  P, N, Shift G, brackets). Off leaves only shortcuts with Ctrl, Alt or
+	 *  a named key (Delete, Esc, arrows, F keys).
+	 */
+	single_key_shortcuts: boolean,
+	/**
+	 *  Settings › New Designs: a new Design turns Satellite on. Off keeps the
+	 *  background last used. Applied when a Design is created, never after.
+	 */
+	new_design_satellite: boolean,
+	// Settings › New Designs: the symbol size a new Design starts with.
+	new_design_symbol_scale: number,
+	// Settings › New Designs: the plant labels a new Design starts with.
+	new_design_labels: PlantLabels,
 };
 
 export type Sort = "Recommended" | "Name" | "Height" | "Edibility" | "Relevance";

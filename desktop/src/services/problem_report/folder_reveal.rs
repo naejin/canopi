@@ -1,42 +1,15 @@
 use std::path::Path;
-use std::process::Command;
+
+use crate::services::folder_reveal::FolderRevealer;
 
 use super::{BUNDLE_FILENAME, SUMMARY_FILENAME};
-
-pub(crate) trait ProblemReportFolderRevealer {
-    fn reveal_folder(&self, folder: &Path) -> Result<(), String>;
-}
-
-pub(crate) struct SystemProblemReportFolderRevealer;
-
-impl ProblemReportFolderRevealer for SystemProblemReportFolderRevealer {
-    fn reveal_folder(&self, folder: &Path) -> Result<(), String> {
-        let mut command = platform_reveal_command(folder);
-        let mut child = command
-            .spawn()
-            .map_err(|error| format!("Failed to show the Problem Report folder: {error}"))?;
-        // The opener may run as long as the file manager it hands off to, so
-        // reap it off the calling thread instead of leaving a zombie.
-        std::thread::Builder::new()
-            .name("problem-report-reveal-reaper".to_owned())
-            .spawn(move || {
-                if let Err(error) = child.wait() {
-                    tracing::warn!("Problem Report folder opener could not be reaped: {error}");
-                }
-            })
-            .map_err(|error| {
-                format!("Failed to watch the Problem Report folder opener: {error}")
-            })?;
-        Ok(())
-    }
-}
 
 /// Reveal `folder` if it is a generated report folder directly inside
 /// `output_root`, the folder reports are written to.
 pub(crate) fn show_problem_report_folder(
     folder: &Path,
     output_root: &Path,
-    revealer: &impl ProblemReportFolderRevealer,
+    revealer: &impl FolderRevealer,
 ) -> Result<(), String> {
     validate_problem_report_folder(folder, output_root)?;
     revealer.reveal_folder(folder)
@@ -81,25 +54,4 @@ fn validate_problem_report_folder(folder: &Path, output_root: &Path) -> Result<(
     }
 
     Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn platform_reveal_command(folder: &Path) -> Command {
-    let mut command = Command::new("open");
-    command.arg(folder);
-    command
-}
-
-#[cfg(target_os = "windows")]
-fn platform_reveal_command(folder: &Path) -> Command {
-    let mut command = Command::new("explorer");
-    command.arg(folder);
-    command
-}
-
-#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-fn platform_reveal_command(folder: &Path) -> Command {
-    let mut command = Command::new("xdg-open");
-    command.arg(folder);
-    command
 }

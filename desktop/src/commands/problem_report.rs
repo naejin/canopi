@@ -88,7 +88,7 @@ pub async fn show_problem_report_folder(
             NativeOperationClass::Local,
             "problem report folder reveal",
             move || {
-                let revealer = crate::services::problem_report::SystemProblemReportFolderRevealer;
+                let revealer = crate::services::folder_reveal::SystemFolderRevealer;
                 crate::services::problem_report::show_problem_report_folder(
                     Path::new(&path),
                     &output_root,

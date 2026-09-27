@@ -52,6 +52,15 @@ pub fn remove_recent_file(conn: &Connection, path: &str) -> Result<(), rusqlite:
     Ok(())
 }
 
+/// Whether `path` is on the Recent Designs list.
+pub fn is_recent_file(conn: &Connection, path: &str) -> Result<bool, rusqlite::Error> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM recent_files WHERE path = ?1)",
+        rusqlite::params![path],
+        |row| row.get(0),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +133,14 @@ mod tests {
         let files = get_recent_files(&conn, 10).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].name, "Forest");
+    }
+
+    #[test]
+    fn is_recent_file_answers_only_for_listed_paths() {
+        let conn = test_db();
+        record_recent_file(&conn, "/home/user/garden.canopi", "Garden").unwrap();
+        assert!(is_recent_file(&conn, "/home/user/garden.canopi").unwrap());
+        assert!(!is_recent_file(&conn, "/home/user/other.canopi").unwrap());
     }
 
     #[test]

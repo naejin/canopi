@@ -65,6 +65,33 @@ pub struct Settings {
     pub used_canvas_tools: Vec<String>,
     /// View › Tool names: `None` follows first use, `Some` is the user's choice.
     pub tool_names_visible: Option<bool>,
+    /// Settings › Keyboard: character-key shortcuts (tool keys such as V or
+    /// P, N, Shift G, brackets). Off leaves only shortcuts with Ctrl, Alt or
+    /// a named key (Delete, Esc, arrows, F keys).
+    pub single_key_shortcuts: bool,
+    /// Settings › New Designs: a new Design turns Satellite on. Off keeps the
+    /// background last used. Applied when a Design is created, never after.
+    pub new_design_satellite: bool,
+    /// Settings › New Designs: the symbol size a new Design starts with.
+    pub new_design_symbol_scale: f32,
+    /// Settings › New Designs: the plant labels a new Design starts with.
+    pub new_design_labels: PlantLabels,
+}
+
+/// Settings › Files and data: a folder Canopi keeps in its app data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AppFolder {
+    Drafts,
+    DataLibrary,
+}
+
+/// Where this device keeps Canopi's folders. The paths are shown on this
+/// screen only: they never enter a Design, a log or a Problem Report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AppFolderLocations {
+    pub drafts: String,
+    pub data_library: String,
 }
 
 /// A geographic camera view: WGS84 centre and MapLibre zoom.
@@ -100,6 +127,10 @@ impl Default for Settings {
             last_view: None,
             used_canvas_tools: Vec::new(),
             tool_names_visible: None,
+            single_key_shortcuts: true,
+            new_design_satellite: false,
+            new_design_symbol_scale: 1.0,
+            new_design_labels: PlantLabels::Names,
         }
     }
 }
@@ -140,6 +171,18 @@ settings_enum! {
 }
 
 settings_enum! {
+    /// Plant labels on the map: none, species codes or names.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+    #[serde(rename_all = "lowercase")]
+    pub enum PlantLabels {
+        None,
+        Codes,
+        #[default]
+        Names,
+    }
+}
+
+settings_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
     #[serde(rename_all = "lowercase")]
     pub enum Theme {
@@ -150,7 +193,7 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, Settings};
+    use super::{BasemapStyle, LastView, PlantLabels, Settings};
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -216,6 +259,34 @@ mod tests {
             serde_json::json!(["select", "polygon"])
         );
         assert_eq!(value["tool_names_visible"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn keyboard_and_new_design_defaults_load_from_an_older_record_and_round_trip() {
+        // A record saved before these fields existed still loads, with defaults.
+        let settings: Settings = serde_json::from_value(serde_json::json!({ "theme": "dark" }))
+            .expect("a record without the new fields should load");
+        assert!(settings.single_key_shortcuts);
+        assert!(!settings.new_design_satellite);
+        assert_eq!(settings.new_design_symbol_scale, 1.0);
+        assert_eq!(settings.new_design_labels, PlantLabels::Names);
+
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "single_key_shortcuts": false,
+            "new_design_satellite": true,
+            "new_design_symbol_scale": 1.5,
+            "new_design_labels": "codes"
+        }))
+        .expect("keyboard and New Design settings should load");
+        let value = serde_json::to_value(&settings).expect("settings should serialize");
+        assert_eq!(value["single_key_shortcuts"], serde_json::json!(false));
+        assert_eq!(value["new_design_satellite"], serde_json::json!(true));
+        assert_eq!(value["new_design_symbol_scale"], serde_json::json!(1.5));
+        assert_eq!(value["new_design_labels"], serde_json::json!("codes"));
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({ "new_design_labels": "all" }))
+                .is_err()
+        );
     }
 
     #[test]

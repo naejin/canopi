@@ -79,6 +79,69 @@ pub async fn get_recent_files(
         .await
 }
 
+/// Start › Recent Designs › Remove from list. The file is untouched.
+#[tauri::command]
+pub async fn remove_recent_design(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
+    path: String,
+) -> Result<(), String> {
+    remove_recent_design_with_executor(executor.inner(), user_db.inner().clone(), path).await
+}
+
+/// Start › Recent Designs › Show in folder: opens the folder of a Design on
+/// the list, and no other folder.
+#[tauri::command]
+pub async fn show_recent_design_in_folder(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
+    path: String,
+) -> Result<(), String> {
+    show_recent_design_in_folder_with_executor(
+        executor.inner(),
+        user_db.inner().clone(),
+        path,
+        crate::services::folder_reveal::SystemFolderRevealer,
+    )
+    .await
+}
+
+async fn remove_recent_design_with_executor(
+    executor: &NativeOperationExecutor,
+    user_db: UserDb,
+    path: String,
+) -> Result<(), String> {
+    executor
+        .run(
+            NativeOperationClass::UserData,
+            "recent design removal",
+            move || crate::services::design_files::remove_recent_design(&user_db, &path),
+        )
+        .await
+}
+
+async fn show_recent_design_in_folder_with_executor(
+    executor: &NativeOperationExecutor,
+    user_db: UserDb,
+    path: String,
+    revealer: impl crate::services::folder_reveal::FolderRevealer + Send + 'static,
+) -> Result<(), String> {
+    let folder = executor
+        .run(
+            NativeOperationClass::UserData,
+            "recent design folder lookup",
+            move || crate::services::design_files::recent_design_folder(&user_db, &path),
+        )
+        .await?;
+    executor
+        .run(
+            NativeOperationClass::Local,
+            "recent design folder reveal",
+            move || crate::services::design_files::show_design_folder(&folder, &revealer),
+        )
+        .await
+}
+
 /// Durably write the Design draft `id` to the app-data drafts store.
 #[tauri::command]
 pub async fn save_design_draft(
@@ -224,6 +287,67 @@ mod tests {
                 .unwrap();
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].name, "Second");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[derive(Clone, Default)]
+    struct RecordingRevealer(std::sync::Arc<std::sync::Mutex<Vec<std::path::PathBuf>>>);
+
+    impl crate::services::folder_reveal::FolderRevealer for RecordingRevealer {
+        fn reveal_folder(&self, folder: &std::path::Path) -> Result<(), String> {
+            self.0.lock().unwrap().push(folder.to_path_buf());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn recent_design_commands_show_its_folder_and_remove_it_from_the_list() {
+        let root = scratch_root("recent_actions");
+        std::fs::create_dir_all(&root).unwrap();
+        let app = mock_app(&root);
+        let path = root.join("orchard.canopi").to_string_lossy().into_owned();
+        tauri::async_runtime::block_on(super::save_design(
+            app.state(),
+            app.state(),
+            path.clone(),
+            design("Orchard"),
+            None,
+        ))
+        .unwrap();
+
+        let revealer = RecordingRevealer::default();
+        tauri::async_runtime::block_on(super::show_recent_design_in_folder_with_executor(
+            app.state::<NativeOperationExecutor>().inner(),
+            app.state::<UserDb>().inner().clone(),
+            path.clone(),
+            revealer.clone(),
+        ))
+        .unwrap();
+        assert_eq!(*revealer.0.lock().unwrap(), vec![root.clone()]);
+
+        // An unlisted path is refused before anything is opened.
+        let unlisted = root.join("elsewhere.canopi").to_string_lossy().into_owned();
+        assert!(
+            tauri::async_runtime::block_on(super::show_recent_design_in_folder(
+                app.state(),
+                app.state(),
+                unlisted,
+            ))
+            .is_err()
+        );
+
+        tauri::async_runtime::block_on(super::remove_recent_design(
+            app.state(),
+            app.state(),
+            path.clone(),
+        ))
+        .unwrap();
+        let recent =
+            tauri::async_runtime::block_on(super::get_recent_files(app.state(), app.state()))
+                .unwrap();
+        assert!(recent.is_empty());
+        assert!(std::path::Path::new(&path).is_file());
 
         let _ = std::fs::remove_dir_all(root);
     }
