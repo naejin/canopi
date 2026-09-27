@@ -1386,7 +1386,7 @@
     "include": "Includi",
     "plantColors": "Colori delle piante",
     "plantColorModes": {
-      "design": "Come nel progetto",
+      "design": "Del progetto",
       "grayscale": "Scala di grigi",
       "black": "Nero"
     },

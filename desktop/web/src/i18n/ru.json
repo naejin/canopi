@@ -1386,7 +1386,7 @@
     "include": "Включить",
     "plantColors": "Цвета растений",
     "plantColorModes": {
-      "design": "Как в проекте",
+      "design": "Из проекта",
       "grayscale": "Оттенки серого",
       "black": "Чёрный"
     },

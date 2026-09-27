@@ -1386,7 +1386,7 @@
     "include": "Opnemen",
     "plantColors": "Plantkleuren",
     "plantColorModes": {
-      "design": "Zoals in het ontwerp",
+      "design": "Uit ontwerp",
       "grayscale": "Grijstinten",
       "black": "Zwart"
     },
