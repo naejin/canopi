@@ -29,6 +29,7 @@ function flatten(tree: TranslationTree, prefix = ''): Map<string, string> {
 }
 
 const flat = Object.fromEntries(Object.entries(locales).map(([code, tree]) => [code, flatten(tree)]))
+const english = flatten(en)
 
 /**
  * Width in Latin-character units: CJK, kana, Hangul and full-width forms are about twice as wide
@@ -73,7 +74,7 @@ describe('placeholder lengths', () => {
   })
 
   it('covers every placeholder key', () => {
-    const placeholderKeys = [...flat.en.keys()].filter(key => /placeholder/i.test(key))
+    const placeholderKeys = [...english.keys()].filter(key => /placeholder/i.test(key))
     const unbudgeted = placeholderKeys.filter(key => !(key in PLACEHOLDER_BUDGETS))
     // Multi-line text areas wrap; their placeholders need no budget.
     expect(unbudgeted.sort()).toEqual([
@@ -99,7 +100,7 @@ const PROPER_NOUNS = new Set([
 const PROPER_NAMES = ['Data library', 'Saved stamps', 'Plant catalog', 'Plants in this Design', 'Design notebook']
 
 function titleCaseWords(text: string): string[] {
-  const words = PROPER_NAMES.reduce((copy, name) => copy.replaceAll(name, name.toLowerCase()), text)
+  const words = PROPER_NAMES.reduce((copy, name) => copy.split(name).join(name.toLowerCase()), text)
     .replace(/\{\{[^}]*\}\}/g, 'x')
     // A capital after sentence or list punctuation starts a new phrase.
     .replace(/([.!?:·›(“"‘—–]\s*)([A-Z])/gu, (_, before: string, letter: string) => before + letter.toLowerCase())
@@ -116,7 +117,7 @@ function titleCaseWords(text: string): string[] {
 
 describe('English copy', () => {
   it('uses sentence case in titles, buttons and labels', () => {
-    const labels = [...flat.en.entries()].filter(([, text]) => text.split(/\s+/).length <= 8 && !/[.!?]$/.test(text.trim()))
+    const labels = [...english.entries()].filter(([, text]) => text.split(/\s+/).length <= 8 && !/[.!?]$/.test(text.trim()))
     const titleCase = labels
       .map(([key, text]) => ({ key, text, words: titleCaseWords(text) }))
       .filter(entry => entry.words.length > 0)

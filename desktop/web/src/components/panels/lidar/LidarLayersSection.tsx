@@ -203,8 +203,8 @@ function ReferenceSettings({ item, nameOf, inspecting, focused, onFit, onReturn,
         <div className={styles.legend} aria-label={t('canvas.lidar.layers.legend')}>
           <div className={styles.ramp} style={{ backgroundImage: legendGradient(style.colormap, style.reversed) }} />
           <div className={styles.legendLabels}>
-            <span>{formatLegendValue(style.rescale[0], style.units)}</span>
-            <span>{formatLegendValue(style.rescale[1], style.units)}</span>
+            <span>{formatLegendValue(style.rescale[0], style.units, locale.value)}</span>
+            <span>{formatLegendValue(style.rescale[1], style.units, locale.value)}</span>
           </div>
         </div>
       )}

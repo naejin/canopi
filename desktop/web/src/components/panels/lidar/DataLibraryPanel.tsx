@@ -19,6 +19,7 @@ import {
 import { formFromProvenance, type AnalysisContext, type AnalysisForm } from '../../../app/analyses/model'
 import { analysisTitle, findAnalysis } from '../../../app/analyses/registry'
 import { IMPORTABLE_QUANTITIES, RASTER_QUANTITIES, itemTypeLabel } from '../../../app/lidar/item-types'
+import { formatRasterMetres, formatRasterRange } from '../../../app/lidar/display-legend'
 import {
   filterLibraryItems,
   libraryItems,
@@ -432,7 +433,7 @@ function isRunning(row: LibraryItem): boolean {
 function summary(row: LibraryItem): string {
   const type = itemTypeLabel(row.itemType)
   if (row.role === 'Derived') return row.units ? `${type} · ${row.units}` : type
-  const resolution = row.resolutionM !== null ? ` · ${formatMetres(row.resolutionM)}` : ''
+  const resolution = row.resolutionM !== null ? ` · ${formatRasterMetres(row.resolutionM, locale.value)}` : ''
   return `${type}${resolution}`
 }
 
@@ -443,10 +444,6 @@ function statusLabel(row: LibraryItem): string {
   }
   if (row.importJob?.state === 'Cancelled' || row.run?.state === 'Cancelled') return t('canvas.lidar.library.cancelled')
   return row.role === 'Derived' ? t('canvas.lidar.library.calculationFailed') : t('canvas.lidar.library.importFailed')
-}
-
-function formatMetres(value: number): string {
-  return `${value >= 10 ? value.toFixed(0) : value >= 1 ? value.toFixed(1) : value.toFixed(2)} m`
 }
 
 /** The library's type filter: everything, imported data, or one analysis group from the registry. */
@@ -583,11 +580,11 @@ function ItemDetails({ item, client, nameOf, addButton, refreshButton, menu, ope
         <dd>{item.units === 'unknown' ? t('canvas.lidar.library.unitUnknown') : item.units}</dd>
         {item.resolutionM !== null && <>
           <dt>{t('canvas.lidar.library.factResolution')}</dt>
-          <dd>{formatMetres(item.resolutionM)}</dd>
+          <dd>{formatRasterMetres(item.resolutionM, locale.value)}</dd>
         </>}
         {item.displayRange && <>
           <dt>{t('canvas.lidar.library.factRange')}</dt>
-          <dd>{`${item.displayRange[0].toFixed(1)} – ${item.displayRange[1].toFixed(1)} ${item.units}`}</dd>
+          <dd>{formatRasterRange(item.displayRange, item.units, locale.value)}</dd>
         </>}
         <dt>{t('canvas.lidar.library.factStatus')}</dt>
         <dd>{item.status === 'ready' ? t('canvas.lidar.library.ready') : statusLabel(item)}</dd>

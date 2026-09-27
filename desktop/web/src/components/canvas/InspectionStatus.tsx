@@ -8,6 +8,8 @@ import {
   inspectionTarget,
   sampleInspectionCentre,
 } from '../../app/lidar/inspection'
+import { formatRasterSample } from '../../app/lidar/display-legend'
+import { locale } from '../../app/settings/state'
 import styles from './inspection-status.module.css'
 
 /**
@@ -71,7 +73,7 @@ export function InspectionStatus() {
         ) : sample.kind === 'value' ? (
           <>
             <span className={styles.value}>
-              {formatValue(sample.value)}
+              {formatRasterSample(sample.value, locale.value)}
             </span>
             <span className={styles.units}>{sample.units}</span>
           </>
@@ -102,17 +104,4 @@ export function InspectionStatus() {
       <span className={styles.escapeHint}>{t('canvas.rasterSample.escapeHint')}</span>
     </section>
   )
-}
-
-/**
- * A physical measurement, at a precision that does not overstate the source.
- *
- * Metres are shown to centimetres and unitless values to a fixed three decimals,
- * because the read is one native pixel rather than a survey-grade observation.
- */
-function formatValue(value: number): string {
-  const magnitude = Math.abs(value)
-  if (magnitude >= 1000) return value.toFixed(2)
-  if (magnitude >= 1) return value.toFixed(3)
-  return value.toFixed(4)
 }

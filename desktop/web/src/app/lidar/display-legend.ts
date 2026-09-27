@@ -19,7 +19,39 @@ export function legendGradient(colormap: string, reversed: boolean): string {
   return `linear-gradient(90deg, ${stops.join(', ')})`
 }
 
-export function formatLegendValue(value: number, units: string): string {
+const formatters = new Map<string, Intl.NumberFormat>()
+
+/** A number with exactly `digits` decimals, in the interface locale's digits and separators. */
+function fixed(value: number, digits: number, locale: string): string {
+  const key = `${locale}:${digits}`
+  let formatter = formatters.get(key)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })
+    formatters.set(key, formatter)
+  }
+  return formatter.format(value)
+}
+
+export function formatLegendValue(value: number, units: string, locale: string): string {
   const digits = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2
-  return `${value.toFixed(digits)}${unitSuffix(units)}`
+  return `${fixed(value, digits, locale)}${unitSuffix(units)}`
+}
+
+/** A raster's cell size in metres, to centimetres below 10 m. */
+export function formatRasterMetres(value: number, locale: string): string {
+  return `${fixed(value, value >= 10 ? 0 : value >= 1 ? 1 : 2, locale)} m`
+}
+
+/** A raster's display range, to one decimal. */
+export function formatRasterRange(range: readonly [number, number], units: string, locale: string): string {
+  return `${fixed(range[0], 1, locale)} – ${fixed(range[1], 1, locale)}${unitSuffix(units)}`
+}
+
+/**
+ * A sampled raster value, at a precision that does not overstate the source: the read is one
+ * native pixel rather than a survey-grade observation.
+ */
+export function formatRasterSample(value: number, locale: string): string {
+  const magnitude = Math.abs(value)
+  return fixed(value, magnitude >= 1000 ? 2 : magnitude >= 1 ? 3 : 4, locale)
 }

@@ -8,7 +8,7 @@ import {
   itemTypeStyle,
   unitSuffix,
 } from '../app/lidar/item-types'
-import { formatLegendValue } from '../app/lidar/display-legend'
+import { formatLegendValue, formatRasterMetres, formatRasterRange, formatRasterSample } from '../app/lidar/display-legend'
 import { locale } from '../app/settings/state'
 
 const raster = (quantity: RasterQuantity) => ({ kind: 'Raster' as const, quantity })
@@ -56,9 +56,23 @@ describe('library item types', () => {
     expect(unitSuffix('°')).toBe('°')
     expect(unitSuffix('m')).toBe(' m')
     expect(unitSuffix('unknown')).toBe('')
-    expect(formatLegendValue(60, '°')).toBe('60.0°')
-    expect(formatLegendValue(173.2, '%')).toBe('173%')
-    expect(formatLegendValue(104.25, 'm')).toBe('104 m')
-    expect(formatLegendValue(1.5, '')).toBe('1.50')
+    expect(formatLegendValue(60, '°', 'en')).toBe('60.0°')
+    expect(formatLegendValue(173.2, '%', 'en')).toBe('173%')
+    expect(formatLegendValue(104.25, 'm', 'en')).toBe('104 m')
+    expect(formatLegendValue(1.5, '', 'en')).toBe('1.50')
+  })
+
+  it('formats raster numbers with the interface locale', () => {
+    expect(formatLegendValue(1.5, 'm', 'fr')).toBe('1,50 m')
+    expect(formatLegendValue(-12.25, '°', 'de')).toBe('-12,3°')
+    expect(formatRasterMetres(0.5, 'en')).toBe('0.50 m')
+    expect(formatRasterMetres(0.5, 'fr')).toBe('0,50 m')
+    expect(formatRasterMetres(2.25, 'de')).toBe('2,3 m')
+    expect(formatRasterMetres(12, 'fr')).toBe('12 m')
+    expect(formatRasterRange([1, 2.25], 'm', 'fr')).toBe('1,0 – 2,3 m')
+    expect(formatRasterRange([10, 30], '%', 'en')).toBe('10.0 – 30.0%')
+    expect(formatRasterSample(1234.5, 'fr')).toBe('1\u202f234,50')
+    expect(formatRasterSample(1.23456, 'de')).toBe('1,235')
+    expect(formatRasterSample(0.5, 'en')).toBe('0.5000')
   })
 })
