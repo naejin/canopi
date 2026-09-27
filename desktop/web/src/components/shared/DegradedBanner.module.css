@@ -10,3 +10,8 @@
 .notice {
   box-shadow: var(--shadow-float);
 }
+
+/* The error tint is translucent; lay it on the surface so the map never shows through. */
+.banner .notice[data-notice-tone="error"] {
+  background: linear-gradient(var(--color-danger-bg), var(--color-danger-bg)), var(--color-surface);
+}

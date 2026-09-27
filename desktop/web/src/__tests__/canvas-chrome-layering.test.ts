@@ -14,7 +14,22 @@ function classZIndex(path: string, className: string): number {
   return Number.parseInt(declaration.groups.value, 10)
 }
 
+function ruleBody(path: string, selector: string): string {
+  const source = readCssSource(path)
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rule = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)
+  if (!rule?.groups?.body) throw new Error(`Missing ${selector} CSS rule in ${path}`)
+  return rule.groups.body
+}
+
 describe('floating chrome layering', () => {
+  it('lays app-wide notices over the map on the opaque surface, under their translucent error tint', () => {
+    // The last background layer is the surface, so the map never shows through the tint.
+    const onSurface = /background:\s*linear-gradient\(var\(--color-danger-bg\),\s*var\(--color-danger-bg\)\),\s*var\(--color-surface\)\s*;/
+    expect(ruleBody('web/BrowserAppShell.module.css', '.notice[data-tone="error"]')).toMatch(onSurface)
+    expect(ruleBody('components/shared/DegradedBanner.module.css', '.banner .notice[data-notice-tone="error"]')).toMatch(onSurface)
+  })
+
   it('stacks the title bar over the dock, the dock over the rails and chips, and all of them over map status', () => {
     const titleBar = classZIndex('components/shared/WorkspaceTitleBar.module.css', 'titleBar')
     const dock = classZIndex('components/shared/SidePanelDock.module.css', 'dock')
