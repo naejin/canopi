@@ -210,7 +210,10 @@ settings_enum! {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasemapStyle, LastView, PlantLabels, SatelliteSource, Settings};
+    use super::{
+        AppFolder, AppFolderLocations, BasemapStyle, LastView, PlantLabels, SatelliteSource,
+        Settings,
+    };
 
     #[test]
     fn last_view_defaults_to_none_and_round_trips() {
@@ -326,6 +329,31 @@ mod tests {
         assert!(
             serde_json::from_value::<Settings>(serde_json::json!({ "satellite_source": "bing" }))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn app_folders_use_their_wire_names() {
+        assert_eq!(
+            serde_json::to_value(AppFolder::DataLibrary).unwrap(),
+            serde_json::json!("data_library")
+        );
+        assert_eq!(
+            serde_json::from_value::<AppFolder>(serde_json::json!("drafts")).unwrap(),
+            AppFolder::Drafts
+        );
+        let locations = AppFolderLocations {
+            drafts: "/data/drafts".to_owned(),
+            data_library: "/data/lidar".to_owned(),
+        };
+        let value = serde_json::to_value(&locations).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({ "drafts": "/data/drafts", "data_library": "/data/lidar" })
+        );
+        assert_eq!(
+            serde_json::from_value::<AppFolderLocations>(value).unwrap(),
+            locations.clone()
         );
     }
 

@@ -630,6 +630,18 @@ mod tests {
     }
 
     #[test]
+    fn a_listed_design_without_a_folder_has_nothing_to_show() {
+        let user_db = test_user_db();
+        {
+            let conn = user_db.acquire();
+            crate::db::recent_files::record_recent_file(&conn, "orchard.canopi", "Orchard")
+                .unwrap();
+        }
+        let error = recent_design_folder(&user_db, "orchard.canopi").unwrap_err();
+        assert_eq!(error, "This Design has no folder to show.");
+    }
+
+    #[test]
     fn a_design_folder_that_is_gone_is_reported_without_its_path() {
         let gone = std::env::temp_dir().join("canopi-gone-folder-for-reveal");
         let revealer = RecordingRevealer(std::cell::RefCell::new(Vec::new()));

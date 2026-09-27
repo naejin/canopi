@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { plantDbStatus } from '../app/health/state'
 import { exportFile } from '../ipc/export'
 import { searchSpecies } from '../ipc/species'
+import { getAppFolders, showAppFolder } from '../ipc/settings'
+import { removeRecentDesign, showRecentDesignInFolder } from '../ipc/design'
 import type { SpeciesSearchRequest } from '../types/species'
 
 const invoke = vi.hoisted(() => vi.fn(async (
@@ -44,5 +46,16 @@ describe('native IPC wire format', () => {
     selectSavePath.mockResolvedValueOnce('/exports/Budget.CSV')
     await exportFile('a,b', 'budget.csv', 'CSV', ['csv'])
     expect(invoke).toHaveBeenLastCalledWith('export_file', { data: 'a,b', path: '/exports/Budget.CSV' })
+  })
+
+  it('names the app folder and Recent Design commands and their arguments', async () => {
+    await getAppFolders()
+    expect(invoke).toHaveBeenLastCalledWith('get_app_folders')
+    await showAppFolder('data_library')
+    expect(invoke).toHaveBeenLastCalledWith('show_app_folder', { folder: 'data_library' })
+    await removeRecentDesign('/designs/a.canopi')
+    expect(invoke).toHaveBeenLastCalledWith('remove_recent_design', { path: '/designs/a.canopi' })
+    await showRecentDesignInFolder('/designs/a.canopi')
+    expect(invoke).toHaveBeenLastCalledWith('show_recent_design_in_folder', { path: '/designs/a.canopi' })
   })
 })
