@@ -14,6 +14,7 @@ import {
   moveStepBy,
   readStoryImageFile,
   renameStory,
+  type StoryImageDecoder,
   requestDeleteStep,
   selectedStep,
   selectStep,
@@ -313,6 +314,75 @@ describe('story images', () => {
     }
     const read = await readStoryImageFile(new File([new Uint8Array(1024)], 'a.png', { type: 'image/png' }), { stories: [full] })
     expect(read).toEqual({ ok: false, problem: 'designFull', bytes: 1024 })
+  })
+
+  describe('an image over 1 MB', () => {
+    const MIB = 1024 * 1024
+    const big = () => new File([new Uint8Array(3 * MIB)], 'orchard.jpg', { type: 'image/jpeg' })
+
+    /** A decoded 4000 × 3000 photo whose encoded size follows its pixels and quality. */
+    function photo(options: { webp?: boolean; bytesPerPixel?: number } = {}) {
+      const calls: { width: number; height: number; type: string; quality: number }[] = []
+      const close = vi.fn()
+      const decoder: StoryImageDecoder = {
+        decode: async () => ({
+          width: 4000,
+          height: 3000,
+          close,
+          encode: async (width, height, type, quality) => {
+            calls.push({ width, height, type, quality })
+            const encoded = options.webp === false && type === 'image/webp' ? 'image/png' : type
+            const size = Math.round(width * height * quality * (options.bytesPerPixel ?? 0.5))
+            // Only a blob that fits is ever read; a larger one needs no bytes behind it.
+            return size <= MIB ? new Blob([new Uint8Array(size)], { type: encoded }) : { size, type: encoded } as Blob
+          },
+        }),
+      }
+      return { decoder, calls, close }
+    }
+
+    it('makes it smaller in the browser, as WebP, until it fits 1 MB', async () => {
+      const { decoder, calls, close } = photo()
+      const read = await readStoryImageFile(big(), null, decoder)
+      expect(read.ok).toBe(true)
+      if (!read.ok) return
+      expect(read.src.startsWith('data:image/webp;base64,')).toBe(true)
+      expect(read.bytes).toBeLessThanOrEqual(MIB)
+      expect(read.resizedFrom).toBe(3 * MIB)
+      expect(designEmbeddedImageBytes({ stories: [{ id: 's', name: 's', steps: [{ id: 'a', view_id: 'v', title: '', images: [{ src: read.src, alt: 'x' }] }] }] })).toBe(read.bytes)
+      // At most 2560 px on the long side, then lower quality before a smaller size.
+      expect(calls[0]).toMatchObject({ width: 2560, height: 1920, type: 'image/webp' })
+      expect(calls[1]!.width).toBe(2560)
+      expect(calls[1]!.quality).toBeLessThan(calls[0]!.quality)
+      expect(calls.at(-1)!.width).toBeLessThan(2560)
+      expect(close).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses JPEG where the browser cannot write WebP', async () => {
+      const { decoder, calls } = photo({ webp: false })
+      const read = await readStoryImageFile(big(), null, decoder)
+      expect(read.ok && read.src.startsWith('data:image/jpeg;base64,')).toBe(true)
+      expect(calls.filter((call) => call.type === 'image/webp')).toHaveLength(1)
+    })
+
+    it('refuses it when even the smallest size stays over 1 MB, and when it cannot be decoded', async () => {
+      const { decoder, close } = photo({ bytesPerPixel: 100 })
+      expect(await readStoryImageFile(big(), null, decoder)).toEqual({ ok: false, problem: 'tooLarge', bytes: 3 * MIB })
+      expect(close).toHaveBeenCalledTimes(1)
+      expect(await readStoryImageFile(big(), null, { decode: async () => null })).toEqual({ ok: false, problem: 'unreadable', bytes: 3 * MIB })
+    })
+
+    it('still keeps the Design within 10 MB of images', async () => {
+      const nearlyFull: Story = {
+        ...STORY,
+        steps: STORY.steps.map((step, index) => ({
+          ...step,
+          images: index === 0 ? Array.from({ length: 10 }, () => ({ src: `data:image/png;base64,${'A'.repeat(1_390_000)}`, alt: 'x' })) : [],
+        })),
+      }
+      const read = await readStoryImageFile(big(), { stories: [nearlyFull] }, photo().decoder)
+      expect(read).toMatchObject({ ok: false, problem: 'designFull' })
+    })
   })
 
   it('refuses a file it cannot read', async () => {

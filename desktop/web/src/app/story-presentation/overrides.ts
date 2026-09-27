@@ -3,12 +3,13 @@ import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { PanelTarget } from '../../types/design'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
 
-// What the map shows while a story step is presented, laid over the user's own
+// What the map shows while a story is presented, laid over the user's own
 // state for the session only: the map layer store, the Design's site data, its
-// label choice and its layers stay as they are, so nothing is saved, dirtied
-// or undone, and clearing the overrides shows the user's state exactly. The
-// presentation controller (controller.ts) is the only writer; the map, the
-// runtime adapter and the panel target overlays read them.
+// label choice, its layers and the grid, ruler and guide settings stay as they
+// are, so nothing is saved, dirtied or undone, and clearing the overrides shows
+// the user's state exactly. The presentation controller (controller.ts) is the
+// only writer; the map, the runtime adapter and the panel target overlays read
+// them.
 
 export interface StoryPresentationOverrides {
   /** Background band and terrain as the step's view shows them. */
@@ -28,6 +29,19 @@ export const storyPresentationOverrides: ReadonlySignal<StoryPresentationOverrid
 /** Written only by the presentation controller. */
 export function setStoryPresentationOverrides(next: StoryPresentationOverrides | null): void {
   overrides.value = next
+}
+
+const editingAidsHidden = signal(false)
+
+/**
+ * The map's editing aids (grid, rulers, ruler guides) are hidden for the whole
+ * presentation, whatever step shows; the user's own settings are untouched.
+ */
+export const storyPresentationHidesEditingAids: ReadonlySignal<boolean> = computed(() => editingAidsHidden.value)
+
+/** Written only by the presentation controller. */
+export function setStoryPresentationHidesEditingAids(hidden: boolean): void {
+  editingAidsHidden.value = hidden
 }
 
 /** The map layers the workspace map draws: a presented step's, else the user's own. */

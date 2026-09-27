@@ -11,6 +11,7 @@ import {
   renameStory,
   reorderSteps,
   requestDeleteStep,
+  registerStoryUndoToast,
   requestDeleteStory,
   richTextFirstLine,
   selectedStep,
@@ -19,6 +20,7 @@ import {
   selectStory,
   storyUndo,
   undoStoryDelete,
+  type StoryUndo,
 } from '../../app/stories'
 import { currentDesign } from '../../app/document-session/store'
 import { presentStory } from '../../app/story-presentation'
@@ -310,6 +312,12 @@ function StepRow({ story, step, number, view, selected, dragging, onReorderBegin
 function StoryUndoToast() {
   const undo = storyUndo.value
   if (!undo) return null
+  return <StoryUndoToastContent undo={undo} />
+}
+
+function StoryUndoToastContent({ undo }: { readonly undo: StoryUndo }) {
+  // Ctrl Z reaches the toast only while it is on screen.
+  useEffect(() => registerStoryUndoToast(), [])
   return (
     <div className={styles.toastSlot}>
       <Toast message={undo.message} actionLabel={t('stories.undo')} onAction={undoStoryDelete} onDismiss={dismissStoryUndo} />
@@ -331,7 +339,8 @@ function PresentButton({ story }: { readonly story: Story }) {
         className={`${styles.smallButton} ${styles.primary}`}
         disabled={!canPresent}
         aria-describedby={story.steps.length === 0 ? hintId : undefined}
-        onClick={() => { presentStory(story.id, selectedStepIndex(story)) }}
+        data-story-present={story.id}
+        onClick={() => { presentStory(story.id, selectedStepIndex(story), { returnFocus: 'present-button' }) }}
       >
         <ControlIcon name="play" size={16} />
         {t('stories.present')}

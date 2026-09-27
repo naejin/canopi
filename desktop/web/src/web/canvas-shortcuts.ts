@@ -4,6 +4,7 @@ import { savedViewDialogOpen } from '../app/saved-views'
 import { modalLayerOpen } from '../app/shell/modal-layer'
 import { singleKeyShortcuts } from '../app/settings/state'
 import { runFindPlantsShortcut } from '../app/plant-finder/focus'
+import { runStoryUndoShortcut } from '../app/stories/actions'
 import { matchShellCommandShortcut, type ShellCommandState } from '../app/shell-commands'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
 import { isEditableTarget } from '../canvas/runtime/interaction/pointer-utils'
@@ -24,7 +25,7 @@ let activeInstallation: WebCanvasShortcutInstallation | null = null
 
 /**
  * Web Edition keyboard routing: Ctrl F for the open panel's plant finder,
- * shell shortcuts the browser lets a page keep (Ctrl O, Ctrl S, F1, F2,
+ * Ctrl Z for a Stories Undo toast on screen, shell shortcuts the browser lets a page keep (Ctrl O, Ctrl S, F1, F2,
  * Ctrl ,), then canvas commands. Canvas keys never
  * act inside a text field unless the command says so (Ctrl K), and character
  * keys stay off while Settings › Keyboard turns single-key shortcuts off.
@@ -40,6 +41,8 @@ export function installWebCanvasShortcuts(
     if (saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek()) return
     // Ctrl F belongs to the open panel's plant finder, even while a field has focus.
     if (runFindPlantsShortcut(event)) return
+    // Ctrl Z answers a Stories Undo toast on screen before the map's history.
+    if (runStoryUndoShortcut(event)) return
     const shellCommand = shell ? matchShellCommandShortcut(shell.catalog, event) : null
     if (shellCommand?.shortcut && !BROWSER_RESERVED_SHORTCUTS.has(shellCommand.shortcut)) {
       event.preventDefault()

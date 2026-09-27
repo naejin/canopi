@@ -48,7 +48,7 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
   const fullScreenLabel = fullScreen ? t('presentation.exitFullScreen') : t('presentation.fullScreen')
 
   useLayoutEffect(() => {
-    // Start on Next so the keys and Enter work at once.
+    // Start on Next (Finish in a one-step story) so the keys and Enter work at once.
     next.current?.focus({ preventScroll: true })
   }, [])
 
@@ -197,7 +197,7 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
           </ul>
         )}
         <nav className={styles.nav} aria-label={t('presentation.steps')}>
-          {/* aria-disabled keeps focus on the button at either end, so the keys keep working. */}
+          {/* aria-disabled keeps focus on the button on the first step, so the keys keep working. */}
           <button type="button" className={styles.navButton} aria-disabled={first ? true : undefined} onClick={previousPresentedStep}>
             <ControlIcon name="chevron-left" size={18} />
             {t('presentation.previous')}
@@ -219,9 +219,15 @@ function StoryPresenterContent({ presented }: { readonly presented: PresentedSte
               )
             })}
           </div>
-          <button ref={next} type="button" className={`${styles.navButton} ${styles.primary}`} aria-disabled={last ? true : undefined} onClick={nextPresentedStep}>
-            {t('presentation.next')}
-            <ControlIcon name="chevron-right" size={18} />
+          {/* One button, Next then Finish on the last step, so focus stays on it. */}
+          <button
+            ref={next}
+            type="button"
+            className={`${styles.navButton} ${styles.primary}`}
+            onClick={last ? leaveStoryPresentation : nextPresentedStep}
+          >
+            {last ? t('presentation.finish') : t('presentation.next')}
+            {!last && <ControlIcon name="chevron-right" size={18} />}
           </button>
         </nav>
         <span className={styles.hint} data-hint="keys">{t('presentation.keysHint')}</span>

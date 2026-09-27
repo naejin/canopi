@@ -347,7 +347,7 @@ function createTestSettingsAdapter(
   let plantSpacingIntervalM = 0.5
   return {
     readLocale: () => 'en',
-    readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+    readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
@@ -956,9 +956,16 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('presents only a story step’s layers, without selection, and changes nothing in the Scene', () => {
+  it('presents only a story step’s layers, without selection or measurement guides, and changes nothing in the Scene', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    sceneEdits.run('guide-add', (tx) => {
+      tx.mutate((draft) => {
+        draft.measurementGuides.push({ kind: 'measurement-guide', id: 'measure-1', locked: false, start: { x: 0, y: 0 }, end: { x: 5, y: 0 } })
+      })
+    })
+    const canUndo = runtime.commandSurface.history.canUndo.value
     runtime.commandSurface.sceneEdits.selectAll()
     const selection = runtime.querySurface.getSelection()
     const scene = runtime.querySurface.getSceneSnapshot()
@@ -973,13 +980,17 @@ describe('scene canvas runtime', () => {
     expect(presented.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 1))
     expect(presented.selectedPlantIds.size).toBe(0)
     expect(presented.hoverTarget).toBeNull()
+    // Measurement guides are an editing aid: a presented story never shows them.
+    runtime.commandSurface.layers.presentLayers(layerNames)
+    expect(scene.measurementGuides.length).toBeGreaterThan(0)
+    expect(presentation.buildRendererSnapshot().scene.measurementGuides).toEqual([])
 
     runtime.commandSurface.layers.presentLayers(null)
     expect(presentation.buildRendererSnapshot().scene.layers.map((layer) => layer.visible))
       .toEqual(scene.layers.map((layer) => layer.visible))
     expect(runtime.querySurface.getSelection()).toEqual(selection)
     expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
-    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(canUndo)
     runtime.destroy()
   })
 

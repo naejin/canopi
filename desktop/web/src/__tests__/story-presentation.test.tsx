@@ -10,6 +10,7 @@ import {
   presentStory,
   previousPresentedStep,
   storyPresentationActive,
+  storyPresentationHidesEditingAids,
   storyPresentationOverrides,
 } from '../app/story-presentation'
 import { StoryPresenter } from '../components/stories/StoryPresenter'
@@ -24,6 +25,9 @@ import { createSessionPlane } from '../canvas/session-plane'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { PlantDisplay } from '../canvas/runtime/plant-display'
 import { locale } from '../app/settings/state'
+import { gridVisible, rulersVisible } from '../app/canvas-settings/signals'
+import { registerFocusRegion } from '../app/shell/focus-regions'
+import { currentCanvasQuerySurface } from '../canvas/session'
 import type { CanopiFile, SavedView, Story } from '../types/design'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
@@ -209,21 +213,59 @@ describe('presenting a story', () => {
     expect(presentStory('tour')).toBe(false)
   })
 
-  it('shows the step’s labels to the map and hides the grid and rulers, then gives them back', () => {
+  it('shows the step’s labels to the map and hides the grid, rulers and guides, then gives them back', () => {
     const adapter = createAppCanvasRuntimeAppAdapter({ presentationData: {} as never })
     const displays: PlantDisplay[] = []
     const dispose = adapter.plantDisplay!.subscribe((display) => { displays.push(display) })
     const overlay = () => adapter.settings.readChromeOverlay()
     const before = overlay()
+    expect(before.guidesVisible).toBe(true)
 
     presentStory('tour', 1, { reducedMotion: true })
     expect(displays.at(-1)?.labels).toBe('codes')
-    expect(overlay()).toEqual({ gridVisible: false, rulersVisible: false })
+    expect(overlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
 
     leaveStoryPresentation()
     expect(displays.at(-1)?.labels).toBe('names')
     expect(overlay()).toEqual(before)
     dispose()
+  })
+
+  it('hides the editing aids for the whole presentation, whatever a step overrides', () => {
+    const adapter = createAppCanvasRuntimeAppAdapter({ presentationData: {} as never })
+    gridVisible.value = true
+    rulersVisible.value = true
+    // No command surface: no step applies its overrides, yet the aids stay hidden.
+    setCurrentCanvasSession({ ...createTestCanvasRuntimeSurfaces({ queries: currentCanvasQuerySurface.peek()! }), commands: null as never })
+    try {
+      presentStory('tour', 0, { reducedMotion: true })
+      expect(storyPresentationOverrides.value).toBeNull()
+      expect(storyPresentationHidesEditingAids.value).toBe(true)
+      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: false, rulersVisible: false, guidesVisible: false })
+      leaveStoryPresentation()
+      expect(storyPresentationHidesEditingAids.value).toBe(false)
+      expect(adapter.settings.readChromeOverlay()).toEqual({ gridVisible: true, rulersVisible: true, guidesVisible: true })
+      expect(gridVisible.value).toBe(true)
+      expect(rulersVisible.value).toBe(true)
+    } finally {
+      gridVisible.value = false
+      rulersVisible.value = false
+    }
+  })
+
+  it('gives focus back to the map when the presentation did not start from a Present button', async () => {
+    const map = document.createElement('div')
+    map.tabIndex = 0
+    document.body.append(map)
+    const release = registerFocusRegion('map', map)
+    try {
+      presentStory('tour', 0, { reducedMotion: true })
+      leaveStoryPresentation()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(document.activeElement).toBe(map)
+    } finally {
+      release()
+    }
   })
 })
 
@@ -272,15 +314,37 @@ describe('the presenter', () => {
     await act(async () => { presenter.querySelector<HTMLButtonElement>('nav button[aria-label="Step 3: Untitled step"]')!.click() })
     expect(presentedStep.value?.index).toBe(2)
     expect(presenter.querySelector('[role="status"]')?.textContent).toBe('Step 3 of 3: Untitled step')
-    const next = [...presenter.querySelectorAll<HTMLButtonElement>('nav button')].at(-1)!
-    expect(next.getAttribute('aria-disabled')).toBe('true')
-    await act(async () => { next.click() })
+    await act(async () => { key(presenter, 'ArrowRight') })
     expect(presentedStep.value?.index).toBe(2)
 
     await act(async () => { key(presenter, 'Escape') })
     expect(storyPresentationActive.value).toBe(false)
     expect(container.querySelector('[data-story-presenter]')).toBeNull()
     expect(modalLayerOpen.value).toBe(false)
+  })
+
+  it('offers Finish instead of Next on the last step, which leaves the presentation', async () => {
+    const presenter = await present(1)
+    const next = document.activeElement as HTMLButtonElement
+    expect(next.textContent).toBe('Next')
+    await act(async () => { next.click() })
+    expect(presentedStep.value?.index).toBe(2)
+    // The same button, so focus stays on it.
+    expect(document.activeElement).toBe(next)
+    expect(next.textContent).toBe('Finish')
+    expect(next.hasAttribute('aria-disabled')).toBe(false)
+    expect(presenter.querySelector('nav')?.textContent).not.toContain('Next')
+    await act(async () => { next.click() })
+    expect(storyPresentationActive.value).toBe(false)
+    expect(container.querySelector('[data-story-presenter]')).toBeNull()
+  })
+
+  it('starts on Finish in a story with one step', async () => {
+    replaceCurrentDesignState({ ...design(), stories: [{ ...TOUR, steps: [TOUR.steps[0]!] }] }, null, 'Stories')
+    await present(0)
+    expect(document.activeElement?.textContent).toBe('Finish')
+    const previous = [...container.querySelectorAll<HTMLButtonElement>('nav button')][0]!
+    expect(previous.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('jumps to the first and last steps with Home and End, and pages with PageUp and PageDown', async () => {

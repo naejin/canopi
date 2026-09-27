@@ -9,8 +9,11 @@ vi.mock('../app/saved-views/thumbnails', async (importOriginal) => {
 })
 
 import { StoriesPanel } from '../components/panels/StoriesPanel'
-import { dismissStoryUndo, selectStep, selectStory, storyUndo } from '../app/stories'
-import { leaveStoryPresentation, presentedStep } from '../app/story-presentation'
+import { dismissStoryUndo, runStoryUndoShortcut, selectStep, selectStory, storyUndo } from '../app/stories'
+import { leaveStoryPresentation, presentedStep, storyPresentationActive } from '../app/story-presentation'
+import { StoryPresenter } from '../components/stories/StoryPresenter'
+import { installWebCanvasShortcuts } from '../web/canvas-shortcuts'
+import { disposeShortcuts, initShortcuts } from '../shortcuts/manager'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { mapZoomToStageScale } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -84,6 +87,14 @@ function mountMap(): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
+/** Lets asynchronous work (reading a file) finish and render, until `done`. */
+async function until(done: () => boolean): Promise<void> {
+  for (let tries = 0; tries < 250 && !done(); tries += 1) {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+  }
+  expect(done()).toBe(true)
+}
+
 async function renderPanel(): Promise<void> {
   await act(async () => { render(<StoriesPanel />, container) })
 }
@@ -121,6 +132,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  disposeShortcuts()
+  leaveStoryPresentation()
   render(null, container)
   container.remove()
   dismissStoryUndo()
@@ -213,6 +226,32 @@ describe('Stories panel', () => {
     expect(button('Present').getAttribute('aria-describedby')).not.toBeNull()
   })
 
+  it('gives focus back to the Present button after leaving, though the panel stepped aside meanwhile', async () => {
+    mountMap()
+    function Workspace() {
+      // As the workspace does: the dock (and so this panel) steps aside while presenting.
+      return (
+        <>
+          {storyPresentationActive.value ? null : <StoriesPanel />}
+          <StoryPresenter />
+        </>
+      )
+    }
+    await act(async () => { render(<Workspace />, container) })
+    const present = button('Present')
+    present.focus()
+    await act(async () => { present.click() })
+    expect(present.isConnected).toBe(false)
+    expect(document.activeElement?.textContent).toContain('Next')
+
+    await act(async () => {
+      container.querySelector('[data-story-presenter]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(storyPresentationActive.value).toBe(false)
+    expect(document.activeElement).toBe(button('Present'))
+  })
+
   it('reorders steps by dragging the handle', async () => {
     await renderPanel()
     for (const [index, row] of rows().entries()) {
@@ -255,6 +294,58 @@ describe('Stories panel', () => {
     expect(storyUndo.value?.message).toBe('Deleted step “The site”')
     await act(async () => { button('Undo').click() })
     expect(stepIds()).toEqual(['s1', 's3', 's2'])
+  })
+
+  it('answers Ctrl Z with the Undo toast’s undo while it shows, but not in a text field', async () => {
+    await renderPanel()
+    await openMenuItem(button('More actions for step 1'), 'delete')
+    expect(stepIds()).toEqual(['s2', 's3'])
+
+    const field = document.createElement('input')
+    document.body.append(field)
+    const inField = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true })
+    field.dispatchEvent(inField)
+    expect(runStoryUndoShortcut(inField)).toBe(false)
+    expect(stepIds()).toEqual(['s2', 's3'])
+
+    const redo = new KeyboardEvent('keydown', { key: 'Z', code: 'KeyZ', ctrlKey: true, shiftKey: true, cancelable: true })
+    expect(runStoryUndoShortcut(redo)).toBe(false)
+
+    const undo = new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })
+    let handled = false
+    await act(async () => { handled = runStoryUndoShortcut(undo) })
+    expect(handled).toBe(true)
+    expect(undo.defaultPrevented).toBe(true)
+    expect(stepIds()).toEqual(['s1', 's2', 's3'])
+    expect(storyUndo.value).toBeNull()
+    // Nothing left to undo: Ctrl Z goes on to the map's history.
+    expect(runStoryUndoShortcut(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true }))).toBe(false)
+  })
+
+  it('leaves Ctrl Z to the map when the Undo toast is not on screen', async () => {
+    await renderPanel()
+    await openMenuItem(button('More actions for this story'), 'delete-story')
+    expect(storyUndo.value).not.toBeNull()
+    await act(async () => { render(null, container) })
+    const undo = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, cancelable: true })
+    expect(runStoryUndoShortcut(undo)).toBe(false)
+    expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['open-day'])
+  })
+
+  it('undoes a story delete with Ctrl Z through both editions’ key routing', async () => {
+    await renderPanel()
+    await openMenuItem(button('More actions for this story'), 'delete-story')
+    const disposeWeb = installWebCanvasShortcuts(window)
+    try {
+      await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })) })
+      expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['visit', 'open-day'])
+    } finally {
+      disposeWeb()
+    }
+    await openMenuItem(button('More actions for this story'), 'delete-story')
+    initShortcuts()
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, cancelable: true })) })
+    expect(currentDesign.value!.stories!.map((story) => story.id)).toEqual(['visit', 'open-day'])
   })
 
   it('renames and deletes a story from its menu, with Undo', async () => {
@@ -416,7 +507,7 @@ describe('step editor', () => {
     const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
     Object.defineProperty(input, 'files', { value: [new File([new Uint8Array([1, 2, 3])], 'a.webp', { type: 'image/webp' })], configurable: true })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    await until(() => editor.querySelector('input[required]') !== null)
     const pendingAlt = editor.querySelector<HTMLInputElement>('input[required]')!
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
     await act(async () => { pendingAlt.dispatchEvent(escape) })
@@ -424,22 +515,56 @@ describe('step editor', () => {
     expect(currentDesign.value!.stories![0]!.steps[0]!.images).toEqual([])
   })
 
-  it('embeds a chosen image once it has a description, and refuses images over 1 MB or of another type', async () => {
+  it('makes an image over 1 MB smaller before embedding it, and says so', async () => {
     const editor = await openStep('s1')
     const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
-    const choose = async (file: File) => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 3000, height: 2000, close: vi.fn() })))
+    const context = { drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: '', imageSmoothingQuality: 'low' }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (this: HTMLCanvasElement, done, type) {
+      done(new Blob([new Uint8Array(this.width * 100)], { type: type ?? 'image/png' }))
+    })
+    try {
+      Object.defineProperty(input, 'files', { value: [new File([new Uint8Array(2.5 * 1024 * 1024)], 'orchard.jpg', { type: 'image/jpeg' })], configurable: true })
+      await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+      await until(() => editor.querySelector('input[required]') !== null)
+      expect(context.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 2560, 1707)
+      expect(editor.textContent).toContain('Canopi made this image smaller to fit: 2.5 MB to 0.2 MB.')
+      const alt = editor.querySelector<HTMLInputElement>('input[required]')!
+      await act(async () => {
+        alt.value = 'The orchard in May'
+        alt.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => { alt.form!.requestSubmit() })
+      const images = currentDesign.value!.stories![0]!.steps[0]!.images!
+      expect(images).toHaveLength(1)
+      expect(images[0]!.alt).toBe('The orchard in May')
+      expect(images[0]!.src.startsWith('data:image/webp;base64,')).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('embeds a chosen image once it has a description, and refuses images of another type or that cannot be made small enough', async () => {
+    const editor = await openStep('s1')
+    const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
+    // Reading a file is asynchronous: wait for what it shows.
+    const choose = async (file: File, shows: () => boolean) => {
       Object.defineProperty(input, 'files', { value: [file], configurable: true })
       await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
-      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+      await until(shows)
     }
+    const alertText = () => editor.querySelector('[role="alert"]')?.textContent
 
-    await choose(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' }))
-    expect(editor.textContent).toContain('Choose a PNG, JPEG, WebP or GIF image.')
+    await choose(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' }), () => !!alertText())
+    expect(alertText()).toBe('Choose a PNG, JPEG, WebP or GIF image.')
 
-    await choose(new File([new Uint8Array(1024 * 1024 + 1)], 'big.png', { type: 'image/png' }))
-    expect(editor.querySelector('[role="alert"]')?.textContent).toMatch(/An image can be at most 1 MB/)
+    // No decoder in this DOM: an image over 1 MB cannot be made smaller.
+    await choose(new File([new Uint8Array(1024 * 1024 + 1)], 'big.png', { type: 'image/png' }), () => alertText() !== 'Choose a PNG, JPEG, WebP or GIF image.' && !!alertText())
+    expect(alertText()).toBe('Canopi couldn\'t read this image. Try another file.')
 
-    await choose(new File([new Uint8Array([137, 80, 78, 71])], 'hedge.png', { type: 'image/png' }))
+    await choose(new File([new Uint8Array([137, 80, 78, 71])], 'hedge.png', { type: 'image/png' }), () => !!editor.querySelector('input[required]'))
     const keep = [...editor.querySelectorAll<HTMLButtonElement>('button[type="submit"]')].find((entry) => entry.textContent === 'Add image')!
     expect(keep.disabled).toBe(true)
     const alt = editor.querySelector<HTMLInputElement>('input[required]')!

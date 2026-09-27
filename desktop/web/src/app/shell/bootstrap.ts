@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { initShortcuts } from "../../shortcuts/manager";
+import { disposeShortcuts, initShortcuts } from "../../shortcuts/manager";
 import type { SubsystemHealth } from "../../types/health";
 import { initTheme } from "../../utils/theme";
 import { plantDbStatus } from "../health/state";
@@ -41,6 +41,7 @@ export function bootstrapShell(settingsAdapter: SettingsPlatformAdapter): ShellB
       if (disposed) return;
       disposed = true;
       settingsInstallation.dispose();
+      disposeShortcuts();
       disposeTheme();
     },
   };

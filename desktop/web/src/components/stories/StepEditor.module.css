@@ -117,8 +117,12 @@
   border-radius: var(--radius-control);
 }
 
+.resized,
 .pendingActions {
   grid-column: 1 / -1;
+}
+
+.pendingActions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

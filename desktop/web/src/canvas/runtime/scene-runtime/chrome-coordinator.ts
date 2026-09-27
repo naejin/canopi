@@ -6,6 +6,7 @@ interface SceneRuntimeChromeSnapshot {
   camera: CameraViewportSnapshot
   rulersVisible: boolean
   gridVisible: boolean
+  guidesVisible: boolean
   guides: Guide[]
 }
 
@@ -33,9 +34,10 @@ export class SceneRuntimeChromeCoordinator {
     this._overlay?.refreshTheme()
   }
 
-  update(snapshot: SceneRuntimeChromeSnapshot): void {
+  update({ guidesVisible, ...snapshot }: SceneRuntimeChromeSnapshot): void {
     this._overlay?.update({
       ...snapshot,
+      guides: guidesVisible ? snapshot.guides : [],
       chromeVisible: this._visible,
     })
   }

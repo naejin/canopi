@@ -1,5 +1,6 @@
 import { commandPaletteOpen, handleAppCommandKeyDown } from '../commands/registry'
 import { isFindPlantsShortcut, runFindPlantsShortcut } from '../app/plant-finder/focus'
+import { runStoryUndoShortcut } from '../app/stories/actions'
 
 export { commandPaletteOpen } from '../commands/registry'
 
@@ -19,17 +20,20 @@ export function initShortcuts() {
       if (commandPaletteOpen.peek()) return
       if (runFindPlantsShortcut(e)) return
     }
+    // Ctrl Z answers a Stories Undo toast on screen before the map's history.
+    if (!commandPaletteOpen.peek() && runStoryUndoShortcut(e)) return
     handleAppCommandKeyDown(e)
   }
 
   window.addEventListener('keydown', _keydownHandler)
 }
 
+export function disposeShortcuts(): void {
+  if (!_keydownHandler) return
+  window.removeEventListener('keydown', _keydownHandler)
+  _keydownHandler = null
+}
+
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    if (_keydownHandler) {
-      window.removeEventListener('keydown', _keydownHandler)
-      _keydownHandler = null
-    }
-  })
+  import.meta.hot.dispose(disposeShortcuts)
 }

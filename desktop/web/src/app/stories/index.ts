@@ -21,6 +21,8 @@ export {
   setStepTitle,
   stepsShowingView,
   storyUndo,
+  registerStoryUndoToast,
+  runStoryUndoShortcut,
   undoStoryDelete,
   useCurrentViewForStep,
   type StoryUndo,
@@ -30,6 +32,8 @@ export {
   formatImageBytes,
   readStoryImageFile,
   STORY_IMAGE_ACCEPT,
+  type DecodedStoryImage,
+  type StoryImageDecoder,
   type StoryImageProblem,
   type StoryImageRead,
 } from './images'

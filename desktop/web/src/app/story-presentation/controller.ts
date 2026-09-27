@@ -9,15 +9,21 @@ import { currentDesign, designSessionStore } from '../document-session/store'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import { goToSavedView } from '../saved-views/current-view'
-import { setStoryPresentationOverrides, type StoryPresentationOverrides } from './overrides'
+import { focusRegion } from '../shell/focus-regions'
+import {
+  setStoryPresentationHidesEditingAids,
+  setStoryPresentationOverrides,
+  type StoryPresentationOverrides,
+} from './overrides'
 
 // Presenting a story full-window inside Canopi. This controller is the one
-// owner of the presentation: its state, the session overrides a step applies
-// (overrides.ts, the runtime's presented layers and the Species Focus), the
-// camera it moves, the full-screen request and the listeners it adds. Every
-// one of them is undone by `leaveStoryPresentation()`, which also runs when
-// another Design replaces this one, when the story goes away and on HMR.
-// Applying a step never edits or dirties the Design.
+// owner of the presentation: its state, the session overrides (overrides.ts:
+// the editing aids it hides and what a step shows; the runtime's presented
+// layers and the Species Focus), the camera it moves, the full-screen request,
+// the listeners it adds and where focus goes afterwards. Every one of them is
+// undone by `leaveStoryPresentation()`, which also runs when another Design
+// replaces this one, when the story goes away and on HMR. Applying a step
+// never edits or dirties the Design.
 
 interface ActivePresentation {
   readonly session: object
@@ -31,8 +37,16 @@ interface Restore {
   readonly speciesFocus: string | null
 }
 
+/**
+ * Where focus goes after leaving: the Stories panel's Present button that
+ * started the presentation, else the map.
+ */
+export type PresentationReturnFocus = 'present-button' | 'map'
+
 const active = signal<ActivePresentation | null>(null)
 let restore: Restore | null = null
+let returnFocus: { readonly target: PresentationReturnFocus; readonly storyId: string } | null = null
+let returnFocusTimer: ReturnType<typeof setTimeout> | null = null
 let disposeWatch: (() => void) | null = null
 let enteredFullScreen = false
 
@@ -68,6 +82,8 @@ export const storyPresentationActive: ReadonlySignal<boolean> = computed(() => a
 export interface StoryPresentationOptions {
   /** Jump between steps instead of flying; defaults to the platform reduced-motion preference. */
   readonly reducedMotion?: boolean
+  /** Where focus goes after leaving; the map by default. */
+  readonly returnFocus?: PresentationReturnFocus
 }
 
 let reducedMotionOverride: boolean | undefined
@@ -79,7 +95,9 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
   const plane = queries?.sessionPlane.peek()
   if (!story || story.steps.length === 0 || !queries || !plane) return false
   if (active.peek()) leaveStoryPresentation()
+  cancelReturnFocus()
   reducedMotionOverride = options.reducedMotion
+  returnFocus = { target: options.returnFocus ?? 'map', storyId }
   restore = {
     camera: geographicViewOf(queries.viewport.peek(), plane),
     speciesFocus: queries.getSpeciesFocus().canonicalName,
@@ -89,6 +107,7 @@ export function presentStory(storyId: string, index = 0, options: StoryPresentat
     storyId,
     index: clampIndex(index, story.steps.length),
   }
+  setStoryPresentationHidesEditingAids(true)
   disposeWatch = effect(watchPresentation)
   setPresentingAttribute(true)
   return true
@@ -115,7 +134,8 @@ export function previousPresentedStep(): void {
 /**
  * Ends the presentation and puts back everything it changed: the map layers,
  * site data, labels, Design layers and rings as the user had them, the
- * Species Focus, full screen and, in the same Design, the camera.
+ * Species Focus, the editing aids, full screen and, in the same Design, the
+ * camera; then focus goes back to where the presentation started.
  */
 export function leaveStoryPresentation(): void {
   const current = active.peek()
@@ -125,6 +145,7 @@ export function leaveStoryPresentation(): void {
   appliedStepKey = null
   active.value = null
   setStoryPresentationOverrides(null)
+  setStoryPresentationHidesEditingAids(false)
   setPresentingAttribute(false)
   const sameDesign = current.session === designSessionStore.sessionIdentity.peek()
   const commands = getCurrentCanvasCommandSurface()
@@ -136,6 +157,36 @@ export function leaveStoryPresentation(): void {
     if (saved.camera) commands.viewport.showPlace(saved.camera, saved.camera.zoom, { motion: 'jump' })
   }
   exitFullScreen()
+  scheduleReturnFocus(sameDesign)
+}
+
+/**
+ * Focus moves once the workspace has rendered again: the dock that holds the
+ * Present button comes back and the modal layer lets the chrome go.
+ */
+function scheduleReturnFocus(sameDesign: boolean): void {
+  const target = returnFocus
+  returnFocus = null
+  cancelReturnFocus()
+  if (!target || typeof document === 'undefined') return
+  returnFocusTimer = setTimeout(() => {
+    returnFocusTimer = null
+    if (active.peek()) return
+    const button = sameDesign && target.target === 'present-button'
+      ? [...document.querySelectorAll<HTMLButtonElement>('button[data-story-present]')]
+        .find((candidate) => candidate.dataset.storyPresent === target.storyId)
+      : undefined
+    if (button && !button.disabled && button.closest('[inert]') === null) {
+      button.focus({ preventScroll: true })
+      if (document.activeElement === button) return
+    }
+    focusRegion('map')
+  }, 0)
+}
+
+function cancelReturnFocus(): void {
+  if (returnFocusTimer !== null) clearTimeout(returnFocusTimer)
+  returnFocusTimer = null
 }
 
 /** Full screen is on while presenting; the browser or the user may end it too. */
@@ -252,6 +303,7 @@ function clampIndex(index: number, count: number): number {
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     leaveStoryPresentation()
+    cancelReturnFocus()
     if (typeof document !== 'undefined') document.removeEventListener('fullscreenchange', onFullScreenChange)
   })
 }

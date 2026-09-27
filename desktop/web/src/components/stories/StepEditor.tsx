@@ -15,6 +15,7 @@ import {
   type StoryImageRead,
 } from '../../app/stories'
 import { currentDesign } from '../../app/document-session/store'
+import { STORY_IMAGE_MAX_BYTES } from '../../generated/canopi-design-format'
 import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import type { SavedView, StoryImage, StoryStep } from '../../types/design'
@@ -33,8 +34,9 @@ export function StepEditor({ storyId, step, number, view }: {
 }) {
   const headingId = useId()
   const titleId = useId()
-  const [pending, setPending] = useState<{ src: string } | null>(null)
+  const [pending, setPending] = useState<{ src: string; resized: string | null } | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
+  const [shrinking, setShrinking] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const images = step.images ?? []
   const canCapture = canAddStorySteps()
@@ -42,8 +44,19 @@ export function StepEditor({ storyId, step, number, view }: {
 
   async function chooseImage(file: File): Promise<void> {
     setProblem(null)
+    // Making a large image smaller can take a moment.
+    setShrinking(file.size > STORY_IMAGE_MAX_BYTES)
     const read = await readStoryImageFile(file, currentDesign.peek())
-    if (read.ok) setPending({ src: read.src })
+    setShrinking(false)
+    if (read.ok) {
+      setPending({
+        src: read.src,
+        resized: read.resizedFrom === undefined ? null : t('stories.imageResized', {
+          from: formatImageBytes(read.resizedFrom, locale.peek()),
+          to: formatImageBytes(read.bytes, locale.peek()),
+        }),
+      })
+    }
     else setProblem(imageProblemText(read))
   }
 
@@ -89,6 +102,7 @@ export function StepEditor({ storyId, step, number, view }: {
           if (file) void chooseImage(file)
         }}
       />
+      {shrinking && <p className={styles.hint} role="status">{t('stories.imageShrinking')}</p>}
       {problem && <Notice tone="error">{problem}</Notice>}
       {(images.length > 0 || pending) && (
         <div className={styles.images}>
@@ -111,6 +125,7 @@ export function StepEditor({ storyId, step, number, view }: {
           {pending && (
             <PendingImage
               src={pending.src}
+              resized={pending.resized}
               number={images.length + 1}
               onKeep={(alt) => {
                 setStepImages(storyId, step.id, [...images, { src: pending.src, alt }])
@@ -194,8 +209,10 @@ function ImageRow({ image, number, onAlt, onRemove }: {
   )
 }
 
-function PendingImage({ src, number, onKeep, onCancel }: {
+function PendingImage({ src, resized, number, onKeep, onCancel }: {
   readonly src: string
+  /** Says the image was made smaller to fit, and by how much. */
+  readonly resized: string | null
   readonly number: number
   onKeep(alt: string): void
   onCancel(): void
@@ -234,6 +251,7 @@ function PendingImage({ src, number, onKeep, onCancel }: {
         />
         <span className={styles.hint} id={hintId}>{t('stories.imageAltHint')}</span>
       </label>
+      {resized && <p className={`${styles.hint} ${styles.resized}`} role="status">{resized}</p>}
       <div className={styles.pendingActions}>
         <button type="button" className={`${styles.button} ${styles.ghost}`} onClick={onCancel}>{t('stories.cancel')}</button>
         <button type="submit" className={`${styles.button} ${styles.primary}`} disabled={!ready} data-image-number={number}>

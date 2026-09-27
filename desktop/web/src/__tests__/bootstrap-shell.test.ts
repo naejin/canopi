@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   disposeSettings: vi.fn(),
   disposeTheme: vi.fn(),
   initShortcuts: vi.fn(),
+  disposeShortcuts: vi.fn(),
   initTheme: vi.fn(),
   installSettingsProjection: vi.fn(),
   invoke: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../shortcuts/manager", () => ({
   initShortcuts: mocks.initShortcuts,
+  disposeShortcuts: mocks.disposeShortcuts,
 }));
 
 vi.mock("../utils/theme", () => ({
@@ -76,6 +78,7 @@ describe("settings platform bootstrap", () => {
     mocks.disposeSettings.mockReset();
     mocks.disposeTheme.mockReset();
     mocks.initShortcuts.mockReset();
+    mocks.disposeShortcuts.mockReset();
     mocks.initTheme.mockReset().mockReturnValue(mocks.disposeTheme);
     mocks.installSettingsProjection.mockReset().mockReturnValue({
       ready: Promise.resolve(),
@@ -219,6 +222,7 @@ describe("settings platform bootstrap", () => {
     bootstrap.dispose();
 
     expect(mocks.disposeSettings).toHaveBeenCalledOnce();
+    expect(mocks.disposeShortcuts).toHaveBeenCalledOnce();
     expect(mocks.disposeTheme).toHaveBeenCalledOnce();
   });
 

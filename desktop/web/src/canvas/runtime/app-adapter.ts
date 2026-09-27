@@ -23,6 +23,8 @@ export interface CanvasRuntimeLayerProjectionSource {
 export interface CanvasRuntimeChromeSettingsSnapshot {
   readonly gridVisible: boolean
   readonly rulersVisible: boolean
+  /** The Design's ruler guides; the app hides them while it presents the map. */
+  readonly guidesVisible: boolean
 }
 
 export interface CanvasRuntimeCleanStateAdapter {
@@ -191,7 +193,7 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
     translate: detachedCanvasRuntimeTranslator,
     settings: {
       readLocale: () => 'en',
-      readChromeOverlay: () => ({ gridVisible, rulersVisible }),
+      readChromeOverlay: () => ({ gridVisible, rulersVisible, guidesVisible: true }),
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,

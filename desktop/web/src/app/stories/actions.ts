@@ -20,6 +20,8 @@ import {
 } from '../design-edit'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { canShowSavedViews, captureCurrentView, goToSavedView } from '../saved-views/current-view'
+import { modalLayerOpen } from '../shell/modal-layer'
+import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 
 // The Stories panel's action layer. Stories and their steps are Design Edit
 // data (app/design-edit/stories.ts); each step shows a saved view, so adding
@@ -94,6 +96,32 @@ export function undoStoryDelete(): void {
 
 export function dismissStoryUndo(): void {
   undoState.value = null
+}
+
+let undoToastsShowing = 0
+
+/** The Undo toast is on screen while registered; only then does Ctrl Z reach it. */
+export function registerStoryUndoToast(): () => void {
+  undoToastsShowing += 1
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    undoToastsShowing -= 1
+  }
+}
+
+/**
+ * Ctrl Z (Cmd Z) undoes the delete the Undo toast offers while it is on
+ * screen, before the map's own history. Shared by both editions' key routing;
+ * a text field keeps its own undo. True when the shortcut undid the delete.
+ */
+export function runStoryUndoShortcut(event: KeyboardEvent): boolean {
+  if ((event.ctrlKey === event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') return false
+  if (undoToastsShowing === 0 || !storyUndo.peek() || modalLayerOpen.peek() || isEditableTarget(event.target)) return false
+  event.preventDefault()
+  undoStoryDelete()
+  return true
 }
 
 function offerUndo(message: string, undo: () => void): void {

@@ -50,6 +50,16 @@ function focusTarget(region: HTMLElement): HTMLElement | null {
   return null
 }
 
+/** Moves focus into a showing region, to the control last focused there; false when it cannot. */
+export function focusRegion(id: FocusRegionId): boolean {
+  const element = regions.get(id)
+  if (!element || !showing(element)) return false
+  const target = focusTarget(element)
+  if (!target) return false
+  target.focus({ preventScroll: true })
+  return document.activeElement === target
+}
+
 /** Moves focus to the next (1) or previous (-1) showing region; false when there is none. */
 export function cycleFocusRegion(step: 1 | -1): boolean {
   const active = document.activeElement

@@ -7,7 +7,7 @@ import type {
 } from '../../canvas/runtime/app-adapter'
 import type { CanvasMapBackdrop } from '../../canvas/runtime/scene-visuals'
 import { effectiveBackgroundOpacity, mapBackgroundOf, type MapLayersState } from '../map-layers/state'
-import { presentedMapLayers, storyPresentationOverrides } from '../story-presentation/overrides'
+import { presentedMapLayers, storyPresentationHidesEditingAids, storyPresentationOverrides } from '../story-presentation/overrides'
 import {
   gridVisible,
   layerLockState,
@@ -64,11 +64,15 @@ export function createAppCanvasRuntimeAppAdapter(
     translate: t,
     settings: {
       readLocale: () => locale.value,
-      // Presenting a story shows the map without the grid and rulers.
-      readChromeOverlay: () => ({
-        gridVisible: gridVisible.value && storyPresentationOverrides.value === null,
-        rulersVisible: rulersVisible.value && storyPresentationOverrides.value === null,
-      }),
+      // Presenting a story shows the map without the grid, rulers and ruler guides.
+      readChromeOverlay: () => {
+        const aids = !storyPresentationHidesEditingAids.value
+        return {
+          gridVisible: gridVisible.value && aids,
+          rulersVisible: rulersVisible.value && aids,
+          guidesVisible: aids,
+        }
+      },
       readSnapToGridEnabled: () => snapToGridEnabled.value,
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM.value,
@@ -100,7 +104,7 @@ export function createAppCanvasRuntimeAppAdapter(
       subscribeChromeOverlay: (onChange) => effect(() => {
         void gridVisible.value
         void rulersVisible.value
-        void storyPresentationOverrides.value
+        void storyPresentationHidesEditingAids.value
         onChange()
       }),
       subscribeMapBackdrop: (onChange) => effect(() => {

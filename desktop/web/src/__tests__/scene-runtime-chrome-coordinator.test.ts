@@ -72,6 +72,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
       camera: cameraSnapshot(),
       rulersVisible: true,
       gridVisible: false,
+      guidesVisible: true,
       guides: [],
     })
 
@@ -91,6 +92,7 @@ describe('SceneRuntimeChromeCoordinator', () => {
       camera: cameraSnapshot(),
       rulersVisible: true,
       gridVisible: false,
+      guidesVisible: true,
       guides: [],
     })
     secondHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="vertical"]')
@@ -101,5 +103,22 @@ describe('SceneRuntimeChromeCoordinator', () => {
     coordinator.destroy()
     coordinator.destroy()
     expect(secondHost.childElementCount).toBe(0)
+  })
+
+  it('draws no ruler guides while the app hides them, and draws them again after', () => {
+    const host = document.createElement('div')
+    setHostRect(host)
+    const coordinator = new SceneRuntimeChromeCoordinator()
+    coordinator.attach(host, vi.fn())
+    coordinator.show()
+    const grid = () => host.querySelector<HTMLCanvasElement>('[data-scene-chrome-part="grid"]')!
+    const guides = [{ id: 'guide-v', axis: 'v' as const, position: 10 }]
+
+    coordinator.update({ camera: cameraSnapshot(), rulersVisible: false, gridVisible: false, guidesVisible: false, guides })
+    expect(grid().style.display).toBe('none')
+
+    coordinator.update({ camera: cameraSnapshot(), rulersVisible: false, gridVisible: false, guidesVisible: true, guides })
+    expect(grid().style.display).toBe('block')
+    coordinator.destroy()
   })
 })

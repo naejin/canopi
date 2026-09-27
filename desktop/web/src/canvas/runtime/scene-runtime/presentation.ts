@@ -108,7 +108,7 @@ export class SceneRuntimePresentationController {
 
   /**
    * While a story is presented the map shows only the named Design layers and
-   * no selection or hover; null shows the Design as it is again. Session
+   * no selection, hover or measurement guides; null shows the Design as it is again. Session
    * presentation only: the Scene, its history and dirty state never change.
    * Returns whether anything changed.
    */
@@ -159,12 +159,14 @@ export class SceneRuntimePresentationController {
   }
 
   private buildPresentedSnapshot(visible: ReadonlySet<string>, overview: boolean): SceneRendererSnapshot {
-    return this.buildViewCaptureSnapshot({
+    const snapshot = this.buildViewCaptureSnapshot({
       viewport: this._getViewport(),
       overview,
       visibleLayerNames: [...visible],
       focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
     })
+    // Measurement guides are an editing aid, like the chrome's ruler guides.
+    return { ...snapshot, scene: { ...snapshot.scene, measurementGuides: [] } }
   }
 
   /**
