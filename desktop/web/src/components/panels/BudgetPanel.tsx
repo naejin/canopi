@@ -3,6 +3,8 @@ import { useBudgetItemWorkbench } from '../../app/budget/workbench'
 import type { BudgetSort } from '../../app/planning-view/state'
 import { navigateTo, sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { EmptyState } from '../shared/EmptyState'
@@ -93,7 +95,7 @@ export function BudgetPanel() {
             {t('canvas.budget.noResults')}
           </EmptyState>
         ) : <>
-          <div className={row.columns} aria-hidden="true">
+          <div className={`${row.columns} ${styles.columns}`} aria-hidden="true">
             <span className={styles.plantsCaption}>{t('canvas.budget.plants')}</span>
             <span className={styles.priceCaption}>{t('canvas.budget.unitCost')}</span>
             <span className={styles.totalCaption}>{t('canvas.budget.lineTotal')}</span>
@@ -113,14 +115,14 @@ export function BudgetPanel() {
               return (
                 <li
                   key={item.canonical}
-                  className={row.row}
+                  className={`${row.row} ${styles.row}`}
                   data-selected={workbench.focusedCanonical === item.canonical}
                   onMouseEnter={() => workbench.hoverRow(item)}
                   onMouseLeave={workbench.clearHover}
                 >
                   <button
                     type="button"
-                    className={row.main}
+                    className={`${row.main} ${styles.rowMain}`}
                     aria-pressed={workbench.focusedCanonical === item.canonical}
                     onClick={() => workbench.toggleSpeciesFocus(item.canonical)}
                   >
@@ -137,7 +139,7 @@ export function BudgetPanel() {
                       highlight={finderHighlight(finder.byKey.get(item.canonical))}
                     />
                     <span className={row.code}>{item.code}</span>
-                    <span className={styles.plantsColumn}>{item.count}</span>
+                    <span className={styles.plantsColumn}>{formatCount(item.count, locale.value)}</span>
                   </button>
                   <span className={styles.priceField} data-invalid={invalid ? 'true' : undefined}>
                     <span className={styles.currency} aria-hidden="true">{workbench.currencySymbol}</span>

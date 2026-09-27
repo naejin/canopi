@@ -27,56 +27,80 @@
   list-style: none;
 }
 
+/*
+ * Budget rows at 440 px: tighter gaps and compact number columns leave the
+ * names about 140 px, so a typical common name stays on one line above the
+ * scientific name. The shared row keeps its code column; the price field
+ * stays wide enough for a price with its currency.
+ */
+.list .row,
+.list .rowMain,
+.columns {
+  gap: var(--space-1-5);
+}
+
 /* Fixed columns so plant counts, prices and totals line up down the list. */
 .plantsColumn {
-  flex: 0 0 36px;
+  flex: 0 0 auto;
+  min-width: 28px;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
+.columns {
+  align-items: flex-end;
+}
+
+/* Captions may be wider than their column: they wrap between words, and a
+   single long word overflows to the left, never onto the next caption. */
 .plantsCaption,
 .priceCaption,
 .totalCaption {
+  display: flex;
+  justify-content: flex-end;
   text-align: right;
 }
 
 .plantsCaption {
-  flex: 0 0 36px;
+  flex: 0 0 28px;
 }
 
 .priceCaption {
-  flex: 0 0 88px;
+  flex: 0 0 76px;
 }
 
 .totalCaption {
-  flex: 0 0 84px;
+  flex: 0 0 72px;
 }
 
 .totalColumn {
-  flex: 0 0 84px;
+  flex: 0 0 72px;
   margin-left: auto;
   color: var(--color-text);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   text-align: right;
+  white-space: nowrap;
 }
 
+/* "No price" may wrap in long languages instead of widening the column. */
 .totalColumn[data-empty="true"] {
   color: var(--color-text-muted);
   font-weight: 400;
+  white-space: normal;
 }
 
 .priceField {
-  flex: 0 0 88px;
+  flex: 0 0 76px;
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-height: var(--control-size-lg);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1-5);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-control);
   background: var(--color-surface);
