@@ -264,12 +264,12 @@ export function createSceneRuntimeConstruction(
   })
   disposeEffects.push(effect(() => reorigin.observe(camera.snapshot.value)))
   disposeEffects.push(() => reorigin.dispose())
-  const updateSpeciesFocus = (change: Partial<SpeciesFocus>) => {
+  const focusSpecies = (canonicalName: string | null) => {
     if (!runtimeActive) return
     const current = sceneStore.session.speciesFocus
-    const next = { ...current, ...change }
-    if (change.canonicalName !== undefined && next.canonicalName !== null && !sceneStore.persisted.plants.some((plant) => plant.canonicalName === next.canonicalName)) return
-    if (current.canonicalName === next.canonicalName && current.showCodes === next.showCodes) return
+    const next: SpeciesFocus = { canonicalName }
+    if (canonicalName !== null && !sceneStore.persisted.plants.some((plant) => plant.canonicalName === canonicalName)) return
+    if (current.canonicalName === next.canonicalName) return
     sceneStore.updateSession((draft) => { draft.speciesFocus = next })
     callbacks.incrementSceneRevision()
     callbacks.invalidate('scene')
@@ -277,8 +277,7 @@ export function createSceneRuntimeConstruction(
   const commandSurface = createSceneCanvasCommandSurface({
     readEmptySceneScale,
     speciesFocus: {
-      focus: (canonicalName) => updateSpeciesFocus({ canonicalName }),
-      showCodes: (showCodes) => updateSpeciesFocus({ showCodes }),
+      focus: focusSpecies,
     },
     sceneStore,
     camera,

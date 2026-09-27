@@ -202,8 +202,16 @@ export interface CanvasViewSceneRequest {
   readonly focusedSpecies: string | null
 }
 
+/** How many plants in view carry a label on the map now ("Codes shown for 70 of 282 plants in view"). */
+export interface CanvasPlantLabelCoverage {
+  readonly labelled: number
+  readonly inView: number
+}
+
 export interface CanvasQuerySurface {
   getSpeciesFocus(): SpeciesFocus
+  /** Labels drawn for the plants in view; zero in overview and while nothing is mounted. */
+  getPlantLabelCoverage(): CanvasPlantLabelCoverage
   readonly revision: CanvasQueryRevision
   readonly viewport: ReadonlySignal<CameraViewportSnapshot>
   // The open Design's metre frame; null only before the first hydration.

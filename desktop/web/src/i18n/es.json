@@ -1015,7 +1015,12 @@
     "file.open": "Abrir diseño…",
     "edit.selectAll": "Seleccionar todo",
     "file.exportPlantingPlan": "Plan de plantación (PDF)…",
-    "edit.cut": "Cortar"
+    "edit.cut": "Cortar",
+    "view.labels": "Etiquetas",
+    "view.labelsNone": "Ninguna",
+    "view.labelsCodes": "Códigos",
+    "view.labelsNames": "Nombres",
+    "view.cycleLabels": "Etiquetas: ninguna, códigos, nombres"
   },
   "titleBar": {
     "untitledDesign": "Diseño sin título",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Seleccionarla",
     "selectAll_few": "Seleccionar todas ({{count, number}})",
     "selectAll_many": "Seleccionar todas ({{count, number}})",
-    "selectAll_other": "Seleccionar todas ({{count, number}})"
+    "selectAll_other": "Seleccionar todas ({{count, number}})",
+    "labelsNone": "Ninguna",
+    "labelsOff": "Etiquetas ocultas",
+    "codesShown_one": "Códigos visibles en {{shown, number}} de {{count, number}} planta a la vista",
+    "codesShown_few": "Códigos visibles en {{shown, number}} de {{count, number}} plantas a la vista",
+    "codesShown_many": "Códigos visibles en {{shown, number}} de {{count, number}} plantas a la vista",
+    "codesShown_other": "Códigos visibles en {{shown, number}} de {{count, number}} plantas a la vista",
+    "namesShown_one": "Nombres visibles en {{shown, number}} de {{count, number}} planta a la vista",
+    "namesShown_few": "Nombres visibles en {{shown, number}} de {{count, number}} plantas a la vista",
+    "namesShown_many": "Nombres visibles en {{shown, number}} de {{count, number}} plantas a la vista",
+    "namesShown_other": "Nombres visibles en {{shown, number}} de {{count, number}} plantas a la vista"
   },
   "geojson": {
     "import": "Importar GeoJSON…",

@@ -12,6 +12,7 @@ import {
 import { composeWorkspaceMenus, type MenuDefinition } from '../app/shell-commands/menus'
 import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capabilities'
 import { savedViewMenuActions } from '../app/saved-views'
+import { plantLabelMenuActions } from '../app/plant-display/menu'
 import type { CanvasCommandProjection } from '../app/canvas-commands'
 import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
@@ -185,7 +186,7 @@ export function createBrowserShellCommandProjection({
   })
   return {
     ...shell,
-    workspaceMenus: composeWorkspaceMenus({ shell, canvas, translate: t, savedViews: savedViewMenuActions() }),
+    workspaceMenus: composeWorkspaceMenus({ shell, canvas, translate: t, savedViews: savedViewMenuActions(), plantLabels: plantLabelMenuActions() }),
   }
 }
 

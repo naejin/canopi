@@ -1015,7 +1015,12 @@
     "file.open": "打开设计…",
     "edit.selectAll": "全选",
     "file.exportPlantingPlan": "种植方案（PDF）…",
-    "edit.cut": "剪切"
+    "edit.cut": "剪切",
+    "view.labels": "标签",
+    "view.labelsNone": "无",
+    "view.labelsCodes": "代码",
+    "view.labelsNames": "名称",
+    "view.cycleLabels": "标签：无、代码、名称"
   },
   "titleBar": {
     "untitledDesign": "未命名设计",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "全部选择（{{count, number}}）",
     "selectAll_few": "全部选择（{{count, number}}）",
     "selectAll_many": "全部选择（{{count, number}}）",
-    "selectAll_other": "全部选择（{{count, number}}）"
+    "selectAll_other": "全部选择（{{count, number}}）",
+    "labelsNone": "无",
+    "labelsOff": "标签已关闭",
+    "codesShown_one": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示代码",
+    "codesShown_few": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示代码",
+    "codesShown_many": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示代码",
+    "codesShown_other": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示代码",
+    "namesShown_one": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示名称",
+    "namesShown_few": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示名称",
+    "namesShown_many": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示名称",
+    "namesShown_other": "视图中 {{count, number}} 株植物有 {{shown, number}} 株显示名称"
   },
   "geojson": {
     "import": "导入 GeoJSON…",

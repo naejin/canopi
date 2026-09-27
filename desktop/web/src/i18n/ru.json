@@ -1015,7 +1015,12 @@
     "file.open": "Открыть проект…",
     "edit.selectAll": "Выделить всё",
     "file.exportPlantingPlan": "План посадки (PDF)…",
-    "edit.cut": "Вырезать"
+    "edit.cut": "Вырезать",
+    "view.labels": "Подписи",
+    "view.labelsNone": "Нет",
+    "view.labelsCodes": "Коды",
+    "view.labelsNames": "Названия",
+    "view.cycleLabels": "Подписи: нет, коды, названия"
   },
   "titleBar": {
     "untitledDesign": "Безымянный проект",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Выделить",
     "selectAll_few": "Выделить все ({{count, number}})",
     "selectAll_many": "Выделить все ({{count, number}})",
-    "selectAll_other": "Выделить все ({{count, number}})"
+    "selectAll_other": "Выделить все ({{count, number}})",
+    "labelsNone": "Нет",
+    "labelsOff": "Подписи скрыты",
+    "codesShown_one": "Коды показаны у {{shown, number}} из {{count, number}} растения в кадре",
+    "codesShown_few": "Коды показаны у {{shown, number}} из {{count, number}} растений в кадре",
+    "codesShown_many": "Коды показаны у {{shown, number}} из {{count, number}} растений в кадре",
+    "codesShown_other": "Коды показаны у {{shown, number}} из {{count, number}} растения в кадре",
+    "namesShown_one": "Названия показаны у {{shown, number}} из {{count, number}} растения в кадре",
+    "namesShown_few": "Названия показаны у {{shown, number}} из {{count, number}} растений в кадре",
+    "namesShown_many": "Названия показаны у {{shown, number}} из {{count, number}} растений в кадре",
+    "namesShown_other": "Названия показаны у {{shown, number}} из {{count, number}} растения в кадре"
   },
   "geojson": {
     "import": "Импорт GeoJSON…",

@@ -35,6 +35,9 @@ export interface MenuSubmenu {
   readonly type: 'submenu'
   readonly id: string
   readonly label: string
+  /** A key that acts on the whole submenu (View › Labels: N cycles its items). */
+  readonly shortcut?: string
+  readonly ariaShortcut?: string
   readonly disabled: boolean
   readonly items: readonly MenuAction[]
 }
@@ -63,6 +66,8 @@ export interface WorkspaceMenuInput<Id extends ShellCommandId> {
   readonly translate: (key: string) => string
   /** View › Saved views ▸: one entry per saved view of the open Design. */
   readonly savedViews?: readonly MenuAction[]
+  /** View › Labels ▸: None, Codes, Names; the canvas `cycle-labels` command gives its key. */
+  readonly plantLabels?: readonly MenuAction[]
   /** Extra File entries placed right after a shell command (Open recent after Open Design…). */
   readonly fileInsertions?: readonly { readonly after: Id; readonly entry: MenuEntry }[]
 }
@@ -89,6 +94,7 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
   canvas,
   translate,
   savedViews = [],
+  plantLabels = [],
   fileInsertions = [],
 }: WorkspaceMenuInput<Id>): MenuDefinition[] {
   const shellMenu = (id: 'file' | 'edit' | 'view' | 'help') => shell.menus.find((menu) => menu.id === id)
@@ -135,17 +141,26 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
   const viewMenu = shellMenu('view')
   const viewSections = viewMenu?.sections ?? []
   const panels = [...shell.panelBar.design, ...shell.panelBar.planning]
+  const cycleLabels = canvas.viewActions.find((command) => command.id === 'cycle-labels')
+  const labelsSubmenu: MenuEntry[] = plantLabels.length > 0
+    ? [{
+      ...submenu(cycleLabels?.commandId ?? 'view.labels', translate('menu.view.labels'), plantLabels),
+      shortcut: cycleLabels?.shortcut,
+      ariaShortcut: cycleLabels?.ariaShortcut,
+    }]
+    : []
   menus.push({
     id: 'view',
     label: viewMenu?.label ?? translate('menu.view'),
     items: joinSections([
-      canvas.viewActions.map((command) => canvasAction(command)),
+      canvas.viewActions.filter((command) => command.id !== 'cycle-labels').map((command) => canvasAction(command)),
       // Saved views, then the commands that save and manage them (shell section 2).
       viewSections[2]
         ? [submenu('view.savedViews', translate('menu.view.savedViews'), savedViews), ...shellSectionEntries(viewSections[2], translate)]
         : [],
       [
         ...canvas.settingsToggles.map((command) => canvasAction(command, command.pressed ?? false)),
+        ...labelsSubmenu,
         ...shellSectionEntries(viewSections[0] ?? [], translate),
       ],
       panels.map((command) => shellAction(command)),

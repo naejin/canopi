@@ -16,6 +16,7 @@ import {
   snapToGridEnabled,
 } from '../canvas-settings/signals'
 import { requestPlaceSearchFocus } from '../geocoding/place-search-ui'
+import { cyclePlantLabels } from '../plant-display/actions'
 import { activePanel, selectPanel } from '../shell/state'
 import {
   currentCanvasCommandSurface,
@@ -94,6 +95,10 @@ export function runCanvasEditAction(action: CanvasEditAction): void {
 export function runCanvasViewAction(action: CanvasViewAction): void {
   if (action === 'search-place') {
     if (currentCanvasCommandSurface.peek()) requestPlaceSearchFocus()
+    return
+  }
+  if (action === 'cycle-labels') {
+    if (currentCanvasCommandSurface.peek()) cyclePlantLabels()
     return
   }
   withCanvas(({ viewport }) => {

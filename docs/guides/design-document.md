@@ -5,7 +5,7 @@ This guide covers the `.canopi` v8 Design file, its session lifecycle (new, open
 ## Authorities
 
 - **Scene runtime** (`SceneStore` via `SceneCanvasRuntime`) owns plants, zones, annotations, measurement guides, ruler guides, groups, locks, species colours, symbols and codes, and Design layers. It changes only through runtime transactions. Panels read it through read-only runtime queries such as `CanvasQuerySurface`, never through mirrored signals.
-- **Design Edit** (`app/design-edit/`) owns `name`, `description`, `budget`, `budget_currency`, `timeline`, `consortiums`, `lidar` presentation, `views`, `stories`, `created_at` and unknown top-level `extra` fields.
+- **Design Edit** (`app/design-edit/`) owns `name`, `description`, `budget`, `budget_currency`, `timeline`, `consortiums`, `lidar` presentation, `views`, `stories`, `created_at`, the plant display (`extra.plant_display`) and unknown top-level `extra` fields.
 - **Settings** own device preferences (see [Settings](#settings)). They are never Design data.
 - Undo covers Scene edits only. Design Edit commands, map layers and settings are not undoable.
 - Non-canvas state never goes into `SceneStore`. Canvas state is not copied into standalone signals when a computed value or runtime query will do.
@@ -19,6 +19,7 @@ This guide covers the `.canopi` v8 Design file, its session lifecycle (new, open
 - `DESIGN_FILE_FIELDS` in `common-types/src/design.rs` lists every top-level field with its owner (`Scene` or `Document`). It generates `KNOWN_CANOPI_KEYS` and `DOCUMENT_FILE_FIELD_OWNERS`. Save composition (`composeDocumentForSave()` in `app/contracts/document.ts`) reads that metadata. Never hand-maintain a parallel owner list.
 - Scene-owned presentation fields: `plant_species_colors`, `plant_species_symbols` (per-species default symbol ids; an explicit `round` is stored, and clearing deletes the key) and `plant_species_codes` (Species Code reservations, filled in before the clean baseline, kept through deletion, assigned in the same undoable edit as new plants). Unknown symbol ids render as `round`. See [ADR 0007](../adr/0007-design-objects-and-personal-libraries.md).
 - Per-object non-visual fields (plant notes, planted date, quantity, zone notes) and `locked` round-trip. New saves write explicit `locked` values.
+- `plant_display` (a root key the format keeps as unknown `extra`, so v8 files carry it without a version bump) is Display on the map for this Design: `{ color_by: "species" | "stratum" | "one_color", one_color: "#RRGGBB", symbol_scale: 0.5–2, outline, labels: "none" | "codes" | "names" }`. It is absent while every option is the default (species colours, 100 %, outline on, names). Readers repair invalid values to the defaults. It never changes a stored plant or species colour.
 - The `lidar` section (`common-types/src/lidar.rs`) stores ordered presentation entries `{ kind, id, visible, opacity, order, style }` that reference Data Library identities: a `Source` entry names a source item, an `Analysis` entry a derived item (renamed `Derived` with the next file version bump, ADR 0011). It never stores raster bytes or paths. Entries that point at deleted library items persist as unavailable until the user deletes them explicitly. Web round-trips the section without rendering it. See [data library](data-library.md).
 
 ### Saved views and stories
@@ -122,7 +123,8 @@ Web counterparts: `web/browser-design-session.ts` (file, Draft and New acquisiti
 
 ## Design Edit
 
-- Production code writes non-canvas fields only through `app/design-edit/` (`budget.ts`, `timeline.ts`, `consortium.ts`, `lidar.ts`, `views.ts`, `core.ts`), never through `store.ts` or raw signals. It reads identity and dirty state through the read-only store projections.
+- Production code writes non-canvas fields only through `app/design-edit/` (`budget.ts`, `timeline.ts`, `consortium.ts`, `lidar.ts`, `views.ts`, `plant-display.ts`, `core.ts`), never through `store.ts` or raw signals.
+- **Display on the map is Design data.** How this Design's plants read (labels now; colour, size and outline with it) travels with the file: `setPlantDisplayOptions()` (`app/design-edit/plant-display.ts`) writes `extra.plant_display`, continuous save persists it, and it is not undoable, like views. It is not Scene data: a label change never enters the scene history. `app/plant-display/` is the action layer (`cyclePlantLabels()` for View › Labels and N, `currentPlantDisplay`). It reads identity and dirty state through the read-only store projections.
 - A command computes its updater and visible replay first, then installs committed state, then publishes signals. A thrown computation publishes nothing. No-op updates do not dirty the Design (compare fields before spreading).
 - `reconcileCurrentDesign()` performs scene-derived maintenance without recording user intent.
 

@@ -37,7 +37,7 @@ export type CanvasEditAction =
   | 'unlock'
   | 'save-as-stamp'
 
-export type CanvasViewAction = 'zoom-in' | 'zoom-out' | 'fit-to-design' | 'search-place'
+export type CanvasViewAction = 'zoom-in' | 'zoom-out' | 'fit-to-design' | 'search-place' | 'cycle-labels'
 
 export type CanvasCommandId =
   | 'edit.undo'
@@ -74,6 +74,7 @@ export type CanvasCommandId =
   | 'view.zoomOut'
   | 'view.fitToDesign'
   | 'view.searchPlace'
+  | 'view.cycleLabels'
 
 export type CanvasCommandIntent =
   | { readonly type: 'select-tool', readonly tool: CanvasToolId }
@@ -298,6 +299,8 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', ['Ctrl+Minus']),
   view('fit-to-design', 'view.fitToDesign', 'menu.view.fitToDesign', ['Shift+F', 'Ctrl+0']),
   view('search-place', 'view.searchPlace', 'menu.view.searchPlace', ['Ctrl+K'], true),
+  // N cycles View › Labels (None, Codes, Names); menus show it on the Labels submenu.
+  view('cycle-labels', 'view.cycleLabels', 'menu.view.cycleLabels', ['N']),
   {
     kind: 'settings',
     id: 'grid',

@@ -6,6 +6,7 @@ import type {
 } from './presentation-data'
 import type { ScenePersistedState, ScenePoint } from './scene'
 import type { CanvasMapBackdrop } from './scene-visuals'
+import type { PlantDisplay } from './plant-display'
 import type {
   CanvasDesignObjectSelectionModel,
   CanvasRuntimeDocumentMetadata,
@@ -127,6 +128,12 @@ export interface CanvasRuntimeLayerProjectionAdapter {
   syncLayer(layer: CanvasRuntimeLayerProjectionSource): void
 }
 
+/** Display on the map: how plants are coloured, sized, outlined and labelled. */
+export interface CanvasRuntimePlantDisplayAdapter {
+  /** Calls `onChange` now and whenever the display changes. */
+  subscribe(onChange: (display: PlantDisplay) => void): () => void
+}
+
 export interface CanvasRuntimePresentationDataAdapter {
   readonly plantLabels?: CanvasPlantLabelSource
   readonly speciesCache?: CanvasSpeciesPresentationCache
@@ -153,6 +160,8 @@ export interface CanvasRuntimeAppAdapter {
    */
   readonly tryInspectAt?: (point: { readonly x: number; readonly y: number }) => boolean
   readonly presentationData?: CanvasRuntimePresentationDataAdapter
+  /** Absent in a detached runtime, which draws the default display. */
+  readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator
 }

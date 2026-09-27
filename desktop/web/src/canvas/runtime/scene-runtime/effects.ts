@@ -1,5 +1,6 @@
 import { effect } from '@preact/signals'
-import type { CanvasRuntimeSettingsAdapter } from '../app-adapter'
+import type { CanvasRuntimePlantDisplayAdapter, CanvasRuntimeSettingsAdapter } from '../app-adapter'
+import type { PlantDisplay } from '../plant-display'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { CanvasMapBackdrop } from '../scene-visuals'
 import {
@@ -12,6 +13,8 @@ interface SceneRuntimeEffectsDeps {
   onLocale: () => void
   onChromeOverlay: () => void
   onMapBackdrop: (backdrop: CanvasMapBackdrop) => void
+  onPlantDisplay: (display: PlantDisplay) => void
+  plantDisplay?: CanvasRuntimePlantDisplayAdapter
   onPanelTargetHover: () => void
   camera: Pick<WorkspaceCameraFrameReader, 'snapshot'>
   onCameraFrame: () => void
@@ -38,6 +41,7 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
     disposers.push(deps.settings.subscribeLocale(deps.onLocale))
     disposers.push(deps.settings.subscribeChromeOverlay(deps.onChromeOverlay))
     disposers.push(deps.settings.subscribeMapBackdrop(deps.onMapBackdrop))
+    if (deps.plantDisplay) disposers.push(deps.plantDisplay.subscribe(deps.onPlantDisplay))
     disposers.push(deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover))
     return disposers
   } catch (error) {

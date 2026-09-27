@@ -869,7 +869,7 @@ function fakeRuntimeComposition(
 
 function fakeCommandSurface(): CanvasCommandSurface {
   return {
-    speciesFocus: { focus: () => {}, showCodes: () => {} },
+    speciesFocus: { focus: () => {} },
     tools: { setTool: vi.fn(), plantRowSpacing: { input: vi.fn(), commit: vi.fn(), blur: vi.fn(), cancel: vi.fn() } },
     viewport: {
       zoomIn: vi.fn(),
@@ -951,7 +951,8 @@ function fakeQuerySurface(): CanvasQuerySurface {
       revision: 0,
     }),
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
-    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
+    getSpeciesFocus: () => ({ canonicalName: null }),
+    getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
     captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,

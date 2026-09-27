@@ -154,7 +154,7 @@ export class SceneRuntimePresentationController {
       ...persisted,
       layers: persisted.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })),
     }
-    const speciesFocus = { canonicalName: request.focusedSpecies, showCodes: false }
+    const speciesFocus = { canonicalName: request.focusedSpecies }
     const { viewport } = request
     if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus, viewport)
     const localizedCommonNames = this.getLocalizedCommonNames()

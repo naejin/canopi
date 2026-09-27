@@ -1015,7 +1015,12 @@
     "file.open": "Ontwerp openen…",
     "edit.selectAll": "Alles selecteren",
     "file.exportPlantingPlan": "Plantplan (PDF)…",
-    "edit.cut": "Knippen"
+    "edit.cut": "Knippen",
+    "view.labels": "Labels",
+    "view.labelsNone": "Geen",
+    "view.labelsCodes": "Codes",
+    "view.labelsNames": "Namen",
+    "view.cycleLabels": "Labels: geen, codes, namen"
   },
   "titleBar": {
     "untitledDesign": "Naamloos ontwerp",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Selecteren",
     "selectAll_few": "Alle {{count, number}} selecteren",
     "selectAll_many": "Alle {{count, number}} selecteren",
-    "selectAll_other": "Alle {{count, number}} selecteren"
+    "selectAll_other": "Alle {{count, number}} selecteren",
+    "labelsNone": "Geen",
+    "labelsOff": "Labels uit",
+    "codesShown_one": "Codes getoond bij {{shown, number}} van {{count, number}} zichtbare plant",
+    "codesShown_few": "Codes getoond bij {{shown, number}} van {{count, number}} zichtbare planten",
+    "codesShown_many": "Codes getoond bij {{shown, number}} van {{count, number}} zichtbare planten",
+    "codesShown_other": "Codes getoond bij {{shown, number}} van {{count, number}} zichtbare planten",
+    "namesShown_one": "Namen getoond bij {{shown, number}} van {{count, number}} zichtbare plant",
+    "namesShown_few": "Namen getoond bij {{shown, number}} van {{count, number}} zichtbare planten",
+    "namesShown_many": "Namen getoond bij {{shown, number}} van {{count, number}} zichtbare planten",
+    "namesShown_other": "Namen getoond bij {{shown, number}} van {{count, number}} zichtbare planten"
   },
   "geojson": {
     "import": "GeoJSON importeren…",

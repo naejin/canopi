@@ -1,6 +1,7 @@
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { setCanvasMapBackdrop } from './scene-visuals'
+import { DEFAULT_PLANT_DISPLAY, setCanvasPlantDisplay } from './plant-display'
 import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
@@ -321,6 +322,8 @@ export class SceneCanvasRuntime {
   }
 
   private _installEffects(): void {
+    // The display is module state shared with drawing and hit testing; the next runtime starts from the default.
+    this._disposeEffects.push(() => { setCanvasPlantDisplay(DEFAULT_PLANT_DISPLAY) })
     this._disposeEffects.push(...installSceneRuntimeEffects({
       onTheme: () => {
         const container = this._rendering.container
@@ -344,6 +347,12 @@ export class SceneCanvasRuntime {
         this._renderChrome()
         this._invalidate('scene')
       },
+      onPlantDisplay: (display) => {
+        if (!setCanvasPlantDisplay(display)) return
+        this._construction.inspection.refresh()
+        this._invalidate('scene')
+      },
+      plantDisplay: this._appAdapter.plantDisplay,
       onPanelTargetHover: () => {
         this._invalidate('scene')
       },

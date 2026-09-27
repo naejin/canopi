@@ -27,6 +27,7 @@ import {
 } from '../commands/registry'
 import type { AppCommandId } from '../commands/graph/catalog'
 import { flattenMenuActions } from '../app/shell-commands/menus'
+import { currentDesign } from '../app/document-session/store'
 import { designRenameRequest } from '../app/shell/requests'
 import { keyboardShortcutsDialogOpen, settingsDialogOpen } from '../app/shell/dialogs'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
@@ -584,6 +585,32 @@ describe('command registry canvas tool switching', () => {
     input.remove()
   })
 
+  it('cycles View › Labels with N on the map, never while typing', () => {
+    designSessionFixture.file = { ...emptyDesign() }
+    mountCanvasCommandSurface({})
+    const keyDown = (target: EventTarget) => {
+      const event = new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true })
+      let handled = false
+      target.addEventListener('keydown', () => { handled = handleAppCommandKeyDown(event) }, { once: true })
+      target.dispatchEvent(event)
+      return handled
+    }
+    const labels = () => (currentDesign.value?.extra?.plant_display as { labels?: string } | undefined)?.labels ?? 'names'
+
+    expect(keyDown(document.body)).toBe(true)
+    expect(labels()).toBe('none')
+    keyDown(document.body)
+    expect(labels()).toBe('codes')
+    keyDown(document.body)
+    expect(labels()).toBe('names')
+
+    const input = document.createElement('input')
+    document.body.append(input)
+    expect(keyDown(input)).toBe(false)
+    expect(labels()).toBe('names')
+    input.remove()
+  })
+
   it('ignores app shortcuts and the palette while the save dialog is open', async () => {
     const openSpy = vi.spyOn(documentActions, 'openDesign').mockResolvedValue(undefined)
     const keyDown = (init: KeyboardEventInit) => {
@@ -660,7 +687,8 @@ describe('command registry canvas tool switching', () => {
     expect(byMenu.view).toEqual([
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
       'view.saveCurrentView', 'view.manageViews',
-      'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers', 'view.toggleToolNames',
+      'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers',
+      'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
       'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook',
       'view.backgroundSatellite', 'view.backgroundMap', 'view.backgroundNone', 'view.toggleTheme',
@@ -673,8 +701,14 @@ describe('command registry canvas tool switching', () => {
     ])
     expect(byMenu.help).toEqual(['help.shortcuts', 'help.reportProblem', 'help.aboutCanopi'])
 
-    // Every palette command with a shortcut shows the same shortcut in its menu.
-    const menuShortcut = new Map(flattenMenuActions(menus()).map((item) => [item.id, item.shortcut]))
+    // Every palette command with a shortcut shows the same shortcut in its menu
+    // item, or on the submenu it acts on (N on View › Labels).
+    const menuShortcut = new Map([
+      ...flattenMenuActions(menus()).map((item) => [item.id, item.shortcut] as const),
+      ...menus().flatMap((menu) => menu.items).flatMap((entry) => entry.type === 'submenu' && entry.shortcut
+        ? [[entry.id, entry.shortcut] as const]
+        : []),
+    ])
     for (const command of paletteCommands()) {
       if (command.shortcut) expect(menuShortcut.get(command.id), command.id).toBe(command.shortcut)
     }
@@ -685,6 +719,7 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('help.shortcuts')).toBe('F1')
     expect(menuShortcut.get('file.exportCanvasPdf')).toBe('Ctrl P')
     expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
+    expect(menuShortcut.get('view.cycleLabels')).toBe('N')
   })
 
   it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {
@@ -695,12 +730,14 @@ describe('command registry canvas tool switching', () => {
     const item = (id: string) => flattenMenuActions([view]).find((entry) => entry.id === id)!
 
     expect(item('view.toggleTheme')).toMatchObject({ check: 'checkbox', checked: true })
+    expect(item('view.labels:names')).toMatchObject({ label: 'Names', check: 'radio', checked: true })
+    expect(item('view.labels:none')).toMatchObject({ label: 'None', check: 'radio', checked: false })
     expect(item('canvas.toggleGrid')).toMatchObject({ check: 'checkbox', checked: true })
     expect(item('canvas.toggleSnapToGrid')).toMatchObject({ check: 'checkbox', checked: false })
     expect(item('view.backgroundMap').check).toBe('radio')
     expect(item('view.zoomIn').check).toBeUndefined()
     const submenus = menus().flatMap((menu) => menu.items).flatMap((entry) => entry.type === 'submenu' ? [entry.id] : [])
-    expect(submenus).toEqual(['file.openRecent', 'submenu.export', 'edit.arrange', 'view.savedViews', 'submenu.background'])
+    expect(submenus).toEqual(['file.openRecent', 'submenu.export', 'edit.arrange', 'view.savedViews', 'view.cycleLabels', 'submenu.background'])
   })
 
   it('routes F2, Ctrl , and F1 to the title bar and dialogs from anywhere', () => {

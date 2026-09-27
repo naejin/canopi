@@ -1137,7 +1137,12 @@
     "file.open": "Open Design…",
     "edit.selectAll": "Select all",
     "file.exportPlantingPlan": "Planting plan (PDF)…",
-    "edit.cut": "Cut"
+    "edit.cut": "Cut",
+    "view.labels": "Labels",
+    "view.labelsNone": "None",
+    "view.labelsCodes": "Codes",
+    "view.labelsNames": "Names",
+    "view.cycleLabels": "Labels: none, codes, names"
   },
   "titleBar": {
     "untitledDesign": "Untitled Design",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Select it",
     "selectAll_few": "Select all {{count, number}}",
     "selectAll_many": "Select all {{count, number}}",
-    "selectAll_other": "Select all {{count, number}}"
+    "selectAll_other": "Select all {{count, number}}",
+    "labelsNone": "None",
+    "labelsOff": "Labels are off",
+    "codesShown_one": "Codes shown for {{shown, number}} of {{count, number}} plant in view",
+    "codesShown_few": "Codes shown for {{shown, number}} of {{count, number}} plants in view",
+    "codesShown_many": "Codes shown for {{shown, number}} of {{count, number}} plants in view",
+    "codesShown_other": "Codes shown for {{shown, number}} of {{count, number}} plants in view",
+    "namesShown_one": "Names shown for {{shown, number}} of {{count, number}} plant in view",
+    "namesShown_few": "Names shown for {{shown, number}} of {{count, number}} plants in view",
+    "namesShown_many": "Names shown for {{shown, number}} of {{count, number}} plants in view",
+    "namesShown_other": "Names shown for {{shown, number}} of {{count, number}} plants in view"
   },
   "geojson": {
     "import": "Import GeoJSON…",

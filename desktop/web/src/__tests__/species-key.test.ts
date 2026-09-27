@@ -1,7 +1,10 @@
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { allocateSpeciesCodes } from '../canvas/runtime/species-key'
+import { DEFAULT_PLANT_DISPLAY, setCanvasPlantDisplay } from '../canvas/runtime/plant-display'
+
+afterEach(() => { setCanvasPlantDisplay(DEFAULT_PLANT_DISPLAY) })
 
 describe('Species codes', () => {
   it('assigns readable unique codes independently of plant order', () => {
@@ -97,10 +100,10 @@ it('admits short codes at detail scale while keeping dense labels collision-free
     plantedDate: null,
     quantity: 1,
   }))
+  setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'codes' })
   const snapshot = createTestSceneRendererSnapshot({
     scene: { plants, plantSpeciesCodes: { 'Mentha spicata': 'MSP' } },
     viewport: { x: 0, y: 0, scale: 60 },
-    speciesFocus: { canonicalName: null, showCodes: true },
   })
   const labels = getCanvasPlantNameLabels(snapshot)
   expect(labels.length).toBeGreaterThan(0)
@@ -112,12 +115,12 @@ it('admits short codes at detail scale while keeping dense labels collision-free
       viewport: { x: 0, y: 0, scale: 10 },
     }),
   ).toEqual([])
-  expect(
-    getCanvasPlantNameLabels({
-      ...snapshot,
-      speciesFocus: { canonicalName: null, showCodes: false },
-    }),
-  ).toEqual([])
+  // Names need 100 px/m; Labels › None admits no automatic label at any scale.
+  setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'names' })
+  expect(getCanvasPlantNameLabels(snapshot)).toEqual([])
+  setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'none' })
+  expect(getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 0, y: 0, scale: 400 } })).toEqual([])
+  setCanvasPlantDisplay({ ...DEFAULT_PLANT_DISPLAY, labels: 'codes' })
   expect(
     getCanvasPlantNameLabels({
       ...snapshot,

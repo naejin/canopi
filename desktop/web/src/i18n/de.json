@@ -1015,7 +1015,12 @@
     "file.open": "Design öffnen…",
     "edit.selectAll": "Alles auswählen",
     "file.exportPlantingPlan": "Pflanzplan (PDF)…",
-    "edit.cut": "Ausschneiden"
+    "edit.cut": "Ausschneiden",
+    "view.labels": "Beschriftungen",
+    "view.labelsNone": "Keine",
+    "view.labelsCodes": "Kürzel",
+    "view.labelsNames": "Namen",
+    "view.cycleLabels": "Beschriftungen: keine, Kürzel, Namen"
   },
   "titleBar": {
     "untitledDesign": "Unbenanntes Design",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Auswählen",
     "selectAll_few": "Alle {{count, number}} auswählen",
     "selectAll_many": "Alle {{count, number}} auswählen",
-    "selectAll_other": "Alle {{count, number}} auswählen"
+    "selectAll_other": "Alle {{count, number}} auswählen",
+    "labelsNone": "Keine",
+    "labelsOff": "Beschriftungen aus",
+    "codesShown_one": "Kürzel für {{shown, number}} von {{count, number}} sichtbaren Pflanze",
+    "codesShown_few": "Kürzel für {{shown, number}} von {{count, number}} sichtbaren Pflanzen",
+    "codesShown_many": "Kürzel für {{shown, number}} von {{count, number}} sichtbaren Pflanzen",
+    "codesShown_other": "Kürzel für {{shown, number}} von {{count, number}} sichtbaren Pflanzen",
+    "namesShown_one": "Namen für {{shown, number}} von {{count, number}} sichtbaren Pflanze",
+    "namesShown_few": "Namen für {{shown, number}} von {{count, number}} sichtbaren Pflanzen",
+    "namesShown_many": "Namen für {{shown, number}} von {{count, number}} sichtbaren Pflanzen",
+    "namesShown_other": "Namen für {{shown, number}} von {{count, number}} sichtbaren Pflanzen"
   },
   "geojson": {
     "import": "GeoJSON importieren…",

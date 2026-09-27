@@ -10,6 +10,7 @@ import {
   type SceneViewportState,
 } from '../../canvas/runtime/scene'
 import type {
+  CanvasPlantLabelCoverage,
   CanvasQuerySurface,
 } from '../../canvas/runtime/runtime'
 import type { PlacedPlant } from '../../types/design'
@@ -26,6 +27,7 @@ interface TestCanvasQuerySurfaceOptions {
   readonly selection?: SceneDesignObjectSelection
   /** Defaults to a plane at the shared test origin; pass `null` for no Design frame. */
   readonly sessionPlane?: SessionPlane | null
+  readonly plantLabelCoverage?: CanvasPlantLabelCoverage
 }
 
 export type TestCanvasQuerySurface = CanvasQuerySurface & {
@@ -46,6 +48,7 @@ export function createTestCanvasQuerySurface({
   englishFallbackNames = new Map(),
   selection = [],
   sessionPlane = createSessionPlane(TEST_GEO_ORIGIN),
+  plantLabelCoverage = { labelled: 0, inView: 0 },
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
   const sessionPlaneSignal = signal<SessionPlane | null>(sessionPlane)
   const sceneRevision = signal(0)
@@ -76,7 +79,8 @@ export function createTestCanvasQuerySurface({
     revision,
     viewport: viewportSnapshot,
     sessionPlane: sessionPlaneSignal,
-    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
+    getSpeciesFocus: () => ({ canonicalName: null }),
+    getPlantLabelCoverage: () => plantLabelCoverage,
     capturePrintSnapshot: () => {
       void admissionRevision.value
       return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null
@@ -88,7 +92,7 @@ export function createTestCanvasQuerySurface({
       return createTestSceneRendererSnapshot({
         scene: { ...scene, layers: scene.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })) },
         viewport: request.viewport,
-        speciesFocus: { canonicalName: request.focusedSpecies, showCodes: false },
+        speciesFocus: { canonicalName: request.focusedSpecies },
       })
     },
     getScenePhysicalExtentMeters: () => computeScenePhysicalExtentMeters(scene),

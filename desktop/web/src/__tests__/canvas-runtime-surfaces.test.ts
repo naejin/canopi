@@ -39,7 +39,8 @@ function createQuerySurface() {
       revision: 0,
     }),
     sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
-    getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
+    getSpeciesFocus: () => ({ canonicalName: null }),
+    getPlantLabelCoverage: () => ({ labelled: 0, inView: 0 }),
     capturePrintSnapshot: () => null,
     captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,
@@ -80,7 +81,7 @@ function createQuerySurface() {
 
 function createCommandSurface() {
   return {
-    speciesFocus: { focus: () => {}, showCodes: () => {} },
+    speciesFocus: { focus: () => {} },
     tools: {
       setTool: (_name: string) => {},
       plantRowSpacing: { input: () => {}, commit: () => {}, blur: () => {}, cancel: () => {} },

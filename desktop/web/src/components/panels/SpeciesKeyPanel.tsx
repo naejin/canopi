@@ -31,6 +31,11 @@ import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SegmentedControl } from '../shared/SegmentedControl'
+import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import { setPlantLabels } from '../../app/plant-display/actions'
+import { plantLabelCoverageText } from '../../app/plant-display/coverage'
+import { currentPlantDisplay } from '../../app/plant-display/state'
+import { currentDesign } from '../../app/document-session/store'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import row from '../shared/species-row.module.css'
 import styles from './SpeciesKeyPanel.module.css'
@@ -126,7 +131,7 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
       species: t('plantFinder.species', { count: entries.length }),
     })}</p>
     <div className={styles.controls}>
-      <DisplayOnMap showCodes={focus?.showCodes ?? false} />
+      <DisplayOnMap />
       <PlantFinder
         value={query}
         onChange={(value) => { view.plantsSearch.value = value }}
@@ -170,10 +175,12 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
   </>
 }
 
-function DisplayOnMap({ showCodes }: { showCodes: boolean }) {
+function DisplayOnMap() {
   const view = usePlanningViewState()
   const open = view.plantsDisplayOpen.value
   const bodyId = useId()
+  const display = currentPlantDisplay.value
+  const hasDesign = currentDesign.value !== null
   return (
     <section className={styles.display}>
       <button
@@ -190,21 +197,29 @@ function DisplayOnMap({ showCodes }: { showCodes: boolean }) {
         <div id={bodyId} className={styles.displayBody}>
           <div className={styles.field}>
             <span className={styles.fieldLabel}>{t('speciesKey.labels')}</span>
-            <SegmentedControl
+            <SegmentedControl<PlantLabelMode>
               label={t('speciesKey.labels')}
               options={[
-                { value: 'names', label: t('speciesKey.labelsNames') },
-                { value: 'codes', label: t('speciesKey.labelsCodes') },
+                { value: 'none', label: t('speciesKey.labelsNone'), disabled: !hasDesign },
+                { value: 'codes', label: t('speciesKey.labelsCodes'), disabled: !hasDesign },
+                { value: 'names', label: t('speciesKey.labelsNames'), disabled: !hasDesign },
               ]}
-              value={showCodes ? 'codes' : 'names'}
-              onChange={(value) => currentCanvasSpeciesFocusCommands.value?.showCodes(value === 'codes')}
+              value={display.labels}
+              onChange={setPlantLabels}
             />
+            <PlantLabelCoverageLine />
           </div>
           <p className={styles.hint}>{t('speciesKey.swatchHint')}</p>
         </div>
       )}
     </section>
   )
+}
+
+/** "Codes shown for 70 of 282 plants in view": follows the camera, so it re-renders alone. */
+function PlantLabelCoverageLine() {
+  const text = plantLabelCoverageText()
+  return text ? <p className={styles.hint} role="status">{text}</p> : null
 }
 
 function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {

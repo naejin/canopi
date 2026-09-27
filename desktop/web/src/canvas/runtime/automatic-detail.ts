@@ -8,14 +8,18 @@ import { getSceneLayerStyle } from './scene-visuals'
 import { getCanvasTextOpacity } from './text-visibility'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { PlantNameLabel } from './selection-labels'
+import { getCanvasPlantDisplay } from './plant-display'
 
 export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): readonly PlantNameLabel[] {
   const { scene, viewport } = snapshot
-  const codes = snapshot.speciesFocus.showCodes
+  // Labels › None keeps only names the user pinned or a single selection shows.
+  const mode = getCanvasPlantDisplay().labels
+  const automatic = mode !== 'none'
+  const codes = mode === 'codes'
   const minimumScale = codes ? 50 : 100
   const layer = getSceneLayerStyle(scene, 'plants')
   if (!layer.visible || layer.opacity === 0) return []
-  if (viewport.scale < minimumScale && snapshot.pinnedPlantNameLabels.length === 0) return []
+  if ((!automatic || viewport.scale < minimumScale) && snapshot.pinnedPlantNameLabels.length === 0) return []
   const occupied = new LabelCollisionIndex()
   for (const rect of getCanvasDetailLayout(scene, viewport.scale).bounds) occupied.add(rect)
   for (const label of snapshot.selectionLabels) {
@@ -32,7 +36,7 @@ export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): reado
     const existing = pinned.get(plant.id)
     if (snapshot.selectionLabelPlantIds.has(plant.id) && !plant.pinnedName) continue
     const forced = snapshot.selectionLabelPlantIds.has(plant.id)
-    if (!existing && !plant.pinnedName && !forced && (viewport.scale < minimumScale || (!codes && nearestPlantSpacing(scene.plants, plant.position) * viewport.scale < 35))) continue
+    if (!existing && !plant.pinnedName && !forced && (!automatic || viewport.scale < minimumScale || (!codes && nearestPlantSpacing(scene.plants, plant.position) * viewport.scale < 35))) continue
     const opacity = forced ? 1 : existing?.opacity ?? getCanvasTextOpacity(viewport.scale)
     if (!opacity) continue
     const commonName = snapshot.localizedCommonNames.get(plant.canonicalName) ?? plant.commonName

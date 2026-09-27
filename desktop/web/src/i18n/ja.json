@@ -1015,7 +1015,12 @@
     "file.open": "デザインを開く…",
     "edit.selectAll": "すべて選択",
     "file.exportPlantingPlan": "植栽計画（PDF）…",
-    "edit.cut": "切り取り"
+    "edit.cut": "切り取り",
+    "view.labels": "ラベル",
+    "view.labelsNone": "なし",
+    "view.labelsCodes": "コード",
+    "view.labelsNames": "名前",
+    "view.cycleLabels": "ラベル：なし、コード、名前"
   },
   "titleBar": {
     "untitledDesign": "無題のデザイン",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "すべて選択（{{count, number}}）",
     "selectAll_few": "すべて選択（{{count, number}}）",
     "selectAll_many": "すべて選択（{{count, number}}）",
-    "selectAll_other": "すべて選択（{{count, number}}）"
+    "selectAll_other": "すべて選択（{{count, number}}）",
+    "labelsNone": "なし",
+    "labelsOff": "ラベルはオフです",
+    "codesShown_one": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本にコードを表示",
+    "codesShown_few": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本にコードを表示",
+    "codesShown_many": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本にコードを表示",
+    "codesShown_other": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本にコードを表示",
+    "namesShown_one": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本に名前を表示",
+    "namesShown_few": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本に名前を表示",
+    "namesShown_many": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本に名前を表示",
+    "namesShown_other": "表示中の植物 {{count, number}} 本のうち {{shown, number}} 本に名前を表示"
   },
   "geojson": {
     "import": "GeoJSON をインポート…",

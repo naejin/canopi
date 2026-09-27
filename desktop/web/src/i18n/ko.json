@@ -1015,7 +1015,12 @@
     "file.open": "디자인 열기…",
     "edit.selectAll": "모두 선택",
     "file.exportPlantingPlan": "식재 계획 (PDF)…",
-    "edit.cut": "잘라내기"
+    "edit.cut": "잘라내기",
+    "view.labels": "레이블",
+    "view.labelsNone": "없음",
+    "view.labelsCodes": "코드",
+    "view.labelsNames": "이름",
+    "view.cycleLabels": "레이블: 없음, 코드, 이름"
   },
   "titleBar": {
     "untitledDesign": "제목 없는 디자인",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "모두 선택({{count, number}})",
     "selectAll_few": "모두 선택({{count, number}})",
     "selectAll_many": "모두 선택({{count, number}})",
-    "selectAll_other": "모두 선택({{count, number}})"
+    "selectAll_other": "모두 선택({{count, number}})",
+    "labelsNone": "없음",
+    "labelsOff": "레이블 꺼짐",
+    "codesShown_one": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 코드 표시",
+    "codesShown_few": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 코드 표시",
+    "codesShown_many": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 코드 표시",
+    "codesShown_other": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 코드 표시",
+    "namesShown_one": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 이름 표시",
+    "namesShown_few": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 이름 표시",
+    "namesShown_many": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 이름 표시",
+    "namesShown_other": "보이는 식물 {{count, number}}개 중 {{shown, number}}개에 이름 표시"
   },
   "geojson": {
     "import": "GeoJSON 가져오기…",

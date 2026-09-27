@@ -1015,7 +1015,12 @@
     "file.open": "Ouvrir un Design…",
     "edit.selectAll": "Tout sélectionner",
     "file.exportPlantingPlan": "Plan de plantation (PDF)…",
-    "edit.cut": "Couper"
+    "edit.cut": "Couper",
+    "view.labels": "Étiquettes",
+    "view.labelsNone": "Aucune",
+    "view.labelsCodes": "Codes",
+    "view.labelsNames": "Noms",
+    "view.cycleLabels": "Étiquettes : aucune, codes, noms"
   },
   "titleBar": {
     "untitledDesign": "Design sans titre",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "La sélectionner",
     "selectAll_few": "Tout sélectionner ({{count, number}})",
     "selectAll_many": "Tout sélectionner ({{count, number}})",
-    "selectAll_other": "Tout sélectionner ({{count, number}})"
+    "selectAll_other": "Tout sélectionner ({{count, number}})",
+    "labelsNone": "Aucune",
+    "labelsOff": "Étiquettes masquées",
+    "codesShown_one": "Codes affichés pour {{shown, number}} plante sur {{count, number}} visible",
+    "codesShown_few": "Codes affichés pour {{shown, number}} plantes sur {{count, number}} visibles",
+    "codesShown_many": "Codes affichés pour {{shown, number}} plantes sur {{count, number}} visibles",
+    "codesShown_other": "Codes affichés pour {{shown, number}} plantes sur {{count, number}} visibles",
+    "namesShown_one": "Noms affichés pour {{shown, number}} plante sur {{count, number}} visible",
+    "namesShown_few": "Noms affichés pour {{shown, number}} plantes sur {{count, number}} visibles",
+    "namesShown_many": "Noms affichés pour {{shown, number}} plantes sur {{count, number}} visibles",
+    "namesShown_other": "Noms affichés pour {{shown, number}} plantes sur {{count, number}} visibles"
   },
   "geojson": {
     "import": "Importer du GeoJSON…",

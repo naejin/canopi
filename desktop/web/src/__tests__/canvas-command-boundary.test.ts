@@ -174,6 +174,7 @@ describe('Canvas Command Projection boundaries', () => {
       'view.zoomOut',
       'view.fitToDesign',
       'view.searchPlace',
+      'view.cycleLabels',
       'canvas.toggleGrid',
       'canvas.toggleSnapToGrid',
       'canvas.toggleRulers',

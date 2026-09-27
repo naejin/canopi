@@ -17,7 +17,13 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
     .map((menu) => ({
       id: menu.id,
       label: menu.id === 'tools' ? t('shortcuts.toolsHeading', { menu: menu.label }) : menu.label,
-      rows: flattenMenuActions([menu]).filter((action) => action.shortcut),
+      rows: [
+        ...flattenMenuActions([menu]).filter((action) => action.shortcut),
+        // A submenu whose key acts on it as a whole (View › Labels, N).
+        ...menu.items.flatMap((entry) => entry.type === 'submenu' && entry.shortcut
+          ? [{ id: entry.id, label: entry.label, shortcut: entry.shortcut }]
+          : []),
+      ],
     }))
     .filter((section) => section.rows.length > 0)
   // Keys that are not menu commands: moving between areas (F6) and nudging on the map.

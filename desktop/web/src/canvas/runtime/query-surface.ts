@@ -1,4 +1,7 @@
 import { buildCanvasPrintSnapshot } from './print-snapshot'
+import { getCanvasPlantNameLabels } from './automatic-detail'
+import { worldToScreen } from './annotation-layout'
+import { getSceneLayerStyle } from './scene-visuals'
 import { isWorkspaceOverviewScale } from '../workspace-camera-policy'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
@@ -7,6 +10,7 @@ import type { WorkspaceCameraFrameReader } from './camera'
 import type {
   CanvasDesignObjects,
   CanvasDesignObjectSelectionModel,
+  CanvasPlantLabelCoverage,
   CanvasQueryRevision,
   CanvasQuerySurface,
   CanvasViewSceneRequest,
@@ -33,7 +37,11 @@ interface SceneCanvasQuerySurfaceOptions {
   >
   readonly presentation: Pick<
     SceneRuntimePresentationController,
-    'createPlantPresentationContext' | 'getLocalizedCommonNames' | 'getEnglishFallbackNames' | 'buildViewCaptureSnapshot'
+    | 'createPlantPresentationContext'
+    | 'getLocalizedCommonNames'
+    | 'getEnglishFallbackNames'
+    | 'buildViewCaptureSnapshot'
+    | 'buildRendererSnapshot'
   >
 }
 
@@ -70,6 +78,22 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   getScenePhysicalExtentMeters(): number | null { return this.options.sceneStore.physicalExtentMeters }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }
   getSpeciesFocus() { return this.options.sceneStore.session.speciesFocus }
+  getPlantLabelCoverage(): CanvasPlantLabelCoverage {
+    const frame = this.options.camera.snapshot.peek()
+    const { width, height } = frame.screenSize
+    if (frame.mode === 'overview' || width <= 0 || height <= 0) return { labelled: 0, inView: 0 }
+    const snapshot = this.options.presentation.buildRendererSnapshot()
+    if (!getSceneLayerStyle(snapshot.scene, 'plants').visible) return { labelled: 0, inView: 0 }
+    const inView = new Set<string>()
+    for (const plant of snapshot.scene.plants) {
+      const point = worldToScreen(plant.position, snapshot.viewport)
+      if (point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height) inView.add(plant.id)
+    }
+    const labelled = new Set(getCanvasPlantNameLabels(snapshot)
+      .filter((label) => inView.has(label.plantId))
+      .map((label) => label.plantId))
+    return { labelled: labelled.size, inView: inView.size }
+  }
   getSelection(): SceneDesignObjectTarget[] {
     return this.options.sceneStore.session.selectedTargets.map((target) => ({ ...target }))
   }

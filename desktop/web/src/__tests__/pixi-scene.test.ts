@@ -363,7 +363,7 @@ describe('createPixiScenePresentation', () => {
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
       createPlant({ id: 'apple', position: { x: 0, y: 0 } }),
       createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } }),
-    ] }, selectedTargets: [{ kind: 'plant', id: 'mint' }], speciesFocus: { canonicalName: 'Malus domestica', showCodes: false } })
+    ] }, selectedTargets: [{ kind: 'plant', id: 'mint' }], speciesFocus: { canonicalName: 'Malus domestica' } })
     renderer.renderScene(snapshot)
     const marks = pixi.__pixiMockState.graphics.filter((graphic) => graphic.circle.mock.calls.length)
     expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
@@ -371,7 +371,7 @@ describe('createPixiScenePresentation', () => {
     expect(marks[1]!.alpha).toBe(1)
     renderer.setViewport({ x: 10, y: 20, scale: 2 })
     expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
-    renderer.renderScene({ ...snapshot, speciesFocus: { canonicalName: null, showCodes: false } })
+    renderer.renderScene({ ...snapshot, speciesFocus: { canonicalName: null } })
     expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, 1])
     expect(marks[1]!.stroke.mock.calls.at(-1)?.[0].alpha).toBe(selectionOpacity)
     renderer.dispose()

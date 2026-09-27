@@ -183,6 +183,7 @@ describe('Canvas Command Projection', () => {
       ['zoom-out', 'Ctrl −'],
       ['fit-to-design', 'Shift F'],
       ['search-place', 'Ctrl K'],
+      ['cycle-labels', 'N'],
     ])
     projection.viewActions[2]!.action()
     expect(intents.view).toHaveBeenCalledWith('fit-to-design')

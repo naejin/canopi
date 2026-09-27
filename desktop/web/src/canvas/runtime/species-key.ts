@@ -87,12 +87,10 @@ export function allocateSpeciesCodes(
 
 export interface SpeciesFocus {
   readonly canonicalName: string | null
-  readonly showCodes: boolean
 }
 
 export interface SpeciesFocusCommands {
   focus(canonicalName: string | null): void
-  showCodes(visible: boolean): void
 }
 
 export function speciesFocusOpacity(

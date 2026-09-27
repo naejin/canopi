@@ -23,6 +23,7 @@ import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
 import { closeCanvasContextMenu, openCanvasContextMenu } from '../canvas-context-menu/state'
 import { t } from '../../i18n'
+import { currentPlantDisplay } from '../plant-display/state'
 
 export interface CanvasRuntimeAppCapabilities {
   readonly presentationData: CanvasRuntimePresentationDataAdapter
@@ -51,6 +52,11 @@ export function createAppCanvasRuntimeAppAdapter(
       ? { savedObjectStamps: capabilities.savedObjectStamps }
       : {}),
     presentationData: capabilities.presentationData,
+    plantDisplay: {
+      subscribe: (onChange) => effect(() => {
+        onChange(currentPlantDisplay.value)
+      }),
+    },
     translate: t,
     settings: {
       readLocale: () => locale.value,

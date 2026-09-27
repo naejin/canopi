@@ -48,7 +48,7 @@ export function createTestSceneRendererSnapshot(
     selectionLabelPlantIds: new Set(singleSelectedPlant ? [singleSelectedPlant.id] : []),
     revealedAnnotationId: getRevealedAnnotationId(selectedTargets),
     ...selectionProjection,
-    speciesFocus: options.speciesFocus ?? { canonicalName: null, showCodes: false },
+    speciesFocus: options.speciesFocus ?? { canonicalName: null },
     highlightedPlantIds: new Set(options.highlightedPlantIds ?? []),
     highlightedZoneIds: new Set(options.highlightedZoneIds ?? []),
     speciesCache: new Map(options.speciesCache ?? []),

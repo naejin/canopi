@@ -12,7 +12,7 @@ export function createDefaultSceneSessionState(overrides: Partial<SceneSessionSt
       ? cloneSceneDesignObjectTarget(overrides.hoveredTarget)
       : null,
     documentRevision: overrides.documentRevision ?? 0,
-    speciesFocus: { canonicalName: null, showCodes: false, ...overrides.speciesFocus },
+    speciesFocus: { canonicalName: null, ...overrides.speciesFocus },
   }
 }
 

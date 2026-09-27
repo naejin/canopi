@@ -8,6 +8,7 @@ import { CanvasOverview } from './CanvasOverview'
 import { DisplayLegend } from './DisplayLegend'
 import { InspectionLens } from './InspectionLens'
 import { PlantAppearancePopovers } from './PlantAppearancePopovers'
+import { PlantLabelsChip } from './PlantLabelsChip'
 import { SelectionChip } from './SelectionChip'
 import { SiteOnboarding } from './SiteOnboarding'
 import { SpeciesFocusChip } from './SpeciesFocusChip'
@@ -40,6 +41,7 @@ export function CanvasChrome({ projection, canvasRef, children }: {
       <InspectionLens canvasRef={canvasRef} />
       {children}
       <SpeciesFocusChip />
+      {!locating && <PlantLabelsChip />}
       {!locating && <SelectionChip />}
       {!locating && <CanvasOverview />}
       <DisplayLegend />

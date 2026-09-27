@@ -308,6 +308,7 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
           aria-disabled={entry.disabled ? true : undefined}
           aria-haspopup="menu"
           aria-expanded={submenuOpen}
+          aria-keyshortcuts={entry.ariaShortcut}
           data-menu-root-item="true"
           data-submenu-id={entry.id}
           onClick={() => {
@@ -318,6 +319,7 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
         >
           {checkable && <span className={styles.check} aria-hidden="true" />}
           <span className={styles.itemLabel}>{entry.label}</span>
+          {entry.shortcut && <span className={styles.itemShortcut} aria-hidden="true">{entry.shortcut}</span>}
           <ControlIcon name="chevron-right" className={styles.submenuChevron} />
         </button>
         {submenuOpen && inlineSubmenus && renderSubmenuPopup(entry, true)}

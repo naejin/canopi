@@ -1015,7 +1015,12 @@
     "file.open": "Apri progetto…",
     "edit.selectAll": "Seleziona tutto",
     "file.exportPlantingPlan": "Piano di impianto (PDF)…",
-    "edit.cut": "Taglia"
+    "edit.cut": "Taglia",
+    "view.labels": "Etichette",
+    "view.labelsNone": "Nessuna",
+    "view.labelsCodes": "Codici",
+    "view.labelsNames": "Nomi",
+    "view.cycleLabels": "Etichette: nessuna, codici, nomi"
   },
   "titleBar": {
     "untitledDesign": "Progetto senza titolo",
@@ -1363,7 +1368,17 @@
     "selectAll_one": "Selezionala",
     "selectAll_few": "Seleziona tutte ({{count, number}})",
     "selectAll_many": "Seleziona tutte ({{count, number}})",
-    "selectAll_other": "Seleziona tutte ({{count, number}})"
+    "selectAll_other": "Seleziona tutte ({{count, number}})",
+    "labelsNone": "Nessuna",
+    "labelsOff": "Etichette nascoste",
+    "codesShown_one": "Codici mostrati per {{shown, number}} di {{count, number}} pianta visibile",
+    "codesShown_few": "Codici mostrati per {{shown, number}} di {{count, number}} piante visibili",
+    "codesShown_many": "Codici mostrati per {{shown, number}} di {{count, number}} piante visibili",
+    "codesShown_other": "Codici mostrati per {{shown, number}} di {{count, number}} piante visibili",
+    "namesShown_one": "Nomi mostrati per {{shown, number}} di {{count, number}} pianta visibile",
+    "namesShown_few": "Nomi mostrati per {{shown, number}} di {{count, number}} piante visibili",
+    "namesShown_many": "Nomi mostrati per {{shown, number}} di {{count, number}} piante visibili",
+    "namesShown_other": "Nomi mostrati per {{shown, number}} di {{count, number}} piante visibili"
   },
   "geojson": {
     "import": "Importa GeoJSON…",

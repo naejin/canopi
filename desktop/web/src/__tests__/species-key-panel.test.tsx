@@ -24,7 +24,11 @@ import { readPlanningViewState } from '../app/planning-view/state'
 import { plantFinderMapMatches } from '../app/plant-finder/map-matches'
 import { focusOpenPlantFinder } from '../app/plant-finder/focus'
 import { speciesTarget } from '../target'
-import type { PlacedPlant } from '../types/design'
+import type { CanopiFile, PlacedPlant } from '../types/design'
+import { designSessionFixture, replaceCurrentDesignState } from './support/design-session-state'
+import { currentDesign } from '../app/document-session/store'
+import { setPlantLabels } from '../app/plant-display/actions'
+import { PLANT_LABELS_CHIP_MS, PlantLabelsChip } from '../components/canvas/PlantLabelsChip'
 
 const plants = [
   { id: 'apple-1', canonicalName: 'Malus domestica', commonName: 'Pommier cultivé', x: 0 },
@@ -72,7 +76,7 @@ describe('Plants in this Design', () => {
       scene: store.persisted,
       plants: plants.map(placedPlant),
     })
-    let focus: SpeciesFocus = { canonicalName: null, showCodes: false }
+    let focus: SpeciesFocus = { canonicalName: null }
     queries = { ...baseQueries, getSpeciesFocus: () => focus }
     focusTemporaryBounds = vi.fn<CanvasCommandSurface['viewport']['focusTemporaryBounds']>(() => true)
     selectSpecies = vi.fn<CanvasCommandSurface['sceneEdits']['selectSpecies']>()
@@ -82,10 +86,6 @@ describe('Plants in this Design', () => {
       speciesFocus: {
         focus: (canonicalName) => {
           focus = { ...focus, canonicalName }
-          baseQueries.bumpSceneRevision()
-        },
-        showCodes: (showCodes) => {
-          focus = { ...focus, showCodes }
           baseQueries.bumpSceneRevision()
         },
       },
@@ -107,6 +107,8 @@ describe('Plants in this Design', () => {
     sidePanel.value = null
     readPlanningViewState().plantsSearch.value = ''
     readPlanningViewState().plantsSelectedOnMap.value = false
+    readPlanningViewState().plantsDisplayOpen.value = false
+    designSessionFixture.file = null
     vi.restoreAllMocks()
   })
 
@@ -236,15 +238,17 @@ describe('Plants in this Design', () => {
     expect(queries.getSpeciesFocus().canonicalName).toBeNull()
   })
 
-  it('switches map labels between names and codes and recolours a species from its swatch', async () => {
+  it('switches map labels for the Design and recolours a species from its swatch', async () => {
+    replaceCurrentDesignState(emptyDesign(), null, 'Display')
     await act(() => render(<SpeciesKeyPanel />, container))
     const display = buttonNamed('Display on the map')
     expect(display.getAttribute('aria-expanded')).toBe('false')
     await act(() => display.click())
-    const codes = container.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="false"]')!
-    expect(codes.textContent).toBe('Codes')
-    await act(() => codes.click())
-    expect(queries.getSpeciesFocus().showCodes).toBe(true)
+    const labels = container.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Labels"]')!
+    expect([...labels.querySelectorAll('[role="radio"]')].map((radio) => radio.textContent)).toEqual(['None', 'Codes', 'Names'])
+    await act(() => radioNamed(labels, 'Codes').click())
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ labels: 'codes' })
+    expect(radioNamed(labels, 'Codes').getAttribute('aria-checked')).toBe('true')
 
     const swatch = container.querySelector<HTMLInputElement>('input[aria-label="Color of Menthe verte"]')!
     await act(() => {
@@ -314,10 +318,71 @@ describe('Plants in this Design', () => {
     return container.querySelector('p[role="status"]')?.textContent ?? ''
   }
 
+  it('says how many plants in view carry a label', async () => {
+    replaceCurrentDesignState(emptyDesign(), null, 'Display')
+    readPlanningViewState().plantsDisplayOpen.value = true
+    queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 70, inView: 282 }) }
+    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+    await act(() => render(<SpeciesKeyPanel />, container))
+    expect(container.textContent).toContain('Names shown for 70 of 282 plants in view')
+    await act(() => radioNamed(container.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Labels"]')!, 'Codes').click())
+    expect(container.textContent).toContain('Codes shown for 70 of 282 plants in view')
+    await act(() => radioNamed(container.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Labels"]')!, 'None').click())
+    expect(container.textContent).toContain('Labels are off')
+  })
+
+  it('shows a chip after the labels change, then lets it go', async () => {
+    vi.useFakeTimers()
+    try {
+      replaceCurrentDesignState(emptyDesign(), null, 'Display')
+      queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 70, inView: 282 }) }
+      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+      await act(() => render(<PlantLabelsChip />, container))
+      expect(container.querySelector('[data-plant-labels-chip]')).toBeNull()
+      await act(() => setPlantLabels('codes'))
+      expect(container.querySelector('[data-plant-labels-chip]')?.textContent).toBe('Codes shown for 70 of 282 plants in view')
+      await act(() => { vi.advanceTimersByTime(PLANT_LABELS_CHIP_MS) })
+      expect(container.querySelector('[data-plant-labels-chip]')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   function buttonNamed(name: string): HTMLButtonElement {
     return [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === name)!
   }
 })
+
+function radioNamed(group: HTMLElement, name: string): HTMLButtonElement {
+  return [...group.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((radio) => radio.textContent === name)!
+}
+
+function emptyDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
+  return {
+    version: 8,
+    name: 'Display',
+    description: null,
+    plant_species_colors: {},
+    plant_species_symbols: {},
+    plant_species_codes: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    measurement_guides: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    views: [],
+    stories: [],
+    created_at: '',
+    updated_at: '',
+    extra: {},
+    ...overrides,
+  }
+}
 
 function placedPlant(plant: typeof plants[number]): PlacedPlant {
   return {
