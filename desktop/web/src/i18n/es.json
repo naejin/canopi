@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "Aún no hay acciones",
+      "allDone": "Todas las acciones están hechas",
+      "showCompleted": "Mostrar completadas",
+      "descriptionPlaceholder": "¿Qué hay que hacer? Añade notas en las líneas siguientes.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "Redimensionar panel",
-    "close": "Cerrar panel"
+    "close": "Cerrar panel",
+    "back": "Atrás"
   },
   "filters": {
     "sun": "Sol",

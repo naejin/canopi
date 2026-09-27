@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "Nog geen acties",
+      "allDone": "Alle acties zijn klaar",
+      "showCompleted": "Voltooide tonen",
+      "descriptionPlaceholder": "Wat moet er gebeuren? Voeg notities toe op de volgende regels.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "Zijbalk aanpassen",
-    "close": "Paneel sluiten"
+    "close": "Paneel sluiten",
+    "back": "Terug"
   },
   "filters": {
     "sun": "Zon",

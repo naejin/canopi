@@ -319,18 +319,21 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "No actions yet",
+      "allDone": "Every action is done",
+      "showCompleted": "Show completed",
+      "descriptionPlaceholder": "What needs doing? Add notes on the next lines.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
       "noTarget": "No target",
-      "wholeDesign": "Whole design",
+      "wholeDesign": "Whole Design",
       "unavailable": "Unavailable",
       "unscheduledWithEnd": "Unscheduled · saved end {{value}}",
       "invalidStart": "Invalid saved start · {{value}}",
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -1056,7 +1059,8 @@
   },
   "sidebar": {
     "resize": "Resize sidebar",
-    "close": "Close panel"
+    "close": "Close panel",
+    "back": "Back"
   },
   "favorites": {
     "empty": "Star a species in the catalog to keep it here. Select plants on the map and save them as a stamp to reuse a group.",

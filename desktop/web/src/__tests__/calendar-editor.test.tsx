@@ -131,16 +131,25 @@ describe('Calendar action editor', () => {
     expect(document.activeElement).toBe(editor.querySelector('[data-calendar-description]'))
     expect(text.indexOf('Description')).toBeLessThan(text.indexOf('Action type'))
     expect(text.indexOf('Targets')).toBeLessThan(text.indexOf('Completed'))
-    expect(button(editor, 'Range').getAttribute('aria-pressed')).toBe('true')
-    expect(button(editor, 'One day').getAttribute('aria-pressed')).toBe('false')
-    expect(button(editor, 'Unscheduled').getAttribute('aria-pressed')).toBe('false')
+    const schedule = editor.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Schedule"]')!
+    expect(schedule).not.toBeNull()
+    expect([...schedule.querySelectorAll('[role="radio"]')].map((radio) => [radio.textContent, radio.getAttribute('aria-checked')]))
+      .toEqual([['Range', 'true'], ['One day', 'false'], ['Unscheduled', 'false']])
     expect(editor.querySelector('[data-calendar-date-fields]')?.textContent).toContain('End inclusive')
-    expect(editor.querySelector('[data-calendar-completed] input[type="checkbox"]')).not.toBeNull()
+    const completed = editor.querySelector<HTMLInputElement>('[data-calendar-completed] input[role="switch"]')!
+    expect(completed).not.toBeNull()
+    expect(completed.checked).toBe(false)
+    await act(async () => { completed.click() })
+    expect(editor.querySelector<HTMLInputElement>('[data-calendar-completed] input[role="switch"]')!.checked).toBe(true)
+    await act(async () => { editor.querySelector<HTMLInputElement>('[data-calendar-completed] input[role="switch"]')!.click() })
+    expect(editor.querySelector<HTMLInputElement>('[data-calendar-completed] input[role="switch"]')!.checked).toBe(false)
 
     await act(async () => { button(editor, 'One day').click() })
     expect(editor.querySelector('[data-calendar-date-fields]')?.textContent).not.toContain('End inclusive')
+    expect(button(editor, 'One day').getAttribute('aria-checked')).toBe('true')
     await act(async () => { button(editor, 'Save').click() })
     expect(currentDesign.value?.timeline[0]?.end_date).toBeNull()
+    expect(currentDesign.value?.timeline[0]?.completed).toBe(false)
     expect(currentDesign.value?.timeline[0]?.description).toBe('Prune apple\nLeave branch notes intact')
 
     const reopened = await openEdit()
@@ -148,6 +157,35 @@ describe('Calendar action editor', () => {
     expect(reopened.querySelector('[data-calendar-date-fields]')).toBeNull()
     await act(async () => { button(reopened, 'Save').click() })
     expect(currentDesign.value?.timeline[0]).toMatchObject({ start_date: null, end_date: null })
+  })
+
+  it('heads the editor with the shared panel header: Back, title and Close', async () => {
+    const editor = await openEdit()
+    const header = editor.querySelector('header')!
+    expect(header.querySelector('h2')?.textContent).toBe('Edit action')
+    const back = header.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!
+    const close = header.querySelector<HTMLButtonElement>('button[aria-label="Close panel"]')!
+    expect(back).not.toBeNull()
+    expect(close).not.toBeNull()
+    expect(back.compareDocumentPosition(header.querySelector('h2')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await act(async () => { back.click() })
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(sidePanel.value).toBe('calendar')
+    expect(document.activeElement).toBe(container.querySelector('button[data-calendar-action]'))
+
+    const reopened = await openEdit()
+    await act(async () => { reopened.querySelector<HTMLButtonElement>('header button[aria-label="Close panel"]')!.click() })
+    expect(sidePanel.value).toBeNull()
+  })
+
+  it('offers a multi-line description with a placeholder and names the Whole Design target', async () => {
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[data-calendar-add]')!.click() })
+    const editor = container.querySelector<HTMLElement>('[role="dialog"]')!
+    const description = editor.querySelector<HTMLTextAreaElement>('[data-calendar-description]')!
+    expect(description.rows).toBeGreaterThanOrEqual(3)
+    expect(description.placeholder).toBe('What needs doing? Add notes on the next lines.')
+    expect(dropdownTrigger(editor, 'Targets')?.textContent).toContain('Whole Design')
   })
 
   it('picks species targets from a multi-select list with the plant finder, keyboard and Add all', async () => {

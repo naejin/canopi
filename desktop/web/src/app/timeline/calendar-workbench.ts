@@ -60,6 +60,8 @@ export interface CalendarWorkbench {
   readonly search: string
   readonly actionType: string
   readonly completion: CalendarCompletionFilter
+  /** Search, type or completion differs from the default open-actions view. */
+  readonly filtersActive: boolean
   readonly selectedDate: string | null
   readonly display: CalendarDisplay
   readonly expanded: boolean
@@ -67,6 +69,7 @@ export interface CalendarWorkbench {
   readonly scrollTop: number
   readonly editor: CalendarEditorState | null
   readonly editorError: CalendarEditorError
+  readonly clearFilters: () => void
   readonly setSearch: (value: string) => void
   readonly setActionType: (value: string) => void
   readonly setCompletion: (value: CalendarCompletionFilter) => void
@@ -382,6 +385,12 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     scrollTop: view.calendarScrollTop,
     editor: editor.value,
     editorError: editorError.value,
+    filtersActive: search !== '' || actionType !== 'all' || completion !== 'open',
+    clearFilters: () => {
+      view.calendarSearch.value = ''
+      view.calendarActionType.value = 'all'
+      view.calendarCompletion.value = 'open'
+    },
     setSearch: (value) => { view.calendarSearch.value = value },
     setActionType: (value) => { view.calendarActionType.value = value },
     setCompletion: (value) => { view.calendarCompletion.value = value },

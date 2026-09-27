@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "Пока нет действий",
+      "allDone": "Все действия выполнены",
+      "showCompleted": "Показать выполненные",
+      "descriptionPlaceholder": "Что нужно сделать? Заметки — на следующих строках.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "Изменить размер боковой панели",
-    "close": "Закрыть панель"
+    "close": "Закрыть панель",
+    "back": "Назад"
   },
   "filters": {
     "sun": "Солнце",

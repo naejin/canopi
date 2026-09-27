@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "还没有任务",
+      "allDone": "所有任务都已完成",
+      "showCompleted": "显示已完成",
+      "descriptionPlaceholder": "需要做什么？可在下面几行添加备注。",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "调整侧边栏大小",
-    "close": "关闭面板"
+    "close": "关闭面板",
+    "back": "返回"
   },
   "filters": {
     "sun": "光照",

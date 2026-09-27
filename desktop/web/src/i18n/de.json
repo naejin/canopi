@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "Noch keine Aufgaben",
+      "allDone": "Alle Aufgaben sind erledigt",
+      "showCompleted": "Erledigte anzeigen",
+      "descriptionPlaceholder": "Was ist zu tun? Notizen in den nächsten Zeilen.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "Seitenleiste anpassen",
-    "close": "Panel schließen"
+    "close": "Panel schließen",
+    "back": "Zurück"
   },
   "filters": {
     "sun": "Sonne",

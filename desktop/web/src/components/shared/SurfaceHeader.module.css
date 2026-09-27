@@ -34,6 +34,10 @@
   cursor: pointer;
 }
 
+.back {
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .close:hover {
   background: var(--color-control-hover);
   color: var(--color-text);

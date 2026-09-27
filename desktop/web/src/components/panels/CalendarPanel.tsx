@@ -9,7 +9,7 @@ import {
   formatCivilDate,
   localToday,
   parseCivilDate,
-  civilWeekStartsOnSunday,
+  civilWeekdayOffset,
   compareCivilDates,
   startOfCivilMonth,
   type CivilDate,
@@ -24,6 +24,10 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { DatePicker } from '../shared/DatePicker'
+import { EmptyState } from '../shared/EmptyState'
+import { SegmentedControl, type SegmentedOption } from '../shared/SegmentedControl'
+import { SurfaceHeader } from '../shared/SurfaceHeader'
+import { Switch } from '../shared/Switch'
 import { CalendarSpeciesPicker } from './CalendarSpeciesPicker'
 import styles from './CalendarPanel.module.css'
 
@@ -112,7 +116,7 @@ export function CalendarPanel() {
       onKeyDown={handleEscape}
     >
       {workbench.editor ? (
-        <CalendarEditor workbench={workbench} onCancel={cancelEditorAndRestoreFocus} />
+        <CalendarEditor workbench={workbench} onCancel={cancelEditorAndRestoreFocus} onClose={closePanel} />
       ) : (
         <>
           <DockPanelHeader
@@ -302,10 +306,7 @@ function CalendarDateGrid({ workbench, compact, onSelect }: {
     if (event.key === 'ArrowRight') amount = 1
     if (event.key === 'ArrowUp') amount = -7
     if (event.key === 'ArrowDown') amount = 7
-    const weekday = civilDateToLocalDate(day.date).getDay()
-    const weekOffset = civilWeekStartsOnSunday(workbench.activeLocale)
-      ? weekday
-      : (weekday + 6) % 7
+    const weekOffset = civilWeekdayOffset(day.date, workbench.activeLocale)
     if (event.key === 'Home') amount = -weekOffset
     if (event.key === 'End') amount = 6 - weekOffset
     if (amount !== null) {
@@ -448,16 +449,40 @@ function CalendarAgenda({ workbench }: { workbench: Workbench }) {
           <p className={styles.quiet}>{t('canvas.calendar.noUnscheduled')}</p>
         )}
       </section>
-      {workbench.projection.filteredCount === 0 && (
-        <div className={styles.noResults}>
-          <p>{t('canvas.calendar.noResults')}</p>
-          <button type="button" onClick={() => {
-            workbench.setSearch('')
-            workbench.setActionType('all')
-            workbench.setCompletion('open')
-          }}>{t('canvas.calendar.clearFilters')}</button>
-        </div>
-      )}
+      <CalendarAgendaEmpty workbench={workbench} />
+    </div>
+  )
+}
+
+/**
+ * Why the agenda is empty: no actions at all, chosen filters hiding them, or
+ * the default open-actions filter hiding only completed ones.
+ */
+function CalendarAgendaEmpty({ workbench }: { workbench: Workbench }) {
+  if (workbench.projection.filteredCount > 0) return null
+  if (workbench.actions.length === 0) {
+    return (
+      <div className={styles.emptyState} data-calendar-empty>
+        <EmptyState action={{ label: t('canvas.calendar.addAction'), onClick: () => workbench.openAdd(workbench.selectedDate) }}>
+          {t('canvas.calendar.noActionsYet')}
+        </EmptyState>
+      </div>
+    )
+  }
+  if (workbench.filtersActive) {
+    return (
+      <div className={styles.emptyState} data-calendar-empty>
+        <EmptyState status action={{ label: t('canvas.calendar.clearFilters'), onClick: workbench.clearFilters }}>
+          {t('canvas.calendar.noResults')}
+        </EmptyState>
+      </div>
+    )
+  }
+  return (
+    <div className={styles.emptyState} data-calendar-empty>
+      <EmptyState status action={{ label: t('canvas.calendar.showCompleted'), onClick: () => workbench.setCompletion('all') }}>
+        {t('canvas.calendar.allDone')}
+      </EmptyState>
     </div>
   )
 }
@@ -515,7 +540,11 @@ function CalendarActionRow({ action, workbench }: { action: CalendarPlanningActi
   )
 }
 
-function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCancel: () => void }) {
+function CalendarEditor({ workbench, onCancel, onClose }: {
+  workbench: Workbench
+  onCancel: () => void
+  onClose: () => void
+}) {
   const editor = workbench.editor!
   const draft = editor.draft
   const action = editor.actionId
@@ -534,7 +563,12 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
   ]
   const selectedSpeciesTargets = draft.targets.filter((target) => target.kind === 'species')
   const selectedZone = draft.targets.find((target) => target.kind === 'zone')?.zone_name ?? ''
-  const scheduleMode = !draft.scheduled ? 'unscheduled' : draft.range ? 'range' : 'single'
+  const scheduleMode: ScheduleMode = !draft.scheduled ? 'unscheduled' : draft.range ? 'range' : 'single'
+  const scheduleOptions: SegmentedOption<ScheduleMode>[] = [
+    { value: 'range', label: t('canvas.calendar.range') },
+    { value: 'single', label: t('canvas.calendar.oneDay') },
+    { value: 'unscheduled', label: t('canvas.calendar.unscheduled') },
+  ]
   const targetModeItems: DropdownItem<CalendarTargetMode>[] = (
     ['design', 'species', 'selection', 'zone'] as const
   ).map((mode) => ({
@@ -554,7 +588,7 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
     descriptionRef.current?.focus()
   }, [])
 
-  function setScheduleMode(mode: 'range' | 'single' | 'unscheduled'): void {
+  function setScheduleMode(mode: ScheduleMode): void {
     if (mode === 'unscheduled') {
       workbench.setScheduled(false)
       return
@@ -577,18 +611,21 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
 
   return (
     <div className={styles.editor} role="dialog" aria-label={t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}>
-      <header className={styles.editorTitle}>
-        <button type="button" className={styles.backButton} onClick={onCancel}>‹ {t('canvas.calendar.back')}</button>
-        <h2>{t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}</h2>
-      </header>
+      <SurfaceHeader
+        title={t(editor.mode === 'add' ? 'canvas.timeline.addTitle' : 'canvas.timeline.editTitle')}
+        back={{ label: t('sidebar.back'), onClick: onCancel }}
+        closeLabel={t('sidebar.close')}
+        onClose={onClose}
+      />
       <div className={styles.editorFields}>
         <label>
           <span>{t('canvas.timeline.description')}</span>
           <textarea
             ref={descriptionRef}
-            rows={1}
+            rows={3}
             className={styles.descriptionInput}
             data-calendar-description
+            placeholder={t('canvas.calendar.descriptionPlaceholder')}
             value={draft.description}
             onInput={(event) => workbench.updateDraft({ description: event.currentTarget.value })}
           />
@@ -606,22 +643,12 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
           />
         </div>
         <section className={styles.scheduleEditor} aria-label={t('canvas.calendar.schedule')}>
-          <div className={styles.scheduleModes} role="group" aria-label={t('canvas.calendar.schedule')}>
-            {(['range', 'single', 'unscheduled'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={scheduleMode === mode}
-                onClick={() => setScheduleMode(mode)}
-              >
-                {t(mode === 'range'
-                  ? 'canvas.calendar.range'
-                  : mode === 'single'
-                    ? 'canvas.calendar.oneDay'
-                    : 'canvas.calendar.unscheduled')}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label={t('canvas.calendar.schedule')}
+            options={scheduleOptions}
+            value={scheduleMode}
+            onChange={setScheduleMode}
+          />
           {draft.scheduled && (
             <div className={styles.dateFields} data-calendar-date-fields data-range={draft.range ? 'true' : undefined}>
               <div className={styles.field}>
@@ -711,14 +738,13 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
             <p className={styles.validation} role="alert">{t('canvas.calendar.targetRequired')}</p>
           )}
         </section>
-        <label className={styles.checkboxLabel} data-calendar-completed>
-          <input
-            type="checkbox"
+        <div data-calendar-completed>
+          <Switch
+            label={t('canvas.calendar.completed')}
             checked={draft.completed}
-            onChange={(event) => workbench.updateDraft({ completed: event.currentTarget.checked })}
+            onChange={(completed) => workbench.updateDraft({ completed })}
           />
-          <span>{t('canvas.calendar.completed')}</span>
-        </label>
+        </div>
         {action?.recurrence && (
           <p className={styles.savedTargets}>
             {t('canvas.calendar.savedRecurrence', { value: action.recurrence })}
@@ -739,6 +765,8 @@ function CalendarEditor({ workbench, onCancel }: { workbench: Workbench; onCance
     </div>
   )
 }
+
+type ScheduleMode = 'range' | 'single' | 'unscheduled'
 
 function actionDescription(action: CalendarPlanningAction): string {
   return action.description.trim() || actionTypeLabel(action.actionType)

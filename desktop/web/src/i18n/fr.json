@@ -319,6 +319,10 @@
       "unscheduled": "Sans date",
       "noUnscheduled": "Aucune action non planifiée",
       "noResults": "Aucune action ne correspond à ces filtres",
+      "noActionsYet": "Aucune action pour l’instant",
+      "allDone": "Toutes les actions sont terminées",
+      "showCompleted": "Afficher les terminées",
+      "descriptionPlaceholder": "Que faut-il faire ? Ajoutez des notes sur les lignes suivantes.",
       "clearFilters": "Effacer les filtres",
       "markCompleted": "Marquer {{action}} comme terminée",
       "editAction": "Modifier {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Dates enregistrées : {{start}} – {{end}}",
       "continuesBefore": "Se poursuit depuis un mois précédent",
       "continuesAfter": "Se poursuit au-delà de ce mois",
-      "back": "Retour",
       "completed": "Terminée",
       "schedule": "Planification",
       "savedInvalidDate": "Date enregistrée invalide : {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "Redimensionner le panneau",
-    "close": "Fermer le panneau"
+    "close": "Fermer le panneau",
+    "back": "Retour"
   },
   "filters": {
     "sun": "Soleil",

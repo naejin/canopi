@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "아직 작업이 없습니다",
+      "allDone": "모든 작업을 완료했습니다",
+      "showCompleted": "완료된 작업 보기",
+      "descriptionPlaceholder": "무엇을 해야 하나요? 다음 줄에 메모를 추가하세요.",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "사이드바 크기 조절",
-    "close": "패널 닫기"
+    "close": "패널 닫기",
+    "back": "뒤로"
   },
   "filters": {
     "sun": "일조",

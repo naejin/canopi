@@ -8,14 +8,22 @@ import styles from './SurfaceHeader.module.css'
  * count beside the title: the rows show it, and a summary worth reading is a
  * labelled sentence in the panel body.
  */
-export function SurfaceHeader({ title, actions, onClose, closeLabel }: {
+export function SurfaceHeader({ title, actions, onClose, closeLabel, back }: {
   title: string
   actions?: ComponentChildren
   onClose(): void
   closeLabel: string
+  /** A sub-view (an editor over a list) leads with Back to its parent view. */
+  back?: { readonly label: string; onClick(): void }
 }) {
   return (
     <header className={styles.header}>
+      {back && (
+        <button type="button" className={`${styles.close} ${styles.back}`} aria-label={back.label} onClick={back.onClick}>
+          <ControlIcon name="chevron-left" size={18} />
+          <ButtonTooltip label={back.label} side="bottom" />
+        </button>
+      )}
       <h2 className={styles.title}>{title}</h2>
       <div className={styles.actions}>
         {actions}

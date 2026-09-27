@@ -9,8 +9,8 @@
 .headerAction,
 .toolbar button,
 .emptyDate button,
-.noResults button,
-.editor button:not([data-species-picker] button),
+.editorFields button:not([data-species-picker] button):not([role='radio']),
+.editorActions button,
 .unscheduledBar {
   min-height: var(--control-size-md);
   padding: 0 var(--space-2);
@@ -26,8 +26,8 @@
 .headerAction:focus-visible,
 .toolbar button:focus-visible,
 .emptyDate button:focus-visible,
-.noResults button:focus-visible,
-.editor button:focus-visible,
+.editorFields button:focus-visible,
+.editorActions button:focus-visible,
 .actionBody:focus-visible,
 .editChevron:focus-visible,
 .dateButton:focus-visible,
@@ -49,9 +49,7 @@
 .monthNavigation,
 .searchRow,
 .filterRow,
-.editorTitle,
-.editorActions,
-.checkboxLabel {
+.editorActions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -301,8 +299,7 @@
   color: var(--color-text-muted);
 }
 
-.emptyDate,
-.noResults {
+.emptyDate {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
@@ -316,9 +313,12 @@
   font-weight: 600;
 }
 
-.emptyDate button,
-.noResults button {
+.emptyDate button {
   justify-self: start;
+}
+
+.emptyState {
+  border-bottom: 1px solid var(--color-border);
 }
 
 .quiet,
@@ -349,32 +349,6 @@
   overflow: hidden;
 }
 
-.editorTitle {
-  flex-shrink: 0;
-  min-height: var(--control-size-window);
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-}
-
-.editorTitle h2 {
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: 600;
-}
-
-.backButton {
-  flex-shrink: 0;
-  border-color: transparent !important;
-  background: transparent !important;
-  color: var(--color-text-muted) !important;
-}
-
-.backButton:hover {
-  color: var(--color-text) !important;
-  background: var(--color-control-hover) !important;
-}
-
 .editorFields {
   display: grid;
   align-content: start;
@@ -390,7 +364,7 @@
   margin-inline: auto;
 }
 
-.editorFields > label:not(.checkboxLabel),
+.editorFields > label,
 .field {
   display: grid;
   gap: var(--space-1);
@@ -408,7 +382,12 @@
   background: var(--color-surface-alt);
   color: var(--color-text);
   font: inherit;
+  font-weight: 400;
   resize: vertical;
+}
+
+.editorFields textarea::placeholder {
+  color: var(--color-text-muted);
 }
 
 .descriptionInput {
@@ -447,35 +426,6 @@
   font-weight: 600;
 }
 
-.checkboxLabel {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  font-weight: 400;
-}
-
-.checkboxLabel input {
-  flex-shrink: 0;
-  margin: 0;
-  accent-color: var(--color-accent);
-}
-
-.scheduleModes {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.scheduleModes button[aria-pressed='true'] {
-  border-color: var(--color-accent);
-  background: var(--color-control-active);
-  color: var(--color-accent);
-}
-
 .dateFields {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -512,7 +462,6 @@
 
 @media (max-width: 860px) {
   .toolbar,
-  .editorTitle,
   .editorFields,
   .editorActions,
   .actionRow {

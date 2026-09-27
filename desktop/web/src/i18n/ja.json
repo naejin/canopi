@@ -319,6 +319,10 @@
       "unscheduled": "Unscheduled",
       "noUnscheduled": "No unscheduled actions",
       "noResults": "No actions match these filters",
+      "noActionsYet": "まだ作業はありません",
+      "allDone": "すべての作業が完了しています",
+      "showCompleted": "完了した作業を表示",
+      "descriptionPlaceholder": "何をしますか？メモは次の行に書けます。",
       "clearFilters": "Clear filters",
       "markCompleted": "Mark {{action}} completed",
       "editAction": "Edit {{action}}",
@@ -330,7 +334,6 @@
       "savedDateRange": "Saved dates: {{start}} – {{end}}",
       "continuesBefore": "Continues from an earlier month",
       "continuesAfter": "Continues beyond this month",
-      "back": "Back",
       "completed": "Completed",
       "schedule": "Schedule",
       "savedInvalidDate": "Saved date is not valid: {{value}}",
@@ -934,7 +937,8 @@
   },
   "sidebar": {
     "resize": "サイドバーのサイズを変更",
-    "close": "パネルを閉じる"
+    "close": "パネルを閉じる",
+    "back": "戻る"
   },
   "filters": {
     "sun": "日照",
