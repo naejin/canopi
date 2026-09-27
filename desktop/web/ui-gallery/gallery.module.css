@@ -13,3 +13,12 @@
 .canvasArea { position: relative; flex: 1; min-width: 0; }
 .canvas { position: absolute; inset: 0; overflow: hidden; }
 .status { padding: var(--space-1) var(--space-3); border-top: 1px solid var(--color-border); font-size: var(--text-xs); color: var(--color-text-muted); }
+.symbolSheet { flex: 1; overflow: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.symbolFamily h2 { margin: 0 0 var(--space-2); font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); }
+.symbolRow { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.symbolCell { margin: 0; width: 92px; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.symbolLarge { color: var(--color-text); display: flex; }
+.symbolLadder, .symbolMap { display: flex; align-items: center; justify-content: center; gap: var(--space-1); min-height: 28px; width: 100%; }
+/* A fixed dark foliage strip stands in for satellite imagery in both themes. */
+.symbolMap { background: #2F3A24; border-radius: var(--radius-sm); }
+.symbolCell figcaption { font-size: var(--text-xs); text-align: center; line-height: 1.2; }

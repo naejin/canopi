@@ -1,11 +1,10 @@
 /** Read-only, renderer-independent authored Canvas content for physical output. */
 export interface PrintPoint { readonly x: number; readonly y: number }
 export interface PrintBounds extends PrintPoint { readonly width: number; readonly height: number }
+/** A plant symbol path: the body in the plant colour, cut-outs in a contrasting ink. */
 export interface PrintMarkPath {
   readonly d: string
-  readonly fill: boolean
-  readonly stroke: boolean
-  readonly strokeWidth: number
+  readonly paint: 'symbol' | 'cutout'
 }
 export interface PrintPlant {
   readonly id: string

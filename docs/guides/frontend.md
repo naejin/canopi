@@ -90,6 +90,7 @@ Every resource (runtime, renderer, MapLibre instance, timer, listener, observer,
 - `t()` observes `locale` itself, so components do not read `locale.value` just to re-render text. Read it only to select localized data, drive searches or format dates (`Intl.DateTimeFormat`, `Intl.RelativeTimeFormat`).
 - Runtime chrome gets translation through `CanvasRuntimeAppAdapter.translate`. Drawing code (rulers, inspection lens, PDF) receives `t` as a parameter. Runtime modules never import `i18n`.
 - Unit abbreviations such as "yr", "d" and "in" need keys. Scientific units do not. CSV and file export headers reuse the UI table keys.
+- A new plant symbol id (`PLANT_SYMBOL_IDS` in `common-types/src/design.rs`) needs a recipe in `canvas/runtime/plant-symbol-recipes.ts`, a place in `PLANT_SYMBOL_FAMILIES` and `canvas.plantSymbol.names.<id>` in every locale; `botanical-symbols.test.ts` checks all 11.
 - Remove retired keys from every locale together, after checking generated and prefixed keys (layer ids, plant symbols, action types, strata, filter values, PDF errors).
 
 ## Tests and guardrails

@@ -9,8 +9,8 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import {
-  getPlantSymbolShapes,
-  plantSymbolShapePath,
+  getPlantSymbolArt,
+  plantSymbolPath,
 } from '../plant-symbol-recipes'
 import type {
   PlantSymbolId,
@@ -351,20 +351,26 @@ function appendPlantSymbolCommands(
     return
   }
 
-  for (const shape of getPlantSymbolShapes(symbol, radius * 2)) {
-    const path = createSvgElement('path')
-    setSvgAttributes(path, {
-      d: plantSymbolShapePath(shape),
-      transform: `translate(${center.x} ${center.y}) scale(${radius})`,
-      fill: entry.color,
-      'fill-opacity': 1,
-      'fill-rule': 'nonzero',
-      stroke: getPlantSymbolEdgeColor(entry.color),
-      'stroke-width': getPlantSymbolEdgeWidth(radius * 2) / radius,
-      'paint-order': 'stroke fill',
-    })
-    group.appendChild(path)
-  }
+  const art = getPlantSymbolArt(symbol, radius * 2)
+  const edge = getPlantSymbolEdgeColor(entry.color)
+  const transform = `translate(${center.x} ${center.y}) scale(${radius})`
+  const body = createSvgElement('path')
+  setSvgAttributes(body, {
+    d: plantSymbolPath(art.body),
+    transform,
+    fill: entry.color,
+    'fill-opacity': 1,
+    'fill-rule': 'nonzero',
+    stroke: edge,
+    'stroke-width': getPlantSymbolEdgeWidth(radius * 2) / radius,
+    'stroke-linejoin': 'round',
+    'paint-order': 'stroke fill',
+  })
+  group.appendChild(body)
+  if (art.cutouts.length === 0) return
+  const cutouts = createSvgElement('path')
+  setSvgAttributes(cutouts, { d: plantSymbolPath(art.cutouts), transform, fill: edge, 'fill-rule': 'nonzero' })
+  group.appendChild(cutouts)
 }
 
 function appendAnnotationGhost(

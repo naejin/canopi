@@ -1,4 +1,5 @@
 import { getCanvasColor, isThemeManagedZoneFill } from '../theme-refresh'
+import { contrastRatio } from '../plant-colors'
 import type {
   ScenePersistedState,
   SceneZoneEntity,
@@ -107,19 +108,13 @@ export function getStackBadgeTextColor(): string {
 }
 
 /** A thin edge separates silhouettes from Zones without replacing authored color. */
+/** The halo and cut-out colour of a plant symbol on the map. */
 export function getPlantSymbolEdgeColor(color: string): string {
   const background = getCanvasColor('background')
-  const a = hexLuminance(color), b = hexLuminance(background)
-  return (Math.max(a, b) + .05) / (Math.min(a, b) + .05) < 3
-    ? getCanvasColor('plant-label') : background
+  return contrastRatio(color, background) < 3 ? getCanvasColor('plant-label') : background
 }
 
 export function getPlantSymbolEdgeWidth(diameterPx: number): number {
   return diameterPx < 10 ? .5 : .7
 }
 
-function hexLuminance(color: string): number {
-  const rgb = [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16) / 255)
-    .map((channel) => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
-  return rgb[0]! * .2126 + rgb[1]! * .7152 + rgb[2]! * .0722
-}

@@ -1,7 +1,8 @@
 import type { SpeciesDetail, SpeciesListItem } from '../src/types/species'
 import type { CanopiFile } from '../src/types/design'
 import { createDefaultScenePersistedState } from '../src/canvas/runtime/scene'
-import { createSceneGeoFrame, serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { createSceneGeoFrame, PLANT_SYMBOL_IDS, serializeScenePersistedState } from '../src/canvas/runtime/scene'
+import { PLANT_COLOR_PALETTE } from '../src/canvas/plant-colors'
 
 export const detail: SpeciesDetail = {
   "canonical_name": "Malus domestica",
@@ -193,9 +194,28 @@ export const specimens = [
   ['Fragaria vesca', 'Wild strawberry', 'groundcover', '#C44230'],
 ] as const
 export const species: SpeciesListItem[] = specimens.map(([canonical_name, common_name]) => ({ ...baseSpecies, canonical_name, common_name }))
+/** Every symbol in close orchard rows (8 of each), neighbours always different, in the palette colours. */
+function symbolPlanting() {
+  const designed = PLANT_SYMBOL_IDS.slice(0, 29)
+  const columns = 16
+  return Array.from({ length: 8 * designed.length }, (_, index) => {
+    const row = Math.floor(index / columns)
+    const column = index % columns
+    const [canonicalName, commonName] = specimens[index % specimens.length]!
+    return {
+      kind: 'plant' as const, id: `planting-${index}`, canonicalName, commonName,
+      position: { x: column * .42 + (row % 2) * .21, y: row * .36 },
+      color: PLANT_COLOR_PALETTE[(index * 5) % PLANT_COLOR_PALETTE.length]!.hex,
+      symbol: designed[(index * 7) % designed.length]!,
+      stratum: null, canopySpreadM: .5, rotationDeg: null, scale: .5,
+      notes: null, plantedDate: null, quantity: null, locked: false,
+    }
+  })
+}
+
 export function designFixture(state = 'populated'): CanopiFile {
   const scene = createDefaultScenePersistedState()
-  const plants = state === 'empty' ? [] : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
+  const plants = state === 'empty' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
     Array.from({ length: speciesIndex === 0 ? 3 : 8 }, (_, i) => ({
       kind: 'plant' as const, id: `plant-${speciesIndex}-${i}`, canonicalName,
       commonName: state === 'long' ? `${commonName} — a particularly long local cultivar name` : commonName,

@@ -1,7 +1,7 @@
 import type { CanvasPrintSnapshot, PrintMarkPath, PrintZone } from '../print'
 import { resolvePlantBaseColor, type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
-import { getPlantSymbolShapes, plantSymbolShapePath, type PlantSymbolShape } from './plant-symbol-recipes'
+import { getPlantSymbolArt, plantSymbolPath, type PlantSymbolArt } from './plant-symbol-recipes'
 import { getRectangularZoneCorners, getZoneWorldBounds } from './zone-geometry'
 
 export function buildCanvasPrintSnapshot(
@@ -14,8 +14,8 @@ export function buildCanvasPrintSnapshot(
       const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
       return { id: plant.id, canonicalName: plant.canonicalName, speciesCode: scene.plantSpeciesCodes[plant.canonicalName], position: { ...plant.position },
         color: resolvePlantBaseColor(plant, context.speciesCache), symbol,
-        mark: getPlantSymbolShapes(symbol, 24).map(markPath),
-        smallMark: getPlantSymbolShapes(symbol, 12).map(markPath), pinnedName: plant.pinnedName === true }
+        mark: markPaths(getPlantSymbolArt(symbol, 24)),
+        smallMark: markPaths(getPlantSymbolArt(symbol, 12)), pinnedName: plant.pinnedName === true }
     }),
     zones: scene.zones.flatMap((zone) => {
       const bounds = getZoneWorldBounds(zone)
@@ -36,8 +36,9 @@ export function buildCanvasPrintSnapshot(
   }
 }
 
-function markPath(shape: PlantSymbolShape): PrintMarkPath {
-  return { d: plantSymbolShapePath(shape), fill: true, stroke: false, strokeWidth: 0 }
+function markPaths(art: PlantSymbolArt): PrintMarkPath[] {
+  const body: PrintMarkPath = { d: plantSymbolPath(art.body), paint: 'symbol' }
+  return art.cutouts.length > 0 ? [body, { d: plantSymbolPath(art.cutouts), paint: 'cutout' }] : [body]
 }
 
 // Cubic ellipse representation is shared by PDF and preview, including rotation.

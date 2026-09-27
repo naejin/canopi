@@ -4,9 +4,9 @@ import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
 import { DEFAULT_PLANT_COLOR, normalizeHexColor } from '../../canvas/plant-colors'
 import {
   DEFAULT_PLANT_SYMBOL_ID,
-  PLANT_SYMBOL_IDS,
   type PlantSymbolId,
 } from '../../canvas/runtime/scene'
+import { PLANT_SYMBOL_FAMILIES, type PlantSymbolFamily } from '../../canvas/runtime/plant-symbol-recipes'
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
@@ -20,8 +20,7 @@ interface PlantSymbolMenuProps {
   buttonRef: AppearanceAnchorRef
 }
 
-const ABSTRACT_SYMBOLS = ['round', 'square', 'triangle', 'cross'] as const satisfies readonly PlantSymbolId[]
-const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => !ABSTRACT_SYMBOLS.some((abstract) => abstract === symbol))
+const SYMBOL_GRID_COLUMNS = 5
 
 function closeMenu(buttonRef?: AppearanceAnchorRef) {
   plantSymbolMenuOpen.value = false
@@ -115,13 +114,13 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
   return createPortal(
     <div
       ref={menuRef}
-      className={shared.menu}
+      className={`${shared.menu} ${shared.menuWide}`}
       role="dialog"
       aria-label={t('canvas.plantSymbol.label')}
       data-preserve-overlays="true"
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(buttonRef) }
-        else navigateAppearanceChoices(event, 3)
+        else navigateAppearanceChoices(event, SYMBOL_GRID_COLUMNS)
       }}
     >
       <SurfaceHeader title={t('canvas.plantSymbol.label')} closeLabel={t('window.close')} onClose={() => closeMenu(buttonRef)} />
@@ -136,8 +135,9 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
       />
       <div className={shared.body}>
         <div role="listbox" aria-label={t('canvas.plantSymbol.label')}>
-          <SymbolGrid label={t('canvas.plantSymbol.botanical')} symbols={BOTANICAL_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-          <SymbolGrid label={t('canvas.plantSymbol.abstract')} symbols={ABSTRACT_SYMBOLS} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+          {(Object.entries(PLANT_SYMBOL_FAMILIES) as [PlantSymbolFamily, readonly PlantSymbolId[]][]).map(([family, symbols]) => (
+            <SymbolGrid key={family} family={family} label={t(`canvas.plantSymbol.families.${family}`)} symbols={symbols} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+          ))}
         </div>
       </div>
 
@@ -156,18 +156,20 @@ export function PlantSymbolMenu({ buttonRef }: PlantSymbolMenuProps) {
 }
 
 function SymbolGrid({
+  family,
   label,
   symbols,
   activeSymbol,
   onSelect,
 }: {
+  family: PlantSymbolFamily
   label: string
   symbols: readonly PlantSymbolId[]
   activeSymbol: PlantSymbolId
   onSelect(symbol: PlantSymbolId): void
 }) {
   return (
-    <div className={styles.symbolGroup} role="group" aria-label={label}>
+    <div className={styles.symbolGroup} role="group" aria-label={label} data-symbol-family={family}>
       <div className={styles.groupLabel} aria-hidden="true">{label}</div>
       <div className={styles.grid}>
         {symbols.map((symbol) => {

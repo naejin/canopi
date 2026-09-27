@@ -8,6 +8,7 @@ export const GALLERY_SURFACES = {
   'menu-plant': 'Menu · plants',
   'menu-mixed': 'Menu · mixed',
   'menu-empty': 'Menu · empty map',
+  symbols: 'Symbol sheet',
   key: 'Species key',
   layers: 'Layers',
   calendar: 'Calendar',

@@ -15,7 +15,7 @@ const input: PdfInput = { name: 'Garden', locale: 'en', commonNames: {}, canvas:
   layers: [{ name: 'plants', visible: true, opacity: 1 }], zones: [], annotations: [], measurements: [],
   plants: [{ id: 'apple', canonicalName: 'Malus domestica', speciesCode: 'MDO', position: { x: 5, y: 5 },
     color: '#218455', symbol: 'round', pinnedName: false,
-    mark: [{ d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z', fill: true, stroke: false, strokeWidth: 0 }] }],
+    mark: [{ d: 'M1 0 A1 1 0 1 0 -1 0 A1 1 0 1 0 1 0 Z', paint: 'symbol' }] }],
 } }
 const draw = (value: PdfInput) => drawField(value, { x: 60, y: 60, width: 400, height: 400 },
   { x: 0, y: 0, width: 10, height: 10 }, 40, { id: 'detail', width: 595, height: 842 }, text(), fieldReferences(value))
@@ -184,7 +184,7 @@ it('groups repeated overview guide values by zone while retaining every authored
 
 it('retains the authored compact symbol even at small print sizes so the visual key stays meaningful', () => {
   const operations: PdfOperation[] = []
-  drawMark({ ...input.canvas.plants[0]!, symbol: 'square', smallMark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }] }, 10, 20, 1, .7, operations)
+  drawMark({ ...input.canvas.plants[0]!, symbol: 'square', smallMark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }] }, 10, 20, 1, .7, operations)
   expect(operations).toEqual([expect.objectContaining({ kind: 'path', d: 'M-1 -1 H1 V1 H-1 Z', fill: '#218455', opacity: .7 })])
 })
 

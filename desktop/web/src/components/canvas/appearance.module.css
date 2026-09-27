@@ -12,6 +12,11 @@
   z-index: 40;
 }
 
+/* Five 70 px symbol tiles per row. */
+.menuWide {
+  width: 408px;
+}
+
 .selection {
   display: flex;
   align-items: center;

@@ -33,6 +33,7 @@ import { designSessionStore } from '../src/app/document-session/store'
 import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
+import { PlantSymbolSheet } from './PlantSymbolSheet'
 import { readPlanningViewState } from '../src/app/planning-view/state'
 import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../src/commands/registry'
 import {
@@ -127,12 +128,12 @@ function Gallery() {
         .map(([key, label]) => <button data-panel={key === 'key' ? 'species-key' : key === 'notebook' ? 'design-notebook' : key} aria-pressed={selectedSurface.value === key} onClick={() => selectGallerySurface(key as GallerySurface)}>{label}</button>)}
       <span>Edition:</span>
       {(['desktop', 'web'] as const).map((nextEdition) => <a aria-current={edition === nextEdition ? 'page' : undefined} href={editionUrl(nextEdition)}>{nextEdition}</a>)}
-      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'overview', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
+      <span>State:</span>{['populated', 'empty', 'mixed', 'long', 'located', 'dense', 'planting', 'overview', 'max-zoom', 'lidar-progress'].map(state => <a aria-current={fixtureState === state ? 'page' : undefined}
         href={`?surface=${selectedSurface.value}&state=${state}&theme=${theme.value}&locale=${locale.value}${edition === 'web' ? '&edition=web' : ''}`}>{state}</a>)}
     </nav>
     {selectedSurface.value === 'workspace' && edition === 'desktop' ? <GalleryWorkspaceCommands panelProjection={panelProjection} /> : null}
     <main className={styles.workspace} data-edition={edition}>
-      {selectedSurface.value === 'start' ? <GalleryStart /> : edition === 'web' ? (
+      {selectedSurface.value === 'start' ? <GalleryStart /> : selectedSurface.value === 'symbols' ? <PlantSymbolSheet /> : edition === 'web' ? (
         <GalleryWebFrame>
           <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} responsive />
         </GalleryWebFrame>

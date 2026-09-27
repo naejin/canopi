@@ -11,7 +11,7 @@ const text = () => createPdfTextEngine(new Map<PdfFontId, Uint8Array>([
   ['latin', readFileSync('public/pdf-fonts/NotoSans-Regular.ttf')], ['strong', readFileSync('public/pdf-fonts/NotoSans-SemiBold.ttf')],
 ]), 'en')
 const labels: PdfLabels = { notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }
-const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', fill: true, stroke: true, strokeWidth: .14 }]
+const mark = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }]
 const words = (page: PdfPage) => page.operations.flatMap(op => op.kind === 'text' ? op.line.runs.map(run => run.text) : []).join(' ')
 const setup: PdfSetup = { paper: 'A4', layers: ['plants', 'annotations', 'measurement-guides', 'zones'], areas: [{ id: 'bed', name: 'Bed', bounds: { x: -1, y: -1, width: 10, height: 15 } }] }
 function input(): PdfInput {
@@ -119,7 +119,7 @@ it('retains the compact authored symbol at small sizes and selects detail at rea
     const operations: PdfOperation[] = []
     drawMark({ ...plant, symbol }, 10, 20, 1, .6, operations)
     expect(operations).toEqual([{ kind: 'path', d: 'compact',
-      matrix: [1, 0, 0, 1, 10, 20], fill: '#123456', stroke: '#123456', width: .12 * (72 / 25.4), opacity: .6 }])
+      matrix: [1, 0, 0, 1, 10, 20], fill: '#123456', stroke: null, width: 0, opacity: .6 }])
   }
   for (const [radius, expected] of [[3, 'compact'], [6, mark[0]!.d]] as const) {
     const operations: PdfOperation[] = []
@@ -146,4 +146,14 @@ it('links a cropped measurement to its complete detail using consecutive detail 
   const location = cropped.pageReferences![0]!
   expect(cropped.operations.some(op => op.kind === 'text' && op.y === location.y && op.line.runs.map(r => r.text).join('') === String(full.detailNumber))).toBe(true)
   expect(plan.pages.filter(p => p.id === cropped.id || p.sourceId === cropped.id).map(words).join(' ')).toContain('30 m')
+})
+
+it('prints symbol cut-outs in paper or ink, whichever contrasts with the symbol colour', () => {
+  const plant = input().canvas.plants[0]!
+  const marks = [{ d: 'M-1 -1 h2 v2 h-2 Z', paint: 'symbol' as const }, { d: 'M0 0 h1 v1 h-1 Z', paint: 'cutout' as const }]
+  for (const [color, cutout] of [['#123456', '#ffffff'], ['#E9D28B', '#24211c']] as const) {
+    const operations: PdfOperation[] = []
+    drawMark({ ...plant, color, mark: marks }, 10, 20, 6, 1, operations)
+    expect(operations.map((op) => op.kind === 'path' ? [op.d, op.fill] : null)).toEqual([['M-1 -1 h2 v2 h-2 Z', color], ['M0 0 h1 v1 h-1 Z', cutout]])
+  }
 })

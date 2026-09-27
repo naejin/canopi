@@ -7,9 +7,9 @@ import {
   type PlantPresentationEntry,
 } from './plant-presentation'
 import {
-  getPlantSymbolShapes,
+  getPlantSymbolArt,
   ROUND_PLANT_SYMBOL_RADIUS,
-  tracePlantSymbolContour,
+  tracePlantSymbolContours,
 } from './plant-symbol-recipes'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneViewportState, SceneZoneEntity } from './scene'
@@ -200,17 +200,21 @@ function drawPlantSymbolGlyph(
     }
     return
   }
-  ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color)
+  const edge = getPlantSymbolEdgeColor(entry.color)
+  const art = getPlantSymbolArt(symbol, entry.radiusScreenPx * 2)
+  ctx.strokeStyle = edge
   ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  for (const shape of getPlantSymbolShapes(symbol, entry.radiusScreenPx * 2)) {
-    ctx.beginPath()
-    tracePlantSymbolContour(ctx, shape.outline, x, y, r)
-    ctx.stroke()
-    for (const hole of shape.holes ?? []) tracePlantSymbolContour(ctx, hole, x, y, r)
-    ctx.fill()
-  }
+  ctx.beginPath()
+  tracePlantSymbolContours(ctx, art.body, x, y, r)
+  ctx.stroke()
+  ctx.fill('nonzero')
+  if (art.cutouts.length === 0) return
+  ctx.fillStyle = edge
+  ctx.beginPath()
+  tracePlantSymbolContours(ctx, art.cutouts, x, y, r)
+  ctx.fill('nonzero')
 }
 
 function drawStackBadge(

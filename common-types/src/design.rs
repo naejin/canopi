@@ -95,6 +95,7 @@ impl CanopiDesignIngestionErrorKind {
         }
     }
 }
+/// Plant forms, what a plant gives, what it does, then abstract marks.
 pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "canopy",
     "conifer",
@@ -108,6 +109,23 @@ pub const PLANT_SYMBOL_IDS: &[&str] = &[
     "groundcover",
     "rosette",
     "cactus",
+    "apple",
+    "nut",
+    "berry",
+    "grape",
+    "flower",
+    "pod",
+    "carrot",
+    "grain",
+    "chili",
+    "medicinal",
+    "bee",
+    "biomass",
+    "timber",
+    "fodder",
+    "windbreak",
+    "soil",
+    "mushroom",
     "round",
     "square",
     "triangle",

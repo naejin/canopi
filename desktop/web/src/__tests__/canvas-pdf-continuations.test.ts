@@ -13,7 +13,7 @@ function garden(count = 90): PdfInput {
   return { name: 'Garden', locale: 'en', commonNames: {}, canvas: {
     layers: [{ name: 'plants', visible: true, opacity: .7 }], zones: [], annotations: [], measurements: [],
     plants: Array.from({ length: count }, (_, i) => ({ id: String(i), canonicalName: `Species ${String(i).padStart(3, '0')}`, position: { x: i % 10, y: Math.floor(i / 10) },
-      color: '#234567', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }], pinnedName: false })),
+      color: '#234567', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }], pinnedName: false })),
   } }
 }
 it('automatically paginates a complete linked key without requesting consent', () => {

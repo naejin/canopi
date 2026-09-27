@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildCanvasPrintSnapshot } from '../canvas/runtime/print-snapshot'
-import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
+import { createDefaultScenePersistedState, PLANT_SYMBOL_IDS } from '../canvas/runtime/scene'
+import { getPlantSymbolArt, plantSymbolPath } from '../canvas/runtime/plant-symbol-recipes'
 
 describe('Canvas print capture', () => {
   it('captures rotated rectangular and elliptical Zones and open lines with their true ground bounds', () => {
@@ -40,5 +41,19 @@ describe('Canvas print capture', () => {
     expect(result.plants[0]!.mark.length).toBeGreaterThan(0)
     expect(scene).toEqual(before)
     expect(result.plants[0]!.position).not.toBe(scene.plants[0]!.position)
+  })
+  it('prints every symbol from the shared recipe: body in the plant colour, then its cut-outs', () => {
+    const scene = createDefaultScenePersistedState()
+    PLANT_SYMBOL_IDS.forEach((symbol, index) => scene.plants.push({ kind: 'plant', id: symbol, canonicalName: `Species ${index}`, commonName: null,
+      color: '#123456', symbol, locked: false, stratum: null, canopySpreadM: null,
+      position: { x: index, y: 0 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1 }))
+    const result = buildCanvasPrintSnapshot(scene, { viewport: { x: 0, y: 0, scale: 1 }, speciesCache: new Map() })
+    for (const plant of result.plants) {
+      const symbol = plant.symbol as (typeof PLANT_SYMBOL_IDS)[number]
+      for (const [marks, art] of [[plant.mark, getPlantSymbolArt(symbol, 24)], [plant.smallMark!, getPlantSymbolArt(symbol, 12)]] as const) {
+        expect(marks[0], symbol).toEqual({ d: plantSymbolPath(art.body), paint: 'symbol' })
+        expect(marks.slice(1)).toEqual(art.cutouts.length > 0 ? [{ d: plantSymbolPath(art.cutouts), paint: 'cutout' }] : [])
+      }
+    }
   })
 })

@@ -23,9 +23,9 @@ import {
   type PlantPresentationEntry,
 } from '../plant-presentation'
 import {
-  getPlantSymbolShapes,
+  getPlantSymbolArt,
   ROUND_PLANT_SYMBOL_RADIUS,
-  tracePlantSymbolContour,
+  tracePlantSymbolContours,
 } from '../plant-symbol-recipes'
 import type { PlantNameLabel } from '../selection-labels'
 import { SceneViewportPresentation } from './viewport-presentation'
@@ -847,14 +847,15 @@ function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, 
   }
   const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
   const width = getPlantSymbolEdgeWidth(r * 2)
-  for (const shape of getPlantSymbolShapes(symbol, r * 2)) {
-    tracePlantSymbolContour(graphics, shape.outline, x, y, r)
-    graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' }).fill({ color, alpha: opacity })
-    for (const hole of shape.holes ?? []) {
-      tracePlantSymbolContour(graphics, hole, x, y, r)
-      graphics.cut()
-    }
-  }
+  const art = getPlantSymbolArt(symbol, r * 2)
+  // Halo under the whole silhouette, then the body, then cut-outs in the outline colour.
+  tracePlantSymbolContours(graphics, art.body, x, y, r)
+  graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' })
+  tracePlantSymbolContours(graphics, art.body, x, y, r)
+  graphics.fill({ color, alpha: opacity })
+  if (art.cutouts.length === 0) return
+  tracePlantSymbolContours(graphics, art.cutouts, x, y, r)
+  graphics.fill({ color: edge, alpha: opacity })
 }
 
 function screenPxToWorldPx(px: number, viewportScale: number): number {

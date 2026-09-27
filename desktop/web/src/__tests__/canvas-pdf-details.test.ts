@@ -10,7 +10,7 @@ function garden(): PdfInput {
     layers: ['plants', 'zones'].map((name) => ({ name, visible: true, opacity: 1 })),
     zones: [{ name: 'Orchard', bounds: { x: 0, y: 0, width: 30, height: 20 }, path: 'M0 0 H30 V20 H0 Z', fill: null }],
     plants: [[8.5, 'Overlap'], [31, 'Nearby'], [200, 'Distant']].map(([x, name]) => ({ id: String(name), canonicalName: String(name), position: { x: Number(x), y: 12 },
-      color: '#000000', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', fill: true, stroke: false, strokeWidth: 0 }], pinnedName: false })),
+      color: '#000000', symbol: 'square', mark: [{ d: 'M-1 -1 H1 V1 H-1 Z', paint: 'symbol' }], pinnedName: false })),
     annotations: [], measurements: [],
   } }
 }
