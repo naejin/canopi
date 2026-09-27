@@ -292,7 +292,7 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('ungroup', 'canvas.ungroupSelected', 'menu.edit.ungroup', ['Ctrl+Shift+G']),
   edit('bring-to-front', 'canvas.bringToFront', 'menu.edit.bringToFront', [']']),
   edit('send-to-back', 'canvas.sendToBack', 'menu.edit.sendToBack', ['[']),
-  edit('lock', 'canvas.lockSelected', 'menu.edit.lock', ['Ctrl+L']),
+  edit('lock', 'canvas.lockSelected', 'menu.edit.lock', ['Ctrl+Shift+L']),
   edit('unlock', 'canvas.unlockSelected', 'menu.edit.unlock'),
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
   view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', ['Ctrl+Plus']),

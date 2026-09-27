@@ -274,11 +274,14 @@ describe('shortcut manager canvas tool switching', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
+    // Lock is Ctrl Shift L: Ctrl L is the browser's address bar on Web.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
+    expect(lockSelected).not.toHaveBeenCalled()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
     selectedObjectIds.value = new Set()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
 
     expect(copy).toHaveBeenCalledTimes(1)

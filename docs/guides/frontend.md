@@ -13,7 +13,7 @@ This guide covers the Preact frontend in `desktop/web/src/`: state, the action l
 - `app/*/controller.ts` and action modules are leaves. They never import each other (a policy enforces this for `app/*/controller.ts`). Cross-concern orchestration lives in workflow modules that own their `effect()` disposers behind `installX()` / `disposeX()` (for example `app/lidar/workflow.ts`, `app/consortium/workflow.ts`, `app/document-session/workflows.ts`).
 - Canvas edits go through runtime commands. Non-canvas Design edits go through `app/design-edit/`. A view must not mirror an authority's state just to restyle it.
 - `currentCanvasSession` (`canvas/session.ts`) holds role-specific runtime surfaces (query, command, document). App code uses those facades, never renderer internals or a raw `SceneCanvasRuntime`.
-- `Cmd/Ctrl+L` affects only the current editable selection. Grouping (flat, cross-layer Object Groups) is exposed through selection affordances, not hidden shortcuts.
+- Lock (`Ctrl+Shift+L`, `Cmd+Shift+L` on macOS; `Ctrl+L` is the browser's address bar on Web) affects only the current editable selection. Grouping (flat, cross-layer Object Groups) is exposed through selection affordances, not hidden shortcuts.
 
 ### Signals and hooks
 
