@@ -19,6 +19,7 @@ export const GALLERY_SURFACES = {
   'calendar-expanded': 'Calendar expanded',
   budget: 'Budget',
   consortium: 'Consortium',
+  stories: 'Stories',
   favorites: 'Favorites',
   notebook: 'Design notebook',
   lens: 'Inspection lens',
@@ -50,6 +51,7 @@ function panelForGallerySurface(surface: GallerySurface): Panel {
     case 'calendar-expanded': return 'calendar'
     case 'budget': return 'budget'
     case 'consortium': return 'consortium'
+    case 'stories': return 'stories'
     default: return 'canvas'
   }
 }

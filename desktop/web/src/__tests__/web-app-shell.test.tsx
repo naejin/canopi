@@ -172,6 +172,7 @@ describe('Web Edition Browser App Shell', () => {
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
+      'nav.stories',
     ])
   })
 
@@ -281,6 +282,7 @@ describe('Web Edition Browser App Shell', () => {
       'nav.calendar',
       'nav.budget',
       'nav.consortium',
+      'nav.stories',
     ])
     expect(panelBarLabels(container)).toEqual([
       'Design canvas',
@@ -292,6 +294,7 @@ describe('Web Edition Browser App Shell', () => {
       'Calendar',
       'Budget',
       'Consortium',
+      'Stories',
     ])
     await act(async () => {
       panelBarButton(container, 'nav.plantDb').click()

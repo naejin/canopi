@@ -35,6 +35,7 @@ export type ShellCommandIdByCapability = {
   readonly navigateBudget: 'nav.budget'
   readonly navigateConsortium: 'nav.consortium'
   readonly navigateDesignNotebook: 'nav.designNotebook'
+  readonly navigateStories: 'nav.stories'
   readonly saveCurrentView: 'view.saveCurrentView'
   readonly manageViews: 'view.manageViews'
   readonly toggleToolNames: 'view.toggleToolNames'
@@ -202,6 +203,7 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'navigateBudget', id: 'nav.budget', family: 'navigation', labelKey: 'panelRail.budget', shortcut: 'Ctrl+6', palette: true, panel: panel('budget', 'planning', 1) },
   { capabilityId: 'navigateConsortium', id: 'nav.consortium', family: 'navigation', labelKey: 'panelRail.consortium', shortcut: 'Ctrl+7', palette: true, panel: panel('consortium', 'planning', 2) },
   { capabilityId: 'navigateDesignNotebook', id: 'nav.designNotebook', family: 'navigation', labelKey: 'panelRail.notebook', shortcut: 'Ctrl+8', palette: true, panel: panel('design-notebook', 'planning', 3) },
+  { capabilityId: 'navigateStories', id: 'nav.stories', family: 'navigation', labelKey: 'panelRail.stories', shortcut: 'Ctrl+9', palette: true, panel: panel('stories', 'planning', 4) },
   { capabilityId: 'saveCurrentView', id: 'view.saveCurrentView', family: 'settings', labelKey: 'menu.view.saveCurrentView', palette: true, menu: { id: 'view', section: 2 } },
   { capabilityId: 'manageViews', id: 'view.manageViews', family: 'settings', labelKey: 'menu.view.manageViews', palette: true, menu: { id: 'view', section: 2 } },
   { capabilityId: 'toggleToolNames', id: 'view.toggleToolNames', family: 'settings', labelKey: 'menu.view.toolNames', palette: true, check: 'checkbox', menu: { id: 'view', section: 0 } },

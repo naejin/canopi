@@ -69,10 +69,10 @@ describe('Panel rail', () => {
 
     const strokes = Array.from(container.querySelectorAll<SVGElement>('nav[aria-label="Panels"] svg'))
       .map((icon) => icon.getAttribute('stroke-width'))
-    expect(strokes).toEqual(Array(8).fill('1.6'))
+    expect(strokes).toEqual(Array(9).fill('1.6'))
   })
 
-  it('orders panels as the rail groups them, with Ctrl 1–8', async () => {
+  it('orders panels as the rail groups them, with Ctrl 1–9', async () => {
     await act(async () => {
       render(<ProjectedRail />, container)
     })
@@ -86,10 +86,12 @@ describe('Panel rail', () => {
       'Budget',
       'Consortium',
       'Design notebook',
+      'Stories',
     ])
     expect(container.querySelectorAll('[role="separator"]')).toHaveLength(1)
     expect(panelButton('Layers').getAttribute('aria-keyshortcuts')).toBe('Control+1 Meta+1')
     expect(panelButton('Design notebook').querySelector('[role="tooltip"]')?.textContent).toContain('Ctrl 8')
+    expect(panelButton('Stories').getAttribute('aria-keyshortcuts')).toBe('Control+9 Meta+9')
   })
 
   it('does not render a Design Location or canvas entry point', async () => {
@@ -270,6 +272,7 @@ describe('Panel rail', () => {
         expect.stringContaining('Budget'),
         expect.stringContaining('Consortium'),
         expect.stringContaining('Design notebook'),
+        expect.stringContaining('Stories'),
       ])
       expect(items[3]!.getAttribute('aria-keyshortcuts')).toBe('Control+8 Meta+8')
 
@@ -286,7 +289,7 @@ describe('Panel rail', () => {
         await Promise.resolve()
       })
       expect(container.querySelector('[data-panel-rail-more]')).toBeNull()
-      expect(panelButtonLabels()).toHaveLength(8)
+      expect(panelButtonLabels()).toHaveLength(9)
     })
   })
 })

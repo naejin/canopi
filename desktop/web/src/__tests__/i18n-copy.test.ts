@@ -82,6 +82,7 @@ describe('placeholder lengths', () => {
       'canvas.textNote.placeholder',
       'commands.searchPlaceholder',
       'problemReport.descriptionPlaceholder',
+      'stories.textPlaceholder',
     ])
   })
 })

@@ -7,7 +7,7 @@ Read this file, then the one pattern file for the surface you touch:
 | Surface | Pattern |
 | --- | --- |
 | Map canvas, tool rail, view chip, zoom, map annotations, selection and right-click menu, inspection lens, symbol and colour | [Canvas workspace](patterns/canvas-workspace.md) |
-| Plants in this Design, Layers, data library and analysis, Calendar, Budget, Consortium, Favorites, Design Notebook, finder | [Dock panels](patterns/dock-panels.md) |
+| Plants in this Design, Layers, data library and analysis, Calendar, Budget, Consortium, Favorites, Design Notebook, Stories, finder | [Dock panels](patterns/dock-panels.md) |
 | Plant catalog, filters, species detail, photos | [Catalog and details](patterns/catalog-and-details.md) |
 | Title bar, menus, start screen, dialogs, settings, notices, empty/loading/error states, Web on phones | [Controls and shell](patterns/controls-and-shell.md) |
 
@@ -24,7 +24,7 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action (Save as… for Drafts, Details… or Resolve… for problems), place search (Ctrl K), Help, Settings.
 - Left: tool rail. Select, Pan · Place plants, Plant a row, Place a stamp · Zones (Polygon, Rectangle, Ellipse, Line) · Text note, Measure · Undo, Redo. Labelled with keys until each tool has been used once, then icons with labelled tooltips. In a short window its last tools fold, in order, into a More tools menu above Undo and Redo, which always stay.
-- Right: panel rail (Ctrl 1–8; in a short window its last panels fold, in order, into a More menu at its end, above the inspection launcher and zoom group) and one panel at a time: 380 px, or 440 px for Budget and Consortium; Calendar and Consortium can Expand.
+- Right: panel rail (Ctrl 1–9; in a short window its last panels fold, in order, into a More menu at its end, above the inspection launcher and zoom group) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar and Consortium can Expand.
 - Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design).
 - Tool cards sit top-left beside the rail (320 px): tool name, the instruction, then quiet key hints ending with the Esc meaning. Status chips (highlight, search results, selection) sit top-centre or bottom-centre of the visible map area (between the rails and the open dock) at 40 px.
 

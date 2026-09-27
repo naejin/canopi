@@ -45,6 +45,7 @@ type BrowserShellCapabilityId =
   | 'navigateCalendar'
   | 'navigateBudget'
   | 'navigateConsortium'
+  | 'navigateStories'
   | 'toggleToolNames'
   | 'showSatellite'
   | 'showMap'
@@ -106,6 +107,7 @@ export const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
   'Ctrl+6',
   'Ctrl+7',
   'Ctrl+8',
+  'Ctrl+9',
 ])
 
 export function createBrowserShellCapabilities(
@@ -185,6 +187,7 @@ export function createBrowserShellCatalog(
     navigateCalendar: designPanel('calendar'),
     navigateBudget: designPanel('budget'),
     navigateConsortium: designPanel('consortium'),
+    navigateStories: designPanel('stories'),
   })
 }
 

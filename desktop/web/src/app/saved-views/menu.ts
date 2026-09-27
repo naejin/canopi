@@ -1,5 +1,5 @@
 import type { MenuAction } from '../shell-commands/menus'
-import { canShowSavedViews, currentSavedViews, goToSavedView } from './actions'
+import { canShowSavedViews, currentSavedViews, goToSavedView } from './current-view'
 import { requestSavedViewThumbnail, savedViewThumbnail } from './thumbnails'
 
 /** View › Saved views ▸: one entry per view of the open Design, in saved order, with its thumbnail. */

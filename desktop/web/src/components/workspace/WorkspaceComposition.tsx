@@ -180,9 +180,9 @@ function assertSamePanels(
   throw new Error(`Workspace ${group} registrations disagree with shell capabilities (${details}).`)
 }
 
-/** Budget and Consortium open at 440 px; every other panel at 380 px. */
+/** Budget, Consortium and Stories open at 440 px; every other panel at 380 px. */
 function isWidePanel(panel: SidePanel): boolean {
-  return panel === 'budget' || panel === 'consortium'
+  return panel === 'budget' || panel === 'consortium' || panel === 'stories'
 }
 
 function WorkspaceLoading() {

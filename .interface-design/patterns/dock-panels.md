@@ -42,6 +42,10 @@ Title with a muted "N plants · N species" subtitle, then a collapsible "Display
 
 Search; Plants (star first, row opens details, Place and More); Saved stamps (reorder handle with Alt ↑/↓, glyph group, name, "N plants · N species", Place and More with Rename, Export…, Delete); Import… and Save as stamp…. Web keeps stamps browser-local and shows Recently viewed instead of stamps.
 
+## Stories
+
+Board StoryAuthor. Title "Stories"; a row with the story `Dropdown`, its More menu (Rename story…, which swaps the dropdown for a name field with Save and Cancel; Delete story, with an Undo toast) and New story. The body scrolls: step rows (60 px: reorder handle with Alt ↑/↓ and drag, number, a 64 × 44 thumbnail of the step's view, the title in 600 over the first line of its text, More: Duplicate, Move up, Move down, Move to ▸ another story, Delete with an Undo toast); the selected row is the ochre-edged selected row. Then "Add the current view as a step" (disabled, with a note, until the Design is on a map) and the selected step's editor card: "Step n", Title, Text (a toolbar of Bold, Italic, Bulleted list, Add link, Add image over the text; Add link opens an inline address field that refuses anything but web and e-mail addresses), Images (thumbnail, a required Description field and Remove), "This step shows" tags (view name, background, terrain, highlighted species and objects, labels), a note when other steps share the view, then Use the current map view and Go to this view. The footer says "N steps · saved with the Design". No stories yet is an `EmptyState` with New story. 440 px wide.
+
 ## Design notebook
 
 A shortcut list of saved Designs in sections (Desktop). "This Design is in the notebook" or Add this Design; New section; rows with reorder handle, file icon, name, plant count and date, "Open now" on the current row; More: Open, Show in folder, Move to section, Remove from notebook (never deletes the file).

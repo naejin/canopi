@@ -727,7 +727,7 @@ describe('command registry canvas tool switching', () => {
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers',
       'view.labels:none', 'view.labels:codes', 'view.labels:names', 'view.toggleToolNames',
       'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
-      'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook',
+      'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook', 'nav.stories',
       'view.backgroundSatellite', 'view.backgroundMap', 'view.backgroundNone', 'view.toggleTheme',
     ])
     expect(byMenu.tools).toEqual([

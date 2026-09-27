@@ -68,6 +68,7 @@ Tool names are the `canvas.tools.*` keys and panel names the `panelRail.*` keys;
 | Calendar | Calendrier | Calendario | Calendário | Calendario | Kalender |
 | Budget | Budget | Presupuesto | Orçamento | Budget | Budget |
 | Design notebook | Carnet de Designs | Cuaderno de diseños | Caderno de designs | Quaderno dei progetti | Design-Notizbuch |
+| Stories | Récits | Relatos | Histórias | Racconti | Geschichten |
 
 | English | nl | ru | zh | ja | ko |
 | --- | --- | --- | --- | --- | --- |
@@ -85,3 +86,4 @@ Tool names are the `canvas.tools.*` keys and panel names the `panelRail.*` keys;
 | Calendar | Kalender | Календарь | 日历 | カレンダー | 달력 |
 | Budget | Budget | Бюджет | 预算 | 予算 | 예산 |
 | Design notebook | Ontwerpnotitieboek | Блокнот проектов | 设计笔记本 | デザインノート | 디자인 노트북 |
+| Stories | Verhalen | Истории | 故事 | ストーリー | 이야기 |

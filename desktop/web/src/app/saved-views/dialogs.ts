@@ -7,7 +7,8 @@ import {
   type SavedViewDeletion,
 } from '../design-edit'
 import { currentDesign, designSessionStore } from '../document-session/store'
-import { canShowSavedViews, currentSavedViews, defaultSavedViewName, saveCurrentView } from './actions'
+import { defaultSavedViewName, saveCurrentView } from './actions'
+import { canShowSavedViews, currentSavedViews } from './current-view'
 import { storiesShowingView } from './model'
 
 // View › Save current view… and View › Manage views…, shared by both editions.

@@ -52,6 +52,11 @@ const ConsortiumPanel = lazy(async () => {
   return { default: module.ConsortiumPanel }
 })
 
+const StoriesPanel = lazy(async () => {
+  const module = await import('../panels/StoriesPanel')
+  return { default: module.StoriesPanel }
+})
+
 function DesignNotebookSurface() {
   return <DesignNotebookPanel />
 }
@@ -73,6 +78,7 @@ const DESKTOP_WORKSPACE_SURFACES: WorkspaceSurfaces = {
     calendar: CalendarPanel,
     budget: BudgetPanel,
     consortium: ConsortiumPanel,
+    stories: StoriesPanel,
   },
 }
 

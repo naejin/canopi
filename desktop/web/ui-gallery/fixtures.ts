@@ -1,5 +1,5 @@
 import type { SpeciesDetail, SpeciesListItem } from '../src/types/species'
-import type { CanopiFile } from '../src/types/design'
+import type { CanopiFile, RichTextBlock, SavedView, Story } from '../src/types/design'
 import { createDefaultScenePersistedState } from '../src/canvas/runtime/scene'
 import { createSceneGeoFrame, PLANT_SYMBOL_IDS, serializeScenePersistedState } from '../src/canvas/runtime/scene'
 import { PLANT_COLOR_PALETTE } from '../src/canvas/plant-colors'
@@ -214,6 +214,70 @@ function symbolPlanting() {
   })
 }
 
+/** A small drawn hedge (PNG) so a story step shows an embedded image offline. */
+const HEDGE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABACAIAAABqVuVZAAABnklEQVR42u2avQ3CMBCFiZUBGAAxAjNQUVCwAS0lygjUVIiSlg0oqZiAggEoECUFI1BEQlFCQuz4fuy8J4ooSOD78i7ns51c768BVC8DBAAEQAAEQHqVio9gs1vUfpWdxIeXSJX5Bi6qSAkAskIjjokVkDMaQUwmLDoef0eXg7xEtXxO8ovj6MbmIxMcnfyazUfkDipFUnSBG52veHxkROjUxazwfWRE6ATEKIxWo5qPVhmqEZD3B1skUqJDaqKU0wWlnLJ1AZtrxFKswQU/K1f+ibBZ7e55B68RlXyNL2miehdzFRMUAAUISHDWE4yDrOodqVK13pblQt7Nt6/0bv09T42XTzHv/X1UgFTNd9ibVcalddL/wjxIDtDfB+tlvkNtVSNr/o7zHYZE5tj2IVrQ4nnNsWz7EEQS1b6Y93g4SyTj1rOnqJj35nG6Qx8gB0z9Oh/UnlSvT5gVtV9NqzfXh0vfm9W+txpxKMm2c/FBvM+P6s3hbAwHIcXCl4pFeyXZBAcBEAABEAABEAABEARAAARAAARAAARAAAQNPj3bsVHRU8u5AAAAAElFTkSuQmCC'
+
+const plain = (text: string, marks: { bold?: boolean; italic?: boolean; link?: string } = {}) => ({
+  text, bold: marks.bold ?? false, italic: marks.italic ?? false, link: marks.link ?? null,
+})
+
+function storyView(id: string, name: string, origin: { lon: number; lat: number }, offset: [number, number], zoom: number, species: string[], background: SavedView['visible_layers']['background'] = { kind: 'none' }): SavedView {
+  return {
+    id, name,
+    camera: { lon: origin.lon + offset[0], lat: origin.lat + offset[1], zoom, bearing: 0 },
+    visible_layers: {
+      background,
+      terrain: { contours: false, hillshade: false },
+      scene_layers: ['zones', 'water', 'plants', 'measurement-guides', 'annotations'],
+      site_data: [],
+    },
+    highlighted: { species, objects: [] },
+    title: null,
+    text: [],
+  }
+}
+
+/** Saved views and a four-step story over the fixture planting (StoryAuthor board). */
+function storyFixture(origin: { lon: number; lat: number }, long: boolean): { views: SavedView[]; stories: Story[] } {
+  const views = [
+    storyView('view-site', 'The site', origin, [0.00008, -0.00003], 21.2, []),
+    storyView('view-rows', 'Rows and strata', origin, [0.00005, -0.00002], 22, []),
+    // Satellite shows as "Satellite" in the step's tags; offline, its snapshot waits and reads without tiles.
+    storyView('view-hedges', 'Berry hedges', origin, [0.00013, -0.00004], 23, ['Fragaria vesca'], { kind: 'satellite' }),
+    storyView('view-year-one', 'Year one planting', origin, [0.00002, -0.00002], 22.5, ['Malus domestica']),
+  ]
+  const text = (first: string, rest: RichTextBlock[] = []): RichTextBlock[] => [{ kind: 'paragraph', spans: [plain(first)] }, ...rest]
+  const hedgesText: RichTextBlock[] = [
+    { kind: 'paragraph', spans: [
+      plain('Two hedges of '), plain('strawberry and hazel', { bold: true }),
+      plain(' run along the drip line of the fruit trees. They crop from '), plain('year two', { italic: true }),
+      plain(' and shelter the young trees from the west wind.'),
+    ] },
+    { kind: 'bullets', items: [
+      { spans: [plain('Mulch in autumn')] },
+      { spans: [plain('See the '), plain('planting notes', { link: 'https://example.org/hedges' })] },
+    ] },
+  ]
+  const steps = [
+    { id: 'step-site', view_id: 'view-site', title: 'The site', text: text('Where the orchard sits and how water moves across it.'), images: [] },
+    { id: 'step-rows', view_id: 'view-rows', title: 'Rows and strata', text: text('Six rows, from the apple canopy down to groundcover.'), images: [] },
+    {
+      id: 'step-hedges', view_id: 'view-hedges',
+      title: long ? 'Berry hedges along the northern drip line, with a particularly long title' : 'Berry hedges',
+      text: hedgesText,
+      images: [{ src: HEDGE_PNG, alt: 'The hedge in June, heavy with berries' }],
+    },
+    { id: 'step-year-one', view_id: 'view-year-one', title: 'Year one planting', text: text('What goes in this winter, and in what order.'), images: [] },
+  ]
+  return {
+    views,
+    stories: [
+      { id: 'story-visit', name: 'Orchard · client visit', steps },
+      { id: 'story-open-day', name: 'Open day', steps: [{ ...steps[0]!, id: 'step-open-site' }] },
+    ],
+  }
+}
+
 export function designFixture(state = 'populated'): CanopiFile {
   const scene = createDefaultScenePersistedState()
   const plants = state === 'empty' || state === 'zone' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
@@ -240,6 +304,7 @@ export function designFixture(state = 'populated'): CanopiFile {
       ? { lon: 0.033854, lat: 48.220272 }
       : { lon: 13, lat: 23 }), { now: new Date('2026-01-01T00:00:00Z') }),
     name: 'Orchard notebook',
+    ...(state === 'empty' ? {} : storyFixture(state === 'located' ? { lon: 0.033854, lat: 48.220272 } : { lon: 13, lat: 23 }, state === 'long')),
     lidar: state === 'empty' ? null : {
       schema_version: 1,
       entries: [

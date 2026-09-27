@@ -1,12 +1,12 @@
 import { signal, batch } from "@preact/signals";
 import { DEFAULT_SETTINGS } from "../../generated/settings";
 
-export type Panel = "plant-db" | "canvas" | "favorites" | "templates" | "design-notebook" | "species-key" | "layers" | "calendar" | "budget" | "consortium";
+export type Panel = "plant-db" | "canvas" | "favorites" | "templates" | "design-notebook" | "species-key" | "layers" | "calendar" | "budget" | "consortium" | "stories";
 
 // Panels that open as a sidebar alongside the canvas instead of replacing it.
-export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-key" | "layers" | "calendar" | "budget" | "consortium";
+export type SidePanel = "plant-db" | "favorites" | "design-notebook" | "species-key" | "layers" | "calendar" | "budget" | "consortium" | "stories";
 
-const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook", "species-key", "layers", "calendar", "budget", "consortium"]);
+const SIDE_PANELS = new Set<Panel>(["plant-db", "favorites", "design-notebook", "species-key", "layers", "calendar", "budget", "consortium", "stories"]);
 
 export function isSidePanel(panel: Panel): panel is SidePanel {
   return SIDE_PANELS.has(panel);

@@ -18,7 +18,25 @@ export { moveConsortiumEntry } from './consortium'
 export {
   addSavedView,
   deleteSavedView,
+  recaptureSavedView,
   renameSavedView,
   restoreSavedView,
   type SavedViewDeletion,
 } from './views'
+export {
+  addStory,
+  addStoryStep,
+  deleteStory,
+  deleteStoryStep,
+  duplicateStoryStep,
+  moveStoryStep,
+  moveStoryStepToStory,
+  renameStory,
+  reorderStorySteps,
+  restoreStory,
+  restoreStoryStep,
+  updateStoryStep,
+  type StoryDeletion,
+  type StoryStepDeletion,
+  type StoryStepPatch,
+} from './stories'

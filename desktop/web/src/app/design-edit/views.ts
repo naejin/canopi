@@ -4,8 +4,7 @@ import { editCurrentDesign } from './core'
 
 // Saved views are Design Edit data (ADR 0011): every command dirties the Design
 // for continuous save, none is in the scene history, and a command that changes
-// nothing returns the Design untouched. Stories are admitted and saved with the
-// Design; their commands come with the Stories panel.
+// nothing returns the Design untouched. Story commands live in stories.ts.
 
 /**
  * How each saved view shows the Design's plants, by view id, as the Design
@@ -63,6 +62,35 @@ export function addSavedView(view: SavedView, display: SavedViewDisplay | null =
     if (views.some((existing) => existing.id === view.id)) return design
     const added = { ...design, views: [...views, view] }
     return display ? withSavedViewDisplay(added, view.id, display) : added
+  })
+}
+
+/**
+ * Points an existing view at what the map shows now: camera, extent, layers,
+ * highlights and labels. Its name, title and text stay. Every step that shows
+ * the view shows the new capture.
+ */
+export function recaptureSavedView(id: string, capture: SavedView, display: SavedViewDisplay | null = null): void {
+  editCurrentDesign((design) => {
+    const views = design.views ?? []
+    const index = views.findIndex((view) => view.id === id)
+    if (index === -1) return design
+    const current = views[index]!
+    const next: SavedView = {
+      ...current,
+      camera: capture.camera,
+      visible_layers: capture.visible_layers,
+      highlighted: capture.highlighted,
+    }
+    if (capture.extent) next.extent = capture.extent
+    else delete next.extent
+    const sameCapture = JSON.stringify(next) === JSON.stringify(current)
+    const sameDisplay = display === null || readSavedViewDisplay(design, id)?.labels === display.labels
+    if (sameCapture && sameDisplay) return design
+    const nextViews = [...views]
+    nextViews[index] = next
+    const recaptured = { ...design, views: nextViews }
+    return display ? withSavedViewDisplay(recaptured, id, display) : recaptured
   })
 }
 

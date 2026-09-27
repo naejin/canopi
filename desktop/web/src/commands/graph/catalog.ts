@@ -72,6 +72,7 @@ type DesktopShellCapabilityId =
   | 'navigateBudget'
   | 'navigateConsortium'
   | 'navigateDesignNotebook'
+  | 'navigateStories'
   | 'toggleToolNames'
   | 'showSatellite'
   | 'showMap'
@@ -219,6 +220,7 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   navigateDesignNotebook: {
     execute: () => navigateTo('design-notebook'),
   },
+  navigateStories: designPanel('stories'),
   reportProblem: { execute: openProblemReportDialog },
 })
 

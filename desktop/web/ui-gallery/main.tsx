@@ -13,6 +13,8 @@ import { FavoritesPanel } from '../src/components/panels/FavoritesPanel'
 import { BudgetPanel } from '../src/components/panels/BudgetPanel'
 import { CalendarPanel } from '../src/components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../src/components/panels/ConsortiumPanel'
+import { StoriesPanel } from '../src/components/panels/StoriesPanel'
+import { selectStep } from '../src/app/stories'
 import { notebookWorkbench } from './notebook-fixture'
 import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from '../src/web/WebSpeciesCatalogPanel'
 import { WebLayersPanel } from '../src/web/WebLayersPanel'
@@ -109,6 +111,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
+        stories: StoriesPanel,
         'plant-db': WebCatalogSurface,
         favorites: WebFavoritesSurface,
       },
@@ -121,6 +124,7 @@ const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
+        stories: StoriesPanel,
         'design-notebook': GalleryNotebookSurface,
         'plant-db': PlantDbPanel,
         favorites: FavoritesPanel,
@@ -191,6 +195,8 @@ function selectGallerySurface(next: GallerySurface): void {
   plantColorMenuOpen.value = next === 'color'
   plantSymbolMenuOpen.value = next === 'symbol'
   showGalleryDataSurface(next)
+  // Stories opens on the third step, as the StoryAuthor board shows it.
+  if (next === 'stories' && fixtureState !== 'empty') selectStep('step-hedges')
   const url = new URL(location.href)
   url.searchParams.set('surface', next)
   history.replaceState(null, '', url)

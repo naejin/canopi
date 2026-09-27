@@ -17,7 +17,7 @@ import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../m
 import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign } from '../document-session/store'
 import { currentPlantDisplay } from '../plant-display/state'
-import { savedViewZoomFor } from './actions'
+import { savedViewZoomFor } from './current-view'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */

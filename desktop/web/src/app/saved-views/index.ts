@@ -1,11 +1,15 @@
 export {
   canShowSavedViews,
+  captureCurrentView,
   currentSavedViews,
-  defaultSavedViewName,
   goToSavedView,
   savedViewZoomFor,
-  saveCurrentView,
+  type CurrentViewCapture,
   type GoToSavedViewOptions,
+} from './current-view'
+export {
+  defaultSavedViewName,
+  saveCurrentView,
   type SaveCurrentViewInput,
 } from './actions'
 export {

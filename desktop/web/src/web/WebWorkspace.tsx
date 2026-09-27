@@ -6,6 +6,7 @@ import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from './WebSpeciesCatalogP
 import { BudgetPanel } from '../components/panels/BudgetPanel'
 import { CalendarPanel } from '../components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../components/panels/ConsortiumPanel'
+import { StoriesPanel } from '../components/panels/StoriesPanel'
 import {
   WorkspaceComposition,
   type WorkspacePanelProjection,
@@ -40,6 +41,7 @@ export function WebWorkspace({
         calendar: CalendarPanel,
         budget: BudgetPanel,
         consortium: ConsortiumPanel,
+        stories: StoriesPanel,
         'plant-db': WebCatalog,
         favorites: WebFavorites,
       },

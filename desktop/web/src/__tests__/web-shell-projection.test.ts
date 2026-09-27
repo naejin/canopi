@@ -98,7 +98,7 @@ describe('Web Edition shell projection', () => {
       'nav.layers', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
     ])
     expect(projection.panelBar.planning.map((command) => command.id)).toEqual([
-      'nav.calendar', 'nav.budget', 'nav.consortium',
+      'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.stories',
     ])
   })
 
