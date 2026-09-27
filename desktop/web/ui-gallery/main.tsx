@@ -49,6 +49,7 @@ import { DesktopPanelRail } from '../src/components/panels/DesktopPanelRail'
 import { SettingsDialog } from '../src/components/shared/SettingsDialog'
 import { KeyboardShortcutsDialog } from '../src/components/shared/KeyboardShortcutsDialog'
 import { WelcomeScreen } from '../src/components/shared/WelcomeScreen'
+import { DegradedBanner } from '../src/components/shared/DegradedBanner'
 import { PlaceSearchField } from '../src/components/canvas/PlaceSearch'
 import { BrowserAppShell } from '../src/web/BrowserAppShell'
 import {
@@ -86,7 +87,9 @@ if (Number.isFinite(requestedPanelWidth) && requestedPanelWidth >= 320) {
 locale.value = (params.get('locale') ?? 'en') as typeof locale.value
 theme.value = params.get('theme') === 'dark' ? 'dark' : 'light'
 const disposeTheme = effect(() => { document.documentElement.dataset.theme = theme.value })
-plantDbStatus.value = 'available'
+// `plantDb=corrupt|missing` shows the plant database notice under the title bar.
+const plantDb = params.get('plantDb')
+plantDbStatus.value = plantDb === 'corrupt' || plantDb === 'missing' ? plantDb : 'available'
 
 const workspaceSurfaces: WorkspaceSurfaces = edition === 'web'
   ? {
@@ -211,6 +214,7 @@ function GalleryDesktopFrame() {
   if (selectedSurface.value !== 'workspace' && selectedSurface.value !== 'start') return null
   return <>
     <TitleBar />
+    <DegradedBanner />
     {selectedSurface.value === 'workspace' && <DesktopPanelRail />}
     {selectedSurface.value === 'workspace' && <WorkspaceDialogs />}
     <SettingsDialog />
