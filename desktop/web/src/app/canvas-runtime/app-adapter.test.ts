@@ -24,6 +24,7 @@ import {
   resetSettingsProjectionForTests,
 } from '../settings/projection'
 import { locale, theme } from '../settings/state'
+import { createDefaultMapLayers, mapLayers, type MapLayersState } from '../map-layers/state'
 import { createAppCanvasRuntimeAppAdapter } from './app-adapter'
 import { createDesktopCanvasRuntimeAppAdapter } from './desktop-adapter'
 
@@ -135,6 +136,39 @@ describe('Canvas Runtime app adapter composition', () => {
       disposeTheme()
       disposeLocale()
       disposeChromeOverlay()
+    }
+  })
+
+  it('reports the map backdrop the layer store shows, whatever the UI theme', () => {
+    const adapter = createAdapter()
+    const onBackdrop = vi.fn()
+    const base = createDefaultMapLayers()
+    const withLayers = (patch: Partial<MapLayersState>): MapLayersState => ({ ...base, ...patch })
+    mapLayers.value = withLayers({ basemap: { ...base.basemap, style: 'liberty', visible: true, opacity: 1 } })
+    const dispose = adapter.settings.subscribeMapBackdrop(onBackdrop)
+
+    try {
+      expect(onBackdrop).toHaveBeenLastCalledWith('basemap')
+      theme.value = 'dark'
+      expect(onBackdrop).toHaveBeenCalledTimes(1)
+
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('satellite')
+      mapLayers.value = withLayers({ basemap: { ...base.basemap, style: 'dark', visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('dark-basemap')
+      mapLayers.value = withLayers({ basemap: { ...base.basemap, visible: false } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
+      // A faint background lets the map's paper show through.
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 0.3 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
+
+      dispose()
+      mapLayers.value = withLayers({ satellite: { visible: true, opacity: 1 } })
+      expect(onBackdrop).toHaveBeenLastCalledWith('paper')
+    } finally {
+      dispose()
+      theme.value = 'light'
+      mapLayers.value = base
     }
   })
 

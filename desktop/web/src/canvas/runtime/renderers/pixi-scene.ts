@@ -34,6 +34,8 @@ import {
   getAnnotationTextColor,
   getCanvasInteractionStrokeVisual,
   getGuideLineVisual,
+  getLabelHalo,
+  getMapBackdropInk,
   getPlantSymbolEdgeColor,
   getPlantSymbolEdgeWidth,
   getPlantLabelColor,
@@ -382,6 +384,7 @@ function syncMeasurementGuides(
       fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
       fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
+      stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
     })
     text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
     text.rotation = presentation.labelRotationRad
@@ -979,6 +982,7 @@ function drawAnnotationText(
     fontSize: annotation.fontSize,
     lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
     fill: getAnnotationTextColor(),
+    stroke: labelHaloStroke(annotation.fontSize),
   })
   const origin = worldToScreen(annotation.position, viewport)
   text.position.set(origin.x, origin.y)
@@ -998,14 +1002,20 @@ function drawAnnotationDecoration(
   const origin = worldToScreen(annotation.position, viewport)
   graphics.clear()
   if (markerOpacity > 0) {
-    for (const path of markerPaths) {
-      path.forEach((point, index) => {
-        const x = origin.x + point.x
-        const y = origin.y + point.y
-        if (index === 0) graphics.moveTo(x, y)
-        else graphics.lineTo(x, y)
-      })
+    const traceMarker = () => {
+      for (const path of markerPaths) {
+        path.forEach((point, index) => {
+          const x = origin.x + point.x
+          const y = origin.y + point.y
+          if (index === 0) graphics.moveTo(x, y)
+          else graphics.lineTo(x, y)
+        })
+      }
     }
+    traceMarker()
+    graphics.stroke({ color: toPixiColor(getMapBackdropInk().halo, 0),
+      width: markerStrokePx + OVERLAY_CASING_EXTRA_PX, alpha: markerOpacity, cap: 'round', join: 'round' })
+    traceMarker()
     graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
       width: markerStrokePx, alpha: markerOpacity })
   }
@@ -1040,6 +1050,7 @@ function syncSelectionLabels(
       fontWeight: '600',
       fontStyle: label.fontStyle,
       fill: toPixiColor(getPlantLabelColor(), 0),
+      stroke: labelHaloStroke(12),
     })
     text.position.set(label.screenPoint.x, label.screenPoint.y)
     text.anchor.set(0.5, 0)
@@ -1081,6 +1092,7 @@ function syncPinnedPlantNameLabels(
         fontWeight: '600',
         fontStyle: label.fontStyle,
         fill: toPixiColor(getPlantLabelColor(), 0),
+        stroke: labelHaloStroke(12),
       })
       text.position.set(label.screenPoint.x, label.screenPoint.y)
       text.anchor.set(0.5, 0)
@@ -1153,6 +1165,12 @@ function hoverStateForTarget(
 }
 
 const textStyleKeys = new WeakMap<Text, string>()
+
+/** The halo under map text, so it reads on the backdrop and on busy imagery. */
+function labelHaloStroke(fontSizePx: number): { color: number; width: number; join: 'round' } {
+  const halo = getLabelHalo(fontSizePx)
+  return { color: toPixiColor(halo.color, 0), width: halo.widthPx, join: 'round' }
+}
 
 function setTextStyle(text: Text, options: TextStyleOptions): void {
   const key = JSON.stringify(options)

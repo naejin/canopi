@@ -3,20 +3,17 @@
 //
 // Pattern: module-level color cache → getCanvasColor() for reading
 //          → refreshCanvasColorCache() to update from CSS on theme change.
+//
+// Text, halos, badges and the grid drawn over the map do not follow the UI
+// theme: `runtime/scene-visuals.ts` resolves them from the map backdrop.
 // ---------------------------------------------------------------------------
 
 type CanvasColorName =
   | 'background'
-  | 'grid'
-  | 'grid-major'
   | 'ruler-bg'
   | 'ruler-text'
-  | 'plant-label'
   | 'guide-line'
   | 'overlay-casing'
-  | 'stack-badge-bg'
-  | 'stack-badge-text'
-  | 'annotation-text'
   | 'zone-stroke'
   | 'zone-fill'
   | 'hover-stroke'
@@ -28,16 +25,10 @@ type CanvasColorName =
 /** CSS variable read for each canvas colour. Most follow `--canvas-{key}`. */
 export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } = {
   background: '--canvas-bg',
-  grid: '--canvas-grid',
-  'grid-major': '--canvas-grid-major',
   'ruler-bg': '--canvas-ruler-bg',
   'ruler-text': '--canvas-ruler-text',
-  'plant-label': '--canvas-plant-label',
   'guide-line': '--canvas-guide-line',
   'overlay-casing': '--canvas-overlay-casing',
-  'stack-badge-bg': '--canvas-stack-badge-bg',
-  'stack-badge-text': '--canvas-stack-badge-text',
-  'annotation-text': '--canvas-annotation-text',
   'zone-stroke': '--canvas-zone-stroke',
   'zone-fill': '--canvas-zone-fill',
   'hover-stroke': '--canvas-hover-stroke',
@@ -50,16 +41,10 @@ export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } 
 // Light-theme values from `styles/global.css`, used until the first refresh.
 const _colors: { [K in CanvasColorName]: string } = {
   background: '#EFE9DD',
-  grid: 'rgba(39, 35, 29, 0.07)',
-  'grid-major': 'rgba(39, 35, 29, 0.14)',
   'ruler-bg': '#F3EEE3',
   'ruler-text': '#645A4C',
-  'plant-label': '#27231D',
   'guide-line': '#FFF3D6',
   'overlay-casing': 'rgba(20, 16, 10, 0.6)',
-  'stack-badge-bg': '#27231D',
-  'stack-badge-text': '#FBF3E4',
-  'annotation-text': '#27231D',
   'zone-stroke': '#FFF3D6',
   'zone-fill': 'rgba(255, 243, 214, 0.1)',
   'hover-stroke': 'rgba(156, 90, 22, 0.62)',

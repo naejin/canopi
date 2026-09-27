@@ -5,8 +5,7 @@ import {
   type RulerOverlay,
 } from '../rulers'
 import type { CameraViewportSnapshot } from './camera'
-import { getCanvasColor } from '../theme-refresh'
-import { getGuideLineVisual, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
+import { getGuideLineVisual, getMapBackdropInk, OVERLAY_CASING_EXTRA_PX } from './scene-visuals'
 import { CANVAS_RULER_SIZE_PX } from '../rulers'
 
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
@@ -26,8 +25,6 @@ export class SceneChromeOverlay {
   private readonly _gridCanvas = document.createElement('canvas')
   private readonly _rulers: RulerOverlay
   private _snapshot: SceneChromeSnapshot | null = null
-  private _gridColor = getCanvasColor('grid')
-  private _gridMajorColor = getCanvasColor('grid-major')
   private _destroyed = false
 
   constructor(
@@ -49,8 +46,7 @@ export class SceneChromeOverlay {
     try {
       this._container.appendChild(this._gridCanvas)
       rulers = createRulerOverlay(this._container, { onGuideCreate })
-      this._refreshGridColors()
-    } catch (error) {
+      } catch (error) {
       rulers?.destroy()
       this._gridCanvas.remove()
       throw error
@@ -61,7 +57,6 @@ export class SceneChromeOverlay {
   refreshTheme(): void {
     if (this._destroyed) return
     this._rulers.refreshTheme()
-    this._refreshGridColors()
     this.render()
   }
 
@@ -143,9 +138,10 @@ export class SceneChromeOverlay {
     const { interval: minorInterval, index: minorIdx } = gridInterval(scale)
     const majorIdx = Math.min(minorIdx + MAJOR_STEP, NICE_DISTANCES.length - 1)
     const majorInterval = NICE_DISTANCES[majorIdx]!
+    const ink = getMapBackdropInk()
 
     ctx.beginPath()
-    ctx.strokeStyle = this._gridColor
+    ctx.strokeStyle = ink.grid
     ctx.lineWidth = 1
 
     for (let x = Math.floor(left / minorInterval) * minorInterval; x <= right; x += minorInterval) {
@@ -163,7 +159,7 @@ export class SceneChromeOverlay {
     if (majorInterval <= minorInterval) return
 
     ctx.beginPath()
-    ctx.strokeStyle = this._gridMajorColor
+    ctx.strokeStyle = ink.gridMajor
     ctx.lineWidth = 1
 
     for (let x = Math.floor(left / majorInterval) * majorInterval; x <= right; x += majorInterval) {
@@ -213,11 +209,5 @@ export class SceneChromeOverlay {
     }
 
     ctx.restore()
-  }
-
-  private _refreshGridColors(): void {
-    const style = getComputedStyle(this._container)
-    this._gridColor = style.getPropertyValue('--canvas-grid').trim() || getCanvasColor('grid')
-    this._gridMajorColor = style.getPropertyValue('--canvas-grid-major').trim() || getCanvasColor('grid-major')
   }
 }

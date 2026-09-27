@@ -26,7 +26,7 @@ import {
   type SceneArrangementTemplate,
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
-import { getAnnotationTextColor, getPlantSymbolEdgeColor, getPlantSymbolEdgeWidth, resolveZoneVisual } from '../scene-visuals'
+import { getAnnotationTextColor, getLabelHalo, getPlantSymbolEdgeColor, getPlantSymbolEdgeWidth, resolveZoneVisual } from '../scene-visuals'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './layer-guards'
 import { isEditableTarget } from './pointer-utils'
@@ -399,6 +399,10 @@ function appendAnnotationGhost(
     x: frame.origin.x,
     y: frame.origin.y,
     fill: getAnnotationTextColor(),
+    stroke: getLabelHalo(annotation.fontSize).color,
+    'stroke-width': getLabelHalo(annotation.fontSize).widthPx,
+    'stroke-linejoin': 'round',
+    'paint-order': 'stroke fill',
     'font-family': CANVAS_CHROME_FONT_FAMILY,
     'font-size': annotation.fontSize,
     opacity: STAMP_GHOST_ANNOTATION_OPACITY * textOpacity,

@@ -5,6 +5,7 @@ import type {
   CanvasSpeciesPresentationCache,
 } from './presentation-data'
 import type { ScenePersistedState, ScenePoint } from './scene'
+import type { CanvasMapBackdrop } from './scene-visuals'
 import type {
   CanvasDesignObjectSelectionModel,
   CanvasRuntimeDocumentMetadata,
@@ -116,6 +117,8 @@ export interface CanvasRuntimeSettingsAdapter {
   subscribeTheme(onChange: () => void): () => void
   subscribeLocale(onChange: () => void): () => void
   subscribeChromeOverlay(onChange: () => void): () => void
+  /** Calls `onChange` now and whenever the map background under the Design changes. */
+  subscribeMapBackdrop(onChange: (backdrop: CanvasMapBackdrop) => void): () => void
   readonly layerProjections: CanvasRuntimeLayerProjectionAdapter
 }
 
@@ -191,6 +194,10 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       subscribeTheme: subscribeImmediately,
       subscribeLocale: subscribeImmediately,
       subscribeChromeOverlay: subscribeImmediately,
+      subscribeMapBackdrop: (onChange) => {
+        onChange('basemap')
+        return () => {}
+      },
       layerProjections: {
         syncFromLayers: (layers) => {
           layerProjections.clear()

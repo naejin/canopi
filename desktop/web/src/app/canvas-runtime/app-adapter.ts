@@ -5,6 +5,8 @@ import type {
   CanvasRuntimePresentationDataAdapter,
   CanvasRuntimeSavedObjectStampAdapter,
 } from '../../canvas/runtime/app-adapter'
+import type { CanvasMapBackdrop } from '../../canvas/runtime/scene-visuals'
+import { mapBackgroundOf, mapLayers, type MapLayersState } from '../map-layers/state'
 import {
   gridVisible,
   layerLockState,
@@ -89,11 +91,29 @@ export function createAppCanvasRuntimeAppAdapter(
         void rulersVisible.value
         onChange()
       }),
+      subscribeMapBackdrop: (onChange) => effect(() => {
+        onChange(mapBackdropOf(mapLayers.value))
+      }),
       layerProjections: {
         syncFromLayers,
         syncLayer,
       },
     },
+  }
+}
+
+/** Below half opacity a background mostly lets the map's light paper through. */
+const BACKDROP_OPACITY_THRESHOLD = 0.5
+
+function mapBackdropOf(state: MapLayersState): CanvasMapBackdrop {
+  switch (mapBackgroundOf(state)) {
+    case 'satellite':
+      return state.satellite.opacity < BACKDROP_OPACITY_THRESHOLD ? 'paper' : 'satellite'
+    case 'basemap':
+      if (state.basemap.opacity < BACKDROP_OPACITY_THRESHOLD) return 'paper'
+      return state.basemap.style === 'dark' ? 'dark-basemap' : 'basemap'
+    case 'none':
+      return 'paper'
   }
 }
 

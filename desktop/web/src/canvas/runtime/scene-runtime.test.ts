@@ -374,6 +374,10 @@ function createTestSettingsAdapter(
       onChange()
       return () => {}
     },
+    subscribeMapBackdrop: (onChange) => {
+      onChange('basemap')
+      return () => {}
+    },
     layerProjections: {
       syncFromLayers: () => {},
       syncLayer: () => {},

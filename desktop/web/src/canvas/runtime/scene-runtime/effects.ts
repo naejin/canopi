@@ -1,6 +1,7 @@
 import { effect } from '@preact/signals'
 import type { CanvasRuntimeSettingsAdapter } from '../app-adapter'
 import type { WorkspaceCameraFrameReader } from '../camera'
+import type { CanvasMapBackdrop } from '../scene-visuals'
 import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
@@ -10,12 +11,13 @@ interface SceneRuntimeEffectsDeps {
   onTheme: () => void
   onLocale: () => void
   onChromeOverlay: () => void
+  onMapBackdrop: (backdrop: CanvasMapBackdrop) => void
   onPanelTargetHover: () => void
   camera: Pick<WorkspaceCameraFrameReader, 'snapshot'>
   onCameraFrame: () => void
   settings: Pick<
     CanvasRuntimeSettingsAdapter,
-    'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay'
+    'subscribeTheme' | 'subscribeLocale' | 'subscribeChromeOverlay' | 'subscribeMapBackdrop'
   >
   subscribePanelOriginTargetChanges(onChange: () => void): () => void
 }
@@ -35,6 +37,7 @@ export function installSceneRuntimeEffects(deps: SceneRuntimeEffectsDeps): Array
     disposers.push(deps.settings.subscribeTheme(deps.onTheme))
     disposers.push(deps.settings.subscribeLocale(deps.onLocale))
     disposers.push(deps.settings.subscribeChromeOverlay(deps.onChromeOverlay))
+    disposers.push(deps.settings.subscribeMapBackdrop(deps.onMapBackdrop))
     disposers.push(deps.subscribePanelOriginTargetChanges(deps.onPanelTargetHover))
     return disposers
   } catch (error) {

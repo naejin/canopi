@@ -24,8 +24,14 @@ import {
   resolveZoneVisual,
 } from './scene-visuals'
 import { getRectangularZoneCorners } from './zone-geometry'
+import { getCanvasColor } from '../theme-refresh'
 
 const ZONE_STROKE_PX = 2
+
+/** The lens preview sits on the themed paper (`--canvas-bg`), not on the map. */
+function lensPaper(): string {
+  return getCanvasColor('background')
+}
 
 export interface InspectionLensDrawOptions {
   readonly widthPx: number
@@ -194,13 +200,13 @@ function drawPlantSymbolGlyph(
     ctx.arc(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
     ctx.fill()
     if (entry.lod !== 'dot') {
-      ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color)
+      ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color, lensPaper())
       ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
       ctx.stroke()
     }
     return
   }
-  const edge = getPlantSymbolEdgeColor(entry.color)
+  const edge = getPlantSymbolEdgeColor(entry.color, lensPaper())
   const art = getPlantSymbolArt(symbol, entry.radiusScreenPx * 2)
   ctx.strokeStyle = edge
   ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
@@ -230,11 +236,11 @@ function drawStackBadge(
   const x = entry.screenPoint.x + offset.x
   const y = entry.screenPoint.y + offset.y
   ctx.globalAlpha = opacity
-  ctx.fillStyle = getStackBadgeBackgroundColor()
+  ctx.fillStyle = getStackBadgeBackgroundColor(lensPaper())
   ctx.beginPath()
   ctx.arc(x, y, STACK_BADGE_RADIUS_PX, 0, Math.PI * 2)
   ctx.fill()
-  ctx.fillStyle = getStackBadgeTextColor()
+  ctx.fillStyle = getStackBadgeTextColor(lensPaper())
   ctx.font = `9px ${CANVAS_CHROME_FONT_FAMILY}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'

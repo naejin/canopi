@@ -1,5 +1,6 @@
 import { setCanvasSelection } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
+import { setCanvasMapBackdrop } from './scene-visuals'
 import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
@@ -329,6 +330,11 @@ export class SceneCanvasRuntime {
       },
       onChromeOverlay: () => {
         this._renderChrome()
+      },
+      onMapBackdrop: (backdrop) => {
+        if (!setCanvasMapBackdrop(backdrop)) return
+        this._renderChrome()
+        this._invalidate('scene')
       },
       onPanelTargetHover: () => {
         this._invalidate('scene')
