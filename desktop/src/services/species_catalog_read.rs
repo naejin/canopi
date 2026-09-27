@@ -12,6 +12,7 @@ mod detail_projection;
 mod detail_row_map;
 mod filters;
 mod flower;
+mod habit;
 mod list_items;
 mod list_projection;
 mod media;
@@ -66,6 +67,13 @@ impl<'guard, 'connection> SpeciesCatalogRead<'guard, 'connection> {
         locale: &str,
     ) -> Result<HashMap<String, String>, String> {
         common_names::localized_names_for_canonical_names(self.conn, canonical_names, locale)
+    }
+
+    pub(crate) fn habits_for_canonical_names(
+        &self,
+        canonical_names: &[String],
+    ) -> Result<HashMap<String, String>, String> {
+        habit::read_projection(self.conn, canonical_names)
     }
 
     pub(crate) fn locale_common_names_for_canonical_name(
@@ -265,6 +273,22 @@ mod tests {
     }
 
     #[test]
+    fn habit_projection_reads_catalog_habits_through_the_reader_seam() {
+        let plant_db = detail_projection_test_db();
+        let conn = crate::db::require_plant_db(&plant_db).unwrap();
+        conn.execute("UPDATE species SET habit = 'Tree' WHERE id = 'sp-1'", [])
+            .unwrap();
+        let catalog = SpeciesCatalogRead::new(&conn);
+
+        let habits = catalog
+            .habits_for_canonical_names(&["Apple".to_owned(), "Pear".to_owned()])
+            .unwrap();
+
+        assert_eq!(habits.len(), 1);
+        assert_eq!(habits["Apple"], "Tree");
+    }
+
+    #[test]
     fn flower_color_projection_reads_direct_species_colors() {
         let plant_db = test_support::test_plant_db();
         let conn = crate::db::require_plant_db(&plant_db).unwrap();
@@ -406,6 +430,7 @@ mod tests {
             include_str!("species_catalog_read/detail_row_map.rs"),
             include_str!("species_catalog_read/filters.rs"),
             include_str!("species_catalog_read/flower.rs"),
+            include_str!("species_catalog_read/habit.rs"),
             include_str!("species_catalog_read/list_items.rs"),
             include_str!("species_catalog_read/list_projection.rs"),
             include_str!("species_catalog_read/media.rs"),

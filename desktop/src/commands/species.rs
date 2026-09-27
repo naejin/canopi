@@ -106,6 +106,25 @@ pub async fn get_common_names(
         .await
 }
 
+/// Batch lookup: returns the catalog habit (e.g. `Tree`) for each canonical name that has one.
+#[tauri::command]
+pub async fn get_species_habits(
+    executor: State<'_, crate::native_operation::NativeOperationExecutor>,
+    plant_db: State<'_, crate::db::PlantDb>,
+    canonical_names: Vec<String>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let plant_db = plant_db.inner().clone();
+    executor
+        .run(
+            crate::native_operation::NativeOperationClass::Catalog,
+            "species habit batch",
+            move || {
+                crate::services::species_catalog::get_species_habits(&plant_db, canonical_names)
+            },
+        )
+        .await
+}
+
 /// Batch-fetch detail records for multiple species by canonical name.
 /// Used for canvas species metadata hydration — one IPC call for all placed plants.
 #[tauri::command]

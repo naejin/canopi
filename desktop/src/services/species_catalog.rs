@@ -17,6 +17,14 @@ pub fn get_common_names(
     SpeciesCatalogRead::new(&conn).common_names_for_canonical_names(&canonical_names, &locale)
 }
 
+pub fn get_species_habits(
+    plant_db: &PlantDb,
+    canonical_names: Vec<String>,
+) -> Result<HashMap<String, String>, String> {
+    let conn = db::require_plant_db(plant_db)?;
+    SpeciesCatalogRead::new(&conn).habits_for_canonical_names(&canonical_names)
+}
+
 pub fn get_species_batch(
     plant_db: &PlantDb,
     canonical_names: Vec<String>,
