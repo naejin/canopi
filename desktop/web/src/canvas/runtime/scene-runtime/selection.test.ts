@@ -45,7 +45,7 @@ function makeScene(): ScenePersistedState {
     zones: [
       {
         kind: 'zone',
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         locked: false,
         zoneType: 'rect',
         points: [

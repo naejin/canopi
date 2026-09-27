@@ -53,7 +53,7 @@ function canopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
 describe('Saved Object Stamp file composition', () => {
   it('exports a minimal Canopi file with only visible stamp geometry', () => {
     const payload: SavedObjectStampPayload = {
-      version: 1,
+      version: 2,
       anchor: { x: 10, y: 20 },
       plants: [{
         id: 'plant-source',
@@ -134,6 +134,7 @@ describe('Saved Object Stamp file composition', () => {
       quantity: null,
     }])
     expect(file.zones).toEqual([{
+      id: 'zone-source',
       name: 'Kitchen bed',
       locked: false,
       zone_type: 'polygon',
@@ -157,7 +158,7 @@ describe('Saved Object Stamp file composition', () => {
       name: 'Guild',
       members: [
         { kind: 'plant', id: 'plant-source' },
-        { kind: 'zone', id: 'Kitchen bed' },
+        { kind: 'zone', id: 'zone-source' },
         { kind: 'annotation', id: 'annotation-source' },
       ],
     }])
@@ -167,7 +168,7 @@ describe('Saved Object Stamp file composition', () => {
     const file = composeSavedObjectStampCanopiFile({
       name: 'Ungrouped stamp',
       payload: {
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -213,7 +214,7 @@ describe('Saved Object Stamp file composition', () => {
         quantity: 5,
       }],
       zones: [{
-        name: 'Hidden bed',
+        id: 'Hidden bed', name: 'Hidden bed',
         locked: false,
         zone_type: 'polygon',
         points: [geoAt(0, 0), geoAt(4, 0), geoAt(4, 4)],
@@ -248,7 +249,7 @@ describe('Saved Object Stamp file composition', () => {
     expectPointNear(payload?.plants[0]?.position, { x: 3, y: 10 })
     expectPointNear(payload?.annotations[0]?.position, { x: 7, y: 6 })
     expect(payload).toEqual({
-      version: 1,
+      version: 2,
       anchor: expect.any(Object),
       plants: [{
         id: 'source-plant',
@@ -306,7 +307,7 @@ describe('Saved Object Stamp file composition', () => {
     const file = composeSavedObjectStampCanopiFile({
       name: 'Zone pair',
       payload: {
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-source',
@@ -343,7 +344,7 @@ describe('Saved Object Stamp file composition', () => {
 
     expect(file.groups[0]?.members).toEqual([
       { kind: 'plant', id: 'plant-source' },
-      { kind: 'zone', id: 'Kitchen bed' },
+      { kind: 'zone', id: 'zone-source' },
     ])
     expect(payload?.groups).toEqual([{
       id: 'group-source',
@@ -378,7 +379,7 @@ describe('Saved Object Stamp file composition', () => {
       // Ellipses are stored as the corners of their unrotated bounding box:
       // centre (100, 100), radii (10, 6).
       zones: [{
-        name: 'Pond edge',
+        id: 'Pond edge', name: 'Pond edge',
         locked: false,
         zone_type: 'ellipse',
         points: [geoAt(90, 94), geoAt(110, 106)],
@@ -406,7 +407,7 @@ describe('Saved Object Stamp file composition', () => {
       name: '  ',
       layers: [{ name: 'zones', visible: true, locked: false, opacity: 1 }],
       zones: [{
-        name: 'Bed',
+        id: 'Bed', name: 'Bed',
         locked: true,
         zone_type: 'rect',
         points: [geoAt(0, 0), geoAt(4, 4)],

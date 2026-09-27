@@ -72,6 +72,7 @@ export function createTestCanvasCommandSurface(
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      renameZone: () => false,
       rotateSelected: () => {},
       unlockAll: () => {},
       nudgeSelected: () => false,

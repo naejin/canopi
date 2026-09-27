@@ -39,13 +39,13 @@ describe('browser workspace map contribution adapter', () => {
     const adapter = createBrowserWorkspaceMapContributionAdapter({
       sessionIdentity: signal(identity), hasCurrentDesign: () => true,
     })
-    setHoveredPanelTargets([{ kind: 'zone', zone_name: 'plot' }])
+    setHoveredPanelTargets([{ kind: 'zone', zone_id: 'plot' }])
     const snapshot = adapter.read(runtimeWithPlane(createSessionPlane({ lat: 48, lon: 2 })))!
     expect(snapshot.sessionIdentity).toBe(identity)
     expect(snapshot.lidar).toEqual([])
     expect(snapshot.terrain).toMatchObject({ contoursVisible: false, hillshadeVisible: false })
     expect(snapshot.overlays.location).toEqual({ lat: 48, lon: 2 })
-    expect(snapshot.overlays.hoveredTargets).toEqual([{ kind: 'zone', zone_name: 'plot' }])
+    expect(snapshot.overlays.hoveredTargets).toEqual([{ kind: 'zone', zone_id: 'plot' }])
     expect(snapshot).not.toHaveProperty('designExtentMeters')
     expect(Object.isFrozen(snapshot)).toBe(true)
     expect(Object.isFrozen(snapshot.overlays.hoveredTargets[0])).toBe(true)
@@ -57,7 +57,7 @@ describe('browser workspace map contribution adapter', () => {
     const adapter = createBrowserWorkspaceMapContributionAdapter({
       sessionIdentity: signal({}), hasCurrentDesign: () => true,
     })
-    setHoveredPanelTargets([{ kind: 'zone', zone_name: 'plot' }])
+    setHoveredPanelTargets([{ kind: 'zone', zone_id: 'plot' }])
 
     const snapshot = adapter.read(runtimeWithPlane(
       createSessionPlane({ lat: 23, lon: 13 }),

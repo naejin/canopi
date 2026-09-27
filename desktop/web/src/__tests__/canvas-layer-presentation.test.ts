@@ -70,7 +70,7 @@ describe('Canvas Layer Presentation', () => {
       tool_names_visible: null,
     })
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'Layer presentation',
       description: null,
       plant_species_colors: {},

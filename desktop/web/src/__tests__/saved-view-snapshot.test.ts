@@ -85,7 +85,7 @@ function queries() {
 
 function design(): CanopiFile {
   return {
-    version: 8, name: 'Orchard', description: null,
+    version: 9, name: 'Orchard', description: null,
     plant_species_colors: {}, plant_species_symbols: {}, plant_species_codes: {},
     layers: [], plants: [], zones: [], annotations: [], measurement_guides: [], consortiums: [],
     groups: [], timeline: [], budget: [], budget_currency: 'EUR', lidar: null,

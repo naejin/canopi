@@ -73,14 +73,15 @@ function createPlant(id: string, x: number, y: number, canonical = 'Quercus robu
 }
 
 function createEllipseZone(
-  name: string,
+  id: string,
   x: number,
   y: number,
   radiusX: number,
   radiusY: number,
 ): CanopiFile['zones'][number] {
   return {
-    name,
+    id,
+    name: null,
     zone_type: 'ellipse',
     // Files store the opposite corners of the unrotated bounding box.
     points: [at(x - radiusX, y - radiusY), at(x + radiusX, y + radiusY)],
@@ -230,7 +231,7 @@ describe('Canvas runtime surfaces', () => {
       expectPointNear(scene.zones[0]?.points[1], { x: 3, y: 2 })
       expectPointNear(scene.zones[1]?.points[0], { x: centre.x + 1, y: centre.y })
       expectPointNear(scene.zones[1]?.points[1], { x: 3, y: 2 })
-      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[1]!.name }])
+      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[1]!.id }])
 
       commands.sceneEdits.duplicateSelected()
 
@@ -244,7 +245,7 @@ describe('Canvas runtime surfaces', () => {
       scene = queries.getSceneSnapshot()
       expectPointNear(scene.zones[3]?.points[0], { x: 100, y: 50 })
       expectPointNear(scene.zones[3]?.points[1], { x: 3, y: 2 })
-      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[3]!.name }])
+      expect(queries.getSelection()).toEqual([{ kind: 'zone', id: scene.zones[3]!.id }])
 
       commands.history.undo()
       expect(queries.getSceneSnapshot().zones).toHaveLength(3)

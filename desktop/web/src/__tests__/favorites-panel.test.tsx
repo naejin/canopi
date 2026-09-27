@@ -149,7 +149,7 @@ describe('FavoritesPanel', () => {
         id: 'stamp-1',
         name: 'Pommier, Lavande',
         payload_json: JSON.stringify({
-          version: 1,
+          version: 2,
           anchor: { x: 10, y: 10 },
           plants: [
             {

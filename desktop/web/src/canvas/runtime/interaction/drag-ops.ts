@@ -47,8 +47,8 @@ export function captureSceneDragState(
   }
 
   for (const zone of scene.zones) {
-    if (selectionKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))) {
-      state.zoneStarts.set(zone.name, zone.points.map((point) => ({ ...point })))
+    if (selectionKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))) {
+      state.zoneStarts.set(zone.id, zone.points.map((point) => ({ ...point })))
     }
   }
 
@@ -72,8 +72,8 @@ export function captureSceneDragState(
     for (const member of resolveSceneObjectGroupMembers(scene, group)) {
       const plant = member.kind === 'plant' ? scene.plants.find((entry) => entry.id === member.id) : null
       if (plant) state.plantStarts.set(plant.id, { ...plant.position })
-      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
-      if (zone) state.zoneStarts.set(zone.name, zone.points.map((point) => ({ ...point })))
+      const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.id === member.id) : null
+      if (zone) state.zoneStarts.set(zone.id, zone.points.map((point) => ({ ...point })))
       const annotation = member.kind === 'annotation'
         ? scene.annotations.find((entry) => entry.id === member.id)
         : null
@@ -99,7 +99,7 @@ export function applySceneDragDeltaToDraft(
     }
   })
   draft.zones = draft.zones.map((zone) => {
-    const start = state.zoneStarts.get(zone.name)
+    const start = state.zoneStarts.get(zone.id)
     if (!start) return zone
     if (zone.zoneType === 'ellipse' && start.length >= 2) {
       // Elliptical Zones store center + radii, not drawable vertices.

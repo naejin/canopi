@@ -147,7 +147,8 @@
       "speciesDetails": "Soortdetails",
       "addToCalendar": "Toevoegen aan kalender…",
       "setUnitCost": "Eenheidsprijs instellen…",
-      "placePlantsHere": "Planten hier plaatsen"
+      "placePlantsHere": "Planten hier plaatsen",
+      "renameZone": "Zone hernoemen…"
     },
     "rotationHandle": {
       "label": "Draaien"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} metingen",
       "measurements_many": "{{count, number}} metingen",
       "measurements_other": "{{count, number}} metingen",
-      "clear": "Selectie wissen"
+      "clear": "Selectie wissen",
+      "rename": "Hernoemen…"
     },
     "viewChip": "Weergave",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "{{degrees}}° aftrekken",
       "cancel": "Annuleren",
       "rotate": "Draaien"
+    },
+    "renameZoneDialog": {
+      "title": "Zone hernoemen",
+      "name": "Naam",
+      "hint": "Laat leeg om de zone naar type en grootte te noemen.",
+      "cancel": "Annuleren",
+      "rename": "Hernoemen"
     }
   },
   "worldMap": {

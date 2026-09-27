@@ -562,7 +562,7 @@ function CalendarEditor({ workbench, onCancel, onClose }: {
     ...ACTION_TYPES.map((type) => ({ value: type, label: actionTypeLabel(type) })),
   ]
   const selectedSpeciesTargets = draft.targets.filter((target) => target.kind === 'species')
-  const selectedZone = draft.targets.find((target) => target.kind === 'zone')?.zone_name ?? ''
+  const selectedZone = draft.targets.find((target) => target.kind === 'zone')?.zone_id ?? ''
   const scheduleMode: ScheduleMode = !draft.scheduled ? 'unscheduled' : draft.range ? 'range' : 'single'
   const scheduleOptions: SegmentedOption<ScheduleMode>[] = [
     { value: 'range', label: t('canvas.calendar.range') },
@@ -578,10 +578,10 @@ function CalendarEditor({ workbench, onCancel, onClose }: {
   }))
   const zoneItems: DropdownItem<string>[] = [
     { value: '', label: t('canvas.calendar.chooseZone') },
-    ...(selectedZone && !workbench.zones.some((zone) => zone.name === selectedZone)
-      ? [{ value: selectedZone, label: `${missingZoneLabel(selectedZone)} · ${t('canvas.calendar.unavailable')}` }]
+    ...(selectedZone && !workbench.zones.some((zone) => zone.id === selectedZone)
+      ? [{ value: selectedZone, label: `${missingZoneLabel()} · ${t('canvas.calendar.unavailable')}` }]
       : []),
-    ...workbench.zones.map((zone) => ({ value: zone.name, label: zone.label })),
+    ...workbench.zones.map((zone) => ({ value: zone.id, label: zone.label })),
   ]
 
   useLayoutEffect(() => {

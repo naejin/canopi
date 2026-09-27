@@ -1,4 +1,4 @@
-import type { SavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
+import { SAVED_OBJECT_STAMP_PAYLOAD_VERSION, type SavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
 import type { ObjectGroup, CanopiFile } from '../../types/design'
 import {
   createSceneGeoFrame,
@@ -62,6 +62,7 @@ export function composeSavedObjectStampCanopiFile({
       quantity: null,
     })),
     zones: payload.zones.map((zone) => ({
+      id: zone.id,
       name: zone.name,
       locked: false,
       zone_type: zone.zoneType,
@@ -115,10 +116,10 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
     : []
   const zones = layerVisible(file, 'zones')
     ? file.zones
-      .filter((zone) => zone.name.trim().length > 0 && zone.points.length > 0)
+      .filter((zone) => zone.id.trim().length > 0 && zone.points.length > 0)
       .map((zone, index) => {
         const id = `zone-${index + 1}`
-        idMap.set(memberKey({ kind: 'zone', id: zone.name }), id)
+        idMap.set(memberKey({ kind: 'zone', id: zone.id }), id)
         return {
           id,
           name: zone.name,
@@ -149,7 +150,7 @@ export function savedObjectStampPayloadFromCanopiFile(file: CanopiFile): SavedOb
   if (plants.length + zones.length + annotations.length === 0) return null
 
   return {
-    version: 1,
+    version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION,
     anchor: anchorForPayloadObjects(plants, zones, annotations),
     plants,
     zones,
@@ -199,7 +200,7 @@ function validCapturedGroups(payload: SavedObjectStampPayload): ObjectGroup[] {
     ] as const),
     ...payload.zones.map((zone) => [
       memberKey({ kind: 'zone', id: zone.id }),
-      { kind: 'zone' as const, id: zone.name },
+      { kind: 'zone' as const, id: zone.id },
     ] as const),
     ...payload.annotations.map((annotation) => [
       memberKey({ kind: 'annotation', id: annotation.id }),
@@ -262,6 +263,7 @@ function anchorForPayloadObjects(
 function zoneAnchorPoints(zone: SavedObjectStampPayload['zones'][number]): ScenePoint[] {
   const bounds = getZoneWorldBounds({
     kind: 'zone',
+    id: zone.id,
     name: zone.name,
     locked: false,
     zoneType: zone.zoneType,

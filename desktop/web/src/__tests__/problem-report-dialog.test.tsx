@@ -22,7 +22,7 @@ vi.mock('../ipc/problem-report', () => ({
 
 function makeDesign(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Secret Orchard',
     description: 'Private notes',
     plant_species_colors: {},

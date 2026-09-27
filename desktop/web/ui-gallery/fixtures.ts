@@ -228,9 +228,9 @@ export function designFixture(state = 'populated'): CanopiFile {
   const activeSpecies = state === 'empty' ? [] : specimens.map(([canonicalName]) => canonicalName)
   return {
     ...serializeScenePersistedState({ ...scene, plants,
-      // `state=zone`: one rectangle drawn and never named, so its name is its generated id.
+      // `state=zone`: one rectangle drawn and never named.
       zones: state === 'zone' ? [{
-        kind: 'zone' as const, name: 'zone-ee08f9f9-634f-4723-bbde-1200610562dc', locked: false, zoneType: 'rect',
+        kind: 'zone' as const, id: 'zone-ee08f9f9-634f-4723-bbde-1200610562dc', name: null, locked: false, zoneType: 'rect',
         rotationDeg: 0, fillColor: null, notes: null,
         points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
       }] : [],

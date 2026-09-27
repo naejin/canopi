@@ -40,7 +40,7 @@ import { designSessionFixture, replaceCurrentDesignState } from './support/desig
 
 function design(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Display',
     description: null,
     plant_species_colors: {},

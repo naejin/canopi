@@ -29,7 +29,7 @@ import {
 
 function makeDesign(name = 'Design'): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name,
     description: null,
     plant_species_colors: {},

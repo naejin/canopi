@@ -291,7 +291,7 @@ function seedV2Partitions(storage: MemoryStorage): void {
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Draft',
     description: null,
     plant_species_colors: {},

@@ -55,7 +55,7 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
@@ -152,7 +152,7 @@ describe('scene runtime mutation controller', () => {
       index === 0 ? { ...plant, id: 'shared-id' } : plant,
     )
     file.zones = file.zones.map((zone, index) =>
-      index === 0 ? { ...zone, name: 'shared-id' } : zone,
+      index === 0 ? { ...zone, id: 'shared-id' } : zone,
     )
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
@@ -160,28 +160,28 @@ describe('scene runtime mutation controller', () => {
     controller.lockSelected()
 
     expect(sceneStore.persisted.plants.find((plant) => plant.id === 'shared-id')?.locked).toBe(false)
-    expect(sceneStore.persisted.zones.find((zone) => zone.name === 'shared-id')?.locked).toBe(true)
+    expect(sceneStore.persisted.zones.find((zone) => zone.id === 'shared-id')?.locked).toBe(true)
     expect(sceneStore.session.selectedTargets).toEqual([])
   })
 
   it('deletes only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
 
     controller.deleteSelected()
 
     expect(sceneStore.persisted.plants.some((plant) => plant.id === 'shared-id')).toBe(true)
-    expect(sceneStore.persisted.zones.some((zone) => zone.name === 'shared-id')).toBe(false)
+    expect(sceneStore.persisted.zones.some((zone) => zone.id === 'shared-id')).toBe(false)
     expect(sceneStore.session.selectedTargets).toEqual([])
   })
 
   it('duplicates only the typed selected Design Object when raw ids collide', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const { controller, sceneStore } = createController(file)
     sceneStore.setSelection([{ kind: 'zone', id: 'shared-id' }])
 
@@ -297,7 +297,7 @@ describe('scene runtime mutation controller', () => {
 
     controller.deleteSelected()
 
-    expect(sceneStore.persisted.zones.map((zone) => zone.name)).toEqual(['zone-1'])
+    expect(sceneStore.persisted.zones.map((zone) => zone.id)).toEqual(['zone-1'])
     expect(sceneStore.session.selectedTargets).toEqual([{ kind: 'zone', id: 'zone-1' }])
     expect(state.dirtyTypes).toEqual([])
     expect(state.invalidations).toBe(0)
@@ -317,7 +317,7 @@ describe('scene runtime mutation controller', () => {
       },
     ]
     file.zones = file.zones.map((zone) =>
-      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+      zone.id === 'zone-1' ? { ...zone, locked: true } : zone,
     )
     const { controller, sceneStore, state } = createController(file)
 

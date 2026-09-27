@@ -123,6 +123,7 @@ function createCommandSurface() {
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      renameZone: () => false,
       rotateSelected: () => {},
       unlockAll: () => {},
       nudgeSelected: () => false,

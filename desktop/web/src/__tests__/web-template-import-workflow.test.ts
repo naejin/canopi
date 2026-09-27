@@ -43,7 +43,7 @@ describe('Web Edition Design Template import workflow', () => {
   it('rejects malformed static assets at the Web ingestion boundary before opening', async () => {
     const fetchTemplateAsset = vi.fn(async () => new Response(JSON.stringify({
       ...makeCanopiFile(),
-      zones: [{ name: 'missing fields' }],
+      zones: [{ id: 'zone-missing-fields' }],
     })))
     const openCanopiTemplate = vi.fn(async () => 'opened' as const)
     const workflow = createBrowserDesignTemplateImportWorkflow({
@@ -79,7 +79,7 @@ describe('Web Edition Design Template import workflow', () => {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Test Template',
     description: null,
     plant_species_colors: {},

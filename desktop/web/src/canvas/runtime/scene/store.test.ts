@@ -129,7 +129,7 @@ describe('scene store', () => {
       ],
       zones: [
         {
-          name: 'zone-a',
+          id: 'zone-a', name: null,
           locked: false,
           zone_type: 'rect',
           points: [
@@ -280,7 +280,7 @@ describe('scene store', () => {
       ],
       zones: [
         {
-          name: 'zone-1',
+          id: 'zone-1', name: null,
           zone_type: 'polygon',
           points: [geoAt(0, 0)],
           rotation: 0,
@@ -335,7 +335,8 @@ describe('scene store', () => {
       plants: [],
       zones: [
         {
-          name: 'zone-1',
+          id: 'zone-1',
+          name: null,
           locked: false,
           zone_type: 'rect',
           points: [

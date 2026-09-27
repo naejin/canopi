@@ -34,7 +34,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'zone-1',
+      id: 'zone-1', name: null,
       zoneType: 'polygon',
       points: [
         { x: 3, y: 4 },
@@ -54,7 +54,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'line-1',
+      id: 'line-1', name: 'line-1',
       zoneType: 'line',
       points: [
         { x: 3, y: 4 },
@@ -102,7 +102,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'rotated-rectangle',
+      id: 'rotated-rectangle', name: 'rotated-rectangle',
       zoneType: 'rect',
       points: [
         { x: 1, y: 3 },
@@ -123,7 +123,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'rotated-ellipse',
+      id: 'rotated-ellipse', name: 'rotated-ellipse',
       zoneType: 'ellipse',
       points: [
         { x: -2 * Math.SQRT2, y: 2 * Math.SQRT2 },
@@ -144,7 +144,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'general-rotated-ellipse',
+      id: 'general-rotated-ellipse', name: 'general-rotated-ellipse',
       zoneType: 'ellipse',
       points: [
         {
@@ -167,7 +167,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'near-hard-ellipse',
+      id: 'near-hard-ellipse', name: 'near-hard-ellipse',
       zoneType: 'ellipse',
       points: [
         { x: 1e-12 * scale, y: 2 * scale },
@@ -188,7 +188,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'huge-ellipse',
+      id: 'huge-ellipse', name: 'huge-ellipse',
       zoneType: 'ellipse',
       points: [
         { x: 0, y: 0 },
@@ -207,7 +207,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'overflowed-ellipse',
+      id: 'overflowed-ellipse', name: 'overflowed-ellipse',
       zoneType: 'ellipse',
       points: [
         { x: Number.MAX_VALUE, y: Number.MAX_VALUE },
@@ -226,7 +226,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'tiny-ellipse',
+      id: 'tiny-ellipse', name: 'tiny-ellipse',
       zoneType: 'ellipse',
       points: [
         { x: 0, y: 0 },
@@ -245,7 +245,7 @@ describe('Scene physical extent', () => {
     scene.zones.push({
       kind: 'zone',
       locked: false,
-      name: 'circle',
+      id: 'circle', name: 'circle',
       zoneType: 'ellipse',
       points: [
         { x: 3, y: 4 },

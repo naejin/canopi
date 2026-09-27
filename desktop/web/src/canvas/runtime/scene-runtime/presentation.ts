@@ -342,7 +342,7 @@ function containsHoverTarget(
 ): boolean {
   if (target.kind === 'group') return scene.groups.some((group) => group.id === target.id)
   if (target.kind === 'plant') return scene.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return scene.zones.some((zone) => zone.name === target.id)
+  if (target.kind === 'zone') return scene.zones.some((zone) => zone.id === target.id)
   if (target.kind === 'annotation') {
     return scene.annotations.some((annotation) => annotation.id === target.id)
   }

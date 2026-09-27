@@ -11,8 +11,8 @@ function createScene(overrides: Partial<TargetResolutionScene> = {}): TargetReso
       { id: 'plant-3', canonicalName: 'Malus domestica' },
     ],
     zones: [
-      { name: 'orchard' },
-      { name: 'pond-edge' },
+      { id: 'orchard' },
+      { id: 'pond-edge' },
     ],
     ...overrides,
   }
@@ -43,8 +43,8 @@ describe('resolveTargets', () => {
     })
   })
 
-  it('resolves a zone target by zone name', () => {
-    const target: PanelTarget = { kind: 'zone', zone_name: 'orchard' }
+  it('resolves a zone target by zone id', () => {
+    const target: PanelTarget = { kind: 'zone', zone_id: 'orchard' }
 
     const result = resolveTargets([target], createScene())
 
@@ -70,13 +70,13 @@ describe('resolveTargets', () => {
   it('resolves mixed targets and reports only missing scene-backed targets', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'plant-missing' }
-    const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
+    const missingZone: PanelTarget = { kind: 'zone', zone_id: 'missing-zone' }
 
     const result = resolveTargets(
       [
         speciesTarget('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-2' },
-        { kind: 'zone', zone_name: 'pond-edge' },
+        { kind: 'zone', zone_id: 'pond-edge' },
         MANUAL_TARGET,
         NONE_TARGET,
         missingSpecies,
@@ -115,7 +115,7 @@ describe('resolveTargets', () => {
   it('keeps plant and zone IDs typed when names collide', () => {
     const result = resolveTargets(
       [
-        { kind: 'zone', zone_name: 'plant-1' },
+        { kind: 'zone', zone_id: 'plant-1' },
         { kind: 'placed_plant', plant_id: 'orchard' },
       ],
       createScene({
@@ -124,8 +124,8 @@ describe('resolveTargets', () => {
           { id: 'orchard', canonicalName: 'Prunus avium' },
         ],
         zones: [
-          { name: 'plant-1' },
-          { name: 'orchard' },
+          { id: 'plant-1' },
+          { id: 'orchard' },
         ],
       }),
     )

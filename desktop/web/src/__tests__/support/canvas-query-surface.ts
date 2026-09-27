@@ -99,7 +99,8 @@ export function createTestCanvasQuerySurface({
     getSceneSnapshot: () => scene,
     getSelection: () => currentSelection.map((target) => ({ ...target })),
     getDesignObjectSelection: () => ({
-      editableTargets: [],
+      // The selection as the runtime models it; this surface has no locks.
+      editableTargets: currentSelection.map((target) => ({ ...target })),
       lockedTargets: [],
       blockedTargets: [],
       bounds: null,

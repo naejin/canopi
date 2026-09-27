@@ -147,7 +147,8 @@
       "speciesDetails": "種の詳細",
       "addToCalendar": "カレンダーに追加…",
       "setUnitCost": "単価を設定…",
-      "placePlantsHere": "ここに植物を配置"
+      "placePlantsHere": "ここに植物を配置",
+      "renameZone": "ゾーン名を変更…"
     },
     "rotationHandle": {
       "label": "回転"
@@ -699,7 +700,8 @@
       "measurements_few": "計測 {{count, number}} 件",
       "measurements_many": "計測 {{count, number}} 件",
       "measurements_other": "計測 {{count, number}} 件",
-      "clear": "選択を解除"
+      "clear": "選択を解除",
+      "rename": "名前を変更…"
     },
     "viewChip": "表示",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "{{degrees}}° 減らす",
       "cancel": "キャンセル",
       "rotate": "回転"
+    },
+    "renameZoneDialog": {
+      "title": "ゾーン名を変更",
+      "name": "名前",
+      "hint": "空欄にすると、ゾーンは種類と大きさで表示されます。",
+      "cancel": "キャンセル",
+      "rename": "名前を変更"
     }
   },
   "worldMap": {

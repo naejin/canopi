@@ -135,7 +135,7 @@ async function mountHarness(container: HTMLElement): Promise<void> {
 
 function makeDesign(name = "Demo"): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name,
     description: null,
     plant_species_colors: {},

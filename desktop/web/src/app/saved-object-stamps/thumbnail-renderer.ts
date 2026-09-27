@@ -179,6 +179,7 @@ function zonePreviewPoints(zone: SavedObjectStampZone): readonly ScenePoint[] {
 function sceneZoneFromSavedZone(zone: SavedObjectStampZone): SceneZoneEntity {
   return {
     kind: 'zone',
+    id: zone.id,
     name: zone.name,
     locked: false,
     zoneType: zone.zoneType,

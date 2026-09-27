@@ -147,7 +147,8 @@
       "speciesDetails": "종 상세 정보",
       "addToCalendar": "달력에 추가…",
       "setUnitCost": "단가 설정…",
-      "placePlantsHere": "여기에 식물 배치"
+      "placePlantsHere": "여기에 식물 배치",
+      "renameZone": "구역 이름 바꾸기…"
     },
     "rotationHandle": {
       "label": "회전"
@@ -699,7 +700,8 @@
       "measurements_few": "측정 {{count, number}}개",
       "measurements_many": "측정 {{count, number}}개",
       "measurements_other": "측정 {{count, number}}개",
-      "clear": "선택 해제"
+      "clear": "선택 해제",
+      "rename": "이름 바꾸기…"
     },
     "viewChip": "보기",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "{{degrees}}° 빼기",
       "cancel": "취소",
       "rotate": "회전"
+    },
+    "renameZoneDialog": {
+      "title": "구역 이름 바꾸기",
+      "name": "이름",
+      "hint": "비워 두면 구역이 종류와 크기로 표시됩니다.",
+      "cancel": "취소",
+      "rename": "이름 바꾸기"
     }
   },
   "worldMap": {

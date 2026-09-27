@@ -21,9 +21,9 @@ export interface CalendarTargetLabel {
   readonly unavailable: boolean
 }
 
-/** A zone a Calendar action can target: its name (its identity) and how lists show it. */
+/** A zone a Calendar action can target: its identity and how lists show it. */
 export interface PlanningZoneOption {
-  readonly name: string
+  readonly id: string
   readonly label: string
 }
 
@@ -229,11 +229,11 @@ function projectCalendarTargetLabel(
       }
     }
     case 'zone': {
-      const zone = zones.find((candidate) => candidate.name === target.zone_name)
+      const zone = zones.find((candidate) => candidate.id === target.zone_id)
       return {
         target,
         kind: target.kind,
-        label: zone?.label ?? missingZoneLabel(target.zone_name),
+        label: zone?.label ?? missingZoneLabel(),
         unavailable: zone === undefined,
       }
     }

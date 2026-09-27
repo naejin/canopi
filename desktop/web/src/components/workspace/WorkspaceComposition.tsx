@@ -14,6 +14,7 @@ import {
 } from '../../app/shell/state'
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
 import { SavedViewDialogs } from '../shared/SavedViewDialogs'
+import { RenameZoneDialog } from '../canvas/RenameZoneDialog'
 import { RotateSelectionDialog } from '../canvas/RotateSelectionDialog'
 import { GettingStartedDialog } from '../shared/GettingStartedDialog'
 import { SidePanelDock } from '../shared/SidePanelDock'
@@ -118,6 +119,7 @@ export function WorkspaceDialogs() {
       <CanvasPdfDialog />
       <SavedViewDialogs />
       <RotateSelectionDialog />
+      <RenameZoneDialog />
       <GettingStartedDialog />
     </>
   )

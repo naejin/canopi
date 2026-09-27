@@ -40,7 +40,7 @@ const COMMAND = { label: 'Command', action: vi.fn() }
 
 function design(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Orchard',
     description: null,
     plant_species_colors: {},

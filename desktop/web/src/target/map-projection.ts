@@ -29,7 +29,7 @@ export interface TargetMapPlantRef {
 }
 
 export interface TargetMapZoneRef {
-  readonly name: string
+  readonly id: string
   readonly zoneType?: string
   readonly points: readonly TargetMapProjectionPoint[]
   readonly rotationDeg?: number
@@ -167,7 +167,7 @@ export function projectTargetResolutionToMapFeatures(
         },
         properties: {
           kind: 'zone',
-          sceneId: ref.zone.name,
+          sceneId: ref.zone.id,
         },
       })
       continue
@@ -193,7 +193,7 @@ export function projectTargetResolutionToMapFeatures(
       },
       properties: {
         kind: 'zone',
-        sceneId: ref.zone.name,
+        sceneId: ref.zone.id,
       },
     })
   }
@@ -232,7 +232,8 @@ function getZoneProjectionPoints(zone: TargetZoneRef): readonly TargetMapProject
 function targetZoneToSceneZone(zone: TargetZoneRef): SceneZoneEntity {
   return {
     kind: 'zone',
-    name: zone.name,
+    id: zone.id,
+    name: null,
     locked: false,
     zoneType: zone.zoneType ?? 'polygon',
     points: zone.points ? zone.points.map((point) => ({ x: point.x, y: point.y })) : [],

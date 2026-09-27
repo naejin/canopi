@@ -3,8 +3,14 @@ import type {
   ScenePoint,
 } from './runtime/scene'
 
+/**
+ * Payload format of a saved stamp. Version 2 separates a zone's display name
+ * from its identity (`.canopi` v9); version 1 stamps are refused (ADR 0003).
+ */
+export const SAVED_OBJECT_STAMP_PAYLOAD_VERSION = 2
+
 export interface SavedObjectStampPayload {
-  readonly version: 1
+  readonly version: typeof SAVED_OBJECT_STAMP_PAYLOAD_VERSION
   readonly anchor: ScenePoint
   readonly plants: SavedObjectStampPlant[]
   readonly zones: SavedObjectStampZone[]
@@ -25,7 +31,8 @@ export interface SavedObjectStampPlant {
 
 export interface SavedObjectStampZone {
   readonly id: string
-  readonly name: string
+  /** The zone's display name; null when the user has not named it. */
+  readonly name: string | null
   readonly zoneType: string
   readonly points: ScenePoint[]
   readonly rotationDeg: number
@@ -59,7 +66,7 @@ export function parseSavedObjectStampPayload(raw: string): SavedObjectStampPaylo
 
 export function normalizeSavedObjectStampPayload(data: unknown): SavedObjectStampPayload | null {
   if (!isRecord(data)) return null
-  if (data.version !== 1) return null
+  if (data.version !== SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
   const anchor = pointFromUnknown(data.anchor)
   if (!anchor) return null
 
@@ -70,7 +77,7 @@ export function normalizeSavedObjectStampPayload(data: unknown): SavedObjectStam
   if (!plants || !zones || !annotations || !groups) return null
 
   return {
-    version: 1,
+    version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION,
     anchor,
     plants,
     zones,
@@ -101,10 +108,10 @@ function plantFromUnknown(data: unknown): SavedObjectStampPlant | null {
 function zoneFromUnknown(data: unknown): SavedObjectStampZone | null {
   if (!isRecord(data)) return null
   const id = stringFromUnknown(data.id)
-  const name = stringFromUnknown(data.name)
+  const name = nullableStringFromUnknown(data.name)
   const zoneType = stringFromUnknown(data.zoneType)
   const points = arrayFromUnknown(data.points, pointFromUnknown)
-  if (!id || !name || !zoneType || !points || points.length === 0) return null
+  if (!id || !zoneType || !points || points.length === 0) return null
 
   return {
     id,

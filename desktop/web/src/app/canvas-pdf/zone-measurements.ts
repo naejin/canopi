@@ -24,15 +24,15 @@ export function insideZone(zone: PrintZone, point: PrintPoint): boolean {
 
 /** Physical sizes derive from the captured primitive, never its axis-aligned bounds. */
 export function zoneMeasurements(zones: readonly PrintZone[]): ZoneMeasurements[] {
-  const ellipses = [...zones].filter(z => z.geometry?.kind === 'ellipse').sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x || a.name.localeCompare(b.name))
-  const reserved = new Set(zones.map(z => z.name).filter(n => /^[ZE]\d+$/.test(n))), assigned = new Set<string>()
+  const ellipses = [...zones].filter(z => z.geometry?.kind === 'ellipse').sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x || (a.name ?? '').localeCompare(b.name ?? ''))
+  const reserved = new Set(zones.flatMap(z => z.name !== null && /^[ZE]\d+$/.test(z.name) ? [z.name] : [])), assigned = new Set<string>()
   let polygons = 0
   return zones.flatMap((zone): ZoneMeasurements[] => {
     const geometry = zone.geometry
     if (!geometry) return []
     while (reserved.has(`Z${String(polygons + 1).padStart(2, '0')}`)) polygons++
     const generated = geometry.kind === 'ellipse' ? `E${String(ellipses.indexOf(zone) + 1).padStart(2, '0')}` : `Z${String(++polygons).padStart(2, '0')}`
-    let reference = /^[ZE]\d+$/.test(zone.name) && !assigned.has(zone.name) ? zone.name : generated
+    let reference = zone.name !== null && /^[ZE]\d+$/.test(zone.name) && !assigned.has(zone.name) ? zone.name : generated
     while (assigned.has(reference) || reserved.has(reference) && reference !== zone.name) reference = `Z${String(++polygons).padStart(2, '0')}`
     assigned.add(reference)
     if (geometry.kind !== 'ellipse') {

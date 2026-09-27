@@ -3,15 +3,15 @@ import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/
 import { nearestPlantSpacing } from '../../canvas/plant-spacing'
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
 import { measureZone } from '../../canvas/runtime/zone-geometry'
-import { isGeneratedZoneName } from '../../canvas/runtime/zone-names'
+import { zoneDisplayName } from '../../canvas/runtime/zone-identity'
 
 /**
  * What is selected on the map, for the selection status chip: counts by kind,
  * the species of the selected plants and their spacing, the selected zones
  * with their measures, and the one selected text note or measurement.
  * Read through read-only runtime queries, with geometry in the session
- * plane's metres; groups count as their members. It carries no object ids:
- * a zone's name is its id until the user names it, so `name` is null then.
+ * plane's metres; groups count as their members. It carries no object ids;
+ * a zone's `name` is its display name, null until the user names it.
  */
 export interface MapSelectionSummary {
   readonly plantCount: number
@@ -29,7 +29,7 @@ export interface MapSelectionSummary {
 }
 
 export interface MapSelectionZone {
-  /** The name the user gave the zone; null while its name is its generated id. */
+  /** The name the user gave the zone; null until it has one. */
   readonly name: string | null
   /** `rect`, `ellipse`, `polygon` or `line`. */
   readonly zoneType: string
@@ -65,12 +65,12 @@ export function readMapSelectionSummary(queries: CanvasQuerySurface | null): Map
   if (!queries || selection.length === 0) return null
   const scene = queries.getSceneSnapshot()
   const plantIds = new Set<string>()
-  const zoneNames = new Set<string>()
+  const zoneIds = new Set<string>()
   const noteIds = new Set<string>()
   const measurementIds = new Set<string>()
   const add = (kind: string, id: string) => {
     if (kind === 'plant') plantIds.add(id)
-    else if (kind === 'zone') zoneNames.add(id)
+    else if (kind === 'zone') zoneIds.add(id)
     else if (kind === 'annotation') noteIds.add(id)
     else if (kind === 'measurement-guide') measurementIds.add(id)
   }
@@ -109,10 +109,10 @@ export function readMapSelectionSummary(queries: CanvasQuerySurface | null): Map
   }
 
   const selectedPlants = plantCount >= 2 ? scene.plants.filter((plant) => plantIds.has(plant.id)) : []
-  const zones = scene.zones.filter((zone) => zoneNames.has(zone.name)).map((zone): MapSelectionZone => {
+  const zones = scene.zones.filter((zone) => zoneIds.has(zone.id)).map((zone): MapSelectionZone => {
     const measure = measureZone(zone)
     return {
-      name: isGeneratedZoneName(zone.name) ? null : zone.name,
+      name: zoneDisplayName(zone),
       zoneType: zone.zoneType,
       areaM2: measure?.areaM2 ?? null,
       perimeterM: measure?.perimeterM ?? null,

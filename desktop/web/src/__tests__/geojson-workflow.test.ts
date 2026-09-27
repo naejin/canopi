@@ -61,7 +61,7 @@ function sourceDesign(): CanopiFile {
     ],
     zones: [
       {
-        name: 'Bed',
+        id: 'zone-bed', name: 'Bed',
         locked: false,
         zone_type: 'polygon',
         points: [geoAt(0, 0), geoAt(8, 0), geoAt(8, 6), geoAt(0, 6)],
@@ -70,7 +70,7 @@ function sourceDesign(): CanopiFile {
         notes: null,
       },
       {
-        name: 'Pond',
+        id: 'zone-pond', name: null,
         locked: false,
         zone_type: 'ellipse',
         points: [geoAt(20, 20), geoAt(26, 24)],
@@ -95,7 +95,7 @@ function sourceDesign(): CanopiFile {
       id: 'group',
       locked: false,
       name: 'Kitchen garden',
-      members: [{ kind: 'plant', id: 'apple' }, { kind: 'zone', id: 'Bed' }],
+      members: [{ kind: 'plant', id: 'apple' }, { kind: 'zone', id: 'zone-bed' }],
     }],
   })
 }
@@ -142,8 +142,9 @@ async function exportText(file: CanopiFile): Promise<string> {
   return written[0]!.text
 }
 
-function sortById<T extends { id?: string; name?: string }>(entries: readonly T[]): T[] {
-  return [...entries].sort((a, b) => (a.id ?? a.name ?? '').localeCompare(b.id ?? b.name ?? ''))
+// Imported zones get new ids; the display name (or its absence) and the type order them.
+function sortZones<T extends { name: string | null; zone_type: string }>(entries: readonly T[]): T[] {
+  return [...entries].sort((a, b) => `${a.name ?? ''}:${a.zone_type}`.localeCompare(`${b.name ?? ''}:${b.zone_type}`))
 }
 
 afterEach(async () => {
@@ -210,8 +211,8 @@ describe('GeoJSON workflow through the scene runtime', () => {
     expect(Math.abs(imported.position.lon - original.position.lon)).toBeLessThanOrEqual(1e-9)
     expect(Math.abs(imported.position.lat - original.position.lat)).toBeLessThanOrEqual(1e-9)
 
-    const zones = sortById(after.zones)
-    const sourceZones = sortById(source.zones)
+    const zones = sortZones(after.zones)
+    const sourceZones = sortZones(source.zones)
     expect(zones.map((zone) => [zone.name, zone.zone_type, zone.rotation, zone.fill_color, zone.notes])).toEqual(
       sourceZones.map((zone) => [zone.name, zone.zone_type, zone.rotation, zone.fill_color, zone.notes]),
     )
@@ -231,7 +232,7 @@ describe('GeoJSON workflow through the scene runtime', () => {
     expect(after.groups[0]).toMatchObject({ name: 'Kitchen garden' })
     expect(after.groups[0]!.members).toEqual([
       { kind: 'plant', id: imported.id },
-      { kind: 'zone', id: 'Bed' },
+      { kind: 'zone', id: zones.find((zone) => zone.name === 'Bed')!.id },
     ])
 
     expect(target.commands.history.canUndo.value).toBe(true)

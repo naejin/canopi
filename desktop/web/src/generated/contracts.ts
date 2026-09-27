@@ -567,7 +567,7 @@ export type PaginatedResult<T> = {
 	total_estimate: number,
 };
 
-export type PanelTarget = { kind: "placed_plant"; plant_id: string } | { kind: "species"; canonical_name: string } | { kind: "zone"; zone_name: string } | { kind: "manual" } | { kind: "none" };
+export type PanelTarget = { kind: "placed_plant"; plant_id: string } | { kind: "species"; canonical_name: string } | { kind: "zone"; zone_id: string } | { kind: "manual" } | { kind: "none" };
 
 /**
  *  One typed parameter value, in the units the registry declares (metres, m²,
@@ -1077,7 +1077,8 @@ export type ToolProvenance = {
 };
 
 export type Zone = {
-	name: string,
+	id: string,
+	name: string | null,
 	locked: boolean,
 	zone_type: string,
 	points: GeoPoint[],

@@ -63,7 +63,7 @@ export function createClipboardPayload(
 
   return {
     plants: persisted.plants.filter((plant) => plantIds.has(plant.id)).map(clonePlantEntity),
-    zones: persisted.zones.filter((zone) => zoneIds.has(zone.name)).map(cloneZoneEntity),
+    zones: persisted.zones.filter((zone) => zoneIds.has(zone.id)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
     measurementGuides: persisted.measurementGuides
       .filter((guide) => measurementGuideIds.has(guide.id))
@@ -86,7 +86,7 @@ export function createClipboardArrangementTemplate(
       },
     })),
     zones: payload.zones.map((zone) => ({
-      sourceId: zone.name,
+      sourceId: zone.id,
       entity: cloneZoneEntity(zone),
     })),
     annotations: payload.annotations.map((annotation) => ({

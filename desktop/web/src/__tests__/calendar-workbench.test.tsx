@@ -27,7 +27,7 @@ function action(overrides: Partial<TimelineAction> = {}): TimelineAction {
     start_date: '2026-09-12',
     end_date: '2026-09-13',
     recurrence: 'FREQ=YEARLY',
-    targets: [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'North bed' }],
+    targets: [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'North bed' }],
     depends_on: ['earlier-action'],
     completed: false,
     order: 3,
@@ -37,7 +37,7 @@ function action(overrides: Partial<TimelineAction> = {}): TimelineAction {
 
 function design(name: string, timeline: TimelineAction[] = [action()]): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name,
     description: null,
     plant_species_colors: {},
@@ -149,8 +149,8 @@ describe('Calendar workbench', () => {
     expect(workbench.editor?.draft.targets).toEqual([{ kind: 'placed_plant', plant_id: 'apple-1' }])
 
     act(() => workbench.cancelEditor())
-    await act(async () => { requestCalendarAdd({ kind: 'zone', zoneName: 'North bed' }) })
-    expect(workbench.editor?.draft).toMatchObject({ targetMode: 'zone', targets: [{ kind: 'zone', zone_name: 'North bed' }] })
+    await act(async () => { requestCalendarAdd({ kind: 'zone', zoneId: 'North bed' }) })
+    expect(workbench.editor?.draft).toMatchObject({ targetMode: 'zone', targets: [{ kind: 'zone', zone_id: 'North bed' }] })
   })
 
   it('drops a request from another Design session', async () => {

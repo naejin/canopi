@@ -399,7 +399,7 @@ describe('Saved Object Stamp Workbench', () => {
     }]
     scene.zones = [{
       kind: 'zone',
-      name: 'Source zone',
+      id: 'Source zone', name: 'Source zone',
       locked: true,
       zoneType: 'polygon',
       points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
@@ -472,7 +472,7 @@ describe('Saved Object Stamp Workbench', () => {
     const scene = createDefaultScenePersistedState()
     scene.zones = [{
       kind: 'zone',
-      name: 'Water',
+      id: 'Water', name: 'Water',
       locked: false,
       zoneType: 'polygon',
       points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }],
@@ -715,7 +715,7 @@ describe('Saved Object Stamp Workbench', () => {
       id: 'stamp-1',
       name: 'Apple guild',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -838,7 +838,7 @@ describe('Saved Object Stamp Workbench', () => {
     expect(payload.anchor.x).toBeCloseTo(0, 6)
     expect(payload.anchor.y).toBeCloseTo(0, 6)
     expect(payload).toMatchObject({
-      version: 1,
+      version: 2,
       plants: [{
         id: 'source-plant',
         canonicalName: 'Malus domestica',

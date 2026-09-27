@@ -66,7 +66,7 @@ export function projectSceneSelectionEntityIds(
     if (isSelected({ kind: 'plant', id: plant.id })) selectedPlantIds.add(plant.id)
   }
   for (const zone of persisted.zones) {
-    if (isSelected({ kind: 'zone', id: zone.name })) selectedZoneIds.add(zone.name)
+    if (isSelected({ kind: 'zone', id: zone.id })) selectedZoneIds.add(zone.id)
   }
   for (const annotation of persisted.annotations) {
     if (isSelected({ kind: 'annotation', id: annotation.id })) {
@@ -117,13 +117,13 @@ export function getSelectedTopLevelTargets(
 
   for (const zone of persisted.zones) {
     if (
-      !selectedKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))
-      || groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name }))
+      !selectedKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))
+      || groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id }))
     ) continue
-    const key = `zone:${zone.name}`
+    const key = `zone:${zone.id}`
     if (seen.has(key)) continue
     seen.add(key)
-    targets.push({ kind: 'zone', id: zone.name })
+    targets.push({ kind: 'zone', id: zone.id })
   }
 
   for (const annotation of persisted.annotations) {
@@ -257,7 +257,7 @@ export function getTargetBounds(
   }
 
   const zone = target.kind === 'zone'
-    ? persisted.zones.find((entry) => entry.name === target.id)
+    ? persisted.zones.find((entry) => entry.id === target.id)
     : null
   if (zone && zone.points.length > 0) {
     const bounds = getZoneWorldBounds(zone)
@@ -374,7 +374,7 @@ function sceneContainsTarget(
 ): boolean {
   if (target.kind === 'group') return persisted.groups.some((group) => group.id === target.id)
   if (target.kind === 'plant') return persisted.plants.some((plant) => plant.id === target.id)
-  if (target.kind === 'zone') return persisted.zones.some((zone) => zone.name === target.id)
+  if (target.kind === 'zone') return persisted.zones.some((zone) => zone.id === target.id)
   if (target.kind === 'annotation') {
     return persisted.annotations.some((annotation) => annotation.id === target.id)
   }
@@ -432,7 +432,7 @@ function resolveSceneObjectGroupMemberLayer(
     return persisted.plants.some((plant) => plant.id === member.id) ? 'plants' : null
   }
   if (member.kind === 'zone') {
-    return persisted.zones.some((zone) => zone.name === member.id) ? 'zones' : null
+    return persisted.zones.some((zone) => zone.id === member.id) ? 'zones' : null
   }
   return persisted.annotations.some((annotation) => annotation.id === member.id) ? 'annotations' : null
 }

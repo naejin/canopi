@@ -218,7 +218,8 @@ function clonePlantEntity(plant: ScenePlantEntity): ScenePlantEntity {
 function hydrateZoneEntity(zone: Zone, geo: SceneGeoFrame): SceneZoneEntity {
   return {
     kind: 'zone',
-    name: zone.name,
+    id: zone.id,
+    name: zone.name ?? null,
     locked: zone.locked ?? false,
     zoneType: zone.zone_type,
     points: zone.zone_type === 'ellipse' && zone.points.length >= 2
@@ -232,6 +233,7 @@ function hydrateZoneEntity(zone: Zone, geo: SceneGeoFrame): SceneZoneEntity {
 
 function serializeZoneEntity(zone: SceneZoneEntity, geo: SceneGeoFrame): Zone {
   return {
+    id: zone.id,
     name: zone.name,
     locked: zone.locked,
     zone_type: zone.zoneType,

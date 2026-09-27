@@ -3,6 +3,8 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
 import { SelectionChip } from '../components/canvas/SelectionChip'
+import { RenameZoneDialog } from '../components/canvas/RenameZoneDialog'
+import { renameZoneDialog } from '../app/rename-zone/state'
 import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import { plantFinderMapMatches } from '../app/plant-finder/map-matches'
 import { SceneStore } from '../canvas/runtime/scene/store'
@@ -10,7 +12,6 @@ import type { SceneDesignObjectSelection } from '../canvas/runtime/scene'
 import type { CanvasCommandSurface } from '../canvas/runtime/runtime'
 import { setCanvasRuntimeSurfaces } from '../canvas/session'
 import { selectedObjectIds } from '../canvas/session-state'
-import { generatedZoneName, isGeneratedZoneName } from '../canvas/runtime/zone-names'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
@@ -59,17 +60,17 @@ describe('Selection chip', () => {
         quantity: 1,
       }))
       draft.zones = [{
-        kind: 'zone', name: 'Z04', locked: false, zoneType: 'polygon', rotationDeg: 0, fillColor: null, notes: null,
+        kind: 'zone', id: 'zone-z04', name: 'Z04', locked: false, zoneType: 'polygon', rotationDeg: 0, fillColor: null, notes: null,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
       }, {
-        // Drawn with the Rectangle tool and never named: its name is its generated id.
-        kind: 'zone', name: RECT_ID, locked: false, zoneType: 'rect', rotationDeg: 30, fillColor: null, notes: null,
+        // Drawn with the Rectangle tool and never named.
+        kind: 'zone', id: RECT_ID, name: null, locked: false, zoneType: 'rect', rotationDeg: 30, fillColor: null, notes: null,
         points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
       }, {
-        kind: 'zone', name: `${ELLIPSE_ID} copy`, locked: false, zoneType: 'ellipse', rotationDeg: 0, fillColor: null, notes: null,
+        kind: 'zone', id: ELLIPSE_ID, name: null, locked: false, zoneType: 'ellipse', rotationDeg: 0, fillColor: null, notes: null,
         points: [{ x: 50, y: 50 }, { x: 10, y: 5 }],
       }, {
-        kind: 'zone', name: LINE_ID, locked: false, zoneType: 'line', rotationDeg: 0, fillColor: null, notes: null,
+        kind: 'zone', id: LINE_ID, name: null, locked: false, zoneType: 'line', rotationDeg: 0, fillColor: null, notes: null,
         points: [{ x: 0, y: 0 }, { x: 30, y: 40 }],
       }]
       draft.annotations = [{
@@ -177,7 +178,7 @@ describe('Selection chip', () => {
 
   it('names a zone by its name, with its area and perimeter', async () => {
     await act(() => render(<SelectionChip />, container))
-    await select([{ kind: 'zone', id: 'Z04' }])
+    await select([{ kind: 'zone', id: 'zone-z04' }])
     // A right triangle with 10 m legs: 50 m², 10 + 10 + 14.1 m around.
     expect(status()).toBe('Zone · Z04 · 50 m² · 34.1 m')
   })
@@ -186,13 +187,38 @@ describe('Selection chip', () => {
     await act(() => render(<SelectionChip />, container))
     await select([{ kind: 'zone', id: RECT_ID }])
     expect(status()).toBe('Rectangle zone · 120 m² · 44 m')
-    await select([{ kind: 'zone', id: `${ELLIPSE_ID} copy` }])
+    await select([{ kind: 'zone', id: ELLIPSE_ID }])
     // π · 10 · 5 m², and Ramanujan's perimeter of a 20 × 10 m ellipse.
     expect(status()).toBe('Ellipse zone · 157 m² · 48.4 m')
     await select([{ kind: 'zone', id: LINE_ID }])
     expect(status()).toBe('Line zone · 50 m')
     await act(() => { locale.value = 'fr' })
     expect(status()).toBe('Zone linéaire · 50 m')
+  })
+
+  it('offers Rename… for one zone, which renames it by its id through the runtime', async () => {
+    const renameZone = vi.fn<CanvasCommandSurface['sceneEdits']['renameZone']>(() => true)
+    setCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection, renameZone } }),
+      queries,
+      documents: createTestCanvasDocumentSurface(),
+    })
+    await act(() => render(<><SelectionChip /><RenameZoneDialog /></>, container))
+    await select([{ kind: 'zone', id: 'zone-z04' }, { kind: 'zone', id: RECT_ID }])
+    expect(buttons()).toEqual(['Clear selection'])
+
+    await select([{ kind: 'zone', id: RECT_ID }])
+    await act(() => chip()!.querySelector<HTMLButtonElement>('button')!.click())
+    const input = document.querySelector<HTMLInputElement>('[role="dialog"] input')!
+    expect(input.value).toBe('')
+    await act(() => {
+      input.value = '  Kitchen bed '
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(() => input.form!.requestSubmit())
+
+    expect(renameZone).toHaveBeenCalledWith(RECT_ID, 'Kitchen bed')
+    expect(renameZoneDialog.value).toBeNull()
   })
 
   it('names a text note by its text and a measurement by its length', async () => {
@@ -205,11 +231,11 @@ describe('Selection chip', () => {
 
   it('names a zone and summarises a mixed selection', async () => {
     await act(() => render(<SelectionChip />, container))
-    await select([{ kind: 'zone', id: 'Z04' }])
+    await select([{ kind: 'zone', id: 'zone-z04' }])
     expect(status()).toContain('Zone · Z04')
-    expect(buttons()).toEqual(['Clear selection'])
+    expect(buttons()).toEqual(['Rename…', 'Clear selection'])
 
-    await select([{ kind: 'plant', id: 'apricot-1' }, { kind: 'plant', id: 'fig-1' }, { kind: 'zone', id: 'Z04' }, { kind: 'annotation', id: 'note-1' }])
+    await select([{ kind: 'plant', id: 'apricot-1' }, { kind: 'plant', id: 'fig-1' }, { kind: 'zone', id: 'zone-z04' }, { kind: 'annotation', id: 'note-1' }])
     expect(status()).toBe('4 selected · 2 plants · 1 zone · 1 text note')
   })
 
@@ -236,14 +262,14 @@ describe('Selection chip', () => {
     const scene = queries.getSceneSnapshot()
     const ids = [
       ...scene.plants.map((plant) => plant.id),
-      ...scene.zones.map((zone) => zone.name).filter((name) => name !== 'Z04'),
+      ...scene.zones.map((zone) => zone.id),
       ...scene.annotations.map((note) => note.id),
       ...scene.measurementGuides.map((guide) => guide.id),
       ...scene.groups.map((group) => group.id),
     ]
     const targets: SceneDesignObjectSelection = [
       ...scene.plants.map((plant) => ({ kind: 'plant' as const, id: plant.id })),
-      ...scene.zones.map((zone) => ({ kind: 'zone' as const, id: zone.name })),
+      ...scene.zones.map((zone) => ({ kind: 'zone' as const, id: zone.id })),
       ...scene.annotations.map((note) => ({ kind: 'annotation' as const, id: note.id })),
       ...scene.measurementGuides.map((guide) => ({ kind: 'measurement-guide' as const, id: guide.id })),
       { kind: 'group' as const, id: 'guild' },
@@ -259,18 +285,6 @@ describe('Selection chip', () => {
       const text = chip()!.textContent ?? ''
       for (const id of ids) expect(text).not.toContain(id)
       expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/i)
-    }
-  })
-})
-
-describe('generated zone names', () => {
-  it('tells a drawn zone\'s generated id, and pasted copies of it, from a name the user gave', () => {
-    expect(isGeneratedZoneName(generatedZoneName())).toBe(true)
-    expect(isGeneratedZoneName(`${RECT_ID} copy`)).toBe(true)
-    expect(isGeneratedZoneName(`${RECT_ID} copy 3`)).toBe(true)
-    expect(isGeneratedZoneName('0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b')).toBe(true)
-    for (const name of ['Z04', 'Zone 1', 'zone-garden', 'Verger syntropique', `${RECT_ID} (north)`]) {
-      expect(isGeneratedZoneName(name)).toBe(false)
     }
   })
 })

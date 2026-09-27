@@ -225,7 +225,7 @@ describe('CanvasPanel basemap feedback', () => {
 
 function demoDesign(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Demo',
     description: null,
     plant_species_colors: {},

@@ -26,7 +26,7 @@ export function createZoomCalibrationScene(name: ZoomCalibrationScene): ScenePer
   const width = columns * spacing + 8
   const height = rows * spacing + 10
   scene.zones = [{
-    kind: 'zone', name: 'Planting bed', locked: false, zoneType: 'rect',
+    kind: 'zone', id: 'Planting bed', name: 'Planting bed', locked: false, zoneType: 'rect',
     points: [{ x: 2, y: 3 }, { x: width, y: 3 }, { x: width, y: height }, { x: 2, y: height }],
     rotationDeg: 0, fillColor: null, notes: null,
   }]

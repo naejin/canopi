@@ -51,7 +51,7 @@ function createOverlayScene() {
     {
       kind: 'zone',
       locked: false,
-      name: 'orchard',
+      id: 'orchard', name: 'orchard',
       zoneType: 'polygon',
       rotationDeg: 0,
       points: [
@@ -75,7 +75,7 @@ function createSnapshot(
       getSceneSnapshot: () => scene,
     },
     location: { lat: 48.8566, lon: 2.3522 },
-    hoveredTargets: [{ kind: 'zone', zone_name: 'orchard' }],
+    hoveredTargets: [{ kind: 'zone', zone_id: 'orchard' }],
     selectedTargets: [{ kind: 'placed_plant', plant_id: 'plant-1' }],
     paintRevision: 0,
     ...overrides,

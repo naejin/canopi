@@ -230,7 +230,7 @@ describe('command registry canvas tool switching', () => {
 
   it('routes file commands through document-session actions', () => {
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -277,7 +277,7 @@ describe('command registry canvas tool switching', () => {
     expect(saveCommand.disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -331,7 +331,7 @@ describe('command registry canvas tool switching', () => {
     expect(zoomIn().disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -402,7 +402,7 @@ describe('command registry canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
 
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},

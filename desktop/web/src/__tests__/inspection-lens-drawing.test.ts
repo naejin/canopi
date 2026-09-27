@@ -56,7 +56,7 @@ describe('drawInspectionLensScene', () => {
     canvas.context.stroke.mockImplementation(() => { widths.push(canvas.context.lineWidth) })
     draw(canvas.context, createRendererSnapshot({
       viewport: { x: 0, y: 0, scale: 20 },
-      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+      zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: null, notes: null }],
     }), { dpr: 2 })
     expect(widths).toEqual([0.2, 0.1])

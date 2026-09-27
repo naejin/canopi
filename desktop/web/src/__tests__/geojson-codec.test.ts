@@ -33,7 +33,7 @@ function designObjects(): GeoJsonDesignObjects {
     ],
     zones: [
       {
-        name: 'Bed A',
+        id: 'Bed A', name: 'Bed A',
         locked: false,
         zone_type: 'polygon',
         points: [geoAt(0, 0), geoAt(10, 0), geoAt(10, 8)],
@@ -42,7 +42,7 @@ function designObjects(): GeoJsonDesignObjects {
         notes: 'Mulched',
       },
       {
-        name: 'Pond',
+        id: 'Pond', name: 'Pond',
         locked: false,
         zone_type: 'ellipse',
         points: [geoAt(20, 20), geoAt(30, 26)],
@@ -51,7 +51,7 @@ function designObjects(): GeoJsonDesignObjects {
         notes: null,
       },
       {
-        name: 'Terrace',
+        id: 'Terrace', name: 'Terrace',
         locked: false,
         zone_type: 'rect',
         points: [geoAt(40, 0), geoAt(50, 0), geoAt(50, 5), geoAt(40, 5)],
@@ -60,7 +60,7 @@ function designObjects(): GeoJsonDesignObjects {
         notes: null,
       },
       {
-        name: 'Hedge line',
+        id: 'Hedge line', name: 'Hedge line',
         locked: false,
         zone_type: 'line',
         points: [geoAt(0, 30), geoAt(12, 31), geoAt(24, 30)],
@@ -217,8 +217,9 @@ describe('GeoJSON codec import', () => {
     expect(imported.objects.plants.map((plant) => plant.canonical_name)).toEqual(['Corylus avellana', 'Juglans regia'])
     expect(imported.objects.plants[1]).toMatchObject({ position: { lon: 10.1, lat: 20.1 }, quantity: 2, common_name: null })
     expect(imported.objects.annotations[0]).toMatchObject({ text: 'Well', annotation_type: 'text', font_size: 16 })
+    // An unnamed feature gives an unnamed zone; lists name it by its type and size.
     expect(imported.objects.zones[0]).toMatchObject({
-      name: 'Zone 1',
+      name: null,
       zone_type: 'polygon',
       points: [{ lon: 10, lat: 20 }, { lon: 10.001, lat: 20 }, { lon: 10.001, lat: 20.001 }],
     })

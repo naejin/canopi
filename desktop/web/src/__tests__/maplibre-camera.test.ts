@@ -90,7 +90,7 @@ function createScene(): ScenePersistedState {
       {
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zoneType: 'rect',
         rotationDeg: 0,
         points: [

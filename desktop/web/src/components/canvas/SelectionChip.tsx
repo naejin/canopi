@@ -2,6 +2,7 @@ import { canvasCommandDefinitions } from '../../app/canvas-commands'
 import { useMapSelectionSummary, type MapSelectionSummary } from '../../app/map-selection/summary'
 import { describeMapSelection } from '../../app/map-selection/summary-text'
 import { ariaKeyShortcuts } from '../../app/shell-commands/shortcut-text'
+import { loneEditableZoneId, openRenameZoneDialog } from '../../app/rename-zone/state'
 import { currentCanvasQuerySurface, currentCanvasSceneEditCommandSurface } from '../../canvas/session'
 import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
@@ -13,18 +14,22 @@ import styles from './SelectionChip.module.css'
  * 120 m² · 44 m") in the visible map area, above the view chip and
  * the zoom group, so it never meets the top finder chip. It reads the
  * selection through read-only runtime queries and offers Select all of this
- * species and Clear selection; the rest lives in the right-click menu.
+ * species, Rename… for a lone zone and Clear selection; the rest lives in the
+ * right-click menu.
  */
 const SELECT_SAME_SPECIES = canvasCommandDefinitions.find((definition) =>
   definition.kind === 'edit' && definition.id === 'select-same-species')!
 
 export function SelectionChip() {
   const summary = useMapSelectionSummary()
-  const overview = currentCanvasQuerySurface.value?.viewport.value.mode === 'overview'
+  const queries = currentCanvasQuerySurface.value
+  const overview = queries?.viewport.value.mode === 'overview'
   if (!summary || overview) return null
   const { head, details } = describeMapSelection(summary, locale.value)
   const [only] = summary.species
   const wholeSpecies = summary.species.length === 1 && isOnlyPlants(summary) && only!.selectedCount < only!.designCount
+  // The summary hook re-renders the chip on selection and scene changes (locks included).
+  const renameZoneId = loneEditableZoneId(queries?.getDesignObjectSelection() ?? null)
   return (
     <div className={styles.chip} role="group" aria-label={t('canvas.selectionChip.label')} data-selection-chip="bottom">
       <span className={styles.text} role="status" aria-live="polite">
@@ -41,6 +46,20 @@ export function SelectionChip() {
           onClick={() => currentCanvasSceneEditCommandSurface.value?.selectSameSpecies(only!.canonicalName)}
         >
           {t(SELECT_SAME_SPECIES.labelKey)}
+        </button>
+      )}
+      {renameZoneId !== null && (
+        <button
+          type="button"
+          className={styles.button}
+          aria-haspopup="dialog"
+          onClick={() => openRenameZoneDialog({
+            zoneId: renameZoneId,
+            name: summary.zones[0]?.name ?? null,
+            rename: (zoneId, name) => currentCanvasSceneEditCommandSurface.value?.renameZone(zoneId, name),
+          })}
+        >
+          {t('canvas.selectionChip.rename')}
         </button>
       )}
       <button

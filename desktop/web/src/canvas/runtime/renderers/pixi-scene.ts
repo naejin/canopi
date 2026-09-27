@@ -210,7 +210,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   stage.addChild(selectionLabelLayer)
 
   const presentation = new SceneViewportPresentation()
-  const zoneGraphicsByName = new Map<string, Graphics>()
+  const zoneGraphicsById = new Map<string, Graphics>()
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const measurementGuideLabelById = new Map<string, Text>()
   const plantGraphicsById = new Map<string, Graphics>()
@@ -246,7 +246,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
     },
     renderScene(nextSnapshot) {
       const { plantNameLabels } = presentation.setScene(nextSnapshot)
-      syncZones(zonesLayer, zoneGraphicsByName, nextSnapshot, true)
+      syncZones(zonesLayer, zoneGraphicsById, nextSnapshot, true)
       syncMeasurementGuides(
         createText,
         measurementGuideLayer,
@@ -289,7 +289,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       const current = presentation.setViewport(viewport)
       if (!current) return
       const { snapshot, plantNameLabels } = current
-      syncZones(zonesLayer, zoneGraphicsByName, snapshot, false)
+      syncZones(zonesLayer, zoneGraphicsById, snapshot, false)
       syncMeasurementGuides(
         createText,
         measurementGuideLayer,
@@ -530,7 +530,7 @@ function drawMeasurementGuideTick(
 
 function syncZones(
   world: Container,
-  zoneGraphicsByName: Map<string, Graphics>,
+  zoneGraphicsById: Map<string, Graphics>,
   snapshot: SceneRendererSnapshot,
   reconcileRemoved: boolean,
 ): void {
@@ -539,31 +539,31 @@ function syncZones(
   world.alpha = layer.opacity
   if (!layer.visible) return
 
-  const nextZoneNames = new Set<string>()
+  const nextZoneIds = new Set<string>()
   for (const zone of snapshot.scene.zones) {
-    nextZoneNames.add(zone.name)
-    const graphics = zoneGraphicsByName.get(zone.name) ?? new Graphics()
-    if (!zoneGraphicsByName.has(zone.name)) {
-      zoneGraphicsByName.set(zone.name, graphics)
+    nextZoneIds.add(zone.id)
+    const graphics = zoneGraphicsById.get(zone.id) ?? new Graphics()
+    if (!zoneGraphicsById.has(zone.id)) {
+      zoneGraphicsById.set(zone.id, graphics)
       world.addChild(graphics)
     }
     drawZone(
       graphics,
       zone,
-      snapshot.selectedZoneIds.has(zone.name),
-      snapshot.highlightedZoneIds.has(zone.name),
-      hoverStateForTarget(snapshot, 'zone', zone.name),
+      snapshot.selectedZoneIds.has(zone.id),
+      snapshot.highlightedZoneIds.has(zone.id),
+      hoverStateForTarget(snapshot, 'zone', zone.id),
       snapshot.viewport.scale,
     )
     graphics.visible = true
   }
 
   if (!reconcileRemoved) return
-  for (const [zoneName, graphics] of zoneGraphicsByName) {
-    if (nextZoneNames.has(zoneName)) continue
+  for (const [zoneId, graphics] of zoneGraphicsById) {
+    if (nextZoneIds.has(zoneId)) continue
     graphics.removeFromParent()
     graphics.destroy()
-    zoneGraphicsByName.delete(zoneName)
+    zoneGraphicsById.delete(zoneId)
   }
 }
 

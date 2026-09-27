@@ -21,7 +21,7 @@ describe('design notebook workbench', () => {
 
   function testDesign(): CanopiFile {
     return {
-      version: 8,
+      version: 9,
       name: 'Current Design',
       description: null,
       plant_species_colors: {},

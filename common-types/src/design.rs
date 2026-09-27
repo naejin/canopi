@@ -4,7 +4,7 @@ use specta::Type;
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
-pub const CURRENT_CANOPI_FILE_VERSION: u32 = 8;
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 9;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
@@ -458,7 +458,13 @@ pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Zone {
-    pub name: String,
+    // Stable identity: Calendar and Budget targets, groups and saved views
+    // refer to it. Renaming a zone never changes it.
+    pub id: String,
+    // Display name the user gave; `None` until then, and the interface labels
+    // the zone by its type and size.
+    #[cfg_attr(feature = "design-schema", schemars(default))]
+    pub name: Option<String>,
     #[cfg_attr(feature = "design-schema", schemars(default))]
     pub locked: bool,
     pub zone_type: String,
@@ -476,7 +482,8 @@ pub struct Zone {
 
 #[derive(Deserialize)]
 struct ZoneInput {
-    name: String,
+    id: String,
+    name: Option<String>,
     #[serde(default)]
     locked: bool,
     zone_type: String,
@@ -494,6 +501,7 @@ impl<'de> Deserialize<'de> for Zone {
     {
         let input = ZoneInput::deserialize(deserializer)?;
         Ok(Self {
+            id: input.id,
             name: input.name,
             locked: input.locked,
             zone_type: input.zone_type,
@@ -580,7 +588,7 @@ pub enum PanelTarget {
     #[serde(rename = "species")]
     Species { canonical_name: String },
     #[serde(rename = "zone")]
-    Zone { zone_name: String },
+    Zone { zone_id: String },
     #[default]
     #[serde(rename = "manual")]
     Manual,
@@ -762,7 +770,7 @@ mod tests {
 
     fn geo_file(plants: serde_json::Value) -> CanopiFile {
         serde_json::from_value(json!({
-            "version": 8,
+            "version": 9,
             "name": "Geo",
             "plant_species_colors": {},
             "layers": [],
@@ -818,7 +826,7 @@ mod tests {
     #[test]
     fn design_positions_reject_local_metre_points() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 8,
+            "version": 9,
             "name": "Metres",
             "plant_species_colors": {},
             "layers": [],
@@ -837,7 +845,7 @@ mod tests {
     #[test]
     fn design_objects_missing_lock_state_load_unlocked_and_serialize_explicitly() {
         let file: CanopiFile = serde_json::from_value(json!({
-            "version": 8,
+            "version": 9,
             "name": "Implicit locks",
             "description": null,
             "plant_species_colors": {},
@@ -859,7 +867,7 @@ mod tests {
             ],
             "zones": [
                 {
-                    "name": "zone-1",
+                    "id": "zone-1",
                     "zone_type": "rect",
                     "points": [
                         { "lon": 13.0, "lat": 23.0 },
@@ -913,10 +921,48 @@ mod tests {
         assert_eq!(value["groups"][0]["locked"], json!(false));
     }
 
+    fn zone_file(zone: serde_json::Value) -> Result<CanopiFile, serde_json::Error> {
+        serde_json::from_value(json!({
+            "version": 9,
+            "name": "Zones",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [],
+            "zones": [zone],
+            "created_at": "2026-09-27T00:00:00.000Z",
+            "updated_at": "2026-09-27T00:00:00.000Z"
+        }))
+    }
+
+    #[test]
+    fn zones_keep_a_stable_id_beside_an_optional_display_name() {
+        let named = zone_file(json!({
+            "id": "zone-1",
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": []
+        }))
+        .expect("a named zone loads");
+        assert_eq!(named.zones[0].id, "zone-1");
+        assert_eq!(named.zones[0].name.as_deref(), Some("North bed"));
+
+        let unnamed = zone_file(json!({ "id": "zone-2", "zone_type": "line", "points": [] }))
+            .expect("an unnamed zone loads");
+        assert_eq!(unnamed.zones[0].name, None);
+        let value = serde_json::to_value(&unnamed).expect("design should serialize");
+        assert_eq!(value["zones"][0]["id"], json!("zone-2"));
+        assert_eq!(value["zones"][0]["name"], json!(null));
+
+        // A v8 zone, whose name was its identity, has no id and is refused.
+        assert!(
+            zone_file(json!({ "name": "North bed", "zone_type": "rect", "points": [] })).is_err()
+        );
+    }
+
     #[test]
     fn general_deserialization_rejects_obsolete_object_group_shape() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 8,
+            "version": 9,
             "name": "Legacy groups require ingestion",
             "plant_species_colors": {},
             "layers": [],
@@ -926,7 +972,7 @@ mod tests {
                 "position": { "lon": 13.0, "lat": 23.0 }
             }],
             "zones": [{
-                "name": "zone-1",
+                "id": "zone-1",
                 "zone_type": "rect",
                 "points": []
             }],

@@ -43,7 +43,7 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
@@ -225,7 +225,7 @@ describe('scene runtime presentation controller', () => {
     const { controller, sceneStore } = createController()
     sceneStore.updatePersisted((draft) => {
       draft.plants[0] = { ...draft.plants[0]!, id: 'shared-id' }
-      draft.zones[0] = { ...draft.zones[0]!, name: 'shared-id' }
+      draft.zones[0] = { ...draft.zones[0]!, id: 'shared-id', name: 'shared-id' }
     })
     sceneStore.setHoveredTarget({ kind: 'zone', id: 'shared-id' })
 
@@ -257,7 +257,7 @@ describe('scene runtime presentation controller', () => {
         layer.name === 'zones' ? { ...layer, locked: false } : layer
       ))
       draft.zones = draft.zones.map((zone) => (
-        zone.name === 'zone-1' ? { ...zone, locked: true } : zone
+        zone.id === 'zone-1' ? { ...zone, locked: true } : zone
       ))
     })
 

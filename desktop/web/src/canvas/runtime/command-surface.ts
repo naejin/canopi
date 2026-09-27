@@ -102,6 +102,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'unlockAll'
     | 'groupSelected'
     | 'ungroupSelected'
+    | 'renameZone'
     | 'rotateSelected'
     | 'setSelectedPlantColor'
     | 'setSelectedPlantSymbol'
@@ -217,6 +218,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       unlockAll: () => this.runSpatialEdit(() => this.options.mutations.unlockAll()),
       groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
       ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
+      renameZone: (zoneId, name) => this.options.mutations.renameZone(zoneId, name),
       rotateSelected: (degrees) => this.runSpatialEdit(() => this.options.mutations.rotateSelected(degrees)),
       nudgeSelected: (delta) => this.nudgeSelected(delta),
       endNudge: (options) => this.endNudge(options),
@@ -340,7 +342,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       const receipt = createSceneArrangementPlacement({ sceneEdits: this.options.sceneEdits }).place({
         template: {
           plants: scene.plants.map((entity) => ({ sourceId: entity.id, entity })),
-          zones: scene.zones.map((entity) => ({ sourceId: entity.name, entity })),
+          zones: scene.zones.map((entity) => ({ sourceId: entity.id, entity })),
           annotations: scene.annotations.map((entity) => ({ sourceId: entity.id, entity })),
           measurementGuides: scene.measurementGuides.map((entity) => ({ sourceId: entity.id, entity })),
           groups: scene.groups.map((entity) => ({ sourceId: entity.id, entity })),

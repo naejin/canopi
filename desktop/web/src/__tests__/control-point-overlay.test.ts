@@ -295,7 +295,8 @@ function createHarness(
     if (kind === 'zone') {
       draft.zones = [{
         kind: 'zone',
-        name: target.id,
+        id: target.id,
+        name: null,
         locked: false,
         zoneType: 'rect',
         rotationDeg: 0,

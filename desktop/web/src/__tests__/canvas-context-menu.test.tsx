@@ -50,6 +50,7 @@ function createCommands(): CanvasContextMenuCommands {
     unlockSelected: vi.fn(),
     groupSelected: vi.fn(),
     ungroupSelected: vi.fn(),
+    renameZone: vi.fn(() => true),
     rotateSelected: vi.fn(),
   }
 }

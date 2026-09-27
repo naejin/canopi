@@ -50,7 +50,7 @@ describe('browser Design Session lifecycle', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(design).not.toHaveProperty('spatial_frame')
     expect(design).toMatchObject({
-      version: 8,
+      version: 9,
       name: 'Untitled',
       description: null,
       plant_species_colors: {},
@@ -131,17 +131,17 @@ describe('browser Design Session lifecycle', () => {
       markDesignSessionDirtyForTest(store)
       await expect(controller.continuousSave.flush()).resolves.toBe(true)
 
-      expect(lastComposed.current?.version).toBe(8)
+      expect(lastComposed.current?.version).toBe(9)
       expect(lastComposed.current).not.toHaveProperty('spatial_frame')
       const draft = appDataStore.loadDraft('draft-canonical-new-design')
-      expect(draft?.version).toBe(8)
+      expect(draft?.version).toBe(9)
       expect(draft).not.toHaveProperty('spatial_frame')
 
       await controller.downloadCanopi()
       const download = downloadCanopiFile.mock.calls[0]?.[0]
       if (!download) throw new Error('browser download was not captured')
       const downloaded = JSON.parse(download.text) as Record<string, unknown>
-      expect(downloaded.version).toBe(8)
+      expect(downloaded.version).toBe(9)
       expect(downloaded).not.toHaveProperty('spatial_frame')
       expect(decodeCanopiDesign(downloaded).layers.find((layer) => layer.name === 'zones')?.visible).toBe(true)
     } finally {
@@ -206,15 +206,15 @@ describe('browser Design Session lifecycle', () => {
 
   it.each([
     {
-      label: 'a v6 Design',
-      content: () => ({ ...makeCanopiFile(), version: 6 }),
-      message: '$.version: unsupported Canopi Design version 6; current version is 8',
+      label: 'a v7 Design',
+      content: () => ({ ...makeCanopiFile(), version: 7 }),
+      message: '$.version: unsupported Canopi Design version 7; current version is 9',
       kind: 'unsupported_version',
     },
     {
-      label: 'a v7 Design',
-      content: () => ({ ...makeCanopiFile(), version: 7 }),
-      message: '$.version: unsupported Canopi Design version 7; current version is 8',
+      label: 'a v8 Design',
+      content: () => ({ ...makeCanopiFile(), version: 8 }),
+      message: '$.version: unsupported Canopi Design version 8; current version is 9',
       kind: 'unsupported_version',
     },
     {
@@ -2123,7 +2123,7 @@ function memoryStorage(): MemoryStorage {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Test Design',
     description: null,
     plant_species_colors: {},

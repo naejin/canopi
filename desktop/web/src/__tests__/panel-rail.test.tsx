@@ -27,7 +27,7 @@ describe('Panel rail', () => {
     activePanel.value = 'canvas'
     sidePanel.value = null
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},

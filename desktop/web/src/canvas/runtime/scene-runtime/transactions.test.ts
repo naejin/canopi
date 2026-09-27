@@ -240,7 +240,7 @@ describe('Scene Edit single-writer admission', () => {
     const file = makeFile()
     file.plants[0]!.id = 'shared-id'
     file.zones = [{
-      name: 'shared-id',
+      id: 'shared-id', name: 'shared-id',
       zone_type: 'rect',
       rotation: 0,
       points: [geoAt(0, 0), geoAt(5, 0), geoAt(5, 5), geoAt(0, 5)],

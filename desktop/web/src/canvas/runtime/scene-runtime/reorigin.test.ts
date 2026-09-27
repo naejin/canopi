@@ -56,7 +56,7 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'bed',
+        id: 'bed', name: 'bed',
         zone_type: 'rect',
         rotation: 0,
         points: [geoAt(0, 0), geoAt(8, 0), geoAt(8, 6), geoAt(0, 6)],
@@ -65,7 +65,7 @@ function makeFile(): CanopiFile {
         locked: false,
       },
       {
-        name: 'pond',
+        id: 'pond', name: 'pond',
         zone_type: 'ellipse',
         rotation: 15,
         points: [geoAt(20, 30), geoAt(26, 34)],

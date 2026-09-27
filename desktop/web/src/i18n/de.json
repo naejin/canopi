@@ -147,7 +147,8 @@
       "speciesDetails": "Artdetails",
       "addToCalendar": "Zum Kalender hinzufügen…",
       "setUnitCost": "Stückkosten festlegen…",
-      "placePlantsHere": "Pflanzen hier setzen"
+      "placePlantsHere": "Pflanzen hier setzen",
+      "renameZone": "Zone umbenennen…"
     },
     "rotationHandle": {
       "label": "Drehen"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} Messungen",
       "measurements_many": "{{count, number}} Messungen",
       "measurements_other": "{{count, number}} Messungen",
-      "clear": "Auswahl aufheben"
+      "clear": "Auswahl aufheben",
+      "rename": "Umbenennen…"
     },
     "viewChip": "Ansicht",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "{{degrees}}° abziehen",
       "cancel": "Abbrechen",
       "rotate": "Drehen"
+    },
+    "renameZoneDialog": {
+      "title": "Zone umbenennen",
+      "name": "Name",
+      "hint": "Leer lassen, um die Zone nach Art und Größe zu benennen.",
+      "cancel": "Abbrechen",
+      "rename": "Umbenennen"
     }
   },
   "worldMap": {

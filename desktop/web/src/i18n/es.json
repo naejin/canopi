@@ -147,7 +147,8 @@
       "speciesDetails": "Detalles de la especie",
       "addToCalendar": "Añadir al calendario…",
       "setUnitCost": "Fijar el coste unitario…",
-      "placePlantsHere": "Colocar plantas aquí"
+      "placePlantsHere": "Colocar plantas aquí",
+      "renameZone": "Renombrar zona…"
     },
     "rotationHandle": {
       "label": "Girar"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} medidas",
       "measurements_many": "{{count, number}} de medidas",
       "measurements_other": "{{count, number}} medidas",
-      "clear": "Borrar la selección"
+      "clear": "Borrar la selección",
+      "rename": "Renombrar…"
     },
     "viewChip": "Vista",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "Restar {{degrees}}°",
       "cancel": "Cancelar",
       "rotate": "Girar"
+    },
+    "renameZoneDialog": {
+      "title": "Renombrar zona",
+      "name": "Nombre",
+      "hint": "Déjelo vacío para nombrar la zona por su tipo y tamaño.",
+      "cancel": "Cancelar",
+      "rename": "Renombrar"
     }
   },
   "worldMap": {

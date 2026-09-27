@@ -18,7 +18,8 @@ export interface PrintPlant {
   readonly pinnedName: boolean
 }
 export interface PrintZone {
-  readonly name: string
+  /** The zone's display name; null until the user names it. */
+  readonly name: string | null
   readonly path: string
   readonly bounds: PrintBounds
   readonly fill: string | null

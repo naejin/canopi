@@ -15,7 +15,7 @@ import { geoAt } from './support/geo-design'
 
 const ORIGIN = { lon: 2.294481, lat: 48.858370 }
 
-function v7Design(overrides: Partial<CanopiFile> = {}): CanopiFile {
+function currentDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
     version: CURRENT_CANOPI_FILE_VERSION,
     name: 'Geo garden',
@@ -31,7 +31,7 @@ function v7Design(overrides: Partial<CanopiFile> = {}): CanopiFile {
     ],
     zones: [
       {
-        name: 'bed', locked: false, zone_type: 'rect',
+        id: 'bed', name: 'bed', locked: false, zone_type: 'rect',
         points: [
           { lon: 2.29440, lat: 48.85845 },
           { lon: 2.29450, lat: 48.85845 },
@@ -41,7 +41,7 @@ function v7Design(overrides: Partial<CanopiFile> = {}): CanopiFile {
         rotation: 30, fill_color: null, notes: null,
       },
       {
-        name: 'pond', locked: false, zone_type: 'ellipse',
+        id: 'pond', name: 'pond', locked: false, zone_type: 'ellipse',
         points: [{ lon: 2.29455, lat: 48.85842 }, { lon: 2.29462, lat: 48.85836 }],
         rotation: 0, fill_color: null, notes: null,
       },
@@ -83,13 +83,13 @@ function sceneFields(file: CanopiFile): string {
 
 describe('geolocated design codec', () => {
   it('writes every loaded position back byte-identically when nothing changed', () => {
-    const file = v7Design()
+    const file = currentDesign()
     const store = new SceneStore(file)
     expect(sceneFields(store.toCanopiFile())).toBe(sceneFields(file))
   })
 
   it('centres the session plane on the objects', () => {
-    const { geo, persisted } = hydrateSceneFromDesign(v7Design())
+    const { geo, persisted } = hydrateSceneFromDesign(currentDesign())
     const xs = persisted.plants.map((p) => p.position.x)
     expect(Math.abs(geo.plane.origin.lon - 2.29451)).toBeLessThan(0.0001)
     expect(Math.min(...xs)).toBeLessThan(0)
@@ -97,7 +97,7 @@ describe('geolocated design codec', () => {
   })
 
   it('rewrites only the edited plant, rounded to 1e-9 degree', () => {
-    const file = v7Design()
+    const file = currentDesign()
     const store = new SceneStore(file)
     store.updatePersisted((draft) => {
       draft.plants[0]!.position = { x: draft.plants[0]!.position.x + 1.25, y: draft.plants[0]!.position.y }
@@ -117,7 +117,7 @@ describe('geolocated design codec', () => {
   })
 
   it('keeps every stored lon/lat unchanged across a re-origin beyond 10 km', () => {
-    const file = v7Design()
+    const file = currentDesign()
     const store = new SceneStore(file)
     const farCentre = store.sessionPlane.toGeo({ x: 12_000, y: -3_000 })
     store.commitReorigin(store.beginReorigin(farCentre))
@@ -129,9 +129,9 @@ describe('geolocated design codec', () => {
   })
 
   it('stores ellipses as opposite unrotated bounding-box corners', () => {
-    const file = v7Design()
+    const file = currentDesign()
     const { persisted, geo } = hydrateSceneFromDesign(file)
-    const pond = persisted.zones.find((zone) => zone.name === 'pond')!
+    const pond = persisted.zones.find((zone) => zone.id === 'pond')!
     const [first, second] = file.zones[1]!.points.map((point) => geo.plane.toPlane(point))
     expect(pond.points[0]!.x).toBeCloseTo((first!.x + second!.x) / 2, 9)
     expect(pond.points[1]!.x).toBeCloseTo((second!.x - first!.x) / 2, 9)
@@ -139,7 +139,7 @@ describe('geolocated design codec', () => {
   })
 
   it('stores ruler guides as a latitude or a longitude', () => {
-    const { persisted, geo } = hydrateSceneFromDesign(v7Design())
+    const { persisted, geo } = hydrateSceneFromDesign(currentDesign())
     const horizontal = persisted.guides.find((guide) => guide.axis === 'h')!
     const vertical = persisted.guides.find((guide) => guide.axis === 'v')!
     expect(geo.plane.toGeo({ x: 0, y: horizontal.position }).lat).toBeCloseTo(48.8584, 10)
@@ -164,18 +164,18 @@ describe('geolocated design codec', () => {
     // A former metre fixture authored around 45°N, converted by the test-only helper.
     const origin = { lon: 5.72, lat: 45.18 }
     const rect = [{ x: 0, y: 0 }, { x: 12.5, y: 0 }, { x: 12.5, y: 8 }, { x: 0, y: 8 }]
-    const file = v7Design({
+    const file = currentDesign({
       plants: [],
       annotations: [],
       measurement_guides: [],
       extra: {},
       zones: [
         {
-          name: 'rect', locked: false, zone_type: 'rect', rotation: 0, fill_color: null, notes: null,
+          id: 'rect', name: 'rect', locked: false, zone_type: 'rect', rotation: 0, fill_color: null, notes: null,
           points: rect.map((point) => geoAt(point.x, point.y, origin)),
         },
         {
-          name: 'ellipse', locked: false, zone_type: 'ellipse', rotation: 0, fill_color: null, notes: null,
+          id: 'ellipse', name: 'ellipse', locked: false, zone_type: 'ellipse', rotation: 0, fill_color: null, notes: null,
           points: [geoAt(20, 0, origin), geoAt(26, 4, origin)],
         },
       ],
@@ -189,9 +189,9 @@ describe('geolocated design codec', () => {
   })
 
   it('serializes with an explicit frame so saved content never depends on hidden state', () => {
-    const { persisted, geo } = hydrateSceneFromDesign(v7Design())
+    const { persisted, geo } = hydrateSceneFromDesign(currentDesign())
     const saved = serializeScenePersistedState(persisted, geo)
-    expect(saved.version).toBe(8)
+    expect(saved.version).toBe(9)
     expect('spatial_frame' in saved).toBe(false)
   })
 })

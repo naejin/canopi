@@ -134,12 +134,12 @@ export function createObjectStampTool(context: ObjectStampToolContext): ObjectSt
     }
 
     if (hit.kind === 'zone') {
-      const zone = scene.zones.find((entry) => entry.name === hit.id)
+      const zone = scene.zones.find((entry) => entry.id === hit.id)
       if (!zone) return
 
       objectStampSource = {
         kind: 'zone',
-        sourceId: zone.name,
+        sourceId: zone.id,
         zone: cloneZoneForObjectStamp(zone),
         anchorWorld: { ...world },
       }
@@ -430,7 +430,7 @@ function cloneGroupMembersForObjectStamp(
       continue
     }
 
-    const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.name === member.id) : null
+    const zone = member.kind === 'zone' ? scene.zones.find((entry) => entry.id === member.id) : null
     if (zone) {
       zones.push(cloneZoneForObjectStamp(zone))
       continue
@@ -477,7 +477,7 @@ function objectStampArrangementTemplate(source: ObjectStampSource): SceneArrange
       entity: clonePlantForObjectStamp(plant),
     })),
     zones: source.zones.map((zone) => ({
-      sourceId: zone.name,
+      sourceId: zone.id,
       entity: cloneZoneForObjectStamp(zone),
     })),
     annotations: source.annotations.map((annotation) => ({

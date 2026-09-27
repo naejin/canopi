@@ -66,6 +66,7 @@ export type CanvasContextMenuCommands = Pick<
   | 'unlockSelected'
   | 'groupSelected'
   | 'ungroupSelected'
+  | 'renameZone'
   | 'rotateSelected'
 >
 

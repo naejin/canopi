@@ -26,7 +26,7 @@ describe('Web Layers', () => {
 
   function mount(lidar: CanopiFile['lidar']): void {
     const file: CanopiFile = {
-      version: 8, name: 'Web', description: null, plant_species_colors: {}, plant_species_symbols: {},
+      version: 9, name: 'Web', description: null, plant_species_colors: {}, plant_species_symbols: {},
       plant_species_codes: {}, layers: [], plants: [], zones: [], annotations: [], measurement_guides: [],
       consortiums: [], groups: [], timeline: [], budget: [], budget_currency: 'EUR', created_at: '', updated_at: '',
       extra: {}, lidar,

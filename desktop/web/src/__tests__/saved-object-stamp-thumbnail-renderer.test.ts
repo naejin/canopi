@@ -7,7 +7,7 @@ import { createSavedObjectStampThumbnailSignature } from '../app/saved-object-st
 
 function payload(overrides: Partial<SavedObjectStampPayload> = {}): SavedObjectStampPayload {
   return {
-    version: 1,
+    version: 2,
     anchor: { x: 0, y: 0 },
     plants: [],
     zones: [],

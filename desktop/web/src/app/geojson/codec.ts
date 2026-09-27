@@ -157,14 +157,14 @@ export function encodeDesignGeoJson(objects: GeoJsonDesignObjects): GeoJsonFeatu
       notes: zone.notes,
       rotation: zone.rotation,
       locked: zone.locked,
-      group_ids: groupIds('zone', zone.name),
+      group_ids: groupIds('zone', zone.id),
     }
     if (zone.zone_type === 'rect' || zone.zone_type === 'ellipse') {
       properties.canopi_points = zone.points.map(position)
     }
     features.push({
       type: 'Feature',
-      id: zone.name,
+      id: zone.id,
       geometry: zoneGeometry(zone),
       properties,
     })
@@ -259,6 +259,7 @@ function drawnZoneOutline(zone: Zone): GeoJsonPosition[] | null {
 function zoneEntityFrame(zone: Zone) {
   return {
     kind: 'zone' as const,
+    id: zone.id,
     name: zone.name,
     locked: zone.locked,
     zoneType: zone.zone_type,
@@ -284,7 +285,7 @@ function closeRing(points: GeoJsonPosition[]): GeoJsonPosition[] {
 
 export interface GeoJsonDecodeOptions {
   /** Identity for features without an `id`; defaults to a per-kind counter. */
-  readonly createId?: (kind: 'plant' | 'annotation' | 'measurement-guide') => string
+  readonly createId?: (kind: 'plant' | 'zone' | 'annotation' | 'measurement-guide') => string
 }
 
 export function parseDesignGeoJson(text: string, options: GeoJsonDecodeOptions = {}): GeoJsonDecodeResult {
@@ -385,9 +386,10 @@ export function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOption
           })
           return
         }
-        const name = ids.claim(zoneName(properties, featureId, zones.length))
+        const id = ids.claim(featureId ?? createId('zone'))
         zones.push({
-          name,
+          id,
+          name: nonEmptyString(properties.name),
           locked: booleanOr(properties.locked, false),
           zone_type: 'line',
           points: line,
@@ -395,7 +397,7 @@ export function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOption
           fill_color: stringOrNull(properties.fill_color),
           notes: stringOrNull(properties.notes),
         })
-        addMemberships(properties, { kind: 'zone', id: name })
+        addMemberships(properties, { kind: 'zone', id })
         return
       }
       case 'Polygon': {
@@ -404,9 +406,10 @@ export function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOption
         const framed = zoneType === 'rect' || zoneType === 'ellipse'
           ? readFramePoints(properties.canopi_points, zoneType, index)
           : null
-        const name = ids.claim(zoneName(properties, featureId, zones.length))
+        const id = ids.claim(featureId ?? createId('zone'))
         zones.push({
-          name,
+          id,
+          name: nonEmptyString(properties.name),
           locked: booleanOr(properties.locked, false),
           zone_type: framed ? zoneType! : 'polygon',
           points: framed ?? outline,
@@ -414,7 +417,7 @@ export function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOption
           fill_color: stringOrNull(properties.fill_color),
           notes: stringOrNull(properties.notes),
         })
-        addMemberships(properties, { kind: 'zone', id: name })
+        addMemberships(properties, { kind: 'zone', id })
         return
       }
       default:
@@ -520,10 +523,6 @@ function readFramePoints(value: unknown, zoneType: 'rect' | 'ellipse', index: nu
 // A Canopi polygon keeps its stored rotation; any other outline is drawn as-is.
 function polygonRotation(zoneType: string | null, rotation: unknown): number {
   return zoneType === 'polygon' ? finiteOr(rotation, 0) : 0
-}
-
-function zoneName(properties: Record<string, unknown>, featureId: string | null, index: number): string {
-  return nonEmptyString(properties.name) ?? featureId ?? `Zone ${index + 1}`
 }
 
 function annotationText(properties: Record<string, unknown>, featureId: string | null): string {

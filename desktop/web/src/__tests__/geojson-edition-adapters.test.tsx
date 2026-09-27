@@ -35,7 +35,7 @@ import type { CanopiFile } from '../types/design'
 
 function emptyDesign(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Adapters',
     description: null,
     plant_species_colors: {},

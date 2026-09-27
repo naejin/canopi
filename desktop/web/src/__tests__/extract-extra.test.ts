@@ -10,7 +10,7 @@ import { extractDocumentExtra as extractExtra } from '../app/contracts/document'
 describe('extractExtra', () => {
   it('returns empty object for known-only keys', () => {
     const raw = {
-      version: 8,
+      version: 9,
       name: 'test',
       description: null,
       plant_species_colors: {},

@@ -40,7 +40,7 @@ describe('overlay stroke casing', () => {
 
   it('cases Zone strokes in the dark overlay casing', () => {
     const visual = resolveZoneVisual({
-      kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+      kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
       points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], fillColor: null, notes: null,
     })
     expect(visual.stroke).toBe(getCanvasColor('zone-stroke'))

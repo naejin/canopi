@@ -11,7 +11,7 @@ import type { CanopiFile, SavedView, Story, StoryStep } from '../types/design'
 
 function design(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Views',
     description: null,
     plant_species_colors: {},

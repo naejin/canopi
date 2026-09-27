@@ -109,7 +109,7 @@ function makeFile(): CanopiFile {
     ],
     zones: [
       {
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zone_type: 'rect',
         rotation: 0,
         points: [
@@ -863,6 +863,43 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('renames a zone as one undoable edit that keeps its id', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(makeFile())
+    const edits = runtime.commandSurface.sceneEdits
+    const zone = () => runtime.querySurface.getSceneSnapshot().zones[0]!
+
+    expect(edits.renameZone('zone-1', '  North bed ')).toBe(true)
+    expect(zone()).toMatchObject({ id: 'zone-1', name: 'North bed' })
+    expect(edits.renameZone('zone-1', 'North bed')).toBe(false)
+    expect(edits.renameZone('zone-missing', 'Pond')).toBe(false)
+
+    // A blank name clears it; lists then name the zone by its type and size.
+    expect(edits.renameZone('zone-1', '   ')).toBe(true)
+    expect(zone()).toMatchObject({ id: 'zone-1', name: null })
+
+    runtime.commandSurface.history.undo()
+    expect(zone()).toMatchObject({ id: 'zone-1', name: 'North bed' })
+    runtime.commandSurface.history.undo()
+    expect(zone()).toMatchObject({ id: 'zone-1', name: null })
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
+  it('does not rename a locked zone or a zone on a locked layer', () => {
+    const file = makeFile()
+    for (const locked of [
+      { ...file, zones: [{ ...file.zones[0]!, locked: true }] },
+      { ...file, layers: file.layers.map((layer) => layer.name === 'zones' ? { ...layer, locked: true } : layer) },
+    ]) {
+      const runtime = new SceneCanvasRuntime()
+      runtime.documentSurface.loadDocument(locked)
+      expect(runtime.commandSurface.sceneEdits.renameZone('zone-1', 'North bed')).toBe(false)
+      expect(runtime.querySurface.getSceneSnapshot().zones[0]!.name).toBeNull()
+      runtime.destroy()
+    }
+  })
+
   it('captures print content only after an edit settles without changing history or dirty state', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -1179,7 +1216,7 @@ describe('scene canvas runtime', () => {
       },
     ]
     file.zones = file.zones.map((zone) =>
-      zone.name === 'zone-1' ? { ...zone, locked: true } : zone,
+      zone.id === 'zone-1' ? { ...zone, locked: true } : zone,
     )
     runtime.documentSurface.loadDocument(file)
 
@@ -1501,7 +1538,7 @@ describe('scene canvas runtime', () => {
   it('publishes the UI selection mirror when only the selected target kind changes', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(file)
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
@@ -1528,7 +1565,7 @@ describe('scene canvas runtime', () => {
   it('returns an owned typed selection snapshot with stable collision order', () => {
     const file = makeFile()
     file.plants[0] = { ...file.plants[0]!, id: 'shared-id' }
-    file.zones[0] = { ...file.zones[0]!, name: 'shared-id' }
+    file.zones[0] = { ...file.zones[0]!, id: 'shared-id' }
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(file)
     const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
@@ -1947,7 +1984,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime()
     const file = makeFile()
     file.zones = [{
-      name: 'zone-1',
+      id: 'zone-1', name: null,
       zone_type: 'rect',
       rotation: 0,
       points: [at(10, 10), at(110, 10), at(110, 90), at(10, 90)],
@@ -1986,7 +2023,7 @@ describe('scene canvas runtime', () => {
     renderer.renderScene.mockClear()
     hoveredPanelTargets.value = [
       speciesTarget('Malus domestica'),
-      { kind: 'zone', zone_name: 'zone-1' },
+      { kind: 'zone', zone_id: 'zone-1' },
       { kind: 'placed_plant', plant_id: 'missing-plant' },
     ]
 
@@ -2012,7 +2049,7 @@ describe('scene canvas runtime', () => {
     renderer.renderScene.mockClear()
     selectedPanelTargets.value = [
       speciesTarget('Malus domestica'),
-      { kind: 'zone', zone_name: 'zone-1' },
+      { kind: 'zone', zone_id: 'zone-1' },
     ]
 
     await vi.waitFor(() => {
@@ -2028,7 +2065,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('keeps typed panel target highlights separate when plant IDs and zone names collide', async () => {
+  it('keeps typed panel target highlights separate when plant and zone ids collide', async () => {
     const runtime = createRuntimeWithAppPanelTargets()
     runtime.documentSurface.loadDocument({
       ...makeFile(),
@@ -2043,14 +2080,14 @@ describe('scene canvas runtime', () => {
       zones: [
         {
           ...makeFile().zones[0]!,
-          name: 'colliding-id',
+          id: 'colliding-id',
         },
       ],
     })
     const { renderer } = await initRuntimeWithStubbedRenderer(runtime)
 
     renderer.renderScene.mockClear()
-    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'colliding-id' }]
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'colliding-id' }]
 
     await vi.waitFor(() => {
       expect(renderer.renderScene).toHaveBeenCalled()
@@ -2069,7 +2106,7 @@ describe('scene canvas runtime', () => {
 
     renderer.renderScene.mockClear()
     selectedPanelTargets.value = [speciesTarget('Malus domestica')]
-    hoveredPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
+    hoveredPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
 
     await vi.waitFor(() => {
       const snapshot = renderer.renderScene.mock.calls[renderer.renderScene.mock.calls.length - 1]?.[0]
@@ -2101,7 +2138,7 @@ describe('scene canvas runtime', () => {
     ;(runtime as any)._interaction._deps.setHoveredTarget(plantTarget('plant-1'))
     expect(panelTargetProbe.canvasHoverTargets).toEqual([speciesTarget('Malus domestica')])
 
-    panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_name: 'zone-1' }])
+    panelTargetProbe.setPanelOriginTargets([{ kind: 'zone', zone_id: 'zone-1' }])
     runtime.documentSurface.replaceDocument(
       makeFile(),
       createCanvasDocumentReplacementToken(),
@@ -2345,7 +2382,7 @@ describe('scene canvas runtime', () => {
     selectedObjectIds.value = new Set(['plant-1'])
     hoveredPanelTargets.value = [speciesTarget('Malus domestica')]
     selectedPanelTargetOrigin.value = 'timeline'
-    selectedPanelTargets.value = [{ kind: 'zone', zone_name: 'zone-1' }]
+    selectedPanelTargets.value = [{ kind: 'zone', zone_id: 'zone-1' }]
     runtime.commandSurface.sceneEdits.selectAll()
 
     renderer.renderScene.mockClear()
@@ -2450,7 +2487,7 @@ describe('scene canvas runtime', () => {
     runtime.documentSurface.loadDocument(file)
     setInteractionViewport(runtime)
     selectSavedObjectStampSourceForTests({
-      version: 1,
+      version: 2,
       anchor: { x: 10, y: 10 },
       plants: [{
         id: 'plant-1',

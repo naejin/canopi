@@ -30,7 +30,7 @@ function createScene() {
     {
       kind: 'zone',
       locked: false,
-      name: 'orchard',
+      id: 'orchard', name: 'orchard',
       zoneType: 'polygon',
       rotationDeg: 0,
       points: [
@@ -44,7 +44,7 @@ function createScene() {
     {
       kind: 'zone',
       locked: false,
-      name: 'hedgerow',
+      id: 'hedgerow', name: 'hedgerow',
       zoneType: 'line',
       rotationDeg: 0,
       points: [
@@ -62,7 +62,7 @@ describe('panel-target map overlays', () => {
   it('builds a stable MapLibre contract for mixed projected features', () => {
     const index = targets.indexScene(createScene())
     const projection = targets.resolve(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }],
       index,
     )
 
@@ -86,7 +86,7 @@ describe('panel-target map overlays', () => {
 
   it('renders Linear Zone targets through line overlays without fill', () => {
     const projection = targets.resolve(
-      [{ kind: 'zone', zone_name: 'hedgerow' }],
+      [{ kind: 'zone', zone_id: 'hedgerow' }],
       targets.indexScene(createScene()),
     )
 

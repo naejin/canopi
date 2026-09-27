@@ -33,7 +33,7 @@ function emptyScene(from: { x: number; y: number }, to: { x: number; y: number }
     plantSpeciesColors: {}, plantSpeciesSymbols: {}, plantSpeciesCodes: {},
     layers: [], plants: [], annotations: [], measurementGuides: [], groups: [], guides: [],
     zones: [{
-      kind: 'zone', locked: false, name: 'bed', zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
+      kind: 'zone', locked: false, id: 'bed', name: 'bed', zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
       points: [from, { x: to.x, y: from.y }, to, { x: from.x, y: to.y }],
     }],
   }

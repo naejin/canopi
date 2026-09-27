@@ -11,7 +11,7 @@ import { geoAt } from './support/geo-design'
 // Minimal fixture covering one of each entity type, with both populated and null optional fields.
 // Non-canvas sections are placeholders here because the scene codec no longer owns them.
 const FIXTURE: CanopiFile = {
-  version: 8,
+  version: 9,
   name: 'Round-trip test',
   description: 'A test design',
   plant_species_colors: {
@@ -60,7 +60,7 @@ const FIXTURE: CanopiFile = {
   ],
   zones: [
     {
-      name: 'Orchard',
+      id: 'Orchard', name: 'Orchard',
       zone_type: 'planting',
       rotation: 0,
       points: [geoAt(0, 0), geoAt(100, 0), geoAt(100, 100)],
@@ -119,7 +119,7 @@ describe('file format round-trip', () => {
     expect(serialized.updated_at).toBe(now.toISOString())
     expect(serialized).toEqual({
       ...FIXTURE,
-      version: 8,
+      version: 9,
       name: 'Untitled',
       description: null,
       created_at: now.toISOString(),
@@ -130,7 +130,7 @@ describe('file format round-trip', () => {
   })
 
   it('round-trips a serialized current-version Design through JSON and the Design decoder', () => {
-    expect(CURRENT_CANOPI_FILE_VERSION).toBe(8)
+    expect(CURRENT_CANOPI_FILE_VERSION).toBe(9)
     const hydrated = hydrateSceneFromDesign(FIXTURE)
     const serialized = serializeScenePersistedState(hydrated.persisted, hydrated.geo, {
       now: new Date('2026-04-09T12:00:00.000Z'),
@@ -138,7 +138,7 @@ describe('file format round-trip', () => {
 
     const decoded = decodeCanopiDesign(JSON.parse(JSON.stringify(encodeCanopiDesign(serialized))))
 
-    expect(decoded.version).toBe(8)
+    expect(decoded.version).toBe(9)
     expect(decoded.plants.map((plant) => plant.position)).toEqual(FIXTURE.plants.map((plant) => plant.position))
     expect(decoded.zones).toEqual(serialized.zones)
     expect(decoded.annotations).toEqual(serialized.annotations)
@@ -168,8 +168,8 @@ describe('file format round-trip', () => {
 
   it('refuses a Design of the previous format version', () => {
     const { extra: _extra, ...wire } = conformance.accepted_documents['views-and-stories']
-    expect(() => decodeCanopiDesign({ ...wire, version: 7 })).toThrow(
-      '$.version: unsupported Canopi Design version 7; current version is 8',
+    expect(() => decodeCanopiDesign({ ...wire, version: 8 })).toThrow(
+      '$.version: unsupported Canopi Design version 8; current version is 9',
     )
   })
 })

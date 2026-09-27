@@ -20,7 +20,7 @@ function action(overrides: Partial<TimelineAction> = {}): TimelineAction {
 
 function design(timeline: TimelineAction[]): CanopiFile {
   return {
-    version: 8, name: 'Calendar empty test', description: null, plant_species_colors: {}, layers: [], plants: [],
+    version: 9, name: 'Calendar empty test', description: null, plant_species_colors: {}, layers: [], plants: [],
     zones: [], annotations: [], consortiums: [], groups: [], timeline, budget: [], budget_currency: 'EUR', extra: {},
     created_at: '', updated_at: '',
   }

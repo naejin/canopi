@@ -4,7 +4,6 @@ import type { PdfTextEngine } from './text'
 import { insideZone, type ZoneMeasurements } from './zone-measurements'
 import { MM, pathOp, rectPath, textOp } from './page-drawing'
 import { fieldLabels } from './labels'
-import { isGeneratedZoneName } from '../../canvas/runtime/zone-names'
 
 export function groupedGuides(zones: readonly ZoneMeasurements[], guides: CanvasPrintSnapshot['measurements']): ReadonlyMap<string, string> {
   const result = new Map<string, string>()
@@ -49,7 +48,7 @@ export function overviewMeasurements(zones: readonly ZoneMeasurements[], guides:
     }
     const values = [...counts].sort((a, b) => a[0] - b[0]).map(([n, count]) => compact.format(n) + (count > 1 ? ` ×${count}` : '')).join(' · ') || '—'
     const lines = text.wrap(values, 7.2, frame!.width * .4)
-    const name = item.zone.name !== item.reference && !isGeneratedZoneName(item.zone.name) ? item.zone.name : ''
+    const name = item.zone.name !== null && item.zone.name !== item.reference ? item.zone.name : ''
     const names = name ? text.wrap(name, 7, frame!.width * .16) : []
     const rows = Math.max(item.lengths.length, lines.length, names.length + 1)
     room(Math.min(rows * 9 + 3, frame!.height - 60))

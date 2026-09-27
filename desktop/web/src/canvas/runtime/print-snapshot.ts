@@ -3,6 +3,7 @@ import { resolvePlantDisplayColor, type PlantPresentationContext } from './plant
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
 import { getPlantSymbolArt, plantSymbolPath, type PlantSymbolArt } from './plant-symbol-recipes'
 import { getRectangularZoneCorners, getZoneWorldBounds } from './zone-geometry'
+import { zoneDisplayName } from './zone-identity'
 
 export function buildCanvasPrintSnapshot(
   scene: ScenePersistedState,
@@ -29,7 +30,7 @@ export function buildCanvasPrintSnapshot(
       const geometry: PrintZone['geometry'] = zone.zoneType === 'ellipse' && points.length >= 2
         ? { kind: 'ellipse', center: { ...points[0]! }, radii: { x: Math.abs(points[1]!.x), y: Math.abs(points[1]!.y) }, rotation: zone.rotationDeg }
         : { kind: zone.zoneType === 'line' ? 'line' : zone.zoneType === 'rect' ? 'rect' : 'polygon', points: points.map(p => ({ ...p })) }
-      return [{ name: zone.name, path, bounds, geometry, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
+      return [{ name: zoneDisplayName(zone), path, bounds, geometry, fill: zone.zoneType === 'line' ? null : zone.fillColor }]
     }),
     annotations: scene.annotations.map((annotation) => ({ id: annotation.id, position: { ...annotation.position },
       text: annotation.text, fontSize: annotation.fontSize, rotation: annotation.rotationDeg ?? 0 })),

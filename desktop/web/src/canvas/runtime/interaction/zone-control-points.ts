@@ -52,14 +52,14 @@ export function createZoneControlPoints(
     rootDataAttribute: 'zoneControlPoints',
     activeDataAttribute: 'zoneControlPointActive',
     getEligibleEntity: eligibleSelectedZone,
-    getEntityId: (zone) => zone.name,
-    ownsControlPoint: (zone, point) => zone.name === point.zoneId,
+    getEntityId: (zone) => zone.id,
+    ownsControlPoint: (zone, point) => zone.id === point.zoneId,
     cloneEntity: cloneZone,
     createControlPoints: createZoneControlPointsForZone,
     reshape: reshapeZone,
     entitiesEqual: zonesEqual,
     writeDraft(draft, zoneId, nextZone) {
-      draft.zones = draft.zones.map((zone) => zone.name === zoneId ? nextZone : zone)
+      draft.zones = draft.zones.map((zone) => zone.id === zoneId ? nextZone : zone)
     },
     decorateHandle(handle, point, screen) {
       handle.dataset.zoneControlPoint = point.id
@@ -83,15 +83,15 @@ export function createZoneControlPoints(
     ) return null
     const target = selection.editableTargets[0]
     if (target?.kind !== 'zone') return null
-    return options.getSceneStore().persisted.zones.find((zone) => zone.name === target.id) ?? null
+    return options.getSceneStore().persisted.zones.find((zone) => zone.id === target.id) ?? null
   }
 }
 
 function createZoneControlPointsForZone(zone: SceneZoneEntity): ZoneControlPoint[] {
   if (zone.zoneType === 'line' && zone.points.length >= 2) {
     return zone.points.slice(0, 2).map((point, index) => ({
-      id: `${zone.name}:line:${index}`,
-      zoneId: zone.name,
+      id: `${zone.id}:line:${index}`,
+      zoneId: zone.id,
       kind: 'line-endpoint',
       index,
       world: point,
@@ -100,8 +100,8 @@ function createZoneControlPointsForZone(zone: SceneZoneEntity): ZoneControlPoint
 
   if (zone.zoneType === 'polygon' && zone.points.length >= 3) {
     return zone.points.map((point, index) => ({
-      id: `${zone.name}:polygon:${index}`,
-      zoneId: zone.name,
+      id: `${zone.id}:polygon:${index}`,
+      zoneId: zone.id,
       kind: 'polygon-vertex',
       index,
       world: point,
@@ -111,8 +111,8 @@ function createZoneControlPointsForZone(zone: SceneZoneEntity): ZoneControlPoint
   if (zone.zoneType === 'rect') {
     const corners = getRectangularZoneCorners(zone)
     return corners?.map((point, index) => ({
-      id: `${zone.name}:rect:${index}`,
-      zoneId: zone.name,
+      id: `${zone.id}:rect:${index}`,
+      zoneId: zone.id,
       kind: 'rect-corner',
       index,
       world: point,
@@ -124,29 +124,29 @@ function createZoneControlPointsForZone(zone: SceneZoneEntity): ZoneControlPoint
     const radii = zone.points[1]!
     return [
       {
-        id: `${zone.name}:ellipse:east`,
-        zoneId: zone.name,
+        id: `${zone.id}:ellipse:east`,
+        zoneId: zone.id,
         kind: 'ellipse-east',
         index: 0,
         world: offsetRotated(center, { x: Math.abs(radii.x), y: 0 }, zone.rotationDeg),
       },
       {
-        id: `${zone.name}:ellipse:west`,
-        zoneId: zone.name,
+        id: `${zone.id}:ellipse:west`,
+        zoneId: zone.id,
         kind: 'ellipse-west',
         index: 1,
         world: offsetRotated(center, { x: -Math.abs(radii.x), y: 0 }, zone.rotationDeg),
       },
       {
-        id: `${zone.name}:ellipse:north`,
-        zoneId: zone.name,
+        id: `${zone.id}:ellipse:north`,
+        zoneId: zone.id,
         kind: 'ellipse-north',
         index: 2,
         world: offsetRotated(center, { x: 0, y: -Math.abs(radii.y) }, zone.rotationDeg),
       },
       {
-        id: `${zone.name}:ellipse:south`,
-        zoneId: zone.name,
+        id: `${zone.id}:ellipse:south`,
+        zoneId: zone.id,
         kind: 'ellipse-south',
         index: 3,
         world: offsetRotated(center, { x: 0, y: Math.abs(radii.y) }, zone.rotationDeg),

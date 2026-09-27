@@ -5,7 +5,7 @@ import type { CanopiFile } from '../types/design'
 
 function design(name: string): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name,
     description: null,
     plant_species_colors: {},

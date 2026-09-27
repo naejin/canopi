@@ -50,7 +50,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
     ],
     zones: [
       {
-        name: 'orchard',
+        id: 'orchard',
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },
@@ -59,7 +59,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
         ],
       },
       {
-        name: 'too-small',
+        id: 'too-small',
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },
@@ -73,7 +73,7 @@ function createScene(overrides: Partial<TargetMapProjectionScene> = {}): TargetM
 describe('projectTargetsToMapFeatures', () => {
   it('projects an identity resolution through the map adapter interface', () => {
     const resolution = targetIdentity.resolve(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }],
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }],
       targetIdentity.indexScene(createScene()),
     )
 
@@ -126,7 +126,7 @@ describe('projectTargetsToMapFeatures', () => {
   it('projects a zone target to a closed polygon and keeps colliding IDs typed', () => {
     const result = projectTargetsToMapFeatures(
       [
-        { kind: 'zone', zone_name: 'plant-1' },
+        { kind: 'zone', zone_id: 'plant-1' },
         { kind: 'placed_plant', plant_id: 'orchard' },
       ],
       createScene({
@@ -136,7 +136,7 @@ describe('projectTargetsToMapFeatures', () => {
         ],
         zones: [
           {
-            name: 'plant-1',
+            id: 'plant-1',
             points: [
               { x: 0, y: 0 },
               { x: 4, y: 0 },
@@ -144,7 +144,7 @@ describe('projectTargetsToMapFeatures', () => {
             ],
           },
           {
-            name: 'orchard',
+            id: 'orchard',
             points: [
               { x: 0, y: 0 },
               { x: 6, y: 0 },
@@ -170,11 +170,11 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a Linear Zone target to a line feature', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'hedgerow' }],
+      [{ kind: 'zone', zone_id: 'hedgerow' }],
       createScene({
         zones: [
           {
-            name: 'hedgerow',
+            id: 'hedgerow',
             zoneType: 'line',
             points: [
               { x: 0, y: 0 },
@@ -197,10 +197,10 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a rotated rectangular Zone target to its oriented polygon', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      [{ kind: 'zone', zone_id: 'rotated-bed' }],
       createScene({
         zones: [{
-          name: 'rotated-bed',
+          id: 'rotated-bed',
           zoneType: 'rect',
           rotationDeg: 90,
           points: [
@@ -214,10 +214,10 @@ describe('projectTargetsToMapFeatures', () => {
       LOCATION,
     )
     const expected = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'rotated-bed' }],
+      [{ kind: 'zone', zone_id: 'rotated-bed' }],
       createScene({
         zones: [{
-          name: 'rotated-bed',
+          id: 'rotated-bed',
           zoneType: 'polygon',
           points: [
             { x: 7, y: -3 },
@@ -237,10 +237,10 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('projects a rotated elliptical Zone target to its oriented polygon', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'ellipse-bed' }],
+      [{ kind: 'zone', zone_id: 'ellipse-bed' }],
       createScene({
         zones: [{
-          name: 'ellipse-bed',
+          id: 'ellipse-bed',
           zoneType: 'ellipse',
           rotationDeg: 90,
           points: [
@@ -280,7 +280,7 @@ describe('projectTargetsToMapFeatures', () => {
   it('reports missing scene-backed targets and treats manual and none as intentionally empty', () => {
     const missingSpecies = speciesTarget('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
-    const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
+    const missingZone: PanelTarget = { kind: 'zone', zone_id: 'missing-zone' }
 
     const result = projectTargetsToMapFeatures(
       [MANUAL_TARGET, NONE_TARGET, missingSpecies, missingPlant, missingZone],
@@ -298,7 +298,7 @@ describe('projectTargetsToMapFeatures', () => {
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
 
     const result = projectTargetsToMapFeatures(
-      [speciesTarget('Malus domestica'), { kind: 'zone', zone_name: 'orchard' }, missingPlant],
+      [speciesTarget('Malus domestica'), { kind: 'zone', zone_id: 'orchard' }, missingPlant],
       createScene(),
       null,
     )
@@ -311,7 +311,7 @@ describe('projectTargetsToMapFeatures', () => {
 
   it('skips zones with fewer than three points instead of emitting invalid polygons', () => {
     const result = projectTargetsToMapFeatures(
-      [{ kind: 'zone', zone_name: 'too-small' }],
+      [{ kind: 'zone', zone_id: 'too-small' }],
       createScene(),
       LOCATION,
     )

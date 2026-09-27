@@ -671,6 +671,7 @@ mod tests {
             "position": { "lon": 2.352_212_345_6, "lat": 48.856_612_345_6 }
         }]);
         value["zones"] = json!([{
+            "id": "zone-north",
             "name": "North bed",
             "zone_type": "rect",
             "points": [
@@ -703,7 +704,7 @@ mod tests {
                 "recurrence": null,
                 "targets": [
                     { "kind": "species", "canonical_name": "Quercus robur" },
-                    { "kind": "zone", "zone_name": "North bed" }
+                    { "kind": "zone", "zone_id": "zone-north" }
                 ],
                 "depends_on": null,
                 "completed": false,
@@ -738,6 +739,12 @@ mod tests {
             value["zones"][0]["points"]
         );
         assert_eq!(reloaded_value["zones"][0]["rotation"], json!(30.0));
+        assert_eq!(reloaded_value["zones"][0]["id"], json!("zone-north"));
+        assert_eq!(reloaded_value["zones"][0]["name"], json!("North bed"));
+        assert_eq!(
+            reloaded_value["timeline"][0]["targets"][1],
+            json!({ "kind": "zone", "zone_id": "zone-north" })
+        );
         assert_eq!(
             reloaded_value["measurement_guides"][0]["start"],
             value["measurement_guides"][0]["start"]

@@ -147,7 +147,8 @@
       "speciesDetails": "物种详情",
       "addToCalendar": "添加到日历…",
       "setUnitCost": "设置单价…",
-      "placePlantsHere": "在此放置植物"
+      "placePlantsHere": "在此放置植物",
+      "renameZone": "重命名区域…"
     },
     "rotationHandle": {
       "label": "旋转"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} 个测量",
       "measurements_many": "{{count, number}} 个测量",
       "measurements_other": "{{count, number}} 个测量",
-      "clear": "清除选择"
+      "clear": "清除选择",
+      "rename": "重命名…"
     },
     "viewChip": "视图",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "减少 {{degrees}}°",
       "cancel": "取消",
       "rotate": "旋转"
+    },
+    "renameZoneDialog": {
+      "title": "重命名区域",
+      "name": "名称",
+      "hint": "留空则以类型和大小命名该区域。",
+      "cancel": "取消",
+      "rename": "重命名"
     }
   },
   "worldMap": {

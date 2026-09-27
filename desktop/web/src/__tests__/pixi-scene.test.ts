@@ -169,7 +169,7 @@ describe('createPixiScenePresentation', () => {
     }
     const renderer = mountPresentation(document.createElement('div'))
     renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
-      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0, fillColor: '#eeeeee', notes: null,
+      zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0, fillColor: '#eeeeee', notes: null,
         points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }] }],
       measurementGuides: [{ kind: 'measurement-guide', id: 'guide', locked: false, start: { x: 0, y: 0 }, end: { x: 2, y: 0 } }],
     }, viewport: { x: 0, y: 0, scale: 30 } }))
@@ -478,7 +478,7 @@ describe('createPixiScenePresentation', () => {
     }
     const renderer = mountPresentation(document.createElement('div'))
     renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
-      zones: [{ kind: 'zone', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
+      zones: [{ kind: 'zone', id: 'bed', name: 'bed', zoneType: 'rect', locked: false, rotationDeg: 0,
         points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: 'rgba(45, 95, 63, 0.1)', notes: null }],
       layers: [{ kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 0.5 }],
     } }))
@@ -786,7 +786,7 @@ describe('createPixiScenePresentation', () => {
         zones: [{
           kind: 'zone',
           locked: false,
-          name: 'ellipse-1',
+          id: 'ellipse-1', name: 'ellipse-1',
           zoneType: 'ellipse',
           points: [
             { x: 50, y: 60 },
@@ -828,7 +828,7 @@ describe('createPixiScenePresentation', () => {
         zones: [{
           kind: 'zone',
           locked: false,
-          name: 'zone-1',
+          id: 'zone-1', name: null,
           zoneType: 'rect',
           points: [
             { x: 0, y: 0 },
@@ -879,7 +879,7 @@ describe('createPixiScenePresentation', () => {
           {
             kind: 'zone',
             locked: false,
-            name: 'rotated-rect',
+            id: 'rotated-rect', name: 'rotated-rect',
             zoneType: 'rect',
             points: [
               { x: 0, y: 0 },
@@ -894,7 +894,7 @@ describe('createPixiScenePresentation', () => {
           {
             kind: 'zone',
             locked: false,
-            name: 'rotated-ellipse',
+            id: 'rotated-ellipse', name: 'rotated-ellipse',
             zoneType: 'ellipse',
             points: [
               { x: 40, y: 40 },
@@ -961,7 +961,7 @@ describe('createPixiScenePresentation', () => {
         zones: [{
           kind: 'zone',
           locked: false,
-          name: 'shared-id',
+          id: 'shared-id', name: 'shared-id',
           zoneType: 'rect',
           points: [
             { x: 0, y: 0 },
@@ -1033,7 +1033,7 @@ describe('createPixiScenePresentation', () => {
           {
             kind: 'zone',
             locked: false,
-            name: 'selected-zone',
+            id: 'selected-zone', name: 'selected-zone',
             zoneType: 'rect',
             points: [
               { x: 0, y: 0 },
@@ -1048,7 +1048,7 @@ describe('createPixiScenePresentation', () => {
           {
             kind: 'zone',
             locked: false,
-            name: 'hover-zone',
+            id: 'hover-zone', name: 'hover-zone',
             zoneType: 'rect',
             points: [
               { x: 20, y: 0 },

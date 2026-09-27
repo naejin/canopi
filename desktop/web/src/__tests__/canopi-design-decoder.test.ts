@@ -38,14 +38,15 @@ describe('Canopi Design decoder', () => {
     { version: 1, displayed: 1 },
     { version: 6, displayed: 6 },
     { version: 7, displayed: 7 },
-    { version: 9, displayed: 9 },
+    { version: 8, displayed: 8 },
+    { version: 10, displayed: 10 },
   ])('rejects unsupported old, missing, or future version $displayed', ({ version, displayed }) => {
     const input = currentDesign()
     if (version === undefined) delete input.version
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; current version is 8`,
+      `$.version: unsupported Canopi Design version ${displayed}; current version is 9`,
     )
     expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
   })
@@ -59,10 +60,10 @@ describe('Canopi Design decoder', () => {
   it('admits a current-version Design with lon/lat positions', () => {
     const decoded = decodeCanopiDesign(currentDesign({
       plants: [plant('plant-1', 'Malus domestica')],
-      zones: [{ name: 'Bed', zone_type: 'polygon', points: [{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }] }],
+      zones: [{ id: 'zone-bed', name: 'Bed', zone_type: 'polygon', points: [{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }] }],
     }))
 
-    expect(decoded.version).toBe(8)
+    expect(decoded.version).toBe(9)
     expect(decoded.plants[0]!.position).toEqual({ lon: 13.0001, lat: 23.0002 })
     expect(decoded.zones[0]!.points).toEqual([{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }])
   })
@@ -160,7 +161,7 @@ describe('Canopi Design decoder', () => {
       description: undefined,
       future_top_level: { enabled: true },
       zones: [{
-        name: 'Orchard',
+        id: 'zone-orchard',
         zone_type: 'bed',
         points: [],
         future_nested: 'ignored like serde',
@@ -172,7 +173,8 @@ describe('Canopi Design decoder', () => {
 
     expect(decoded.description).toBeNull()
     expect(decoded.zones[0]).toEqual({
-      name: 'Orchard',
+      id: 'zone-orchard',
+      name: null,
       locked: false,
       zone_type: 'bed',
       points: [],
@@ -302,7 +304,7 @@ function savedView(id: string): Record<string, unknown> {
 
 function currentDesign(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: 8,
+    version: 9,
     name: 'Garden',
     description: null,
     plant_species_colors: {},

@@ -17,7 +17,7 @@ import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/
 import type { CanvasRuntimeSavedObjectStampCapture } from '../../canvas/runtime/app-adapter'
 import { canSaveSelectionAsObjectStamp } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import { beginSavedObjectStampPlacement } from '../../canvas/saved-object-stamp-source'
-import { parseSavedObjectStampPayload } from '../../canvas/saved-object-stamp-payload'
+import { parseSavedObjectStampPayload, SAVED_OBJECT_STAMP_PAYLOAD_VERSION } from '../../canvas/saved-object-stamp-payload'
 import {
   createSavedObjectStamp as createSavedObjectStampIpc,
   deleteSavedObjectStamp as deleteSavedObjectStampIpc,
@@ -393,10 +393,10 @@ function normalizeSelection(capture: CanvasRuntimeSavedObjectStampCapture): Norm
       return savedPlantFromScene(plant, id, scene.plantSpeciesSymbols)
     })
   const zones = scene.zones
-    .filter((zone) => selected.zones.has(zone.name))
+    .filter((zone) => selected.zones.has(zone.id))
     .map((zone, index) => {
       const id = `zone-${index + 1}`
-      idMap.set(concreteKey({ kind: 'zone', id: zone.name }), id)
+      idMap.set(concreteKey({ kind: 'zone', id: zone.id }), id)
       return savedZoneFromScene(zone, id)
     })
   const annotations = scene.annotations
@@ -415,7 +415,7 @@ function normalizeSelection(capture: CanvasRuntimeSavedObjectStampCapture): Norm
   }))
 
   const payload: SavedObjectStampPayload = {
-    version: 1,
+    version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION,
     anchor: selection.bounds
       ? {
           x: (selection.bounds.minX + selection.bounds.maxX) / 2,

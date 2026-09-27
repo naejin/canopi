@@ -40,7 +40,7 @@ import { TEST_GEO_ORIGIN } from './support/geo-design'
 
 function design(views: SavedView[] = [], stories: Story[] = []): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Orchard',
     description: null,
     plant_species_colors: {},

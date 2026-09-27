@@ -198,7 +198,7 @@ describe('Tool card', () => {
         created_at: '',
         updated_at: '',
         payload_json: JSON.stringify({
-          version: 1,
+          version: 2,
           anchor: { x: 0, y: 0 },
           plants: [
             { id: 'a', canonicalName: 'Malus domestica', commonName: 'Apple', color: null, position: { x: 0, y: 0 }, rotationDeg: null, scale: null },

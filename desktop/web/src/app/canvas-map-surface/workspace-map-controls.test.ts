@@ -230,11 +230,11 @@ async function waitForMap(maps: FakeMap[]): Promise<FakeMap> {
 
 function targetContribution(sessionIdentity: object): WorkspaceMapContributionSnapshot {
   const scene = createDefaultScenePersistedState()
-  scene.zones = [{ kind: 'zone', locked: false, name: 'plot', zoneType: 'polygon', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], fillColor: null, notes: null }]
+  scene.zones = [{ kind: 'zone', locked: false, id: 'plot', name: 'plot', zoneType: 'polygon', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], fillColor: null, notes: null }]
   return {
     sessionIdentity, lidar: [],
     terrain: { contourIntervalMeters: 1, contoursVisible: false, contoursOpacity: 1, hillshadeVisible: false, hillshadeOpacity: 1, isDark: false },
-    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_name: 'plot' }], selectedTargets: [], paintRevision: 0 },
+    overlays: { runtime: { getSceneSnapshot: () => scene }, location: { lat: 48, lon: 2 }, hoveredTargets: [{ kind: 'zone', zone_id: 'plot' }], selectedTargets: [], paintRevision: 0 },
     frame: null,
   }
 }

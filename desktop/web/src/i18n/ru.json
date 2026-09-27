@@ -147,7 +147,8 @@
       "speciesDetails": "Сведения о виде",
       "addToCalendar": "Добавить в календарь…",
       "setUnitCost": "Задать цену за единицу…",
-      "placePlantsHere": "Разместить растения здесь"
+      "placePlantsHere": "Разместить растения здесь",
+      "renameZone": "Переименовать зону…"
     },
     "rotationHandle": {
       "label": "Повернуть"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} измерения",
       "measurements_many": "{{count, number}} измерений",
       "measurements_other": "{{count, number}} измерения",
-      "clear": "Снять выделение"
+      "clear": "Снять выделение",
+      "rename": "Переименовать…"
     },
     "viewChip": "Вид",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "Вычесть {{degrees}}°",
       "cancel": "Отмена",
       "rotate": "Повернуть"
+    },
+    "renameZoneDialog": {
+      "title": "Переименовать зону",
+      "name": "Название",
+      "hint": "Оставьте пустым, чтобы зона называлась по типу и размеру.",
+      "cancel": "Отмена",
+      "rename": "Переименовать"
     }
   },
   "worldMap": {

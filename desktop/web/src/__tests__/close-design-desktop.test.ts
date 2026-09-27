@@ -76,7 +76,7 @@ import type { CanopiFile } from '../types/design'
 
 function makeFile(name: string, plantCount = 0): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name,
     description: null,
     plant_species_colors: {},

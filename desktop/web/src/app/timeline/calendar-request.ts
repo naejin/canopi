@@ -8,7 +8,7 @@ import { selectPanel } from '../shell/state'
  */
 export type CalendarAddTarget =
   | { readonly kind: 'selected-plants' }
-  | { readonly kind: 'zone'; readonly zoneName: string }
+  | { readonly kind: 'zone'; readonly zoneId: string }
 
 export interface CalendarAddRequest {
   readonly target: CalendarAddTarget

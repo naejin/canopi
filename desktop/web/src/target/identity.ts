@@ -15,7 +15,7 @@ export interface TargetPlantRef {
 }
 
 export interface TargetZoneRef {
-  readonly name: string
+  readonly id: string
   readonly zoneType?: string
   readonly points?: readonly TargetScenePoint[]
   readonly rotationDeg?: number
@@ -29,7 +29,7 @@ export interface TargetSceneInput {
 export interface TargetSceneIndex {
   readonly plantsById: ReadonlyMap<string, TargetPlantRef>
   readonly plantIdsBySpecies: ReadonlyMap<string, readonly string[]>
-  readonly zonesByName: ReadonlyMap<string, TargetZoneRef>
+  readonly zonesById: ReadonlyMap<string, TargetZoneRef>
 }
 
 export type ResolvedTargetRef =
@@ -62,7 +62,7 @@ export function targetKey(target: Target): string {
     case 'species':
       return `species:${target.canonical_name}`
     case 'zone':
-      return `zone:${target.zone_name}`
+      return `zone:${target.zone_id}`
     case 'manual':
       return 'manual'
     case 'none':
@@ -85,7 +85,7 @@ export function targetsEqual(left: Target, right: Target): boolean {
 export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   const plantsById = new Map<string, TargetPlantRef>()
   const plantIdsBySpecies = new Map<string, string[]>()
-  const zonesByName = new Map<string, TargetZoneRef>()
+  const zonesById = new Map<string, TargetZoneRef>()
 
   for (const plant of scene.plants) {
     plantsById.set(plant.id, plant)
@@ -95,10 +95,10 @@ export function indexTargetScene(scene: TargetSceneInput): TargetSceneIndex {
   }
 
   for (const zone of scene.zones) {
-    zonesByName.set(zone.name, zone)
+    zonesById.set(zone.id, zone)
   }
 
-  return { plantsById, plantIdsBySpecies, zonesByName }
+  return { plantsById, plantIdsBySpecies, zonesById }
 }
 
 export function resolveTargetsInScene(
@@ -158,8 +158,8 @@ export function resolveTargetsInScene(
         break
       }
       case 'zone': {
-        const zone = index.zonesByName.get(target.zone_name)
-        if (zone) addZone(target.zone_name, zone)
+        const zone = index.zonesById.get(target.zone_id)
+        if (zone) addZone(target.zone_id, zone)
         else unresolvedTargets.push(target)
         break
       }

@@ -1,6 +1,6 @@
 import type { SceneZoneEntity } from '../../canvas/runtime/scene'
 import { measureZone } from '../../canvas/runtime/zone-geometry'
-import { isGeneratedZoneName } from '../../canvas/runtime/zone-names'
+import { zoneDisplayName } from '../../canvas/runtime/zone-identity'
 import { t } from '../../i18n'
 
 const ZONE_TYPE_KEYS: Readonly<Record<string, string>> = {
@@ -17,11 +17,12 @@ export function zoneTypeLabel(zoneType: string): string {
 
 /**
  * How every list names a zone: the name the user gave it, else its type and
- * size ("Rectangle zone · 120 m²", "Line zone · 50 m"). A zone's name is its
- * id until the user names it, and the interface never shows that id.
+ * size ("Rectangle zone · 120 m²", "Line zone · 50 m"). The interface never
+ * shows a zone's id.
  */
 export function zoneLabel(zone: SceneZoneEntity, activeLocale: string): string {
-  if (!isGeneratedZoneName(zone.name)) return zone.name
+  const name = zoneDisplayName(zone)
+  if (name !== null) return name
   const measure = measureZone(zone)
   const size = measure === null
     ? null
@@ -30,9 +31,9 @@ export function zoneLabel(zone: SceneZoneEntity, activeLocale: string): string {
   return size === null ? type : `${type} · ${size}`
 }
 
-/** A saved zone name whose zone is gone: the name, or plain "Zone" for a generated id. */
-export function missingZoneLabel(name: string): string {
-  return isGeneratedZoneName(name) ? t('canvas.selectionChip.zone') : name
+/** A target whose zone is gone: plain "Zone", since a zone's id is never shown. */
+export function missingZoneLabel(): string {
+  return t('canvas.selectionChip.zone')
 }
 
 /** Lengths as the map labels them: two decimals below 1 m, one below 100 m, none above. */

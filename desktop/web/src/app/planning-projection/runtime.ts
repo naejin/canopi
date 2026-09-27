@@ -66,7 +66,7 @@ function readPlanningProjectionCanvasSnapshot(
     speciesKey: session
       ? buildSpeciesKey(session.getSceneSnapshot(), localizedNames, englishFallbackNames)
       : [],
-    zones: session?.getSceneSnapshot().zones.map((zone) => ({ name: zone.name, label: zoneLabel(zone, activeLocale) })) ?? [],
+    zones: session?.getSceneSnapshot().zones.map((zone) => ({ id: zone.id, label: zoneLabel(zone, activeLocale) })) ?? [],
     selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],
   }
 }

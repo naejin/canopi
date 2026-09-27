@@ -72,7 +72,7 @@ describe('budget export', () => {
 
   it('exports the open Design’s Budget from the File menu, as the panel would, and ignores a cancelled dialog', async () => {
     designSessionFixture.file = {
-      version: 8,
+      version: 9,
       name: 'Orchard',
       description: null,
       plant_species_colors: {},

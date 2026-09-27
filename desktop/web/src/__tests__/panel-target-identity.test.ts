@@ -17,7 +17,7 @@ function createScene(overrides: Partial<TargetSceneInput> = {}): TargetSceneInpu
     ],
     zones: [
       {
-        name: 'orchard',
+        id: 'orchard',
         points: [
           { x: 0, y: 0 },
           { x: 10, y: 0 },
@@ -43,7 +43,7 @@ describe('targets identity seam', () => {
     expect(species).toEqual({ kind: 'species', canonical_name: 'Malus domestica' })
     expect(targetIdentity.key(species)).toBe('species:Malus domestica')
     expect(targetIdentity.key({ kind: 'placed_plant', plant_id: 'plant-1' })).toBe('placed_plant:plant-1')
-    expect(targetIdentity.key({ kind: 'zone', zone_name: 'orchard' })).toBe('zone:orchard')
+    expect(targetIdentity.key({ kind: 'zone', zone_id: 'orchard' })).toBe('zone:orchard')
     expect(targetIdentity.key(MANUAL_TARGET)).toBe('manual')
     expect(targetIdentity.key(NONE_TARGET)).toBe('none')
 
@@ -56,14 +56,14 @@ describe('targets identity seam', () => {
   it('resolves scene-backed targets without owning map projection', () => {
     const missingSpecies = targetIdentity.species('Pyrus communis')
     const missingPlant: PanelTarget = { kind: 'placed_plant', plant_id: 'missing-plant' }
-    const missingZone: PanelTarget = { kind: 'zone', zone_name: 'missing-zone' }
+    const missingZone: PanelTarget = { kind: 'zone', zone_id: 'missing-zone' }
     const index = targetIdentity.indexScene(createScene())
 
     const resolution = targetIdentity.resolve(
       [
         targetIdentity.species('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-2' },
-        { kind: 'zone', zone_name: 'orchard' },
+        { kind: 'zone', zone_id: 'orchard' },
         MANUAL_TARGET,
         NONE_TARGET,
         missingSpecies,
@@ -92,8 +92,8 @@ describe('targets identity seam', () => {
         { kind: 'placed_plant', plant_id: 'plant-3' },
         targetIdentity.species('Malus domestica'),
         { kind: 'placed_plant', plant_id: 'plant-1' },
-        { kind: 'zone', zone_name: 'orchard' },
-        { kind: 'zone', zone_name: 'orchard' },
+        { kind: 'zone', zone_id: 'orchard' },
+        { kind: 'zone', zone_id: 'orchard' },
       ],
       targetIdentity.indexScene(createScene()),
     )
@@ -118,7 +118,7 @@ describe('targets identity seam', () => {
       [
         targetIdentity.species('Missing species'),
         { kind: 'placed_plant', plant_id: 'missing-plant' },
-        { kind: 'zone', zone_name: 'missing-zone' },
+        { kind: 'zone', zone_id: 'missing-zone' },
       ],
       targetIdentity.indexScene(createScene()),
     )
@@ -129,7 +129,7 @@ describe('targets identity seam', () => {
     expect(resolution.unresolvedTargets).toEqual([
       targetIdentity.species('Missing species'),
       { kind: 'placed_plant', plant_id: 'missing-plant' },
-      { kind: 'zone', zone_name: 'missing-zone' },
+      { kind: 'zone', zone_id: 'missing-zone' },
     ])
     expect(hoveredPanelTargets.value).toBe(hovered)
     expect(selectedPanelTargets.value).toBe(selected)

@@ -495,6 +495,7 @@ function sceneZoneFromSavedZone(
 ): SceneZoneEntity {
   return {
     kind: 'zone',
+    id: zone.id,
     name: zone.name,
     locked: false,
     zoneType: zone.zoneType,

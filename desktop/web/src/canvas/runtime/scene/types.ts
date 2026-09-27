@@ -38,7 +38,10 @@ export interface ScenePlantEntity {
 
 export interface SceneZoneEntity {
   kind: 'zone'
-  name: string
+  /** Stable identity; targets, groups and saved views refer to it. */
+  id: string
+  /** The name the user gave, or null; labels then use the type and size. */
+  name: string | null
   locked: boolean
   zoneType: string
   points: ScenePoint[]

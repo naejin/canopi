@@ -8,9 +8,9 @@ describe('Canvas print capture', () => {
     const scene = createDefaultScenePersistedState()
     const common = { kind: 'zone' as const, locked: false, fillColor: null, notes: null }
     scene.zones.push(
-      { ...common, name: 'Bed', zoneType: 'rect', rotationDeg: 90, points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 4 }, { x: 0, y: 4 }] },
-      { ...common, name: 'Pond', zoneType: 'ellipse', rotationDeg: 90, points: [{ x: 10, y: 20 }, { x: 4, y: 2 }] },
-      { ...common, name: 'Path', zoneType: 'line', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
+      { ...common, id: 'Bed', name: 'Bed', zoneType: 'rect', rotationDeg: 90, points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 4 }, { x: 0, y: 4 }] },
+      { ...common, id: 'zone-pond', name: 'Pond', zoneType: 'ellipse', rotationDeg: 90, points: [{ x: 10, y: 20 }, { x: 4, y: 2 }] },
+      { ...common, id: 'zone-path', name: null, zoneType: 'line', rotationDeg: 0, points: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
     )
     const result = buildCanvasPrintSnapshot(scene, { viewport: { x: 0, y: 0, scale: 1 }, speciesCache: new Map() })
     expect(result.zones[0]!.bounds).toEqual({ x: -1, y: expect.closeTo(1, 12), width: 4, height: 2 })
@@ -18,10 +18,12 @@ describe('Canvas print capture', () => {
     expect(result.zones[1]!.bounds).toEqual({ x: 8, y: 16, width: 4, height: 8 })
     expect(result.zones[1]!.path.match(/C/g)).toHaveLength(4)
     expect(result.zones[2]!.path).toBe('M0 0 L5 5')
+    // Print carries each zone's display name, never its id.
+    expect(result.zones.map((zone) => zone.name)).toEqual(['Bed', 'Pond', null])
   })
   it('captures owned primitive geometry so ellipse diameters are independent of rotated bounds', () => {
     const scene = createDefaultScenePersistedState()
-    scene.zones.push({ kind: 'zone', name: 'Pond', zoneType: 'ellipse', rotationDeg: 45, locked: false, fillColor: null, notes: null,
+    scene.zones.push({ kind: 'zone', id: 'Pond', name: 'Pond', zoneType: 'ellipse', rotationDeg: 45, locked: false, fillColor: null, notes: null,
       points: [{ x: 10, y: 20 }, { x: 4, y: 2 }] })
     const result = buildCanvasPrintSnapshot(scene, { viewport: { x: 0, y: 0, scale: 1 }, speciesCache: new Map() })
     expect(result.zones[0]!.geometry).toEqual({ kind: 'ellipse', center: { x: 10, y: 20 }, radii: { x: 4, y: 2 }, rotation: 45 })

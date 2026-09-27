@@ -52,7 +52,7 @@ const HEDGE = savedView('hedge', 'Hedge')
 
 function design(views: SavedView[], stories: Story[] = []): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Views',
     description: null,
     plant_species_colors: {},

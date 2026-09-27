@@ -147,7 +147,8 @@
       "speciesDetails": "Species details",
       "addToCalendar": "Add to calendar…",
       "setUnitCost": "Set unit cost…",
-      "placePlantsHere": "Place plants here"
+      "placePlantsHere": "Place plants here",
+      "renameZone": "Rename zone…"
     },
     "rotationHandle": {
       "label": "Rotate"
@@ -699,7 +700,8 @@
       "measurements_few": "{{count, number}} measurements",
       "measurements_many": "{{count, number}} measurements",
       "measurements_other": "{{count, number}} measurements",
-      "clear": "Clear selection"
+      "clear": "Clear selection",
+      "rename": "Rename…"
     },
     "viewChip": "View",
     "map": {
@@ -759,6 +761,13 @@
       "subtract": "Subtract {{degrees}}°",
       "cancel": "Cancel",
       "rotate": "Rotate"
+    },
+    "renameZoneDialog": {
+      "title": "Rename zone",
+      "name": "Name",
+      "hint": "Leave it empty to name the zone by its type and size.",
+      "cancel": "Cancel",
+      "rename": "Rename"
     }
   },
   "worldMap": {

@@ -93,9 +93,9 @@ function captureMemberTarget(
     return
   }
 
-  const zone = target.kind === 'zone' ? scene.zones.find((entry) => entry.name === target.id) : null
+  const zone = target.kind === 'zone' ? scene.zones.find((entry) => entry.id === target.id) : null
   if (zone) {
-    state.zones.set(zone.name, {
+    state.zones.set(zone.id, {
       zoneType: zone.zoneType,
       points: zone.points.map((point) => ({ ...point })),
       rotationDeg: zone.rotationDeg,
@@ -152,7 +152,7 @@ export function applyRotationTransformToDraft(
   })
 
   draft.zones = draft.zones.map((zone) => {
-    const start = state.zones.get(zone.name)
+    const start = state.zones.get(zone.id)
     if (!start) return zone
     return rotateZone(zone, start, pivot, deltaDeg)
   })

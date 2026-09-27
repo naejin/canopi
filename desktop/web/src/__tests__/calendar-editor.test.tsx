@@ -54,7 +54,7 @@ function action(): TimelineAction {
 
 function design(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Calendar editor test',
     description: null,
     plant_species_colors: {},
@@ -361,19 +361,19 @@ describe('Calendar action editor', () => {
       ...createDefaultScenePersistedState(),
       zones: [
         {
-          kind: 'zone', name: unnamed, locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
+          kind: 'zone', id: unnamed, name: null, locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
           points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
         },
         {
-          kind: 'zone', name: 'Herb spiral', locked: false, zoneType: 'ellipse', rotationDeg: 0, fillColor: null, notes: null,
+          kind: 'zone', id: 'zone-herb-spiral', name: 'Herb spiral', locked: false, zoneType: 'ellipse', rotationDeg: 0, fillColor: null, notes: null,
           points: [{ x: 0, y: 0 }, { x: 2, y: 2 }],
         },
       ],
     }
     designSessionFixture.file = {
       ...design(),
-      timeline: [{ ...action(), targets: [{ kind: 'zone', zone_name: unnamed }] }, {
-        ...action(), id: 'water-deleted', description: 'Water', order: 1, targets: [{ kind: 'zone', zone_name: deleted }],
+      timeline: [{ ...action(), targets: [{ kind: 'zone', zone_id: unnamed }] }, {
+        ...action(), id: 'water-deleted', description: 'Water', order: 1, targets: [{ kind: 'zone', zone_id: deleted }],
       }],
     }
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({

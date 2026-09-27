@@ -15,7 +15,7 @@ import { dropdownTrigger } from './support/dropdown-trigger'
 
 function design(): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Planning keyboard test',
     description: null,
     plant_species_colors: {},

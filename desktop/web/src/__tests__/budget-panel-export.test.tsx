@@ -25,7 +25,7 @@ import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfac
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 8,
+    version: 9,
     name: 'Budget export test',
     description: null,
     plant_species_colors: {},

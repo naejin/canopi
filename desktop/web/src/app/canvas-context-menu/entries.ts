@@ -14,6 +14,7 @@ import type { PlantAppearanceAnchor, PlantAppearanceKind } from './state'
 import type { MapSelectionSummary } from '../map-selection/summary'
 import type { CalendarAddTarget } from '../timeline/calendar-request'
 import { openRotateSelectionDialog } from '../rotate-selection/state'
+import { loneEditableZoneId, openRenameZoneDialog } from '../rename-zone/state'
 
 export type CanvasContextMenuItemId =
   | CanvasEditAction
@@ -21,6 +22,7 @@ export type CanvasContextMenuItemId =
   | 'plant-symbol'
   | 'toggle-plant-names'
   | 'species-details'
+  | 'rename-zone'
   | 'add-to-calendar'
   | 'set-unit-cost'
   | 'place-plants-here'
@@ -151,6 +153,26 @@ export function buildCanvasContextMenuEntries(
       ]
     : []
 
+  // Rename zone… names one lone zone; a locked one keeps the item, disabled.
+  const loneZone = calendarTarget?.kind === 'zone' ? calendarTarget.zoneId : null
+  const renameZoneId = loneEditableZoneId(selection)
+  const zoneEntries: readonly CanvasContextMenuEntry[] = loneZone === null
+    ? []
+    : [{
+        id: 'rename-zone',
+        label: options.translate('canvas.contextMenu.renameZone'),
+        disabled: renameZoneId === null,
+        run: () => {
+          if (renameZoneId === null) return
+          openRenameZoneDialog({
+            zoneId: renameZoneId,
+            name: options.summary?.zones[0]?.name ?? null,
+            rename: (zoneId, name) => commands.renameZone(zoneId, name),
+            returnFocus: () => request.returnFocus(),
+          })
+        },
+      }, SEPARATOR]
+
   const arrange = [
     edit('bring-to-front', !can.edit, () => commands.bringToFront()),
     edit('send-to-back', !can.edit, () => commands.sendToBack()),
@@ -158,6 +180,7 @@ export function buildCanvasContextMenuEntries(
     edit('group', !can.group, () => commands.groupSelected()),
     edit('ungroup', !can.ungroup, () => commands.ungroupSelected()),
   ]
+
   return [
     edit('cut', !can.copy, () => {
       commands.copy()
@@ -168,6 +191,7 @@ export function buildCanvasContextMenuEntries(
     edit('duplicate', !can.edit, () => commands.duplicateSelected()),
     SEPARATOR,
     ...plantEntries,
+    ...zoneEntries,
     ...planningEntries,
     {
       id: 'arrange',
@@ -227,5 +251,5 @@ function calendarTargetFor(selection: CanvasDesignObjectSelectionModel): Calenda
   if ((selection.plantNamePinning?.plantIds.length ?? 0) > 0) return { kind: 'selected-plants' }
   const targets = [...selection.editableTargets, ...selection.lockedTargets ?? []]
   const [only] = targets
-  return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneName: only.id } : null
+  return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneId: only.id } : null
 }

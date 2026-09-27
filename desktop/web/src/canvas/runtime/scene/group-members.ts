@@ -60,7 +60,7 @@ export function resolveSceneObjectGroupMember(
     return scene.plants.some((plant) => plant.id === member.id) ? { kind: 'plant', id: member.id } : null
   }
   if (member.kind === 'zone') {
-    return scene.zones.some((zone) => zone.name === member.id) ? { kind: 'zone', id: member.id } : null
+    return scene.zones.some((zone) => zone.id === member.id) ? { kind: 'zone', id: member.id } : null
   }
   return scene.annotations.some((annotation) => annotation.id === member.id)
     ? { kind: 'annotation', id: member.id }

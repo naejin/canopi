@@ -31,9 +31,9 @@ export function fixture(name: FixtureName): Omit<PdfPreparation, 'fontBaseUrl'> 
   if (name === 'legends' || name === 'multilingual') setup = { ...setup, areas: [{ id: 'all', name: 'Whole design', bounds: { x: -1, y: -4, width: 20, height: 24 } }] }
   if (name === 'dense') setup = { ...setup, areas: [{ id: 'bed', name: 'Nursery bed', bounds: { x: -.2, y: -.2, width: 2.2, height: 2.8 } }] }
   if (name === 'mixed' || name === 'map-excluded' || name === 'framing') {
-    scene.zones.push({ kind: 'zone', name: 'Orchard', locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
+    scene.zones.push({ kind: 'zone', id: 'zone-orchard', name: 'Orchard', locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
       points: [{ x: -1, y: -1 }, { x: 29, y: -1 }, { x: 29, y: 19 }, { x: -1, y: 19 }] })
-    scene.zones.push({ kind: 'zone', name: 'Access path', locked: false, zoneType: 'line', rotationDeg: 0, fillColor: null, notes: null,
+    scene.zones.push({ kind: 'zone', id: 'zone-access-path', name: 'Access path', locked: false, zoneType: 'line', rotationDeg: 0, fillColor: null, notes: null,
       points: [{ x: -3, y: -3 }, { x: 28, y: -3 }, { x: 28, y: 18 }] })
     setup = { ...setup, areas: [{ id: 'orchard', name: 'Orchard', bounds: { x: -1, y: -1, width: 30, height: 20 } }] }
   }

@@ -242,7 +242,7 @@ describe('Planning Projection', () => {
   it('keeps unavailable saved Calendar targets visible in the projection', () => {
     const projection = buildCalendarPlanningProjection({
       actions: [makeAction({
-        targets: [speciesTarget('Missing species'), { kind: 'zone', zone_name: 'Missing zone' }],
+        targets: [speciesTarget('Missing species'), { kind: 'zone', zone_id: 'zone-missing' }],
       })],
       plants: [],
       zones: [],
@@ -255,7 +255,8 @@ describe('Planning Projection', () => {
 
     expect(projection.agenda[0]?.actions[0]?.targetLabels).toEqual([
       expect.objectContaining({ label: 'Missing species', unavailable: true }),
-      expect.objectContaining({ label: 'Missing zone', unavailable: true }),
+      // A zone's id is never shown: a deleted zone is plain "Zone".
+      expect.objectContaining({ label: 'Zone', unavailable: true }),
     ])
   })
 

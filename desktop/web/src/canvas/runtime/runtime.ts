@@ -155,6 +155,13 @@ export interface CanvasSceneEditCommandSurface {
   groupSelected(): void
   ungroupSelected(): void
   /**
+   * Gives a zone a display name as one undoable edit; a blank name clears it,
+   * and lists then name the zone by its type and size. The zone's id, which
+   * Calendar and Budget targets and groups refer to, never changes. False when
+   * nothing changed (unknown or locked zone, locked layer, same name).
+   */
+  renameZone(zoneId: string, name: string | null): boolean
+  /**
    * Turns the editable selection about its centre by `degrees`, clockwise on
    * the map for positive values, as one undoable edit. A selection holding a
    * locked object, a measurement or a single plant does not turn.

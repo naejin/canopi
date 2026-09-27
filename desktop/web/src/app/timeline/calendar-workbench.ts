@@ -92,7 +92,7 @@ export interface CalendarWorkbench {
   readonly toggleSpeciesTarget: (canonicalName: string) => void
   /** Adds every given species to the targets; ones already chosen stay once. */
   readonly addSpeciesTargets: (canonicalNames: readonly string[]) => void
-  readonly setZoneTarget: (zoneName: string) => void
+  readonly setZoneTarget: (zoneId: string) => void
   readonly saveEditor: () => boolean
   readonly cancelEditor: () => void
   readonly deleteEditorAction: () => void
@@ -283,11 +283,11 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     calendarTargetPresentation.setSelectedTargets(targets)
   }, [editor, editorError])
 
-  const setZoneTarget = useCallback((zoneName: string) => {
+  const setZoneTarget = useCallback((zoneId: string) => {
     const current = editor.value
     if (!current) return
-    const targets: readonly PanelTarget[] = zoneName
-      ? [{ kind: 'zone', zone_name: zoneName }]
+    const targets: readonly PanelTarget[] = zoneId
+      ? [{ kind: 'zone', zone_id: zoneId }]
       : []
     editor.value = {
       ...current,
@@ -376,7 +376,7 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     calendarAddRequest.value = null
     if (addRequest.sessionIdentity !== designSessionStore.sessionIdentity.peek()) return
     openAdd()
-    if (addRequest.target.kind === 'zone') setZoneTarget(addRequest.target.zoneName)
+    if (addRequest.target.kind === 'zone') setZoneTarget(addRequest.target.zoneId)
     else setTargetMode('selection')
   }, [addRequest, openAdd, setTargetMode, setZoneTarget])
 

@@ -39,7 +39,7 @@ function createScene(): ScenePersistedState {
       {
         kind: 'zone',
         locked: false,
-        name: 'z1',
+        id: 'z1', name: null,
         zoneType: 'rect',
         points: [
           { x: 0, y: 0 },
@@ -460,7 +460,7 @@ describe('computeSceneBounds', () => {
     scene.zones = [{
       kind: 'zone',
       locked: false,
-      name: 'ellipse-1',
+      id: 'ellipse-1', name: 'ellipse-1',
       zoneType: 'ellipse',
       points: [
         { x: 50, y: 60 },
@@ -485,7 +485,7 @@ describe('computeSceneBounds', () => {
     scene.zones = [{
       kind: 'zone',
       locked: false,
-      name: 'ellipse-1',
+      id: 'ellipse-1', name: 'ellipse-1',
       zoneType: 'ellipse',
       points: [
         { x: 0, y: 0 },

@@ -4,6 +4,7 @@ import type { PlantPresentationContext } from '../plant-presentation'
 import { normalizeHexColor } from '../../plant-colors'
 import type { SelectedPlantColorContext } from '../../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../../plant-symbol-context'
+import { zoneDisplayName } from '../zone-identity'
 import type {
   PlantSymbolId,
   SceneObjectGroupEntity,
@@ -209,6 +210,15 @@ export class SceneRuntimeMutationController {
     this._runCommandWhenSettled(() => this._ungroupSelectedWhenSettled(), undefined)
   }
 
+  /**
+   * Gives a zone a display name as one undoable edit; a blank name clears it.
+   * Its identity, which targets and groups refer to, never changes. False when
+   * nothing changed: an unknown, locked or layer-locked zone, or the same name.
+   */
+  renameZone(zoneId: string, name: string | null): boolean {
+    return this._runCommandWhenSettled(() => this._renameZoneWhenSettled(zoneId, name), false)
+  }
+
   setSelectedPlantColor(color: string | null): number {
     return this._runCommandWhenSettled(
       () => this._setSelectedPlantColorWhenSettled(color),
@@ -334,6 +344,20 @@ export class SceneRuntimeMutationController {
     })
   }
 
+  private _renameZoneWhenSettled(zoneId: string, name: string | null): boolean {
+    const persisted = this._sceneStore.persisted
+    const zone = persisted.zones.find((candidate) => candidate.id === zoneId)
+    if (!zone || zone.locked || !isSceneLayerEditable(sceneLayerState(persisted).zones)) return false
+    const nextName = zoneDisplayName({ name })
+    if (zoneDisplayName(zone) === nextName) return false
+    this._sceneEdits.run('rename-zone', (tx) => {
+      tx.mutate((draft) => {
+        draft.zones = draft.zones.map((candidate) => candidate.id === zoneId ? { ...candidate, name: nextName } : candidate)
+      })
+    })
+    return true
+  }
+
   private _toggleSelectedPlantNamePinsWhenSettled(): void {
     const selectedPlantIds = this._getEditableSelectedPlantIds()
     if (selectedPlantIds.size === 0) return
@@ -364,7 +388,7 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run('delete-selected', (tx) => {
       tx.mutate((draft) => {
         draft.plants = draft.plants.filter((plant) => !deleted.plantIds.has(plant.id))
-        draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.name))
+        draft.zones = draft.zones.filter((zone) => !deleted.zoneIds.has(zone.id))
         draft.annotations = draft.annotations.filter((annotation) => !deleted.annotationIds.has(annotation.id))
         draft.measurementGuides = draft.measurementGuides
           .filter((guide) => !deleted.measurementGuideIds.has(guide.id))
@@ -401,8 +425,8 @@ export class SceneRuntimeMutationController {
 
     if (isSceneLayerEditable(layerState.zones)) {
       for (const zone of persisted.zones) {
-        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.name })) || zone.locked) continue
-        targets.push({ kind: 'zone', id: zone.name })
+        if (groupedMemberKeys.has(sceneTargetKey({ kind: 'zone', id: zone.id })) || zone.locked) continue
+        targets.push({ kind: 'zone', id: zone.id })
       }
     }
 
@@ -832,7 +856,7 @@ export class SceneRuntimeMutationController {
     this._sceneEdits.run(position === 'start' ? 'send-to-back' : 'bring-to-front', (tx) => {
       tx.mutate((draft) => {
         draft.plants = reorderSceneEntities(draft.plants, resolved.plantIds, position, (plant) => plant.id)
-        draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.name)
+        draft.zones = reorderSceneEntities(draft.zones, resolved.zoneIds, position, (zone) => zone.id)
         draft.annotations = reorderSceneEntities(draft.annotations, resolved.annotationIds, position, (annotation) => annotation.id)
         draft.measurementGuides = reorderSceneEntities(
           draft.measurementGuides,
@@ -1067,7 +1091,7 @@ function isConcreteDesignObjectTargetLocked(
     return persisted.plants.some((plant) => plant.id === target.id && plant.locked)
   }
   if (target.kind === 'zone') {
-    return persisted.zones.some((zone) => zone.name === target.id && zone.locked)
+    return persisted.zones.some((zone) => zone.id === target.id && zone.locked)
   }
   return persisted.annotations.some((annotation) => annotation.id === target.id && annotation.locked)
 }

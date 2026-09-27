@@ -14,6 +14,7 @@ import type {
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { t } from '../i18n'
 import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
+import { applyRenameZone, closeRenameZoneDialog, renameZoneDialog } from '../app/rename-zone/state'
 import type { MapSelectionSummary } from '../app/map-selection/summary'
 
 function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): CanvasContextMenuCommands {
@@ -32,6 +33,7 @@ function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): Can
     unlockSelected: vi.fn(),
     groupSelected: vi.fn(),
     ungroupSelected: vi.fn(),
+    renameZone: vi.fn(() => true),
     rotateSelected: vi.fn(),
     ...overrides,
   }
@@ -311,10 +313,59 @@ describe('canvas context menu entries', () => {
     expect(ids(zone.entries)).not.toContain('set-unit-cost')
     expect(ids(zone.entries)).not.toContain('species-details')
     item(zone.entries, 'add-to-calendar').run()
-    expect(zone.addToCalendar).toHaveBeenCalledWith({ kind: 'zone', zoneName: 'zone-1' })
+    expect(zone.addToCalendar).toHaveBeenCalledWith({ kind: 'zone', zoneId: 'zone-1' })
 
     const twoZones = build(selection({ editableTargets: [{ kind: 'zone', id: 'a' }, { kind: 'zone', id: 'b' }] }), { summary: null })
     expect(item(twoZones.entries, 'add-to-calendar').disabled).toBe(true)
+  })
+
+  it('offers Rename zone… for a lone zone and renames it by id on the request’s surface', () => {
+    const returnFocus = vi.fn()
+    const summary: MapSelectionSummary = {
+      ...APPLE_SUMMARY, plantCount: 0, species: [], plantSpacingM: null,
+      zones: [{ name: 'North bed', zoneType: 'rect', areaM2: 12, perimeterM: 14 }],
+    }
+    const { entries, commands } = build(ONE_ZONE, { returnFocus, summary })
+
+    expect(ids(entries).slice(0, 7)).toEqual(['cut', 'copy', 'paste', 'duplicate', '—', 'rename-zone', '—'])
+    expect(item(entries, 'rename-zone').label).toBe('Rename zone…')
+    // A modal dialog, like Rotate…: an ellipsis, no popover chevron.
+    expect(item(entries, 'rename-zone').opensDialog).toBeUndefined()
+    item(entries, 'rename-zone').run()
+    expect(renameZoneDialog.value).toMatchObject({ zoneId: 'zone-1', name: 'North bed' })
+    applyRenameZone('  Kitchen bed  ')
+
+    expect(commands.renameZone).toHaveBeenCalledWith('zone-1', 'Kitchen bed')
+    expect(returnFocus).toHaveBeenCalledOnce()
+    expect(renameZoneDialog.value).toBeNull()
+  })
+
+  it('clears a zone’s name from an empty field, and leaves Cancel without an edit', () => {
+    const { entries, commands } = build(ONE_ZONE, { summary: null })
+
+    item(entries, 'rename-zone').run()
+    expect(renameZoneDialog.value?.name).toBeNull()
+    closeRenameZoneDialog()
+    expect(commands.renameZone).not.toHaveBeenCalled()
+
+    item(entries, 'rename-zone').run()
+    applyRenameZone('   ')
+    expect(commands.renameZone).toHaveBeenCalledWith('zone-1', null)
+  })
+
+  it('keeps Rename zone… for a lone zone only, disabled while it is locked', () => {
+    expect(ids(build(TWO_APPLES).entries)).not.toContain('rename-zone')
+    expect(ids(build(PLANT_AND_ZONE).entries)).not.toContain('rename-zone')
+    expect(ids(build(selection({ editableTargets: [{ kind: 'zone', id: 'a' }, { kind: 'zone', id: 'b' }] })).entries))
+      .not.toContain('rename-zone')
+
+    const locked = build(selection({
+      lockedTargets: [{ kind: 'zone', id: 'zone-1' }],
+      blockedTargets: [{ target: { kind: 'zone', id: 'zone-1' }, reason: 'locked-design-object', layerName: 'zones' }],
+    })).entries
+    expect(item(locked, 'rename-zone').disabled).toBe(true)
+    item(locked, 'rename-zone').run()
+    expect(renameZoneDialog.value).toBeNull()
   })
 
   it('asks for an angle with Rotate… and turns the selection on the request’s surface', () => {

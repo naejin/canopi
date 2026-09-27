@@ -138,11 +138,11 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     const endWorld = context.applySnapping(rawWorld)
 
     if (drag.mode === 'line') {
-      let zoneName: string | null = null
+      let zoneId: string | null = null
       drag.transaction.mutate((draft) => {
-        zoneName = appendLineZoneToDraft(draft, drag.startWorld, endWorld)
+        zoneId = appendLineZoneToDraft(draft, drag.startWorld, endWorld)
       })
-      if (zoneName) drag.transaction.setSelection([{ kind: 'zone', id: zoneName }])
+      if (zoneId) drag.transaction.setSelection([{ kind: 'zone', id: zoneId }])
       drag.transaction.commit()
       activeDrag = null
       return
@@ -154,13 +154,13 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
 
-    let zoneName: string | null = null
+    let zoneId: string | null = null
     drag.transaction.mutate((draft) => {
-      zoneName = drag.mode === 'rectangle'
+      zoneId = drag.mode === 'rectangle'
         ? appendRectangleZoneToDraft(draft, rect)
         : appendEllipseZoneToDraft(draft, rect)
     })
-    if (zoneName) drag.transaction.setSelection([{ kind: 'zone', id: zoneName }])
+    if (zoneId) drag.transaction.setSelection([{ kind: 'zone', id: zoneId }])
     drag.transaction.commit()
     activeDrag = null
   }
@@ -248,11 +248,11 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
     context.sceneEdits.run('interaction-polygon', (tx) => {
-      let zoneName: string | null = null
+      let zoneId: string | null = null
       tx.mutate((draft) => {
-        zoneName = appendPolygonZoneToDraft(draft, polygonDraftVertices)
+        zoneId = appendPolygonZoneToDraft(draft, polygonDraftVertices)
       })
-      if (zoneName) tx.setSelection([{ kind: 'zone', id: zoneName }])
+      if (zoneId) tx.setSelection([{ kind: 'zone', id: zoneId }])
     }, {
       onCommitted: () => {
         cancelPolygonDraft()
@@ -393,7 +393,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       return
     }
 
-    const zone = scene.zones.find((entry) => entry.name === selectedId)
+    const zone = scene.zones.find((entry) => entry.id === selectedId)
     if (!zone) {
       zoneMeasurements.hide()
       return

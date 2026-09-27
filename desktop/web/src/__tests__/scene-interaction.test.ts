@@ -271,6 +271,7 @@ function createInteractionDeps(
       unlockSelected: vi.fn(),
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
+      renameZone: vi.fn(() => true),
       rotateSelected: vi.fn(),
     },
     contextMenu: overrides.contextMenu ?? contextMenuHost.adapter,
@@ -310,6 +311,7 @@ function createSelectionCommands(
     unlockSelected: vi.fn(),
     groupSelected: vi.fn(),
     ungroupSelected: vi.fn(),
+    renameZone: vi.fn(() => true),
     rotateSelected: vi.fn(),
     ...overrides,
   }
@@ -482,13 +484,14 @@ function makePlant(
 }
 
 function makeRectZone(
-  name: string,
+  id: string,
   points: SceneZoneEntity['points'],
   overrides: Partial<SceneZoneEntity> = {},
 ): SceneZoneEntity {
   return {
     kind: 'zone',
-    name,
+    id,
+    name: null,
     locked: false,
     zoneType: 'rect',
     points,
@@ -2056,8 +2059,8 @@ describe('SceneInteractionSession', () => {
     events.pointerMove(end, { button: 0 })
     events.pointerUp(end, { button: 0 })
 
-    const line = store.persisted.zones.find((zone) => zone.name === 'line-1')
-    const rect = store.persisted.zones.find((zone) => zone.name === 'rect-1')
+    const line = store.persisted.zones.find((zone) => zone.id === 'line-1')
+    const rect = store.persisted.zones.find((zone) => zone.id === 'rect-1')
     expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
     expectPointCloseTo(line?.points[0], quarterTurnClockwise(pivot, { x: 90, y: 120 }))
     expectPointCloseTo(line?.points[1], quarterTurnClockwise(pivot, { x: 110, y: 120 }))
@@ -2108,7 +2111,7 @@ describe('SceneInteractionSession', () => {
     events.pointerMove(end, { button: 0 })
     events.pointerUp(end, { button: 0 })
 
-    const line = store.persisted.zones.find((zone) => zone.name === 'line-1')
+    const line = store.persisted.zones.find((zone) => zone.id === 'line-1')
     const group = store.persisted.groups[0]
     expectPointCloseTo(store.persisted.plants[0]?.position, quarterTurnClockwise(pivot, { x: 60, y: 120 }))
     expectPointCloseTo(line?.points[0], quarterTurnClockwise(pivot, { x: 90, y: 120 }))
@@ -6045,7 +6048,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'ellipse-1',
+        id: 'ellipse-1', name: 'ellipse-1',
         zoneType: 'ellipse',
         rotationDeg: 0,
         points: [
@@ -6078,7 +6081,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'ellipse-1',
+          id: 'ellipse-1', name: 'ellipse-1',
           zoneType: 'ellipse',
           rotationDeg: 0,
           points: [
@@ -6091,7 +6094,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'ellipse-2',
+          id: 'ellipse-2', name: 'ellipse-2',
           zoneType: 'ellipse',
           rotationDeg: 0,
           points: [
@@ -6139,7 +6142,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-ellipse',
+        id: 'zone-ellipse', name: null,
         zoneType: 'ellipse',
         rotationDeg: 0,
         points: [
@@ -6168,7 +6171,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-ellipse',
+        id: 'zone-ellipse', name: null,
         zoneType: 'ellipse',
         rotationDeg: 0,
         points: [
@@ -6343,7 +6346,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'polygon-1',
+        id: 'polygon-1', name: 'polygon-1',
         zoneType: 'polygon',
         rotationDeg: 0,
         points: [
@@ -6378,7 +6381,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'polygon-1',
+          id: 'polygon-1', name: 'polygon-1',
           zoneType: 'polygon',
           rotationDeg: 0,
           points: [
@@ -6392,7 +6395,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'polygon-2',
+          id: 'polygon-2', name: 'polygon-2',
           zoneType: 'polygon',
           rotationDeg: 0,
           points: [
@@ -6426,7 +6429,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'polygon-1',
+        id: 'polygon-1', name: 'polygon-1',
         zoneType: 'polygon',
         rotationDeg: 0,
         points: [
@@ -6456,7 +6459,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'line-1',
+        id: 'line-1', name: 'line-1',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -6485,7 +6488,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'line-1',
+        id: 'line-1', name: 'line-1',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -6514,7 +6517,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'line-1',
+        id: 'line-1', name: 'line-1',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -6978,7 +6981,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -7016,7 +7019,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'zone-1',
+          id: 'zone-1', name: null,
           zoneType: 'rect',
           rotationDeg: 0,
           points: [
@@ -7031,7 +7034,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'zone-2',
+          id: 'zone-2', name: null,
           zoneType: 'rect',
           rotationDeg: 0,
           points: [
@@ -7067,7 +7070,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -7105,7 +7108,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -7141,7 +7144,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'zone-1',
+        id: 'zone-1', name: null,
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -7217,7 +7220,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'line-1',
+        id: 'line-1', name: 'line-1',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -7257,7 +7260,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'line-1',
+        id: 'line-1', name: 'line-1',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -7377,7 +7380,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'poly-1',
+        id: 'poly-1', name: 'poly-1',
         zoneType: 'polygon',
         rotationDeg: 0,
         points: [
@@ -7456,7 +7459,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'ellipse-1',
+        id: 'ellipse-1', name: 'ellipse-1',
         zoneType: 'ellipse',
         rotationDeg: 0,
         points: [
@@ -7945,7 +7948,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'Kitchen bed',
+          id: 'Kitchen bed', name: 'Kitchen bed',
           zoneType: 'rect',
           rotationDeg: 0,
           points: [
@@ -7960,7 +7963,7 @@ describe('SceneInteractionSession', () => {
         {
           kind: 'zone',
           locked: false,
-          name: 'Kitchen bed copy',
+          id: 'Kitchen bed copy', name: 'Kitchen bed copy',
           zoneType: 'rect',
           rotationDeg: 0,
           points: [
@@ -7994,7 +7997,7 @@ describe('SceneInteractionSession', () => {
     expect(store.persisted.zones).toHaveLength(3)
     const clone = store.persisted.zones[2]!
     expect(clone).toMatchObject({
-      name: 'Kitchen bed copy 2',
+      name: 'Kitchen bed',
       zoneType: 'rect',
       rotationDeg: 0,
       points: [
@@ -8006,7 +8009,7 @@ describe('SceneInteractionSession', () => {
       fillColor: '#A06B1F',
       notes: 'Annuals',
     })
-    expect(selectedObjectIds.value).toEqual(new Set(['Kitchen bed copy 2']))
+    expect(selectedObjectIds.value).toEqual(new Set([clone.id]))
     expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
     session.dispose()
@@ -8017,7 +8020,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'Hedgerow',
+        id: 'Hedgerow', name: 'Hedgerow',
         zoneType: 'line',
         rotationDeg: 0,
         points: [
@@ -8045,7 +8048,7 @@ describe('SceneInteractionSession', () => {
 
     expect(store.persisted.zones).toHaveLength(2)
     expect(store.persisted.zones[1]).toMatchObject({
-      name: 'Hedgerow copy',
+      name: 'Hedgerow',
       zoneType: 'line',
       rotationDeg: 0,
       points: [
@@ -8055,7 +8058,7 @@ describe('SceneInteractionSession', () => {
       fillColor: '#A06B1F',
       notes: 'Boundary',
     })
-    expect(selectedObjectIds.value).toEqual(new Set(['Hedgerow copy']))
+    expect(selectedObjectIds.value).toEqual(new Set([store.persisted.zones[1]!.id]))
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-object-stamp')
     session.dispose()
   })
@@ -8141,7 +8144,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'Oval bed',
+        id: 'Oval bed', name: 'Oval bed',
         zoneType: 'ellipse',
         rotationDeg: 0,
         points: [
@@ -8162,7 +8165,7 @@ describe('SceneInteractionSession', () => {
 
     expect(store.persisted.zones).toHaveLength(2)
     expect(store.persisted.zones[1]).toMatchObject({
-      name: 'Oval bed copy',
+      name: 'Oval bed',
       zoneType: 'ellipse',
       rotationDeg: 0,
       points: [
@@ -8177,7 +8180,7 @@ describe('SceneInteractionSession', () => {
     store.updatePersisted((draft) => {
       draft.zones = [{
         kind: 'zone',
-        name: 'Kitchen bed',
+        id: 'Kitchen bed', name: 'Kitchen bed',
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -8209,7 +8212,7 @@ describe('SceneInteractionSession', () => {
 
     store.updatePersisted((draft) => {
       draft.zones = draft.zones.map((zone) =>
-        zone.name === 'Kitchen bed' ? { ...zone, locked: true } : zone,
+        zone.id === 'Kitchen bed' ? { ...zone, locked: true } : zone,
       )
     })
     events.pointerDown({ x: 20, y: 20 }, { button: 0 })
@@ -8218,7 +8221,7 @@ describe('SceneInteractionSession', () => {
 
     store.updatePersisted((draft) => {
       draft.zones = draft.zones.map((zone) =>
-        zone.name === 'Kitchen bed' ? { ...zone, locked: false } : zone,
+        zone.id === 'Kitchen bed' ? { ...zone, locked: false } : zone,
       )
     })
     events.pointerDown({ x: 20, y: 20 }, { button: 0 })
@@ -8282,7 +8285,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'Kitchen bed',
+        id: 'Kitchen bed', name: 'Kitchen bed',
         zoneType: 'rect',
         rotationDeg: 0,
         points: [
@@ -8347,7 +8350,7 @@ describe('SceneInteractionSession', () => {
       rotationDeg: 15,
     })
     expect(cloneZone).toMatchObject({
-      name: 'Kitchen bed copy',
+      name: 'Kitchen bed',
       points: [
         { x: 70, y: 100 },
         { x: 90, y: 100 },
@@ -8368,7 +8371,7 @@ describe('SceneInteractionSession', () => {
       name: 'Guild unit',
       members: [
         { kind: 'plant', id: clonePlant.id },
-        { kind: 'zone', id: cloneZone.name },
+        { kind: 'zone', id: cloneZone.id },
         { kind: 'annotation', id: cloneAnnotation.id },
       ],
     })
@@ -8386,7 +8389,7 @@ describe('SceneInteractionSession', () => {
 
   it('places Saved Object Stamps with full ghost preview and selected unlocked copies', () => {
     selectSavedObjectStampSourceForTests({
-      version: 1,
+      version: 2,
       anchor: { x: 12, y: 24 },
       plants: [{
         id: 'plant-1',
@@ -8487,7 +8490,7 @@ describe('SceneInteractionSession', () => {
       locked: false,
       members: [
         { kind: 'plant', id: plant.id },
-        { kind: 'zone', id: zone.name },
+        { kind: 'zone', id: zone.id },
         { kind: 'annotation', id: annotation.id },
       ],
     })
@@ -8505,7 +8508,7 @@ describe('SceneInteractionSession', () => {
       )
     })
     selectSavedObjectStampSourceForTests({
-      version: 1,
+      version: 2,
       anchor: { x: 0, y: 0 },
       plants: [],
       zones: [{
@@ -8565,7 +8568,7 @@ describe('SceneInteractionSession', () => {
       created_at: '2026-06-19T09:00:00Z',
       updated_at: '2026-06-19T09:00:00Z',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -8654,7 +8657,7 @@ describe('SceneInteractionSession', () => {
     })
     expect(selectedObjectIds.value).toEqual(new Set([
       store.persisted.plants[0]!.id,
-      store.persisted.zones[0]!.name,
+      store.persisted.zones[0]!.id,
       store.persisted.annotations[0]!.id,
     ]))
     expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
@@ -8688,7 +8691,7 @@ describe('SceneInteractionSession', () => {
       created_at: '2026-06-19T09:00:00Z',
       updated_at: '2026-06-19T09:00:00Z',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -8765,7 +8768,7 @@ describe('SceneInteractionSession', () => {
       created_at: '2026-06-19T09:00:00Z',
       updated_at: '2026-06-19T09:00:00Z',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [],
         zones: [{
@@ -9064,7 +9067,7 @@ describe('SceneInteractionSession', () => {
       created_at: '2026-06-19T09:00:00Z',
       updated_at: '2026-06-19T09:00:00Z',
       payload_json: JSON.stringify({
-        version: 1,
+        version: 2,
         anchor: { x: 0, y: 0 },
         plants: [{
           id: 'plant-1',
@@ -9375,7 +9378,7 @@ describe('SceneInteractionSession', () => {
       draft.zones = [{
         kind: 'zone',
         locked: false,
-        name: 'shared',
+        id: 'shared', name: 'shared',
         zoneType: 'rect',
         rotationDeg: 0,
         points: [

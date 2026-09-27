@@ -11,7 +11,7 @@ import type { CanopiFile, SavedView } from '../types/design'
 import { geoAt } from './support/geo-design'
 
 const RAW_DOCUMENT = {
-  version: 8,
+  version: 9,
   name: 'Format contract',
   description: null,
   plant_species_colors: {},
@@ -38,7 +38,7 @@ const RAW_DOCUMENT = {
 } as const
 
 const BASE_DOCUMENT: CanopiFile = {
-  version: 8,
+  version: 9,
   name: 'Contract base',
   description: null,
   plant_species_colors: {},
@@ -154,7 +154,7 @@ describe('document format contract', () => {
         locked: false,
       }],
       zones: [{
-        name: 'Canvas zone',
+        id: 'Canvas zone', name: 'Canvas zone',
         zone_type: 'polygon',
         rotation: 0,
         points: [geoAt(0, 0), geoAt(1, 0), geoAt(1, 1)],
@@ -408,7 +408,7 @@ describe('document format contract', () => {
         locked: false,
       }],
       zones: [{
-        name: 'North bed',
+        id: 'North bed', name: 'North bed',
         zone_type: 'planting',
         rotation: 0,
         points: [geoAt(0, 0), geoAt(10, 0), geoAt(10, 10)],
