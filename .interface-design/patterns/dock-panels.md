@@ -4,7 +4,7 @@ Read the [design system](../system.md) first. Workbench and dock ownership: [fro
 
 ## Panel frame
 
-A floating panel on the right (top 72, right 76, bottom 64): Literata 18 title, optional muted subtitle, head actions (Expand, Back on the left), close. Body scrolls; footers hold totals and apply actions. Width 380, or 440 for Budget and Consortium. `SidePanelDock` owns resize; a user width wins. Opening or switching panels keeps the map mounted.
+A floating panel on the right (top 72, right 76, bottom 64): Literata 18 title, optional muted subtitle, head actions (Expand, Back on the left), close. `DockPanelHeader` / `SurfaceHeader` carry no bare count beside the title: the rows already show it, and a summary worth reading is a labelled sentence ("N plants · N species") in the subtitle or finder line. Counts shown on their own (row plant counts, section counts, filter badges) go through `formatCount` (`utils/format-count.ts`); counts in sentences use `{{count, number}}` with plural forms. Body scrolls; footers hold totals and apply actions. Width 380, or 440 for Budget and Consortium. `SidePanelDock` owns resize; a user width wins. Opening or switching panels keeps the map mounted.
 
 ## The plant finder
 
@@ -26,13 +26,13 @@ Title with a muted "N plants · N species" subtitle, then a collapsible "Display
 - The active site item has a footer: legend with range, Opacity, Fit, Read values (pressed while active), Analyze… on sources, Remove from Design.
 - Import dialog: name (duplicate names refused with a suggestion), measure and unit, ordered files with Move up/down, a coverage check against the Design ("Covers your site"). Progress shows on its own row under Site data with Cancel import; the rest of Layers stays usable.
 - Analyze dialog is generated from the analysis registry (ADR 0011): options with one-line explanations, existing results marked "Already in Layers", parameters inline, a primary action naming the result ("Add contours").
-- Data library (dialog): search, type filter, Import…; rows with preview, kind, resolution and "In this Design" or Add to Design; Delete everywhere confirms and names the Designs that use the item. Removing from a Design keeps the library item.
+- Data library (dialog): search, type filter (a `Dropdown`), Import…; rows with preview, kind, resolution and "In this Design" or Add to Design; Delete everywhere confirms and names the Designs that use the item. Removing from a Design keeps the library item.
 - Web: no terrain import; Site data shows why ("needs Canopi Desktop, kept in this Design"); Add GeoJSON… sits on the Design section.
 
 ## Planning
 
 - **Calendar:** month grid (week start from the locale) with single-day marks and range bars, today underlined, a selected day as a ringed cell; action types have a colour and a shape. Agenda for the selected day with done checkboxes and Edit; "Add action on <date>"; footer "N actions without a date · Show". New action: Title, type (radio chips), Start and End date fields, Repeat every year, targets (Species with the finder picker, Selected plants, Zone, Whole Design), a plant count.
-- **Budget:** finder with Missing a price and sort; rows with code, plant count, unit cost field (locale decimals) and total; footer with plants and "N of M species priced", the grand total, a meter that filters to unpriced species, currency and Export CSV…, and the note that changing currency relabels prices.
+- **Budget:** finder with Missing a price and sort; rows with code, plant count, unit cost field (locale decimals) and total, in compact columns (6 px gaps, plants 28, unit cost 76, total 72) so at 440 px a typical common name stays on one line over its scientific name; column captions overflow leftwards rather than onto their neighbour, and "No price" wraps instead of widening its column; footer with plants and "N of M species priced", the grand total, a meter that filters to unpriced species, currency and Export CSV…, and the note that changing currency relabels prices.
 - **Consortium:** "N species · N have no stratum yet" (a link that lists them with a stratum and phase picker); finder; a stratum × phase table with grouped phase headers and durations in words, a neutral bark heat ramp, dots on cells with matches, a selected cell with an outer ink ring; the list below shows the cell or the matches with full phase names.
 - Planning views keep their search, filters and scroll per Design Session.
 

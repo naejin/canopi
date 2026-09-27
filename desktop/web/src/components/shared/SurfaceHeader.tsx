@@ -3,10 +3,13 @@ import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
 import styles from './SurfaceHeader.module.css'
 
-/** Shared chrome; callers retain navigation and dismissal ownership. */
-export function SurfaceHeader({ title, count, actions, onClose, closeLabel }: {
+/**
+ * Shared chrome; callers retain navigation and dismissal ownership. No bare
+ * count beside the title: the rows show it, and a summary worth reading is a
+ * labelled sentence in the panel body.
+ */
+export function SurfaceHeader({ title, actions, onClose, closeLabel }: {
   title: string
-  count?: number
   actions?: ComponentChildren
   onClose(): void
   closeLabel: string
@@ -14,7 +17,6 @@ export function SurfaceHeader({ title, count, actions, onClose, closeLabel }: {
   return (
     <header className={styles.header}>
       <h2 className={styles.title}>{title}</h2>
-      {count !== undefined && <span className={styles.count}>{count}</span>}
       <div className={styles.actions}>
         {actions}
         <button type="button" className={styles.close} aria-label={closeLabel} onClick={onClose}>

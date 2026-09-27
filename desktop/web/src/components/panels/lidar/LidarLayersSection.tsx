@@ -15,6 +15,8 @@ import { analyzeInLibrary, layersFocusRequest, openDataLibrary, openInDataLibrar
 import { viewDesignLocation, viewLidarCoverage } from '../../../app/lidar/camera-request'
 import { beginInspection, endInspection, inspectionTarget } from '../../../app/lidar/inspection'
 import { t } from '../../../i18n'
+import { locale } from '../../../app/settings/state'
+import { formatCount } from '../../../utils/format-count'
 import { LayerVisibilityIcon } from '../../canvas/LayerPanel'
 import { ButtonTooltip } from '../../shared/ButtonTooltip'
 import { Notice } from '../../shared/Notice'
@@ -56,7 +58,7 @@ export function LidarLayersSection() {
   return (
     <section className={styles.section} aria-label={t('canvas.lidar.layers.title')}>
       <div className={styles.sectionTitle}>
-        <h3>{t('canvas.lidar.layers.title')} <span>{items.length}</span></h3>
+        <h3>{t('canvas.lidar.layers.title')} <span>{formatCount(items.length, locale.value)}</span></h3>
         <button type="button" className={styles.addButton} onClick={openDataLibrary}>
           {t('canvas.lidar.layers.addData')}
         </button>

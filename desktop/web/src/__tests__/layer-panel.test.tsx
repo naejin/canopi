@@ -121,6 +121,8 @@ describe('LayerPanel', () => {
     const rows = Array.from(container.querySelectorAll('[role="listitem"]'))
     const basemapRow = rows.find((row) => row.textContent?.includes('Basemap'))
     expect(basemapRow).toBeTruthy()
+    // The rows show how many layers there are; the header carries no bare count.
+    expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
     expect(container.querySelector('input[aria-label="Opacity: Basemap"]')).toBeTruthy()
 
     const basemapToggle = basemapRow?.querySelector('button')

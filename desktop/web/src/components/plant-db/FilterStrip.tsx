@@ -1,4 +1,6 @@
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import type { FilterOptions, SpeciesFilter } from '../../types/species'
 import type { StripControlField } from '../../app/plant-browser'
@@ -24,7 +26,7 @@ export function FilterStrip({ onMoreFilters }: { onMoreFilters: () => void }) {
       <div className={styles.filterActions}>
         <button type="button" className={styles.moreFiltersBtn} onClick={onMoreFilters}>
           {t('filters.moreFilters')}
-          {filterStrip.activeCount > 0 && <span className={styles.filterBadge}>{filterStrip.activeCount}</span>}
+          {filterStrip.activeCount > 0 && <span className={styles.filterBadge}>{formatCount(filterStrip.activeCount, locale.value)}</span>}
           <span aria-hidden="true">{'\u203A'}</span>
         </button>
         {filterStrip.hasActive && (

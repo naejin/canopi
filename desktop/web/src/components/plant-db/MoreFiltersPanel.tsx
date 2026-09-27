@@ -1,6 +1,7 @@
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { useRef, useEffect } from 'preact/hooks'
 import { t } from '../../i18n'
+import { formatCount } from '../../utils/format-count'
 import { locale } from '../../app/settings/state'
 import {
   DYNAMIC_OPTIONS_BACKEND_MISMATCH_ERROR,
@@ -127,7 +128,7 @@ function CategorySection({ category, searchQuery }: {
         aria-expanded={isOpen}
       >
         <span className={styles.categoryTitle}>{t(category.i18nKey, category.key)}</span>
-        {activeCount > 0 && <span className={styles.categoryBadge}>{activeCount}</span>}
+        {activeCount > 0 && <span className={styles.categoryBadge}>{formatCount(activeCount, locale.value)}</span>}
         <span className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ''}`} aria-hidden="true">›</span>
       </button>
 

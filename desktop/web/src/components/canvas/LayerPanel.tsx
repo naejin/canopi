@@ -1,5 +1,7 @@
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import type { CanvasLayerPresentationDetail, CanvasLayerPresentationRow } from '../../app/canvas-layer-presentation/presentation'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { Dropdown } from '../shared/Dropdown'
@@ -82,7 +84,7 @@ export function LayerPanel({ rows, actions, referenceItems }: {
   const firstReference = rows.find(row => row.detail.type !== 'scene')?.id
   return (
     <aside className={styles.panel} aria-label={t('canvas.layers.layerPanel')}>
-      <DockPanelHeader title={t('canvas.layers.layerPanel')} count={rows.length} />
+      <DockPanelHeader title={t('canvas.layers.layerPanel')} />
       <div className={styles.groupHeading}><h3>{t('canvas.layers.sceneStack')}</h3><span>{t('canvas.layers.topToBottom')}</span></div>
       <div role="list">
         {rows.map((row) => {
@@ -117,7 +119,7 @@ export function LayerPanel({ rows, actions, referenceItems }: {
                   onClick={() => actions.active(row.id)}
                 >
                   <LayerIcon id={row.id} /><span>{row.label}</span>
-                  {row.count !== undefined && <span className={styles.count}>{row.count}</span>}
+                  {row.count !== undefined && <span className={styles.count}>{formatCount(row.count, locale.value)}</span>}
                 </button>
                 {row.canLock ? (
                   <button

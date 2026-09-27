@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
+import { formatCount } from '../../utils/format-count'
 import {
   MIN_FAVORITES_FRAME_HEIGHT,
   locale,
@@ -323,7 +324,7 @@ export function FavoritesPanel() {
           <div className={styles.frameHeader}>
             <span id="favorite-plants-title" className={styles.title}>{t('canvas.layers.plants')}</span>
             {count > 0 && (
-              <span className={styles.count}>{count}</span>
+              <span className={styles.count}>{formatCount(count, locale.value)}</span>
             )}
           </div>
           <div className={styles.plantsFrameBody}>
@@ -374,7 +375,7 @@ export function FavoritesPanel() {
               </span>
             </div>
             {savedStampsView.items.length > 0 && (
-              <span className={styles.count}>{savedStampsView.items.length}</span>
+              <span className={styles.count}>{formatCount(savedStampsView.items.length, locale.value)}</span>
             )}
             <button
               type="button"

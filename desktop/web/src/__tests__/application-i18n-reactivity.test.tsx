@@ -54,7 +54,7 @@ describe('application translation authority', () => {
 
     expect(changeLanguage).toHaveBeenCalledWith('fr')
     expect(t('plantDb.placeSpecies', { name: 'Poirier' })).toBe('Placer Poirier')
-    expect(t('worldMap.plantCount', { count: 4 })).toBe('4 plantes')
+    expect(t('plantFinder.plants', { count: 4 })).toBe('4 plantes')
     expect(t('missing.test.key', 'Fallback label')).toBe('Fallback label')
   })
 

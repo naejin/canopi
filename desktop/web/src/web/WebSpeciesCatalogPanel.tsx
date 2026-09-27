@@ -58,13 +58,13 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   return (
     <section className={styles.panel} data-testid={`web-species-${mode}-panel`} data-mode={mode} aria-label={title}>
       <div ref={mainRef} className={styles.main} hidden={showingDetail} inert={showingDetail} data-favorites-main={!isCatalog || undefined}>
-      {!isCatalog && <DockPanelHeader title={title} count={favoritesView.items.length} />}
+      {!isCatalog && <DockPanelHeader title={title} />}
       {!isCatalog && <div className={styles.header}><SurfaceSearch value={favoriteSearch} onChange={setFavoriteSearch} label={t('favorites.search')} /></div>}
       {isCatalog && <header className={styles.header}>
         <div className={styles.titleRow}>
           <h2 className={styles.title}>{title}</h2>
           <span className={styles.count}>
-            {isCatalog ? results.totalEstimate || visibleItems.length : visibleItems.length}
+            {t('plantDb.resultsCount', { count: results.totalEstimate || visibleItems.length })}
           </span>
         </div>
         {isCatalog && (

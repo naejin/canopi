@@ -6,7 +6,7 @@ Read the [design system](../system.md) first. Catalog data, filters and translat
 
 - The finder at the top ("Search 175,473 species"), then active filters as removable tokens (neutral fill, "Remove filter: …"), then "Add filter".
 - Add filter opens a popover anchored under the chip: a search over filters and the filter categories from the Species Catalog Filter catalog (never a hard-coded list): Climate and hardiness, Size and form, Light, Soil and water, Uses, Stratum and succession, Ecology, Risks. A category opens its choices beside the popover (checkboxes, ranges, lists) with Clear; choices apply as they are made.
-- A result line with the count, a Sort dropdown (Name, Height, Hardiness) and Clear filters.
+- A result line with the count, a Sort dropdown (Name, Height, Hardiness) and Clear filters. The count is grouped for the interface language and agrees in number ("175,473 results", "175 473 résultats", "1 result").
 - Rows: glyph · common name over italic scientific name over a quiet facts line (form, height, hardiness) · code when the species is in this Design · Place (on the active row) · favourite star (filled ochre when on). The row body opens details and drags onto the map. A hint explains that codes mark species already in the Design.
 - Desktop and Web keep separate list and detail compositions around the shared workbench.
 

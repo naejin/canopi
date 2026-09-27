@@ -9,6 +9,8 @@ import {
 import { buildSpeciesKey, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { DEFAULT_PLANT_SYMBOL_ID } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { navigateTo } from '../../app/shell/state'
 import { usePlanningViewState } from '../../app/planning-view/state'
@@ -246,7 +248,7 @@ function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {
           highlight={finderHighlight(result.byKey.get(entry.canonicalName))}
         />
         <span className={row.code}>{entry.code}</span>
-        <span className={row.count}>{entry.count}</span>
+        <span className={row.count}>{formatCount(entry.count, locale.value)}</span>
       </button>
       {result.active && (
         <button

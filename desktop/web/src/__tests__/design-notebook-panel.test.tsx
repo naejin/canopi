@@ -140,6 +140,9 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('[aria-label="Design notebook"]')).not.toBeNull()
     expect(container.textContent).toContain('Terrace Guild')
     expect(container.textContent).toContain('Forest Edge')
+    expect(container.textContent).toContain('12 plants')
+    // The rows show how many Designs there are; the header carries no bare count.
+    expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
     expect(container.textContent).not.toContain('All Designs')
     expect(container.textContent).not.toContain('Pinned designs')
     expect(container.querySelector('input[aria-label="Search designs"]')).toBeNull()

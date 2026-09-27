@@ -12,6 +12,8 @@ import type { ConsortiumListFilter } from '../../app/planning-view/state'
 import type { ConsortiumPlanningRow } from '../../app/planning-projection'
 import { navigateTo, sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import { ControlIcon } from '../shared/ControlIcon'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
@@ -315,7 +317,7 @@ function ConsortiumRow({ row: item, workbench }: { row: ConsortiumPlanningRow; w
           highlight={finderHighlight(workbench.finder.byKey.get(item.canonicalName))}
         />
         <span className={row.code}>{item.code}</span>
-        <span className={styles.countColumn}>{item.count}</span>
+        <span className={styles.countColumn}>{formatCount(item.count, locale.value)}</span>
       </button>
       <span className={styles.phaseColumn}>{phaseSpanLabel(item.startPhase, item.endPhase)}</span>
       <button

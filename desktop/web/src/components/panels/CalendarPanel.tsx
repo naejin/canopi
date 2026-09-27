@@ -18,6 +18,8 @@ import { ACTION_TYPES, type CalendarDayProjection, type CalendarPlanningAction, 
 import type { CalendarCompletionFilter, CalendarDisplay } from '../../app/planning-view/state'
 import { sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
+import { locale } from '../../app/settings/state'
+import { formatCount } from '../../utils/format-count'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
@@ -437,7 +439,7 @@ function CalendarAgenda({ workbench }: { workbench: Workbench }) {
           onClick={() => workbench.setUnscheduledExpanded(!workbench.unscheduledExpanded)}
         >
           <span>{workbench.unscheduledExpanded ? '▾' : '▸'} {t('canvas.calendar.unscheduled')}</span>
-          <small>{workbench.projection.unscheduled.length}</small>
+          <small>{formatCount(workbench.projection.unscheduled.length, locale.value)}</small>
         </button>
         {workbench.unscheduledExpanded && workbench.projection.unscheduled.map((action) => (
           <CalendarActionRow key={action.id} action={action} workbench={workbench} />
