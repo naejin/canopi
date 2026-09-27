@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} Messungen",
       "clear": "Auswahl aufheben"
     },
-    "viewChip": "Ansicht"
+    "viewChip": "Ansicht",
+    "map": {
+      "label": "Entwurfskarte",
+      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf."
+    }
   },
   "worldMap": {
     "title": "Weltkarte",

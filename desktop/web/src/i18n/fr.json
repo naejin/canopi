@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} mesures",
       "clear": "Effacer la sélection"
     },
-    "viewChip": "Affichage"
+    "viewChip": "Affichage",
+    "map": {
+      "label": "Carte du design",
+      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélectionner, puis vide la sélection."
+    }
   },
   "worldMap": {
     "title": "Carte du monde",

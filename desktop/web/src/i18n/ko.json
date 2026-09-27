@@ -648,7 +648,11 @@
       "measurements_other": "측정 {{count, number}}개",
       "clear": "선택 해제"
     },
-    "viewChip": "보기"
+    "viewChip": "보기",
+    "map": {
+      "label": "디자인 지도",
+      "description": "도구 레일에 표시된 키를 눌러 도구를 선택합니다. Shift F10은 선택 항목의 메뉴를 엽니다. Esc는 취소하고, 선택 도구로 돌아간 다음, 선택을 해제합니다."
+    }
   },
   "worldMap": {
     "title": "세계 지도",

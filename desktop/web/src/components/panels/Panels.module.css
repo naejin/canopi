@@ -49,6 +49,13 @@
   background: transparent;
 }
 
+/* The map is a keyboard stop (Tab, or focus returning after a gesture). It is
+   full-bleed, so its ring sits inside the edge instead of being clipped. */
+.canvasContainer:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
 /* Map status: a quiet chip at the bottom centre, between the view chip and the zoom group. */
 .basemapFeedback {
   position: absolute;

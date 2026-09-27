@@ -648,7 +648,11 @@
       "measurements_other": "計測 {{count, number}} 件",
       "clear": "選択を解除"
     },
-    "viewChip": "表示"
+    "viewChip": "表示",
+    "map": {
+      "label": "デザインマップ",
+      "description": "ツールレールに表示されたキーを押すとツールを選べます。Shift F10 で選択範囲のメニューを開きます。Esc で取り消し、次に選択ツールに戻り、次に選択を解除します。"
+    }
   },
   "worldMap": {
     "title": "世界地図",

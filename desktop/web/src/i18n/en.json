@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} measurements",
       "clear": "Clear selection"
     },
-    "viewChip": "View"
+    "viewChip": "View",
+    "map": {
+      "label": "Design map",
+      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection."
+    }
   },
   "worldMap": {
     "title": "World Map",

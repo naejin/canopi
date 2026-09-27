@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} misure",
       "clear": "Annulla la selezione"
     },
-    "viewChip": "Vista"
+    "viewChip": "Vista",
+    "map": {
+      "label": "Mappa del progetto",
+      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione."
+    }
   },
   "worldMap": {
     "title": "Mappa mondiale",

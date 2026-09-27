@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} medições",
       "clear": "Limpar a seleção"
     },
-    "viewChip": "Visualização"
+    "viewChip": "Visualização",
+    "map": {
+      "label": "Mapa do design",
+      "description": "Prima a tecla de uma ferramenta para a escolher, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção."
+    }
   },
   "worldMap": {
     "title": "Mapa mundial",

@@ -77,6 +77,10 @@ import {
   createMeasurementGuideControlPoints,
 } from './interaction/measurement-guide-control-points'
 import type { ControlPointOverlayController } from './interaction/control-point-overlay'
+import {
+  prepareInteractionHost,
+  type InteractionHostController,
+} from './interaction/interaction-host'
 import type { CanvasDesignObjectSelectionModel } from './runtime'
 import type {
   CanvasContextMenuCommands,
@@ -185,6 +189,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _controlPointOverlays: readonly ControlPointOverlayController[]
   private readonly _lockedAffordance: LockedObjectAffordanceController
+  private readonly _host: InteractionHostController
   private _tool: InteractionTool = 'select'
   private _pointerGesture: SceneInteractionPointerGesture | null = null
   private _toolPointerDrag: SceneToolPointerDrag | null = null
@@ -209,6 +214,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
 
     try {
+      this._host = own(
+        prepareInteractionHost(this._deps.container, this._deps.translate),
+        (host) => host.dispose(),
+      )
       this._preview = own(
         createInteractionPreview(this._deps.container),
         (preview) => preview.remove(),
@@ -434,6 +443,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._preview.remove())
     attempt(() => this._tooltip.dispose())
     attempt(() => this._deps.setHoveredTarget(null))
+    attempt(() => this._host.dispose())
 
     throwCanvasRuntimeCleanupErrors(errors, 'Scene Interaction Session disposal failed')
   }
@@ -445,6 +455,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   refreshTranslations(): void {
     if (this._disposed) return
+    this._host.refreshTranslations()
     this._rotationHandle.refreshTranslations()
     this._lockedAffordance.refreshTranslations()
     this._forEachUniqueToolHook('refreshTranslations', (refresh) => refresh())
@@ -1128,9 +1139,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private _focusInteractionHost(): void {
-    if (!this._deps.container.hasAttribute('tabindex')) {
-      this._deps.container.tabIndex = -1
-    }
     this._deps.container.focus({ preventScroll: true })
   }
 

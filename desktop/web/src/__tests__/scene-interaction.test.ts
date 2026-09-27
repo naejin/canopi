@@ -10150,4 +10150,70 @@ describe('SceneInteractionSession', () => {
 
     expect(setHoveredTarget).toHaveBeenCalledWith(null)
   })
+  describe('keyboard access to the map', () => {
+    it('puts the map host in the Tab order with an accessible name and a description of its keys', () => {
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+
+      expect(container.tabIndex).toBe(0)
+      expect(container.getAttribute('role')).toBe('application')
+      expect(container.getAttribute('aria-label')).toBe(t('canvas.map.label'))
+      const descriptionId = container.getAttribute('aria-describedby')
+      expect(descriptionId).toBeTruthy()
+      expect(document.getElementById(descriptionId!)?.textContent).toBe(t('canvas.map.description'))
+      session.dispose()
+    })
+
+    it('restores the host when the session ends', () => {
+      container.setAttribute('aria-label', 'Before')
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+
+      session.dispose()
+
+      expect(container.hasAttribute('tabindex')).toBe(false)
+      expect(container.hasAttribute('role')).toBe(false)
+      expect(container.hasAttribute('aria-describedby')).toBe(false)
+      expect(container.getAttribute('aria-label')).toBe('Before')
+    })
+
+    it('refreshes the accessible name and description in place on a locale change', () => {
+      let language = 'en'
+      const translate = (key: string): string => `${language}:${key}`
+      const session = createTestSession(createInteractionDeps(container, store, camera, { translate }))
+      const description = document.getElementById(container.getAttribute('aria-describedby')!)
+
+      language = 'fr'
+      session.refreshTranslations()
+
+      expect(container.getAttribute('aria-label')).toBe('fr:canvas.map.label')
+      expect(document.getElementById(container.getAttribute('aria-describedby')!)).toBe(description)
+      expect(description?.textContent).toBe('fr:canvas.map.description')
+      session.dispose()
+    })
+
+    it('opens the right-click menu with Shift F10 after Tab focus, with no pointer press first', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+      })
+      const deps = createInteractionDeps(container, store, camera)
+      const session = createTestSession(deps)
+      deps.setSelection([plantTarget('plant-1')])
+
+      container.focus()
+      expect(document.activeElement).toBe(container)
+      events.keyDown({ key: 'F10', shiftKey: true, target: container })
+
+      expect(contextMenuHost.current).not.toBeNull()
+      session.dispose()
+    })
+
+    it('keeps focusing the host on a pointer press', () => {
+      const session = createTestSession(createInteractionDeps(container, store, camera))
+      session.setTool('select')
+
+      events.pointerDown({ x: 40, y: 40 })
+
+      expect(document.activeElement).toBe(container)
+      session.dispose()
+    })
+  })
 })

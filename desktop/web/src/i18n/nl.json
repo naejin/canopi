@@ -648,7 +648,11 @@
       "measurements_other": "{{count, number}} metingen",
       "clear": "Selectie wissen"
     },
-    "viewChip": "Weergave"
+    "viewChip": "Weergave",
+    "map": {
+      "label": "Ontwerpkaart",
+      "description": "Druk op de toets van een gereedschap om het te kiezen, zoals de gereedschapsbalk laat zien. Shift F10 opent het menu van de selectie. Esc annuleert, gaat dan terug naar Selecteren en wist daarna de selectie."
+    }
   },
   "worldMap": {
     "title": "Wereldkaart",
