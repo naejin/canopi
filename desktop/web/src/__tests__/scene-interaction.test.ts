@@ -10216,4 +10216,170 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+  describe('the Esc chain', () => {
+    function escapeOnMap(): KeyboardEvent {
+      return events.keyDown({ key: 'Escape', target: container })
+    }
+
+    function sessionWithToolLog(): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, tools: string[] } {
+      const tools: string[] = []
+      const deps = createInteractionDeps(container, store, camera, { setTool: (name: string) => { tools.push(name) } })
+      return { session: createTestSession(deps), deps, tools }
+    }
+
+    it.each([
+      'hand',
+      'plant-stamp',
+      'plant-spacing',
+      'object-stamp',
+      'polygon',
+      'rectangle',
+      'ellipse',
+      'line',
+      'text',
+      'measurement-guide',
+    ])('returns %s to Select, then clears the selection', (tool) => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 200, y: 200 })]
+      })
+      const { session, deps, tools } = sessionWithToolLog()
+      session.setTool(tool)
+      deps.setSelection([plantTarget('plant-1')])
+      container.focus()
+
+      const first = escapeOnMap()
+      expect(first.defaultPrevented).toBe(true)
+      expect(tools.at(-1)).toBe('select')
+      expect(deps.clearSelection).not.toHaveBeenCalled()
+
+      const second = escapeOnMap()
+      expect(second.defaultPrevented).toBe(true)
+      expect(deps.clearSelection).toHaveBeenCalledTimes(1)
+
+      const third = escapeOnMap()
+      expect(third.defaultPrevented).toBe(false)
+      session.dispose()
+    })
+
+    it('leaves Esc alone when the map does not have focus', () => {
+      const { session, tools } = sessionWithToolLog()
+      session.setTool('rectangle')
+      const field = document.createElement('div')
+      document.body.appendChild(field)
+
+      const event = events.keyDown({ key: 'Escape', target: field })
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(tools).not.toContain('select')
+      field.remove()
+      session.dispose()
+    })
+
+    it('cancels a new text note, returns focus to the map, then returns to Select', () => {
+      const { session, tools } = sessionWithToolLog()
+      session.setTool('text')
+      events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      textarea.focus()
+
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+
+      expect(container.querySelector('textarea')).toBeNull()
+      expect(document.activeElement).toBe(container)
+      expect(tools).not.toContain('select')
+      escapeOnMap()
+      expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+
+    it('returns focus to the map after a text note is finished with Enter', () => {
+      const { session } = sessionWithToolLog()
+      session.setTool('text')
+      events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      textarea.focus()
+      textarea.value = 'Mulch in November'
+
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+      expect(store.persisted.annotations).toHaveLength(1)
+      expect(document.activeElement).toBe(container)
+      session.dispose()
+    })
+
+    it('returns focus to the map after editing a note in place', () => {
+      store.updatePersisted((draft) => {
+        draft.annotations = [makeTextAnnotation('note-1', { x: 40, y: 40 }, 'Old')]
+      })
+      const deps = createInteractionDeps(container, store, camera)
+      const session = createTestSession(deps)
+      session.setTool('select')
+      deps.setSelection([annotationTarget('note-1')])
+      container.focus()
+      events.keyDown({ key: 'Enter', target: container })
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      textarea.focus()
+
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+
+      expect(container.querySelector('textarea')).toBeNull()
+      expect(document.activeElement).toBe(container)
+      session.dispose()
+    })
+
+    it('cancels a polygon draft first, then returns to Select', () => {
+      const { session, tools } = sessionWithToolLog()
+      session.setTool('polygon')
+      container.focus()
+      events.pointerDown({ x: 20, y: 20 })
+      events.pointerUp({ x: 20, y: 20 })
+      events.pointerDown({ x: 80, y: 20 })
+      events.pointerUp({ x: 80, y: 20 })
+
+      escapeOnMap()
+      expect(tools).not.toContain('select')
+      expect(document.activeElement).toBe(container)
+
+      escapeOnMap()
+      expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+
+    it('cancels a zone drag first, then returns to Select', () => {
+      const { session, tools } = sessionWithToolLog()
+      session.setTool('rectangle')
+      events.pointerDown({ x: 20, y: 20 })
+      events.pointerMove({ x: 80, y: 60 })
+
+      escapeOnMap()
+      expect(tools).not.toContain('select')
+      expect(store.persisted.zones).toHaveLength(0)
+      expect(document.activeElement).toBe(container)
+
+      escapeOnMap()
+      expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+
+    it('drops the Plant a row source from its spacing field, returns focus to the map, then returns to Select', () => {
+      store.updatePersisted((draft) => {
+        draft.plants = [makePlant('source', 'Malus domestica', { x: 20, y: 30 })]
+      })
+      const { session, tools } = sessionWithToolLog()
+      session.setTool('plant-spacing')
+      events.pointerDown({ x: 20, y: 30 })
+      events.pointerUp({ x: 20, y: 30 })
+      const input = container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')!
+      input.focus()
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+
+      expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
+      expect(document.activeElement).toBe(container)
+      expect(tools).not.toContain('select')
+      escapeOnMap()
+      expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+  })
 })

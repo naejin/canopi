@@ -242,6 +242,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         commitPlantSpacingIntervalMeters: this._deps.commitPlantSpacingIntervalMeters,
         translate: this._deps.translate,
         switchTool: (name) => this._switchTool(name),
+        focusHost: () => this._focusInteractionHost(),
         applySnapping: (point) => this._applySnapping(point),
         getContainerRect: () => this._currentContainerRect(),
         notifyTransientHistoryChange: () => this._deps.notifyTransientHistoryChange?.(),
@@ -252,6 +253,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         getSceneStore: this._deps.getSceneStore,
         sceneEdits: this._deps.sceneEdits,
         canEditAnnotation: (annotationId) => this._canEditAnnotation(annotationId),
+        focusHost: () => this._focusInteractionHost(),
         refreshSelectionDependent: () => this._refreshSelectionDependentMeasurements(),
       }), (editor) => editor.dispose())
       this._sharedGestures = own(createSceneInteractionSharedGestures({
@@ -1015,6 +1017,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       return
     }
 
+    if (this._runEscapeChain(event)) return
     if (this._beginSelectedAnnotationTextEditFromKeyboard(event)) return
 
     if (
@@ -1183,6 +1186,28 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._pendingInteractionHostFocusFrame === null) return
     window.cancelAnimationFrame(this._pendingInteractionHostFocusFrame)
     this._pendingInteractionHostFocusFrame = null
+  }
+
+  /**
+   * Esc on the map once the active tool has had its turn (a gesture in
+   * progress cancels first): leave the tool for Select, then clear the
+   * selection. Tools that keep a pick (a stamp, a row source) drop it first.
+   */
+  private _runEscapeChain(event: KeyboardEvent): boolean {
+    if (event.key !== 'Escape' || event.defaultPrevented) return false
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
+    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
+    if (this._tool !== 'select') {
+      event.preventDefault()
+      this._switchTool('select')
+      return true
+    }
+    if (this._deps.getSelection().length === 0) return false
+    event.preventDefault()
+    this._deps.clearSelection()
+    this._deps.render('scene')
+    this._refreshSelectionDependentMeasurements()
+    return true
   }
 
   private _beginSelectedAnnotationTextEditFromKeyboard(event: KeyboardEvent): boolean {

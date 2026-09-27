@@ -34,6 +34,7 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 - Zones: click adds corners, first corner or Enter finishes, Backspace removes the last corner, Shift keeps 45°. Live edge lengths and area. A selected zone shows a sheet beside it: name, colour (radio swatches), fill, area and perimeter, Lock, Delete zone.
 - Text note: click places a field; Enter finishes (never while an input method composes), Shift Enter breaks a line, Esc restores. Measure: click two points; the result stays as a guide.
 - Drawing never moves existing objects; Space pans temporarily.
+- Esc on the map cancels the gesture in progress, then returns to Select, then clears the selection. Closing a field the tool opened (a text note, the row spacing) returns focus to the map, so the chain continues.
 
 ## Symbol and colour
 

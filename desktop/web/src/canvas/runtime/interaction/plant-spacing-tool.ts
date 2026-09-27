@@ -55,6 +55,7 @@ export interface PlantSpacingToolContext {
   readonly translate: CanvasRuntimeTranslator
   readonly sceneEdits: SceneEditCoordinator
   readonly switchTool: (name: string) => void
+  readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly getContainerRect: () => DOMRect
 }
@@ -90,7 +91,10 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   const overlay: PlantSpacingOverlayController = createPlantSpacingOverlay(
     context.container,
     {
-      onCancel: () => cancel(),
+      onCancel: () => {
+        cancel()
+        context.focusHost()
+      },
       onIntervalInput: (value) => handleIntervalInput(value),
       onIntervalCommit: (value) => commitIntervalInput(value),
       onIntervalBlur: (value) => commitIntervalInput(value, {

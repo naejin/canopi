@@ -8,6 +8,7 @@ import { isSceneLayerOpenForCreation } from './layer-guards'
 
 export interface TextAnnotationToolContext {
   readonly container: HTMLElement
+  readonly focusHost: () => void
   readonly camera: WorkspaceCameraFrameReader
   readonly getSceneStore: () => SceneStateReader
   readonly sceneEdits: SceneEditCoordinator
@@ -118,9 +119,13 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
   }
 
   function cancel(): void {
+    // Removing a focused field drops focus to the page; the map keeps it so
+    // the next Esc reaches the Esc chain.
+    const hadFocus = textarea !== null && textarea === document.activeElement
     textarea?.remove()
     textarea = null
     textWorldPosition = null
+    if (hadFocus) context.focusHost()
   }
 
   function isAnnotationsLayerOpen(): boolean {

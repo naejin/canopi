@@ -11,6 +11,8 @@ export interface AnnotationInlineEditorContext {
   readonly sceneEdits: SceneEditCoordinator
   readonly canEditAnnotation: (annotationId: string) => boolean
   readonly refreshSelectionDependent: () => void
+  /** Focus the map host once a focused editor closes. */
+  readonly focusHost: () => void
 }
 
 export interface AnnotationInlineEditorController {
@@ -157,8 +159,10 @@ export function createAnnotationInlineEditor(
   }
 
   function cleanup(): void {
+    const hadFocus = active !== null && active.textarea === document.activeElement
     active?.textarea.remove()
     active = null
+    if (hadFocus) context.focusHost()
   }
 
   function contains(target: EventTarget | null): boolean {

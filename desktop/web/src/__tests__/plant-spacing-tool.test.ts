@@ -52,6 +52,7 @@ function createPlantSpacingAdapter(
     translate: (key) => key,
     sceneEdits: createSceneEdits(store),
     switchTool: () => {},
+    focusHost: () => {},
     applySnapping: (point) => point,
     getContainerRect: () => container.getBoundingClientRect(),
   })

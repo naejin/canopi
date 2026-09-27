@@ -122,6 +122,7 @@ describe('canvas chrome fonts', () => {
       sceneEdits: { run: vi.fn() } as unknown as SceneEditCoordinator,
       canEditAnnotation: () => true,
       refreshSelectionDependent: vi.fn(),
+      focusHost: vi.fn(),
     })
     expect(editor.start('note')).toBe(true)
 

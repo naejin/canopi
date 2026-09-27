@@ -58,6 +58,8 @@ export interface SceneToolRegistryContext {
   readonly sceneEdits: SceneEditCoordinator
   readonly render: (kind: 'scene' | 'viewport') => void
   readonly switchTool: (name: string) => void
+  /** Focus the map host, as after a gesture ends from a field it opened. */
+  readonly focusHost: () => void
   readonly applySnapping: (point: ScenePoint) => ScenePoint
   readonly getContainerRect: () => DOMRect
   readonly notifyTransientHistoryChange: () => void
@@ -79,6 +81,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
   try {
     const textTool = own(createTextAnnotationTool({
       container: context.container,
+      focusHost: context.focusHost,
       camera: context.camera,
       getSceneStore: context.getSceneStore,
       sceneEdits: context.sceneEdits,
@@ -131,6 +134,7 @@ export function createSceneToolRegistry(context: SceneToolRegistryContext): Scen
       translate: context.translate,
       sceneEdits: context.sceneEdits,
       switchTool: context.switchTool,
+      focusHost: context.focusHost,
       applySnapping: context.applySnapping,
       getContainerRect: context.getContainerRect,
     }), (tool) => tool.dispose())
