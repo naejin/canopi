@@ -53,7 +53,7 @@ function action(): TimelineAction {
 
 function design(): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name: 'Calendar editor test',
     description: null,
     plant_species_colors: {},

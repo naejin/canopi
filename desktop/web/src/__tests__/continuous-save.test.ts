@@ -24,7 +24,7 @@ let uninstall: () => void
 
 function makeFile(name = 'Garden'): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name,
     description: null,
     plant_species_colors: {},

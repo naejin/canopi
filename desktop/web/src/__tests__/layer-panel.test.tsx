@@ -69,7 +69,7 @@ describe('LayerPanel', () => {
     saveSettings.mockReset().mockResolvedValue(undefined)
     resetSettingsProjectionForTests()
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'Demo',
       description: null,
       plant_species_colors: {},

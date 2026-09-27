@@ -35,7 +35,7 @@ function plant(canonicalName = 'Malus domestica'): PlacedPlant {
 
 function design(name: string): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name,
     description: null,
     plant_species_colors: {},

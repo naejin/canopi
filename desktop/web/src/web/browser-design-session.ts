@@ -522,6 +522,8 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
     timeline: [],
     budget: [],
     budget_currency: DEFAULT_BUDGET_CURRENCY,
+    views: [],
+    stories: [],
     created_at: timestamp,
     updated_at: timestamp,
     extra: {},

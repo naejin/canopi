@@ -2,7 +2,7 @@
 // GeoJSON codec for design objects (RFC 7946).
 //
 // Pure translation between persisted design objects (WGS84 lon/lat, the
-// `.canopi` v7 shapes) and a GeoJSON FeatureCollection. No DOM, IPC or
+// `.canopi` shapes) and a GeoJSON FeatureCollection. No DOM, IPC or
 // runtime access: callers read objects from the runtime's canonical form and
 // hand decoded objects back to a runtime import transaction.
 //

@@ -7,11 +7,11 @@ import {
 } from '../app/contracts/document'
 import { KNOWN_CANOPI_KEYS } from '../generated/known-canopi-keys'
 import { consortiumTarget, speciesBudgetTarget, speciesTarget } from '../target'
-import type { CanopiFile } from '../types/design'
+import type { CanopiFile, SavedView } from '../types/design'
 import { geoAt } from './support/geo-design'
 
 const RAW_DOCUMENT = {
-  version: 7,
+  version: 8,
   name: 'Format contract',
   description: null,
   plant_species_colors: {},
@@ -38,7 +38,7 @@ const RAW_DOCUMENT = {
 } as const
 
 const BASE_DOCUMENT: CanopiFile = {
-  version: 7,
+  version: 8,
   name: 'Contract base',
   description: null,
   plant_species_colors: {},
@@ -54,6 +54,23 @@ const BASE_DOCUMENT: CanopiFile = {
   created_at: '2026-04-13T00:00:00.000Z',
   updated_at: '2026-04-13T00:00:00.000Z',
   extra: {},
+}
+
+function savedView(id: string): SavedView {
+  return {
+    id,
+    name: id,
+    camera: { lon: 13, lat: 23, zoom: 18, bearing: 0 },
+    visible_layers: {
+      background: { kind: 'satellite' },
+      terrain: { contours: false, hillshade: false },
+      scene_layers: ['plants'],
+      site_data: [],
+    },
+    highlighted: { species: [], objects: [] },
+    title: null,
+    text: [],
+  }
 }
 
 describe('document format contract', () => {
@@ -104,6 +121,12 @@ describe('document format contract', () => {
           style: null,
         }],
       },
+      views: [savedView('document-view')],
+      stories: [{
+        id: 'document-story',
+        name: 'Document story',
+        steps: [{ id: 'step-1', view_id: 'document-view', title: 'Step', text: [], images: [] }],
+      }],
       created_at: '2026-04-13T01:00:00.000Z',
       extra: {
         future_panel_field: { source: 'document' },
@@ -160,6 +183,8 @@ describe('document format contract', () => {
         name: null,
         members: [{ kind: 'plant', id: 'canvas-plant' }],
       }],
+      views: [savedView('canvas-view')],
+      stories: [],
       updated_at: '2026-04-13T02:00:00.000Z',
       extra: {
         guides: [{ id: 'canvas-guide', axis: 'v', lon: 13.002 }],

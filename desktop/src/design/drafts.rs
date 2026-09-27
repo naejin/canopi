@@ -1,6 +1,6 @@
 //! Design drafts: Untitled Designs kept in app data until they are saved as a
 //! file or deleted. Each draft is `{app_data}/drafts/<id>.canopi` in the same
-//! v7 wire format, encoder, durable write and load admission as a Design file.
+//! `.canopi` wire format, encoder, durable write and load admission as a Design file.
 
 use common_types::design::{CanopiFile, DesignDraftSummary};
 use std::path::{Path, PathBuf};

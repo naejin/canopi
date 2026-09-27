@@ -50,7 +50,7 @@ describe('browser Design Session lifecycle', () => {
     expect(store.isDesignDirty()).toBe(false)
     expect(design).not.toHaveProperty('spatial_frame')
     expect(design).toMatchObject({
-      version: 7,
+      version: 8,
       name: 'Untitled',
       description: null,
       plant_species_colors: {},
@@ -100,7 +100,7 @@ describe('browser Design Session lifecycle', () => {
     expect(secondLayer.visible).toBe(false)
   })
 
-  it('composes a new browser Design as v7 through draft and download', async () => {
+  it('composes a new browser Design as the current version through draft and download', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })
     const downloadCanopiFile = vi.fn<(download: BrowserCanopiDownload) => Promise<void>>(
@@ -131,17 +131,17 @@ describe('browser Design Session lifecycle', () => {
       markDesignSessionDirtyForTest(store)
       await expect(controller.continuousSave.flush()).resolves.toBe(true)
 
-      expect(lastComposed.current?.version).toBe(7)
+      expect(lastComposed.current?.version).toBe(8)
       expect(lastComposed.current).not.toHaveProperty('spatial_frame')
       const draft = appDataStore.loadDraft('draft-canonical-new-design')
-      expect(draft?.version).toBe(7)
+      expect(draft?.version).toBe(8)
       expect(draft).not.toHaveProperty('spatial_frame')
 
       await controller.downloadCanopi()
       const download = downloadCanopiFile.mock.calls[0]?.[0]
       if (!download) throw new Error('browser download was not captured')
       const downloaded = JSON.parse(download.text) as Record<string, unknown>
-      expect(downloaded.version).toBe(7)
+      expect(downloaded.version).toBe(8)
       expect(downloaded).not.toHaveProperty('spatial_frame')
       expect(decodeCanopiDesign(downloaded).layers.find((layer) => layer.name === 'zones')?.visible).toBe(true)
     } finally {
@@ -206,15 +206,15 @@ describe('browser Design Session lifecycle', () => {
 
   it.each([
     {
-      label: 'a v5 Design',
-      content: () => ({ ...makeCanopiFile(), version: 5 }),
-      message: '$.version: unsupported Canopi Design version 5; current version is 7',
+      label: 'a v6 Design',
+      content: () => ({ ...makeCanopiFile(), version: 6 }),
+      message: '$.version: unsupported Canopi Design version 6; current version is 8',
       kind: 'unsupported_version',
     },
     {
-      label: 'a v6 Design',
-      content: () => ({ ...makeCanopiFile(), version: 6 }),
-      message: '$.version: unsupported Canopi Design version 6; current version is 7',
+      label: 'a v7 Design',
+      content: () => ({ ...makeCanopiFile(), version: 7 }),
+      message: '$.version: unsupported Canopi Design version 7; current version is 8',
       kind: 'unsupported_version',
     },
     {
@@ -263,7 +263,7 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readCurrentDesign()).toEqual(original)
   })
 
-  it('opens a v7 Design with lon/lat positions', async () => {
+  it('opens a current-version Design with lon/lat positions', async () => {
     const openedFile = makeCanopiFile({
       name: 'Geolocated Garden',
       plants: [plantAt({ lon: 2.3522, lat: 48.8566 })],
@@ -2123,7 +2123,7 @@ function memoryStorage(): MemoryStorage {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name: 'Test Design',
     description: null,
     plant_species_colors: {},

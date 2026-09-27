@@ -166,7 +166,7 @@ describe('shortcut manager canvas tool switching', () => {
 
   it('routes file shortcuts through document-session actions', () => {
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'test',
       description: null,
       plant_species_colors: {},

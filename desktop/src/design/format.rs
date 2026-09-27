@@ -3,6 +3,7 @@ use common_types::design::{
     DEFAULT_BUDGET_CURRENCY, Layer, MISSING_CANOPI_FILE_VERSION, OBSOLETE_CANOPI_ROOT_KEYS,
     validate_design_geometry,
 };
+use common_types::views::validate_views_and_stories;
 use std::fmt;
 use std::path::Path;
 
@@ -217,7 +218,7 @@ fn decode_design_value(
     {
         return Err(CanopiDesignIngestionError::new(
             CanopiDesignIngestionErrorKind::InvalidDocument,
-            format!("$.{key}: obsolete root field; v7 stores lon/lat on each design object"),
+            format!("$.{key}: obsolete root field; Designs store lon/lat on each design object"),
         ));
     }
 
@@ -228,9 +229,11 @@ fn decode_design_value(
             format!("$: {error}"),
         )
     })?;
-    validate_design_geometry(&file).map_err(|error| {
-        CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
-    })?;
+    validate_design_geometry(&file)
+        .and_then(|()| validate_views_and_stories(&file.views, &file.stories))
+        .map_err(|error| {
+            CanopiDesignIngestionError::new(CanopiDesignIngestionErrorKind::InvalidDocument, error)
+        })?;
     Ok(file)
 }
 
@@ -299,6 +302,8 @@ pub(crate) fn create_new_design(
         timeline: Vec::new(),
         budget: Vec::new(),
         budget_currency: DEFAULT_BUDGET_CURRENCY.to_owned(),
+        views: Vec::new(),
+        stories: Vec::new(),
         created_at: timestamp.clone(),
         updated_at: timestamp,
         extra: std::collections::HashMap::new(),
@@ -657,7 +662,7 @@ mod tests {
         use serde_json::json;
 
         let dir = std::env::temp_dir();
-        let path: PathBuf = dir.join("canopi_test_v7_round_trip.canopi");
+        let path: PathBuf = dir.join("canopi_test_geolocated_round_trip.canopi");
 
         let mut value = serde_json::to_value(create_default()).expect("default design serializes");
         value["plants"] = json!([{
@@ -717,10 +722,10 @@ mod tests {
         ]);
 
         std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
-            .expect("write v7 file");
-        let loaded = load_from_file(&path).expect("v7 file should load");
-        save_to_file(&path, &loaded, None).expect("v7 file should save");
-        let reloaded = load_from_file(&path).expect("saved v7 file should reload");
+            .expect("write current-version file");
+        let loaded = load_from_file(&path).expect("current-version file should load");
+        save_to_file(&path, &loaded, None).expect("current-version file should save");
+        let reloaded = load_from_file(&path).expect("saved file should reload");
 
         assert_eq!(reloaded.version, CURRENT_CANOPI_FILE_VERSION);
         let reloaded_value = serde_json::to_value(&reloaded).expect("reloaded design serializes");
@@ -810,6 +815,85 @@ mod tests {
 
         assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
         assert!(error.message.starts_with("$.extra:"), "{error}");
+    }
+
+    #[test]
+    fn a_previous_format_version_is_refused_before_parsing() {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["version"] = serde_json::json!(CURRENT_CANOPI_FILE_VERSION - 1);
+
+        let error = decode_design_value(value).expect_err("older Designs must be refused");
+
+        assert_eq!(
+            error.kind,
+            CanopiDesignIngestionErrorKind::UnsupportedVersion
+        );
+    }
+
+    fn with_views_and_stories() -> CanopiFile {
+        let mut value = serde_json::to_value(create_default()).expect("serialize");
+        value["views"] = serde_json::json!([{
+            "id": "view-1",
+            "name": "Berry hedges",
+            "camera": { "lon": 2.294_481_234_5, "lat": 48.858_370_123_4, "zoom": 19.25, "bearing": 0.0 },
+            "visible_layers": {
+                "background": { "kind": "satellite" },
+                "terrain": { "contours": false, "hillshade": false },
+                "scene_layers": ["plants", "zones"],
+                "site_data": []
+            },
+            "highlighted": {
+                "species": ["Lycium barbarum"],
+                "objects": [{ "kind": "zone", "id": "Hedge" }]
+            },
+            "title": "Berry hedges",
+            "text": []
+        }]);
+        value["stories"] = serde_json::json!([{
+            "id": "story-1",
+            "name": "Client visit",
+            "steps": [{
+                "id": "step-1",
+                "view_id": "view-1",
+                "title": "Berry hedges",
+                "text": [{ "kind": "paragraph", "spans": [
+                    { "text": "Two hedges", "bold": true, "italic": false, "link": null }
+                ] }],
+                "images": [{ "src": "https://example.org/hedge.jpg", "alt": "Hedge" }]
+            }]
+        }]);
+        decode_design_value(value).expect("views and stories should be admitted")
+    }
+
+    #[test]
+    fn views_and_stories_save_byte_identically_when_unchanged() {
+        let dir = unique_dir("views_round_trip");
+        let path = dir.join("stories.canopi");
+        let bytes = encode_design(&with_views_and_stories()).expect("encode");
+        std::fs::write(&path, &bytes).unwrap();
+
+        let loaded = load_from_file(&path).expect("load");
+        save_to_file(&path, &loaded, None).expect("save");
+
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert_eq!(loaded.views[0].camera.lon, 2.294_481_234_5);
+        assert_eq!(loaded.stories[0].steps[0].view_id, "view-1");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_story_step_without_its_saved_view_is_refused() {
+        let mut value = serde_json::to_value(with_views_and_stories()).expect("serialize");
+        value["views"] = serde_json::json!([]);
+
+        let error = decode_design_value(value).expect_err("dangling step must be refused");
+
+        assert_eq!(error.kind, CanopiDesignIngestionErrorKind::InvalidDocument);
+        assert!(
+            error.message.starts_with("$.stories[0].steps[0].view_id"),
+            "{error}"
+        );
     }
 
     #[test]

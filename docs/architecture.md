@@ -21,7 +21,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 | Owner | Owns | Mutation path |
 |---|---|---|
 | Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, layers | Runtime transactions |
-| Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, extra | Design Edit commands |
+| Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, saved views, stories, extra | Design Edit commands |
 | Map layer store (`app/map-layers/`) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
 | Settings | Last view, basemap style, Google key (device-local credential), locale, theme | Settings actions |
 
@@ -32,11 +32,11 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 
 ## Geolocation model
 
-- **Files store lon/lat.** `.canopi` format v7 stores every persisted position as `GeoPoint { lon, lat }` (WGS84 degrees). Zone rotation is degrees clockwise from true north. The file has no anchor, north bearing, placement status or altitude.
+- **Files store lon/lat.** `.canopi` format v8 stores every persisted position, including saved-view cameras, as `GeoPoint { lon, lat }` (WGS84 degrees). Zone rotation is degrees clockwise from true north. The file has no anchor, north bearing, placement status or altitude.
 - **Session plane.** On load, the codec builds a local tangent plane (local Mercator, `canvas/projection.ts`) with its origin at the centre of the objects' bounds, or at the current view centre for an empty Design. All runtime geometry, tools, snapping, measurements, hit testing and PDF layout work in metres in this plane. Camera `{x, y, scale}` is pixels per metre in the plane.
 - **Re-origin.** When the view centre moves more than 10 km from the plane origin, the runtime rebuilds the plane at the view centre and re-projects every object from its stored lon/lat. This is lossless because lon/lat is authoritative.
 - **Canonical write-back.** The codec remembers each object's loaded lon/lat. On save, an object whose plane coordinates did not change writes its original lon/lat unchanged; a changed object writes lon/lat rounded to 1e-9 degree (about 0.1 mm). Open then save without edits is byte-identical.
-- **Relative arrangements.** Saved object stamps stay relative arrangements in metres. Design templates are v7 files and are placed relative to the view on insert.
+- **Relative arrangements.** Saved object stamps stay relative arrangements in metres. Design templates are current-format `.canopi` files and are placed relative to the view on insert.
 - **LiDAR** sampling and coverage fit use the session plane.
 - **View, not placement.** Pan, zoom, fit and place search move the camera only. Objects never move unless the user edits them (cut and paste relocates objects).
 - **New Design view.** A new Design opens at the app's last view (`last_view {lon, lat, zoom}` in settings); without one, at lat 23.0, lon 13.0, zoom 4 and asks "Where is your site?" before "Start your Design". Opening a Design fits the camera to its objects; an empty Design uses the last view.

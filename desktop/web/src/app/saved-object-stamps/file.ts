@@ -17,7 +17,7 @@ import { sessionPlaneOriginForPoints } from '../../canvas/session-plane'
 
 // A stamp is a relative arrangement in metres. Its portable `.canopi` file
 // places that arrangement around 0°/0°; import reads it back through a plane
-// centred on the file's own objects, so any v7 Design can be imported.
+// centred on the file's own objects, so any current-version Design can be imported.
 const STAMP_FILE_ORIGIN = { lon: 0, lat: 0 } as const
 
 interface ComposeSavedObjectStampCanopiFileOptions {
@@ -84,6 +84,8 @@ export function composeSavedObjectStampCanopiFile({
     timeline: [],
     budget: [],
     budget_currency: 'EUR',
+    views: [],
+    stories: [],
     created_at: timestamp,
     updated_at: timestamp,
     extra: {},

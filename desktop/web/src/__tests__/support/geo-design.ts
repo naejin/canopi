@@ -6,7 +6,7 @@ import type { CanopiFile } from '../../types/design'
 export const TEST_GEO_ORIGIN: GeoPosition = Object.freeze({ lon: 13, lat: 23 })
 
 /**
- * Authors a v7 position from local metres (x east, y south) around `origin`.
+ * Authors a lon/lat position from local metres (x east, y south) around `origin`.
  * Use it to write fixtures that read like the old metre ones.
  */
 export function geoAt(x: number, y: number, origin: GeoPosition = TEST_GEO_ORIGIN): { lon: number; lat: number } {

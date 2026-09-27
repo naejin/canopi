@@ -160,7 +160,7 @@ describe('geolocated design codec', () => {
     expect(createSessionPlane(ORIGIN).toPlane(position).x).toBeCloseTo(3.3333333, 3)
   })
 
-  it('keeps zone measurements of a metre fixture after conversion to v7', () => {
+  it('keeps zone measurements of a metre fixture after conversion to lon/lat', () => {
     // A former metre fixture authored around 45°N, converted by the test-only helper.
     const origin = { lon: 5.72, lat: 45.18 }
     const rect = [{ x: 0, y: 0 }, { x: 12.5, y: 0 }, { x: 12.5, y: 8 }, { x: 0, y: 8 }]
@@ -191,7 +191,7 @@ describe('geolocated design codec', () => {
   it('serializes with an explicit frame so saved content never depends on hidden state', () => {
     const { persisted, geo } = hydrateSceneFromDesign(v7Design())
     const saved = serializeScenePersistedState(persisted, geo)
-    expect(saved.version).toBe(7)
+    expect(saved.version).toBe(8)
     expect('spatial_frame' in saved).toBe(false)
   })
 })

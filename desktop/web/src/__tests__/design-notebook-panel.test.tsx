@@ -11,7 +11,7 @@ describe('DesignNotebookPanel', () => {
 
   function testDesign(): CanopiFile {
     return {
-      version: 7,
+      version: 8,
       name: 'Current Design',
       description: null,
       plant_species_colors: {},

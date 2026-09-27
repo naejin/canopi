@@ -3,6 +3,10 @@ import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
 } from '../app/contracts/design-ingestion'
+import {
+  STORY_IMAGE_MAX_BYTES,
+  STORY_IMAGES_MAX_TOTAL_BYTES,
+} from '../generated/canopi-design-format'
 
 describe('Canopi Design decoder', () => {
   it('rejects malformed nested fields with an actionable path', () => {
@@ -32,16 +36,16 @@ describe('Canopi Design decoder', () => {
   it.each([
     { version: undefined, displayed: 1 },
     { version: 1, displayed: 1 },
-    { version: 5, displayed: 5 },
     { version: 6, displayed: 6 },
-    { version: 8, displayed: 8 },
+    { version: 7, displayed: 7 },
+    { version: 9, displayed: 9 },
   ])('rejects unsupported old, missing, or future version $displayed', ({ version, displayed }) => {
     const input = currentDesign()
     if (version === undefined) delete input.version
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; current version is 7`,
+      `$.version: unsupported Canopi Design version ${displayed}; current version is 8`,
     )
     expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
   })
@@ -52,21 +56,64 @@ describe('Canopi Design decoder', () => {
     )
   })
 
-  it('admits a v7 Design with lon/lat positions', () => {
+  it('admits a current-version Design with lon/lat positions', () => {
     const decoded = decodeCanopiDesign(currentDesign({
       plants: [plant('plant-1', 'Malus domestica')],
       zones: [{ name: 'Bed', zone_type: 'polygon', points: [{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }] }],
     }))
 
-    expect(decoded.version).toBe(7)
+    expect(decoded.version).toBe(8)
     expect(decoded.plants[0]!.position).toEqual({ lon: 13.0001, lat: 23.0002 })
     expect(decoded.zones[0]!.points).toEqual([{ lon: 2.35, lat: 48.85 }, { lon: 2.351, lat: 48.851 }])
+  })
+
+  it('caps embedded story images at 1 MiB each and 10 MiB per Design', () => {
+    expect(STORY_IMAGE_MAX_BYTES).toBe(1024 * 1024)
+    expect(STORY_IMAGES_MAX_TOTAL_BYTES).toBe(10 * STORY_IMAGE_MAX_BYTES)
+    const full = dataUri(STORY_IMAGE_MAX_BYTES)
+    const withImages = (sizes: readonly string[][]) => currentDesign({
+      views: [savedView('view-1')],
+      stories: [{
+        id: 'story-1',
+        name: 'Visit',
+        steps: sizes.map((images, index) => ({
+          id: `step-${index}`,
+          view_id: 'view-1',
+          title: 'Step',
+          images: images.map((src) => ({ src, alt: '' })),
+        })),
+      }],
+    })
+
+    expect(decodeCanopiDesign(withImages([[full]])).stories?.[0]?.steps[0]?.images?.[0]?.src).toBe(full)
+    expect(() => decodeCanopiDesign(withImages([[dataUri(STORY_IMAGE_MAX_BYTES + 1)]]))).toThrow(
+      `$.stories[0].steps[0].images[0].src: an embedded image holds at most ${STORY_IMAGE_MAX_BYTES} bytes`,
+    )
+    const tenFull = Array.from({ length: 10 }, () => [full])
+    expect(() => decodeCanopiDesign(withImages(tenFull))).not.toThrow()
+    expectKind(() => decodeCanopiDesign(withImages([...tenFull, [dataUri(1)]])), 'invalid_document')
+    expect(() => decodeCanopiDesign(withImages([...tenFull, [dataUri(1)]]))).toThrow(
+      `$.stories[0].steps[10].images[0].src: a Design embeds at most ${STORY_IMAGES_MAX_TOTAL_BYTES} bytes of images`,
+    )
+  })
+
+  it.each([
+    ['data:image/png;base64,not base64!', 'an embedded image must be valid base64 data'],
+    ['data:image/png;base64,AAA', 'an embedded image must be valid base64 data'],
+    ['data:image/png,raw', 'an embedded image must be base64 data'],
+    ['http://example.org/a.png', 'images must be https: links or embedded PNG, JPEG, WebP or GIF data'],
+  ])('refuses the story image source %s', (src, reason) => {
+    const input = currentDesign({
+      views: [savedView('view-1')],
+      stories: [{ id: 'story-1', name: 'Visit', steps: [{ id: 'step-1', view_id: 'view-1', title: 'Step', images: [{ src }] }] }],
+    })
+    expect(() => decodeCanopiDesign(input)).toThrow(`$.stories[0].steps[0].images[0].src: ${reason}`)
   })
 
   it.each(['location', 'north_bearing_deg', 'spatial_frame'])('rejects obsolete root authority %s', (key) => {
     const input = currentDesign({ [key]: null })
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.${key}: obsolete root field; v7 stores lon/lat on each design object`,
+      `$.${key}: obsolete root field; Designs store lon/lat on each design object`,
     )
     expectKind(() => decodeCanopiDesign(input), 'invalid_document')
   })
@@ -231,9 +278,31 @@ function plant(id: string, canonicalName: string): Record<string, unknown> {
   }
 }
 
+function dataUri(decodedBytes: number): string {
+  const tail = decodedBytes % 3 === 1 ? 'AA==' : decodedBytes % 3 === 2 ? 'AAA=' : ''
+  return `data:image/png;base64,${'AAAA'.repeat(Math.floor(decodedBytes / 3))}${tail}`
+}
+
+function savedView(id: string): Record<string, unknown> {
+  return {
+    id,
+    name: 'Orchard',
+    camera: { lon: 2, lat: 48, zoom: 17, bearing: 0 },
+    visible_layers: {
+      background: { kind: 'satellite' },
+      terrain: { contours: false, hillshade: false },
+      scene_layers: [],
+      site_data: [],
+    },
+    highlighted: { species: [], objects: [] },
+    title: null,
+    text: [],
+  }
+}
+
 function currentDesign(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: 7,
+    version: 8,
     name: 'Garden',
     description: null,
     plant_species_colors: {},

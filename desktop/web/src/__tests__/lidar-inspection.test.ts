@@ -47,7 +47,7 @@ const { signal } = await import('@preact/signals')
 /** A Design whose only presentation entry is a visible source layer. */
 function designWithPresentedLayer(): Parameters<typeof replaceCurrentDesignState>[0] {
   return {
-    version: 7,
+    version: 8,
     name: 'Inspect',
     description: null,
     plant_species_colors: {},

@@ -5,6 +5,7 @@ import {
   OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
+import { viewsAndStoriesProblem } from './views-admission'
 import { normalizeLoadedDocument } from './document'
 import { decodeCanopiFileSchema } from './canopi-design-schema-decoder'
 import {
@@ -18,6 +19,7 @@ export function decodeCanopiDesign(value: unknown): CanopiFile {
   try {
     admitCurrentDesignValue(value)
     const decoded = decodeCanopiFileSchema(value, CANOPI_FILE_SCHEMA) as CanopiFile
+    admitViewsAndStories(decoded)
     return normalizeLoadedDocument(decoded)
   } catch (error) {
     throw asCanopiDesignIngestionError(error)
@@ -46,7 +48,7 @@ function admitCurrentDesignValue(value: unknown): asserts value is Record<string
   if (obsolete) {
     throw new CanopiDesignIngestionError(
       'invalid_document',
-      `$.${obsolete}: obsolete root field; v7 stores lon/lat on each design object`,
+      `$.${obsolete}: obsolete root field; Designs store lon/lat on each design object`,
     )
   }  // Unknown fields travel at the root; `extra` is only the in-memory holder
   // and the canonical encoder never writes it, so a root `extra` is refused.
@@ -56,6 +58,11 @@ function admitCurrentDesignValue(value: unknown): asserts value is Record<string
       '$.extra: unknown fields belong at the document root',
     )
   }
+}
+
+function admitViewsAndStories(file: CanopiFile): void {
+  const problem = viewsAndStoriesProblem(file.views ?? [], file.stories ?? [])
+  if (problem) throw new CanopiDesignIngestionError('invalid_document', problem)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

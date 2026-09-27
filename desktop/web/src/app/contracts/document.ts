@@ -138,6 +138,8 @@ function normalizeDocumentKnownFields(file: CanopiFile): CanopiFile {
     budget: file.budget ?? [],
     budget_currency: file.budget_currency ?? DEFAULT_BUDGET_CURRENCY,
     ...(file.lidar == null ? {} : { lidar: file.lidar }),
+    views: file.views ?? [],
+    stories: file.stories ?? [],
     created_at: file.created_at,
     updated_at: file.updated_at,
     extra: normalizePersistedExtra(file.extra),

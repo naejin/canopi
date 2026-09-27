@@ -4,7 +4,7 @@ use specta::Type;
 pub const DEFAULT_BUDGET_CURRENCY: &str = "EUR";
 pub const DEFAULT_PLANT_SYMBOL_ID: &str = "round";
 /// Current `.canopi` format version shared by native loading and generated Web facts.
-pub const CURRENT_CANOPI_FILE_VERSION: u32 = 7;
+pub const CURRENT_CANOPI_FILE_VERSION: u32 = 8;
 /// Missing versions are interpreted as the first public `.canopi` format.
 pub const MISSING_CANOPI_FILE_VERSION: u32 = 1;
 pub const FUTURE_CANOPI_FILE_VERSION_POLICY: &str = "reject";
@@ -207,6 +207,14 @@ pub const DESIGN_FILE_FIELDS: &[DesignFileField] = &[
         owner: DesignFileFieldOwner::Document,
     },
     DesignFileField {
+        key: "views",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
+        key: "stories",
+        owner: DesignFileFieldOwner::Document,
+    },
+    DesignFileField {
         key: "created_at",
         owner: DesignFileFieldOwner::Document,
     },
@@ -254,6 +262,12 @@ pub struct CanopiFile {
     // document stores display settings only, never raster bytes or paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lidar: Option<crate::lidar::LidarPresentationSection>,
+    // Named map views (ADR 0011).
+    #[serde(default)]
+    pub views: Vec<crate::views::SavedView>,
+    // Ordered presentations of saved views (ADR 0011).
+    #[serde(default)]
+    pub stories: Vec<crate::views::Story>,
     pub created_at: String,
     pub updated_at: String,
     /// Preserves unknown fields for forward compatibility — round-trips fields
@@ -730,7 +744,7 @@ mod tests {
 
     fn geo_file(plants: serde_json::Value) -> CanopiFile {
         serde_json::from_value(json!({
-            "version": 7,
+            "version": 8,
             "name": "Geo",
             "plant_species_colors": {},
             "layers": [],
@@ -739,7 +753,7 @@ mod tests {
             "created_at": "2026-09-25T00:00:00.000Z",
             "updated_at": "2026-09-25T00:00:00.000Z"
         }))
-        .expect("v7 design should deserialize")
+        .expect("current design should deserialize")
     }
 
     fn plant_at(lon: f64, lat: f64) -> serde_json::Value {
@@ -786,7 +800,7 @@ mod tests {
     #[test]
     fn design_positions_reject_local_metre_points() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 7,
+            "version": 8,
             "name": "Metres",
             "plant_species_colors": {},
             "layers": [],
@@ -799,13 +813,13 @@ mod tests {
             "created_at": "2026-09-25T00:00:00.000Z",
             "updated_at": "2026-09-25T00:00:00.000Z"
         }));
-        assert!(result.is_err(), "v7 positions must be lon/lat");
+        assert!(result.is_err(), "design positions must be lon/lat");
     }
 
     #[test]
     fn design_objects_missing_lock_state_load_unlocked_and_serialize_explicitly() {
         let file: CanopiFile = serde_json::from_value(json!({
-            "version": 7,
+            "version": 8,
             "name": "Implicit locks",
             "description": null,
             "plant_species_colors": {},
@@ -884,7 +898,7 @@ mod tests {
     #[test]
     fn general_deserialization_rejects_obsolete_object_group_shape() {
         let result = serde_json::from_value::<CanopiFile>(json!({
-            "version": 7,
+            "version": 8,
             "name": "Legacy groups require ingestion",
             "plant_species_colors": {},
             "layers": [],

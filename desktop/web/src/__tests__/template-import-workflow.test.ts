@@ -233,7 +233,7 @@ async function flushMicrotasks(): Promise<void> {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name: 'Test Template',
     description: null,
     plant_species_colors: {},

@@ -17,6 +17,17 @@ export type DesignNotebookSnapshot = Contracts.DesignNotebookSnapshot
 export type DesignDraftSummary = Contracts.DesignDraftSummary
 export type DesignSaveOutcome = Contracts.DesignSaveOutcome
 export type Consortium = Contracts.Consortium
+export type SavedView = Contracts.SavedView
+export type SavedViewCamera = Contracts.SavedViewCamera
+export type SavedViewLayers = Contracts.SavedViewLayers
+export type SavedViewBackground = Contracts.SavedViewBackground
+export type SavedViewHighlight = Contracts.SavedViewHighlight
+export type SavedViewObject = Contracts.SavedViewObject
+export type RichTextBlock = Contracts.RichTextBlock
+export type RichTextSpan = Contracts.RichTextSpan
+export type Story = Contracts.Story
+export type StoryStep = Contracts.StoryStep
+export type StoryImage = Contracts.StoryImage
 
 export interface PlacedPlant extends Omit<Contracts.PlacedPlant, 'id' | 'color' | 'symbol' | 'pinned_name'> {
   id: string

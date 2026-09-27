@@ -9,7 +9,7 @@ import { speciesBudgetTarget } from '../target'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name: 'test',
     description: null,
     plant_species_colors: {},

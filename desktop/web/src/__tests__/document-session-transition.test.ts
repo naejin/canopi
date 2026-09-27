@@ -88,7 +88,7 @@ let machine: DesignSessionStateMachine;
 
 function makeFile(name: string): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name,
     description: null,
     plant_species_colors: {},

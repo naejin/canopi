@@ -79,7 +79,7 @@ describe('Web Edition Design Template import workflow', () => {
 
 function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name: 'Test Template',
     description: null,
     plant_species_colors: {},
@@ -95,6 +95,8 @@ function makeCanopiFile(overrides: Partial<CanopiFile> = {}): CanopiFile {
     timeline: [],
     budget: [],
     budget_currency: 'EUR',
+    views: [],
+    stories: [],
     created_at: '2026-06-01T00:00:00.000Z',
     updated_at: '2026-06-02T00:00:00.000Z',
     ...overrides,

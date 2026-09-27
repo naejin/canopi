@@ -36,7 +36,7 @@ function action(overrides: Partial<TimelineAction> = {}): TimelineAction {
 
 function design(name: string, timeline: TimelineAction[] = [action()]): CanopiFile {
   return {
-    version: 7,
+    version: 8,
     name,
     description: null,
     plant_species_colors: {},

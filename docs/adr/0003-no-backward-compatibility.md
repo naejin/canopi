@@ -9,7 +9,7 @@ Canopi v1 accumulated migrations, legacy readers, compatibility corpora and pres
 ## Decision
 
 - Canopi v2 has no migrations, legacy readers, compatibility shims or old-format fixtures. Old data is refused, set aside or deleted.
-- **Designs:** only `.canopi` format v7 is admitted. v6 and older, missing, invalid and future versions are refused with the existing `unsupported_version` error before the active Design is replaced. There is no production converter; a test may convert a fixture through a test-only helper.
+- **Designs:** only the current `.canopi` format is admitted (v7 when this was accepted; v8 since saved views and stories, ADR 0011). Older, missing, invalid and future versions are refused with the existing `unsupported_version` error before the active Design is replaced. There is no production converter; a test may convert a fixture through a test-only helper.
 - **Desktop user DB:** one schema. A database from an older Canopi is renamed `user.db.v<N>-set-aside` and an empty one is created.
 - **LiDAR library:** catalogue v20. A library written by an older Canopi is deleted on first open and starts empty; a newer catalogue is refused, not deleted.
 - **Web storage:** v1 browser storage is ignored, never read or rewritten.

@@ -21,7 +21,7 @@ function consortium(canonicalName: string, overrides: Partial<Omit<Consortium, '
 beforeEach(() => {
   designSessionFixture.nonCanvasRevision = 0
   designSessionFixture.file = {
-    version: 7,
+    version: 8,
     name: 'test',
     description: null,
     plant_species_colors: {},

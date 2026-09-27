@@ -109,6 +109,8 @@ export type CanopiFile = {
 	budget?: BudgetItem[],
 	budget_currency: string,
 	lidar?: LidarPresentationSection | null,
+	views?: SavedView[],
+	stories?: Story[],
 	created_at: string,
 	updated_at: string,
 };
@@ -684,6 +686,19 @@ export type RasterQuantity =
 // Terrain slope, in degrees or percent (derived only).
 "Slope";
 
+export type RichTextBlock = { kind: "paragraph"; spans: RichTextSpan[] } | { kind: "bullets"; items: RichTextListItem[] };
+
+export type RichTextListItem = {
+	spans: RichTextSpan[],
+};
+
+export type RichTextSpan = {
+	text: string,
+	bold?: boolean,
+	italic?: boolean,
+	link: string | null,
+};
+
 export type SavedObjectStamp = {
 	id: string,
 	name: string,
@@ -691,6 +706,44 @@ export type SavedObjectStamp = {
 	sort_order: number,
 	created_at: string,
 	updated_at: string,
+};
+
+export type SavedView = {
+	id: string,
+	name: string,
+	camera: SavedViewCamera,
+	visible_layers: SavedViewLayers,
+	highlighted: SavedViewHighlight,
+	title: string | null,
+	text?: RichTextBlock[],
+};
+
+export type SavedViewBackground = { kind: "basemap"; style: string } | { kind: "satellite" } | { kind: "none" };
+
+export type SavedViewCamera = {
+	lon: number,
+	lat: number,
+	zoom: number,
+	bearing: number,
+};
+
+export type SavedViewHighlight = {
+	species: string[],
+	objects: SavedViewObject[],
+};
+
+export type SavedViewLayers = {
+	background: SavedViewBackground,
+	terrain: SavedViewTerrain,
+	scene_layers: string[],
+	site_data: string[],
+};
+
+export type SavedViewObject = { kind: "plant"; id: string } | { kind: "zone"; id: string } | { kind: "annotation"; id: string } | { kind: "measurement_guide"; id: string } | { kind: "group"; id: string };
+
+export type SavedViewTerrain = {
+	contours: boolean,
+	hillshade: boolean,
 };
 
 export type Settings = {
@@ -966,6 +1019,25 @@ export type StaleReason =
 { reason: "RecipeUpdated"; from: number; to: number } |
 // A different engine build is installed.
 { reason: "ToolUpdated"; from: string; to: string };
+
+export type Story = {
+	id: string,
+	name: string,
+	steps: StoryStep[],
+};
+
+export type StoryImage = {
+	src: string,
+	alt?: string,
+};
+
+export type StoryStep = {
+	id: string,
+	view_id: string,
+	title: string,
+	text?: RichTextBlock[],
+	images?: StoryImage[],
+};
 
 export type SubsystemHealth = {
 	plant_db: PlantDbStatus,

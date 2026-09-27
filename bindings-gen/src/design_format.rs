@@ -160,6 +160,31 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
         "export const FUTURE_CANOPI_FILE_VERSION_POLICY = {:?} as const\n",
         common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
     )?;
+    writeln!(
+        file,
+        "export const SAVED_VIEW_MAX_ZOOM = {:?}",
+        common_types::views::SAVED_VIEW_MAX_ZOOM,
+    )?;
+    writeln!(
+        file,
+        "export const RICH_TEXT_LINK_SCHEMES = {} as const",
+        serde_json::to_string(common_types::views::RICH_TEXT_LINK_SCHEMES)?,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGE_DATA_TYPES = {} as const",
+        serde_json::to_string(common_types::views::STORY_IMAGE_DATA_TYPES)?,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGE_MAX_BYTES = {}",
+        common_types::views::STORY_IMAGE_MAX_BYTES,
+    )?;
+    writeln!(
+        file,
+        "export const STORY_IMAGES_MAX_TOTAL_BYTES = {}\n",
+        common_types::views::STORY_IMAGES_MAX_TOTAL_BYTES,
+    )?;
     file.push_str("export const OBSOLETE_CANOPI_ROOT_KEYS = [\n");
     for key in common_types::design::OBSOLETE_CANOPI_ROOT_KEYS {
         writeln!(file, "  {:?},", key)?;
