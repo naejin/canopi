@@ -1,5 +1,6 @@
 import { computeScenePhysicalExtentMeters } from '../../canvas/runtime/scene-physical-extent'
 import { buildCanvasPrintSnapshot } from '../../canvas/runtime/print-snapshot'
+import { createTestSceneRendererSnapshot } from './scene-renderer-snapshot'
 import { signal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
 import {
@@ -74,6 +75,16 @@ export function createTestCanvasQuerySurface({
     capturePrintSnapshot: () => {
       void admissionRevision.value
       return settled ? buildCanvasPrintSnapshot(scene, { viewport, speciesCache: new Map() }) : null
+    },
+    captureViewScene: (request) => {
+      void admissionRevision.value
+      if (!settled) return null
+      const visible = new Set(request.visibleLayerNames)
+      return createTestSceneRendererSnapshot({
+        scene: { ...scene, layers: scene.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })) },
+        viewport: request.viewport,
+        speciesFocus: { canonicalName: request.focusedSpecies, showCodes: false },
+      })
     },
     getScenePhysicalExtentMeters: () => computeScenePhysicalExtentMeters(scene),
     getSceneSnapshot: () => scene,

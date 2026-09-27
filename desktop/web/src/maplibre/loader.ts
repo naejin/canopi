@@ -10,6 +10,8 @@ export interface MapLibreMapConstructorOptions {
   bearing?: number
   renderWorldCopies?: boolean
   canvasContextAttributes?: WebGLContextAttributes
+  pixelRatio?: number
+  fadeDuration?: number
   attributionControl?: false | { compact?: boolean }
   interactive: boolean
   pitchWithRotate: boolean

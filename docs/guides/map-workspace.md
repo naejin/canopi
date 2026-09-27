@@ -152,6 +152,34 @@ Paths are relative to `desktop/web/src/` unless they start with `desktop/`.
 - `CanvasDocumentSurface.attachInspectionTo()` returns a disposable handle (`canvas/inspection.ts`). `SceneCanvasInspectionOwner` owns the preview canvas, subscriptions, observer, frame, independent inspected location and hover; attachment failure rolls back. Replacement resets the location; destruction releases lenses.
 - The lens opens at the canvas centre and follows pointer movement over artwork (host-relative CSS px through `inspectAtScreenPoint`); moving onto controls keeps the last location; editing drags do not redirect it. It pans by drag or arrows, never moves the main camera or selection, excludes hidden plant layers, and its Canvas2D preview (`inspection-lens-drawing.ts`) is renderer-neutral and DPR-aware. `inspection-layout.ts` places full localized names with connectors and never forces overlaps.
 
+## View snapshots
+
+A saved view is captured as an image off-screen, for view and story thumbnails and story export. The visible map, camera, selection and Design are never touched. Planting-plan PDFs still have no map ([ADR 0008](../adr/0008-canvas-pdf-export.md)).
+
+- `maplibre/view-snapshot-map.ts` is the one owner of a hidden MapLibre map: a fixed, off-page, `aria-hidden` container, the production background band (`mountMapBackground`, with its own `BasemapTileAuth`) and its own shared scene layer (`canopi-snapshot-scene`). Captures run one at a time on that single map, which is resized per request and replaced only for a new pixel ratio or after WebGL context loss. The map is removed 30 s after its last capture (`VIEW_SNAPSHOT_IDLE_RELEASE_MS`), which also releases its WebGL context. Sides are limited to 4096 device pixels.
+- `app/saved-views/snapshot.ts`: `captureSavedViewSnapshot(view, { width, height, pixelRatio?, timeoutMs?, type?, signal? })` resolves `{ blob, width, height, missingTiles, attribution, timings }`, or null with no Design on a map. It fits the view's zoom so the image shows what the workspace shows at its current size, takes the background, Design layers and focused species from the view, and takes opacities and locale from current settings. It owns the shared map (HMR dispose included). `VIEW_SNAPSHOT_THUMBNAIL` is 320 × 200 and `VIEW_SNAPSHOT_EXPORT` is 1600 × 1000.
+- The scene comes from `CanvasQuerySurface.captureViewScene()`: the settled scene at the snapshot viewport with the view's layers and species focus, and no selection, hover or panel highlight. It returns null while an edit owns the Scene (`ViewSnapshotSceneBusyError`).
+- Reading: MapLibre fires `idle` in the same task that painted a complete frame, so the capture copies the canvas with `drawImage` inside that handler. After the timeout it calls `redraw()` and copies right away. Neither case needs `preserveDrawingBuffer`. A frame is complete when the requested background is installed (`MapBackgroundHandle.isApplied()`), the tiles are loaded and the scene layer has drawn the new snapshot.
+- `missingTiles` is set when the timeout passed first (default 8 s), when any map error occurred during the capture, or when the background never installed (for example Satellite without a usable key). `attribution` is the snapshot map's own attribution control text (OpenFreeMap and OpenStreetMap credits, or the Google copyright).
+- Google key: the key only reaches MapLibre's request transform. A capture result holds an image, flags, credit text and timings, never a URL. Map errors during a capture are counted, never logged.
+- The gallery surface `snapshots` (`ui-gallery/GalleryViewSnapshots.tsx`) captures views of the workspace with both reading modes and shows the timings; add `tiles=1` for Basemap and Satellite.
+
+Costs measured in headless Chrome with SwiftShader (software WebGL) on Linux, gallery fixtures, milliseconds:
+
+| Step | No background | Basemap or Satellite (network) |
+|---|---|---|
+| First map setup (includes loading MapLibre and Pixi) | 1250–3200 | same |
+| Setup of a later map | 70–200 | same |
+| Settle, 320 × 200 | 20–70 | 140–420 |
+| Settle, 1600 × 1000 | 30 | 360–440 |
+| Copy in the `idle` handler | 0.2–11 | 0.2–1.2 |
+| PNG encode (`toBlob`, includes GPU readback), 320 × 200 | 20–350 | 40–970 |
+| PNG encode, 1600 × 1000 | 700 | 370–420 |
+
+With `preserveDrawingBuffer: true` the same captures fell in the same ranges. It adds a buffer copy on every frame and buys nothing when the copy happens in the frame's task, so it is off. The snapshot map is one more WebGL context while it lives. Chromium caps live contexts per page (16 on desktop) and drops the oldest instead of refusing a new one. A map per thumbnail could therefore take the context of the workspace map, so there is exactly one snapshot map, released when idle (checked in Chrome: its canvas and container are gone after the delay).
+
+Limits: terrain (contours, hillshade), LiDAR site data and highlighted objects are not drawn. A saved view stores no extent, so the fitted zoom depends on the current workspace size. Satellite opens its own Google session per snapshot map lifetime. Tauri WebKitGTK and WebView2 are not measured yet.
+
 ## Tauri, network and profiling
 
 - `desktop/tauri.conf.json` CSP: images and connections allow HTTPS plus the scoped asset protocol; `script-src` adds `'wasm-unsafe-eval'` for the raster engine; `worker-src` and `child-src` admit self-hosted workers and `blob:`. Never broaden CSP to cover a missing worker bundle.
@@ -171,10 +199,10 @@ Copied modules and commits are in `THIRD_PARTY_NOTICES.md`; the boundary is in [
 | Basemap opacity and labels | `map-controller.ts` | Same approach; Canopi scales only the layers it installed. |
 | Raster display | `cog-imagery.ts`, `plugins/maplibre-raster.ts` | Drives the upstream control UI with a main-thread tiler; its codec patches do not apply to DEFLATE display COGs. |
 | Zone fill patterns | `fill-patterns.ts` | Zones are drawn by Pixi without patterns; patterns are a product decision. |
-| Map capture, print layout | `map-capture.ts`, `print-layout-export.ts` | PDF has no maps in v2.0 ([ADR 0008](../adr/0008-canvas-pdf-export.md)); re-evaluate when map export returns. |
+| Map capture, print layout | `map-capture.ts`, `print-layout-export.ts` | Captures the visible map through GeoLibre's `MapEngine` and throws on errors or timeout; view snapshots need an off-screen map, a missing-tiles flag and the scene layer. The redraw-then-copy step is the same. PDF has no maps in v2.0 ([ADR 0008](../adr/0008-canvas-pdf-export.md)). |
 | Attribution, resize, bounds | `collapsed-attribution-control.ts`, `map-resize.ts`, `map-bounds.ts` | Collapsing credit changes required attribution; the host owns resize; `canvas/projection.ts` has the same formulas. |
 
-`@geolibre/map` is not a dependency. The PDF path never mounts or captures a map or fetches map assets.
+`@geolibre/map` is not a dependency. The PDF path never mounts or captures a map or fetches map assets; only [view snapshots](#view-snapshots) capture a map.
 
 ## Tests
 

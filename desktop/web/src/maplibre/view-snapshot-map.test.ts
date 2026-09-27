@@ -1,0 +1,502 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { geoToMercator } from '../canvas/projection'
+import type { MapLibreMapConstructorOptions } from './loader'
+import type { MapBackgroundHandle, MapBackgroundOptions, MapBackgroundPresentation } from './map-background'
+import type { SharedMapSceneLayer, SharedMapSceneLayerOptions } from './shared-scene-layer'
+import { createTestSceneRendererSnapshot } from '../__tests__/support/scene-renderer-snapshot'
+import {
+  createViewSnapshotMap,
+  VIEW_SNAPSHOT_SCENE_LAYER_ID,
+  type ViewSnapshotMapOptions,
+  type ViewSnapshotRequest,
+} from './view-snapshot-map'
+
+const ORIGIN = { lat: 48.2, lon: 0.03 }
+const SECRET_KEY = 'AIza-snapshot-secret'
+
+type Listener = (event?: unknown) => void
+
+class FakeMap {
+  static instances: FakeMap[] = []
+  static autoLoad = true
+  static autoIdle = true
+  readonly listeners = new Map<string, Set<Listener>>()
+  readonly canvas: HTMLCanvasElement
+  readonly layers = new Map<string, Record<string, unknown>>()
+  readonly jumps: { center: [number, number]; zoom: number }[] = []
+  center: [number, number]
+  zoom: number
+  tilesLoaded = true
+  resizes = 0
+  redraws = 0
+  removed = false
+
+  constructor(readonly options: MapLibreMapConstructorOptions) {
+    FakeMap.instances.push(this)
+    this.center = options.center ?? [0, 0]
+    this.zoom = options.zoom ?? 0
+    this.canvas = document.createElement('canvas')
+    ;(this.canvas as unknown as { getContext: (type: string) => unknown }).getContext = (type: string) =>
+      type === 'webgl2' ? ({} as WebGL2RenderingContext) : null
+    this.syncCanvasSize()
+    options.container.appendChild(this.canvas)
+    const attribution = document.createElement('div')
+    attribution.className = 'maplibregl-ctrl-attrib-inner'
+    attribution.innerHTML = '<a>OpenFreeMap</a> | <a>© OpenStreetMap</a> | <a>OpenFreeMap</a>'
+    options.container.appendChild(attribution)
+    if (FakeMap.autoLoad) queueMicrotask(() => this.fire('load'))
+  }
+
+  get pixelRatio(): number { return this.options.pixelRatio ?? 1 }
+
+  syncCanvasSize(): void {
+    const width = parseInt(this.options.container.style.width, 10)
+    const height = parseInt(this.options.container.style.height, 10)
+    this.canvas.width = Math.round(width * this.pixelRatio)
+    this.canvas.height = Math.round(height * this.pixelRatio)
+  }
+
+  on(type: string, listener: Listener): void {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set())
+    this.listeners.get(type)!.add(listener)
+  }
+  off(type: string, listener: Listener): void { this.listeners.get(type)?.delete(listener) }
+  fire(type: string, event?: unknown): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener(event)
+  }
+  listenerCount(type: string): number { return this.listeners.get(type)?.size ?? 0 }
+
+  jumpTo(options: { center: [number, number]; zoom: number }): void {
+    this.center = options.center
+    this.zoom = options.zoom
+    this.jumps.push({ center: options.center, zoom: options.zoom })
+  }
+  resize(): void {
+    this.resizes += 1
+    this.syncCanvasSize()
+  }
+  redraw(): void { this.redraws += 1 }
+  remove(): void { this.removed = true }
+  loaded(): boolean { return true }
+  areTilesLoaded(): boolean { return this.tilesLoaded }
+  triggerRepaint(): void {
+    if (FakeMap.autoIdle) queueMicrotask(() => this.fire('idle'))
+  }
+  getCanvas(): HTMLCanvasElement { return this.canvas }
+  getPitch(): number { return 0 }
+  addLayer(layer: Record<string, unknown>): void { this.layers.set(String(layer.id), layer) }
+  getLayer(id: string): unknown { return this.layers.get(id) }
+  /** Web Mercator at 512-pixel tiles, like MapLibre. */
+  project(point: { lng: number; lat: number }): { x: number; y: number } {
+    const worldSize = 512 * 2 ** this.zoom
+    const centre = geoToMercator(this.center[0], this.center[1])
+    const target = geoToMercator(point.lng, point.lat)
+    const width = this.canvas.width / this.pixelRatio
+    const height = this.canvas.height / this.pixelRatio
+    return {
+      x: (target.x - centre.x) * worldSize + width / 2,
+      y: (target.y - centre.y) * worldSize + height / 2,
+    }
+  }
+}
+
+interface FakeLayer extends SharedMapSceneLayer {
+  readonly options: SharedMapSceneLayerOptions
+  readonly snapshots: unknown[]
+  readonly disposals: unknown[]
+}
+
+let layers: FakeLayer[] = []
+let backgrounds: (MapBackgroundHandle & { presentations: MapBackgroundPresentation[]; disposed: boolean; applied: boolean; options: MapBackgroundOptions })[] = []
+
+function createFakeLayer(options: SharedMapSceneLayerOptions): FakeLayer {
+  let sceneSyncCount = 0
+  const snapshots: unknown[] = []
+  const disposals: unknown[] = []
+  const layer: FakeLayer = {
+    options,
+    snapshots,
+    disposals,
+    layer: { id: options.id, type: 'custom', render: () => undefined },
+    get diagnostics() { return { sceneSyncCount } as SharedMapSceneLayer['diagnostics'] },
+    initialize: vi.fn(async () => undefined),
+    setSnapshot(snapshot) {
+      snapshots.push(snapshot)
+      sceneSyncCount += 1
+    },
+    requestRender: () => undefined,
+    dispose: vi.fn(async (disposeOptions?: unknown) => { disposals.push(disposeOptions) }),
+  }
+  layers.push(layer)
+  return layer
+}
+
+function createFakeBackground(options: MapBackgroundOptions) {
+  const handle = {
+    options,
+    presentations: [] as MapBackgroundPresentation[],
+    disposed: false,
+    applied: true,
+    update(presentation: MapBackgroundPresentation) { handle.presentations.push(presentation) },
+    restore: () => undefined,
+    isApplied: () => handle.applied,
+    dispose() { handle.disposed = true },
+  }
+  backgrounds.push(handle)
+  return handle
+}
+
+function createOwner(overrides: Partial<ViewSnapshotMapOptions> = {}) {
+  return createViewSnapshotMap({
+    loadMapLibre: async () => ({ Map: FakeMap as unknown as new (options: MapLibreMapConstructorOptions) => unknown }),
+    mountBackground: createFakeBackground,
+    createSceneLayer: createFakeLayer,
+    readFrame: (canvas) => ({
+      width: canvas.width,
+      height: canvas.height,
+      encode: async (type) => new Blob(['frame'], { type }),
+    }),
+    ...overrides,
+  })
+}
+
+const BASEMAP: MapBackgroundPresentation = {
+  basemap: { style: 'liberty', visible: true, opacity: 1 },
+  satellite: { visible: false, opacity: 1 },
+  locale: 'en',
+}
+
+function request(overrides: Partial<ViewSnapshotRequest> = {}): ViewSnapshotRequest {
+  return {
+    camera: { lon: ORIGIN.lon, lat: ORIGIN.lat, zoom: 18 },
+    width: 320,
+    height: 200,
+    background: BASEMAP,
+    scene: {
+      origin: ORIGIN,
+      build: (viewport) => createTestSceneRendererSnapshot({ viewport }),
+    },
+    timeoutMs: 5_000,
+    ...overrides,
+  }
+}
+
+beforeEach(() => {
+  FakeMap.instances = []
+  FakeMap.autoLoad = true
+  FakeMap.autoIdle = true
+  layers = []
+  backgrounds = []
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
+
+describe('view snapshot map', () => {
+  it('captures on the first complete frame without touching another map', async () => {
+    const owner = createOwner()
+    const build = vi.fn((viewport: { x: number; y: number; scale: number }) => createTestSceneRendererSnapshot({ viewport }))
+
+    const capture = await owner.capture(request({ scene: { origin: ORIGIN, build } }))
+
+    expect(capture.missingTiles).toBe(false)
+    expect(capture.blob.type).toBe('image/png')
+    expect(capture).toMatchObject({ width: 320, height: 200 })
+    expect(capture.attribution).toEqual(['OpenFreeMap', '© OpenStreetMap'])
+    const [map] = FakeMap.instances
+    expect(map!.options).toMatchObject({
+      pixelRatio: 1,
+      fadeDuration: 0,
+      interactive: false,
+      attributionControl: false,
+      canvasContextAttributes: { antialias: true, preserveDrawingBuffer: false },
+    })
+    expect(map!.jumps.at(-1)).toEqual({ center: [ORIGIN.lon, ORIGIN.lat], zoom: 18 })
+    // The plane origin is the map centre, so the scene viewport puts it there.
+    const viewport = build.mock.calls[0]![0]
+    expect(viewport.x).toBeCloseTo(160, 6)
+    expect(viewport.y).toBeCloseTo(100, 6)
+    expect(map!.layers.has(VIEW_SNAPSHOT_SCENE_LAYER_ID)).toBe(true)
+    expect(backgrounds[0]!.presentations).toEqual([BASEMAP])
+    expect(layers[0]!.options.readOrigin()).toEqual(ORIGIN)
+    const container = map!.options.container
+    expect(container.getAttribute('aria-hidden')).toBe('true')
+    expect(container.style.visibility).toBe('hidden')
+    expect(container.style.position).toBe('fixed')
+    expect(owner.diagnostics).toMatchObject({ live: true, mapsCreated: 1, captures: 1 })
+    await owner.dispose()
+  })
+
+  it('waits for the background to be installed before reading', async () => {
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    const map = FakeMap.instances[0]!
+    backgrounds[0]!.applied = false
+    map.fire('idle')
+    map.tilesLoaded = false
+    backgrounds[0]!.applied = true
+    map.fire('idle')
+    expect(map.listenerCount('idle')).toBe(1)
+    map.tilesLoaded = true
+    map.fire('idle')
+
+    await expect(pending).resolves.toMatchObject({ missingTiles: false })
+    expect(map.listenerCount('idle')).toBe(0)
+    await owner.dispose()
+  })
+
+  it('reads a redrawn frame with the missing-tiles flag when the timeout passes', async () => {
+    vi.useFakeTimers()
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request({ timeoutMs: 1_000 }))
+    await vi.advanceTimersByTimeAsync(999)
+    expect(FakeMap.instances[0]!.redraws).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+
+    const capture = await pending
+    expect(capture.missingTiles).toBe(true)
+    expect(FakeMap.instances[0]!.redraws).toBe(1)
+    await owner.dispose()
+  })
+
+  it('flags missing tiles after a tile error and never logs the failing URL', async () => {
+    FakeMap.autoIdle = false
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    const map = FakeMap.instances[0]!
+    map.fire('error', { error: new Error(`403 https://tile.googleapis.com/v1/2dtiles/1/2/3?session=s&key=${SECRET_KEY}`) })
+    map.fire('idle')
+
+    const capture = await pending
+    expect(capture.missingTiles).toBe(true)
+    expect(JSON.stringify(capture)).not.toContain(SECRET_KEY)
+    for (const call of [...consoleError.mock.calls, ...consoleWarn.mock.calls]) {
+      expect(String(call)).not.toContain(SECRET_KEY)
+    }
+    await owner.dispose()
+  })
+
+  it('flags a background that never installed', async () => {
+    vi.useFakeTimers()
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request({ timeoutMs: 100 }))
+    await vi.advanceTimersByTimeAsync(0)
+    backgrounds[0]!.applied = false
+    await vi.advanceTimersByTimeAsync(100)
+    await expect(pending).resolves.toMatchObject({ missingTiles: true })
+    await owner.dispose()
+  })
+
+  it('shares one map across captures, resizing it and replacing it for a new pixel ratio', async () => {
+    const owner = createOwner()
+    const order: string[] = []
+    const first = owner.capture(request()).then(() => order.push('thumbnail'))
+    const second = owner.capture(request({ width: 1600, height: 1000 })).then(() => order.push('export'))
+    await Promise.all([first, second])
+    expect(order).toEqual(['thumbnail', 'export'])
+    expect(FakeMap.instances).toHaveLength(1)
+    expect(FakeMap.instances[0]!.resizes).toBe(1)
+    expect(FakeMap.instances[0]!.options.container.style.width).toBe('1600px')
+
+    const retina = await owner.capture(request({ pixelRatio: 2 }))
+    expect(retina).toMatchObject({ width: 640, height: 400 })
+    expect(FakeMap.instances).toHaveLength(2)
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(owner.diagnostics.mapsCreated).toBe(2)
+    await owner.dispose()
+  })
+
+  it('releases the map and its context after the idle delay and recreates it on demand', async () => {
+    vi.useFakeTimers()
+    const owner = createOwner({ idleReleaseMs: 1_000 })
+    await owner.capture(request())
+    const map = FakeMap.instances[0]!
+    const container = map.options.container
+    expect(container.isConnected).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(map.removed).toBe(true)
+    expect(container.isConnected).toBe(false)
+    expect(layers[0]!.disposals).toEqual([{ mapWillBeRemoved: true }])
+    expect(backgrounds[0]!.disposed).toBe(true)
+    expect(map.listenerCount('error')).toBe(0)
+    expect(owner.diagnostics.live).toBe(false)
+
+    await owner.capture(request())
+    expect(FakeMap.instances).toHaveLength(2)
+    await owner.dispose()
+  })
+
+  it('fails a capture on context loss and starts the next one on a new map', async () => {
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    FakeMap.instances[0]!.fire('webglcontextlost')
+    await expect(pending).rejects.toThrow('lost its WebGL context')
+    expect(owner.diagnostics.contextLosses).toBe(1)
+
+    FakeMap.autoIdle = true
+    await owner.capture(request())
+    expect(FakeMap.instances).toHaveLength(2)
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    await owner.dispose()
+  })
+
+  it('cancels a capture through its signal and keeps the map', async () => {
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const controller = new AbortController()
+    const pending = owner.capture(request({ signal: controller.signal }))
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(FakeMap.instances[0]!.listenerCount('idle')).toBe(0)
+    expect(owner.diagnostics.live).toBe(true)
+
+    const aborted = new AbortController()
+    aborted.abort()
+    await expect(owner.capture(request({ signal: aborted.signal }))).rejects.toMatchObject({ name: 'AbortError' })
+    await owner.dispose()
+  })
+
+  it('fails a capture whose scene cannot be built and keeps serving the next', async () => {
+    const owner = createOwner()
+    const failing = request({ scene: { origin: ORIGIN, build: () => { throw new Error('busy') } } })
+    await expect(owner.capture(failing)).rejects.toThrow('busy')
+    await expect(owner.capture(request())).resolves.toMatchObject({ missingTiles: false })
+    expect(FakeMap.instances).toHaveLength(1)
+    await owner.dispose()
+  })
+
+  it('refuses sizes and cameras it cannot draw', async () => {
+    const owner = createOwner()
+    await expect(owner.capture(request({ width: 2049, pixelRatio: 2 }))).rejects.toThrow('4096')
+    await expect(owner.capture(request({ width: 10.5 }))).rejects.toThrow('whole positive')
+    await expect(owner.capture(request({ pixelRatio: 0 }))).rejects.toThrow('pixel ratio')
+    await expect(owner.capture(request({ camera: { lon: Number.NaN, lat: 0, zoom: 1 } }))).rejects.toThrow('finite')
+    await expect(owner.capture(request({ timeoutMs: -1 }))).rejects.toThrow('timeout')
+    expect(FakeMap.instances).toHaveLength(0)
+  })
+
+  it('tears down on dispose, fails the capture in flight and refuses later ones', async () => {
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    await owner.dispose()
+    await expect(pending).rejects.toThrow('released')
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(document.querySelector('[data-canopi-view-snapshot]')).toBeNull()
+    await expect(owner.capture(request())).rejects.toThrow('disposed')
+    await owner.dispose()
+  })
+
+  it('removes a map whose setup failed', async () => {
+    const owner = createOwner({
+      createSceneLayer: (options) => {
+        const layer = createFakeLayer(options)
+        ;(layer as { initialize: SharedMapSceneLayer['initialize'] }).initialize = async () => { throw new Error('no pixi') }
+        return layer
+      },
+    })
+    await expect(owner.capture(request())).rejects.toThrow('no pixi')
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(owner.diagnostics.live).toBe(false)
+    await owner.dispose()
+  })
+  it('copies the frame to a 2D canvas and encodes it, failing without 2D or an encoder result', async () => {
+    const drawImage = vi.fn()
+    let blob: Blob | null = new Blob(['png'], { type: 'image/png' })
+    let context: unknown = { drawImage }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => context as never)
+    const toBlob = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback, type, quality) => {
+      expect([type, quality]).toEqual(['image/webp', 0.8])
+      callback(blob)
+    })
+    const owner = createOwner({ readFrame: undefined })
+
+    const capture = await owner.capture(request({ type: 'image/webp', quality: 0.8 }))
+    expect(capture.blob).toBe(blob)
+    expect(drawImage).toHaveBeenCalledWith(FakeMap.instances[0]!.canvas, 0, 0)
+    expect(toBlob).toHaveBeenCalledTimes(1)
+
+    blob = null
+    await expect(owner.capture(request({ type: 'image/webp', quality: 0.8 }))).rejects.toThrow('encode')
+    context = null
+    await expect(owner.capture(request())).rejects.toThrow('copy')
+    await owner.dispose()
+  })
+
+  it('cancels a capture while the map loads and releases that map', async () => {
+    FakeMap.autoLoad = false
+    const owner = createOwner()
+    const controller = new AbortController()
+    const pending = owner.capture(request({ signal: controller.signal }))
+    await vi.waitFor(() => expect(FakeMap.instances).toHaveLength(1))
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(owner.diagnostics.live).toBe(false)
+    await owner.dispose()
+  })
+
+  it('disposes while a map loads without waiting for it', async () => {
+    FakeMap.autoLoad = false
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances).toHaveLength(1))
+    await owner.dispose()
+    await expect(pending).rejects.toThrow('released while loading')
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+  })
+
+  it('fails a capture whose scene layer failed and replaces the map next time', async () => {
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request())
+    await vi.waitFor(() => expect(FakeMap.instances[0]?.listenerCount('idle')).toBe(1))
+    layers[0]!.options.onFailure?.(new Error('pixi failed'))
+    FakeMap.instances[0]!.fire('idle')
+    await expect(pending).rejects.toThrow('pixi failed')
+    FakeMap.autoIdle = true
+    await owner.capture(request())
+    expect(FakeMap.instances).toHaveLength(2)
+    await owner.dispose()
+  })
+
+  it('fails a capture when the forced redraw throws', async () => {
+    vi.useFakeTimers()
+    FakeMap.autoIdle = false
+    const owner = createOwner()
+    const pending = owner.capture(request({ timeoutMs: 10 }))
+    const settled = pending.catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(0)
+    FakeMap.instances[0]!.redraw = () => { throw new Error('redraw failed') }
+    await vi.advanceTimersByTimeAsync(10)
+    expect(await settled).toMatchObject({ message: 'redraw failed' })
+    await owner.dispose()
+  })
+
+  it('reports a teardown failure once and still removes the container', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const owner = createOwner()
+    await owner.capture(request())
+    const map = FakeMap.instances[0]!
+    map.remove = () => { throw new Error('remove failed') }
+    await owner.dispose()
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    expect(map.options.container.isConnected).toBe(false)
+  })
+})

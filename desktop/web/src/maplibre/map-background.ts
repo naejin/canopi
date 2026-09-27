@@ -88,6 +88,11 @@ export interface MapBackgroundHandle {
   update(presentation: MapBackgroundPresentation): void
   /** Re-applies after a same-map style reload emptied the stack. */
   restore(): void
+  /**
+   * Whether the latest presentation is on the map: the requested Basemap style
+   * installed, or the Satellite layer added. Tile loading is not part of it.
+   */
+  isApplied(): boolean
   dispose(): void
 }
 
@@ -178,6 +183,12 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
       if (disposed) return
       vector.restore()
       if (satellite) satellite.update(readViewport(map))
+    },
+    isApplied() {
+      if (disposed || !presentation || !readiness.isReady()) return false
+      if (presentation.satellite.visible) return map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID) != null
+      if (presentation.basemap.visible) return vector.installedStyle === presentation.basemap.style
+      return true
     },
     dispose() {
       if (disposed) return

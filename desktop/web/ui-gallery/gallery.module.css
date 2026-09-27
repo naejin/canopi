@@ -22,3 +22,13 @@
 /* A fixed dark foliage strip stands in for satellite imagery in both themes. */
 .symbolMap { background: #2F3A24; border-radius: var(--radius-sm); }
 .symbolCell figcaption { font-size: var(--text-xs); text-align: center; line-height: 1.2; }
+/* Off-screen view snapshots over the live workspace (surface=snapshots). */
+.snapshots { position: absolute; top: var(--space-2); right: var(--space-2); bottom: var(--space-2); width: min(360px, calc(100% - var(--space-4))); overflow: auto; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-xs); z-index: 5; }
+.snapshots header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.snapshots header button { margin-left: auto; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); cursor: pointer; }
+.snapshots ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.snapshots img, .snapshotMissing { display: block; width: 100%; aspect-ratio: 8 / 5; object-fit: contain; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); }
+.snapshotMissing { display: grid; place-items: center; color: var(--color-text-muted); }
+.snapshots dl { margin: var(--space-1) 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px var(--space-2); }
+.snapshots dt { color: var(--color-text-muted); }
+.snapshots dd { margin: 0; overflow-wrap: anywhere; }

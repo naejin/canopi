@@ -1,4 +1,5 @@
 import { buildCanvasPrintSnapshot } from './print-snapshot'
+import { isWorkspaceOverviewScale } from '../workspace-camera-policy'
 import type { PlacedPlant } from '../../types/design'
 import type { SelectedPlantColorContext } from '../plant-color-context'
 import type { SelectedPlantSymbolContext } from '../plant-symbol-context'
@@ -8,6 +9,7 @@ import type {
   CanvasDesignObjectSelectionModel,
   CanvasQueryRevision,
   CanvasQuerySurface,
+  CanvasViewSceneRequest,
 } from './runtime'
 import type {
   SceneDocumentReader,
@@ -31,7 +33,7 @@ interface SceneCanvasQuerySurfaceOptions {
   >
   readonly presentation: Pick<
     SceneRuntimePresentationController,
-    'createPlantPresentationContext' | 'getLocalizedCommonNames'
+    'createPlantPresentationContext' | 'getLocalizedCommonNames' | 'buildViewCaptureSnapshot'
   >
 }
 
@@ -56,6 +58,14 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
         this.options.presentation.createPlantPresentationContext(1, scene.plants),
       )
     }, null)
+  }
+  captureViewScene(request: CanvasViewSceneRequest) {
+    void this.options.settledReader.revision.value
+    const overview = isWorkspaceOverviewScale(request.viewport.scale, this.options.camera.snapshot.peek())
+    return this.options.settledReader.readWhenSettled(
+      () => this.options.presentation.buildViewCaptureSnapshot({ ...request, overview }),
+      null,
+    )
   }
   getScenePhysicalExtentMeters(): number | null { return this.options.sceneStore.physicalExtentMeters }
   getSceneSnapshot(): ScenePersistedState { return this.options.sceneStore.persisted }

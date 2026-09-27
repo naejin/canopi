@@ -880,6 +880,42 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('captures a saved view scene without selection or session changes, and not during an edit', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    const selection = runtime.querySurface.getSelection()
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const layerNames = scene.layers.map((layer) => layer.name)
+    expect(selection.length).toBeGreaterThan(0)
+    const viewport = { x: 100, y: 80, scale: 4 }
+
+    const capture = runtime.querySurface.captureViewScene({
+      viewport,
+      visibleLayerNames: [layerNames[0]!],
+      focusedSpecies: 'Malus domestica',
+    })
+
+    expect(capture?.viewport).toEqual(viewport)
+    expect(capture?.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 0))
+    expect(capture?.speciesFocus).toEqual({ canonicalName: 'Malus domestica', showCodes: false })
+    expect(capture?.selectedPlantIds.size).toBe(0)
+    expect(capture?.hoverTarget).toBeNull()
+    expect(runtime.querySurface.captureViewScene({ viewport: { x: 0, y: 0, scale: 0.001 }, visibleLayerNames: [], focusedSpecies: null })
+      ?.scene.layers.every((layer) => !layer.visible)).toBe(true)
+    expect(runtime.querySurface.getSelection()).toEqual(selection)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.querySurface.getSpeciesFocus().canonicalName).toBeNull()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    const sceneEdits = (runtime as unknown as { _sceneCommands: SceneEditCoordinator })._sceneCommands
+    const active = sceneEdits.begin('interaction-drag')
+    active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
+    expect(runtime.querySurface.captureViewScene({ viewport, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
+    active.abort()
+    runtime.destroy()
+  })
+
   it('shows a searched place by moving only the view', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))

@@ -52,7 +52,7 @@ vi.mock('../maplibre/map-background', async (importOriginal) => {
         dispose: vi.fn(handle.dispose),
       }
       backgroundSpy.mounts.push(record)
-      return { update: record.update, restore: handle.restore, dispose: record.dispose }
+      return { update: record.update, restore: handle.restore, isApplied: handle.isApplied, dispose: record.dispose }
     },
   }
 })

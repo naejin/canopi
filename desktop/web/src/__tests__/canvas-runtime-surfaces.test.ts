@@ -41,6 +41,7 @@ function createQuerySurface() {
     sessionPlane: signal(createSessionPlane(DEFAULT_NEW_DESIGN_VIEW)),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
+    captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: () => createDefaultScenePersistedState(),
     getSelection: () => [],

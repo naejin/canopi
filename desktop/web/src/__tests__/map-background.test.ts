@@ -146,6 +146,25 @@ describe('map background band', () => {
     background.dispose()
   })
 
+  it('reports whether the latest presentation is on the map', async () => {
+    const { map, background } = mount()
+    expect(background.isApplied()).toBe(false)
+    background.update(presentation())
+    expect(background.isApplied()).toBe(false)
+    await settle()
+    expect(background.isApplied()).toBe(true)
+    background.update(presentation({ satelliteVisible: true }))
+    await settle()
+    expect(background.isApplied()).toBe(true)
+    map.removeLayer(MAPLIBRE_SATELLITE_LAYER_ID)
+    expect(background.isApplied()).toBe(false)
+    background.update(presentation({ basemapVisible: false }))
+    await settle()
+    expect(background.isApplied()).toBe(true)
+    background.dispose()
+    expect(background.isApplied()).toBe(false)
+  })
+
   it('adds no remote source when every background row is hidden', async () => {
     const { map, background } = mount()
     background.update(presentation({ basemapVisible: false }))

@@ -34,6 +34,7 @@ import { activity } from './memory-backend'
 import { lidarMapViewBounds } from '../src/app/lidar/camera-request'
 import { GalleryCanvasSurface } from './GalleryCanvasSurface'
 import { PlantSymbolSheet } from './PlantSymbolSheet'
+import { GalleryViewSnapshots } from './GalleryViewSnapshots'
 import { readPlanningViewState } from '../src/app/planning-view/state'
 import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from '../src/commands/registry'
 import {
@@ -141,6 +142,9 @@ function Gallery() {
         <>
           <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} />
           <GalleryDesktopFrame />
+          {selectedSurface.value === 'snapshots'
+            ? <GalleryViewSnapshots ready={galleryCanvasReady.value} tiles={params.get('tiles') === '1'} />
+            : null}
         </>
       )}
     </main>

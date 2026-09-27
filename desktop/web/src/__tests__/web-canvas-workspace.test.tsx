@@ -938,6 +938,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     sessionPlane: signal<SessionPlane | null>(createSessionPlane(TEST_GEO_ORIGIN)),
     getSpeciesFocus: () => ({ canonicalName: null, showCodes: false }),
     capturePrintSnapshot: () => null,
+    captureViewScene: () => null,
     getScenePhysicalExtentMeters: () => null,
     getSceneSnapshot: vi.fn(() => createDefaultScenePersistedState()),
     getSelection: vi.fn(() => []),

@@ -19,7 +19,8 @@ import type {
   SceneBounds,
   TemporaryBoundsFocusOptions,
 } from './camera'
-import type { ScenePersistedState } from './scene'
+import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { SceneRendererSnapshot } from './renderers/scene-types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -164,6 +165,14 @@ export interface CanvasCommandSurface {
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 }
 
+export interface CanvasViewSceneRequest {
+  readonly viewport: SceneViewportState
+  /** Design layers drawn; every other layer is hidden. */
+  readonly visibleLayerNames: readonly string[]
+  /** Species the view focuses; others are dimmed as Species Focus does. */
+  readonly focusedSpecies: string | null
+}
+
 export interface CanvasQuerySurface {
   getSpeciesFocus(): SpeciesFocus
   readonly revision: CanvasQueryRevision
@@ -171,6 +180,12 @@ export interface CanvasQuerySurface {
   // The open Design's metre frame; null only before the first hydration.
   readonly sessionPlane: ReadonlySignal<SessionPlane | null>
   capturePrintSnapshot(): CanvasPrintSnapshot | null
+  /**
+   * The settled scene as a saved view shows it at `viewport`, for an off-screen
+   * snapshot: no selection, hover or panel highlight. Null while an edit owns
+   * the Scene. Never changes session state.
+   */
+  captureViewScene(request: CanvasViewSceneRequest): SceneRendererSnapshot | null
   getScenePhysicalExtentMeters(): number | null
   getSceneSnapshot(): ScenePersistedState
   getSelection(): SceneDesignObjectTarget[]

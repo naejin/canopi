@@ -134,6 +134,48 @@ export class SceneRuntimePresentationController {
     }
   }
 
+  /**
+   * A snapshot for an off-screen view capture: the persisted scene with only
+   * the requested layers visible, no selection, hover or panel highlight.
+   */
+  buildViewCaptureSnapshot(request: {
+    readonly viewport: SceneViewportState
+    readonly overview: boolean
+    readonly visibleLayerNames: readonly string[]
+    readonly focusedSpecies: string | null
+  }): SceneRendererSnapshot {
+    const persisted = this._sceneStore.persisted
+    const visible = new Set(request.visibleLayerNames)
+    const scene: ScenePersistedState = {
+      ...persisted,
+      layers: persisted.layers.map((layer) => ({ ...layer, visible: visible.has(layer.name) })),
+    }
+    const speciesFocus = { canonicalName: request.focusedSpecies, showCodes: false }
+    const { viewport } = request
+    if (request.overview) return buildOverviewRendererSnapshot(scene, speciesFocus, viewport)
+    const localizedCommonNames = this.getLocalizedCommonNames()
+    const speciesCache = this._speciesCache.getCache()
+    const selectionLabelPlantIds = new Set<string>()
+    return {
+      scene,
+      speciesFocus,
+      viewport,
+      selectionLabelPlantIds,
+      revealedAnnotationId: null,
+      selectedPlantIds: new Set(),
+      selectedZoneIds: new Set(),
+      selectedAnnotationIds: new Set(),
+      selectedMeasurementGuideIds: new Set(),
+      highlightedPlantIds: new Set(),
+      highlightedZoneIds: new Set(),
+      speciesCache,
+      localizedCommonNames,
+      hoveredCanonicalName: null,
+      hoverTarget: null,
+      ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds, speciesCache }),
+    }
+  }
+
   async refreshSpeciesCacheEntries(
     canonicalNames: string[],
     activeLocale: string,

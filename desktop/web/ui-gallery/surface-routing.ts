@@ -18,6 +18,7 @@ export const GALLERY_SURFACES = {
   favorites: 'Favorites',
   notebook: 'Design notebook',
   lens: 'Inspection lens',
+  snapshots: 'View snapshots',
 } as const
 
 export type GallerySurface = keyof typeof GALLERY_SURFACES

@@ -29,3 +29,15 @@ export {
   type SaveViewDialogRequest,
 } from './dialogs'
 export { savedViewMenuActions } from './menu'
+export {
+  captureSavedViewSnapshot,
+  describeSavedViewSnapshot,
+  disposeViewSnapshots,
+  savedViewBackgroundPresentation,
+  ViewSnapshotSceneBusyError,
+  VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS,
+  VIEW_SNAPSHOT_EXPORT,
+  VIEW_SNAPSHOT_THUMBNAIL,
+  type SavedViewSnapshot,
+  type SavedViewSnapshotOptions,
+} from './snapshot'
