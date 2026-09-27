@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import { batch, useSignal } from '@preact/signals'
 import {
   buildBudgetListProjection,
   useBudgetPlanningSurface,
@@ -16,6 +16,7 @@ import type { PlantFinderResult } from '../plant-finder/matcher'
 import { useMapSelectionSpecies } from '../plant-finder/selection'
 import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { exportBudgetCsv, isBudgetExportCancelled } from './export'
+import { budgetPriceRequest } from './price-request'
 import {
   budgetCurrencySymbol,
   formatBudgetCurrency,
@@ -44,6 +45,8 @@ export interface BudgetItemWorkbench {
   readonly exportPending: boolean
   readonly exportFailed: boolean
   readonly focusedCanonical: string | null
+  /** Moves when another surface asked for a price (Set unit cost…): the panel focuses that field. */
+  readonly priceFocusRequest: number
   readonly scrollTop: number
   readonly setSearch: (value: string) => void
   readonly setSort: (value: BudgetSort) => void
@@ -202,6 +205,26 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     priceInvalid.value = value.trim() !== '' && !validateBudgetPriceDraft(value, activeLocale).valid
   }, [activeLocale, editPrice, priceInvalid])
 
+  // Set unit cost… from the map: that species' price, its row shown even under filters.
+  const priceRequest = budgetPriceRequest.value
+  const priceFocusRequest = useSignal(0)
+  useEffect(() => {
+    if (!priceRequest) return
+    budgetPriceRequest.value = null
+    const canonical = priceRequest.canonicalName
+    if (priceRequest.sessionIdentity !== designSessionStore.sessionIdentity.peek()) return
+    if (!projectionRef.current.rows.some((row) => row.canonical === canonical)) return
+    batch(() => {
+      if (!listRef.current.rows.some((row) => row.canonical === canonical)) {
+        view.budgetSearch.value = ''
+        view.budgetMissingPriceOnly.value = false
+        view.budgetSelectedOnMap.value = false
+      }
+      startPriceEdit(canonical)
+      priceFocusRequest.value += 1
+    })
+  }, [priceRequest, priceFocusRequest, startPriceEdit, view])
+
   const formatCurrency = useCallback((amount: number) => (
     formatBudgetCurrency(amount, currency, activeLocale)
   ), [activeLocale, currency])
@@ -253,6 +276,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     exportPending: exportPending.value,
     exportFailed: exportFailed.value,
     focusedCanonical: currentCanvasQuerySurface.value?.getSpeciesFocus().canonicalName ?? null,
+    priceFocusRequest: priceFocusRequest.value,
     scrollTop: view.budgetScrollTop,
     setSearch: (value) => { view.budgetSearch.value = value },
     setSort: (value) => { view.budgetSort.value = value },

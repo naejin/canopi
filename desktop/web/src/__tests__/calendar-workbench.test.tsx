@@ -6,6 +6,7 @@ import {
   type CalendarWorkbench,
 } from '../app/timeline/calendar-workbench'
 import { disposePlanningViewState } from '../app/planning-view/state'
+import { calendarAddRequest, requestCalendarAdd } from '../app/timeline/calendar-request'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { setCanvasSelection } from '../canvas/session-state'
 import { MANUAL_TARGET, speciesTarget } from '../target'
@@ -134,6 +135,30 @@ describe('Calendar workbench', () => {
     expect(workbench.editor?.draft.targets).toEqual([
       { kind: 'placed_plant', plant_id: 'replacement-selection' },
     ])
+  })
+
+  it('opens a new action aimed at the map selection or one zone when the right-click menu asks', async () => {
+    act(() => {
+      queries.setSelection([{ kind: 'plant', id: 'apple-1' }])
+      setCanvasSelection(['apple-1'])
+    })
+    await act(async () => { requestCalendarAdd({ kind: 'selected-plants' }) })
+
+    expect(calendarAddRequest.value).toBeNull()
+    expect(workbench.editor).toMatchObject({ mode: 'add', draft: { targetMode: 'selection' } })
+    expect(workbench.editor?.draft.targets).toEqual([{ kind: 'placed_plant', plant_id: 'apple-1' }])
+
+    act(() => workbench.cancelEditor())
+    await act(async () => { requestCalendarAdd({ kind: 'zone', zoneName: 'North bed' }) })
+    expect(workbench.editor?.draft).toMatchObject({ targetMode: 'zone', targets: [{ kind: 'zone', zone_name: 'North bed' }] })
+  })
+
+  it('drops a request from another Design session', async () => {
+    await act(async () => {
+      calendarAddRequest.value = { target: { kind: 'selected-plants' }, sessionIdentity: {} }
+    })
+    expect(calendarAddRequest.value).toBeNull()
+    expect(workbench.editor).toBeNull()
   })
 
   it('rejects reversed dates and an explicitly empty target mode without writing', () => {

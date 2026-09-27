@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "キャンバス編集コマンド",
       "showName": "名前を表示",
-      "hideName": "名前を非表示"
+      "hideName": "名前を非表示",
+      "speciesDetails": "種の詳細",
+      "addToCalendar": "カレンダーに追加…",
+      "setUnitCost": "単価を設定…"
     },
     "rotationHandle": {
       "label": "回転"

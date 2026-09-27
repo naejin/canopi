@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Commandes d’édition du canevas",
       "showName": "Afficher le nom",
-      "hideName": "Masquer le nom"
+      "hideName": "Masquer le nom",
+      "speciesDetails": "Détails de l’espèce",
+      "addToCalendar": "Ajouter au calendrier…",
+      "setUnitCost": "Définir le coût unitaire…"
     },
     "rotationHandle": {
       "label": "Pivoter"

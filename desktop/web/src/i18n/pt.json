@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Comandos de edição da tela",
       "showName": "Mostrar nome",
-      "hideName": "Ocultar nome"
+      "hideName": "Ocultar nome",
+      "speciesDetails": "Detalhes da espécie",
+      "addToCalendar": "Adicionar ao calendário…",
+      "setUnitCost": "Definir o custo unitário…"
     },
     "rotationHandle": {
       "label": "Girar"

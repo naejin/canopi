@@ -129,8 +129,10 @@ function isCommand(entry: ActionMenuEntry): entry is ActionMenuCommand {
  * outside press, focus leaving it, resize or scroll (`restoreFocus` false), and
  * on Escape, Tab or a chosen command (`restoreFocus` true).
  */
-export function ContextMenu({ label, entries, anchor, onClose }: {
+export function ContextMenu({ label, heading, entries, anchor, onClose }: {
   readonly label: string
+  /** A quiet line above the items naming what they act on (the right-click menu's selection). */
+  readonly heading?: string
   readonly entries: readonly ActionMenuEntry[]
   readonly anchor: MenuAnchorRect
   onClose(restoreFocus: boolean): void
@@ -162,14 +164,15 @@ export function ContextMenu({ label, entries, anchor, onClose }: {
 
   const restore = () => close.current(true)
   return (
-    <MenuPopup menuId={menuId} label={label} entries={entries} anchor={{ getBoundingClientRect: () => anchor }}
+    <MenuPopup menuId={menuId} label={label} heading={heading} entries={entries} anchor={{ getBoundingClientRect: () => anchor }}
       placement="point" onClose={restore} onBack={restore} />
   )
 }
 
-function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack }: {
+function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose, onBack }: {
   readonly menuId: string
   readonly label: string
+  readonly heading?: string
   readonly entries: readonly ActionMenuEntry[]
   readonly anchor: MenuAnchor
   /** `below` a trigger, to the `side` of a parent item, or at a `point`. */
@@ -256,6 +259,8 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
           focusMenuItem(buttons[next])
         }
       }}>
+      {/* The menu's accessible name already says this; the line is for sighted users. */}
+      {heading && <div className={styles.heading} role="presentation" aria-hidden="true">{heading}</div>}
       {entries.map((entry, index) => {
         if ('separator' in entry) {
           items.current[index] = null

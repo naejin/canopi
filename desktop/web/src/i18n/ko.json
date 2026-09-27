@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "캔버스 편집 명령",
       "showName": "이름 표시",
-      "hideName": "이름 숨기기"
+      "hideName": "이름 숨기기",
+      "speciesDetails": "종 상세 정보",
+      "addToCalendar": "달력에 추가…",
+      "setUnitCost": "단가 설정…"
     },
     "rotationHandle": {
       "label": "회전"

@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Comandi di modifica della tela",
       "showName": "Mostra nome",
-      "hideName": "Nascondi nome"
+      "hideName": "Nascondi nome",
+      "speciesDetails": "Dettagli della specie",
+      "addToCalendar": "Aggiungi al calendario…",
+      "setUnitCost": "Imposta il costo unitario…"
     },
     "rotationHandle": {
       "label": "Ruota"

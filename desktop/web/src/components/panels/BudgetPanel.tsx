@@ -39,6 +39,14 @@ export function BudgetPanel() {
       ;(input as HTMLInputElement).select()
     }
   }, [workbench.editingCanonical])
+  // Set unit cost… from the map focuses the requested price wherever focus was.
+  useLayoutEffect(() => {
+    if (workbench.priceFocusRequest === 0 || workbench.editingCanonical === null) return
+    const input = document.getElementById(priceInputId(workbench.editingCanonical)) as HTMLInputElement | null
+    input?.scrollIntoView?.({ block: 'nearest' })
+    input?.focus()
+    input?.select()
+  }, [workbench.priceFocusRequest])
 
   const filtered = finder.active || workbench.selectedOnMap || workbench.missingPriceOnly
   const listPlants = list.rows.reduce((sum, item) => sum + item.count, 0)

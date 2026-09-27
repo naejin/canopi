@@ -130,11 +130,22 @@ const contextMenuHost = {
   },
 }
 
+function contextMenuEntryOptions() {
+  return {
+    translate: t,
+    openPlantAppearance: vi.fn(),
+    summary: null,
+    openSpeciesDetail: vi.fn(),
+    addToCalendar: vi.fn(),
+    setUnitCost: vi.fn(),
+  }
+}
+
 /** The open menu's command, as the app renders it. */
 function contextMenuCommand(id: CanvasContextMenuItemId): CanvasContextMenuCommand {
   const request = contextMenuHost.current
   if (!request) throw new Error('No context menu is open')
-  const entry = buildCanvasContextMenuEntries(request, { translate: t, openPlantAppearance: vi.fn() })
+  const entry = buildCanvasContextMenuEntries(request, contextMenuEntryOptions())
     .find((candidate): candidate is CanvasContextMenuCommand => 'id' in candidate && candidate.id === id)
   if (!entry) throw new Error(`The context menu has no '${id}' item`)
   return entry
@@ -155,7 +166,7 @@ function dispatchContextMenu(container: HTMLElement, client: ScenePoint): MouseE
 function contextMenuItemIds(): readonly string[] {
   const request = contextMenuHost.current
   if (!request) return []
-  return buildCanvasContextMenuEntries(request, { translate: t, openPlantAppearance: vi.fn() })
+  return buildCanvasContextMenuEntries(request, contextMenuEntryOptions())
     .flatMap((entry) => 'id' in entry ? [entry.id] : [])
 }
 

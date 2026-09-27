@@ -19,6 +19,7 @@ import type {
 } from '../canvas/runtime/app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -137,6 +138,40 @@ describe('CanvasContextMenu', () => {
     setCurrentCanvasSession(null)
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('names the selection above its commands, in the selection chip’s words', async () => {
+    const scene = createDefaultScenePersistedState()
+    scene.plants = [1, 2].map((index) => ({
+      kind: 'plant' as const,
+      id: `plant-${index}`,
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: null,
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: index, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }))
+    const queries = createTestCanvasQuerySurface({
+      scene,
+      selection: [{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }],
+    })
+    await act(async () => { setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries })) })
+    const menu = await open()
+
+    expect(menu.querySelector('[role="presentation"]')?.textContent).toBe('2 plants · Apple · 1 m apart')
+    expect(menu.getAttribute('aria-label')).toBe('2 plants · Apple · 1 m apart')
+    expect(menu.querySelector('[role="menuitem"]')).toBe(document.activeElement)
+
+    // The empty map has no selection to name.
+    const empty = await open(request({ selection: null }))
+    expect(empty.querySelector('[role="presentation"]')).toBeNull()
+    expect(empty.getAttribute('aria-label')).toBe('Canvas edit commands')
   })
 
   it('renders word labels as menu items with separators, shortcuts and a red Delete last', async () => {

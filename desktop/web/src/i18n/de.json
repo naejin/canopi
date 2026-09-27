@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Bearbeitungsbefehle der Zeichenfläche",
       "showName": "Namen anzeigen",
-      "hideName": "Namen ausblenden"
+      "hideName": "Namen ausblenden",
+      "speciesDetails": "Artdetails",
+      "addToCalendar": "Zum Kalender hinzufügen…",
+      "setUnitCost": "Stückkosten festlegen…"
     },
     "rotationHandle": {
       "label": "Drehen"

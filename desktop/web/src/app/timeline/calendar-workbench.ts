@@ -12,6 +12,7 @@ import {
   type CalendarActionFormData,
 } from '../design-edit'
 import { designSessionStore } from '../document-session/store'
+import { calendarAddRequest } from './calendar-request'
 import { createPanelTargetPresentationController } from '../panel-targets/presentation'
 import { usePlanningViewState, type CalendarCompletionFilter, type CalendarDisplay } from '../planning-view/state'
 import {
@@ -367,6 +368,17 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     const current = parseCivilDate(view.calendarMonth.peek()) ?? localToday()
     view.calendarMonth.value = formatCivilDate(startOfCivilMonth(addCivilMonths(current, amount)))
   }, [view])
+
+  // Add to calendar… from the map: a new action aimed at the selected plants or one zone.
+  const addRequest = calendarAddRequest.value
+  useEffect(() => {
+    if (!addRequest) return
+    calendarAddRequest.value = null
+    if (addRequest.sessionIdentity !== designSessionStore.sessionIdentity.peek()) return
+    openAdd()
+    if (addRequest.target.kind === 'zone') setZoneTarget(addRequest.target.zoneName)
+    else setTargetMode('selection')
+  }, [addRequest, openAdd, setTargetMode, setZoneTarget])
 
   return {
     projection: surface.projection,

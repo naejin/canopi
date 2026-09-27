@@ -9,6 +9,7 @@ import {
 } from './support/design-session-state'
 import { locale } from '../app/settings/state'
 import { validateBudgetPriceDraft } from '../app/budget/workbench'
+import { budgetPriceRequest, requestBudgetPrice } from '../app/budget/price-request'
 import { readPlanningViewState } from '../app/planning-view/state'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { speciesBudgetTarget } from '../target'
@@ -86,6 +87,29 @@ describe('Budget Item workbench', () => {
     expect(validateBudgetPriceDraft('  ')).toEqual({ valid: false })
     expect(validateBudgetPriceDraft('-2')).toEqual({ valid: false })
     expect(validateBudgetPriceDraft('3,90')).toEqual({ valid: false })
+  })
+
+  it('focuses a species’ unit cost when the right-click menu asks, showing its row through the filters', async () => {
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [makePlant('Malus domestica', 'Apple'), makePlant('Pyrus communis', 'Pear')],
+      }),
+    }))
+    await act(async () => { render(<BudgetPanel />, container) })
+    const view = readPlanningViewState()
+    await act(async () => { view.budgetSearch.value = 'Apple' })
+    expect(rowNames()).toEqual(['Apple'])
+
+    await act(async () => { requestBudgetPrice('Pyrus communis') })
+
+    expect(budgetPriceRequest.value).toBeNull()
+    expect(rowNames()).toEqual(['Apple', 'Pear'])
+    expect(document.activeElement).toBe(priceInput('Pear'))
+    await type(priceInput('Pear'), '12')
+    await act(async () => {
+      priceInput('Pear').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(currentDesign.value?.budget[0]).toMatchObject({ description: 'Pyrus communis', unit_cost: 12 })
   })
 
   it('labels each unit cost field and commits a zero price on blur', async () => {

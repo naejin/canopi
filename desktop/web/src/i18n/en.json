@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Canvas edit commands",
       "showName": "Show name",
-      "hideName": "Hide name"
+      "hideName": "Hide name",
+      "speciesDetails": "Species details",
+      "addToCalendar": "Add to calendar…",
+      "setUnitCost": "Set unit cost…"
     },
     "rotationHandle": {
       "label": "Rotate"

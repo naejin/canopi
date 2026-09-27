@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Команды редактирования холста",
       "showName": "Показать название",
-      "hideName": "Скрыть название"
+      "hideName": "Скрыть название",
+      "speciesDetails": "Сведения о виде",
+      "addToCalendar": "Добавить в календарь…",
+      "setUnitCost": "Задать цену за единицу…"
     },
     "rotationHandle": {
       "label": "Повернуть"

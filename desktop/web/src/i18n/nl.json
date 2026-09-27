@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Canvasbewerkingsopdrachten",
       "showName": "Naam tonen",
-      "hideName": "Naam verbergen"
+      "hideName": "Naam verbergen",
+      "speciesDetails": "Soortdetails",
+      "addToCalendar": "Toevoegen aan kalender…",
+      "setUnitCost": "Eenheidsprijs instellen…"
     },
     "rotationHandle": {
       "label": "Draaien"

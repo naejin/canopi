@@ -13,6 +13,7 @@ import type {
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { t } from '../i18n'
 import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
+import type { MapSelectionSummary } from '../app/map-selection/summary'
 
 function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): CanvasContextMenuCommands {
   return {
@@ -59,6 +60,17 @@ const PLANT_AND_ZONE = selection({
   plantNamePinning: { plantIds: ['apple-1'], allPinned: true },
 })
 
+const APPLE_SUMMARY: MapSelectionSummary = {
+  plantCount: 2,
+  species: [{ canonicalName: 'Malus domestica', name: 'Apple', selectedCount: 2, designCount: 5 }],
+  plantSpacingM: 1.5,
+  zones: [],
+  noteCount: 0,
+  noteText: null,
+  measurementCount: 0,
+  measurementLengthM: null,
+}
+
 function build(
   model: CanvasDesignObjectSelectionModel | null,
   options: {
@@ -66,10 +78,14 @@ function build(
     readonly saveSelectionAsObjectStamp?: () => void
     readonly openPlantAppearance?: CanvasContextMenuEntryOptions['openPlantAppearance']
     readonly returnFocus?: () => void
+    readonly summary?: MapSelectionSummary | null
   } = {},
 ) {
   const commands = options.commands ?? createCommands()
   const openPlantAppearance = options.openPlantAppearance ?? vi.fn()
+  const openSpeciesDetail = vi.fn()
+  const addToCalendar = vi.fn()
+  const setUnitCost = vi.fn()
   const request: CanvasContextMenuRequest = {
     anchor: { left: 300, top: 200, right: 300, bottom: 200 },
     world: { x: 12, y: 34 },
@@ -78,8 +94,15 @@ function build(
     ...(options.saveSelectionAsObjectStamp ? { saveSelectionAsObjectStamp: options.saveSelectionAsObjectStamp } : {}),
     returnFocus: options.returnFocus ?? vi.fn(),
   }
-  const entries = buildCanvasContextMenuEntries(request, { translate: t, openPlantAppearance })
-  return { entries, commands, openPlantAppearance, request }
+  const entries = buildCanvasContextMenuEntries(request, {
+    translate: t,
+    openPlantAppearance,
+    summary: options.summary === undefined ? (model ? APPLE_SUMMARY : null) : options.summary,
+    openSpeciesDetail,
+    addToCalendar,
+    setUnitCost,
+  })
+  return { entries, commands, openPlantAppearance, openSpeciesDetail, addToCalendar, setUnitCost, request }
 }
 
 function ids(entries: readonly CanvasContextMenuEntry[]): string[] {
@@ -98,7 +121,8 @@ describe('canvas context menu entries', () => {
 
     expect(ids(entries)).toEqual([
       'cut', 'copy', 'paste', 'duplicate', '—',
-      'select-same-species', 'plant-color', 'plant-symbol', 'toggle-plant-names', '—',
+      'select-same-species', 'plant-color', 'plant-symbol', 'toggle-plant-names', 'species-details', '—',
+      'add-to-calendar', 'set-unit-cost', '—',
       'bring-to-front', 'send-to-back', '—',
       'group', 'ungroup', 'rotate', 'save-as-stamp', '—',
       'lock', 'unlock', '—',
@@ -107,7 +131,8 @@ describe('canvas context menu entries', () => {
     const labels = entries.flatMap((entry) => 'label' in entry ? [entry.label] : [])
     expect(labels).toEqual([
       'Cut', 'Copy', 'Paste', 'Duplicate',
-      'Select all of this species', 'Plant color', 'Plant symbol', 'Show name',
+      'Select all of this species', 'Plant color', 'Plant symbol', 'Show name', 'Species details',
+      'Add to calendar…', 'Set unit cost…',
       'Bring to front', 'Send to back',
       'Group', 'Ungroup', 'Rotate…', 'Save as stamp',
       'Lock', 'Unlock',
@@ -189,7 +214,8 @@ describe('canvas context menu entries', () => {
     const { entries } = build(locked, { commands, saveSelectionAsObjectStamp: vi.fn() })
 
     const enabled = entries.flatMap((entry) => 'id' in entry && !entry.disabled ? [entry.id] : [])
-    expect(enabled).toEqual(['save-as-stamp', 'unlock'])
+    // Species details and the Budget price read or plan, never move the locked plant.
+    expect(enabled).toEqual(['species-details', 'set-unit-cost', 'save-as-stamp', 'unlock'])
     for (const entry of entries) {
       if ('id' in entry && entry.disabled) entry.run()
     }
@@ -236,6 +262,38 @@ describe('canvas context menu entries', () => {
     expect(commands.lockSelected).toHaveBeenCalledOnce()
     run('delete')
     expect(commands.deleteSelected).toHaveBeenCalledTimes(2)
+  })
+
+  it('opens the species detail, the Calendar editor and the Budget price for the selection’s one species', () => {
+    const { entries, openSpeciesDetail, addToCalendar, setUnitCost } = build(TWO_APPLES)
+
+    item(entries, 'species-details').run()
+    item(entries, 'add-to-calendar').run()
+    item(entries, 'set-unit-cost').run()
+
+    expect(openSpeciesDetail).toHaveBeenCalledWith('Malus domestica')
+    expect(addToCalendar).toHaveBeenCalledWith({ kind: 'selected-plants' })
+    expect(setUnitCost).toHaveBeenCalledWith('Malus domestica')
+    expect(item(entries, 'add-to-calendar').opensDialog).toBeUndefined()
+  })
+
+  it('keeps Species details and Set unit cost… for one species only, and aims Add to calendar… at a lone zone', () => {
+    const mixed = build(TWO_APPLES, {
+      summary: { ...APPLE_SUMMARY, species: [...APPLE_SUMMARY.species, { canonicalName: 'Pyrus communis', name: 'Pear', selectedCount: 1, designCount: 1 }] },
+    })
+    expect(item(mixed.entries, 'species-details').disabled).toBe(true)
+    expect(item(mixed.entries, 'set-unit-cost').disabled).toBe(true)
+    item(mixed.entries, 'species-details').run()
+    expect(mixed.openSpeciesDetail).not.toHaveBeenCalled()
+
+    const zone = build(ONE_ZONE, { summary: null })
+    expect(ids(zone.entries)).not.toContain('set-unit-cost')
+    expect(ids(zone.entries)).not.toContain('species-details')
+    item(zone.entries, 'add-to-calendar').run()
+    expect(zone.addToCalendar).toHaveBeenCalledWith({ kind: 'zone', zoneName: 'zone-1' })
+
+    const twoZones = build(selection({ editableTargets: [{ kind: 'zone', id: 'a' }, { kind: 'zone', id: 'b' }] }), { summary: null })
+    expect(item(twoZones.entries, 'add-to-calendar').disabled).toBe(true)
   })
 
   it('asks for an angle with Rotate… and turns the selection on the request’s surface', () => {

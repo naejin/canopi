@@ -5,11 +5,14 @@ import {
 } from '../canvas-commands'
 import { ariaKeyShortcuts, formatShortcut } from '../shell-commands/shortcut-text'
 import type { CanvasContextMenuRequest } from '../../canvas/runtime/app-adapter'
+import type { CanvasDesignObjectSelectionModel } from '../../canvas/runtime/runtime'
 import {
   selectionCommandAvailability,
   selectionIncludesPlants,
 } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import type { PlantAppearanceAnchor, PlantAppearanceKind } from './state'
+import type { MapSelectionSummary } from '../map-selection/summary'
+import type { CalendarAddTarget } from '../timeline/calendar-request'
 import { openRotateSelectionDialog } from '../rotate-selection/state'
 
 export type CanvasContextMenuItemId =
@@ -17,6 +20,9 @@ export type CanvasContextMenuItemId =
   | 'plant-color'
   | 'plant-symbol'
   | 'toggle-plant-names'
+  | 'species-details'
+  | 'add-to-calendar'
+  | 'set-unit-cost'
 
 export interface CanvasContextMenuCommand {
   readonly id: CanvasContextMenuItemId
@@ -35,6 +41,14 @@ export type CanvasContextMenuEntry = CanvasContextMenuCommand | { readonly separ
 export interface CanvasContextMenuEntryOptions {
   readonly translate: (key: string) => string
   openPlantAppearance(kind: PlantAppearanceKind, anchor: PlantAppearanceAnchor): void
+  /** What the selection chip says about the selection (its species); null on the empty map. */
+  readonly summary: MapSelectionSummary | null
+  /** Species details: the species' detail in the Plant catalog. */
+  openSpeciesDetail(canonicalName: string): void
+  /** Add to calendar…: the Calendar's new-action editor aimed at the selection. */
+  addToCalendar(target: CalendarAddTarget): void
+  /** Set unit cost…: the species' price field in the Budget. */
+  setUnitCost(canonicalName: string): void
 }
 
 const SEPARATOR = { separator: true } as const
@@ -72,7 +86,29 @@ export function buildCanvasContextMenuEntries(
       })
     },
   })
-  const plantEntries: readonly CanvasContextMenuEntry[] = selectionIncludesPlants(selection)
+  const species = options.summary?.species ?? []
+  const oneSpecies = species.length === 1 ? species[0]!.canonicalName : null
+  const plants = selectionIncludesPlants(selection)
+  const plain = (
+    id: CanvasContextMenuItemId,
+    labelKey: string,
+    target: string | CalendarAddTarget | null,
+    run: (target: never) => void,
+  ): CanvasContextMenuCommand => ({
+    id,
+    label: options.translate(labelKey),
+    disabled: target === null,
+    run: () => {
+      if (target !== null) run(target as never)
+    },
+  })
+  const calendarTarget = calendarTargetFor(selection)
+  const planningEntries: readonly CanvasContextMenuEntry[] = [
+    plain('add-to-calendar', 'canvas.contextMenu.addToCalendar', calendarTarget, options.addToCalendar),
+    ...plants ? [plain('set-unit-cost', 'canvas.contextMenu.setUnitCost', oneSpecies, options.setUnitCost)] : [],
+    SEPARATOR,
+  ]
+  const plantEntries: readonly CanvasContextMenuEntry[] = plants
     ? [
         edit('select-same-species', !can.selectSameSpecies, () => commands.selectSameSpecies()),
         appearance('color', 'canvas.plantColor.label'),
@@ -85,6 +121,7 @@ export function buildCanvasContextMenuEntries(
             if (can.plantAppearance) commands.toggleSelectedPlantNamePins()
           },
         },
+        plain('species-details', 'canvas.contextMenu.speciesDetails', oneSpecies, options.openSpeciesDetail),
         SEPARATOR,
       ]
     : []
@@ -99,6 +136,7 @@ export function buildCanvasContextMenuEntries(
     edit('duplicate', !can.edit, () => commands.duplicateSelected()),
     SEPARATOR,
     ...plantEntries,
+    ...planningEntries,
     edit('bring-to-front', !can.edit, () => commands.bringToFront()),
     edit('send-to-back', !can.edit, () => commands.sendToBack()),
     SEPARATOR,
@@ -146,4 +184,15 @@ function editCommand(
     },
     ...extra,
   }
+}
+
+/**
+ * Add to calendar… aims at the selected plants (the Calendar's "Selected on
+ * map" target, editable plants only), else at one lone zone; null otherwise.
+ */
+function calendarTargetFor(selection: CanvasDesignObjectSelectionModel): CalendarAddTarget | null {
+  if ((selection.plantNamePinning?.plantIds.length ?? 0) > 0) return { kind: 'selected-plants' }
+  const targets = [...selection.editableTargets, ...selection.lockedTargets ?? []]
+  const [only] = targets
+  return targets.length === 1 && only?.kind === 'zone' ? { kind: 'zone', zoneName: only.id } : null
 }

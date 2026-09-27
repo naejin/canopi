@@ -143,7 +143,10 @@
     "contextMenu": {
       "ariaLabel": "Comandos de edición del lienzo",
       "showName": "Mostrar nombre",
-      "hideName": "Ocultar nombre"
+      "hideName": "Ocultar nombre",
+      "speciesDetails": "Detalles de la especie",
+      "addToCalendar": "Añadir al calendario…",
+      "setUnitCost": "Fijar el coste unitario…"
     },
     "rotationHandle": {
       "label": "Girar"

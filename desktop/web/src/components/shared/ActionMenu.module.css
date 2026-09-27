@@ -33,6 +33,15 @@
   box-shadow: var(--shadow-float);
 }
 
+.heading {
+  max-width: 320px;
+  padding: calc(var(--space-1-5) + var(--space-0-25)) calc(var(--space-2) + var(--space-0-5)) var(--space-0-75);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .item {
   display: flex;
   align-items: center;
