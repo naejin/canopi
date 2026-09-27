@@ -123,8 +123,10 @@
 }
 
 /* The map attribution pill sits immediately left of the zoom group, bottom
-   aligned with it, and wraps rather than running under the view chip. On a
-   map 640 px wide or narrower MapLibre folds it into an (i) button. */
+   aligned with it, between the view chip and the zoom group. When that band
+   has too little room for one line (app/shell/visible-map-area.ts), the
+   workspace folds it into MapLibre's (i) button instead of letting it wrap
+   up under a panel. */
 .canvasArea :global(.maplibregl-ctrl-bottom-right) {
   right: calc(var(--zoom-group-width, 0px) + var(--chrome-inset) + var(--space-2));
   bottom: var(--chrome-inset);

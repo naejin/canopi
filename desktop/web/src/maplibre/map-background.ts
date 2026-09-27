@@ -69,6 +69,7 @@ export type MapBackgroundMap = VectorBasemapMap & SatelliteMountOptions['map'] &
   getZoom?(): number
   addControl?(control: unknown, position?: string): unknown
   removeControl?(control: unknown): unknown
+  getContainer?(): HTMLElement
 }
 
 export interface MapBackgroundOptions {
@@ -93,6 +94,12 @@ export interface MapBackgroundHandle {
    * installed, or the Satellite layer added. Tile loading is not part of it.
    */
   isApplied(): boolean
+  /**
+   * Folds the credits into MapLibre's (i) button (true) or keeps them
+   * expanded (false), for a surface that knows how much room they have.
+   * Until it is called, MapLibre folds them only on a map 640 px or narrower.
+   */
+  setAttributionCompact(compact: boolean): void
   dispose(): void
 }
 
@@ -190,6 +197,10 @@ export function mountMapBackground(options: MapBackgroundOptions): MapBackground
       if (presentation.basemap.visible) return vector.installedStyle === presentation.basemap.style
       return true
     },
+    setAttributionCompact(compact) {
+      if (disposed) return
+      attribution.setCompact(compact)
+    },
     dispose() {
       if (disposed) return
       disposed = true
@@ -210,9 +221,10 @@ function readViewport(map: MapBackgroundMap): SatelliteViewport {
 }
 
 /**
- * One compact attribution control per map. It lists every visible source's
+ * One attribution control per map. It lists every visible source's
  * attribution (the OpenFreeMap TileJSON credit) and the Google satellite
- * copyright as custom attribution.
+ * copyright as custom attribution. Options are fixed when MapLibre adds a
+ * control, so a new credit or fold remounts it.
  */
 function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   type AttributionControlClass = new (options?: { compact?: boolean; customAttribution?: string | string[] }) => unknown
@@ -224,14 +236,41 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
   }
   let control: unknown = null
   let credit = ''
+  // Unset: MapLibre folds the credits into an (i) button only on a map 640 px
+  // wide or narrower, so imagery terms stay readable elsewhere.
+  let compact: boolean | undefined
+  let foldWatch: MutationObserver | null = null
+  // A compact control opens showing its credits and folds on the first map
+  // drag, which the workspace map never has: fold it as soon as MapLibre makes
+  // it compact (at once, or when the first source credits arrive).
+  const foldWhenCompact = () => {
+    const credits = map.getContainer?.().querySelector('.maplibregl-ctrl-attrib')
+    if (!credits) return
+    const fold = () => {
+      if (!credits.classList.contains('maplibregl-compact')) return false
+      credits.classList.remove('maplibregl-compact-show')
+      return true
+    }
+    if (fold() || typeof MutationObserver === 'undefined') return
+    foldWatch = new MutationObserver(() => {
+      if (!fold()) return
+      foldWatch?.disconnect()
+      foldWatch = null
+    })
+    foldWatch.observe(credits, { attributes: true, attributeFilter: ['class'] })
+  }
   const mount = () => {
     if (!Control || !map.addControl) return
-    // No `compact`: MapLibre folds the credits into an (i) button only on a map
-    // 640 px wide or narrower, so imagery terms stay readable elsewhere.
-    control = new Control(credit ? { customAttribution: credit } : {})
+    control = new Control({
+      ...(compact === undefined ? {} : { compact }),
+      ...(credit ? { customAttribution: credit } : {}),
+    })
     map.addControl(control, 'bottom-right')
+    if (compact) foldWhenCompact()
   }
   const unmount = () => {
+    foldWatch?.disconnect()
+    foldWatch = null
     if (control && map.removeControl) map.removeControl(control)
     control = null
   }
@@ -240,6 +279,12 @@ function createAttributionOwner(maplibre: unknown, map: MapBackgroundMap) {
     setSatelliteCredit(next: string) {
       if (next === credit) return
       credit = next
+      unmount()
+      mount()
+    },
+    setCompact(next: boolean) {
+      if (next === compact) return
+      compact = next
       unmount()
       mount()
     },

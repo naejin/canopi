@@ -75,6 +75,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
   private readonly surface: MapLibreSurfaceAdapter<MapLibreMapInstance>
   private readonly logError: (message?: unknown, ...optionalParams: unknown[]) => void
   private attempt: WorkspaceMapAttempt | null = null
+  private attributionCompact: boolean | null = null
 
   constructor(private readonly options: WorkspaceActivationMapControlsOptions) {
     this.surface = options.surface ?? createMapLibreSurfaceAdapter()
@@ -245,6 +246,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
     this.drainReconciliation(attempt)
   }
 
+  setAttributionCompact(compact: boolean): void {
+    this.attributionCompact = compact
+    const attempt = this.attempt
+    if (!attempt || attempt.released || attempt.failureReported) return
+    attempt.background?.setAttributionCompact(compact)
+  }
+
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void {
     const attempt = this.attempt
     if (!attempt || attempt.released || attempt.failureReported) return
@@ -333,6 +341,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
       lifetime,
       onError: (error) => this.logError('Map basemap style failed to load:', error),
     })
+    if (this.attributionCompact !== null) attempt.background.setAttributionCompact(this.attributionCompact)
     attempt.background.update(attempt.presentation)
   }
 

@@ -222,6 +222,22 @@ describe('createWorkspaceRuntimeComposition', () => {
     expect(fixture.workspace.updateBackgroundPresentation).toHaveBeenCalledOnce()
   })
 
+  it('folds the map credits as the visible map area asks, until disposal', async () => {
+    const folded = signal(false)
+    const fixture = compositionFixture({
+      readSnapshot: () => workspaceSnapshot(),
+      readAttributionCompact: () => folded.value,
+    })
+    await fixture.composition.start()
+    expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(false)
+    folded.value = true
+    expect(fixture.controls.setAttributionCompact).toHaveBeenLastCalledWith(true)
+    await fixture.composition.dispose()
+    fixture.controls.setAttributionCompact.mockClear()
+    folded.value = false
+    expect(fixture.controls.setAttributionCompact).not.toHaveBeenCalled()
+  })
+
   it('forwards reactive contribution snapshots through the lifecycle and disposes the reader effect', async () => {
     const contribution = signal<WorkspaceMapContributionSnapshot | null>(null)
     const read = vi.fn<WorkspaceMapContributionAdapter['read']>(() => contribution.value)
@@ -366,6 +382,7 @@ interface CompositionFixtureOptions {
   readonly mapContributions?: WorkspaceMapContributionAdapter
   readonly readSnapshot: () => WorkspaceActivationSnapshot | null
   readonly readBackgroundPresentation?: () => MapBackgroundPresentation
+  readonly readAttributionCompact?: () => boolean
   readonly onFailure?: (error: unknown) => void
   readonly activate?: (snapshot: WorkspaceActivationSnapshot) => Promise<WorkspaceActivationOutcome>
   readonly teardown?: () => Promise<void>
@@ -414,6 +431,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     getWebGL2Context: vi.fn(() => null),
     updateMapContributions: vi.fn(),
     updateBackgroundPresentation: vi.fn(),
+    setAttributionCompact: vi.fn(),
     installStyleRestorer: vi.fn(() => () => {}),
   }
   const workspace = {
@@ -444,6 +462,7 @@ function compositionFixture(options: CompositionFixtureOptions) {
     onFailure: options.onFailure,
     readSnapshot: options.readSnapshot,
     readBackgroundPresentation: options.readBackgroundPresentation,
+    readAttributionCompact: options.readAttributionCompact ?? (() => false),
     onViewSettled: options.onViewSettled,
   }, dependencies)
 

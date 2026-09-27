@@ -21,7 +21,15 @@ function createMap() {
   const sources = new Map<string, Record<string, unknown>>()
   const layers: Record<string, unknown>[] = [{ id: 'basemap-background' }, { id: 'canopi-scene' }]
   const controls: FakeControl[] = []
+  // MapLibre's attribution markup, as a compact control first renders it (shown).
+  const container = document.createElement('div')
+  const credits = document.createElement('details')
+  credits.className = 'maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show'
+  credits.setAttribute('open', '')
+  container.append(credits)
   const map = {
+    credits,
+    getContainer: () => container,
     sources,
     layers,
     controls,
@@ -172,6 +180,46 @@ describe('map background band', () => {
     // compact: true would fold the credits into an (i) after the first drag;
     // left unset, MapLibre folds them only when the map is 640 px or narrower.
     expect(map.controls[0]!.options.compact).toBeUndefined()
+    background.dispose()
+  })
+
+  it('folds the credits into the (i) button when the workspace asks, and unfolds them again', async () => {
+    const { map, background } = mount()
+    background.update(presentation())
+    await settle()
+    background.setAttributionCompact(true)
+    expect(map.controls).toHaveLength(1)
+    expect(map.controls[0]!.options.compact).toBe(true)
+    // Folded, not merely compact: the credits wait behind the button.
+    expect(map.credits.classList.contains('maplibregl-compact-show')).toBe(false)
+
+    background.setAttributionCompact(true)
+    expect(map.controls).toHaveLength(1)
+    background.setAttributionCompact(false)
+    expect(map.controls).toHaveLength(1)
+    expect(map.controls[0]!.options.compact).toBe(false)
+
+    // A Google credit remounts the control; it keeps the fold.
+    background.setAttributionCompact(true)
+    background.update(presentation({ satelliteVisible: true }))
+    await settle()
+    expect(map.controls[0]!.options).toMatchObject({ compact: true, customAttribution: '&copy; Google' })
+    background.dispose()
+  })
+
+  it('folds the credits once MapLibre makes them compact, when the first credits arrive after mounting', async () => {
+    const map = createMap()
+    map.credits.className = 'maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-attrib-empty'
+    const { background } = mount(map)
+    background.setAttributionCompact(true)
+    map.credits.classList.add('maplibregl-compact', 'maplibregl-compact-show')
+    await settle()
+    expect(map.credits.classList.contains('maplibregl-compact')).toBe(true)
+    expect(map.credits.classList.contains('maplibregl-compact-show')).toBe(false)
+    // After that the (i) button is the user's: showing the credits sticks.
+    map.credits.classList.add('maplibregl-compact-show')
+    await settle()
+    expect(map.credits.classList.contains('maplibregl-compact-show')).toBe(true)
     background.dispose()
   })
 

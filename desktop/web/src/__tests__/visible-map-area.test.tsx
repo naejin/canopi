@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  mapAttributionFolded,
+  measureBottomBandRoom,
   measureVisibleMapFrame,
   registerMapArea,
   registerMapOccluder,
@@ -131,6 +133,42 @@ describe('visible map area', () => {
   it('falls back to the whole screen when chrome leaves too little map', () => {
     expect(cameraFramingRect({ width: 500, height: 800 }, { top: 0, right: 300, bottom: 0, left: 100 }))
       .toEqual({ x: 0, y: 0, width: 500, height: 800 })
+  })
+
+  it('folds the map credits when the bottom band between the view chip and zoom group is narrow', () => {
+    const viewChip = { left: 12, top: 744, width: 280, height: 44 }
+    const narrow = { left: 0, top: 0, width: 720, height: 800 }
+    // 720 px window: the zoom group starts 48 px after the view chip ends.
+    const narrowZoom = { left: 340, top: 744, width: 368, height: 44 }
+    expect(measureBottomBandRoom(rect(narrow), [
+      { rect: rect(viewChip), side: 'bottom' },
+      { rect: rect(narrowZoom), side: 'bottom' },
+      { rect: rect({ left: 270, top: 72, width: 380, height: 664 }) },
+    ])).toBe(48)
+    expect(measureBottomBandRoom(rect(WINDOW), [
+      { rect: rect(viewChip), side: 'bottom' },
+      { rect: rect(ZOOM_GROUP), side: 'bottom' },
+    ])).toBe(608)
+    expect(measureBottomBandRoom(rect(WINDOW), [])).toBe(1280)
+
+    const area = element(narrow)
+    const releaseArea = registerMapArea(area)
+    const releaseChip = registerMapOccluder(element(viewChip), 'bottom')
+    const zoom = element(narrowZoom)
+    const releaseZoom = registerMapOccluder(zoom, 'bottom')
+    try {
+      expect(mapAttributionFolded.value).toBe(true)
+      // A wide window has room for the credits on one line.
+      boxes.set(area, WINDOW)
+      boxes.set(zoom, ZOOM_GROUP)
+      window.dispatchEvent(new Event('resize'))
+      expect(mapAttributionFolded.value).toBe(false)
+    } finally {
+      releaseZoom()
+      releaseChip()
+      releaseArea()
+    }
+    expect(mapAttributionFolded.value).toBe(false)
   })
 
   it('lets the labelled tool rail give way when it would crowd the map', () => {

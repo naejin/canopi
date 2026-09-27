@@ -7,7 +7,8 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * the bottom chrome float over it. Each registers here, and this module is the
  * one source of the visible map frame: fitting and temporary focus frame into
  * it (through the camera), status chips centre in it and the rulers start at
- * its left edge (through `--map-inset-*` on the map area).
+ * its left edge (through `--map-inset-*` on the map area), and the map credits
+ * fold when the bottom band leaves them too little room.
  */
 export interface VisibleMapFrame {
   /** The map area's size, in CSS pixels. */
@@ -30,6 +31,12 @@ export interface MapOccluderBox {
 
 /** The least map width the labelled tool rail may leave between itself and the right chrome. */
 export const MIN_VISIBLE_MAP_WIDTH_PX = 360
+/**
+ * The least room the map credits need on one line between the view chip and
+ * the zoom group; with less they fold into MapLibre's (i) button instead of
+ * wrapping up under a panel.
+ */
+export const MAP_ATTRIBUTION_MIN_ROOM_PX = 360
 
 const NO_FRAME: VisibleMapFrame = Object.freeze({ width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 })
 /** A floating band at least this share of the map's width covers the top or the bottom edge. */
@@ -37,6 +44,8 @@ const HORIZONTAL_BAND_SHARE = 0.6
 const INSET_PROPERTIES = ['top', 'right', 'bottom', 'left'] as const
 
 export const visibleMapFrame = signal<VisibleMapFrame>(NO_FRAME)
+/** Whether the map credits fold into their (i) button (see `MAP_ATTRIBUTION_MIN_ROOM_PX`). */
+export const mapAttributionFolded = signal(false)
 
 /** Pure: how far each registered chrome box covers each edge of the map rectangle. */
 export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccluderBox>): VisibleMapFrame {
@@ -52,6 +61,24 @@ export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccl
     edges[edge] = Math.max(edges[edge], Math.round(cover))
   }
   return { width: Math.round(map.width), height: Math.round(map.height), ...edges }
+}
+
+/**
+ * Pure: the free width of the bottom band, between the bottom chrome on the
+ * left (the view chip) and on the right (the zoom group), where the map
+ * credits sit. The whole map width when no bottom chrome is registered.
+ */
+export function measureBottomBandRoom(map: DOMRect, occluders: Iterable<MapOccluderBox>): number {
+  let left = map.left
+  let right = map.right
+  const middle = map.left + map.width / 2
+  for (const { rect, side } of occluders) {
+    if (rect.width <= 0 || rect.height <= 0) continue
+    if ((side ?? inferSide(map, rect)) !== 'bottom') continue
+    if (rect.left + rect.width / 2 < middle) left = Math.max(left, rect.right)
+    else right = Math.min(right, rect.left)
+  }
+  return Math.round(right - left)
 }
 
 /**
@@ -79,10 +106,11 @@ let stopCameraSync: (() => void) | null = null
 
 function recompute(): void {
   if (!area) return
-  const next = measureVisibleMapFrame(
-    area.getBoundingClientRect(),
-    [...occluders].map(([element, side]) => ({ rect: element.getBoundingClientRect(), side })),
-  )
+  const map = area.getBoundingClientRect()
+  const boxes = [...occluders].map(([element, side]) => ({ rect: element.getBoundingClientRect(), side }))
+  const next = measureVisibleMapFrame(map, boxes)
+  const folded = map.width > 0 && measureBottomBandRoom(map, boxes) < MAP_ATTRIBUTION_MIN_ROOM_PX
+  if (mapAttributionFolded.peek() !== folded) mapAttributionFolded.value = folded
   for (const edge of INSET_PROPERTIES) area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
   const current = visibleMapFrame.peek()
   if (
@@ -137,6 +165,7 @@ function releaseArea(element: HTMLElement): void {
   area = null
   stopWatching()
   visibleMapFrame.value = NO_FRAME
+  mapAttributionFolded.value = false
 }
 
 /** Floating chrome over the map; returns its release. */

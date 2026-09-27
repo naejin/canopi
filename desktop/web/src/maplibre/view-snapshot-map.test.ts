@@ -140,6 +140,7 @@ function createFakeBackground(options: MapBackgroundOptions) {
     update(presentation: MapBackgroundPresentation) { handle.presentations.push(presentation) },
     restore: () => undefined,
     isApplied: () => handle.applied,
+    setAttributionCompact: () => undefined,
     dispose() { handle.disposed = true },
   }
   backgrounds.push(handle)

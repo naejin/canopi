@@ -32,6 +32,7 @@ import {
   type WorkspaceGenerationLifecycle,
 } from './workspace-generation-reconciler'
 import { WorkspaceMapControls } from './workspace-map-controls'
+import { mapAttributionFolded } from '../shell/visible-map-area'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
@@ -72,6 +73,8 @@ export interface WorkspaceRuntimeCompositionOptions {
     readInitialCenter: () => { readonly lat: number; readonly lon: number },
   ) => WorkspaceActivationSnapshot | null
   readonly readBackgroundPresentation?: () => ReturnType<typeof readWorkspaceBackgroundPresentation>
+  /** Whether the map credits fold into their (i) button; the visible map area decides by default. */
+  readonly readAttributionCompact?: () => boolean
   /** Called once the camera has been still for `WORKSPACE_VIEW_SETTLE_MS` on a Design. */
   readonly onViewSettled?: (view: WorkspaceSettledView) => void
 }
@@ -227,6 +230,7 @@ export function createWorkspaceRuntimeComposition(
           workspace.updateBackgroundPresentation(
             (options.readBackgroundPresentation ?? readWorkspaceBackgroundPresentation)(),
           )
+          controls.setAttributionCompact?.((options.readAttributionCompact ?? readMapAttributionFolded)())
         })
         void reconciler.reconcileInitialGeneration().then(
           resolveStart,
@@ -287,4 +291,8 @@ function reportCompositionFailure(
   } catch (observerError) {
     logMapError('Shared workspace failure observer failed:', observerError)
   }
+}
+
+function readMapAttributionFolded(): boolean {
+  return mapAttributionFolded.value
 }

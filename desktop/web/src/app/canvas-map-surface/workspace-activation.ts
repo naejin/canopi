@@ -61,6 +61,8 @@ export interface WorkspaceActivationMapControls {
   getWebGL2Context(map: WorkspaceActivationMap): WebGL2RenderingContext | null
   updateMapContributions(snapshot: WorkspaceMapContributionSnapshot | null): void
   updateBackgroundPresentation(presentation: MapBackgroundPresentation): void
+  /** Folds the map credits into their (i) button, now and on every later map. */
+  setAttributionCompact?(compact: boolean): void
   /** Restores same-map style contributions after initial style admission. */
   installStyleRestorer(map: WorkspaceActivationMap, restore: () => void): () => void
   /** Map/context failures that happen outside the custom layer. */
