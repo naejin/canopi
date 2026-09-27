@@ -31,6 +31,7 @@ import { selectionCommandAvailability } from '../../canvas/runtime/interaction/c
 import { openRotateSelectionDialog } from '../rotate-selection/state'
 import { sceneHasLockedDesignObjects } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
+import { singleKeyShortcuts } from '../settings/state'
 
 /**
  * The canvas half of the command graph, shared by both editions: projection
@@ -148,4 +149,5 @@ export const workspaceCanvasCommandProjection = computed(() => createCanvasComma
   state: readWorkspaceCanvasProjectionState(),
   intents: workspaceCanvasIntentAdapter,
   translate: t,
+  shortcuts: { characterKeys: singleKeyShortcuts.value },
 }))

@@ -93,6 +93,22 @@ function storedFrom(options: PlantDisplayOptions): StoredPlantDisplay {
   }
 }
 
+/** The Design with some display options changed; a change to nothing returns it untouched. */
+export function withPlantDisplayOptions<T extends Pick<CanopiFile, 'extra'>>(
+  design: T,
+  change: Partial<PlantDisplayOptions>,
+): T {
+  const current = readPlantDisplayOptions(design)
+  const next = readPlantDisplayOptions({
+    extra: { [PLANT_DISPLAY_EXTRA_KEY]: storedFrom({ ...current, ...change }) },
+  })
+  if (sameOptions(current, next)) return design
+  const extra: Record<string, unknown> = { ...design.extra }
+  if (sameOptions(next, DEFAULT_PLANT_DISPLAY_OPTIONS)) delete extra[PLANT_DISPLAY_EXTRA_KEY]
+  else extra[PLANT_DISPLAY_EXTRA_KEY] = storedFrom(next)
+  return { ...design, extra }
+}
+
 /** Changes some display options of the current Design; a change to nothing leaves it untouched. */
 export function setPlantDisplayOptions(change: Partial<PlantDisplayOptions>): void {
   editPlantDisplay(() => change)
@@ -113,15 +129,5 @@ export function resetStratumDisplayColors(): void {
 }
 
 function editPlantDisplay(change: (current: PlantDisplayOptions) => Partial<PlantDisplayOptions>): void {
-  editCurrentDesign((design) => {
-    const current = readPlantDisplayOptions(design)
-    const next = readPlantDisplayOptions({
-      extra: { [PLANT_DISPLAY_EXTRA_KEY]: storedFrom({ ...current, ...change(current) }) },
-    })
-    if (sameOptions(current, next)) return design
-    const extra: Record<string, unknown> = { ...design.extra }
-    if (sameOptions(next, DEFAULT_PLANT_DISPLAY_OPTIONS)) delete extra[PLANT_DISPLAY_EXTRA_KEY]
-    else extra[PLANT_DISPLAY_EXTRA_KEY] = storedFrom(next)
-    return { ...design, extra }
-  })
+  editCurrentDesign((design) => withPlantDisplayOptions(design, change(readPlantDisplayOptions(design))))
 }

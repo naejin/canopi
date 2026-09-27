@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_BASEMAP_STYLES,
   SETTINGS_LOCALES,
+  SETTINGS_PLANT_LABELS,
   SETTINGS_THEMES,
 } from '../generated/settings'
 import type { Settings } from '../types/settings'
@@ -67,6 +68,13 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
     last_view: readLastView(value.last_view),
     used_canvas_tools: readStrings(value.used_canvas_tools),
     tool_names_visible: typeof value.tool_names_visible === 'boolean' ? value.tool_names_visible : null,
+    single_key_shortcuts: readBoolean(value.single_key_shortcuts, DEFAULT_SETTINGS.single_key_shortcuts),
+    new_design_satellite: readBoolean(value.new_design_satellite, DEFAULT_SETTINGS.new_design_satellite),
+    new_design_symbol_scale: readFiniteNumber(
+      value.new_design_symbol_scale,
+      DEFAULT_SETTINGS.new_design_symbol_scale,
+    ),
+    new_design_labels: readEnum(value.new_design_labels, SETTINGS_PLANT_LABELS, DEFAULT_SETTINGS.new_design_labels),
   }
 }
 

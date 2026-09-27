@@ -23,6 +23,10 @@ export interface StartScreenDesign {
   readonly name: string
   readonly updatedAt: string
   open(): void
+  /** More › Show in folder: the file's folder in the system file manager. */
+  showInFolder(): void
+  /** More › Remove from list; the file itself is untouched. */
+  remove(): void
 }
 
 export interface StartScreenDraft {
@@ -134,18 +138,7 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
             <section className={styles.section} aria-labelledby={`${searchId}-recent`}>
               <h2 className={styles.sectionTitle} id={`${searchId}-recent`}>{t('start.recentDesigns')}</h2>
               <ul className={styles.rows}>
-                {visibleRecent.map((design) => (
-                  <li key={design.id} className={styles.row}>
-                    <button type="button" className={styles.rowButton} onClick={design.open}>
-                      <span className={styles.thumb} aria-hidden="true"><ControlIcon name="pin" size={20} /></span>
-                      {/* Recent files do not know their plant count or place yet (canopi-h90p.23); show neither rather than a wrong "0 plants". */}
-                      <span className={styles.rowText}>
-                        <span className={styles.rowName}>{visibleDesignName(design.name)}</span>
-                      </span>
-                      <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
-                    </button>
-                  </li>
-                ))}
+                {visibleRecent.map((design) => <RecentRow key={design.id} design={design} />)}
               </ul>
             </section>
           )}
@@ -162,6 +155,31 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
         </>}
       </div>
     </div>
+  )
+}
+
+function RecentRow({ design }: { readonly design: StartScreenDesign }) {
+  const name = visibleDesignName(design.name)
+  return (
+    <li className={styles.row}>
+      <div className={styles.rowLine}>
+        <button type="button" className={styles.rowButton} onClick={design.open}>
+          <span className={styles.thumb} aria-hidden="true"><ControlIcon name="pin" size={20} /></span>
+          {/* Recent files do not know their plant count or place yet (canopi-h90p.23); show neither rather than a wrong "0 plants". */}
+          <span className={styles.rowText}>
+            <span className={styles.rowName}>{name}</span>
+          </span>
+          <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
+        </button>
+        <ActionMenu
+          label={t('start.designActions', { name })}
+          items={[
+            { label: t('start.showInFolder'), run: design.showInFolder },
+            { label: t('start.removeFromList'), run: design.remove },
+          ]}
+        />
+      </div>
+    </li>
   )
 }
 

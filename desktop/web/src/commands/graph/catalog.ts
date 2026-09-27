@@ -16,6 +16,7 @@ import {
   type ShellCommandState,
 } from '../../app/shell-commands'
 import { formatShortcut } from '../../app/shell-commands/shortcut-text'
+import { singleKeyShortcuts } from '../../app/settings/state'
 import { currentDesign } from '../../app/document-session/store'
 import { desktopGeoJsonWorkflow as desktopGeoJson } from '../../platform/geojson.desktop'
 import {
@@ -109,11 +110,14 @@ export function readAppCommandState(): AppCommandState {
 function canvasAppCommandDefinition(
   definition: CanvasCommandDefinition,
 ): AppCommandDefinition {
-  const shortcut = canvasCommandDisplayKey(definition)
   return {
     id: definition.commandId,
     label: () => t(definition.labelKey),
-    shortcut: shortcut ? formatShortcut(shortcut, t) : undefined,
+    // Read when shown: the language and Settings › Keyboard can change.
+    get shortcut() {
+      const shortcut = canvasCommandDisplayKey(definition, { characterKeys: singleKeyShortcuts.value })
+      return shortcut ? formatShortcut(shortcut, t) : undefined
+    },
     palette: definition.palette,
     run: () => dispatchCanvasCommandIntent(definition.intent, workspaceCanvasIntentAdapter),
     disabled: () => isCanvasCommandDisabled(definition.intent, readWorkspaceCanvasProjectionState()),

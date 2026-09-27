@@ -172,7 +172,7 @@ describe("Design Session replacement", () => {
     const replacement = createDesignSessionReplacement({ store, workflowRunner: makeWorkflowRunner(events) });
     const raw = {
       ...makeFile("New"),
-      extra: { shouldBeCleared: true },
+      extra: { shouldBeCleared: true, plant_display: { labels: "codes" } },
       future_top_level: { shouldAlsoBeCleared: true },
     } as CanopiFile;
 
@@ -192,7 +192,8 @@ describe("Design Session replacement", () => {
       "workflow.install",
     ]);
     expect(receipt.canvasHydrated).toBe(true);
-    expect(receipt.file?.extra).toEqual({});
+    // Only the Settings › New Designs display options survive into a new Design.
+    expect(receipt.file?.extra).toEqual({ plant_display: { labels: "codes" } });
     expect(receipt.file).not.toHaveProperty("future_top_level");
     expect(store.readCurrentDesign()).toBe(receipt.file);
     expect(store.readDesignPath()).toBeNull();

@@ -17,6 +17,8 @@ import {
   theme,
   googleMapsApiKey,
   lastView,
+  newDesignDefaults,
+  singleKeyShortcuts,
 } from '../app/settings/state'
 import {
   flushSettingsProjection,
@@ -50,6 +52,10 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     last_view: null,
     used_canvas_tools: [],
     tool_names_visible: null,
+    single_key_shortcuts: true,
+    new_design_satellite: false,
+    new_design_symbol_scale: 1,
+    new_design_labels: 'names',
     ...overrides,
   }
 }
@@ -64,6 +70,8 @@ function resetProjectionSignals(): void {
   mapLayers.value = createDefaultMapLayers()
   plantSpacingIntervalM.value = 0.5
   savedStampsFrameHeight.value = 220
+  singleKeyShortcuts.value = true
+  newDesignDefaults.value = { satellite: false, symbolScale: 1, labels: 'names' }
 }
 
 function readSource(path: string): string {
@@ -206,6 +214,10 @@ describe('settings projection', () => {
       last_view: null,
       used_canvas_tools: [],
       tool_names_visible: null,
+      single_key_shortcuts: true,
+      new_design_satellite: false,
+      new_design_symbol_scale: 1,
+      new_design_labels: 'names',
     })
     expect(saveSettings).not.toHaveBeenCalled()
   })
@@ -244,6 +256,28 @@ describe('settings projection', () => {
     expect(snapshot.basemap_style).toBe('liberty')
     expect(snapshot).not.toHaveProperty('satellite_provider')
     expect(JSON.stringify(mapLayers.value)).not.toContain('device-key')
+  })
+
+  it('projects Keyboard and New Designs settings and clamps the default symbol size', () => {
+    hydrateSettingsProjectionForTests(baseSettings({
+      single_key_shortcuts: false,
+      new_design_satellite: true,
+      new_design_symbol_scale: 9,
+      new_design_labels: 'none',
+    }))
+    expect(singleKeyShortcuts.value).toBe(false)
+    expect(newDesignDefaults.value).toEqual({ satellite: true, symbolScale: 2, labels: 'none' })
+
+    mutateSettingsProjection((draft) => {
+      draft.singleKeyShortcuts = true
+      draft.newDesigns = { ...draft.newDesigns, symbolScale: 0.1, labels: 'codes' }
+    }, { persist: 'none' })
+    expect(snapshotSettingsProjection()).toMatchObject({
+      single_key_shortcuts: true,
+      new_design_satellite: true,
+      new_design_symbol_scale: 0.5,
+      new_design_labels: 'codes',
+    })
   })
 
   it('normalizes theme, map layer choices, opacities, and contour interval at the seam', () => {

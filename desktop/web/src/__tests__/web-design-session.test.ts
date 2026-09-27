@@ -1,3 +1,5 @@
+import { newDesignDefaults } from '../app/settings/state'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { effect } from '@preact/signals'
 import { describe, expect, it, vi } from 'vitest'
 import { composeDocumentForSave } from '../app/contracts/document'
@@ -33,6 +35,25 @@ import {
 const NOW = new Date('2026-07-04T12:00:00.000Z')
 
 describe('browser Design Session lifecycle', () => {
+  it('starts a new browser Design with the Settings › New Designs defaults', async () => {
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter(),
+      now: () => NOW,
+    })
+    newDesignDefaults.value = { satellite: true, symbolScale: 0.5, labels: 'none' }
+    mapLayers.value = createDefaultMapLayers()
+    try {
+      await controller.newDesign()
+      expect(store.readCurrentDesign()?.extra?.plant_display).toMatchObject({ symbol_scale: 0.5, labels: 'none' })
+      expect(mapLayers.value.satellite.visible).toBe(true)
+    } finally {
+      newDesignDefaults.value = { satellite: false, symbolScale: 1, labels: 'names' }
+      mapLayers.value = createDefaultMapLayers()
+    }
+  })
+
   it('creates a browser-local Design with the canonical New Design defaults', async () => {
     const store = createMemoryDesignSessionStore()
     const controller = createBrowserDesignSessionController({

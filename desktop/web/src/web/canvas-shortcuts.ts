@@ -2,6 +2,7 @@ import { canvasCommandDefinitionForShortcut } from '../app/canvas-commands'
 import { saveProblem } from '../app/document-session/save-problem'
 import { savedViewDialogOpen } from '../app/saved-views'
 import { modalLayerOpen } from '../app/shell/modal-layer'
+import { singleKeyShortcuts } from '../app/settings/state'
 import { runFindPlantsShortcut } from '../app/plant-finder/focus'
 import { matchShellCommandShortcut, type ShellCommandState } from '../app/shell-commands'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
@@ -25,7 +26,8 @@ let activeInstallation: WebCanvasShortcutInstallation | null = null
  * Web Edition keyboard routing: Ctrl F for the open panel's plant finder,
  * shell shortcuts the browser lets a page keep (Ctrl O, Ctrl S, F1, F2,
  * Ctrl ,), then canvas commands. Canvas keys never
- * act inside a text field unless the command says so (Ctrl K).
+ * act inside a text field unless the command says so (Ctrl K), and character
+ * keys stay off while Settings › Keyboard turns single-key shortcuts off.
  */
 export function installWebCanvasShortcuts(
   target: Window = window,
@@ -44,7 +46,7 @@ export function installWebCanvasShortcuts(
       if (!shellCommand.isExecutionDisabled(shell!.readState())) shellCommand.execute()
       return
     }
-    const definition = canvasCommandDefinitionForShortcut(event)
+    const definition = canvasCommandDefinitionForShortcut(event, { characterKeys: singleKeyShortcuts.peek() })
     if (!definition) return
     if (isEditableTarget(event.target) && !definition.worksInTextFields) return
     if (!dispatchWorkspaceCanvasIntent(definition.intent)) return

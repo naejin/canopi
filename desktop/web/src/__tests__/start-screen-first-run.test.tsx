@@ -80,7 +80,7 @@ describe('Start screen on first run', () => {
 
   it('keeps the search once there is something to search', async () => {
     await act(async () => {
-      renderStart({ recent: [{ id: '/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open: vi.fn() }] })
+      renderStart({ recent: [{ id: '/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open: vi.fn(), showInFolder: vi.fn(), remove: vi.fn() }] })
     })
     expect(container.querySelector('input[type="search"]')).not.toBeNull()
     expect(container.textContent).not.toContain('No Designs yet')

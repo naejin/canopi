@@ -1,6 +1,10 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import * as designIpc from "../../ipc/design";
 import {
+  applyNewDesignBackground,
+  withNewDesignDisplay,
+} from "../settings/new-design-defaults";
+import {
   createDesignSessionStateMachine,
   type DocumentTransitionResult,
   type QueuedDocumentLoadOptions,
@@ -109,18 +113,20 @@ export function openDesignSessionFromPath(
   });
 }
 
-export function createNewDesignSession(): Promise<DocumentTransitionResult> {
+export async function createNewDesignSession(): Promise<DocumentTransitionResult> {
   const draftId = createDraftId();
-  return designSessionStateMachine.transitionDocument({
+  const result = await designSessionStateMachine.transitionDocument({
     source: "new",
     dirtyGuard: "flush",
     load: async () => ({
-      file: await designIpc.newDesign(),
+      file: withNewDesignDisplay(await designIpc.newDesign()),
       path: null,
       name: "Untitled",
       draftId,
     }),
   });
+  if (result.status === "applied") applyNewDesignBackground();
+  return result;
 }
 
 export function openDesignDraftSession(id: string): Promise<DocumentTransitionResult> {

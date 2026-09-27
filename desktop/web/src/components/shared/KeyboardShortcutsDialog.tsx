@@ -1,6 +1,7 @@
 import type { MenuDefinition } from '../../app/shell-commands/menus'
 import { flattenMenuActions } from '../../app/shell-commands/menus'
 import { closeKeyboardShortcutsDialog, keyboardShortcutsDialogOpen } from '../../app/shell/dialogs'
+import { singleKeyShortcuts } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { WorkspaceDialog } from './WorkspaceDialog'
@@ -9,7 +10,9 @@ import styles from './KeyboardShortcutsDialog.module.css'
 /**
  * Help › Keyboard shortcuts (F1): every menu command that has a shortcut,
  * grouped by menu, generated from the same menus so it cannot drift, then the
- * keys that are not commands (F6 between areas, arrow-key nudges).
+ * keys that are not commands (F6 between areas, arrow-key nudges). With
+ * Settings › Keyboard › Single-key shortcuts off, the menus drop those keys,
+ * so the list does too, and the footnote says how to turn them back on.
  */
 export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly MenuDefinition[] }) {
   if (!keyboardShortcutsDialogOpen.value) return null
@@ -43,7 +46,11 @@ export function KeyboardShortcutsDialog({ menus }: { readonly menus: readonly Me
       wide
       footer={(
         <>
-          <span className={styles.footnote}>{t('shortcuts.footnote')}</span>
+          <span className={styles.footnote} data-single-key-shortcuts={singleKeyShortcuts.value ? 'on' : 'off'}>
+            {singleKeyShortcuts.value
+              ? `${t('shortcuts.footnote')} ${t('shortcuts.singleKeysOn')}`
+              : t('shortcuts.singleKeysOff')}
+          </span>
           <button type="button" className={styles.closeButton} onClick={closeKeyboardShortcutsDialog} data-dialog-initial-focus>
             {t('window.close')}
           </button>

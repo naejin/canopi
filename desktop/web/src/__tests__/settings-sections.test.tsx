@@ -1,0 +1,250 @@
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { aboutCanopiDialogOpen } from '../app/about/state'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
+import {
+  recentFrontendDiagnostics,
+  resetFrontendDiagnosticsForTests,
+} from '../app/problem-report/diagnostics'
+import {
+  googleMapsApiKey,
+  locale,
+  newDesignDefaults,
+  singleKeyShortcuts,
+} from '../app/settings/state'
+import {
+  closeKeyboardShortcutsDialog,
+  closeSettingsDialog,
+  keyboardShortcutsDialogOpen,
+  openSettingsDialog,
+} from '../app/shell/dialogs'
+import { SettingsDialog, type SettingsFoldersAdapter } from '../components/shared/SettingsDialog'
+
+const FAKE_KEY = 'FAKE-GOOGLE-KEY-never-log-me-42'
+const DEFAULT_NEW_DESIGNS = { satellite: false, symbolScale: 1, labels: 'names' } as const
+
+let container: HTMLDivElement
+let consoleSpies: MockInstance[]
+
+function dialog(): HTMLElement {
+  return container.querySelector<HTMLElement>('[role="dialog"]')!
+}
+
+function button(label: string): HTMLButtonElement {
+  const found = [...dialog().querySelectorAll<HTMLButtonElement>('button')].find((candidate) => candidate.textContent === label)
+  if (!found) throw new Error(`Missing button ${label}`)
+  return found
+}
+
+function radio(label: string): HTMLButtonElement {
+  return [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((candidate) => candidate.textContent === label)!
+}
+
+function keyInput(): HTMLInputElement | null {
+  return dialog().querySelector<HTMLInputElement>('[data-google-key-input]')
+}
+
+async function openSection(section: string, folders?: SettingsFoldersAdapter): Promise<void> {
+  await act(async () => { render(<SettingsDialog folders={folders} />, container) })
+  await act(async () => { openSettingsDialog() })
+  await act(async () => {
+    dialog().querySelector<HTMLButtonElement>(`[data-settings-section="${section}"]`)!.click()
+  })
+}
+
+/** Everything the page, the console and the diagnostics buffer could leak. */
+function everywhereTheKeyCouldLeak(): string {
+  const consoleText = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).map(String).join('\n')
+  return [
+    document.documentElement.outerHTML,
+    consoleText,
+    JSON.stringify(recentFrontendDiagnostics()),
+  ].join('\n')
+}
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  locale.value = 'en'
+  googleMapsApiKey.value = null
+  mapLayers.value = createDefaultMapLayers()
+  newDesignDefaults.value = DEFAULT_NEW_DESIGNS
+  singleKeyShortcuts.value = true
+  resetFrontendDiagnosticsForTests()
+  consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method))
+})
+
+afterEach(() => {
+  closeSettingsDialog()
+  closeKeyboardShortcutsDialog()
+  aboutCanopiDialogOpen.value = false
+  render(null, container)
+  container.remove()
+  googleMapsApiKey.value = null
+  newDesignDefaults.value = DEFAULT_NEW_DESIGNS
+  singleKeyShortcuts.value = true
+  vi.restoreAllMocks()
+})
+
+describe('Settings sections', () => {
+  it('lists every section and shows one at a time', async () => {
+    await openSection('appearance')
+    const nav = dialog().querySelector('nav')!
+    expect([...nav.querySelectorAll('button')].map((item) => item.textContent)).toEqual([
+      'Appearance', 'Map and imagery', 'New Designs', 'Keyboard', 'Files and data', 'About',
+    ])
+    expect(nav.querySelector('[aria-current="page"]')!.textContent).toBe('Appearance')
+    await act(async () => { button('Keyboard').click() })
+    expect(nav.querySelector('[aria-current="page"]')!.textContent).toBe('Keyboard')
+    expect(dialog().querySelector('h3')!.textContent).toBe('Keyboard')
+  })
+})
+
+describe('Settings › Map and imagery: the Google key', () => {
+  it('keeps a saved key masked and out of the page until Show, then only inside the input', async () => {
+    googleMapsApiKey.value = FAKE_KEY
+    await openSection('map')
+
+    expect(radio('My Google key').getAttribute('aria-checked')).toBe('true')
+    const input = keyInput()!
+    expect(input.type).toBe('password')
+    expect(input.value).toBe('')
+    expect(dialog().textContent).toContain('A key is saved.')
+    expect(dialog().textContent).toContain('The key stays on this device.')
+    expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+
+    await act(async () => { button('Show').click() })
+    expect(button('Show').getAttribute('aria-pressed')).toBe('true')
+    expect(keyInput()!.type).toBe('text')
+    expect(keyInput()!.value).toBe(FAKE_KEY)
+    // The value is the input's own state, never page markup or text.
+    expect(dialog().textContent).not.toContain(FAKE_KEY)
+    expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+
+    await act(async () => { button('Show').click() })
+    expect(keyInput()!.value).toBe('')
+    expect(keyInput()!.type).toBe('password')
+  })
+
+  it('saves a typed key trimmed, and Remove key forgets it', async () => {
+    await openSection('map')
+    expect(radio('Free imagery').getAttribute('aria-checked')).toBe('true')
+    expect(keyInput()).toBeNull()
+
+    await act(async () => { radio('My Google key').click() })
+    const input = keyInput()!
+    expect(button('Show').disabled).toBe(true)
+    await act(async () => {
+      input.value = `  ${FAKE_KEY}  `
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { button('Save key').click() })
+    expect(googleMapsApiKey.value).toBe(FAKE_KEY)
+    expect(keyInput()!.value).toBe('')
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('Key saved on this device.')
+
+    await act(async () => { button('Remove key').click() })
+    expect(googleMapsApiKey.value).toBeNull()
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('Key removed. The map uses the free imagery.')
+    expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+  })
+
+  it('choosing Free imagery forgets a saved key', async () => {
+    googleMapsApiKey.value = FAKE_KEY
+    await openSection('map')
+    await act(async () => { radio('Free imagery').click() })
+    expect(googleMapsApiKey.value).toBeNull()
+    expect(keyInput()).toBeNull()
+    expect(everywhereTheKeyCouldLeak()).not.toContain(FAKE_KEY)
+  })
+
+  it('sets the map style and Soften background for this device', async () => {
+    await openSection('map')
+    await act(async () => { dialog().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click() })
+    const positron = [...document.body.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((option) => option.textContent === 'Positron')!
+    await act(async () => { positron.click() })
+    expect(mapLayers.value.basemap.style).toBe('positron')
+
+    await act(async () => { dialog().querySelector<HTMLInputElement>('input[role="switch"]')!.click() })
+    expect(mapLayers.value.softenBackground).toBe(true)
+  })
+})
+
+describe('Settings › New Designs', () => {
+  it('stores the defaults a new Design starts with', async () => {
+    await openSection('new-designs')
+    expect(dialog().textContent).toContain('Designs you already have keep their own.')
+
+    await act(async () => { dialog().querySelector<HTMLInputElement>('input[role="switch"]')!.click() })
+    expect(newDesignDefaults.value.satellite).toBe(true)
+
+    const slider = dialog().querySelector<HTMLInputElement>('input[type="range"]')!
+    await act(async () => {
+      slider.value = '150'
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(newDesignDefaults.value.symbolScale).toBe(1.5)
+    expect(slider.getAttribute('aria-valuetext')).toBe('150%')
+
+    await act(async () => { radio('Codes').click() })
+    expect(newDesignDefaults.value.labels).toBe('codes')
+  })
+})
+
+describe('Settings › Keyboard', () => {
+  it('turns single-key shortcuts off and opens the full list', async () => {
+    await openSection('keyboard')
+    expect(dialog().textContent).toContain('Shortcuts can’t be changed yet.')
+    await act(async () => { dialog().querySelector<HTMLInputElement>('input[role="switch"]')!.click() })
+    expect(singleKeyShortcuts.value).toBe(false)
+
+    await act(async () => { button('Show all shortcuts').click() })
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(keyboardShortcutsDialogOpen.value).toBe(true)
+  })
+})
+
+describe('Settings › Files and data', () => {
+  it('shows where Drafts and the Data library live and opens each folder', async () => {
+    const folders: SettingsFoldersAdapter = {
+      load: vi.fn().mockResolvedValue({ drafts: '/home/me/.local/share/canopi/drafts', data_library: '/home/me/.local/share/canopi/lidar' }),
+      show: vi.fn().mockResolvedValue(undefined),
+    }
+    await openSection('files', folders)
+    const rows = [...dialog().querySelectorAll<HTMLElement>('[data-app-folder]')]
+    expect(rows.map((row) => row.dataset.appFolder)).toEqual(['drafts', 'data_library'])
+    expect(rows[0]!.textContent).toContain('/home/me/.local/share/canopi/drafts')
+    expect(rows[1]!.textContent).toContain('Data library')
+
+    await act(async () => { rows[1]!.querySelector('button')!.click() })
+    expect(folders.show).toHaveBeenCalledWith('data_library')
+  })
+
+  it('says so when a folder cannot be opened, without logging its path', async () => {
+    const folders: SettingsFoldersAdapter = {
+      load: vi.fn().mockResolvedValue({ drafts: '/home/me/drafts', data_library: '/home/me/lidar' }),
+      show: vi.fn().mockRejectedValue(new Error('Failed to open /home/me/drafts')),
+    }
+    await openSection('files', folders)
+    await act(async () => { dialog().querySelector<HTMLElement>('[data-app-folder="drafts"] button')!.click() })
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe('The folder couldn’t be opened.')
+    expect(consoleSpies.flatMap((spy) => spy.mock.calls.flat()).map(String).join('\n')).not.toContain('/home/me')
+  })
+
+  it('on Web, says Designs stay in the browser', async () => {
+    await openSection('files')
+    expect(dialog().textContent).toContain('The Web Edition keeps your Designs and Drafts in this browser.')
+    expect(dialog().querySelector('[data-app-folder]')).toBeNull()
+  })
+})
+
+describe('Settings › About', () => {
+  it('names the version and opens About Canopi', async () => {
+    await openSection('about')
+    expect(dialog().textContent).toMatch(/Canopi \d+\.\d+\.\d+/)
+    await act(async () => { button('About Canopi…').click() })
+    expect(aboutCanopiDialogOpen.value).toBe(true)
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+  })
+})

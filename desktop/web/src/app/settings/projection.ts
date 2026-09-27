@@ -3,6 +3,7 @@ import type { LastView } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
+import { clampPlantSymbolScale } from '../../canvas/runtime/plant-display'
 import {
   mapLayers,
   mapLayersEqual,
@@ -20,11 +21,14 @@ import {
   googleMapsApiKey,
   lastView,
   locale,
+  newDesignDefaults,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
+  singleKeyShortcuts,
   theme,
   toolNamesVisible,
   usedCanvasTools,
+  type NewDesignDefaults,
 } from './state'
 import type { SettingsPlatformAdapter } from './platform-adapter'
 
@@ -49,6 +53,8 @@ export interface SettingsProjectionDraft {
     usedTools: readonly string[]
     namesVisible: boolean | null
   }
+  singleKeyShortcuts: boolean
+  newDesigns: NewDesignDefaults
 }
 
 interface MutateSettingsProjectionOptions {
@@ -135,6 +141,8 @@ function createDraftFromProjection(): SettingsProjectionDraft {
       usedTools: usedCanvasTools.value,
       namesVisible: toolNamesVisible.value,
     },
+    singleKeyShortcuts: singleKeyShortcuts.value,
+    newDesigns: newDesignDefaults.value,
   }
 }
 
@@ -174,6 +182,12 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
       usedTools: [...new Set(draft.toolRail.usedTools)],
       namesVisible: draft.toolRail.namesVisible,
     },
+    singleKeyShortcuts: draft.singleKeyShortcuts,
+    newDesigns: {
+      satellite: draft.newDesigns.satellite,
+      symbolScale: clampPlantSymbolScale(draft.newDesigns.symbolScale),
+      labels: draft.newDesigns.labels,
+    },
   }
 }
 
@@ -191,6 +205,8 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     if (!mapLayersEqual(mapLayers.value, draft.mapLayers)) mapLayers.value = draft.mapLayers
     if (!sameStrings(usedCanvasTools.value, draft.toolRail.usedTools)) usedCanvasTools.value = draft.toolRail.usedTools
     toolNamesVisible.value = draft.toolRail.namesVisible
+    singleKeyShortcuts.value = draft.singleKeyShortcuts
+    if (!sameNewDesignDefaults(newDesignDefaults.value, draft.newDesigns)) newDesignDefaults.value = draft.newDesigns
   })
 }
 
@@ -218,7 +234,17 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     soften_background: draft.mapLayers.softenBackground,
     used_canvas_tools: [...draft.toolRail.usedTools],
     tool_names_visible: draft.toolRail.namesVisible,
+    single_key_shortcuts: draft.singleKeyShortcuts,
+    new_design_satellite: draft.newDesigns.satellite,
+    new_design_symbol_scale: draft.newDesigns.symbolScale,
+    new_design_labels: draft.newDesigns.labels,
   }
+}
+
+function sameNewDesignDefaults(left: NewDesignDefaults, right: NewDesignDefaults): boolean {
+  return left.satellite === right.satellite
+    && left.symbolScale === right.symbolScale
+    && left.labels === right.labels
 }
 
 function normalizeLastView(view: LastView | null): LastView | null {
@@ -297,6 +323,12 @@ function projectSettingsToSignals(settings: Settings): Settings {
     toolRail: {
       usedTools: settings.used_canvas_tools,
       namesVisible: settings.tool_names_visible ?? null,
+    },
+    singleKeyShortcuts: settings.single_key_shortcuts,
+    newDesigns: {
+      satellite: settings.new_design_satellite,
+      symbolScale: settings.new_design_symbol_scale,
+      labels: settings.new_design_labels,
     },
   })
   applyDraftToProjection(draft)

@@ -3,6 +3,7 @@ import {
   type CanvasCommandShortcutInput,
 } from '../../app/canvas-commands'
 import { matchShellCommandShortcut } from '../../app/shell-commands'
+import { singleKeyShortcuts } from '../../app/settings/state'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
 import { COMMAND_PALETTE_SHORTCUT_KEY } from '../../shortcuts/definitions'
@@ -45,7 +46,7 @@ export function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcu
   const shellCommand = matchShellCommandShortcut(DESKTOP_SHELL_COMMAND_CATALOG, input)
   if (shellCommand) return { commandId: shellCommand.id, preventDefault: true }
 
-  const canvasCommand = canvasCommandDefinitionForShortcut(input)
+  const canvasCommand = canvasCommandDefinitionForShortcut(input, { characterKeys: singleKeyShortcuts.peek() })
   if (!canvasCommand) return null
   // A tool key before the canvas mounts primes the tool it starts with.
   if (canvasCommand.kind !== 'tool' && !getCurrentCanvasCommandSurface()) return null

@@ -1,6 +1,7 @@
 import {
   ariaKeyShortcuts,
   formatShortcut,
+  isCharacterKeyShortcut,
   matchesShortcut,
   type ShortcutInput,
 } from '../shell-commands/shortcut-text'
@@ -257,14 +258,37 @@ function edit(
   }
 }
 
-/** The key a command shows: its first shortcut, else its key hint. */
-export function canvasCommandDisplayKey(definition: CanvasCommandDefinition): string | undefined {
-  return definition.shortcuts?.[0] ?? definition.keyHint
+/** Which shortcuts are live: character keys can be turned off in Settings › Keyboard. */
+export interface CanvasShortcutOptions {
+  readonly characterKeys: boolean
 }
 
-/** `aria-keyshortcuts` for a command: every shortcut, else its key hint. */
-export function canvasCommandAriaKeys(definition: CanvasCommandDefinition): string | undefined {
-  const keys = definition.shortcuts ?? (definition.keyHint ? [definition.keyHint] : undefined)
+const ALL_SHORTCUTS: CanvasShortcutOptions = { characterKeys: true }
+
+/** The command's live shortcuts, in order. */
+function liveShortcuts(
+  definition: CanvasCommandDefinition,
+  options: CanvasShortcutOptions,
+): readonly string[] | undefined {
+  if (!definition.shortcuts || options.characterKeys) return definition.shortcuts
+  const live = definition.shortcuts.filter((shortcut) => !isCharacterKeyShortcut(shortcut))
+  return live.length > 0 ? live : undefined
+}
+
+/** The key a command shows: its first live shortcut, else its key hint. */
+export function canvasCommandDisplayKey(
+  definition: CanvasCommandDefinition,
+  options: CanvasShortcutOptions = ALL_SHORTCUTS,
+): string | undefined {
+  return liveShortcuts(definition, options)?.[0] ?? definition.keyHint
+}
+
+/** `aria-keyshortcuts` for a command: every live shortcut, else its key hint. */
+export function canvasCommandAriaKeys(
+  definition: CanvasCommandDefinition,
+  options: CanvasShortcutOptions = ALL_SHORTCUTS,
+): string | undefined {
+  const keys = liveShortcuts(definition, options) ?? (definition.keyHint ? [definition.keyHint] : undefined)
   return keys?.map(ariaKeyShortcuts).join(' ')
 }
 
@@ -377,9 +401,10 @@ export type CanvasCommandShortcutInput = ShortcutInput
 /** The canvas command a key event names, or null. Callers decide whether the map has focus. */
 export function canvasCommandDefinitionForShortcut(
   input: CanvasCommandShortcutInput,
+  options: CanvasShortcutOptions = ALL_SHORTCUTS,
 ): CanvasCommandDefinition | null {
   return canvasCommandDefinitions.find((definition) =>
-    definition.shortcuts?.some((shortcut) => matchesShortcut(shortcut, input)),
+    liveShortcuts(definition, options)?.some((shortcut) => matchesShortcut(shortcut, input)),
   ) ?? null
 }
 
@@ -505,21 +530,24 @@ interface CreateCanvasCommandProjectionOptions {
   readonly state: CanvasCommandProjectionState
   readonly intents: CanvasCommandIntentAdapter
   readonly translate: (key: string) => string
+  /** Settings › Keyboard; off hides character-key shortcuts from every surface. */
+  readonly shortcuts?: CanvasShortcutOptions
 }
 
 export function createCanvasCommandProjection({
   state,
   intents,
   translate,
+  shortcuts = ALL_SHORTCUTS,
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
   const project = (definition: CanvasCommandDefinition): CanvasProjectedCommand => {
     const disabled = isCanvasCommandDisabled(definition.intent, state)
-    const shortcut = canvasCommandDisplayKey(definition)
+    const shortcut = canvasCommandDisplayKey(definition, shortcuts)
     return {
       commandId: definition.commandId,
       label: translate(definition.labelKey),
       shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
-      ariaShortcut: canvasCommandAriaKeys(definition),
+      ariaShortcut: canvasCommandAriaKeys(definition, shortcuts),
       disabled,
       action: () => {
         if (disabled) return

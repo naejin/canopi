@@ -138,6 +138,16 @@ export async function getRecentFiles(): Promise<DesignSummary[]> {
   return invoke('get_recent_files')
 }
 
+/** Start › Recent Designs › Remove from list; the file is untouched. */
+export async function removeRecentDesign(path: string): Promise<void> {
+  return invoke('remove_recent_design', { path })
+}
+
+/** Start › Recent Designs › Show in folder. */
+export async function showRecentDesignInFolder(path: string): Promise<void> {
+  return invoke('show_recent_design_in_folder', { path })
+}
+
 /** Get saved Design references plus user-owned Notebook Section organization. */
 export async function getDesignNotebook(): Promise<DesignNotebookSnapshot> {
   return invoke('get_design_notebook')

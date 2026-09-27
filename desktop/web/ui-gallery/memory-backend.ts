@@ -107,14 +107,15 @@ function updateItem(id: unknown, change: (item: LibraryItemSummary) => LibraryIt
 export const activity = signal('All changes stay in memory. Reload to reset.')
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
 // Start-screen fixtures: dated relative to now so Today and Yesterday read naturally.
+const removedRecentPaths = new Set<string>()
 function recentDesigns() {
   // First run: no recent Designs and no Drafts.
   if (state === 'empty') return []
-  return [
+  return ([
     { path: '/designs/sanctuaire.canopi', name: "Le Sanctuaire d'Aylin – Verger Syntropique", updated_at: hoursAgo(1), plant_count: 2201 },
     { path: '/designs/haie-nord.canopi', name: 'Haie fruitière nord', updated_at: hoursAgo(26), plant_count: 64 },
     { path: '/designs/mare.canopi', name: 'Jardin de la mare', updated_at: hoursAgo(24 * 14), plant_count: 180 },
-  ]
+  ]).filter(design => !removedRecentPaths.has(design.path))
 }
 let drafts = state === 'empty' ? [] : [
   { id: 'draft-untitled', name: 'Untitled', updated_at: hoursAgo(24 * 3) },
@@ -160,6 +161,12 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     case 'get_favorites': result = species.filter(plant => favoriteNames.has(plant.canonical_name)).map(plant => ({ ...plant, common_name: state === 'long' ? plant.common_name + ' — a particularly long local cultivar name' : plant.common_name })); break
     case 'get_recently_viewed': result = []; break
     case 'get_recent_files': result = recentDesigns(); break
+    case 'remove_recent_design':
+      removedRecentPaths.add(String(args.path))
+      activity.value = 'Removed the Design from Recent Designs in memory.'; result = undefined; break
+    case 'show_recent_design_in_folder': activity.value = 'Show in folder opens the file manager in Canopi Desktop.'; result = undefined; break
+    case 'get_app_folders': result = { drafts: '/home/you/.local/share/canopi/drafts', data_library: '/home/you/.local/share/canopi/lidar' }; break
+    case 'show_app_folder': activity.value = `Show in folder opens the ${String(args.folder)} folder in Canopi Desktop.`; result = undefined; break
     case 'list_design_drafts': result = drafts; break
     case 'delete_design_draft':
       drafts = drafts.filter(draft => draft.id !== args.id)

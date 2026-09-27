@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { locale, theme, toolNamesVisible, usedCanvasTools } from '../app/settings/state'
+import { locale, singleKeyShortcuts, theme, toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import {
   closeKeyboardShortcutsDialog,
   closeSettingsDialog,
@@ -154,6 +154,20 @@ describe('Keyboard shortcuts dialog', () => {
 
     await act(async () => { (document.activeElement as HTMLButtonElement).click() })
     expect(keyboardShortcutsDialogOpen.value).toBe(false)
+  })
+
+  it('says where single-key shortcuts are turned off, and that they are off', async () => {
+    await act(async () => { render(<KeyboardShortcutsDialog menus={menus} />, container) })
+    await act(async () => { openKeyboardShortcutsDialog() })
+    const footnote = () => container.querySelector('[data-single-key-shortcuts]')!
+    expect(footnote().textContent).toBe('Tool keys work while the map has focus. Single-key shortcuts can be turned off in Settings › Keyboard.')
+    await act(async () => { singleKeyShortcuts.value = false })
+    try {
+      expect(footnote().getAttribute('data-single-key-shortcuts')).toBe('off')
+      expect(footnote().textContent).toBe('Single-key shortcuts are off. Turn them on in Settings › Keyboard.')
+    } finally {
+      singleKeyShortcuts.value = true
+    }
   })
 })
 

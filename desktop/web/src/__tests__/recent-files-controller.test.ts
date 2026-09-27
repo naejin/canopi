@@ -29,4 +29,35 @@ describe('recent files controller', () => {
 
     expect(controller.recentFiles.value).toEqual([])
   })
+
+  it('removes a Design from the list and reloads it', async () => {
+    const listed = [
+      { path: '/a', name: 'A', updated_at: '2026-04-01T00:00:00.000Z', plant_count: 0 },
+      { path: '/b', name: 'B', updated_at: '2026-04-02T00:00:00.000Z', plant_count: 0 },
+    ]
+    const loadRecentFiles = vi.fn().mockImplementation(async () => [...listed])
+    const removeRecentFile = vi.fn().mockImplementation(async (path: string) => {
+      listed.splice(listed.findIndex((file) => file.path === path), 1)
+    })
+    const controller = createRecentFilesController({ loadRecentFiles, removeRecentFile })
+    await controller.load()
+
+    await controller.remove('/a')
+
+    expect(removeRecentFile).toHaveBeenCalledWith('/a')
+    expect(controller.recentFiles.value.map((file) => file.path)).toEqual(['/b'])
+  })
+
+  it('keeps the list when removing fails', async () => {
+    const controller = createRecentFilesController({
+      loadRecentFiles: vi.fn().mockResolvedValue([
+        { path: '/a', name: 'A', updated_at: '2026-04-01T00:00:00.000Z', plant_count: 0 },
+      ]),
+      removeRecentFile: vi.fn().mockRejectedValue(new Error('failed')),
+    })
+    await controller.load()
+
+    await expect(controller.remove('/a')).rejects.toThrow('failed')
+    expect(controller.recentFiles.value.map((file) => file.path)).toEqual(['/a'])
+  })
 })

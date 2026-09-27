@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import type { LastView, Locale, Theme } from '../../generated/contracts'
+import type { LastView, Locale, PlantLabels, Theme } from '../../generated/contracts'
 import { DEFAULT_SETTINGS } from '../../generated/settings'
 
 export const locale = signal<Locale>(DEFAULT_SETTINGS.locale)
@@ -34,3 +34,20 @@ export const usedCanvasTools = signal<readonly string[]>(DEFAULT_SETTINGS.used_c
 
 /** View › Tool names: null follows first use, a boolean is the user's choice. */
 export const toolNamesVisible = signal<boolean | null>(DEFAULT_SETTINGS.tool_names_visible ?? null)
+
+/** Settings › Keyboard: character-key shortcuts (V, P, N, Shift G, brackets) are on. */
+export const singleKeyShortcuts = signal<boolean>(DEFAULT_SETTINGS.single_key_shortcuts)
+
+/** Settings › New Designs: what a new Design starts with. Never applied to an existing Design. */
+export interface NewDesignDefaults {
+  /** Turn Satellite on when the Design is created; off keeps the last background. */
+  readonly satellite: boolean
+  readonly symbolScale: number
+  readonly labels: PlantLabels
+}
+
+export const newDesignDefaults = signal<NewDesignDefaults>({
+  satellite: DEFAULT_SETTINGS.new_design_satellite,
+  symbolScale: DEFAULT_SETTINGS.new_design_symbol_scale,
+  labels: DEFAULT_SETTINGS.new_design_labels,
+})

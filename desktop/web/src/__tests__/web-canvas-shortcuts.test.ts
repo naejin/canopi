@@ -4,6 +4,7 @@ import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool } from '../canvas/session-state'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
 import { keyboardShortcutsDialogOpen } from '../app/shell/dialogs'
+import { singleKeyShortcuts } from '../app/settings/state'
 import { createBrowserShellCatalog } from '../web/browser-shell-commands'
 import { answerSaveProblem, requestSaveProblemDecision } from '../app/document-session/save-problem'
 import { registerPlantFinder } from '../app/plant-finder/focus'
@@ -42,6 +43,21 @@ describe('Web Canvas shortcuts', () => {
     expect(dispatchShortcut({ key: 'f', ctrlKey: true }).defaultPrevented).toBe(false)
     expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
     expect(placeSearchFocusRequest.value).toBe(before + 1)
+  })
+
+  it('leaves character keys to the page while single-key shortcuts are off', () => {
+    installWebCanvasShortcuts()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    singleKeyShortcuts.value = false
+    try {
+      expect(dispatchShortcut({ key: 'z' }).defaultPrevented).toBe(false)
+      expect(activeTool.value).toBe('select')
+      const before = placeSearchFocusRequest.value
+      expect(dispatchShortcut({ key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
+      expect(placeSearchFocusRequest.value).toBe(before + 1)
+    } finally {
+      singleKeyShortcuts.value = true
+    }
   })
 
   it('routes the shell shortcuts a browser lets a page keep, and leaves the rest to the browser', () => {

@@ -84,6 +84,8 @@ import {
   resetDesignSessionStateForTests,
 } from '../app/document-session/transition'
 import type { CanopiFile } from '../types/design'
+import { newDesignDefaults } from '../app/settings/state'
+import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 
 function makeFile(name: string): CanopiFile {
   return {
@@ -410,6 +412,30 @@ describe('document replacement actions', () => {
     expect(designPath.value).toBe(null)
     expect(designContinuousSave.readHome()).toMatchObject({ kind: 'draft' })
     expect(designContinuousSave.status.value).toBe('draft')
+  })
+
+  it('starts a new Design with the Settings › New Designs defaults and never touches an opened one', async () => {
+    mocks.canvasSession = null
+    mocks.newDesign.mockResolvedValue(makeFile('Untitled'))
+    newDesignDefaults.value = { satellite: true, symbolScale: 1.5, labels: 'codes' }
+    mapLayers.value = createDefaultMapLayers()
+    try {
+      await newDesignAction()
+
+      expect(currentDesign.value?.extra?.plant_display).toMatchObject({ symbol_scale: 1.5, labels: 'codes' })
+      expect(mapLayers.value.satellite.visible).toBe(true)
+
+      // Opening a Design keeps its own display and the background.
+      mapLayers.value = createDefaultMapLayers()
+      mocks.loadDesign.mockResolvedValue(loaded(makeFile('Kept')))
+      await openDesignFromPath('/designs/kept.canopi')
+      expect(currentDesign.value?.name).toBe('Kept')
+      expect(currentDesign.value?.extra?.plant_display).toBeUndefined()
+      expect(mapLayers.value.satellite.visible).toBe(false)
+    } finally {
+      newDesignDefaults.value = { satellite: false, symbolScale: 1, labels: 'names' }
+      mapLayers.value = createDefaultMapLayers()
+    }
   })
 
   it('saves the canonical document snapshot to its file when no canvas session is mounted', async () => {

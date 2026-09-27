@@ -7,7 +7,7 @@ import {
   rulersVisible,
   snapToGridEnabled,
 } from '../app/canvas-settings/signals'
-import { theme } from '../app/settings/state'
+import { singleKeyShortcuts, theme } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { designSessionFixture, resetDirtyBaselines } from './support/design-session-state'
 import * as documentActions from '../app/document-session/actions'
@@ -609,6 +609,41 @@ describe('command registry canvas tool switching', () => {
     expect(keyDown(input)).toBe(false)
     expect(labels()).toBe('names')
     input.remove()
+  })
+
+  it('turns character-key shortcuts off everywhere with Settings › Keyboard, and keeps Ctrl and named keys', () => {
+    designSessionFixture.file = { ...emptyDesign() }
+    const undo = vi.fn()
+    mountCanvasCommandSurface({ history: { undo, canUndo: signal(true) } } as never)
+    const keyDown = (init: KeyboardEventInit) =>
+      handleAppCommandKeyDown(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    const toolShortcut = () => flattenMenuActions(menus()).find((entry) => entry.id === 'canvas.tool.polygon')!.shortcut
+    const fitShortcut = () => flattenMenuActions(menus()).find((entry) => entry.id === 'view.fitToDesign')!.shortcut
+    const labels = () => (currentDesign.value?.extra?.plant_display as { labels?: string } | undefined)?.labels ?? 'names'
+
+    try {
+      expect(toolShortcut()).toBe('Z')
+      expect(getCommand('canvas.tool.polygon').shortcut).toBe('Z')
+      singleKeyShortcuts.value = false
+
+      expect(keyDown({ key: 'z' })).toBe(false)
+      expect(activeTool.value).toBe('select')
+      expect(keyDown({ key: 'n' })).toBe(false)
+      expect(labels()).toBe('names')
+      expect(keyDown({ key: 'F', shiftKey: true })).toBe(false)
+      // Menus, the palette and the F1 list drop the keys that no longer work.
+      expect(toolShortcut()).toBeUndefined()
+      expect(getCommand('canvas.tool.polygon').shortcut).toBeUndefined()
+      expect(fitShortcut()).toBe('Ctrl 0')
+
+      expect(keyDown({ key: ',', ctrlKey: true })).toBe(true)
+      expect(settingsDialogOpen.value).toBe(true)
+    } finally {
+      singleKeyShortcuts.value = true
+      settingsDialogOpen.value = false
+    }
+    expect(keyDown({ key: 'n' })).toBe(true)
+    expect(labels()).toBe('none')
   })
 
   it('ignores app shortcuts and the palette while the save dialog is open', async () => {

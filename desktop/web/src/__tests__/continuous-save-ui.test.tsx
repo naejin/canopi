@@ -266,7 +266,7 @@ describe('StartScreen', () => {
   it('lists recent Designs as buttons with their date', async () => {
     const open = vi.fn()
     await act(async () => {
-      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open }])
+      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open, showInFolder: vi.fn(), remove: vi.fn() }])
     })
     expect(container.textContent).toContain('Recent Designs')
     const row = buttons().find((button) => button.textContent?.includes('Orchard'))!
@@ -291,6 +291,27 @@ describe('StartScreen', () => {
       search.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(container.querySelector('[role="status"]')?.textContent).toBe('No Designs match “zzz”.')
+  })
+
+  it('offers Show in folder and Remove from list in a recent Design\'s More menu', async () => {
+    const showInFolder = vi.fn()
+    const remove = vi.fn()
+    const open = vi.fn()
+    await act(async () => {
+      renderStart([], [{ id: '/d/a.canopi', name: 'Orchard', updatedAt: new Date().toISOString(), open, showInFolder, remove }])
+    })
+    const choose = async (label: string) => {
+      await act(async () => { container.querySelector<HTMLButtonElement>('button[aria-label="More actions for Orchard"]')!.click() })
+      await act(async () => {
+        Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+          .find((item) => item.textContent === label)!.click()
+      })
+    }
+    await choose('Show in folder')
+    expect(showInFolder).toHaveBeenCalledOnce()
+    await choose('Remove from list')
+    expect(remove).toHaveBeenCalledOnce()
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('opens a draft and deletes one only after an inline confirmation that names it', async () => {

@@ -47,6 +47,7 @@ import { keyboardShortcutsDialogOpen } from '../src/app/shell/dialogs'
 import { TitleBar } from '../src/components/shared/TitleBar'
 import { DesktopPanelRail } from '../src/components/panels/DesktopPanelRail'
 import { SettingsDialog } from '../src/components/shared/SettingsDialog'
+import { getAppFolders, showAppFolder } from '../src/ipc/settings'
 import { KeyboardShortcutsDialog } from '../src/components/shared/KeyboardShortcutsDialog'
 import { WelcomeScreen } from '../src/components/shared/WelcomeScreen'
 import { DegradedBanner } from '../src/components/shared/DegradedBanner'
@@ -227,7 +228,7 @@ function GalleryDesktopFrame() {
     <DegradedBanner />
     {selectedSurface.value === 'workspace' && <DesktopPanelRail />}
     {selectedSurface.value === 'workspace' && <WorkspaceDialogs />}
-    <SettingsDialog />
+    <SettingsDialog folders={{ load: getAppFolders, show: showAppFolder }} />
     {keyboardShortcutsDialogOpen.value && <KeyboardShortcutsDialog menus={appCommandGraphChromeProjection.value.menus} />}
   </>
 }

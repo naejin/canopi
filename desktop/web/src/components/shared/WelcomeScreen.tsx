@@ -48,6 +48,8 @@ export function WelcomeScreen() {
         name: file.name,
         updatedAt: file.updated_at,
         open: () => { void openDesignFromPath(file.path).catch(logWelcomeError) },
+        showInFolder: () => { void recentFilesController.showInFolder(file.path).catch(logWelcomeError) },
+        remove: () => { void recentFilesController.remove(file.path).catch(logWelcomeError) },
       }))}
       drafts={draftsController.drafts.value.map((draft) => ({
         id: draft.id,

@@ -90,7 +90,8 @@ function commandProjection(command: AppCommandDefinition): Command {
   return {
     id: command.id,
     label: command.label,
-    shortcut: command.shortcut,
+    // Read when the palette shows it: Settings › Keyboard can drop it.
+    get shortcut() { return command.shortcut },
     disabled: () => isCatalogCommandDisabled(command.id),
     action: () => {
       runCatalogCommand(command.id)

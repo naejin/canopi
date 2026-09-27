@@ -13,6 +13,7 @@ import {
   normalizeLoadedDocument,
   normalizeNewDocument,
 } from "../contracts/document";
+import { PLANT_DISPLAY_EXTRA_KEY } from "../design-edit/plant-display";
 import type { DesignSessionStore } from "./store";
 import type { DesignSessionWorkflowRunner } from "./workflow-runner";
 
@@ -415,9 +416,12 @@ function emptySceneDocument(): CanopiFile {
   };
 }
 
+/** What a new Design may carry in `extra`: its Settings › New Designs display options. */
+const NEW_DESIGN_EXTRA_KEYS: readonly string[] = [PLANT_DISPLAY_EXTRA_KEY];
+
 function normalizeReplacement(input: ResolvedDesignReplacement): CanopiFile {
   return input.kind !== "loaded"
-    ? normalizeNewDocument(input.file)
+    ? normalizeNewDocument(input.file, NEW_DESIGN_EXTRA_KEYS)
     : normalizeLoadedDocument(input.file);
 }
 

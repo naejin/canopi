@@ -106,3 +106,13 @@ export function isSingleKeyShortcut(shortcut: string): boolean {
   const parsed = parseShortcut(shortcut)
   return !parsed.ctrl && !parsed.alt
 }
+
+/**
+ * A character key alone or with Shift (V, N, ], Shift G). Settings › Keyboard
+ * can turn these off, so they never fire while someone types or dictates;
+ * named keys (Delete, Esc, arrows, F keys) and Ctrl or Alt shortcuts stay.
+ */
+export function isCharacterKeyShortcut(shortcut: string): boolean {
+  const parsed = parseShortcut(shortcut)
+  return !parsed.ctrl && !parsed.alt && [...parsed.key].length === 1
+}

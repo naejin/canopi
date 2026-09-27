@@ -38,6 +38,10 @@ import {
   type CanvasDocumentSurface,
 } from "../canvas/runtime/runtime";
 import type { CanopiFile } from "../types/design";
+import {
+  applyNewDesignBackground,
+  withNewDesignDisplay,
+} from "../app/settings/new-design-defaults";
 import { CURRENT_CANOPI_FILE_VERSION } from "../generated/canopi-design-format";
 import {
   NEW_DESIGN_LAYER_DEFAULTS,
@@ -241,12 +245,13 @@ export function createBrowserDesignSessionController({
     const intent = ++replacementIntent;
     const flushed = flushBeforeReplacement(intent);
     if (flushed !== true && !(await flushed)) return;
-    const file = createNewWebCanopiFile("Untitled", now().toISOString());
+    const file = withNewDesignDisplay(createNewWebCanopiFile("Untitled", now().toISOString()));
     applyDesignReplacement(draftReplacement({
       file,
       kind: "new",
       name: file.name,
     }, createDraftId(), false));
+    applyNewDesignBackground();
   }
 
   async function closeDesign(): Promise<boolean> {

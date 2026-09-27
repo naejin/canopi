@@ -63,6 +63,10 @@ describe('settings platform adapters', () => {
       hillshade_visible: true,
       hillshade_opacity: 0.3,
       plant_spacing_interval_m: 0.75,
+      single_key_shortcuts: false,
+      new_design_satellite: true,
+      new_design_symbol_scale: 1.5,
+      new_design_labels: 'codes',
     })
     const adapter = createBrowserSettingsPlatformAdapter({
       loadSettings: () => stored,
@@ -143,6 +147,10 @@ describe('settings platform adapters', () => {
         hillshade_visible: 'yes',
         hillshade_opacity: Number.NaN,
         plant_spacing_interval_m: Number.NEGATIVE_INFINITY,
+        single_key_shortcuts: 'off',
+        new_design_satellite: 1,
+        new_design_symbol_scale: '1.5',
+        new_design_labels: 'all',
         unknown_setting: true,
       }),
       saveSettings: vi.fn(),

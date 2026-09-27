@@ -71,10 +71,19 @@ export function normalizeLoadedDocument(file: CanopiFile): CanopiFile {
   }
 }
 
-export function normalizeNewDocument(file: CanopiFile): CanopiFile {
+/**
+ * A new Design starts with an empty `extra`, except the keys its creator set
+ * on purpose (`keepExtraKeys`: Settings › New Designs display options).
+ */
+export function normalizeNewDocument(file: CanopiFile, keepExtraKeys: readonly string[] = []): CanopiFile {
+  const persisted = normalizePersistedExtra(file.extra)
+  const extra: Record<string, unknown> = {}
+  for (const key of keepExtraKeys) {
+    if (Object.prototype.hasOwnProperty.call(persisted, key)) extra[key] = persisted[key]
+  }
   return {
     ...normalizeDocumentKnownFields(file),
-    extra: {},
+    extra,
   }
 }
 

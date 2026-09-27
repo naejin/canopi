@@ -80,6 +80,10 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     last_view: null,
     used_canvas_tools: [],
     tool_names_visible: null,
+    single_key_shortcuts: true,
+    new_design_satellite: false,
+    new_design_symbol_scale: 1,
+    new_design_labels: 'names',
     ...overrides,
   }
 }
