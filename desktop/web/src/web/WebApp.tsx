@@ -8,6 +8,7 @@ import { BrowserAppShell } from "./BrowserAppShell";
 import {
   createBrowserShellCapabilities,
   createBrowserShellCatalog,
+  browserPhoneSheetTabs,
   createBrowserShellCommandProjection,
   type BrowserShellCatalog,
 } from "./browser-shell-commands";
@@ -21,7 +22,6 @@ import { SaveProblemDialog } from "../components/shared/SaveProblemDialog";
 import { SettingsDialog } from "../components/shared/SettingsDialog";
 import { KeyboardShortcutsDialog } from "../components/shared/KeyboardShortcutsDialog";
 import { AboutCanopiDialog } from "../components/shared/AboutCanopiDialog";
-import { PlaceSearchField } from "../components/canvas/PlaceSearch";
 import { WebWorkspace } from "./WebWorkspace";
 import { createBrowserGeoJsonWorkflow } from "./browser-geojson";
 import type { WebShellShortcutSource } from "./canvas-shortcuts";
@@ -101,12 +101,14 @@ export function WebApp({
         onRetrySave={() => {
           void controller.continuousSave.flush().catch(logWebAppCommandError);
         }}
-        search={hasDesign ? <PlaceSearchField compact /> : undefined}
+        placeSearch={hasDesign}
+        undo={hasDesign ? workspaceCanvasCommandProjection.value.historyActions.find((action) => action.id === "undo") : undefined}
       >
         {workspace ?? (
           <WebWorkspace
             controller={controller}
             panelProjection={commandProjection.panelBar}
+            phoneTabs={browserPhoneSheetTabs(commandProjection.panelBar)}
             templatesEnabled={templatesEnabled}
           />
         )}

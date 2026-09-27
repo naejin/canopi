@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "즐겨찾기"
   },
+  "webPhone": {
+    "sheetShow": "패널 표시",
+    "sheetExpand": "패널 확장",
+    "sheetHide": "패널 숨기기",
+    "searchBack": "지도로 돌아가기",
+    "more": "더 보기",
+    "tabs": {
+      "species-key": "식물",
+      "layers": "레이어",
+      "plant-db": "카탈로그",
+      "favorites": "즐겨찾기",
+      "calendar": "달력",
+      "budget": "예산",
+      "consortium": "컨소시엄",
+      "stories": "스토리"
+    }
+  },
   "webShell": {
     "panels": "웹 에디션 패널",
     "workspace": "웹 에디션 작업 공간",

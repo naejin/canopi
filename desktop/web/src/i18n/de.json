@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "Favoriten"
   },
+  "webPhone": {
+    "sheetShow": "Bereiche zeigen",
+    "sheetExpand": "Bereiche vergrößern",
+    "sheetHide": "Bereiche ausblenden",
+    "searchBack": "Zurück zur Karte",
+    "more": "Mehr",
+    "tabs": {
+      "species-key": "Pflanzen",
+      "layers": "Ebenen",
+      "plant-db": "Katalog",
+      "favorites": "Favoriten",
+      "calendar": "Kalender",
+      "budget": "Budget",
+      "consortium": "Konsortium",
+      "stories": "Geschichten"
+    }
+  },
   "webShell": {
     "panels": "Bereiche der Web Edition",
     "workspace": "Arbeitsbereich der Web Edition",

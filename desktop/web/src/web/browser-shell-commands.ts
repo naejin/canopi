@@ -65,6 +65,18 @@ export interface BrowserShellChromeProjection extends ShellChromeProjection<Brow
   readonly workspaceMenus: readonly MenuDefinition[]
 }
 
+/**
+ * The panels as the phone sheet lists them: the Design and planning panels,
+ * then the primary views (the Design map and Templates) when there are two.
+ */
+export function browserPhoneSheetTabs<Command>(panelBar: {
+  readonly primary: readonly Command[]
+  readonly design: readonly Command[]
+  readonly planning: readonly Command[]
+}): readonly Command[] {
+  return [...panelBar.design, ...panelBar.planning, ...(panelBar.primary.length > 1 ? panelBar.primary : [])]
+}
+
 export interface BrowserShellDesignIdentity {
   readonly name: string
   readonly saveStatus: DesignSaveStatus

@@ -48,6 +48,20 @@ describe('floating chrome layering', () => {
     }
   })
 
+  it('stacks the phone sheet under the top bar and over the rails and status chips it can cover', () => {
+    const sheet = classZIndex('components/shared/PhoneSheet.module.css', 'sheet')
+    expect(classZIndex('components/shared/WorkspaceTitleBar.module.css', 'titleBar')).toBeGreaterThan(sheet)
+    for (const [file, name] of [
+      ['components/canvas/ToolRail.module.css', 'rail'],
+      ['components/canvas/ZoomControls.module.css', 'group'],
+      ['components/canvas/SelectionChip.module.css', 'chip'],
+      ['components/canvas/SpeciesFocusChip.module.css', 'chip'],
+      ['components/canvas/CanvasOverview.module.css', 'notice'],
+    ] as const) {
+      expect(sheet).toBeGreaterThan(classZIndex(file, name))
+    }
+  })
+
   it('keeps plant styling popovers above the rail that opens them', () => {
     expect(classZIndex('components/canvas/appearance.module.css', 'menu'))
       .toBeGreaterThan(classZIndex('components/canvas/ToolRail.module.css', 'rail'))

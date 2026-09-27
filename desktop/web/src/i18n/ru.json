@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "Избранное"
   },
+  "webPhone": {
+    "sheetShow": "Показать панели",
+    "sheetExpand": "Развернуть панели",
+    "sheetHide": "Скрыть панели",
+    "searchBack": "Назад к карте",
+    "more": "Ещё",
+    "tabs": {
+      "species-key": "Растения",
+      "layers": "Слои",
+      "plant-db": "Каталог",
+      "favorites": "Избранное",
+      "calendar": "Календарь",
+      "budget": "Бюджет",
+      "consortium": "Консорциум",
+      "stories": "Истории"
+    }
+  },
   "webShell": {
     "panels": "Панели веб-версии",
     "workspace": "Рабочая область веб-версии",

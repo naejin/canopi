@@ -84,3 +84,57 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+/* Phones (board WebPhone): chrome sits 8 px from the edges and clear of the
+   notch and home indicator; the top bar is 44 px targets in a 52 px bar, and
+   everything placed below the title bar follows it down. */
+.shell[data-phone-layout] {
+  --chrome-inset: var(--space-2);
+  --chrome-top: calc(var(--space-2) + env(safe-area-inset-top));
+  --title-bar-height: calc(var(--control-size-touch) + var(--space-2));
+  --chrome-rail-top: calc(var(--chrome-top) + var(--title-bar-height) + var(--space-2));
+}
+
+.shell[data-phone-layout] .notice {
+  right: calc(var(--chrome-inset) + env(safe-area-inset-right));
+  left: calc(var(--chrome-inset) + env(safe-area-inset-left));
+}
+
+.shell[data-phone-layout] .noticeDismiss {
+  width: var(--control-size-touch);
+  height: var(--control-size-touch);
+}
+
+.undoIcon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}
+
+/* The place search on a phone (board WebPhoneSearch): a card over the top bar. */
+.phoneSearch {
+  position: absolute;
+  top: var(--chrome-top);
+  right: calc(var(--chrome-inset) + env(safe-area-inset-right));
+  left: calc(var(--chrome-inset) + env(safe-area-inset-left));
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+}
+
+.phoneSearch > :last-child {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* A full panel sheet leaves no map: the chrome placed from the visible map
+   frame (zoom, inspection, bottom chips) steps aside instead of slipping
+   behind the top bar. */
+.shell[data-phone-layout]:has([data-phone-sheet="full"]) :is([data-zoom-group], [data-inspection-launcher], [data-selection-chip], [data-plant-labels-chip]) {
+  visibility: hidden;
+}

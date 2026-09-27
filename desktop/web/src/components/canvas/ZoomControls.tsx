@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { CanvasToolbarActionCommand } from '../../app/canvas-commands'
 import { locale } from '../../app/settings/state'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import {
   COMMON_MAP_SCALES,
   formatMapScale,
@@ -26,11 +27,14 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
 /**
  * The zoom group at the bottom right: scale bar, zoom out, the map scale as
  * a ratio (a menu of common scales), zoom in and Fit to Design. The map
- * attribution pill sits just left of it.
+ * attribution pill sits just left of it. On a phone it is a column on the
+ * right above the panel sheet: zoom in, zoom out and the ratio, with 44 px
+ * targets; it is placed from the visible map frame, so it covers no edge.
  */
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
   const group = useRef<HTMLDivElement>(null)
-  useMapOccluder(group, 'bottom')
+  const phone = phoneLayout.value !== null
+  useMapOccluder(group, 'bottom', !phone)
   useUnderRail(group, 'panel')
   const frame = currentCanvasQuerySurface.value?.viewport.value
   const command = (id: string) => viewActions.find((action) => action.id === id)
@@ -44,6 +48,16 @@ export function ZoomControls({ viewActions }: { readonly viewActions: readonly C
 
   // The attribution pill is placed against this group's measured width.
   usePublishedWidth(group, '--zoom-group-width')
+
+  if (phone) {
+    return (
+      <div ref={group} className={`${styles.group} ${styles.phone}`} role="group" aria-label={t('canvas.grid.zoom')} data-zoom-group="phone">
+        {zoomIn && <ZoomButton command={zoomIn} disabled={zoomIn.disabled || atMaximum} />}
+        {zoomOut && <ZoomButton command={zoomOut} disabled={zoomOut.disabled || atMinimum} />}
+        {denominator !== null && <ScaleMenu denominator={denominator} />}
+      </div>
+    )
+  }
 
   return (
     <div ref={group} className={styles.group} role="group" aria-label={t('canvas.grid.zoom')} data-zoom-group>

@@ -173,3 +173,15 @@
 .canvasArea :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib:not(.maplibregl-compact)) {
   padding: var(--space-0-5) var(--space-2);
 }
+
+/* Web on phones: the credits and map status keep above the panel sheet and
+   left of the side sheet, clear of the home indicator. */
+:global([data-phone-layout]) .canvasArea :global(.maplibregl-ctrl-bottom-right) {
+  right: max(calc(var(--map-inset-right, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-right)));
+  bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+  max-width: calc(100% - var(--map-inset-left, 0px) - var(--map-inset-right, 0px) - 2 * var(--chrome-inset));
+}
+
+:global([data-phone-layout]) .basemapFeedback {
+  bottom: max(calc(var(--map-inset-bottom, 0px) + var(--space-2)), calc(var(--chrome-inset) + env(safe-area-inset-bottom)));
+}

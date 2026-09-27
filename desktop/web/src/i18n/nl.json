@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "Favorieten"
   },
+  "webPhone": {
+    "sheetShow": "Panelen tonen",
+    "sheetExpand": "Panelen vergroten",
+    "sheetHide": "Panelen verbergen",
+    "searchBack": "Terug naar de kaart",
+    "more": "Meer",
+    "tabs": {
+      "species-key": "Planten",
+      "layers": "Lagen",
+      "plant-db": "Catalogus",
+      "favorites": "Favorieten",
+      "calendar": "Kalender",
+      "budget": "Budget",
+      "consortium": "Consortium",
+      "stories": "Verhalen"
+    }
+  },
   "webShell": {
     "panels": "Webeditie-panelen",
     "workspace": "Webeditie-werkruimte",

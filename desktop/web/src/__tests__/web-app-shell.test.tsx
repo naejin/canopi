@@ -37,6 +37,8 @@ import type { Settings } from '../types/settings'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { BrowserAppShell } from '../web/BrowserAppShell'
+import { phoneLayout } from '../app/shell/phone-layout'
+import { requestPlaceSearchFocus } from '../app/geocoding/place-search-ui'
 import { WebApp } from '../web/WebApp'
 import { SettingsDialog } from '../components/shared/SettingsDialog'
 import { editDesignSessionForTest } from './support/design-session-edit'
@@ -661,6 +663,86 @@ describe('Web Edition Browser App Shell', () => {
     })
     expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
     expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
+  })
+  describe('on a phone', () => {
+    const size = { width: window.innerWidth, height: window.innerHeight }
+    const resizeTo = (width: number, height: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+      window.dispatchEvent(new Event('resize'))
+    }
+
+    afterEach(() => {
+      resizeTo(size.width, size.height)
+    })
+
+    it('turns the title bar into the 44 px top bar with Undo and a place search card, and drops the rail', async () => {
+      const undo = vi.fn()
+      resizeTo(390, 844)
+      await act(async () => {
+        render(
+          <BrowserAppShell
+            commandProjection={shellCommandProjection()}
+            designIdentity={{ name: 'Orchard', saveStatus: 'draft', saveFailureReason: null }}
+            placeSearch
+            undo={{ label: 'Undo', shortcut: 'Ctrl Z', ariaShortcut: 'Control+Z', disabled: false, action: undo }}
+          />,
+          container,
+        )
+      })
+      const shell = container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!
+      expect(shell.dataset.phoneLayout).toBe('portrait')
+      expect(container.querySelector('[data-panel-rail]')).toBeNull()
+      expect(container.querySelector('[role="combobox"]')).toBeNull()
+
+      const undoButton = container.querySelector<HTMLButtonElement>('button[data-phone-undo]')!
+      expect(undoButton.getAttribute('aria-label')).toBe('Undo')
+      await act(async () => { undoButton.click() })
+      expect(undo).toHaveBeenCalledTimes(1)
+
+      const search = container.querySelector<HTMLButtonElement>('button[data-phone-search]')!
+      expect(search.getAttribute('aria-label')).toBe('Search a place')
+      expect(search.getAttribute('aria-expanded')).toBe('false')
+      await act(async () => { search.click() })
+      const card = container.querySelector<HTMLElement>('[data-phone-search-card]')!
+      expect(card.getAttribute('role')).toBe('search')
+      expect(card.querySelector('[role="combobox"]')).not.toBeNull()
+      expect(search.getAttribute('aria-expanded')).toBe('true')
+      await act(async () => {
+        card.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      })
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+      expect(document.activeElement).toBe(search)
+
+      // Back closes it too.
+      await act(async () => { search.click() })
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-phone-search-card] button[aria-label="Back to the map"]')!.click()
+      })
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+
+      // Search a place (Ctrl K) opens the card where no field waits in the bar.
+      await act(async () => { requestPlaceSearchFocus() })
+      expect(container.querySelector('[data-phone-search-card]')).not.toBeNull()
+
+      await act(async () => { resizeTo(1280, 800) })
+      expect(shell.dataset.phoneLayout).toBeUndefined()
+      expect(container.querySelector('[data-panel-rail]')).not.toBeNull()
+      expect(container.querySelector('[data-phone-search-card]')).toBeNull()
+      expect(container.querySelector('button[data-phone-undo]')).toBeNull()
+      expect(container.querySelector('[role="combobox"]')).not.toBeNull()
+    })
+
+    it('uses the side layout when the phone lies on its side, and the desktop layout again once released', async () => {
+      resizeTo(844, 390)
+      await act(async () => {
+        render(<BrowserAppShell commandProjection={shellCommandProjection()} />, container)
+      })
+      expect(container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!.dataset.phoneLayout).toBe('landscape')
+      expect(container.querySelector('button[data-phone-search]')).toBeNull()
+      await act(async () => { render(null, container) })
+      expect(phoneLayout.value).toBeNull()
+    })
   })
 })
 

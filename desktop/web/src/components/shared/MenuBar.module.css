@@ -200,3 +200,41 @@
   margin: var(--space-1) var(--space-1-5);
   background: var(--color-border);
 }
+
+/* Web on phones, on its side too (`data-phone-layout` on the Web shell): one Menu button. */
+:global([data-phone-layout]) .compactGroup {
+  display: block;
+}
+
+:global([data-phone-layout]) .fullGroup {
+  display: none;
+}
+
+:global([data-phone-layout]) .compactGroup .trigger {
+  width: var(--control-size-touch);
+  height: var(--control-size-touch);
+  justify-content: center;
+  padding: 0;
+}
+
+:global([data-phone-layout]) .menu {
+  max-width: calc(100vw - 2 * var(--chrome-inset));
+}
+
+:global([data-phone-layout]) .submenu {
+  position: static;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  margin-left: var(--space-3);
+  border: 0;
+  box-shadow: none;
+}
+
+:global([data-phone-layout]) .item {
+  min-height: var(--control-size-touch);
+}
+
+:global([data-phone-layout]) .itemShortcut {
+  display: none;
+}

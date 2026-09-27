@@ -7,6 +7,8 @@ import { workspaceCanvasCommandProjection } from '../app/workspace-commands/canv
 import { setCurrentCanvasSession } from '../canvas/session'
 import { CameraController, type CameraViewportSnapshot } from '../canvas/runtime/camera'
 import { ZoomControls } from '../components/canvas/ZoomControls'
+import { phoneLayout } from '../app/shell/phone-layout'
+import { registerMapArea, visibleMapFrame } from '../app/shell/visible-map-area'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import {
   createTestCanvasCommandSurface,
@@ -42,6 +44,34 @@ describe('ZoomControls', () => {
     container.remove()
     setCurrentCanvasSession(null)
     locale.value = 'en'
+    phoneLayout.value = null
+  })
+
+  it('stands as a column of zoom in, zoom out and the ratio on a phone, covering no edge of the map', async () => {
+    const viewport = signal(frame())
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: { ...createTestCanvasQuerySurface(), viewport } }))
+    const area = document.createElement('div')
+    document.body.appendChild(area)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this === area ? { left: 0, top: 0, width: 390, height: 844 } : this.dataset.zoomGroup ? { left: 330, top: 500, width: 52, height: 150 } : { left: 0, top: 0, width: 0, height: 0 }
+      return { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => ({}) } as DOMRect
+    })
+    const release = registerMapArea(area)
+    phoneLayout.value = 'portrait'
+    await mount()
+    const group = container.querySelector<HTMLElement>('[data-zoom-group]')!
+    expect(group.dataset.zoomGroup).toBe('phone')
+    expect([...group.querySelectorAll('button')].map((element) => element.getAttribute('aria-label'))).toEqual([
+      'Zoom in', 'Zoom out', 'Map scale 1:190. Choose a scale',
+    ])
+    expect(container.querySelector('[role="img"]')).toBeNull()
+    expect(visibleMapFrame.value).toMatchObject({ right: 0, bottom: 0 })
+
+    await act(async () => { phoneLayout.value = null })
+    expect(visibleMapFrame.value.bottom).toBeGreaterThan(0)
+    release()
+    area.remove()
+    vi.restoreAllMocks()
   })
 
   const mount = async () => {

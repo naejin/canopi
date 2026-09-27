@@ -4,6 +4,7 @@ import type {
   CanvasProjectedCommand,
   CanvasToolbarToolCommand,
 } from '../../app/canvas-commands'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { toolRailRoom, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
 import { ActionMenu } from '../shared/ActionMenu'
@@ -26,12 +27,15 @@ interface ToolRailProps {
  * tool is pressed; arrow keys move between buttons (roving tabindex). When a
  * short window leaves too little room above the view chip (`toolRailRoom`),
  * the last tools fold, in order, into a More tools menu just before Undo and
- * Redo, which always stay on the rail.
+ * Redo, which always stay on the rail. On a phone it is a strip of 44 px
+ * buttons (board WebPhone): Select, Pan, Place plants and Polygon zone, with
+ * every other tool in More; Undo is in the top bar and Redo in Edit.
  */
 export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) {
   const rail = useRef<HTMLDivElement>(null)
   useRail(rail, 'tool')
   useFocusRegion(rail, 'tool-rail')
+  const phone = phoneLayout.value !== null
   const tools = projection.toolGroups.flatMap((group) => group.tools)
 
   // A name cut off in the fixed-width labelled rail (a long German or Russian
@@ -39,7 +43,7 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
   // the labels or the map width change.
   const labelsKey = `${visibleMapFrame.value.width}|${[...tools, ...projection.historyActions].map((command) => `${command.label} ${command.shortcut ?? ''}`).join('|')}`
   const [cutKey, setCutKey] = useState<string | null>(null)
-  const showNames = namesWanted && cutKey !== labelsKey
+  const showNames = namesWanted && !phone && cutKey !== labelsKey
   useLayoutEffect(() => {
     const element = rail.current
     if (!showNames || !element) return
@@ -49,7 +53,7 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
   })
 
   const room = toolRailRoom.value
-  const layoutKey = `${room}|${showNames}|${projection.toolGroups.map((group) => group.tools.map((tool) => tool.tool).join(',')).join('|')}`
+  const layoutKey = `${room}|${showNames}|${phone}|${projection.toolGroups.map((group) => group.tools.map((tool) => tool.tool).join(',')).join('|')}`
   const [fit, setFit] = useState<{ readonly key: string; readonly count: number | null }>({ key: '', count: null })
   // A new room, mode or tool list first lays every tool out to measure it.
   const measuring = fit.key !== layoutKey
@@ -64,18 +68,21 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
     setFit({ key: layoutKey, count: railVisibleCount(buttons, top.height, room) })
   })
   const shown = measuring ? null : fit.count
-  const folded = shown === null ? [] : tools.slice(shown)
-  let remaining = shown ?? Infinity
-  const railGroups = projection.toolGroups.map((group) => {
-    const kept = group.tools.slice(0, Math.max(0, remaining))
-    remaining -= kept.length
-    return { ...group, tools: kept }
-  }).filter((group) => group.tools.length > 0)
+  // The phone strip keeps its four tools first, then folds by room like the rail.
+  const ordered = phone
+    ? [...tools.filter((command) => PHONE_STRIP_TOOLS.has(command.tool)), ...tools.filter((command) => !PHONE_STRIP_TOOLS.has(command.tool))]
+    : tools
+  const kept = new Set(ordered.slice(0, Math.min(shown ?? Infinity, phone ? PHONE_STRIP_TOOLS.size : Infinity)))
+  const folded = tools.filter((command) => !kept.has(command))
+  const railGroups = projection.toolGroups
+    .map((group) => ({ ...group, tools: group.tools.filter((command) => kept.has(command)) }))
+    .filter((group) => group.tools.length > 0)
+  const historyActions = phone ? [] : projection.historyActions
 
   const railCommands: string[] = [
     ...railGroups.flatMap((group) => group.tools.map((tool) => tool.commandId)),
     ...(folded.length > 0 ? [MORE_ID] : []),
-    ...projection.historyActions.map((command) => command.commandId),
+    ...historyActions.map((command) => command.commandId),
   ]
   const active = tools.find((command) => command.active)
   const focusTarget = active && folded.includes(active) ? MORE_ID : active?.commandId ?? railCommands[0]
@@ -157,8 +164,8 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
       role="toolbar"
       aria-label={t('canvas.toolbar')}
       aria-orientation="vertical"
-      className={`${styles.rail} ${showNames ? styles.named : styles.icons}`}
-      data-tool-rail={showNames ? 'named' : 'icons'}
+      className={`${styles.rail} ${showNames ? styles.named : styles.icons}${phone ? ` ${styles.phone}` : ''}`}
+      data-tool-rail={phone ? 'phone' : showNames ? 'named' : 'icons'}
       onKeyDown={handleKeyDown}
     >
       {railGroups.map((group, index) => (
@@ -170,13 +177,18 @@ export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) 
         </div>
       ))}
       {railGroups.length === 0 && more}
-      <div className={styles.group}>
-        <div className={styles.rule} role="separator" />
-        {projection.historyActions.map((command) => renderCommand(command, command.id as ToolIconName))}
-      </div>
+      {historyActions.length > 0 && (
+        <div className={styles.group}>
+          <div className={styles.rule} role="separator" />
+          {historyActions.map((command) => renderCommand(command, command.id as ToolIconName))}
+        </div>
+      )}
     </div>
   )
 }
+
+/** The tools on the phone strip (board WebPhone); every other tool waits in More. */
+const PHONE_STRIP_TOOLS: ReadonlySet<string> = new Set(['select', 'hand', 'plant-stamp', 'polygon'])
 
 /** The More tools button's place in the roving tab order. */
 const MORE_ID = 'tool-rail.more'

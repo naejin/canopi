@@ -2,6 +2,7 @@ import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { storyPresentationActive } from '../../app/story-presentation'
 import type { ShellPanelBarProjection } from '../../app/shell-commands'
@@ -19,6 +20,8 @@ import { StoryPresenter } from '../stories/StoryPresenter'
 import { RenameZoneDialog } from '../canvas/RenameZoneDialog'
 import { RotateSelectionDialog } from '../canvas/RotateSelectionDialog'
 import { GettingStartedDialog } from '../shared/GettingStartedDialog'
+import type { PanelRailCommand } from '../shared/PanelRail'
+import { PhoneSheet } from '../shared/PhoneSheet'
 import { SidePanelDock } from '../shared/SidePanelDock'
 import { useModalInertRegion } from '../shared/useModalLayer'
 import styles from './WorkspaceComposition.module.css'
@@ -42,10 +45,16 @@ export function WorkspaceComposition({
   panelProjection,
   surfaces,
   responsive = false,
+  phoneTabs,
 }: {
   readonly panelProjection: WorkspacePanelProjection
   readonly surfaces: WorkspaceSurfaces
   readonly responsive?: boolean
+  /**
+   * The side panel commands as the phone sheet's tabs. An edition that passes
+   * them shows its panels in the phone sheet while `phoneLayout` is set.
+   */
+  readonly phoneTabs?: readonly PanelRailCommand[]
 }) {
   const registrations = useMemo(
     () => validateWorkspaceSurfaces(panelProjection, surfaces),
@@ -74,6 +83,14 @@ export function WorkspaceComposition({
   useModalInertRegion(root)
   const PrimarySurface = surfaces.primary[primary]
   const SideSurface = mountedSide ? surfaces.side[mountedSide] : undefined
+  const phone = phoneTabs ? phoneLayout.value : null
+  const sidePanelContent = mountedSide && SideSurface ? (
+    <div className={styles.sidePanel} data-workspace-side-panel={mountedSide}>
+      <Suspense fallback={<WorkspaceLoading />}>
+        <SideSurface />
+      </Suspense>
+    </div>
+  ) : null
 
   useEffect(() => {
     if (
@@ -100,18 +117,19 @@ export function WorkspaceComposition({
           <PrimarySurface />
         </Suspense>
       </div>
-      {mountedSide && SideSurface ? (
+      {phone && phoneTabs ? (
+        // The phone sheet stands in for the dock and the panel rail; it steps aside with the dock.
+        !locating && !presenting && (
+          <PhoneSheet layout={phone} tabs={phoneTabs}>{sidePanelContent}</PhoneSheet>
+        )
+      ) : mountedSide && sidePanelContent ? (
         <SidePanelDock
           responsive={responsive}
           wide={isWidePanel(mountedSide)}
           expanded={mountedSide === 'calendar' && planningView.calendarExpanded.value}
           onManualResize={() => { planningView.calendarExpanded.value = false }}
         >
-          <div className={styles.sidePanel} data-workspace-side-panel={mountedSide}>
-            <Suspense fallback={<WorkspaceLoading />}>
-              <SideSurface />
-            </Suspense>
-          </div>
+          {sidePanelContent}
         </SidePanelDock>
       ) : null}
     </div>

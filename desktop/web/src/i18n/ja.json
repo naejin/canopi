@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "お気に入り"
   },
+  "webPhone": {
+    "sheetShow": "パネルを表示",
+    "sheetExpand": "パネルを広げる",
+    "sheetHide": "パネルを隠す",
+    "searchBack": "地図に戻る",
+    "more": "その他",
+    "tabs": {
+      "species-key": "植物",
+      "layers": "レイヤー",
+      "plant-db": "カタログ",
+      "favorites": "お気に入り",
+      "calendar": "カレンダー",
+      "budget": "予算",
+      "consortium": "コンソーシアム",
+      "stories": "ストーリー"
+    }
+  },
   "webShell": {
     "panels": "Web 版パネル",
     "workspace": "Web 版ワークスペース",

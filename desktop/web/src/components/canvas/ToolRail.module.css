@@ -174,3 +174,19 @@
     display: none;
   }
 }
+
+/* Web on phones (board WebPhone): a strip of 44 px buttons below the top bar,
+   clear of the notch in landscape. It keeps its size in short windows. */
+.phone {
+  left: calc(var(--chrome-inset) + env(safe-area-inset-left));
+  width: auto;
+}
+
+.phone .rule {
+  display: none;
+}
+
+.phone.icons .button {
+  width: var(--control-size-touch);
+  height: var(--control-size-touch);
+}

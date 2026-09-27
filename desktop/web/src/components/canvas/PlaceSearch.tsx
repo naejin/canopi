@@ -228,7 +228,12 @@ export function PlaceCombobox({ variant, onPick, disabled = false, autoFocus = f
 }
 
 /** The title-bar place field (View › Search a place…, Ctrl K). Choosing a place moves the camera only. */
-export function PlaceSearchField({ compact = false }: { readonly compact?: boolean }) {
+export function PlaceSearchField({ compact = false, autoFocus = false, onPicked }: {
+  readonly compact?: boolean
+  readonly autoFocus?: boolean
+  /** After the camera moved to the chosen place (the phone search card closes). */
+  readonly onPicked?: () => void
+}) {
   const viewport = currentCanvasViewportCommandSurface.value
   // While "Where is your site?" asks, its field is the place search.
   if (siteLocateOpen.value) return null
@@ -237,8 +242,10 @@ export function PlaceSearchField({ compact = false }: { readonly compact?: boole
       variant="title-bar"
       label={t(compact ? 'canvas.placeSearch.placeholderShort' : 'canvas.placeSearch.placeholder')}
       disabled={!viewport}
+      autoFocus={autoFocus}
       onPick={(result) => {
         currentCanvasViewportCommandSurface.peek()?.showPlace(result, PLACE_SEARCH_ZOOM)
+        onPicked?.()
       }}
     />
   )

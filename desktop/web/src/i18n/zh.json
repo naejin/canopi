@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "收藏"
   },
+  "webPhone": {
+    "sheetShow": "显示面板",
+    "sheetExpand": "展开面板",
+    "sheetHide": "隐藏面板",
+    "searchBack": "返回地图",
+    "more": "更多",
+    "tabs": {
+      "species-key": "植物",
+      "layers": "图层",
+      "plant-db": "目录",
+      "favorites": "收藏",
+      "calendar": "日历",
+      "budget": "预算",
+      "consortium": "组合",
+      "stories": "故事"
+    }
+  },
   "webShell": {
     "panels": "网页版面板",
     "workspace": "网页版工作区",

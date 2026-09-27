@@ -18,12 +18,16 @@ export function useMapArea(ref: RefObject<HTMLElement>): void {
   }, [ref])
 }
 
-/** Registers floating chrome that covers an edge of the map (inferred from its box when `side` is absent). */
-export function useMapOccluder(ref: RefObject<HTMLElement>, side?: MapOccluderSide): void {
+/**
+ * Registers floating chrome that covers an edge of the map (inferred from its
+ * box when `side` is absent); `covers` false leaves it out, for chrome placed
+ * from the visible map frame itself (the phone zoom group).
+ */
+export function useMapOccluder(ref: RefObject<HTMLElement>, side?: MapOccluderSide, covers = true): void {
   useLayoutEffect(() => {
-    const element = ref.current
+    const element = covers ? ref.current : null
     return element ? registerMapOccluder(element, side) : undefined
-  }, [ref, side])
+  }, [ref, side, covers])
 }
 
 /** Registers a rail, which covers its edge and folds its last entries into More when short. */

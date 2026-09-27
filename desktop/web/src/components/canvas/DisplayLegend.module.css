@@ -87,3 +87,13 @@
     transform: none;
   }
 }
+
+/* Web on phones: above the panel sheet, in the visible map. */
+:global([data-phone-layout]) .legend {
+  bottom: calc(var(--map-inset-bottom, 0px) + var(--space-2));
+  max-height: calc(100% - var(--chrome-rail-top) - var(--map-inset-bottom, 0px) - var(--space-4));
+}
+
+:global([data-phone-layout]:has([data-phone-sheet="full"])) .legend {
+  visibility: hidden;
+}

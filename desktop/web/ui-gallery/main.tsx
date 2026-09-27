@@ -44,6 +44,7 @@ import { appCommandGraphChromeProjection, appCommandGraphPanelProjection } from 
 import {
   createBrowserShellCapabilities,
   createBrowserShellCatalog,
+  browserPhoneSheetTabs,
   createBrowserShellCommandProjection,
 } from '../src/web/browser-shell-commands'
 import { workspaceCanvasCommandProjection } from '../src/app/workspace-commands/canvas-actions'
@@ -55,7 +56,6 @@ import { getAppFolders, showAppFolder } from '../src/ipc/settings'
 import { KeyboardShortcutsDialog } from '../src/components/shared/KeyboardShortcutsDialog'
 import { WelcomeScreen } from '../src/components/shared/WelcomeScreen'
 import { DegradedBanner } from '../src/components/shared/DegradedBanner'
-import { PlaceSearchField } from '../src/components/canvas/PlaceSearch'
 import { BrowserAppShell } from '../src/web/BrowserAppShell'
 import {
   WorkspaceComposition,
@@ -153,7 +153,12 @@ function Gallery() {
     <main className={styles.workspace} data-edition={edition}>
       {selectedSurface.value === 'start' ? <GalleryStart /> : selectedSurface.value === 'symbols' ? <PlantSymbolSheet /> : edition === 'web' ? (
         <GalleryWebFrame>
-          <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} responsive />
+          <WorkspaceComposition
+            panelProjection={panelProjection}
+            surfaces={workspaceSurfaces}
+            responsive
+            phoneTabs={galleryPhoneTabs()}
+          />
         </GalleryWebFrame>
       ) : (
         <>
@@ -228,6 +233,10 @@ function galleryWebProjection() {
   })
 }
 
+function galleryPhoneTabs() {
+  return browserPhoneSheetTabs(galleryWebProjection().panelBar)
+}
+
 function galleryPanelProjection(): WorkspacePanelProjection {
   if (edition === 'desktop') return appCommandGraphPanelProjection.value
   return galleryWebProjection().panelBar
@@ -252,7 +261,8 @@ function GalleryWebFrame({ children }: { readonly children: preact.ComponentChil
     <BrowserAppShell
       commandProjection={projection}
       designIdentity={{ name: file.name, saveStatus: 'draft', saveFailureReason: null }}
-      search={<PlaceSearchField compact />}
+      placeSearch
+      undo={workspaceCanvasCommandProjection.value.historyActions.find((action) => action.id === 'undo')}
     >
       {children}
     </BrowserAppShell>

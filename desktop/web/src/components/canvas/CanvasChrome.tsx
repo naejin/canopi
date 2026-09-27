@@ -1,6 +1,7 @@
 import type { ComponentChildren, RefObject } from 'preact'
 import { useFocusRegion } from '../shared/useFocusRegion'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
+import { phoneLayout } from '../../app/shell/phone-layout'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { storyPresentationActive } from '../../app/story-presentation'
 import { toolRailShowsNamesOnMap } from '../../app/tool-rail/learning'
@@ -47,7 +48,8 @@ function CanvasChromeContent({ projection, canvasRef, children }: {
     <>
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
       <ToolCard canvasRef={canvasRef} />
-      <ViewChip toggles={projection.settingsToggles} />
+      {/* Phones leave Grid, Snap and Rulers to the View menu. */}
+      {!phoneLayout.value && <ViewChip toggles={projection.settingsToggles} />}
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />
       {children}

@@ -259,12 +259,14 @@
   }
 }
 
-/* Phones: a bar with the progress on top and the card as a bottom sheet (board StoryPhone). */
-@media (max-width: 600px) {
+/* Phones (the Web phone layout's sizes, `app/shell/phone-layout.ts`): a bar
+   with the progress on top and the card as a bottom sheet (board StoryPhone);
+   on its side the card stands at the left instead. */
+@media (max-width: 639px), (orientation: landscape) and (max-height: 479px) and (max-width: 959px) {
   .topBar {
     top: calc(var(--space-2) + env(safe-area-inset-top));
-    right: var(--space-2);
-    left: var(--space-2);
+    right: calc(var(--space-2) + env(safe-area-inset-right));
+    left: calc(var(--space-2) + env(safe-area-inset-left));
     min-height: 52px;
     padding: 0 var(--space-1) 0 var(--space-4);
     border-radius: var(--radius-panel);
@@ -318,7 +320,7 @@
     width: auto;
     max-height: 60vh;
     gap: var(--space-3);
-    padding: var(--space-4) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+    padding: var(--space-4) calc(var(--space-4) + env(safe-area-inset-right)) calc(var(--space-3) + env(safe-area-inset-bottom)) calc(var(--space-4) + env(safe-area-inset-left));
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   }
 
@@ -364,5 +366,22 @@
 
   .hint[data-hint="swipe"] {
     display: block;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 479px) and (max-width: 959px) {
+  .card {
+    top: calc(env(safe-area-inset-top) + var(--space-4) + var(--control-size-touch) + var(--space-2));
+    right: auto;
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+    left: calc(var(--space-2) + env(safe-area-inset-left));
+    width: min(400px, 50%);
+    max-height: none;
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    border-radius: var(--radius-panel);
+  }
+
+  .image {
+    max-height: 96px;
   }
 }

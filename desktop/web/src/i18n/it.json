@@ -2,6 +2,23 @@
   "nav": {
     "favorites": "Preferiti"
   },
+  "webPhone": {
+    "sheetShow": "Mostra pannelli",
+    "sheetExpand": "Espandi pannelli",
+    "sheetHide": "Nascondi pannelli",
+    "searchBack": "Torna alla mappa",
+    "more": "Altro",
+    "tabs": {
+      "species-key": "Piante",
+      "layers": "Livelli",
+      "plant-db": "Catalogo",
+      "favorites": "Preferiti",
+      "calendar": "Calendario",
+      "budget": "Budget",
+      "consortium": "Consorzio",
+      "stories": "Storie"
+    }
+  },
   "webShell": {
     "panels": "Pannelli dell’edizione web",
     "workspace": "Area di lavoro web",

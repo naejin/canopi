@@ -13,6 +13,7 @@ import {
   type WorkspaceSurfaces,
 } from '../components/workspace/WorkspaceComposition'
 import { lazy } from 'preact/compat'
+import type { PanelRailCommand } from '../components/shared/PanelRail'
 
 const WorldMapPanel = lazy(async () => {
   const module = await import('../components/panels/WorldMapPanel')
@@ -22,10 +23,13 @@ const WorldMapPanel = lazy(async () => {
 export function WebWorkspace({
   controller,
   panelProjection,
+  phoneTabs,
   templatesEnabled,
 }: {
   readonly controller: BrowserDesignSessionController
   readonly panelProjection: WorkspacePanelProjection
+  /** The side panel commands, as the phone sheet's tabs. */
+  readonly phoneTabs: readonly PanelRailCommand[]
   readonly templatesEnabled: boolean
 }) {
   const surfaces = useMemo<WorkspaceSurfaces>(() => {
@@ -53,6 +57,7 @@ export function WebWorkspace({
       panelProjection={panelProjection}
       surfaces={surfaces}
       responsive
+      phoneTabs={phoneTabs}
     />
   )
 }

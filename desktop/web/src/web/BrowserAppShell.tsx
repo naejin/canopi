@@ -1,6 +1,11 @@
 import type { ComponentChildren } from "preact";
-import { useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useSignalEffect } from "@preact/signals";
+import { placeSearchFocusRequest } from "../app/geocoding/place-search-ui";
+import { installPhoneLayout, phoneLayout } from "../app/shell/phone-layout";
 import { t } from "../i18n";
+import { PlaceSearchField } from "../components/canvas/PlaceSearch";
+import { ToolIcon } from "../components/canvas/toolbar-icons";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import { ControlIcon } from "../components/shared/ControlIcon";
 import { DesignNameField } from "../components/shared/DesignNameField";
@@ -8,7 +13,7 @@ import { PanelRail } from "../components/shared/PanelRail";
 import { SaveStatusLabel } from "../components/shared/SaveStatusLabel";
 import { useChromeRow } from "../components/shared/useMapChrome";
 import { useModalInertRegion } from "../components/shared/useModalLayer";
-import { WorkspaceTitleBar } from "../components/shared/WorkspaceTitleBar";
+import { WorkspaceTitleBar, type TitleBarCommand } from "../components/shared/WorkspaceTitleBar";
 import titleBarStyles from "../components/shared/WorkspaceTitleBar.module.css";
 import {
   type BrowserShellChromeProjection,
@@ -27,28 +32,53 @@ interface BrowserAppShellProps {
   readonly designIdentity?: BrowserShellDesignIdentity | null;
   readonly onRenameDesign?: (name: string) => void;
   readonly onRetrySave?: () => void;
-  /** The title-bar place field, supplied while a Design is open. */
-  readonly search?: ComponentChildren;
+  /** Whether the title bar offers the place search (while a Design is open). */
+  readonly placeSearch?: boolean;
+  /** Undo, which the phone top bar carries in place of the tool rail's history. */
+  readonly undo?: TitleBarCommand;
   readonly children?: ComponentChildren;
 }
 
 /**
  * The Web Edition frame: the same floating title bar and panel rail as
  * Desktop over a full-bleed workspace. Saving is to this browser; a copy is
- * a download.
+ * a download. It owns the phone layout (`installPhoneLayout`): on a phone the
+ * title bar becomes the 44 px top bar (Menu, the Design name and status,
+ * Undo and a place search button that opens the search over the map), and
+ * the workspace's phone sheet stands in for the panel rail.
  */
 export function BrowserAppShell({
   commandProjection,
   designIdentity = null,
   onRenameDesign,
   onRetrySave,
-  search,
+  placeSearch = false,
+  undo,
   children,
 }: BrowserAppShellProps) {
   const notice = browserShellNotice.value;
   // The whole frame sits behind a modal dialog; the dialogs mount outside it.
   const shell = useRef<HTMLDivElement>(null);
   useModalInertRegion(shell);
+  useLayoutEffect(() => installPhoneLayout(window), []);
+  const phone = phoneLayout.value;
+  const [searching, setSearching] = useState(false);
+  const searchButton = useRef<HTMLButtonElement>(null);
+  const phoneSearchOpen = phone !== null && placeSearch && searching;
+  // Leaving the phone layout puts the field back in the bar and forgets the card.
+  useEffect(() => { if (!phone) setSearching(false); }, [phone]);
+  // View › Search a place (Ctrl K) opens the search card on a phone, where no field waits in the bar.
+  const seenSearchRequest = useRef(placeSearchFocusRequest.peek());
+  useSignalEffect(() => {
+    const request = placeSearchFocusRequest.value;
+    if (request === seenSearchRequest.current) return;
+    seenSearchRequest.current = request;
+    if (phoneLayout.peek() !== null) setSearching(true);
+  });
+  const closePhoneSearch = () => {
+    setSearching(false);
+    searchButton.current?.focus();
+  };
   const commands = commandProjection.commands;
   const help = requireCommand(commands.get("help.shortcuts"), "help.shortcuts");
   const settings = requireCommand(commands.get("app.settings"), "app.settings");
@@ -60,7 +90,7 @@ export function BrowserAppShell({
   };
 
   return (
-    <div ref={shell} className={styles.shell} data-testid="browser-app-shell">
+    <div ref={shell} className={styles.shell} data-testid="browser-app-shell" data-phone-layout={phone ?? undefined}>
       <main className={styles.workspace} aria-label={t("webShell.workspace")}>
         {children}
       </main>
@@ -92,12 +122,31 @@ export function BrowserAppShell({
             <ButtonTooltip label={t("webShell.openCanopiFile")} shortcut={openCanopi.shortcut} side="bottom" />
           </button>
         ) : undefined}
-        search={search}
+        search={phone ? (
+          <>
+            {undo && <TitleBarUndo command={undo} />}
+            {placeSearch && (
+              <button
+                ref={searchButton}
+                type="button"
+                className={titleBarStyles.iconButton}
+                aria-label={t("canvas.placeSearch.placeholderShort")}
+                aria-expanded={phoneSearchOpen}
+                data-phone-search
+                onClick={() => setSearching(!searching)}
+              >
+                <ControlIcon name="search" size={20} />
+              </button>
+            )}
+          </>
+        ) : placeSearch ? <PlaceSearchField compact /> : undefined}
         help={help}
         settings={settings}
       />
-      {/* The Web rail stays for Templates and the catalog, which work without a Design. */}
-      <PanelRail
+      {phoneSearchOpen && <PhoneSearch onClose={closePhoneSearch} />}
+      {/* The Web rail stays for Templates and the catalog, which work without a Design.
+          On a phone the workspace's sheet carries the panels instead. */}
+      {!phone && <PanelRail
         label={t("webShell.panels")}
         groups={[
           // The Design canvas and the Templates map are the two primary views; with
@@ -106,8 +155,51 @@ export function BrowserAppShell({
           commandProjection.panelBar.design,
           commandProjection.panelBar.planning,
         ]}
-      />
+      />}
       {notice ? <ShellNotice notice={notice} /> : null}
+    </div>
+  );
+}
+
+/** Undo in the phone top bar: the tool strip there leaves history to it and to Edit. */
+function TitleBarUndo({ command }: { readonly command: TitleBarCommand }) {
+  return (
+    <button
+      type="button"
+      className={titleBarStyles.iconButton}
+      aria-label={command.label}
+      aria-keyshortcuts={command.ariaShortcut}
+      aria-disabled={command.disabled ? true : undefined}
+      data-phone-undo
+      onClick={() => { if (!command.disabled) command.action(); }}
+    >
+      <ToolIcon name="undo" className={styles.undoIcon} />
+    </button>
+  );
+}
+
+/**
+ * The place search on a phone (board WebPhoneSearch): a card over the top of
+ * the map with Back and the field, its results below. Back, Escape and a
+ * chosen place close it and return focus to the search button.
+ */
+function PhoneSearch({ onClose }: { readonly onClose: () => void }) {
+  return (
+    <div
+      className={styles.phoneSearch}
+      role="search"
+      aria-label={t("canvas.placeSearch.placeholderShort")}
+      data-phone-search-card
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <button type="button" className={titleBarStyles.iconButton} aria-label={t("webPhone.searchBack")} onClick={onClose}>
+        <ControlIcon name="chevron-left" size={20} />
+      </button>
+      <PlaceSearchField compact autoFocus onPicked={onClose} />
     </div>
   );
 }

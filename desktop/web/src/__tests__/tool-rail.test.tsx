@@ -13,6 +13,7 @@ import {
   toolRailShowsNamesOnMap,
 } from '../app/tool-rail/learning'
 import { toolRailRoom, visibleMapFrame } from '../app/shell/visible-map-area'
+import { phoneLayout } from '../app/shell/phone-layout'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
@@ -91,6 +92,7 @@ describe('ToolRail', () => {
   afterEach(() => {
     render(null, container)
     container.remove()
+    phoneLayout.value = null
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
     activePanel.value = 'canvas'
@@ -266,6 +268,28 @@ describe('ToolRail', () => {
     expect(container.querySelectorAll('button[data-rail-item]')).toHaveLength(
       RAIL_TOOL_IDS.length + 2,
     )
+  })
+
+  it('keeps to a strip of Select, Pan, Place plants and Polygon zone on a phone, with the rest in More and Undo in the top bar', async () => {
+    await mount()
+    await act(async () => {
+      phoneLayout.value = 'portrait'
+      activeTool.value = 'rectangle'
+    })
+    const rail = container.querySelector<HTMLElement>('[role="toolbar"]')!
+    expect(rail.dataset.toolRail).toBe('phone')
+    expect([...container.querySelectorAll<HTMLButtonElement>('[data-rail-item]')].map((button) => button.dataset.command ?? 'more')).toEqual([
+      'canvas.tool.select', 'canvas.tool.hand', 'canvas.tool.plantStamp', 'canvas.tool.polygon', 'more',
+    ])
+    expect(railButton('edit.undo')).toBeNull()
+    const more = container.querySelector<HTMLButtonElement>('[data-tool-rail-more]')!
+    expect(more.hasAttribute('data-holds-active')).toBe(true)
+    // Names never show on the strip, even before each tool has been used.
+    expect(railButton('canvas.tool.polygon').getAttribute('aria-label')).toBe('Polygon zone (Z)')
+
+    await act(async () => { phoneLayout.value = null })
+    expect(rail.dataset.toolRail).toBe('named')
+    expect(railButton('edit.undo')).not.toBeNull()
   })
 
   describe('in a short window', () => {
