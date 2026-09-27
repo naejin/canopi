@@ -75,7 +75,9 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
   const revision = queries?.revision.scene.value
   const namesRevision = queries?.revision.plantNames.value
   const entries = useMemo(
-    () => queries ? buildSpeciesKey(queries.getSceneSnapshot(), queries.getLocalizedCommonNames()) : [],
+    () => queries
+      ? buildSpeciesKey(queries.getSceneSnapshot(), queries.getLocalizedCommonNames(), queries.getEnglishFallbackNames())
+      : [],
     [queries, revision, namesRevision],
   )
   const finderSpecies = useMemo(() => entries.map((entry) => ({
@@ -245,6 +247,7 @@ function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {
         <SpeciesIdentity
           commonName={entry.commonName}
           canonicalName={entry.canonicalName}
+          englishFallback={entry.englishFallback}
           highlight={finderHighlight(result.byKey.get(entry.canonicalName))}
         />
         <span className={row.code}>{entry.code}</span>

@@ -167,6 +167,7 @@ export function CalendarSpeciesPicker({ species, chosen, unavailable, onToggle, 
                 <SpeciesIdentity
                   commonName={option.common_name}
                   canonicalName={option.canonical_name}
+                  englishFallback={option.english_fallback}
                   highlight={finderHighlight(finder.byKey.get(option.canonical_name))}
                 />
                 <span className={row.code}>{option.code}</span>

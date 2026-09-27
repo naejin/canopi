@@ -1,6 +1,6 @@
 import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
-import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { isEnglishFallbackName, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { getBudgetHoverTarget, getBudgetSpeciesTarget } from '../../target'
 import type { BudgetItem, PanelTarget, PlacedPlant } from '../../types/design'
 import type { BudgetSort } from '../planning-view/state'
@@ -8,6 +8,8 @@ import type { BudgetSort } from '../planning-view/state'
 export interface BudgetPlanningRow {
   readonly canonical: string
   readonly commonName: string
+  /** `commonName` is the English catalog name: none exists in the UI language. */
+  readonly englishFallback: boolean
   readonly code: string
   readonly appearances: readonly { readonly symbol: PlantSymbolId; readonly color: string }[]
   readonly count: number
@@ -36,7 +38,9 @@ export interface BudgetListProjection {
 
 export interface BuildBudgetPlanningProjectionOptions {
   readonly plants: readonly PlacedPlant[]
+  /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly englishFallbackNames?: ReadonlyMap<string, string>
   readonly budget: readonly BudgetItem[]
   readonly currency: string
   readonly locale: string
@@ -46,6 +50,7 @@ export interface BuildBudgetPlanningProjectionOptions {
 export function buildBudgetPlanningProjection({
   plants,
   localizedNames,
+  englishFallbackNames = new Map(),
   budget,
   currency,
   locale,
@@ -72,9 +77,11 @@ export function buildBudgetPlanningProjection({
       const price = lineItemPriceMap.get(canonical)
       const identity = identityByCanonical.get(canonical)
       const unitCost = price?.unit_cost ?? 0
+      const commonName = identity?.commonName ?? value.commonName
       return {
         canonical,
-        commonName: identity?.commonName ?? value.commonName,
+        commonName,
+        englishFallback: isEnglishFallbackName(englishFallbackNames, canonical, commonName),
         code: identity?.code ?? '',
         appearances: identity?.appearances ?? [],
         count: value.count,

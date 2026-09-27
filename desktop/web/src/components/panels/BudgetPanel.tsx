@@ -136,6 +136,7 @@ export function BudgetPanel() {
                     <SpeciesIdentity
                       commonName={item.commonName}
                       canonicalName={item.canonical}
+                      englishFallback={item.englishFallback}
                       highlight={finderHighlight(finder.byKey.get(item.canonical))}
                     />
                     <span className={row.code}>{item.code}</span>

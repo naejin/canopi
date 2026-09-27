@@ -6,6 +6,8 @@ import {
 import { buildBudgetPlanningProjection } from '../app/planning-projection/budget'
 import { buildCalendarPlanningProjection } from '../app/planning-projection/calendar'
 import { buildConsortiumPlanningProjection } from '../app/planning-projection/consortium'
+import { buildTimelineSpeciesOptions } from '../app/planning-projection/timeline'
+import { speciesDisplayNames } from '../canvas/runtime/species-key'
 import { MANUAL_TARGET, speciesBudgetTarget, speciesTarget } from '../target'
 import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../types/design'
 
@@ -114,9 +116,9 @@ describe('Planning Projection', () => {
       currency: 'EUR',
       locale: 'fr',
       speciesKey: [
-        { canonicalName: 'Acer campestre', commonName: 'Érable champêtre', code: 'ACH', count: 1, appearances: [{ symbol: 'canopy', color: '#A06B1F' }] },
-        { canonicalName: 'Malus domestica', commonName: 'Apple', code: 'POM', count: 2, appearances: [] },
-        { canonicalName: 'Tilia cordata', commonName: 'Lime', code: 'TCO', count: 3, appearances: [] },
+        { canonicalName: 'Acer campestre', commonName: 'Érable champêtre', code: 'ACH', englishFallback: false, count: 1, appearances: [{ symbol: 'canopy', color: '#A06B1F' }] },
+        { canonicalName: 'Malus domestica', commonName: 'Apple', code: 'POM', englishFallback: false, count: 2, appearances: [] },
+        { canonicalName: 'Tilia cordata', commonName: 'Lime', code: 'TCO', englishFallback: false, count: 3, appearances: [] },
       ],
     })
 
@@ -137,6 +139,34 @@ describe('Planning Projection', () => {
     expect(missing.restricted).toBe(true)
     expect(missing.shownSubtotal).toBe(0)
     expect(projection.grandTotal).toBe(4)
+  })
+
+  it('flags Consortium and Calendar species shown by their English catalog name', () => {
+    const englishFallbackNames = new Map([['Prunus avium', 'Wild cherry']])
+    const localizedNames = speciesDisplayNames(
+      new Map([['Malus domestica', 'Pommier'], ['Prunus avium', null]]),
+      englishFallbackNames,
+    )
+    const plants = [makePlant('Malus domestica', 'Apple'), makePlant('Prunus avium', 'Merisier stocké')]
+    const consortium = buildConsortiumPlanningProjection({
+      consortiums: [
+        { target: speciesTarget('Malus domestica'), stratum: 'high', start_phase: 1, end_phase: 3 },
+        { target: speciesTarget('Prunus avium'), stratum: 'high', start_phase: 1, end_phase: 3 },
+      ],
+      plants,
+      localizedNames,
+      englishFallbackNames,
+    })
+    expect(consortium.rows.map((row) => [row.canonicalName, row.commonName, row.englishFallback])).toEqual([
+      ['Malus domestica', 'Pommier', false],
+      ['Prunus avium', 'Wild cherry', true],
+    ])
+
+    const calendar = buildTimelineSpeciesOptions(plants, localizedNames, 'fr', [], englishFallbackNames)
+    expect(calendar.map((option) => [option.canonical_name, option.common_name, option.english_fallback])).toEqual([
+      ['Malus domestica', 'Pommier', false],
+      ['Prunus avium', 'Wild cherry', true],
+    ])
   })
 
   it('builds inclusive Consortium matrix counts without stale or duplicate species', () => {

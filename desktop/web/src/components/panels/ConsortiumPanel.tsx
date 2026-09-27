@@ -314,6 +314,7 @@ function ConsortiumRow({ row: item, workbench }: { row: ConsortiumPlanningRow; w
         <SpeciesIdentity
           commonName={item.commonName}
           canonicalName={item.canonicalName}
+          englishFallback={item.englishFallback}
           highlight={finderHighlight(workbench.finder.byKey.get(item.canonicalName))}
         />
         <span className={row.code}>{item.code}</span>
@@ -345,7 +346,7 @@ function ConsortiumRowEditor({ row: item, workbench, onCancel }: { row: Consorti
   }))
   return (
     <article className={styles.rowEditor}>
-      <SpeciesIdentity commonName={item.commonName} canonicalName={item.canonicalName} />
+      <SpeciesIdentity commonName={item.commonName} canonicalName={item.canonicalName} englishFallback={item.englishFallback} />
       <div className={styles.editorFields}>
         <div className={styles.editorField}>
           <span>{t('canvas.consortium.stratum')}</span>

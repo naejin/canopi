@@ -205,6 +205,11 @@ export interface CanvasQuerySurface {
   /** Canonical lon/lat design objects, as a save would write them; null while busy. */
   getSettledDesignObjects(): CanvasDesignObjects | null
   getLocalizedCommonNames(): ReadonlyMap<string, string | null>
+  /**
+   * English catalog names for the Design's species with no name in the UI
+   * language (empty in English). Lists show them marked as English.
+   */
+  getEnglishFallbackNames(): ReadonlyMap<string, string>
 }
 
 export interface CanvasDocumentReplacementReceipt {

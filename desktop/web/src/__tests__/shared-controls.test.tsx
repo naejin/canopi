@@ -223,6 +223,23 @@ describe('SpeciesIdentity', () => {
     const scientific = root.querySelector('em')!
     expect(scientific.textContent).toBe('Malus domestica')
     expect(scientific.getAttribute('lang')).toBe('la')
+    expect(root.querySelector('[lang="en"]')).toBeNull()
+    expect(root.textContent).not.toContain('(en)')
+  })
+
+  it('marks an English fallback name with a visible mark and a spoken note', async () => {
+    await act(async () => render(<SpeciesIdentity commonName="Apple" canonicalName="Malus domestica" englishFallback />, root))
+    const name = root.querySelector('strong')!
+    expect(name.querySelector('[lang="en"]')?.textContent).toBe('Apple')
+    const mark = name.querySelector('[aria-hidden="true"]')!
+    expect(mark.textContent).toBe('(en)')
+    expect(mark.closest('[lang="en"]')).toBeNull()
+    expect(name.textContent).toContain('English name: no name in this language yet')
+  })
+
+  it('shows no mark for a scientific-only name even when flagged', async () => {
+    await act(async () => render(<SpeciesIdentity commonName={null} canonicalName="Malus domestica" englishFallback />, root))
+    expect(root.querySelector('strong')?.textContent).toBe('Malus domestica')
   })
 })
 

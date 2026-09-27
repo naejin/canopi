@@ -10,7 +10,7 @@ import { catalogHabitSymbol } from '../plant-db/habit-symbol'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon } from '../shared/ControlIcon'
 import { closeDockPanel } from '../shared/DockPanelHeader'
-import row from '../shared/species-row.module.css'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import styles from './SpeciesDetail.module.css'
 
 export interface SpeciesDetailIdentity {
@@ -89,14 +89,8 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
             <PlantSymbolGlyph symbol={inDesign?.symbol ?? catalogHabitSymbol(identity.habitKey)} size={28} />
           </span>
           <div className={styles.names}>
-            <h2 className={styles.title} lang={titleIsScientific ? 'la' : englishFallback ? 'en' : undefined}>
-              {titleIsScientific ? <i>{title}</i> : title}
-              {englishFallback && (
-                <>
-                  {' '}<span className={styles.fallbackMark} aria-hidden="true">{t('speciesName.englishMark')}</span>
-                  <span className={row.srOnly}>{t('speciesName.englishFallbackNote')}</span>
-                </>
-              )}
+            <h2 className={styles.title}>
+              {titleIsScientific ? <i lang="la">{title}</i> : <SpeciesCommonName name={title} englishFallback={englishFallback} />}
             </h2>
             {(!titleIsScientific || family) && (
               <p className={styles.subtitle}>

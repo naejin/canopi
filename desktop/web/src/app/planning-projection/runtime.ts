@@ -1,6 +1,6 @@
 import { useMemo } from 'preact/hooks'
 import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
-import { buildSpeciesKey, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { buildSpeciesKey, speciesDisplayNames, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { locale } from '../settings/state'
 import { DEFAULT_BUDGET_CURRENCY } from '../contracts/document'
 import { currentDesign, designName } from '../document-session/store'
@@ -12,13 +12,17 @@ import { buildCalendarPlanningProjection, type CalendarPlanningProjection } from
 
 const EMPTY_PLANTS: readonly PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
+const EMPTY_ENGLISH_NAMES: ReadonlyMap<string, string> = new Map()
 const EMPTY_BUDGET: readonly BudgetItem[] = []
 const EMPTY_TIMELINE: readonly TimelineAction[] = []
 const EMPTY_CONSORTIUMS: readonly Consortium[] = []
 
 export interface PlanningProjectionCanvasSnapshot {
   readonly plants: readonly PlacedPlant[]
+  /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames: ReadonlyMap<string, string | null>
+  /** The English catalog names shown for species with no name in the UI language. */
+  readonly englishFallbackNames: ReadonlyMap<string, string>
   readonly speciesKey: readonly SpeciesKeyEntry[]
   readonly zoneNames: readonly string[]
   readonly selectedPlantIds: readonly string[]
@@ -54,15 +58,20 @@ function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasSnapshot
   const selection = currentCanvasSelection.value
   const activeLocale = locale.value
 
-  return useMemo(() => ({
-    plants: session?.getPlacedPlants() ?? EMPTY_PLANTS,
-    localizedNames: session?.getLocalizedCommonNames() ?? EMPTY_NAMES,
-    speciesKey: session
-      ? buildSpeciesKey(session.getSceneSnapshot(), session.getLocalizedCommonNames())
-      : [],
-    zoneNames: session?.getSceneSnapshot().zones.map((zone) => zone.name) ?? [],
-    selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],
-  }), [session, sceneRevision, plantNamesRevision, selection, activeLocale])
+  return useMemo(() => {
+    const localizedNames = session?.getLocalizedCommonNames() ?? EMPTY_NAMES
+    const englishFallbackNames = session?.getEnglishFallbackNames() ?? EMPTY_ENGLISH_NAMES
+    return {
+      plants: session?.getPlacedPlants() ?? EMPTY_PLANTS,
+      localizedNames: speciesDisplayNames(localizedNames, englishFallbackNames),
+      englishFallbackNames,
+      speciesKey: session
+        ? buildSpeciesKey(session.getSceneSnapshot(), localizedNames, englishFallbackNames)
+        : [],
+      zoneNames: session?.getSceneSnapshot().zones.map((zone) => zone.name) ?? [],
+      selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],
+    }
+  }, [session, sceneRevision, plantNamesRevision, selection, activeLocale])
 }
 
 function useBudgetPlanningProjection({
@@ -79,11 +88,12 @@ function useBudgetPlanningProjection({
   return useMemo(() => buildBudgetPlanningProjection({
     plants: snapshot.plants,
     localizedNames: snapshot.localizedNames,
+    englishFallbackNames: snapshot.englishFallbackNames,
     budget,
     currency,
     locale,
     speciesKey: snapshot.speciesKey,
-  }), [snapshot.plants, snapshot.localizedNames, snapshot.speciesKey, budget, currency, locale])
+  }), [snapshot, budget, currency, locale])
 }
 
 export function useBudgetPlanningSurface(): BudgetPlanningSurface {
@@ -144,7 +154,9 @@ export function useCalendarPlanningSurface(options: {
       currentCanvasQuerySurface.peek()?.getSelectedPlantColorContext().plantIds ?? []
     ),
     zoneNames: snapshot.zoneNames,
-    speciesList: buildTimelineSpeciesOptions(snapshot.plants, snapshot.localizedNames, activeLocale, snapshot.speciesKey),
+    speciesList: buildTimelineSpeciesOptions(
+      snapshot.plants, snapshot.localizedNames, activeLocale, snapshot.speciesKey, snapshot.englishFallbackNames,
+    ),
   }
 }
 
@@ -159,8 +171,9 @@ function useConsortiumPlanningProjection({
     consortiums,
     plants: snapshot.plants,
     localizedNames: snapshot.localizedNames,
+    englishFallbackNames: snapshot.englishFallbackNames,
     speciesKey: snapshot.speciesKey,
-  }), [snapshot.plants, snapshot.localizedNames, snapshot.speciesKey, consortiums])
+  }), [snapshot, consortiums])
 }
 
 export function useConsortiumPlanningSurface(): ConsortiumPlanningSurface {

@@ -2,7 +2,7 @@ import { groupPlantsBySpecies } from '../../canvas/plant-grouping'
 import { getConsortiumCanonicalName } from '../../target'
 import type { Consortium, PlacedPlant } from '../../types/design'
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
-import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { isEnglishFallbackName, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from '../consortium/time-model'
 import type { ConsortiumListFilter } from '../planning-view/state'
 
@@ -19,6 +19,8 @@ export interface ConsortiumPlanningRow {
   readonly entry: Consortium
   readonly canonicalName: string
   readonly commonName: string
+  /** `commonName` is the English catalog name: none exists in the UI language. */
+  readonly englishFallback: boolean
   readonly code?: string
   readonly appearances: readonly { readonly symbol: PlantSymbolId; readonly color: string }[]
   readonly count: number
@@ -49,7 +51,9 @@ export interface ConsortiumListProjection {
 export interface BuildConsortiumPlanningProjectionOptions {
   readonly consortiums: readonly Consortium[]
   readonly plants: readonly PlacedPlant[]
+  /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  readonly englishFallbackNames?: ReadonlyMap<string, string>
   readonly speciesKey?: readonly SpeciesKeyEntry[]
 }
 
@@ -57,10 +61,11 @@ export function buildConsortiumPlanningProjection({
   consortiums,
   plants,
   localizedNames,
+  englishFallbackNames = new Map(),
   speciesKey = [],
 }: BuildConsortiumPlanningProjectionOptions): ConsortiumPlanningProjection {
   const activeEntries = filterActiveConsortiumEntries(consortiums, plants)
-  const rows = buildConsortiumRows(activeEntries, plants, localizedNames, speciesKey)
+  const rows = buildConsortiumRows(activeEntries, plants, localizedNames, englishFallbackNames, speciesKey)
   return {
     activeEntries,
     rows,
@@ -117,6 +122,7 @@ function buildConsortiumRows(
   entries: readonly Consortium[],
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
+  englishFallbackNames: ReadonlyMap<string, string>,
   speciesKey: readonly SpeciesKeyEntry[],
 ): ConsortiumPlanningRow[] {
   const plantCounts = groupPlantsBySpecies(plants, localizedNames)
@@ -137,6 +143,7 @@ function buildConsortiumRows(
       entry,
       canonicalName,
       commonName,
+      englishFallback: isEnglishFallbackName(englishFallbackNames, canonicalName, commonName),
       code,
       appearances: speciesIdentity?.appearances ?? [],
       count: plantInfo?.count ?? 0,

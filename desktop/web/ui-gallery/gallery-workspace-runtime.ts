@@ -60,7 +60,7 @@ function createGalleryCanvasRuntimeAppAdapter(design: CanopiFile) {
   const names = new Map(design.plants.map(plant => [plant.canonical_name, plant.common_name]))
   return createAppCanvasRuntimeAppAdapter({
     presentationData: {
-      plantLabels: { getLocaleSnapshot: () => names, ensureEntries: async () => false },
+      plantLabels: { getLocaleSnapshot: () => names, getEnglishFallbackSnapshot: () => new Map(), ensureEntries: async () => false },
       speciesCache: {
         getCache: () => new Map(species.map(plant => [plant.canonical_name, { ...plant }])),
         ensureEntries: async () => false,

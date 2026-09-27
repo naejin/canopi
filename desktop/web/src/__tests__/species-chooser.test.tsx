@@ -23,7 +23,7 @@ import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
 } from './support/canvas-runtime-surfaces'
-import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
 
 const favorites = vi.hoisted(() => ({
   view: null as null | { value: { items: readonly unknown[], loading: boolean, revision: number } },
@@ -63,6 +63,7 @@ function plant(id: string, canonicalName: string, commonName: string, canopySpre
 describe('Place plants species chooser', () => {
   let container: HTMLDivElement
   let map: HTMLDivElement
+  let queries: TestCanvasQuerySurface
 
   beforeEach(async () => {
     locale.value = 'en'
@@ -78,12 +79,13 @@ describe('Place plants species chooser', () => {
         plant('f1', 'Ficus carica', 'Fig', 4),
       ]
     })
+    queries = createTestCanvasQuerySurface({
+      scene: store.persisted,
+      localizedNames: new Map([['Malus domestica', 'Pommier'], ['Ficus carica', null]]),
+    })
     setCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface(),
-      queries: createTestCanvasQuerySurface({
-        scene: store.persisted,
-        localizedNames: new Map([['Malus domestica', 'Pommier'], ['Ficus carica', null]]),
-      }),
+      queries,
       documents: createTestCanvasDocumentSurface(),
     })
     favorites.view!.value = {
@@ -133,6 +135,24 @@ describe('Place plants species chooser', () => {
     ])
     expect(options()[0]!.textContent).toContain('Pommier')
     expect(options()[0]!.textContent).toContain('Malus domestica')
+  })
+
+  it('marks the English catalog name of a Design species with no name in the UI language', async () => {
+    await act(() => {
+      locale.value = 'fr'
+      queries.setEnglishFallbackNames(new Map([['Ficus carica', 'Common fig']]))
+      queries.bumpPlantNamesRevision()
+    })
+
+    const fig = options().find((option) => option.dataset.speciesOption === 'Ficus carica')!
+    expect(fig.querySelector('[lang="en"]')?.textContent).toBe('Common fig')
+    expect(fig.querySelector('[aria-hidden="true"]')?.textContent).toBe('(angl.)')
+    expect(fig.textContent).toContain('Nom anglais : pas encore de nom dans cette langue')
+    const apple = options().find((option) => option.dataset.speciesOption === 'Malus domestica')!
+    expect(apple.textContent).not.toContain('(angl.)')
+    // Rubus idaeus is a Favorite: the catalog gives no English name for it here.
+    const raspberry = options().find((option) => option.dataset.speciesOption === 'Rubus idaeus')!
+    expect(raspberry.querySelector('[lang="en"]')).toBeNull()
   })
 
   it('loads Favorites when none are loaded yet', async () => {

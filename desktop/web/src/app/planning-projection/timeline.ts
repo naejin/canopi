@@ -1,6 +1,6 @@
 import type { PlacedPlant } from '../../types/design'
 import type { PlantSymbolId } from '../../canvas/runtime/scene'
-import type { SpeciesKeyEntry } from '../../canvas/runtime/species-key'
+import { isEnglishFallbackName, type SpeciesKeyEntry } from '../../canvas/runtime/species-key'
 
 export type ActionType = 'planting' | 'pruning' | 'harvest' | 'watering' | 'fertilising' | 'other'
 export const ACTION_TYPES: readonly ActionType[] = ['planting', 'pruning', 'harvest', 'watering', 'fertilising', 'other']
@@ -10,6 +10,8 @@ export interface TimelineSpeciesOption {
   readonly display_name: string
   /** The common name, or null when only the scientific name is known. */
   readonly common_name: string | null
+  /** `common_name` is the English catalog name: none exists in the UI language. */
+  readonly english_fallback: boolean
   readonly code: string
   readonly plant_count: number
   readonly appearance: { readonly symbol: PlantSymbolId; readonly color: string } | null
@@ -20,6 +22,7 @@ export function buildTimelineSpeciesOptions(
   localizedNames: ReadonlyMap<string, string | null> | undefined,
   locale: string,
   speciesKey: readonly SpeciesKeyEntry[] = [],
+  englishFallbackNames: ReadonlyMap<string, string> = new Map(),
 ): TimelineSpeciesOption[] {
   const identity = new Map(speciesKey.map((entry) => [entry.canonicalName, entry]))
   const byName = new Map<string, TimelineSpeciesOption>()
@@ -36,6 +39,7 @@ export function buildTimelineSpeciesOptions(
       canonical_name: plant.canonical_name,
       display_name: commonName ?? plant.canonical_name,
       common_name: commonName,
+      english_fallback: isEnglishFallbackName(englishFallbackNames, plant.canonical_name, commonName),
       code: entry?.code ?? '',
       plant_count: 1,
       appearance: entry?.appearances[0] ?? null,

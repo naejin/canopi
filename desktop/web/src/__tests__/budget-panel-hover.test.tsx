@@ -133,4 +133,32 @@ describe('BudgetPanel hover bridge', () => {
     expect(container.textContent).toContain('Pommier')
     expect(container.textContent).not.toContain('Apple')
   })
+
+  it('marks the English catalog name of a species with no name in the UI language', async () => {
+    locale.value = 'fr'
+    querySurface = createTestCanvasQuerySurface({
+      plants: [makePlant('Malus domestica', 'Pommier stocké')],
+      localizedNames: new Map([['Malus domestica', null]]),
+      englishFallbackNames: new Map([['Malus domestica', 'Apple']]),
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
+
+    await act(async () => {
+      render(<BudgetPanel />, container)
+    })
+
+    const row = container.querySelector('li')!
+    expect(row.querySelector('[lang="en"]')?.textContent).toBe('Apple')
+    expect(row.querySelector('strong [aria-hidden="true"]')?.textContent).toBe('(angl.)')
+    expect(row.textContent).not.toContain('Pommier stocké')
+
+    await act(async () => {
+      locale.value = 'en'
+      querySurface.setLocalizedNames(new Map([['Malus domestica', 'Apple']]))
+      querySurface.setEnglishFallbackNames(new Map())
+      querySurface.bumpPlantNamesRevision()
+    })
+    expect(container.querySelector('li [lang="en"]')).toBeNull()
+    expect(container.textContent).not.toContain('(en)')
+  })
 })

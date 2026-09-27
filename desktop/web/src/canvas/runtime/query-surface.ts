@@ -33,7 +33,7 @@ interface SceneCanvasQuerySurfaceOptions {
   >
   readonly presentation: Pick<
     SceneRuntimePresentationController,
-    'createPlantPresentationContext' | 'getLocalizedCommonNames' | 'buildViewCaptureSnapshot'
+    'createPlantPresentationContext' | 'getLocalizedCommonNames' | 'getEnglishFallbackNames' | 'buildViewCaptureSnapshot'
   >
 }
 
@@ -121,5 +121,8 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
   }
   getLocalizedCommonNames(): ReadonlyMap<string, string | null> {
     return this.options.presentation.getLocalizedCommonNames()
+  }
+  getEnglishFallbackNames(): ReadonlyMap<string, string> {
+    return this.options.presentation.getEnglishFallbackNames()
   }
 }

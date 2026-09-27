@@ -12,12 +12,17 @@ import {
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { MatchText, PlantFinder } from '../shared/PlantFinder'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import styles from './ToolCard.module.css'
 
 type SectionId = 'design' | 'favorites' | 'recent'
 
-interface ChooserSpecies extends PlantStampSource {
+interface ChooserSpecies {
+  readonly source: PlantStampSource
   readonly section: SectionId
+  /** The name shown: the stamp source's name, or the English catalog name for a Design species with none in the UI language. */
+  readonly shownName: string | null
+  readonly englishFallback: boolean
 }
 
 const SECTION_LABELS: Readonly<Record<SectionId, string>> = {
@@ -58,7 +63,7 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
   }, [focusRequest])
 
   function choose(entry: ChooserSpecies): void {
-    selectPlantStampSource(entry)
+    selectPlantStampSource(entry.source)
     onChosen()
   }
 
@@ -70,7 +75,7 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
     else onEscape()
   }
 
-  const bySpecies = new Map(species.map((entry) => [entry.canonical_name, entry]))
+  const bySpecies = new Map(species.map((entry) => [entry.source.canonical_name, entry]))
   const matches: readonly { entry: ChooserSpecies, hit: PlantFinderHit<string> | null }[] = finder.active
     ? finder.hits.flatMap((hit) => {
         const entry = bySpecies.get(hit.key)
@@ -121,18 +126,23 @@ function OptionList({ entries, onChoose }: {
   return (
     <ul className={styles.optionList}>
       {entries.map(({ entry, hit }) => {
-        const common = entry.common_name
+        const common = entry.shownName
+        const canonical = entry.source.canonical_name
         const marks = (text: string) => hit?.marks.find((mark) => mark.text === text)?.ranges ?? []
         return (
-          <li key={entry.canonical_name}>
+          <li key={canonical}>
             <button
               type="button"
               className={styles.option}
-              data-species-option={entry.canonical_name}
+              data-species-option={canonical}
               onClick={() => onChoose(entry)}
             >
-              {common && <span className={styles.optionName}><MatchText text={common} ranges={marks(common)} /></span>}
-              <i lang="la" className={styles.optionLatin}><MatchText text={entry.canonical_name} ranges={marks(entry.canonical_name)} /></i>
+              {common && (
+                <span className={styles.optionName}>
+                  <SpeciesCommonName name={<MatchText text={common} ranges={marks(common)} />} englishFallback={entry.englishFallback} />
+                </span>
+              )}
+              <i lang="la" className={styles.optionLatin}><MatchText text={canonical} ranges={marks(canonical)} /></i>
             </button>
           </li>
         )
@@ -142,7 +152,7 @@ function OptionList({ entries, onChoose }: {
 }
 
 function toFinderSpecies(entry: ChooserSpecies) {
-  return { canonicalName: entry.canonical_name, commonName: entry.common_name }
+  return { canonicalName: entry.source.canonical_name, commonName: entry.shownName }
 }
 
 /** Design species (most planted first), then Favorites, then recent picks, each species once. */
@@ -156,12 +166,12 @@ function useChooserSpecies(): readonly ChooserSpecies[] {
   return useMemo(() => {
     const seen = new Set<string>()
     const entries: ChooserSpecies[] = []
-    const add = (source: PlantStampSource, section: SectionId) => {
+    const add = (source: PlantStampSource, section: SectionId, englishName?: string) => {
       if (seen.has(source.canonical_name)) return
       seen.add(source.canonical_name)
-      entries.push({ ...source, section })
+      entries.push({ source, section, shownName: englishName ?? source.common_name, englishFallback: Boolean(englishName) })
     }
-    for (const source of design) add(source, 'design')
+    for (const { source, englishName } of design) add(source, 'design', englishName)
     for (const item of favoriteItems) {
       add({
         canonical_name: item.canonical_name,
@@ -175,30 +185,35 @@ function useChooserSpecies(): readonly ChooserSpecies[] {
   }, [design, favoriteItems, recent])
 }
 
-function designSpecies(): readonly PlantStampSource[] {
+function designSpecies(): readonly { source: PlantStampSource, englishName?: string }[] {
   const queries = currentCanvasQuerySurface.peek()
   if (!queries) return []
   const names = queries.getLocalizedCommonNames()
-  const bySpecies = new Map<string, { source: PlantStampSource, count: number }>()
+  const englishNames = queries.getEnglishFallbackNames()
+  const bySpecies = new Map<string, { source: PlantStampSource, englishName?: string, count: number }>()
   for (const plant of queries.getSceneSnapshot().plants) {
     const current = bySpecies.get(plant.canonicalName)
     if (current) {
       current.count += 1
       continue
     }
+    const localized = names.get(plant.canonicalName)
     bySpecies.set(plant.canonicalName, {
       count: 1,
+      ...!localized && englishNames.has(plant.canonicalName) ? { englishName: englishNames.get(plant.canonicalName)! } : {},
       source: {
         canonical_name: plant.canonicalName,
-        common_name: names.get(plant.canonicalName) ?? plant.commonName,
+        common_name: localized ?? plant.commonName,
         stratum: plant.stratum,
         // The width the catalog gave when the species was placed.
         width_max_m: plant.canopySpreadM,
       },
     })
   }
+  const shown = (entry: { source: PlantStampSource, englishName?: string }) => (
+    entry.englishName ?? entry.source.common_name ?? entry.source.canonical_name
+  )
   return [...bySpecies.values()]
-    .sort((left, right) => right.count - left.count
-      || (left.source.common_name ?? left.source.canonical_name).localeCompare(right.source.common_name ?? right.source.canonical_name))
-    .map((entry) => entry.source)
+    .sort((left, right) => right.count - left.count || shown(left).localeCompare(shown(right)))
+    .map(({ source, englishName }) => ({ source, englishName }))
 }

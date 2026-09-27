@@ -169,9 +169,11 @@ describe('Species detail (Desktop)', () => {
 
     const title = container.querySelector('h2')!
     expect(ipc.getCommonNames).toHaveBeenCalledWith(['Ribes nigrum'], 'en')
-    expect(title.getAttribute('lang')).toBe('en')
-    expect(title.textContent).toContain('Blackcurrant')
-    expect(title.textContent).toContain('(angl.)')
+    expect(title.getAttribute('lang')).toBeNull()
+    expect(title.querySelector('[lang="en"]')?.textContent).toBe('Blackcurrant')
+    const mark = title.querySelector('[aria-hidden="true"]')!
+    expect(mark.textContent).toBe('(angl.)')
+    expect(mark.closest('[lang="en"]')).toBeNull()
     expect(container.querySelector('p i[lang="la"]')?.textContent).toBe('Ribes nigrum')
   })
 

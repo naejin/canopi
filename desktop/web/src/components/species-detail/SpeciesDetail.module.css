@@ -94,13 +94,6 @@
   letter-spacing: -0.005em;
 }
 
-.fallbackMark {
-  color: var(--color-text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: 400;
-}
-
 .subtitle {
   margin: 0;
   overflow-wrap: anywhere;

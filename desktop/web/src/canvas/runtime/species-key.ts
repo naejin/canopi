@@ -67,9 +67,38 @@ export function speciesFocusOpacity(
   return focus.canonicalName && focus.canonicalName !== canonicalName ? 0.16 : 1
 }
 
+const NO_ENGLISH_FALLBACKS: ReadonlyMap<string, string> = new Map()
+
+/**
+ * The species names lists show: the name in the UI language, else the English
+ * catalog name (see `CanvasQuerySurface.getEnglishFallbackNames`).
+ */
+export function speciesDisplayNames(
+  localizedNames: ReadonlyMap<string, string | null>,
+  englishFallbackNames: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string | null> {
+  if (englishFallbackNames.size === 0) return localizedNames
+  const names = new Map(localizedNames)
+  for (const [canonicalName, englishName] of englishFallbackNames) {
+    if (!names.get(canonicalName)) names.set(canonicalName, englishName)
+  }
+  return names
+}
+
+/** Whether `shownName` is the English fallback name resolved for the species. */
+export function isEnglishFallbackName(
+  englishFallbackNames: ReadonlyMap<string, string>,
+  canonicalName: string,
+  shownName: string | null | undefined,
+): boolean {
+  return Boolean(shownName) && englishFallbackNames.get(canonicalName) === shownName
+}
+
 export interface SpeciesKeyEntry {
   readonly canonicalName: string
   readonly commonName: string | null
+  /** The common name is the English catalog name: none exists in the UI language. */
+  readonly englishFallback: boolean
   readonly code: string
   readonly count: number
   readonly appearances: readonly { symbol: PlantSymbolId; color: string }[]
@@ -78,12 +107,14 @@ export interface SpeciesKeyEntry {
 export function buildSpeciesKey(
   scene: ScenePersistedState,
   localizedNames: ReadonlyMap<string, string | null>,
+  englishFallbackNames: ReadonlyMap<string, string> = NO_ENGLISH_FALLBACKS,
 ): SpeciesKeyEntry[] {
   const entries = new Map<
     string,
     {
       canonicalName: string
       commonName: string | null
+      englishFallback: boolean
       code: string
       count: number
       appearances: { symbol: PlantSymbolId; color: string }[]
@@ -94,7 +125,11 @@ export function buildSpeciesKey(
     if (!entry) {
       entry = {
         canonicalName: plant.canonicalName,
-        commonName: localizedNames.get(plant.canonicalName) || plant.commonName,
+        commonName: localizedNames.get(plant.canonicalName)
+          || englishFallbackNames.get(plant.canonicalName)
+          || plant.commonName,
+        englishFallback: !localizedNames.get(plant.canonicalName)
+          && Boolean(englishFallbackNames.get(plant.canonicalName)),
         code: scene.plantSpeciesCodes[plant.canonicalName] ?? '',
         count: 0,
         appearances: [],

@@ -1081,6 +1081,7 @@ describe('scene canvas runtime', () => {
       },
       plantLabels: {
         getLocaleSnapshot: () => localizedCommonNames,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => false,
       },
     })
@@ -1774,6 +1775,7 @@ describe('scene canvas runtime', () => {
       },
       plantLabels: {
         getLocaleSnapshot: (locale) => labelsByLocale.get(locale) ?? new Map(),
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async (_canonicalNames, locale) => {
           if (labelsByLocale.has(locale)) return false
           labelsByLocale.set(locale, new Map([
@@ -1819,6 +1821,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       plantLabels: {
         getLocaleSnapshot: () => labels,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => {
           if (labelsLoaded) return false
           labelsLoaded = true
@@ -1863,6 +1866,7 @@ describe('scene canvas runtime', () => {
     const runtime = new SceneCanvasRuntime({
       plantLabels: {
         getLocaleSnapshot: () => labels,
+        getEnglishFallbackSnapshot: () => new Map(),
         ensureEntries: async () => {
           labels.set('Malus domestica', 'Apple')
           return true

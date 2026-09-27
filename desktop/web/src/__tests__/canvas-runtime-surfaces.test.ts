@@ -74,6 +74,7 @@ function createQuerySurface() {
     getSettledPlacedPlants: () => [],
     getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
+    getEnglishFallbackNames: () => new Map<string, string>(),
   } satisfies CanvasQuerySurface
 }
 

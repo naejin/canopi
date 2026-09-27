@@ -1,7 +1,13 @@
 export type SpeciesCacheEntry = Record<string, unknown>
 
 export interface CanvasPlantLabelSource {
+  /** Names in `locale`; null when the catalog has none in that language. */
   getLocaleSnapshot(locale: string): ReadonlyMap<string, string | null>
+  /**
+   * English catalog names for the species with no name in `locale`; empty in
+   * English. Lists show these, marked, before a Design's stored name.
+   */
+  getEnglishFallbackSnapshot(locale: string): ReadonlyMap<string, string>
   ensureEntries(canonicalNames: string[], locale: string): Promise<boolean>
 }
 
@@ -14,6 +20,7 @@ export interface CanvasSpeciesPresentationCache {
 export function createDetachedCanvasPlantLabelSource(): CanvasPlantLabelSource {
   return {
     getLocaleSnapshot: () => new Map(),
+    getEnglishFallbackSnapshot: () => new Map(),
     ensureEntries: async () => false,
   }
 }

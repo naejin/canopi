@@ -79,6 +79,10 @@ export class SceneRuntimePresentationController {
     return this._plantLabels.getLocaleSnapshot(this._getLocale())
   }
 
+  getEnglishFallbackNames(): ReadonlyMap<string, string> {
+    return this._plantLabels.getEnglishFallbackSnapshot(this._getLocale())
+  }
+
   getSuggestedPlantColor(canonicalName: string): string | null {
     return this._speciesCache.getSuggestedPlantColor(canonicalName)
   }

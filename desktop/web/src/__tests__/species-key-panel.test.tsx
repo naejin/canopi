@@ -121,6 +121,23 @@ describe('Plants in this Design', () => {
     expect(rows[0]!.textContent).toContain('2')
   })
 
+  it('marks the English catalog name of a species with no name in the UI language', async () => {
+    locale.value = 'fr'
+    baseQueries.setLocalizedNames(new Map([['Malus domestica', 'Pommier'], ['Mentha spicata', null]]))
+    baseQueries.setEnglishFallbackNames(new Map([['Mentha spicata', 'Spearmint']]))
+    await act(() => render(<SpeciesKeyPanel />, container))
+
+    const mint = [...container.querySelectorAll('li')].find((row) => row.textContent?.includes('Spearmint'))!
+    expect(mint.querySelector('[lang="en"]')?.textContent).toBe('Spearmint')
+    expect(mint.querySelector('strong [aria-hidden="true"]')?.textContent).toBe('(angl.)')
+    expect(mint.textContent).toContain('Nom anglais : pas encore de nom dans cette langue')
+    const apple = [...container.querySelectorAll('li')].find((row) => row.textContent?.includes('Pommier'))!
+    expect(apple.textContent).not.toContain('(angl.)')
+    // Stored names keep showing unmarked: their language is unknown.
+    const crab = [...container.querySelectorAll('li')].find((row) => row.textContent?.includes('Pommier sauvage'))!
+    expect(crab.textContent).not.toContain('(angl.)')
+  })
+
   it('finds species despite typos, marks the match and rings the matches on the map', async () => {
     await act(() => render(<><SpeciesKeyPanel /><SpeciesFocusChip /></>, container))
     await search('pomier')

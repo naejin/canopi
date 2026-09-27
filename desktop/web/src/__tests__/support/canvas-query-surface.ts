@@ -21,6 +21,8 @@ interface TestCanvasQuerySurfaceOptions {
   readonly viewport?: SceneViewportState
   readonly plants?: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
+  /** English catalog names shown for species with no name in the active locale. */
+  readonly englishFallbackNames?: ReadonlyMap<string, string>
   readonly selection?: SceneDesignObjectSelection
   /** Defaults to a plane at the shared test origin; pass `null` for no Design frame. */
   readonly sessionPlane?: SessionPlane | null
@@ -32,6 +34,7 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
   setSettled(settled: boolean): void
   setPlants(plants: readonly PlacedPlant[]): void
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
+  setEnglishFallbackNames(names: ReadonlyMap<string, string>): void
   setSelection(selection: SceneDesignObjectSelection): void
 }
 
@@ -40,6 +43,7 @@ export function createTestCanvasQuerySurface({
   viewport = { x: 0, y: 0, scale: 1 },
   plants = [],
   localizedNames = new Map(),
+  englishFallbackNames = new Map(),
   selection = [],
   sessionPlane = createSessionPlane(TEST_GEO_ORIGIN),
 }: TestCanvasQuerySurfaceOptions = {}): TestCanvasQuerySurface {
@@ -64,6 +68,7 @@ export function createTestCanvasQuerySurface({
   }
   let currentPlants = [...plants]
   let currentLocalizedNames = localizedNames
+  let currentEnglishFallbackNames = englishFallbackNames
   let currentSelection = selection.map((target) => ({ ...target }))
   let settled = true
 
@@ -132,6 +137,7 @@ export function createTestCanvasQuerySurface({
         : null
     },
     getLocalizedCommonNames: () => currentLocalizedNames,
+    getEnglishFallbackNames: () => currentEnglishFallbackNames,
     bumpSceneRevision: () => {
       sceneRevision.value += 1
     },
@@ -148,6 +154,9 @@ export function createTestCanvasQuerySurface({
     },
     setLocalizedNames: (names) => {
       currentLocalizedNames = names
+    },
+    setEnglishFallbackNames: (names) => {
+      currentEnglishFallbackNames = names
     },
     setSelection: (nextSelection) => {
       currentSelection = nextSelection.map((target) => ({ ...target }))
