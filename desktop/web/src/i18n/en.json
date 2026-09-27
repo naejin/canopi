@@ -749,7 +749,7 @@
     "rotateDialog": {
       "title": "Rotate selection",
       "angle": "Angle",
-      "hint": "Turns the selection about its centre. Positive angles turn clockwise.",
+      "hint": "Turns the selection about its center. Positive angles turn clockwise.",
       "invalid": "Type an angle in degrees, such as 45 or -30.",
       "add": "Add {{degrees}}°",
       "subtract": "Subtract {{degrees}}°",
@@ -1153,7 +1153,13 @@
     "view.labelsCodes": "Codes",
     "view.labelsNames": "Names",
     "view.cycleLabels": "Labels: none, codes, names",
-    "edit.rotate": "Rotate…"
+    "edit.rotate": "Rotate…",
+    "file.addData": "Add data…",
+    "file.exportBudgetCsv": "Budget as CSV…",
+    "file.close": "Close Design",
+    "help.gettingStarted": "Getting started",
+    "edit.deselect": "Deselect",
+    "edit.unlockAll": "Unlock all"
   },
   "titleBar": {
     "untitledDesign": "Untitled Design",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Delete view",
     "deleted": "Deleted “{{name}}”",
     "undo": "Undo",
+    "done": "Done"
+  },
+  "gettingStarted": {
+    "title": "Getting started",
+    "intro": "Canopi draws your Design right on the map. Here is how to start.",
+    "site": "Find your site: type a place or coordinates in the search field at the top ({{shortcut}}).",
+    "zones": "Draw beds, orchards and paths with the zone tools on the left.",
+    "plants": "{{placePlants}}: choose a species, then click the map. {{plantRow}} repeats a plant along a line.",
+    "menu": "Right-click anything on the map for its commands. {{esc}} goes back to {{select}}.",
+    "plan": "Plan care, costs and plant associations in {{calendar}}, {{budget}} and {{consortium}}, from the panels on the right.",
+    "save": "Canopi saves as you work. {{file}} › {{export}} makes a planting plan (PDF) to print.",
     "done": "Done"
   }
 }

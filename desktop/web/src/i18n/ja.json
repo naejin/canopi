@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "コード",
     "view.labelsNames": "名前",
     "view.cycleLabels": "ラベル：なし、コード、名前",
-    "edit.rotate": "回転…"
+    "edit.rotate": "回転…",
+    "file.addData": "データを追加…",
+    "file.exportBudgetCsv": "予算（CSV）…",
+    "file.close": "デザインを閉じる",
+    "help.gettingStarted": "はじめに",
+    "edit.deselect": "選択解除",
+    "edit.unlockAll": "すべてロック解除"
   },
   "titleBar": {
     "untitledDesign": "無題のデザイン",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "ビューを削除",
     "deleted": "「{{name}}」を削除しました",
     "undo": "元に戻す",
+    "done": "完了"
+  },
+  "gettingStarted": {
+    "title": "はじめに",
+    "intro": "Canopi はデザインを地図の上に直接描きます。はじめ方は次のとおりです。",
+    "site": "敷地を探す: 上部の検索欄に地名または座標を入力します（{{shortcut}}）。",
+    "zones": "左側のゾーンツールで、畝、果樹園、小道を描きます。",
+    "plants": "{{placePlants}}: 種を選んで地図をクリックします。{{plantRow}}は線に沿って植物を繰り返し配置します。",
+    "menu": "地図上のものを右クリックすると、そのコマンドが表示されます。{{esc}} で{{select}}に戻ります。",
+    "plan": "右側のパネルの{{calendar}}、{{budget}}、{{consortium}}で、手入れ、費用、植物の組み合わせを計画します。",
+    "save": "Canopi は作業中に自動で保存します。{{file}} › {{export}} で印刷用の植栽計画（PDF）を作成できます。",
     "done": "完了"
   }
 }

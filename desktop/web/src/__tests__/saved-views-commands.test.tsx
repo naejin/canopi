@@ -121,6 +121,8 @@ function webViewMenu(): readonly MenuEntry[] {
     revertDesign: () => undefined,
     importGeoJson: () => undefined,
     exportGeoJson: () => undefined,
+    exportBudgetCsv: () => undefined,
+    closeDesign: () => undefined,
     navigate: () => undefined,
   }, { templatesEnabled: false, canvasReady: () => true })
   const projection = createBrowserShellCommandProjection({

@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Códigos",
     "view.labelsNames": "Nomes",
     "view.cycleLabels": "Rótulos: nenhum, códigos, nomes",
-    "edit.rotate": "Girar…"
+    "edit.rotate": "Girar…",
+    "file.addData": "Adicionar dados…",
+    "file.exportBudgetCsv": "Orçamento em CSV…",
+    "file.close": "Fechar design",
+    "help.gettingStarted": "Primeiros passos",
+    "edit.deselect": "Desmarcar",
+    "edit.unlockAll": "Desbloquear tudo"
   },
   "titleBar": {
     "untitledDesign": "Design sem título",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Excluir visualização",
     "deleted": "“{{name}}” excluída",
     "undo": "Desfazer",
+    "done": "Concluído"
+  },
+  "gettingStarted": {
+    "title": "Primeiros passos",
+    "intro": "O Canopi desenha seu design direto no mapa. Veja como começar.",
+    "site": "Encontre seu terreno: digite um lugar ou coordenadas no campo de busca no topo ({{shortcut}}).",
+    "zones": "Desenhe canteiros, pomares e caminhos com as ferramentas de zona à esquerda.",
+    "plants": "{{placePlants}}: escolha uma espécie e clique no mapa. {{plantRow}} repete uma planta ao longo de uma linha.",
+    "menu": "Clique com o botão direito em qualquer item do mapa para ver seus comandos. {{esc}} volta para {{select}}.",
+    "plan": "Planeje cuidados, custos e associações de plantas em {{calendar}}, {{budget}} e {{consortium}}, nos painéis à direita.",
+    "save": "O Canopi salva enquanto você trabalha. {{file}} › {{export}} cria um plano de plantio (PDF) para imprimir.",
     "done": "Concluído"
   }
 }

@@ -134,6 +134,10 @@ export function openDesignDraftSession(id: string): Promise<DocumentTransitionRe
   });
 }
 
+export function closeDesignSession(): Promise<DocumentTransitionResult> {
+  return designSessionStateMachine.closeDesign();
+}
+
 export function teardownAttachedDesignSession(options: TeardownDesignSessionOptions): void {
   designSessionStateMachine.teardownAttachedDesignSession(options);
 }

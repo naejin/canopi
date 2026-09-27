@@ -15,11 +15,15 @@ export type ShellCommandIdByCapability = {
   readonly saveDesignAs: 'file.saveAs'
   readonly downloadCanopi: 'file.downloadCanopi'
   readonly revertDesign: 'file.revert'
+  readonly addData: 'file.addData'
+  readonly openDataLibrary: 'file.dataLibrary'
   readonly importGeoJson: 'file.importGeoJson'
   readonly exportCanvasPdf: 'file.exportCanvasPdf'
   readonly exportGeoJson: 'file.exportGeoJson'
+  readonly exportBudgetCsv: 'file.exportBudgetCsv'
   readonly openSettings: 'app.settings'
   readonly findPlants: 'edit.findPlants'
+  readonly closeDesign: 'file.close'
   readonly exitApp: 'file.exit'
   readonly navigateCanvas: 'nav.canvas'
   readonly navigateTemplates: 'nav.templates'
@@ -39,6 +43,7 @@ export type ShellCommandIdByCapability = {
   readonly showNoBackground: 'view.backgroundNone'
   readonly toggleTheme: 'view.toggleTheme'
   readonly showShortcuts: 'help.shortcuts'
+  readonly gettingStarted: 'help.gettingStarted'
   readonly reportProblem: 'help.reportProblem'
   readonly aboutCanopi: 'help.aboutCanopi'
 }
@@ -177,11 +182,15 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'saveDesignAs', id: 'file.saveAs', family: 'file', labelKey: 'menu.file.saveAs', shortcut: 'Ctrl+Shift+S', palette: true, menu: file(1) },
   { capabilityId: 'downloadCanopi', id: 'file.downloadCanopi', family: 'file', labelKey: 'webShell.downloadCanopi', shortcut: 'Ctrl+S', palette: true, menu: file(1) },
   { capabilityId: 'revertDesign', id: 'file.revert', family: 'file', labelKey: 'menu.file.revert', palette: true, menu: file(1) },
+  { capabilityId: 'addData', id: 'file.addData', family: 'file', labelKey: 'menu.file.addData', palette: true, menu: file(2) },
+  { capabilityId: 'openDataLibrary', id: 'file.dataLibrary', family: 'file', labelKey: 'canvas.lidar.layers.openLibrary', palette: true, menu: file(2) },
   { capabilityId: 'importGeoJson', id: 'file.importGeoJson', family: 'file', labelKey: 'geojson.import', palette: true, menu: file(2) },
   { capabilityId: 'exportCanvasPdf', id: 'file.exportCanvasPdf', family: 'file', labelKey: 'menu.file.exportPlantingPlan', shortcut: 'Ctrl+P', palette: true, menu: file(2, 'export') },
   { capabilityId: 'exportGeoJson', id: 'file.exportGeoJson', family: 'file', labelKey: 'menu.file.exportGeoJson', palette: true, menu: file(2, 'export') },
+  { capabilityId: 'exportBudgetCsv', id: 'file.exportBudgetCsv', family: 'file', labelKey: 'menu.file.exportBudgetCsv', palette: true, menu: file(2, 'export') },
   { capabilityId: 'openSettings', id: 'app.settings', family: 'settings', labelKey: 'menu.file.settings', shortcut: 'Ctrl+,', palette: true, menu: file(3) },
   { capabilityId: 'findPlants', id: 'edit.findPlants', family: 'settings', labelKey: 'menu.edit.findPlants', shortcut: 'Ctrl+F', palette: true, menu: { id: 'edit', section: 0 } },
+  { capabilityId: 'closeDesign', id: 'file.close', family: 'file', labelKey: 'menu.file.close', shortcut: 'Ctrl+W', palette: true, menu: file(4) },
   { capabilityId: 'exitApp', id: 'file.exit', family: 'file', labelKey: 'menu.file.exit', shortcut: 'Ctrl+Q', palette: false, menu: file(4) },
   { capabilityId: 'navigateCanvas', id: 'nav.canvas', family: 'navigation', labelKey: 'panelRail.canvas', palette: false, panel: panel('canvas', 'primary', 0) },
   { capabilityId: 'navigateTemplates', id: 'nav.templates', family: 'navigation', labelKey: 'worldMap.title', palette: false, panel: panel('templates', 'primary', 1) },
@@ -201,6 +210,7 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'showNoBackground', id: 'view.backgroundNone', family: 'settings', labelKey: 'menu.view.backgroundNone', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
   { capabilityId: 'toggleTheme', id: 'view.toggleTheme', family: 'settings', labelKey: 'menu.view.darkTheme', palette: true, check: 'checkbox', menu: { id: 'view', section: 1 } },
   { capabilityId: 'showShortcuts', id: 'help.shortcuts', family: 'help', labelKey: 'menu.help.shortcuts', shortcut: 'F1', palette: true, menu: { id: 'help', section: 0 } },
+  { capabilityId: 'gettingStarted', id: 'help.gettingStarted', family: 'help', labelKey: 'menu.help.gettingStarted', palette: true, menu: { id: 'help', section: 0 } },
   { capabilityId: 'reportProblem', id: 'help.reportProblem', family: 'help', labelKey: 'menu.help.reportProblem', palette: true, menu: { id: 'help', section: 1 } },
   { capabilityId: 'aboutCanopi', id: 'help.aboutCanopi', family: 'help', labelKey: 'menu.help.aboutCanopi', palette: true, menu: { id: 'help', section: 1 } },
 ]

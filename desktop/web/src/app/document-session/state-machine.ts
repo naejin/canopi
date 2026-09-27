@@ -28,9 +28,11 @@ import {
   requestSaveProblemDecision,
 } from "./save-problem";
 import {
+  createCloseDesignReplacement,
   createDesignSessionReplacement,
   type DesignSessionPendingCanvasReplacementIdentity,
   type DesignSessionReplacement,
+  type ResolvedDesignReplacement,
 } from "./replacement";
 import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
 import {
@@ -45,7 +47,8 @@ export type DocumentTransitionSource =
   | "queued-path"
   | "open-draft"
   | "revert"
-  | "mount-existing";
+  | "mount-existing"
+  | "close";
 
 /**
  * `flush` writes the current Design to its home before replacing it and asks
@@ -65,14 +68,25 @@ export interface DocumentTransitionLoadResult {
   writePending?: boolean;
 }
 
-export interface DocumentTransitionRequest {
-  source: DocumentTransitionSource;
+export interface DocumentLoadTransitionRequest {
+  source: Exclude<DocumentTransitionSource, "close">;
   dirtyGuard: DirtyGuardMode;
   session?: CanvasDocumentSurface | null;
   load: () => Promise<DocumentTransitionLoadResult>;
   isCancelled?: () => boolean;
   deferWhenDetachedAndEmpty?: () => void;
 }
+
+/** Ends the current Design Session without loading another Design. */
+export interface DocumentCloseTransitionRequest {
+  source: "close";
+  dirtyGuard: "flush";
+  session?: CanvasDocumentSurface | null;
+}
+
+export type DocumentTransitionRequest =
+  | DocumentLoadTransitionRequest
+  | DocumentCloseTransitionRequest;
 
 export type DocumentTransitionStatus = "applied" | "cancelled" | "queued" | "failed";
 
@@ -357,6 +371,24 @@ export class DesignSessionStateMachine {
     });
   }
 
+  /**
+   * Close the current Design: write it home (asking only when that fails),
+   * then empty the Canvas Scene, undo history and store and end continuous
+   * save. Nothing open is a no-op that supersedes no other transition.
+   */
+  closeDesign(
+    options: SaveCurrentDesignOptions = {},
+  ): Promise<DocumentTransitionResult> {
+    if (!this.deps.store.hasCurrentDesign()) {
+      return Promise.resolve(cancelledResult(this.sessionForOption(options.session)));
+    }
+    return this.transitionDocument({
+      source: "close",
+      dirtyGuard: "flush",
+      session: options.session,
+    });
+  }
+
   /** Replace the Design with the version it had when this session began. */
   revertToOpenedVersion(
     options: SaveCurrentDesignOptions = {},
@@ -507,7 +539,12 @@ export class DesignSessionStateMachine {
         operationIntent,
         this.steadyStateFor(session),
       );
-      if (!session && !this.deps.store.hasCurrentDesign() && request.deferWhenDetachedAndEmpty) {
+      if (
+        request.source !== "close"
+        && !session
+        && !this.deps.store.hasCurrentDesign()
+        && request.deferWhenDetachedAndEmpty
+      ) {
         request.deferWhenDetachedAndEmpty();
         publishCompletionIfOwned(this.steadyStateFor(session));
         return {
@@ -571,26 +608,31 @@ export class DesignSessionStateMachine {
           operationIntent,
           this.operationState("loading", request.source, session),
         );
-        const loaded = await request.load();
-        if (request.isCancelled?.()) {
-          publishCompletionIfOwned(this.steadyStateFor(session));
-          return cancelledResult(session);
-        }
-        assertReplacementAttemptCurrent();
+        let replacementInput: ResolvedDesignReplacement;
+        if (request.source === "close") {
+          replacementInput = createCloseDesignReplacement(() => this.continuousSave.endSession());
+        } else {
+          const loaded = await request.load();
+          if (request.isCancelled?.()) {
+            publishCompletionIfOwned(this.steadyStateFor(session));
+            return cancelledResult(session);
+          }
+          assertReplacementAttemptCurrent();
 
-        const home: DesignSessionHomeInput = {
-          draftId: loaded.path ? null : loaded.draftId ?? null,
-          fingerprint: loaded.path ? loaded.fingerprint ?? null : null,
-          writePending: loaded.writePending ?? false,
-        };
-        const replacementInput = {
-          file: loaded.file,
-          kind: request.source === "new" ? "new" as const : "loaded" as const,
-          path: loaded.path,
-          name: loaded.name,
-          finalizationIdentity: `home:${JSON.stringify(home)}`,
-          onDesignFinalized: () => this.continuousSave.beginSession(home),
-        };
+          const home: DesignSessionHomeInput = {
+            draftId: loaded.path ? null : loaded.draftId ?? null,
+            fingerprint: loaded.path ? loaded.fingerprint ?? null : null,
+            writePending: loaded.writePending ?? false,
+          };
+          replacementInput = {
+            file: loaded.file,
+            kind: request.source === "new" ? "new" : "loaded",
+            path: loaded.path,
+            name: loaded.name,
+            finalizationIdentity: `home:${JSON.stringify(home)}`,
+            onDesignFinalized: () => this.continuousSave.beginSession(home),
+          };
+        }
         if (
           retainedReplacementRetry
           && retainedReplacementIdentity

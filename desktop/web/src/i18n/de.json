@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Kürzel",
     "view.labelsNames": "Namen",
     "view.cycleLabels": "Beschriftungen: keine, Kürzel, Namen",
-    "edit.rotate": "Drehen…"
+    "edit.rotate": "Drehen…",
+    "file.addData": "Daten hinzufügen…",
+    "file.exportBudgetCsv": "Budget als CSV…",
+    "file.close": "Design schließen",
+    "help.gettingStarted": "Erste Schritte",
+    "edit.deselect": "Auswahl aufheben",
+    "edit.unlockAll": "Alle entsperren"
   },
   "titleBar": {
     "untitledDesign": "Unbenanntes Design",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Ansicht löschen",
     "deleted": "„{{name}}“ gelöscht",
     "undo": "Rückgängig",
+    "done": "Fertig"
+  },
+  "gettingStarted": {
+    "title": "Erste Schritte",
+    "intro": "Canopi zeichnet Ihr Design direkt auf die Karte. So fangen Sie an.",
+    "site": "Finden Sie Ihr Gelände: Geben Sie oben im Suchfeld einen Ort oder Koordinaten ein ({{shortcut}}).",
+    "zones": "Zeichnen Sie Beete, Obstgärten und Wege mit den Zonenwerkzeugen links.",
+    "plants": "{{placePlants}}: Wählen Sie eine Art und klicken Sie auf die Karte. {{plantRow}} wiederholt eine Pflanze entlang einer Linie.",
+    "menu": "Klicken Sie mit der rechten Maustaste auf etwas auf der Karte, um seine Befehle zu sehen. {{esc}} kehrt zu {{select}} zurück.",
+    "plan": "Planen Sie Pflege, Kosten und Pflanzengemeinschaften in {{calendar}}, {{budget}} und {{consortium}}, in den Bereichen rechts.",
+    "save": "Canopi speichert, während Sie arbeiten. {{file}} › {{export}} erstellt einen Pflanzplan (PDF) zum Drucken.",
     "done": "Fertig"
   }
 }

@@ -23,6 +23,7 @@ export {
   type TimelineSpeciesOption,
 } from './timeline'
 export {
+  readBudgetPlanningSurface,
   useBudgetPlanningSurface,
   useCalendarPlanningSurface,
   useConsortiumPlanningSurface,

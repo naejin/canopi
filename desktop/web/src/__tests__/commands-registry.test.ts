@@ -675,15 +675,16 @@ describe('command registry canvas tool switching', () => {
     expect(Object.keys(byMenu)).toEqual(['file', 'edit', 'view', 'tools', 'help'])
     expect(byMenu.file).toEqual([
       'file.new', 'file.open', 'file.rename', 'file.save', 'file.saveAs', 'file.revert',
-      'file.importGeoJson', 'file.exportCanvasPdf', 'file.exportGeoJson', 'app.settings', 'file.exit',
+      'file.addData', 'file.dataLibrary', 'file.importGeoJson', 'file.exportCanvasPdf', 'file.exportGeoJson', 'file.exportBudgetCsv',
+      'app.settings', 'file.close', 'file.exit',
     ])
     expect(byMenu.edit).toEqual([
       'edit.undo', 'edit.redo',
       'canvas.cut', 'canvas.copy', 'canvas.paste', 'canvas.duplicateSelected', 'canvas.deleteSelected',
-      'canvas.selectAll', 'canvas.selectSameSpecies', 'edit.findPlants',
+      'canvas.selectAll', 'canvas.selectSameSpecies', 'canvas.clearSelection', 'edit.findPlants',
       'canvas.groupSelected', 'canvas.ungroupSelected', 'canvas.bringToFront', 'canvas.sendToBack',
       'canvas.rotateSelected',
-      'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.saveSelectionAsStamp',
+      'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.unlockAll', 'canvas.saveSelectionAsStamp',
     ])
     expect(byMenu.view).toEqual([
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
@@ -700,7 +701,7 @@ describe('command registry canvas tool switching', () => {
       'canvas.tool.polygon', 'canvas.tool.rectangle', 'canvas.tool.ellipse', 'canvas.tool.line',
       'canvas.tool.text', 'canvas.tool.measurementGuide',
     ])
-    expect(byMenu.help).toEqual(['help.shortcuts', 'help.reportProblem', 'help.aboutCanopi'])
+    expect(byMenu.help).toEqual(['help.shortcuts', 'help.gettingStarted', 'help.reportProblem', 'help.aboutCanopi'])
 
     // Every palette command with a shortcut shows the same shortcut in its menu
     // item, or on the submenu it acts on (N on View › Labels).
@@ -721,6 +722,11 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('file.exportCanvasPdf')).toBe('Ctrl P')
     expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
     expect(menuShortcut.get('view.cycleLabels')).toBe('N')
+    expect(menuShortcut.get('file.close')).toBe('Ctrl W')
+    expect(menuShortcut.get('canvas.rotateSelected')).toBe('Ctrl Alt R')
+    expect(menuShortcut.get('canvas.lockSelected')).toBe('Ctrl Shift L')
+    // Esc belongs to the map's own chain; the menu names it without routing it.
+    expect(menuShortcut.get('canvas.clearSelection')).toBe('Esc')
   })
 
   it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {

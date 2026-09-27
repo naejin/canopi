@@ -29,6 +29,7 @@ import {
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
 import { selectionCommandAvailability } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import { openRotateSelectionDialog } from '../rotate-selection/state'
+import { sceneHasLockedDesignObjects } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
 
 /**
@@ -42,6 +43,8 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
   void currentCanvasSelection.value
   const canvasAvailable = surface !== null
   const hasSelection = currentCanvasHasSelection.value
+  // Locks change with scene edits; the snapshot below is read on each one.
+  void queries?.revision.scene.value
   const selection = hasSelection ? queries?.getDesignObjectSelection() ?? null : null
   return {
     activeTool: currentCanvasTool.value,
@@ -52,6 +55,7 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
     hasSelection,
     sameSpeciesSelectionAvailable: (selection?.sameSpeciesReferenceCanonicalName ?? null) !== null,
     rotateAvailable: selection !== null && selectionCommandAvailability(selection).rotate,
+    lockedObjectsPresent: queries !== null && sceneHasLockedDesignObjects(queries.getSceneSnapshot()),
     canUndo: surface?.history.canUndo.value ?? false,
     canRedo: surface?.history.canRedo.value ?? false,
     settingsAvailable: canvasAvailable,
@@ -85,6 +89,7 @@ export function runCanvasEditAction(action: CanvasEditAction): void {
       case 'delete': sceneEdits.deleteSelected(); return
       case 'select-all': sceneEdits.selectAll(); return
       case 'select-same-species': sceneEdits.selectSameSpecies(); return
+      case 'deselect': sceneEdits.clearSelection(); return
       case 'group': sceneEdits.groupSelected(); return
       case 'ungroup': sceneEdits.ungroupSelected(); return
       case 'bring-to-front': sceneEdits.bringToFront(); return
@@ -97,6 +102,7 @@ export function runCanvasEditAction(action: CanvasEditAction): void {
         return
       case 'lock': sceneEdits.lockSelected(); return
       case 'unlock': sceneEdits.unlockSelected(); return
+      case 'unlock-all': sceneEdits.unlockAll(); return
       case 'save-as-stamp': sceneEdits.saveSelectionAsObjectStamp()
     }
   })

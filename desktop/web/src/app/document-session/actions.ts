@@ -2,6 +2,7 @@ import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import { computed } from "@preact/signals";
 import {
   type DocumentTransitionResult,
+  closeDesignSession,
   consumeQueuedDocumentLoad,
   createNewDesignSession,
   designContinuousSave,
@@ -79,6 +80,14 @@ export async function newDesignAction(): Promise<void> {
   const result = await createNewDesignSession();
 
   throwIfFailed(result);
+}
+
+/**
+ * Close the current Design and return to the Start screen. Continuous save
+ * writes it home first; only a failed write asks (Cancel keeps it open).
+ */
+export async function closeDesign(): Promise<void> {
+  throwIfFailed(await closeDesignSession());
 }
 
 function throwIfFailed(result: DocumentTransitionResult | null): void {

@@ -48,7 +48,7 @@ describe('Web Canvas shortcuts', () => {
     const newDesign = vi.fn()
     const catalog = createBrowserShellCatalog({
       newDesign, openCanopi: vi.fn(), downloadCanopi: vi.fn(), revertDesign: vi.fn(),
-      importGeoJson: vi.fn(), exportGeoJson: vi.fn(), navigate: vi.fn(),
+      importGeoJson: vi.fn(), exportGeoJson: vi.fn(), exportBudgetCsv: vi.fn(), closeDesign: vi.fn(), navigate: vi.fn(),
     }, { templatesEnabled: false, canvasReady: () => true })
     installWebCanvasShortcuts(window, {
       catalog,

@@ -71,6 +71,8 @@ export interface ContinuousSave {
   readonly revertAvailable: ReadonlySignal<boolean>
   /** Bind a new home to the store's current session (call from replacement finalization). */
   beginSession(input: DesignSessionHomeInput): void
+  /** Forget the closed session's home: nothing more is written for it (call from close finalization). */
+  endSession(): void
   /** Opaque identity of the current session, for writes that settle later. */
   sessionToken(): object | null
   readHome(): DesignHome | null
@@ -284,6 +286,18 @@ export function createContinuousSave({
           snapshot: current ? cloneDocument(current) : null,
         }
         writePending.value = pendingWrite
+        changed.value = false
+        failed.value = false
+        failureReason.value = null
+        conflict.value = null
+      })
+    },
+
+    endSession() {
+      clearTimer()
+      batch(() => {
+        record.value = null
+        writePending.value = false
         changed.value = false
         failed.value = false
         failureReason.value = null

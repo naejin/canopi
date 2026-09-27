@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "코드",
     "view.labelsNames": "이름",
     "view.cycleLabels": "레이블: 없음, 코드, 이름",
-    "edit.rotate": "회전…"
+    "edit.rotate": "회전…",
+    "file.addData": "데이터 추가…",
+    "file.exportBudgetCsv": "예산(CSV)…",
+    "file.close": "디자인 닫기",
+    "help.gettingStarted": "시작하기",
+    "edit.deselect": "선택 해제",
+    "edit.unlockAll": "모두 잠금 해제"
   },
   "titleBar": {
     "untitledDesign": "제목 없는 디자인",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "보기 삭제",
     "deleted": "“{{name}}” 삭제됨",
     "undo": "실행 취소",
+    "done": "완료"
+  },
+  "gettingStarted": {
+    "title": "시작하기",
+    "intro": "Canopi는 디자인을 지도 위에 바로 그립니다. 이렇게 시작하세요.",
+    "site": "부지 찾기: 위쪽 검색 필드에 장소나 좌표를 입력하세요({{shortcut}}).",
+    "zones": "왼쪽의 구역 도구로 두둑, 과수원, 길을 그리세요.",
+    "plants": "{{placePlants}}: 종을 선택한 다음 지도를 클릭하세요. {{plantRow}}는 선을 따라 식물을 반복해서 심습니다.",
+    "menu": "지도의 항목을 마우스 오른쪽 버튼으로 클릭하면 명령이 표시됩니다. {{esc}} 키를 누르면 {{select}}(으)로 돌아갑니다.",
+    "plan": "오른쪽 패널의 {{calendar}}, {{budget}}, {{consortium}}에서 관리, 비용, 식물 조합을 계획하세요.",
+    "save": "Canopi는 작업하는 동안 저장합니다. {{file}} › {{export}}에서 인쇄용 식재 계획(PDF)을 만들 수 있습니다.",
     "done": "완료"
   }
 }

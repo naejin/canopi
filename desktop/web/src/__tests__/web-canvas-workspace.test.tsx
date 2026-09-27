@@ -909,6 +909,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
       rotateSelected: vi.fn(),
+      unlockAll: vi.fn(),
       nudgeSelected: vi.fn(() => false),
       endNudge: vi.fn(),
     },

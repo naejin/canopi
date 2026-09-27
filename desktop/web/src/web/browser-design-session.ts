@@ -9,6 +9,7 @@ import {
   type HomeWriteOutcome,
 } from "../app/document-session/continuous-save";
 import {
+  createCloseDesignReplacement,
   createDesignSessionReplacement,
   type DesignSessionPendingCanvasReplacementIdentity,
   type ResolvedDesignReplacement,
@@ -87,6 +88,8 @@ export interface BrowserDesignSessionController {
   hasCurrentDesign(): boolean;
   readDesignIdentity(): BrowserShellDesignIdentity | null;
   newDesign(): Promise<void>;
+  /** Write the Design to its Draft, then close it; false when cancelled or nothing was open. */
+  closeDesign(): Promise<boolean>;
   openCanopi(): Promise<boolean>;
   openCanopiTemplate(
     template: DesignTemplateEnvelope,
@@ -244,6 +247,16 @@ export function createBrowserDesignSessionController({
       kind: "new",
       name: file.name,
     }, createDraftId(), false));
+  }
+
+  async function closeDesign(): Promise<boolean> {
+    if (!store.hasCurrentDesign()) return false;
+    const intent = ++replacementIntent;
+    const flushed = flushBeforeReplacement(intent);
+    if (flushed !== true && !(await flushed)) return false;
+    if (intent !== replacementIntent || !store.hasCurrentDesign()) return false;
+    applyDesignReplacement(createCloseDesignReplacement(() => continuousSave.endSession()));
+    return true;
   }
 
   async function openCanopi(): Promise<boolean> {
@@ -476,6 +489,7 @@ export function createBrowserDesignSessionController({
       };
     },
     newDesign,
+    closeDesign,
     openCanopi,
     openCanopiTemplate,
     downloadCanopi,

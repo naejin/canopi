@@ -16,6 +16,7 @@ import {
   dedupeSceneObjectGroupMembers,
   getSceneGroupedMemberKeys,
   isSceneDesignObjectLocked,
+  lockedSceneDesignObjectTargets,
   normalizeSceneDesignObjectTargets,
   resolveSceneObjectGroupMembers,
   resolvePlantSymbolForPlant,
@@ -188,6 +189,11 @@ export class SceneRuntimeMutationController {
 
   unlockSelected(): void {
     this._runCommandWhenSettled(() => this._unlockSelectedWhenSettled(), undefined)
+  }
+
+  /** Unlocks every locked Design Object; layer locks stay. */
+  unlockAll(): void {
+    this._runCommandWhenSettled(() => this._unlockAllWhenSettled(), undefined)
   }
 
   groupSelected(): void {
@@ -508,6 +514,16 @@ export class SceneRuntimeMutationController {
     if (!state || !pivot) return
     this._sceneEdits.run('rotate-selected', (tx) => {
       tx.mutate((draft) => applyRotationTransformToDraft(draft, state, pivot, turn))
+    })
+  }
+
+  private _unlockAllWhenSettled(): void {
+    const locked = lockedSceneDesignObjectTargets(this._sceneStore.persisted)
+    if (locked.length === 0) return
+    this._sceneEdits.run('unlock-all', (tx) => {
+      tx.mutate((draft) => {
+        setSceneDesignObjectLocks(draft, locked, false)
+      })
     })
   }
 

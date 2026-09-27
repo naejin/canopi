@@ -200,6 +200,8 @@ describe('Web GeoJSON file adapter and notice', () => {
         revertDesign: () => undefined,
         importGeoJson: () => undefined,
         exportGeoJson: () => undefined,
+        exportBudgetCsv: () => undefined,
+        closeDesign: () => undefined,
         navigate: () => undefined,
       },
     })

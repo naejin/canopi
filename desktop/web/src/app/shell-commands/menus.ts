@@ -81,9 +81,9 @@ const SUBMENU_LABEL_KEYS: Record<ShellSubmenuId, string> = {
 
 const EDIT_SECTIONS = [
   ['cut', 'copy', 'paste', 'duplicate', 'delete'],
-  ['select-all', 'select-same-species'],
+  ['select-all', 'select-same-species', 'deselect'],
   ['group', 'ungroup', 'arrange', 'rotate'],
-  ['lock', 'unlock'],
+  ['lock', 'unlock', 'unlock-all'],
   ['save-as-stamp'],
 ] as const
 

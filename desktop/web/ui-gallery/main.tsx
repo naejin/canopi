@@ -200,6 +200,7 @@ const galleryWebCatalog = createBrowserShellCatalog(createBrowserShellCapabiliti
   openCanopi: async () => { activity.value = 'Opened the sample Design in memory.'; return true },
   downloadCanopi: async () => { activity.value = 'Download completed in memory.' },
   revertDesign: async () => { activity.value = 'Reverted the sample Design in memory.' },
+  closeDesign: async () => { activity.value = 'Close Design returns to the Start screen.' },
 }, (error) => console.error(error), {
   importGeoJson: async () => { activity.value = 'GeoJSON import stays in memory.'; return { status: 'cancelled' as const } },
   exportGeoJson: async () => { activity.value = 'GeoJSON export completed in memory.'; return { status: 'cancelled' as const } },

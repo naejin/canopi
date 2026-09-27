@@ -149,6 +149,8 @@ export interface CanvasSceneEditCommandSurface {
   sendToBack(): void
   lockSelected(): void
   unlockSelected(): void
+  /** Unlocks every locked Design Object in the Design as one edit; layer locks stay. */
+  unlockAll(): void
   groupSelected(): void
   ungroupSelected(): void
   /**

@@ -29,6 +29,7 @@ export type CanvasEditAction =
   | 'delete'
   | 'select-all'
   | 'select-same-species'
+  | 'deselect'
   | 'group'
   | 'ungroup'
   | 'bring-to-front'
@@ -36,6 +37,7 @@ export type CanvasEditAction =
   | 'rotate'
   | 'lock'
   | 'unlock'
+  | 'unlock-all'
   | 'save-as-stamp'
 
 export type CanvasViewAction = 'zoom-in' | 'zoom-out' | 'fit-to-design' | 'search-place' | 'cycle-labels'
@@ -64,6 +66,7 @@ export type CanvasCommandId =
   | 'canvas.deleteSelected'
   | 'canvas.selectAll'
   | 'canvas.selectSameSpecies'
+  | 'canvas.clearSelection'
   | 'canvas.groupSelected'
   | 'canvas.ungroupSelected'
   | 'canvas.bringToFront'
@@ -71,6 +74,7 @@ export type CanvasCommandId =
   | 'canvas.rotateSelected'
   | 'canvas.lockSelected'
   | 'canvas.unlockSelected'
+  | 'canvas.unlockAll'
   | 'canvas.saveSelectionAsStamp'
   | 'view.zoomIn'
   | 'view.zoomOut'
@@ -100,6 +104,8 @@ export interface CanvasCommandProjectionState {
   readonly sameSpeciesSelectionAvailable: boolean
   /** The selection can turn: editable, nothing locked, more than one plant alone. */
   readonly rotateAvailable: boolean
+  /** Some Design Object is locked, so Unlock all has something to do. */
+  readonly lockedObjectsPresent: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly settingsAvailable: boolean
@@ -162,6 +168,11 @@ interface CanvasCommandDefinitionBase {
   readonly labelKey: string
   /** Canonical shortcuts; the first is shown, the rest are accepted aliases. */
   readonly shortcuts?: readonly string[]
+  /**
+   * A key shown beside the command but never routed to it, because another
+   * owner handles it (Deselect's Esc is the map's own Esc chain).
+   */
+  readonly keyHint?: string
   readonly palette: boolean
   readonly intent: CanvasCommandIntent
   /** The shortcut also works while a text field has focus. */
@@ -232,8 +243,29 @@ function edit(
   commandId: CanvasCommandId,
   labelKey: string,
   shortcuts?: readonly string[],
+  keyHint?: string,
 ): CanvasEditCommandDefinition {
-  return { kind: 'edit', id, commandId, labelKey, shortcuts, palette: true, intent: { type: 'edit', action: id } }
+  return {
+    kind: 'edit',
+    id,
+    commandId,
+    labelKey,
+    shortcuts,
+    ...(keyHint ? { keyHint } : {}),
+    palette: true,
+    intent: { type: 'edit', action: id },
+  }
+}
+
+/** The key a command shows: its first shortcut, else its key hint. */
+export function canvasCommandDisplayKey(definition: CanvasCommandDefinition): string | undefined {
+  return definition.shortcuts?.[0] ?? definition.keyHint
+}
+
+/** `aria-keyshortcuts` for a command: every shortcut, else its key hint. */
+export function canvasCommandAriaKeys(definition: CanvasCommandDefinition): string | undefined {
+  const keys = definition.shortcuts ?? (definition.keyHint ? [definition.keyHint] : undefined)
+  return keys?.map(ariaKeyShortcuts).join(' ')
 }
 
 function view(
@@ -292,6 +324,7 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('delete', 'canvas.deleteSelected', 'menu.edit.delete', ['Delete', 'Backspace']),
   edit('select-all', 'canvas.selectAll', 'menu.edit.selectAll', ['Ctrl+A']),
   edit('select-same-species', 'canvas.selectSameSpecies', 'menu.edit.selectSameSpecies', ['Ctrl+Shift+A']),
+  edit('deselect', 'canvas.clearSelection', 'menu.edit.deselect', undefined, 'Escape'),
   edit('group', 'canvas.groupSelected', 'menu.edit.group', ['Ctrl+G']),
   edit('ungroup', 'canvas.ungroupSelected', 'menu.edit.ungroup', ['Ctrl+Shift+G']),
   edit('bring-to-front', 'canvas.bringToFront', 'menu.edit.bringToFront', [']']),
@@ -299,6 +332,7 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('rotate', 'canvas.rotateSelected', 'menu.edit.rotate', ['Ctrl+Alt+R']),
   edit('lock', 'canvas.lockSelected', 'menu.edit.lock', ['Ctrl+Shift+L']),
   edit('unlock', 'canvas.unlockSelected', 'menu.edit.unlock'),
+  edit('unlock-all', 'canvas.unlockAll', 'menu.edit.unlockAll'),
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
   view('zoom-in', 'view.zoomIn', 'menu.view.zoomIn', ['Ctrl+Plus']),
   view('zoom-out', 'view.zoomOut', 'menu.view.zoomOut', ['Ctrl+Minus']),
@@ -371,6 +405,7 @@ export function canvasCommandIdForTool(toolId: CanvasToolId): CanvasCommandId {
 }
 
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
+  'deselect',
   'cut',
   'copy',
   'duplicate',
@@ -398,6 +433,7 @@ const MUTATING_EDITS: ReadonlySet<CanvasEditAction> = new Set([
   'rotate',
   'lock',
   'unlock',
+  'unlock-all',
   'save-as-stamp',
 ])
 
@@ -424,6 +460,7 @@ export function isCanvasCommandDisabled(
       if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true
       if (intent.action === 'select-same-species') return !state.sameSpeciesSelectionAvailable
       if (intent.action === 'rotate') return !state.rotateAvailable
+      if (intent.action === 'unlock-all') return !state.lockedObjectsPresent
       return SELECTION_EDITS.has(intent.action) && !state.hasSelection
     }
   }
@@ -477,12 +514,12 @@ export function createCanvasCommandProjection({
 }: CreateCanvasCommandProjectionOptions): CanvasCommandProjection {
   const project = (definition: CanvasCommandDefinition): CanvasProjectedCommand => {
     const disabled = isCanvasCommandDisabled(definition.intent, state)
-    const shortcut = definition.shortcuts?.[0]
+    const shortcut = canvasCommandDisplayKey(definition)
     return {
       commandId: definition.commandId,
       label: translate(definition.labelKey),
       shortcut: shortcut ? formatShortcut(shortcut, translate) : undefined,
-      ariaShortcut: definition.shortcuts?.map(ariaKeyShortcuts).join(' '),
+      ariaShortcut: canvasCommandAriaKeys(definition),
       disabled,
       action: () => {
         if (disabled) return

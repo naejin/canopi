@@ -5,7 +5,7 @@ import { setMapBackground } from '../map-layers/actions'
 import { mapBackgroundOf, mapLayers } from '../map-layers/state'
 import { mutateSettingsProjection } from '../settings/projection'
 import { theme } from '../settings/state'
-import { openKeyboardShortcutsDialog, openSettingsDialog } from '../shell/dialogs'
+import { openGettingStartedDialog, openKeyboardShortcutsDialog, openSettingsDialog } from '../shell/dialogs'
 import { requestDesignRename } from '../shell/requests'
 import {
   canShowSavedViews,
@@ -57,6 +57,7 @@ export function createWorkspaceShellCapabilities() {
       isChecked: () => theme.value === 'dark',
     },
     showShortcuts: { execute: openKeyboardShortcutsDialog },
+    gettingStarted: { execute: openGettingStartedDialog },
     aboutCanopi: { execute: openAboutCanopiDialog },
   } satisfies ShellCommandCapabilities
 }

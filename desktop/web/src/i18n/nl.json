@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Codes",
     "view.labelsNames": "Namen",
     "view.cycleLabels": "Labels: geen, codes, namen",
-    "edit.rotate": "Draaien…"
+    "edit.rotate": "Draaien…",
+    "file.addData": "Gegevens toevoegen…",
+    "file.exportBudgetCsv": "Budget als CSV…",
+    "file.close": "Ontwerp sluiten",
+    "help.gettingStarted": "Aan de slag",
+    "edit.deselect": "Deselecteren",
+    "edit.unlockAll": "Alles ontgrendelen"
   },
   "titleBar": {
     "untitledDesign": "Naamloos ontwerp",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Weergave verwijderen",
     "deleted": "‘{{name}}’ verwijderd",
     "undo": "Ongedaan maken",
+    "done": "Klaar"
+  },
+  "gettingStarted": {
+    "title": "Aan de slag",
+    "intro": "Canopi tekent je ontwerp direct op de kaart. Zo begin je.",
+    "site": "Zoek je terrein: typ een plaats of coördinaten in het zoekveld bovenaan ({{shortcut}}).",
+    "zones": "Teken bedden, boomgaarden en paden met de zonegereedschappen links.",
+    "plants": "{{placePlants}}: kies een soort en klik op de kaart. {{plantRow}} herhaalt een plant langs een lijn.",
+    "menu": "Klik met de rechtermuisknop op iets op de kaart voor de opdrachten. {{esc}} gaat terug naar {{select}}.",
+    "plan": "Plan verzorging, kosten en plantengemeenschappen in {{calendar}}, {{budget}} en {{consortium}}, via de panelen rechts.",
+    "save": "Canopi slaat op terwijl je werkt. {{file}} › {{export}} maakt een plantplan (PDF) om af te drukken.",
     "done": "Klaar"
   }
 }

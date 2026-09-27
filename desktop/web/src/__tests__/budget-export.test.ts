@@ -5,7 +5,12 @@ vi.mock('../ipc/export', () => ({
 }))
 
 import { exportFile } from '../ipc/export'
-import { exportBudgetCsv } from '../app/budget/export'
+import { exportBudgetCsv, exportCurrentBudgetCsv } from '../app/budget/export'
+import { setCurrentCanvasSession } from '../canvas/session'
+import { speciesBudgetTarget } from '../target'
+import { designSessionFixture } from './support/design-session-state'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { deliverBudgetCsv as deliverBrowserBudgetCsv } from '../app/budget/platform.browser'
 
 afterEach(() => vi.restoreAllMocks())
@@ -63,5 +68,67 @@ describe('budget export', () => {
     expect(observed?.download).toBe('orchard-budget.csv')
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:budget')
     expect(document.querySelector('a[download="orchard-budget.csv"]')).toBeNull()
+  })
+
+  it('exports the open Design’s Budget from the File menu, as the panel would, and ignores a cancelled dialog', async () => {
+    designSessionFixture.file = {
+      version: 8,
+      name: 'Orchard',
+      description: null,
+      plant_species_colors: {},
+      layers: [],
+      plants: [],
+      zones: [],
+      annotations: [],
+      consortiums: [],
+      groups: [],
+      timeline: [],
+      budget: [{
+        target: speciesBudgetTarget('Malus domestica'),
+        category: 'plants',
+        description: 'Malus domestica',
+        quantity: 0,
+        unit_cost: 5,
+        currency: 'EUR',
+      }],
+      budget_currency: 'EUR',
+      extra: {},
+      created_at: '2026-04-08T00:00:00.000Z',
+      updated_at: '2026-04-08T00:00:00.000Z',
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants: [0, 1].map((index) => ({
+          id: `apple-${index}`,
+          canonical_name: 'Malus domestica',
+          common_name: 'Apple',
+          color: null,
+          position: { lon: 13, lat: 23 },
+          rotation: null,
+          scale: null,
+          notes: null,
+          planted_date: null,
+          quantity: 1,
+          locked: false,
+        })),
+      }),
+    }))
+    try {
+      await exportCurrentBudgetCsv()
+      expect(vi.mocked(exportFile)).toHaveBeenCalledWith(
+        expect.stringContaining('Apple,2,5.00,10.00,EUR'),
+        expect.stringMatching(/-budget\.csv$/),
+        'CSV',
+        ['csv'],
+      )
+
+      vi.mocked(exportFile).mockRejectedValueOnce(new Error('Dialog cancelled'))
+      await expect(exportCurrentBudgetCsv()).resolves.toBeUndefined()
+      vi.mocked(exportFile).mockRejectedValueOnce(new Error('disk full'))
+      await expect(exportCurrentBudgetCsv()).rejects.toThrow('disk full')
+    } finally {
+      designSessionFixture.file = null
+      setCurrentCanvasSession(null)
+    }
   })
 })

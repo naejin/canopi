@@ -71,3 +71,23 @@ export function setSceneDesignObjectLocks(
     if (targetKeys.has(sceneTargetKey({ kind: 'group', id: group.id }))) group.locked = locked
   }
 }
+
+/** Every directly locked Design Object, as typed targets (Unlock all). */
+export function lockedSceneDesignObjectTargets(state: ScenePersistedState): SceneDesignObjectTarget[] {
+  return [
+    ...state.plants.filter((plant) => plant.locked).map((plant) => ({ kind: 'plant' as const, id: plant.id })),
+    ...state.zones.filter((zone) => zone.locked).map((zone) => ({ kind: 'zone' as const, id: zone.name })),
+    ...state.annotations.filter((note) => note.locked).map((note) => ({ kind: 'annotation' as const, id: note.id })),
+    ...state.measurementGuides.filter((guide) => guide.locked).map((guide) => ({ kind: 'measurement-guide' as const, id: guide.id })),
+    ...state.groups.filter((group) => group.locked).map((group) => ({ kind: 'group' as const, id: group.id })),
+  ]
+}
+
+/** Whether any Design Object is locked (layer locks are separate and not counted). */
+export function sceneHasLockedDesignObjects(state: ScenePersistedState): boolean {
+  return state.plants.some((plant) => plant.locked)
+    || state.zones.some((zone) => zone.locked)
+    || state.annotations.some((note) => note.locked)
+    || state.measurementGuides.some((guide) => guide.locked)
+    || state.groups.some((group) => group.locked)
+}

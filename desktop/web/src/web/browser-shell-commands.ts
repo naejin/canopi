@@ -13,6 +13,7 @@ import { composeWorkspaceMenus, type MenuDefinition } from '../app/shell-command
 import { createWorkspaceShellCapabilities } from '../app/workspace-commands/capabilities'
 import { savedViewMenuActions } from '../app/saved-views'
 import { plantLabelMenuActions } from '../app/plant-display/menu'
+import { exportCurrentBudgetCsv } from '../app/budget/export'
 import type { CanvasCommandProjection } from '../app/canvas-commands'
 import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
@@ -29,6 +30,8 @@ type BrowserShellCapabilityId =
   | 'importGeoJson'
   | 'exportCanvasPdf'
   | 'exportGeoJson'
+  | 'exportBudgetCsv'
+  | 'closeDesign'
   | 'openSettings'
   | 'findPlants'
   | 'saveCurrentView'
@@ -48,6 +51,7 @@ type BrowserShellCapabilityId =
   | 'showNoBackground'
   | 'toggleTheme'
   | 'showShortcuts'
+  | 'gettingStarted'
   | 'aboutCanopi'
 
 export type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
@@ -73,6 +77,8 @@ export interface BrowserShellCapabilities {
   revertDesign(): void
   importGeoJson(): void
   exportGeoJson(): void
+  exportBudgetCsv(): void
+  closeDesign(): void
   navigate(panel: Panel): void
 }
 
@@ -81,6 +87,7 @@ export interface BrowserDesignShellCommands {
   openCanopi(): Promise<boolean>
   downloadCanopi(): Promise<void>
   revertDesign(): Promise<unknown>
+  closeDesign(): Promise<unknown>
 }
 
 /**
@@ -90,6 +97,7 @@ export interface BrowserDesignShellCommands {
 export const BROWSER_RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
   'Ctrl+N',
   'Ctrl+Q',
+  'Ctrl+W',
   'Ctrl+1',
   'Ctrl+2',
   'Ctrl+3',
@@ -112,6 +120,8 @@ export function createBrowserShellCapabilities(
     revertDesign: () => runBrowserDesignCommand(() => commands.revertDesign(), onError),
     importGeoJson: () => runBrowserDesignCommand(() => geoJson.importGeoJson(), onError),
     exportGeoJson: () => runBrowserDesignCommand(() => geoJson.exportGeoJson(), onError),
+    exportBudgetCsv: () => runBrowserDesignCommand(exportCurrentBudgetCsv, onError),
+    closeDesign: () => runBrowserDesignCommand(() => commands.closeDesign(), onError),
     navigate: navigateTo,
   }
 }
@@ -155,6 +165,14 @@ export function createBrowserShellCatalog(
     exportGeoJson: {
       execute: () => capabilities.exportGeoJson(),
       isExecutionDisabled: (state) => !state.hasDesign || !canvasReady(),
+    },
+    exportBudgetCsv: {
+      execute: () => capabilities.exportBudgetCsv(),
+      isExecutionDisabled: needsDesign,
+    },
+    closeDesign: {
+      execute: () => capabilities.closeDesign(),
+      isExecutionDisabled: needsDesign,
     },
     navigateCanvas: { execute: () => capabilities.navigate('canvas') },
     ...(templatesEnabled

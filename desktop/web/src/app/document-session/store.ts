@@ -33,6 +33,8 @@ export interface DesignSessionStore {
 
   replaceCurrentDesignState(file: CanopiFile, path: string | null, name: string): void
   replaceCurrentDesignSnapshot(file: CanopiFile): void
+  /** End the session: no current Design, clean baselines, a new session identity. */
+  clearCurrentDesign(): void
   renameCurrentDesign(name: string): boolean
 
   resetDirtyBaselines(): void
@@ -205,6 +207,24 @@ function createDesignSessionStore(
         signals.persistenceDiverged.value = false
         signals.designPath.value = path
         signals.designName.value = name
+      })
+    },
+
+    clearCurrentDesign() {
+      sessionGeneration += 1
+      detachedCanvasRevision = 0
+      committedContentRevision += 1
+      batch(() => {
+        sessionIdentity.value = Object.freeze({})
+        signals.currentDesign.value = null
+        committedDesignRevision.value += 1
+        signals.designPath.value = null
+        signals.designName.value = 'Untitled'
+        signals.canvasClean.value = true
+        signals.detachedCanvasDirty.value = false
+        signals.nonCanvasRevision.value = 0
+        signals.nonCanvasSavedRevision.value = 0
+        signals.persistenceDiverged.value = false
       })
     },
 

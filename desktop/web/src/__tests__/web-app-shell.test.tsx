@@ -105,6 +105,8 @@ function shellCommandProjection({
       revertDesign: () => undefined,
       importGeoJson: () => undefined,
       exportGeoJson: () => undefined,
+      exportBudgetCsv: () => undefined,
+      closeDesign: () => undefined,
       navigate: navigateTo,
     },
   })
@@ -150,6 +152,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.revert',
       'file.importGeoJson',
       'app.settings',
+      'file.close',
     ])
     expect(container.textContent).toContain('Open a .canopi file…')
     expect(container.textContent).toContain('Download a copy')
@@ -200,6 +203,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.revert',
       'file.importGeoJson',
       'app.settings',
+      'file.close',
     ])
   })
 
@@ -219,6 +223,7 @@ describe('Web Edition Browser App Shell', () => {
       'file.revert',
       'file.importGeoJson',
       'app.settings',
+      'file.close',
     ])
 
     await act(async () => {
@@ -426,6 +431,8 @@ describe('Web Edition Browser App Shell', () => {
       revertDesign: vi.fn(),
       importGeoJson: vi.fn(),
       exportGeoJson: vi.fn(),
+      exportBudgetCsv: vi.fn(),
+      closeDesign: vi.fn(),
       navigate: vi.fn(),
     }
     const commandProjection = projectBrowserShellForTest({

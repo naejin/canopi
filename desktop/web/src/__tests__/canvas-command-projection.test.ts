@@ -30,6 +30,7 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     hasSelection: false,
     sameSpeciesSelectionAvailable: false,
     rotateAvailable: false,
+    lockedObjectsPresent: false,
     canUndo: false,
     canRedo: false,
     settingsAvailable: true,
@@ -143,16 +144,16 @@ describe('Canvas Command Projection', () => {
     const empty = createCanvasCommandProjection({ state: state(), intents: intentAdapter(), translate: (k) => k })
     const disabled = (projection: typeof empty) => projection.editActions.filter((edit) => edit.disabled).map((edit) => edit.id)
     expect(disabled(empty)).toEqual([
-      'cut', 'copy', 'duplicate', 'delete', 'select-same-species', 'group', 'ungroup',
-      'bring-to-front', 'send-to-back', 'rotate', 'lock', 'unlock', 'save-as-stamp',
+      'cut', 'copy', 'duplicate', 'delete', 'select-same-species', 'deselect', 'group', 'ungroup',
+      'bring-to-front', 'send-to-back', 'rotate', 'lock', 'unlock', 'unlock-all', 'save-as-stamp',
     ])
     const onePlant = createCanvasCommandProjection({ state: state({ hasSelection: true }), intents: intentAdapter(), translate: (k) => k })
     // A single plant, a measurement or a locked object cannot turn.
-    expect(disabled(onePlant)).toEqual(['select-same-species', 'rotate'])
+    expect(disabled(onePlant)).toEqual(['select-same-species', 'rotate', 'unlock-all'])
 
     const intents = intentAdapter()
     const selected = createCanvasCommandProjection({
-      state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true, rotateAvailable: true }),
+      state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true, rotateAvailable: true, lockedObjectsPresent: true }),
       intents,
       translate: (k) => k,
     })
@@ -163,6 +164,14 @@ describe('Canvas Command Projection', () => {
     expect(rotate).toMatchObject({ commandId: 'canvas.rotateSelected', label: 'menu.edit.rotate', ariaShortcut: 'Control+Alt+R Meta+Alt+R' })
     rotate.action()
     expect(intents.edit).toHaveBeenCalledWith('rotate')
+    // Deselect shows Esc, which the map's own Esc chain handles: no key routes to it here.
+    const deselect = selected.editActions.find((edit) => edit.id === 'deselect')!
+    expect(deselect).toMatchObject({ commandId: 'canvas.clearSelection', label: 'menu.edit.deselect', shortcut: 'shortcutKeys.escape', ariaShortcut: 'Escape' })
+    expect(canvasCommandIdForShortcut(key('Escape'))).toBeNull()
+    // Unlock all needs no selection, only a locked object somewhere in the Design.
+    const unlockAll = createCanvasCommandProjection({ state: state({ lockedObjectsPresent: true }), intents: intentAdapter(), translate: (k) => k })
+      .editActions.find((edit) => edit.id === 'unlock-all')!
+    expect(unlockAll).toMatchObject({ commandId: 'canvas.unlockAll', label: 'menu.edit.unlockAll', disabled: false })
 
     const noCanvas = createCanvasCommandProjection({ state: state({ canvasAvailable: false }), intents: intentAdapter(), translate: (k) => k })
     expect(noCanvas.editActions.every((edit) => edit.disabled)).toBe(true)

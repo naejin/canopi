@@ -5,6 +5,7 @@ import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-fo
 import { geoAt } from '../../../__tests__/support/geo-design'
 import {
   resolvePlantSymbolForPlant,
+  sceneHasLockedDesignObjects,
   SceneStore,
   type SceneDesignObjectTarget,
 } from '../scene'
@@ -640,6 +641,24 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.persisted.plants.map((plant) => plant.position)).toEqual(before)
     expect(sceneStore.persisted.zones[0]!.rotationDeg).toBe(0)
     expect(state.dirtyTypes).toEqual([])
+  })
+
+  it('unlocks every locked object in the Design as one edit, and does nothing when none is locked', () => {
+    const file = makeFile()
+    file.plants[1] = { ...file.plants[1]!, locked: true }
+    file.zones[0] = { ...file.zones[0]!, locked: true }
+    file.groups = [{ id: 'group-1', locked: true, name: null, members: [{ kind: 'annotation', id: 'annotation-1' }] }]
+    const { controller, sceneStore, state } = createController(file)
+    expect(sceneHasLockedDesignObjects(sceneStore.persisted)).toBe(true)
+
+    controller.unlockAll()
+
+    expect(sceneStore.persisted.plants.map((plant) => plant.locked)).toEqual([false, false])
+    expect(sceneStore.persisted.zones[0]!.locked).toBe(false)
+    expect(sceneStore.persisted.groups[0]!.locked).toBe(false)
+    expect(sceneHasLockedDesignObjects(sceneStore.persisted)).toBe(false)
+    controller.unlockAll()
+    expect(state.dirtyTypes).toEqual(['unlock-all'])
   })
 
   it('clears the selection without editing the Design', () => {

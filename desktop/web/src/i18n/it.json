@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Codici",
     "view.labelsNames": "Nomi",
     "view.cycleLabels": "Etichette: nessuna, codici, nomi",
-    "edit.rotate": "Ruota…"
+    "edit.rotate": "Ruota…",
+    "file.addData": "Aggiungi dati…",
+    "file.exportBudgetCsv": "Budget in CSV…",
+    "file.close": "Chiudi progetto",
+    "help.gettingStarted": "Primi passi",
+    "edit.deselect": "Deseleziona",
+    "edit.unlockAll": "Sblocca tutto"
   },
   "titleBar": {
     "untitledDesign": "Progetto senza titolo",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Elimina vista",
     "deleted": "«{{name}}» eliminata",
     "undo": "Annulla",
+    "done": "Fatto"
+  },
+  "gettingStarted": {
+    "title": "Primi passi",
+    "intro": "Canopi disegna il tuo progetto direttamente sulla mappa. Ecco come iniziare.",
+    "site": "Trova il tuo terreno: scrivi un luogo o delle coordinate nel campo di ricerca in alto ({{shortcut}}).",
+    "zones": "Disegna aiuole, frutteti e sentieri con gli strumenti zona a sinistra.",
+    "plants": "{{placePlants}}: scegli una specie, poi fai clic sulla mappa. {{plantRow}} ripete una pianta lungo una linea.",
+    "menu": "Fai clic destro su qualsiasi elemento della mappa per i suoi comandi. {{esc}} torna a {{select}}.",
+    "plan": "Pianifica cure, costi e associazioni di piante in {{calendar}}, {{budget}} e {{consortium}}, dai pannelli a destra.",
+    "save": "Canopi salva mentre lavori. {{file}} › {{export}} crea un piano di impianto (PDF) da stampare.",
     "done": "Fatto"
   }
 }

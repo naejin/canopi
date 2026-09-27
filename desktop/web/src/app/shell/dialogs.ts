@@ -19,3 +19,13 @@ export function openKeyboardShortcutsDialog(): void {
 export function closeKeyboardShortcutsDialog(): void {
   keyboardShortcutsDialogOpen.value = false
 }
+
+export const gettingStartedDialogOpen = signal(false)
+
+export function openGettingStartedDialog(): void {
+  gettingStartedDialogOpen.value = true
+}
+
+export function closeGettingStartedDialog(): void {
+  gettingStartedDialogOpen.value = false
+}

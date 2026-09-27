@@ -1,6 +1,7 @@
 import { deliverBudgetCsv } from '#budget-export-platform'
 import { t } from '../../i18n'
 import { escapeBudgetCsvField } from './formatting'
+import { readBudgetPlanningSurface } from '../planning-projection'
 
 export interface BudgetExportRow {
   canonical: string
@@ -44,4 +45,23 @@ export async function exportBudgetCsv(
     csvRows.join('\n'),
     `${options.designName || 'budget'}-budget.csv`,
   )
+}
+
+/**
+ * File › Export › Budget as CSV…: the open Design's Budget as the Budget panel
+ * shows it. A cancelled save dialog is not a failure.
+ */
+export async function exportCurrentBudgetCsv(): Promise<void> {
+  const { projection, currency, designName } = readBudgetPlanningSurface()
+  try {
+    await exportBudgetCsv(projection.rows, {
+      currency,
+      designName,
+      lineItemPriceMap: projection.lineItemPriceMap,
+      grandTotal: projection.grandTotal,
+    })
+  } catch (error) {
+    if (isBudgetExportCancelled(error)) return
+    throw error
+  }
 }

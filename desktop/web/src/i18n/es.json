@@ -750,7 +750,7 @@
       "title": "Girar la selección",
       "angle": "Ángulo",
       "hint": "Gira la selección sobre su centro. Los ángulos positivos giran en el sentido de las agujas del reloj.",
-      "invalid": "Escriba un ángulo en grados, por ejemplo 45 o -30.",
+      "invalid": "Escribe un ángulo en grados, por ejemplo 45 o -30.",
       "add": "Sumar {{degrees}}°",
       "subtract": "Restar {{degrees}}°",
       "cancel": "Cancelar",
@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Códigos",
     "view.labelsNames": "Nombres",
     "view.cycleLabels": "Etiquetas: ninguna, códigos, nombres",
-    "edit.rotate": "Girar…"
+    "edit.rotate": "Girar…",
+    "file.addData": "Añadir datos…",
+    "file.exportBudgetCsv": "Presupuesto en CSV…",
+    "file.close": "Cerrar diseño",
+    "help.gettingStarted": "Primeros pasos",
+    "edit.deselect": "Deseleccionar",
+    "edit.unlockAll": "Desbloquear todo"
   },
   "titleBar": {
     "untitledDesign": "Diseño sin título",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Eliminar vista",
     "deleted": "«{{name}}» eliminada",
     "undo": "Deshacer",
+    "done": "Listo"
+  },
+  "gettingStarted": {
+    "title": "Primeros pasos",
+    "intro": "Canopi dibuja tu diseño directamente sobre el mapa. Así se empieza.",
+    "site": "Encuentra tu terreno: escribe un lugar o unas coordenadas en el campo de búsqueda de arriba ({{shortcut}}).",
+    "zones": "Dibuja bancales, huertos y caminos con las herramientas de zona de la izquierda.",
+    "plants": "{{placePlants}}: elige una especie y haz clic en el mapa. {{plantRow}} repite una planta a lo largo de una línea.",
+    "menu": "Haz clic derecho en cualquier elemento del mapa para ver sus comandos. {{esc}} vuelve a {{select}}.",
+    "plan": "Planifica cuidados, costes y asociaciones de plantas en {{calendar}}, {{budget}} y {{consortium}}, desde los paneles de la derecha.",
+    "save": "Canopi guarda mientras trabajas. {{file}} › {{export}} crea un plan de plantación (PDF) para imprimir.",
     "done": "Listo"
   }
 }

@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "Codes",
     "view.labelsNames": "Noms",
     "view.cycleLabels": "Étiquettes : aucune, codes, noms",
-    "edit.rotate": "Pivoter…"
+    "edit.rotate": "Pivoter…",
+    "file.addData": "Ajouter des données…",
+    "file.exportBudgetCsv": "Budget en CSV…",
+    "file.close": "Fermer le Design",
+    "help.gettingStarted": "Premiers pas",
+    "edit.deselect": "Désélectionner",
+    "edit.unlockAll": "Tout déverrouiller"
   },
   "titleBar": {
     "untitledDesign": "Design sans titre",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "Supprimer la vue",
     "deleted": "« {{name}} » supprimée",
     "undo": "Annuler",
+    "done": "Terminé"
+  },
+  "gettingStarted": {
+    "title": "Premiers pas",
+    "intro": "Canopi dessine votre Design directement sur la carte. Voici comment commencer.",
+    "site": "Trouvez votre terrain : saisissez un lieu ou des coordonnées dans le champ de recherche en haut ({{shortcut}}).",
+    "zones": "Dessinez potagers, vergers et allées avec les outils de zone à gauche.",
+    "plants": "{{placePlants}} : choisissez une espèce, puis cliquez sur la carte. {{plantRow}} répète une plante le long d’une ligne.",
+    "menu": "Faites un clic droit sur un élément de la carte pour voir ses commandes. {{esc}} revient à {{select}}.",
+    "plan": "Planifiez l’entretien, les coûts et les associations de plantes dans {{calendar}}, {{budget}} et {{consortium}}, depuis les panneaux à droite.",
+    "save": "Canopi enregistre au fil de votre travail. {{file}} › {{export}} crée un plan de plantation (PDF) à imprimer.",
     "done": "Terminé"
   }
 }

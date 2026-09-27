@@ -19,6 +19,7 @@ function canvasProjection(): CanvasCommandProjection {
       hasSelection: false,
       sameSpeciesSelectionAvailable: false,
       rotateAvailable: false,
+      lockedObjectsPresent: false,
       canUndo: false,
       canRedo: false,
       settingsAvailable: false,
@@ -42,6 +43,8 @@ function capabilities(overrides: Partial<BrowserShellCapabilities> = {}): Browse
     revertDesign: () => undefined,
     importGeoJson: () => undefined,
     exportGeoJson: () => undefined,
+    exportBudgetCsv: () => undefined,
+    closeDesign: () => undefined,
     navigate: () => undefined,
     ...overrides,
   }
@@ -74,7 +77,9 @@ describe('Web Edition shell projection', () => {
       'file.importGeoJson',
       'file.exportCanvasPdf',
       'file.exportGeoJson',
+      'file.exportBudgetCsv',
       'app.settings',
+      'file.close',
     ])
     expect(flattenMenuActions(projection.workspaceMenus).map((item) => item.id)).not.toContain('file.exit')
     const disabled = new Map(flattenMenuActions([file]).map((item) => [item.id, item.disabled]))
@@ -106,6 +111,7 @@ describe('Web Edition shell projection', () => {
       openCanopi: vi.fn(async () => true),
       downloadCanopi: vi.fn(async () => undefined),
       revertDesign,
+      closeDesign: vi.fn(async () => true),
     }, vi.fn(), { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
 
     expect(project(caps, { revertAvailable: false }).commands.get('file.revert')?.disabled).toBe(true)
@@ -113,6 +119,27 @@ describe('Web Edition shell projection', () => {
     expect(changed?.disabled).toBe(false)
     changed?.action()
     expect(revertDesign).toHaveBeenCalledOnce()
+  })
+
+  it('offers Close Design without Ctrl W (the browser closes the tab with it) and routes it to the controller', async () => {
+    const closeDesign = vi.fn(async () => true)
+    const caps = createBrowserShellCapabilities({
+      newDesign: vi.fn(async () => undefined),
+      openCanopi: vi.fn(async () => true),
+      downloadCanopi: vi.fn(async () => undefined),
+      revertDesign: vi.fn(async () => true),
+      closeDesign,
+    }, vi.fn(), { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
+
+    expect(project(caps, { hasDesign: false }).commands.get('file.close')?.disabled).toBe(true)
+    const close = project(caps).commands.get('file.close')!
+    expect(close.shortcut).toBeUndefined()
+    expect(close.label).toBe('Close Design')
+    close.action()
+    await Promise.resolve()
+    expect(closeDesign).toHaveBeenCalledOnce()
+    expect(project(caps).commands.get('file.exportBudgetCsv')).toMatchObject({ submenu: 'export', disabled: false })
+    expect(project(caps).commands.get('help.gettingStarted')?.disabled).toBe(false)
   })
 
   it('routes GeoJSON commands to the shared GeoJSON workflow', () => {
@@ -125,6 +152,7 @@ describe('Web Edition shell projection', () => {
       openCanopi: vi.fn(async () => true),
       downloadCanopi: vi.fn(async () => undefined),
       revertDesign: vi.fn(async () => true),
+      closeDesign: vi.fn(async () => true),
     }, vi.fn(), geoJson)
     const projection = project(caps)
 
@@ -143,6 +171,7 @@ describe('Web Edition shell projection', () => {
       openCanopi: vi.fn(async () => { throw failure }),
       downloadCanopi: vi.fn(async () => undefined),
       revertDesign: vi.fn(async () => true),
+      closeDesign: vi.fn(async () => true),
     }, onError, { importGeoJson: vi.fn(), exportGeoJson: vi.fn() })
 
     caps.openCanopi()

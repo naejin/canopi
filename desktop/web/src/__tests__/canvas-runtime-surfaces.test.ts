@@ -124,6 +124,7 @@ function createCommandSurface() {
       groupSelected: () => {},
       ungroupSelected: () => {},
       rotateSelected: () => {},
+      unlockAll: () => {},
       nudgeSelected: () => false,
       endNudge: () => {},
     },

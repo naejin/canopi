@@ -2,6 +2,7 @@ import { canvasPdf, canExportCanvasPdf } from '../../app/canvas-pdf/live'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   canvasCommandDefinitions,
+  canvasCommandDisplayKey,
   dispatchCanvasCommandIntent,
   isCanvasCommandDisabled,
   type CanvasCommandDefinition,
@@ -18,6 +19,7 @@ import { formatShortcut } from '../../app/shell-commands/shortcut-text'
 import { currentDesign } from '../../app/document-session/store'
 import { desktopGeoJsonWorkflow as desktopGeoJson } from '../../platform/geojson.desktop'
 import {
+  closeDesign,
   designRevertAvailable,
   newDesignAction,
   openDesign,
@@ -31,6 +33,8 @@ import {
   recordFrontendDiagnostic,
 } from '../../app/problem-report/diagnostics'
 import { openProblemReportDialog } from '../../app/problem-report/submission'
+import { exportCurrentBudgetCsv } from '../../app/budget/export'
+import { beginDataImport, openDataLibrary } from '../../app/lidar/library-navigation'
 import { createWorkspaceShellCapabilities } from '../../app/workspace-commands/capabilities'
 import {
   readWorkspaceCanvasProjectionState,
@@ -46,13 +50,17 @@ type DesktopShellCapabilityId =
   | 'saveDesign'
   | 'saveDesignAs'
   | 'revertDesign'
+  | 'addData'
+  | 'openDataLibrary'
   | 'importGeoJson'
   | 'exportCanvasPdf'
   | 'exportGeoJson'
+  | 'exportBudgetCsv'
   | 'openSettings'
   | 'findPlants'
   | 'saveCurrentView'
   | 'manageViews'
+  | 'closeDesign'
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigateLayers'
@@ -69,6 +77,7 @@ type DesktopShellCapabilityId =
   | 'showNoBackground'
   | 'toggleTheme'
   | 'showShortcuts'
+  | 'gettingStarted'
   | 'reportProblem'
   | 'aboutCanopi'
 
@@ -100,7 +109,7 @@ export function readAppCommandState(): AppCommandState {
 function canvasAppCommandDefinition(
   definition: CanvasCommandDefinition,
 ): AppCommandDefinition {
-  const shortcut = definition.shortcuts?.[0]
+  const shortcut = canvasCommandDisplayKey(definition)
   return {
     id: definition.commandId,
     label: () => t(definition.labelKey),
@@ -171,6 +180,20 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   exportGeoJson: {
     execute: () => runAsyncCommand('Export GeoJSON', desktopGeoJson.exportGeoJson),
     isExecutionDisabled: isGeoJsonTransferDisabled,
+  },
+  // File › Add data… picks files and imports them into the open Design's site data.
+  addData: {
+    execute: () => runAsyncCommand('Add data', () => beginDataImport()),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  openDataLibrary: { execute: () => openDataLibrary() },
+  exportBudgetCsv: {
+    execute: () => runAsyncCommand('Export budget CSV', exportCurrentBudgetCsv),
+    isExecutionDisabled: (state) => !state.hasDesign,
+  },
+  closeDesign: {
+    execute: () => runAsyncCommand('Close design', closeDesign),
+    isExecutionDisabled: (state) => !state.hasDesign,
   },
   exitApp: {
     execute: () => runAsyncCommand('Close window', () => getCurrentWindow().close()),

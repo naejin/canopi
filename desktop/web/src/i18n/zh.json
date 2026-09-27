@@ -1031,7 +1031,13 @@
     "view.labelsCodes": "代码",
     "view.labelsNames": "名称",
     "view.cycleLabels": "标签：无、代码、名称",
-    "edit.rotate": "旋转…"
+    "edit.rotate": "旋转…",
+    "file.addData": "添加数据…",
+    "file.exportBudgetCsv": "预算（CSV）…",
+    "file.close": "关闭设计",
+    "help.gettingStarted": "入门",
+    "edit.deselect": "取消选择",
+    "edit.unlockAll": "全部解锁"
   },
   "titleBar": {
     "untitledDesign": "未命名设计",
@@ -1673,6 +1679,17 @@
     "deleteConfirmAction": "删除视图",
     "deleted": "已删除“{{name}}”",
     "undo": "撤销",
+    "done": "完成"
+  },
+  "gettingStarted": {
+    "title": "入门",
+    "intro": "Canopi 直接在地图上绘制你的设计。从这里开始：",
+    "site": "找到你的场地：在顶部搜索框中输入地点或坐标（{{shortcut}}）。",
+    "zones": "使用左侧的区域工具绘制苗床、果园和小路。",
+    "plants": "{{placePlants}}：选择一个物种，然后点击地图。{{plantRow}}会沿一条线重复放置植物。",
+    "menu": "右键点击地图上的任意对象即可查看其命令。按 {{esc}} 返回{{select}}。",
+    "plan": "在右侧面板的{{calendar}}、{{budget}}和{{consortium}}中规划养护、成本和植物组合。",
+    "save": "Canopi 会在你工作时自动保存。{{file}} › {{export}} 可生成可打印的种植平面图（PDF）。",
     "done": "完成"
   }
 }

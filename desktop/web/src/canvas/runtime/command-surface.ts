@@ -99,6 +99,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'sendToBack'
     | 'lockSelected'
     | 'unlockSelected'
+    | 'unlockAll'
     | 'groupSelected'
     | 'ungroupSelected'
     | 'rotateSelected'
@@ -213,6 +214,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       sendToBack: () => this.runSpatialEdit(() => this.options.mutations.sendToBack()),
       lockSelected: () => this.runSpatialEdit(() => this.options.mutations.lockSelected()),
       unlockSelected: () => this.runSpatialEdit(() => this.options.mutations.unlockSelected()),
+      unlockAll: () => this.runSpatialEdit(() => this.options.mutations.unlockAll()),
       groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
       ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
       rotateSelected: (degrees) => this.runSpatialEdit(() => this.options.mutations.rotateSelected(degrees)),

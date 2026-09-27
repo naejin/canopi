@@ -15,6 +15,7 @@ import {
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
 import { SavedViewDialogs } from '../shared/SavedViewDialogs'
 import { RotateSelectionDialog } from '../canvas/RotateSelectionDialog'
+import { GettingStartedDialog } from '../shared/GettingStartedDialog'
 import { SidePanelDock } from '../shared/SidePanelDock'
 import { useModalInertRegion } from '../shared/useModalLayer'
 import styles from './WorkspaceComposition.module.css'
@@ -117,6 +118,7 @@ export function WorkspaceDialogs() {
       <CanvasPdfDialog />
       <SavedViewDialogs />
       <RotateSelectionDialog />
+      <GettingStartedDialog />
     </>
   )
 }
