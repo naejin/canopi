@@ -174,6 +174,7 @@ const baseSpecies: SpeciesListItem = {
   "hardiness_zone_max": null,
   "growth_rate": null,
   "stratum": "high",
+  "habit": null,
   "climate_zones": [
     "temperate"
   ],

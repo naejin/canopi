@@ -785,7 +785,7 @@ export type Settings = {
 	tool_names_visible: boolean | null,
 };
 
-export type Sort = "Name" | "Family" | "Height" | "Hardiness" | "GrowthRate" | "Relevance";
+export type Sort = "Recommended" | "Name" | "Height" | "Edibility" | "Relevance";
 
 export type SpeciesDetail = {
 	canonical_name: string,
@@ -979,6 +979,7 @@ export type SpeciesListItem = {
 	hardiness_zone_max: number | null,
 	growth_rate: string | null,
 	stratum: string | null,
+	habit: string | null,
 	climate_zones: string[],
 	life_cycles: string[],
 	edibility_rating: number | null,

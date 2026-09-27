@@ -19,6 +19,7 @@ pub(crate) fn test_plant_db() -> PlantDb {
             edibility_rating INTEGER,
             medicinal_rating INTEGER,
             stratum TEXT,
+            habit TEXT,
             climate_zones TEXT DEFAULT '[]',
             is_annual INTEGER DEFAULT 0,
             is_biennial INTEGER DEFAULT 0,

@@ -1171,6 +1171,7 @@ function speciesProjectionToListItem(
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: row.habit,
     climate_zones: [...row.climate_zones],
     life_cycles: [...row.life_cycles],
     edibility_rating: null,

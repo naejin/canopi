@@ -296,6 +296,7 @@ function toSpeciesListItem({
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: [...row.climate_zones],
     life_cycles: [...row.life_cycles],
     edibility_rating: null,

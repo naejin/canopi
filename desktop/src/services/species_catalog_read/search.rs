@@ -2,7 +2,7 @@ use common_types::species::{PaginatedResult, SpeciesListItem, SpeciesSearchReque
 use rusqlite::{Connection, params_from_iter};
 
 use crate::db::PlantDbConnectionGuard;
-use crate::db::query_builder::{SpeciesSearchPlan, SpeciesSearchPlanRequest};
+use crate::db::query_builder::{BrowsePosition, SpeciesSearchPlan, SpeciesSearchPlanRequest};
 use crate::db::species_search_normalization::{SpeciesSearchAdmission, species_search_admission};
 
 use super::list_projection::map_species_list_row;
@@ -40,11 +40,16 @@ fn search_connection(
         .prepare(list.sql())
         .map_err(|e| format!("Failed to prepare species search: {e}"))?;
 
-    let rows: Vec<SpeciesListItem> = stmt
-        .query_map(params_from_iter(list.params()), map_species_list_row)
+    let browse = plan.is_browse();
+    let mut rows: Vec<(SpeciesListItem, Option<BrowsePosition>)> = stmt
+        .query_map(params_from_iter(list.params()), |row| {
+            let item = map_species_list_row(row)?;
+            let position = browse.then(|| BrowsePosition::from_row(row)).transpose()?;
+            Ok((item, position))
+        })
         .map_err(|e| format!("Failed to execute species search: {e}"))?
         .filter_map(|result| match result {
-            Ok(item) => Some(item),
+            Ok(row) => Some(row),
             Err(error) => {
                 tracing::warn!("Skipped species search row: {error}");
                 None
@@ -53,8 +58,10 @@ fn search_connection(
         .collect();
 
     let has_next = rows.len() as u32 > limit;
-    let items: Vec<SpeciesListItem> = rows.into_iter().take(limit as usize).collect();
-    let next_cursor = plan.next_cursor(&items, has_next);
+    rows.truncate(limit as usize);
+    let last_position = rows.last().and_then(|(_, position)| *position);
+    let items: Vec<SpeciesListItem> = rows.into_iter().map(|(item, _)| item).collect();
+    let next_cursor = plan.next_cursor(&items, last_position.as_ref(), has_next);
 
     Ok(PaginatedResult {
         items,
@@ -157,6 +164,7 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                habit TEXT,
                 climate_zones TEXT DEFAULT '[]',
                 is_annual INTEGER DEFAULT 0,
                 is_biennial INTEGER DEFAULT 0,
@@ -314,6 +322,7 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                habit TEXT,
                 climate_zones TEXT DEFAULT '[]',
                 is_annual INTEGER DEFAULT 0,
                 is_biennial INTEGER DEFAULT 0,
@@ -612,8 +621,82 @@ mod tests {
         for case in species_search_latency_cases() {
             report_species_search_latency_case(&conn, case)?;
         }
+        for sort in [Sort::Recommended, Sort::Name, Sort::Height, Sort::Edibility] {
+            report_species_browse_latency(&conn, sort, "en")?;
+        }
+        report_species_browse_latency(&conn, Sort::Recommended, "fr")?;
 
         Ok(())
+    }
+
+    const BROWSE_LATENCY_PAGE_SIZE: u32 = 50;
+    /// Page 100 stays in Recommended's rated phase; page 250 is past it.
+    const BROWSE_LATENCY_REPORTED_PAGES: &[usize] = &[1, 100, 250];
+
+    /// Times the first browse page and deep pages reached by following
+    /// cursors (cold and warm), and prints each reported page's query plan.
+    fn report_species_browse_latency(
+        conn: &Connection,
+        sort: Sort,
+        locale: &str,
+    ) -> Result<(), String> {
+        let mut cursor = None;
+        let last_page = BROWSE_LATENCY_REPORTED_PAGES.last().copied().unwrap_or(1);
+        for page_number in 1..=last_page {
+            let request = search_request(
+                None,
+                SpeciesFilter::default(),
+                cursor.clone(),
+                sort.clone(),
+                BROWSE_LATENCY_PAGE_SIZE,
+                false,
+                locale,
+            );
+            let started = Instant::now();
+            let page = search(conn, request.clone())?;
+            let elapsed = started.elapsed();
+            if BROWSE_LATENCY_REPORTED_PAGES.contains(&page_number) {
+                let warm_started = Instant::now();
+                search(conn, request.clone())?;
+                let warm_elapsed = warm_started.elapsed();
+                eprintln!(
+                    "species_browse_latency sort={sort:?} locale={locale} page={page_number} \
+                     list_ms={} warm_ms={} first={:?} plan=[{}]",
+                    millis(elapsed),
+                    millis(warm_elapsed),
+                    page.items.first().map(|item| item.canonical_name.as_str()),
+                    species_search_query_plan(conn, request)?,
+                );
+            }
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        Ok(())
+    }
+
+    fn species_search_query_plan(
+        conn: &Connection,
+        request: SpeciesSearchRequest,
+    ) -> Result<String, String> {
+        let plan = SpeciesSearchPlan::build(SpeciesSearchPlanRequest {
+            search: request,
+            use_common_name_token_index: true,
+            use_search_name_entry_index: supports_search_name_entry_index(conn),
+        });
+        let list = plan.list();
+        let mut stmt = conn
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", list.sql()))
+            .map_err(|error| format!("Failed to prepare query plan: {error}"))?;
+        let details = stmt
+            .query_map(params_from_iter(list.params()), |row| {
+                row.get::<_, String>(3)
+            })
+            .map_err(|error| format!("Failed to read query plan: {error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Failed to read query plan row: {error}"))?;
+        Ok(details.join(" | "))
     }
 
     #[derive(Clone, Copy)]
@@ -1583,6 +1666,7 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                habit TEXT,
                 climate_zones TEXT DEFAULT '[]',
                 is_annual INTEGER DEFAULT 0,
                 is_biennial INTEGER DEFAULT 0,
@@ -1623,5 +1707,354 @@ mod tests {
         .unwrap_err();
 
         assert!(error.contains("Failed to count species search results"));
+    }
+    fn browse_fixture_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE species (
+                id INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                common_name TEXT,
+                family TEXT,
+                genus TEXT,
+                height_max_m REAL,
+                hardiness_zone_min INTEGER,
+                hardiness_zone_max INTEGER,
+                growth_rate TEXT,
+                stratum TEXT,
+                habit TEXT,
+                climate_zones TEXT DEFAULT '[]',
+                is_annual INTEGER DEFAULT 0,
+                is_biennial INTEGER DEFAULT 0,
+                is_perennial INTEGER DEFAULT 0,
+                edibility_rating INTEGER,
+                other_uses_rating INTEGER,
+                medicinal_rating INTEGER,
+                width_max_m REAL
+            );
+            CREATE INDEX idx_species_canonical ON species(canonical_name);
+            CREATE INDEX idx_species_height_max ON species(height_max_m);
+            CREATE INDEX idx_species_edibility ON species(edibility_rating);
+            CREATE TABLE best_common_names (
+                species_id INTEGER NOT NULL,
+                language TEXT NOT NULL,
+                common_name TEXT NOT NULL,
+                PRIMARY KEY (species_id, language)
+            );
+            CREATE TABLE species_common_names (
+                species_id INTEGER NOT NULL,
+                common_name TEXT NOT NULL,
+                language TEXT NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                display_order INTEGER NOT NULL DEFAULT 0
+            );
+
+            INSERT INTO species (
+                id, canonical_name, slug, family, height_max_m,
+                edibility_rating, other_uses_rating, medicinal_rating
+            ) VALUES
+                (1, 'Allium cepa', 'allium-cepa', 'Amaryllidaceae', 0.5, 5, 2, 3),
+                (2, 'Malus domestica', 'malus-domestica', 'Rosaceae', 4.0, 5, 3, 1),
+                (3, 'Rubus idaeus', 'rubus-idaeus', 'Rosaceae', 1.2, 5, 3, 1),
+                (4, 'Urtica dioica', 'urtica-dioica', 'Urticaceae', 1.2, 3, NULL, 5),
+                (5, 'Quercus robur', 'quercus-robur', 'Fagaceae', 30.0, 0, 4, 2),
+                (6, 'Taxus baccata', 'taxus-baccata', 'Taxaceae', 15.0, 0, NULL, NULL),
+                (7, 'Aerides odorata', 'aerides-odorata', 'Orchidaceae', NULL, NULL, 5, 5),
+                (8, 'Bulbophyllum lobbii', 'bulbophyllum-lobbii', 'Orchidaceae', 0.1, NULL, NULL, NULL),
+                (9, 'Crataegus monogyna', 'crataegus-monogyna', 'Rosaceae', 8.0, NULL, 4, 4),
+                (10, 'Dendrobium nobile', 'dendrobium-nobile', 'Orchidaceae', NULL, NULL, NULL, NULL),
+                (11, 'Prunus spinosa', 'prunus-spinosa', 'Rosaceae', NULL, 4, 3, 3);
+
+            INSERT INTO best_common_names VALUES
+                (1, 'en', 'Onion'),
+                (2, 'en', 'Apple'),
+                (2, 'fr', 'Pommier'),
+                (3, 'en', 'Raspberry'),
+                (4, 'en', 'Stinging nettle'),
+                (4, 'fr', 'Ortie'),
+                (5, 'en', 'English oak'),
+                (6, 'en', 'Yew'),
+                (8, 'fr', 'Bulbophylle'),
+                (9, 'en', 'Hawthorn'),
+                (10, 'en', 'Noble dendrobium'),
+                (11, 'en', 'Blackthorn');",
+        )
+        .unwrap();
+        crate::db::plant_catalog_connection::initialize_search_connection(&conn).unwrap();
+        conn
+    }
+
+    /// Pages through a browse with `limit`, checking every page's cursor.
+    fn browse_all(
+        conn: &Connection,
+        sort: Sort,
+        filters: SpeciesFilter,
+        locale: &str,
+        limit: u32,
+    ) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut cursor = None;
+        for _ in 0..50 {
+            let page = search(
+                conn,
+                search_request(
+                    None,
+                    filters.clone(),
+                    cursor.clone(),
+                    sort.clone(),
+                    limit,
+                    false,
+                    locale,
+                ),
+            )
+            .unwrap();
+            assert!(page.items.len() <= limit as usize);
+            names.extend(page.items.into_iter().map(|item| item.canonical_name));
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => return names,
+            }
+        }
+        panic!("browse did not terminate: {names:?}");
+    }
+
+    fn assert_browse_order(
+        conn: &Connection,
+        sort: Sort,
+        filters: SpeciesFilter,
+        locale: &str,
+        expected: &[&str],
+    ) {
+        for limit in [1, 2, 3, 4, 20] {
+            let names = browse_all(conn, sort.clone(), filters.clone(), locale, limit);
+            assert_eq!(
+                names, expected,
+                "{sort:?} locale={locale} limit={limit} filters={filters:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn recommended_browse_orders_rated_then_named_in_locale_then_rest() {
+        let conn = browse_fixture_db();
+
+        assert_browse_order(
+            &conn,
+            Sort::Recommended,
+            SpeciesFilter::default(),
+            "en",
+            &[
+                "Malus domestica",
+                "Rubus idaeus",
+                "Allium cepa",
+                "Prunus spinosa",
+                "Urtica dioica",
+                "Quercus robur",
+                "Taxus baccata",
+                "Crataegus monogyna",
+                "Dendrobium nobile",
+                "Aerides odorata",
+                "Bulbophyllum lobbii",
+            ],
+        );
+    }
+
+    #[test]
+    fn recommended_browse_named_phase_follows_the_ui_locale() {
+        let conn = browse_fixture_db();
+
+        assert_browse_order(
+            &conn,
+            Sort::Recommended,
+            SpeciesFilter::default(),
+            "fr",
+            &[
+                "Malus domestica",
+                "Rubus idaeus",
+                "Allium cepa",
+                "Prunus spinosa",
+                "Urtica dioica",
+                "Quercus robur",
+                "Taxus baccata",
+                "Bulbophyllum lobbii",
+                "Aerides odorata",
+                "Crataegus monogyna",
+                "Dendrobium nobile",
+            ],
+        );
+    }
+
+    #[test]
+    fn name_browse_orders_by_canonical_name() {
+        let conn = browse_fixture_db();
+        let mut expected = [
+            "Aerides odorata",
+            "Allium cepa",
+            "Bulbophyllum lobbii",
+            "Crataegus monogyna",
+            "Dendrobium nobile",
+            "Malus domestica",
+            "Prunus spinosa",
+            "Quercus robur",
+            "Rubus idaeus",
+            "Taxus baccata",
+            "Urtica dioica",
+        ];
+        expected.sort();
+
+        assert_browse_order(&conn, Sort::Name, SpeciesFilter::default(), "en", &expected);
+        assert_browse_order(
+            &conn,
+            Sort::Relevance,
+            SpeciesFilter::default(),
+            "en",
+            &expected,
+        );
+    }
+
+    #[test]
+    fn height_browse_orders_tallest_first_with_unknown_heights_last() {
+        let conn = browse_fixture_db();
+
+        assert_browse_order(
+            &conn,
+            Sort::Height,
+            SpeciesFilter::default(),
+            "en",
+            &[
+                "Quercus robur",
+                "Taxus baccata",
+                "Crataegus monogyna",
+                "Malus domestica",
+                "Rubus idaeus",
+                "Urtica dioica",
+                "Allium cepa",
+                "Bulbophyllum lobbii",
+                "Aerides odorata",
+                "Dendrobium nobile",
+                "Prunus spinosa",
+            ],
+        );
+    }
+
+    #[test]
+    fn edibility_browse_orders_best_rated_first_with_unrated_last() {
+        let conn = browse_fixture_db();
+
+        assert_browse_order(
+            &conn,
+            Sort::Edibility,
+            SpeciesFilter::default(),
+            "en",
+            &[
+                "Allium cepa",
+                "Malus domestica",
+                "Rubus idaeus",
+                "Prunus spinosa",
+                "Urtica dioica",
+                "Quercus robur",
+                "Taxus baccata",
+                "Aerides odorata",
+                "Bulbophyllum lobbii",
+                "Crataegus monogyna",
+                "Dendrobium nobile",
+            ],
+        );
+    }
+
+    #[test]
+    fn browse_sorts_apply_filters_in_every_phase() {
+        let conn = browse_fixture_db();
+        let rosaceae = SpeciesFilter {
+            family: Some("Rosaceae".to_owned()),
+            ..SpeciesFilter::default()
+        };
+
+        for (sort, expected) in [
+            (
+                Sort::Recommended,
+                [
+                    "Malus domestica",
+                    "Rubus idaeus",
+                    "Prunus spinosa",
+                    "Crataegus monogyna",
+                ],
+            ),
+            (
+                Sort::Name,
+                [
+                    "Crataegus monogyna",
+                    "Malus domestica",
+                    "Prunus spinosa",
+                    "Rubus idaeus",
+                ],
+            ),
+            (
+                Sort::Height,
+                [
+                    "Crataegus monogyna",
+                    "Malus domestica",
+                    "Rubus idaeus",
+                    "Prunus spinosa",
+                ],
+            ),
+            (
+                Sort::Edibility,
+                [
+                    "Malus domestica",
+                    "Rubus idaeus",
+                    "Prunus spinosa",
+                    "Crataegus monogyna",
+                ],
+            ),
+        ] {
+            assert_browse_order(&conn, sort, rosaceae.clone(), "en", &expected);
+        }
+
+        let count = search(
+            &conn,
+            search_request(None, rosaceae, None, Sort::Recommended, 2, true, "en"),
+        )
+        .unwrap();
+        assert_eq!(count.total_estimate, 4);
+    }
+
+    #[test]
+    fn sorted_text_search_keeps_the_fts_predicate() {
+        let conn = test_db();
+
+        let result = search(
+            &conn,
+            search_request(
+                Some("lavender"),
+                SpeciesFilter::default(),
+                None,
+                Sort::Height,
+                1,
+                true,
+                "en",
+            ),
+        )
+        .unwrap();
+        assert_eq!(result.total_estimate, 2);
+        assert_eq!(result.items[0].canonical_name, "Lavandula beta");
+
+        let next = search(
+            &conn,
+            search_request(
+                Some("lavender"),
+                SpeciesFilter::default(),
+                result.next_cursor,
+                Sort::Height,
+                1,
+                false,
+                "en",
+            ),
+        )
+        .unwrap();
+        assert_eq!(next.items.len(), 1);
+        assert_eq!(next.items[0].canonical_name, "Lavandula alpha");
+        assert_eq!(next.next_cursor, None);
     }
 }

@@ -527,6 +527,7 @@ mod tests {
                 hardiness_zone_max INTEGER,
                 growth_rate TEXT,
                 stratum TEXT,
+                habit TEXT,
                 climate_zones TEXT DEFAULT '[]',
                 is_annual INTEGER DEFAULT 0,
                 is_biennial INTEGER DEFAULT 0,

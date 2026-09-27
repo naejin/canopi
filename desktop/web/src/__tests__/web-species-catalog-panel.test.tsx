@@ -747,6 +747,7 @@ function makeSpeciesListItem(
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: ['Temperate'],
     life_cycles: ['Perennial'],
     edibility_rating: null,

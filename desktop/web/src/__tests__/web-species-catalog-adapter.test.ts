@@ -164,6 +164,7 @@ describe('Web Edition reduced Species Catalog adapter', () => {
       hardiness_zone_min: null,
       hardiness_zone_max: null,
       stratum: null,
+      habit: null,
       edibility_rating: null,
     })
   })
@@ -984,6 +985,7 @@ function makeSpeciesListItem(canonicalName: string) {
     hardiness_zone_max: null,
     growth_rate: null,
     stratum: null,
+    habit: null,
     climate_zones: [],
     life_cycles: [],
     edibility_rating: null,
