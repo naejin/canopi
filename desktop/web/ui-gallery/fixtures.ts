@@ -216,7 +216,7 @@ function symbolPlanting() {
 
 export function designFixture(state = 'populated'): CanopiFile {
   const scene = createDefaultScenePersistedState()
-  const plants = state === 'empty' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
+  const plants = state === 'empty' || state === 'zone' ? [] : state === 'planting' ? symbolPlanting() : specimens.flatMap(([canonicalName, commonName], speciesIndex) =>
     Array.from({ length: speciesIndex === 0 ? 3 : 8 }, (_, i) => ({
       kind: 'plant' as const, id: `plant-${speciesIndex}-${i}`, canonicalName,
       commonName: state === 'long' ? `${commonName} — a particularly long local cultivar name` : commonName,
@@ -228,6 +228,12 @@ export function designFixture(state = 'populated'): CanopiFile {
   const activeSpecies = state === 'empty' ? [] : specimens.map(([canonicalName]) => canonicalName)
   return {
     ...serializeScenePersistedState({ ...scene, plants,
+      // `state=zone`: one rectangle drawn and never named, so its name is its generated id.
+      zones: state === 'zone' ? [{
+        kind: 'zone' as const, name: 'zone-ee08f9f9-634f-4723-bbde-1200610562dc', locked: false, zoneType: 'rect',
+        rotationDeg: 0, fillColor: null, notes: null,
+        points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
+      }] : [],
       plantSpeciesColors: Object.fromEntries(specimens.map(([name, , , color]) => [name, color])),
       plantSpeciesSymbols: Object.fromEntries(specimens.map(([name, , symbol]) => [name, symbol])),
     }, createSceneGeoFrame(state === 'located'

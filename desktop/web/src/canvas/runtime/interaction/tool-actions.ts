@@ -5,6 +5,7 @@ import {
   type ScenePoint,
 } from '../scene'
 import { createUuid } from '../../../utils/ids'
+import { generatedZoneName } from '../zone-names'
 
 export interface SceneRect {
   x: number
@@ -19,8 +20,7 @@ export function appendRectangleZoneToDraft(
 ): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
-  const zoneId = createUuid()
-  const zoneName = `zone-${zoneId}`
+  const zoneName = generatedZoneName()
   draft.zones = [
     ...draft.zones,
     {
@@ -48,8 +48,7 @@ export function appendEllipseZoneToDraft(
 ): string | null {
   if (rect.width < 0.5 || rect.height < 0.5) return null
 
-  const zoneId = createUuid()
-  const zoneName = `zone-${zoneId}`
+  const zoneName = generatedZoneName()
   draft.zones = [
     ...draft.zones,
     {
@@ -76,8 +75,7 @@ export function appendLineZoneToDraft(
 ): string | null {
   if (!isValidLine(start, end)) return null
 
-  const zoneId = createUuid()
-  const zoneName = `zone-${zoneId}`
+  const zoneName = generatedZoneName()
   draft.zones = [
     ...draft.zones,
     {
@@ -124,8 +122,7 @@ export function appendPolygonZoneToDraft(
 ): string | null {
   if (!isValidPolygon(points)) return null
 
-  const zoneId = createUuid()
-  const zoneName = `zone-${zoneId}`
+  const zoneName = generatedZoneName()
   draft.zones = [
     ...draft.zones,
     {

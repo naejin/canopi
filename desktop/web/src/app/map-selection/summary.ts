@@ -1,19 +1,42 @@
 import { useMemo } from 'preact/hooks'
 import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
+import { nearestPlantSpacing } from '../../canvas/plant-spacing'
 import type { CanvasQuerySurface } from '../../canvas/runtime/runtime'
+import { measureZone } from '../../canvas/runtime/zone-geometry'
+import { isGeneratedZoneName } from '../../canvas/runtime/zone-names'
 
 /**
  * What is selected on the map, for the selection status chip: counts by kind,
- * the species of the selected plants and the names of the selected zones.
- * Read through read-only runtime queries; groups count as their members.
+ * the species of the selected plants and their spacing, the selected zones
+ * with their measures, and the one selected text note or measurement.
+ * Read through read-only runtime queries, with geometry in the session
+ * plane's metres; groups count as their members. It carries no object ids:
+ * a zone's name is its id until the user names it, so `name` is null then.
  */
 export interface MapSelectionSummary {
   readonly plantCount: number
   /** Selected plants per species, in Design order. */
   readonly species: readonly MapSelectionSpecies[]
-  readonly zoneNames: readonly string[]
+  /** Mean distance from each selected plant to its nearest selected neighbour, in metres; null below two plants. */
+  readonly plantSpacingM: number | null
+  readonly zones: readonly MapSelectionZone[]
   readonly noteCount: number
+  /** The text of the one selected text note. */
+  readonly noteText: string | null
   readonly measurementCount: number
+  /** The length of the one selected measurement, in metres. */
+  readonly measurementLengthM: number | null
+}
+
+export interface MapSelectionZone {
+  /** The name the user gave the zone; null while its name is its generated id. */
+  readonly name: string | null
+  /** `rect`, `ellipse`, `polygon` or `line`. */
+  readonly zoneType: string
+  /** Null for a line zone. */
+  readonly areaM2: number | null
+  /** A line zone's length. */
+  readonly perimeterM: number | null
 }
 
 export interface MapSelectionSpecies {
@@ -85,9 +108,40 @@ export function readMapSelectionSummary(queries: CanvasQuerySurface | null): Map
     })
   }
 
-  const zones = scene.zones.filter((zone) => zoneNames.has(zone.name)).map((zone) => zone.name)
-  const noteCount = scene.annotations.filter((note) => noteIds.has(note.id)).length
-  const measurementCount = scene.measurementGuides.filter((guide) => measurementIds.has(guide.id)).length
-  if (plantCount + zones.length + noteCount + measurementCount === 0) return null
-  return { plantCount, species, zoneNames: zones, noteCount, measurementCount }
+  const selectedPlants = plantCount >= 2 ? scene.plants.filter((plant) => plantIds.has(plant.id)) : []
+  const zones = scene.zones.filter((zone) => zoneNames.has(zone.name)).map((zone): MapSelectionZone => {
+    const measure = measureZone(zone)
+    return {
+      name: isGeneratedZoneName(zone.name) ? null : zone.name,
+      zoneType: zone.zoneType,
+      areaM2: measure?.areaM2 ?? null,
+      perimeterM: measure?.perimeterM ?? null,
+    }
+  })
+  const notes = scene.annotations.filter((note) => noteIds.has(note.id))
+  const measurements = scene.measurementGuides.filter((guide) => measurementIds.has(guide.id))
+  if (plantCount + zones.length + notes.length + measurements.length === 0) return null
+  const [guide] = measurements
+  return {
+    plantCount,
+    species,
+    plantSpacingM: meanNearestSpacing(selectedPlants),
+    zones,
+    noteCount: notes.length,
+    noteText: notes.length === 1 ? notes[0]!.text : null,
+    measurementCount: measurements.length,
+    measurementLengthM: measurements.length === 1 && guide ? Math.hypot(guide.end.x - guide.start.x, guide.end.y - guide.start.y) : null,
+  }
+}
+
+function meanNearestSpacing(plants: readonly { readonly position: { readonly x: number; readonly y: number } }[]): number | null {
+  let total = 0
+  let counted = 0
+  for (const plant of plants) {
+    const spacing = nearestPlantSpacing(plants, plant.position)
+    if (!Number.isFinite(spacing)) continue
+    total += spacing
+    counted += 1
+  }
+  return counted > 0 ? total / counted : null
 }

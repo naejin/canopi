@@ -27,6 +27,8 @@ interface GalleryCanvasSurfaceProps {
   readonly design: CanopiFile
   readonly dense: boolean
   readonly cameraState?: 'site' | 'overview' | 'maximum'
+  /** Select everything instead of the first species (a fixture without plants). */
+  readonly selectAll?: boolean
   readonly onReadyChange: (ready: boolean) => void
   readonly createRuntimeComposition?: (options: GalleryWorkspaceRuntimeOptions) => WorkspaceRuntimeComposition
 }
@@ -36,6 +38,7 @@ export function GalleryCanvasSurface({
   design,
   dense,
   cameraState = 'site',
+  selectAll = false,
   onReadyChange,
   createRuntimeComposition = createGalleryWorkspaceRuntimeComposition,
 }: GalleryCanvasSurfaceProps) {
@@ -167,7 +170,8 @@ export function GalleryCanvasSurface({
         for (let i = 0; i < 100; i++) activeRuntime.surfaces.commands.viewport.zoomIn()
       }
       if (!runtimeIsActive()) return
-      activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
+      if (selectAll) activeRuntime.surfaces.commands.sceneEdits.selectAll()
+      else activeRuntime.surfaces.commands.sceneEdits.selectSameSpecies(specimens[0][0])
       if (!runtimeIsActive()) return
       activeResize.observe(container)
       if (!runtimeIsActive()) return
@@ -189,7 +193,7 @@ export function GalleryCanvasSurface({
       cancelled = true
       release()
     }
-  }, [cameraState, createRuntimeComposition, dense, design, onReadyChange])
+  }, [cameraState, createRuntimeComposition, dense, design, onReadyChange, selectAll])
 
   useEffect(() => {
     const surface = activeSurface.value
