@@ -32,7 +32,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 
 ## Geolocation model
 
-- **Files store lon/lat.** `.canopi` format v8 stores every persisted position, including saved-view cameras, as `GeoPoint { lon, lat }` (WGS84 degrees). Zone rotation is degrees clockwise from true north. The file has no anchor, north bearing, placement status or altitude.
+- **Files store lon/lat.** `.canopi` format v9 stores every persisted position, including saved-view cameras, as `GeoPoint { lon, lat }` (WGS84 degrees). Zone rotation is degrees clockwise from true north. The file has no anchor, north bearing, placement status or altitude.
 - **Session plane.** On load, the codec builds a local tangent plane (local Mercator, `canvas/projection.ts`) with its origin at the centre of the objects' bounds, or at the current view centre for an empty Design. All runtime geometry, tools, snapping, measurements, hit testing and PDF layout work in metres in this plane. Camera `{x, y, scale}` is pixels per metre in the plane.
 - **Re-origin.** When the view centre moves more than 10 km from the plane origin, the runtime rebuilds the plane at the view centre and re-projects every object from its stored lon/lat. This is lossless because lon/lat is authoritative.
 - **Canonical write-back.** The codec remembers each object's loaded lon/lat. On save, an object whose plane coordinates did not change writes its original lon/lat unchanged; a changed object writes lon/lat rounded to 1e-9 degree (about 0.1 mm). Open then save without edits is byte-identical.
