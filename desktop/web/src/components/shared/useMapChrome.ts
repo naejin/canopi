@@ -1,8 +1,11 @@
 import type { RefObject } from 'preact'
 import { useLayoutEffect } from 'preact/hooks'
 import {
+  refreshVisibleMapArea,
   registerMapArea,
   registerMapOccluder,
+  registerPanelRail,
+  registerUnderPanelRail,
   type MapOccluderSide,
 } from '../../app/shell/visible-map-area'
 
@@ -20,6 +23,25 @@ export function useMapOccluder(ref: RefObject<HTMLElement>, side?: MapOccluderSi
     const element = ref.current
     return element ? registerMapOccluder(element, side) : undefined
   }, [ref, side])
+}
+
+/** Registers the panel rail, which covers the right edge and folds panels into More when short. */
+export function usePanelRail(ref: RefObject<HTMLElement>): void {
+  useLayoutEffect(() => {
+    const element = ref.current
+    return element ? registerPanelRail(element) : undefined
+  }, [ref])
+}
+
+/**
+ * Registers chrome under the panel rail's column that the rail ends above
+ * (`mounted` follows an element rendered only some of the time).
+ */
+export function useUnderPanelRail(ref: RefObject<HTMLElement>, mounted = true): void {
+  useLayoutEffect(() => {
+    const element = mounted ? ref.current : null
+    return element ? registerUnderPanelRail(element) : undefined
+  }, [ref, mounted])
 }
 
 /**
@@ -58,6 +80,8 @@ export function useChromeRow(ref: RefObject<HTMLElement>): void {
     if (!row || !host) return
     const reserve = () => {
       host.style.setProperty('--chrome-rail-top', `calc(${row.offsetTop + row.offsetHeight}px + var(--space-2))`)
+      // The rails moved without resizing; measure the room they have again.
+      refreshVisibleMapArea()
     }
     reserve()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reserve)
@@ -65,6 +89,7 @@ export function useChromeRow(ref: RefObject<HTMLElement>): void {
     return () => {
       observer?.disconnect()
       host.style.removeProperty('--chrome-rail-top')
+      refreshVisibleMapArea()
     }
   }, [ref])
 }

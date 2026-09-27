@@ -24,7 +24,7 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action (Save as… for Drafts, Details… or Resolve… for problems), place search (Ctrl K), Help, Settings.
 - Left: tool rail. Select, Pan · Place plants, Plant a row, Place a stamp · Zones (Polygon, Rectangle, Ellipse, Line) · Text note, Measure · Undo, Redo. Labelled with keys until each tool has been used once, then icons with labelled tooltips.
-- Right: panel rail (Ctrl 1–8) and one panel at a time: 380 px, or 440 px for Budget and Consortium; Calendar and Consortium can Expand.
+- Right: panel rail (Ctrl 1–8; in a short window its last panels fold, in order, into a More menu at its end, above the inspection launcher and zoom group) and one panel at a time: 380 px, or 440 px for Budget and Consortium; Calendar and Consortium can Expand.
 - Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design).
 - Tool cards sit top-left beside the rail (320 px): tool name, the instruction, then quiet key hints ending with the Esc meaning. Status chips (highlight, search results, selection) sit top-centre or bottom-centre of the visible map area (between the rails and the open dock) at 40 px.
 

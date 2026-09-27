@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Paneles",
+    "more": "Más paneles",
     "canvas": "Lienzo del diseño",
     "layers": "Capas",
     "data": "Biblioteca de datos",

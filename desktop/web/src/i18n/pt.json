@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Painéis",
+    "more": "Mais painéis",
     "canvas": "Tela do design",
     "layers": "Camadas",
     "data": "Biblioteca de dados",

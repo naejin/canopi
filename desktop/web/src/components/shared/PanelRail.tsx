@@ -1,7 +1,10 @@
+import { ActionMenu } from './ActionMenu'
 import { ButtonTooltip } from './ButtonTooltip'
 import { PanelIcon, type PanelIconName } from './PanelIcon'
-import { useRef } from 'preact/hooks'
-import { useMapOccluder } from './useMapChrome'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { panelRailRoom } from '../../app/shell/visible-map-area'
+import { t } from '../../i18n'
+import { usePanelRail } from './useMapChrome'
 import { useModalInertRegion } from './useModalLayer'
 import styles from './PanelRail.module.css'
 
@@ -19,24 +22,106 @@ export interface PanelRailCommand {
   action(): void
 }
 
+/** A panel button's vertical extent, from the rail's top edge. */
+export interface PanelRailButtonBox {
+  readonly top: number
+  readonly bottom: number
+}
+
+/**
+ * Pure: how many panel buttons stay on the rail, with a More button after
+ * them, so the rail ends within `room`; null when every panel fits. `buttons`
+ * and `railHeight` are measured with every panel shown; a More button takes a
+ * panel button's height and gap.
+ */
+export function panelRailVisibleCount(
+  buttons: readonly PanelRailButtonBox[],
+  railHeight: number,
+  room: number | null,
+): number | null {
+  if (room === null || buttons.length === 0 || railHeight <= room) return null
+  const first = buttons[0]!
+  const height = first.bottom - first.top
+  const gap = buttons.length > 1 ? Math.max(0, buttons[1]!.top - first.bottom) : 0
+  const trailing = railHeight - buttons[buttons.length - 1]!.bottom
+  let count = 0
+  while (count < buttons.length && buttons[count]!.bottom + gap + height + trailing <= room) count += 1
+  return count
+}
+
 /**
  * The floating panel rail on the right (Ctrl 1–8): one button per panel,
- * groups separated by rules. Only one panel is open at a time.
+ * groups separated by rules. Only one panel is open at a time. When the window
+ * is too short for every panel above the chrome under the rail's column
+ * (`panelRailRoom`), the last panels fold, in order, into a More menu at the
+ * rail's end, so Tab still meets them in rail order.
  */
 export function PanelRail({ groups, label }: {
   readonly groups: readonly (readonly PanelRailCommand[])[]
   readonly label: string
 }) {
-  const visibleGroups = groups.filter((group) => group.length > 0)
+  const visibleGroups = groups
+    .map((group) => group.filter((command) => command.panel))
+    .filter((group) => group.length > 0)
   const rail = useRef<HTMLElement>(null)
-  useMapOccluder(rail, 'right')
+  usePanelRail(rail)
   useModalInertRegion(rail)
+
+  const room = panelRailRoom.value
+  const layoutKey = `${room}|${visibleGroups.map((group) => group.map((command) => command.panel).join(',')).join('|')}`
+  const [fit, setFit] = useState<{ readonly key: string; readonly count: number | null }>({ key: '', count: null })
+  // A new room or panel list first lays every panel out to measure it.
+  const measuring = fit.key !== layoutKey
+  useLayoutEffect(() => {
+    const nav = rail.current
+    if (!measuring || !nav) return
+    const top = nav.getBoundingClientRect()
+    const buttons = Array.from(nav.querySelectorAll<HTMLElement>('[data-panel]'), (button) => {
+      const box = button.getBoundingClientRect()
+      return { top: box.top - top.top, bottom: box.bottom - top.top }
+    })
+    setFit({ key: layoutKey, count: panelRailVisibleCount(buttons, top.height, room) })
+  })
+
+  const shown = measuring ? null : fit.count
+  let remaining = shown ?? Infinity
+  const railGroups = visibleGroups
+    .map((group) => {
+      const kept = group.slice(0, Math.max(0, remaining))
+      remaining -= kept.length
+      return kept
+    })
+  const folded = shown === null ? [] : visibleGroups.flat().slice(shown)
+  // More ends the last group that keeps a panel, or stands alone.
+  const lastKept = railGroups.reduce((last, group, index) => group.length > 0 ? index : last, -1)
+  const more = folded.length > 0 && (
+    <ActionMenu
+      label={t('panelRail.more')}
+      placement="side"
+      triggerClassName={styles.button}
+      iconSize={20}
+      triggerData={{
+        'data-panel-rail-more': '',
+        'data-holds-active': folded.some((command) => command.active) ? '' : undefined,
+      }}
+      items={folded.map((command) => ({
+        id: command.id ?? command.commandId,
+        label: command.label,
+        shortcut: command.shortcut,
+        keyShortcuts: command.ariaShortcut,
+        checked: command.active ?? false,
+        disabled: command.disabled,
+        run: () => command.action(),
+      }))}
+    />
+  )
+
   return (
     <nav ref={rail} className={styles.rail} aria-label={label} data-panel-rail>
-      {visibleGroups.map((group, index) => (
+      {railGroups.map((group, index) => (group.length > 0 || (index === 0 && lastKept < 0 && more)) && (
         <div key={index} className={styles.group}>
-          {index > 0 && <div className={styles.rule} role="separator" />}
-          {group.map((command) => command.panel && (
+          {index > 0 && group.length > 0 && <div className={styles.rule} role="separator" />}
+          {group.map((command) => (
             <button
               key={command.panel}
               type="button"
@@ -49,10 +134,11 @@ export function PanelRail({ groups, label }: {
               disabled={command.disabled}
               onClick={() => command.action()}
             >
-              <PanelIcon panel={command.panel} />
+              <PanelIcon panel={command.panel!} />
               <ButtonTooltip label={command.label} shortcut={command.shortcut} side="left" />
             </button>
           ))}
+          {(index === lastKept || (lastKept < 0 && index === 0)) && more}
         </div>
       ))}
     </nav>

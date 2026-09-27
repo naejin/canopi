@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Pannelli",
+    "more": "Altri pannelli",
     "canvas": "Area del progetto",
     "layers": "Livelli",
     "data": "Libreria dati",

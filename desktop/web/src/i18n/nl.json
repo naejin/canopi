@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Panelen",
+    "more": "Meer panelen",
     "canvas": "Ontwerpcanvas",
     "layers": "Lagen",
     "data": "Databibliotheek",

@@ -1,7 +1,8 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { PanelRail } from '../components/shared/PanelRail'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PanelRail, panelRailVisibleCount } from '../components/shared/PanelRail'
+import { panelRailRoom } from '../app/shell/visible-map-area'
 import { DesktopPanelRail } from '../components/panels/DesktopPanelRail'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
@@ -193,5 +194,101 @@ describe('Panel rail', () => {
     expect(layersButton).not.toBeNull()
     expect(layersButton?.querySelector('[role="tooltip"]')?.textContent)
       .toContain('Calques')
+  })
+
+  describe('in a short window', () => {
+    // The rail's measured layout: 5 px padding, 40 px buttons 2 px apart, a
+    // 13 px rule between the two groups.
+    const RAIL_TOP = 72
+    function buttonTop(index: number): number {
+      return RAIL_TOP + 5 + index * 42 + (index >= 5 ? 13 : 0)
+    }
+    function box(top: number, height: number): DOMRect {
+      return { left: 1216, top, width: 52, height, x: 1216, y: top, right: 1268, bottom: top + height, toJSON: () => ({}) } as DOMRect
+    }
+
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const nav = this.closest('nav')
+        if (this === nav) {
+          const count = nav.querySelectorAll('[data-panel], [data-panel-rail-more]').length
+          const last = buttonTop(count - 1) + 40
+          return box(RAIL_TOP, last + 5 - RAIL_TOP)
+        }
+        const buttons = Array.from(nav?.querySelectorAll('[data-panel], [data-panel-rail-more]') ?? [])
+        const index = buttons.indexOf(this)
+        return index < 0 ? box(0, 0) : box(buttonTop(index), 40)
+      })
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      panelRailRoom.value = null
+    })
+
+    it('counts the panels that fit above the chrome with a More button after them', () => {
+      const buttons = Array.from({ length: 9 }, (_, index) => ({ top: buttonTop(index) - RAIL_TOP, bottom: buttonTop(index) + 40 - RAIL_TOP }))
+      const height = buttons[8]!.bottom + 5
+      expect(panelRailVisibleCount(buttons, height, null)).toBeNull()
+      expect(panelRailVisibleCount(buttons, height, height)).toBeNull()
+      // Five panels and More end at 5 + 6 * 42 - 2 + 5 = 260; a sixth panel sits past the rule.
+      expect(panelRailVisibleCount(buttons, height, 260)).toBe(5)
+      expect(panelRailVisibleCount(buttons, height, 259)).toBe(4)
+      expect(panelRailVisibleCount(buttons, height, 314)).toBe(5)
+      expect(panelRailVisibleCount(buttons, height, 315)).toBe(6)
+      // More stays even when nothing else fits.
+      expect(panelRailVisibleCount(buttons, height, 20)).toBe(0)
+    })
+
+    it('folds the panels that do not fit into a More menu, keeping their order', async () => {
+      await act(async () => {
+        render(<ProjectedRail />, container)
+      })
+      expect(container.querySelector('[data-panel-rail-more]')).toBeNull()
+
+      await act(async () => {
+        panelRailRoom.value = 260
+        await Promise.resolve()
+      })
+      expect(panelButtonLabels()).toEqual([
+        'Layers',
+        'Data library',
+        'Plants in this Design',
+        'Plant catalog',
+        'Favorites and stamps',
+        'More panels',
+      ])
+      // The rule goes with the group that folded away.
+      expect(container.querySelectorAll('[role="separator"]')).toHaveLength(0)
+
+      const more = panelButton('More panels')
+      expect(more.getAttribute('aria-haspopup')).toBe('menu')
+      await act(async () => {
+        more.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]'))
+      expect(items.map((item) => item.textContent)).toEqual([
+        expect.stringContaining('Calendar'),
+        expect.stringContaining('Budget'),
+        expect.stringContaining('Consortium'),
+        expect.stringContaining('Design notebook'),
+      ])
+      expect(items[3]!.getAttribute('aria-keyshortcuts')).toBe('Control+8 Meta+8')
+
+      await act(async () => {
+        items[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      expect(sidePanel.value).toBe('budget')
+      // More shows that it holds the open panel.
+      expect(panelButton('More panels').hasAttribute('data-holds-active')).toBe(true)
+
+      // A taller window gives the panels back.
+      await act(async () => {
+        panelRailRoom.value = 600
+        await Promise.resolve()
+      })
+      expect(container.querySelector('[data-panel-rail-more]')).toBeNull()
+      expect(panelButtonLabels()).toHaveLength(9)
+    })
   })
 })

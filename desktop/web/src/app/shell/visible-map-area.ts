@@ -8,7 +8,10 @@ import { currentCanvasViewportCommandSurface } from '../../canvas/session'
  * one source of the visible map frame: fitting and temporary focus frame into
  * it (through the camera), status chips centre in it and the rulers start at
  * its left edge (through `--map-inset-*` on the map area), and the map credits
- * fold when the bottom band leaves them too little room.
+ * fold when the bottom band leaves them too little room. The panel rail on
+ * the right also registers the room it has above the chrome under its column
+ * (the inspection launcher and the zoom group), so a short window folds its
+ * last panels into a More button instead of covering that chrome.
  */
 export interface VisibleMapFrame {
   /** The map area's size, in CSS pixels. */
@@ -38,6 +41,9 @@ export const MIN_VISIBLE_MAP_WIDTH_PX = 360
  */
 export const MAP_ATTRIBUTION_MIN_ROOM_PX = 360
 
+/** The least gap between the panel rail's bottom and the chrome under its column. */
+export const PANEL_RAIL_BOTTOM_GAP_PX = 8
+
 const NO_FRAME: VisibleMapFrame = Object.freeze({ width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 })
 /** A floating band at least this share of the map's width covers the top or the bottom edge. */
 const HORIZONTAL_BAND_SHARE = 0.6
@@ -46,6 +52,12 @@ const INSET_PROPERTIES = ['top', 'right', 'bottom', 'left'] as const
 export const visibleMapFrame = signal<VisibleMapFrame>(NO_FRAME)
 /** Whether the map credits fold into their (i) button (see `MAP_ATTRIBUTION_MIN_ROOM_PX`). */
 export const mapAttributionFolded = signal(false)
+/**
+ * The height the panel rail may take from its top edge before the chrome under
+ * its column, in CSS pixels; null when nothing sits under it (see
+ * `measurePanelRailRoom`).
+ */
+export const panelRailRoom = signal<number | null>(null)
 
 /** Pure: how far each registered chrome box covers each edge of the map rectangle. */
 export function measureVisibleMapFrame(map: DOMRect, occluders: Iterable<MapOccluderBox>): VisibleMapFrame {
@@ -82,6 +94,24 @@ export function measureBottomBandRoom(map: DOMRect, occluders: Iterable<MapOcclu
 }
 
 /**
+ * Pure: the height the panel rail may take from its top edge before the
+ * highest chrome under its column (the inspection launcher, the zoom group),
+ * less `PANEL_RAIL_BOTTOM_GAP_PX`. Null without a rail or chrome under it.
+ * Reads only the rail's top and sides, so the rail's own height cannot feed
+ * back into it.
+ */
+export function measurePanelRailRoom(rail: DOMRect | null, below: Iterable<DOMRect>): number | null {
+  if (!rail || rail.width <= 0 || rail.height <= 0) return null
+  let floor = Infinity
+  for (const rect of below) {
+    if (rect.width <= 0 || rect.height <= 0) continue
+    if (rect.right <= rail.left || rect.left >= rail.right || rect.top < rail.top) continue
+    floor = Math.min(floor, rect.top)
+  }
+  return floor === Infinity ? null : Math.max(0, Math.floor(floor - PANEL_RAIL_BOTTOM_GAP_PX - rail.top))
+}
+
+/**
  * Whether the labelled tool rail, whose right edge would sit
  * `labelledRailEdgePx` from the map's left edge, would leave less than
  * `MIN_VISIBLE_MAP_WIDTH_PX` of map before the right chrome. Reads only the
@@ -101,6 +131,8 @@ function inferSide(map: DOMRect, rect: DOMRect): MapOccluderSide {
 
 let area: HTMLElement | null = null
 const occluders = new Map<HTMLElement, MapOccluderSide | undefined>()
+let panelRail: HTMLElement | null = null
+const underPanelRail = new Set<HTMLElement>()
 let observer: ResizeObserver | null = null
 let stopCameraSync: (() => void) | null = null
 
@@ -112,6 +144,11 @@ function recompute(): void {
   const folded = map.width > 0 && measureBottomBandRoom(map, boxes) < MAP_ATTRIBUTION_MIN_ROOM_PX
   if (mapAttributionFolded.peek() !== folded) mapAttributionFolded.value = folded
   for (const edge of INSET_PROPERTIES) area.style.setProperty(`--map-inset-${edge}`, `${next[edge]}px`)
+  const room = measurePanelRailRoom(
+    panelRail?.getBoundingClientRect() ?? null,
+    [...underPanelRail].map((element) => element.getBoundingClientRect()),
+  )
+  if (panelRailRoom.peek() !== room) panelRailRoom.value = room
   const current = visibleMapFrame.peek()
   if (
     current.width !== next.width || current.height !== next.height || current.top !== next.top
@@ -128,7 +165,7 @@ function startWatching(): void {
     // The map area is full-bleed, so the window's resize covers it; the
     // observer watches the chrome, whose size changes on its own.
     observer = new ResizeObserver(() => recompute())
-    for (const element of occluders.keys()) observer.observe(element)
+    for (const element of [...occluders.keys(), ...underPanelRail]) observer.observe(element)
   }
   window.addEventListener('resize', recompute)
   stopCameraSync = effect(() => {
@@ -166,6 +203,7 @@ function releaseArea(element: HTMLElement): void {
   stopWatching()
   visibleMapFrame.value = NO_FRAME
   mapAttributionFolded.value = false
+  panelRailRoom.value = null
 }
 
 /** Floating chrome over the map; returns its release. */
@@ -175,9 +213,42 @@ export function registerMapOccluder(element: HTMLElement, side?: MapOccluderSide
   recompute()
   return () => {
     if (!occluders.delete(element)) return
-    observer?.unobserve(element)
+    if (!underPanelRail.has(element)) observer?.unobserve(element)
     recompute()
   }
+}
+
+/** The panel rail: a right-edge occluder whose room is measured; returns its release. */
+export function registerPanelRail(element: HTMLElement): () => void {
+  panelRail = element
+  const release = registerMapOccluder(element, 'right')
+  return () => {
+    if (panelRail === element) panelRail = null
+    release()
+  }
+}
+
+/**
+ * Chrome under the panel rail's column (the inspection launcher, the zoom
+ * group) that the rail must end above; returns its release.
+ */
+export function registerUnderPanelRail(element: HTMLElement): () => void {
+  underPanelRail.add(element)
+  observe(element)
+  recompute()
+  return () => {
+    if (!underPanelRail.delete(element)) return
+    if (!occluders.has(element)) observer?.unobserve(element)
+    recompute()
+  }
+}
+
+/**
+ * Measures again after chrome moved without changing size, such as the rails
+ * when a notice row lowers `--chrome-rail-top`.
+ */
+export function refreshVisibleMapArea(): void {
+  recompute()
 }
 
 if (import.meta.hot) {

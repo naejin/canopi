@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Panneaux",
+    "more": "Autres panneaux",
     "canvas": "Carte du Design",
     "layers": "Calques",
     "data": "Bibliothèque de données",

@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "面板",
+    "more": "更多面板",
     "canvas": "设计画布",
     "layers": "图层",
     "data": "数据库",

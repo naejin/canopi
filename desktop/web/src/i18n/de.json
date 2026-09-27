@@ -1431,6 +1431,7 @@
   },
   "panelRail": {
     "label": "Bereiche",
+    "more": "Weitere Bereiche",
     "canvas": "Entwurfsfläche",
     "layers": "Ebenen",
     "data": "Datenbibliothek",

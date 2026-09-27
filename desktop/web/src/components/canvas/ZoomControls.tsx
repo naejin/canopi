@@ -14,7 +14,7 @@ import { currentCanvasQuerySurface, currentCanvasViewportCommandSurface } from '
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { ControlIcon, type ControlIconName } from '../shared/ControlIcon'
-import { useMapOccluder, usePublishedWidth } from '../shared/useMapChrome'
+import { useMapOccluder, usePublishedWidth, useUnderPanelRail } from '../shared/useMapChrome'
 import styles from './ZoomControls.module.css'
 
 const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
@@ -31,6 +31,7 @@ const VIEW_ACTION_ICONS: Readonly<Record<string, ControlIconName>> = {
 export function ZoomControls({ viewActions }: { readonly viewActions: readonly CanvasToolbarActionCommand[] }) {
   const group = useRef<HTMLDivElement>(null)
   useMapOccluder(group, 'bottom')
+  useUnderPanelRail(group)
   const frame = currentCanvasQuerySurface.value?.viewport.value
   const command = (id: string) => viewActions.find((action) => action.id === id)
   const zoomIn = command('zoom-in')

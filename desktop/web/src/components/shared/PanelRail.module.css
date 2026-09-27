@@ -60,3 +60,15 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+/* More (a short window folds the last panels into its menu): hover while its
+   menu is open, and a soft accent while it holds the open panel. */
+.button[data-panel-rail-more][aria-expanded="true"] {
+  background: var(--color-control-hover);
+  color: var(--color-text-secondary);
+}
+
+.button[data-panel-rail-more][data-holds-active] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}

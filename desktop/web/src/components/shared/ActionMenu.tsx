@@ -50,9 +50,16 @@ interface MenuAnchor {
 }
 
 /** A compact command menu, portalled so scrollable lists cannot clip actions. */
-export function ActionMenu({ label, items }: {
+export function ActionMenu({ label, items, placement = 'below', triggerClassName, iconSize = 18, triggerData }: {
   label: string
   items: readonly ActionMenuEntry[]
+  /** Where the menu opens: below the trigger, or beside it (a rail's More button). */
+  placement?: 'below' | 'side'
+  /** A presentation for the trigger other than the compact row button. */
+  triggerClassName?: string
+  iconSize?: 18 | 20
+  /** `data-*` attributes on the trigger. */
+  triggerData?: Readonly<Record<`data-${string}`, string | undefined>>
 }) {
   const [open, setOpen] = useState(false)
   const menuId = useId()
@@ -85,12 +92,13 @@ export function ActionMenu({ label, items }: {
   }
 
   return <>
-    <button ref={trigger} type="button" className={styles.trigger} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+    <button ref={trigger} type="button" className={triggerClassName ?? styles.trigger} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+      {...triggerData}
       onClick={() => setOpen(!open)} onKeyDown={event => {
         if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true) }
-      }}><ControlIcon name="more" size={18} /><ButtonTooltip label={label} side="left" /></button>
+      }}><ControlIcon name="more" size={iconSize} /><ButtonTooltip label={label} side="left" /></button>
     {open && trigger.current && (
-      <MenuPopup menuId={menuId} label={label} entries={items} anchor={trigger.current} placement="below" onClose={close} onBack={close} />
+      <MenuPopup menuId={menuId} label={label} entries={items} anchor={trigger.current} placement={placement} onClose={close} onBack={close} />
     )}
   </>
 }
