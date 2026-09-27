@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import { plantDbStatus } from '../../app/health/state'
 import { t } from '../../i18n'
 import { Notice } from './Notice'
+import { useMapOccluder } from './useMapChrome'
 import styles from './DegradedBanner.module.css'
 
 export function DegradedBanner() {
@@ -23,6 +24,8 @@ export function DegradedBanner() {
  */
 function DegradedNotice({ message }: { readonly message: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  // Fits and chips keep below it too.
+  useMapOccluder(ref, 'top')
 
   useLayoutEffect(() => {
     const notice = ref.current

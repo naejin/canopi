@@ -24,11 +24,12 @@
   --canvas-tool-card-left: calc(2 * var(--chrome-inset) + var(--chrome-rail-named-width));
 }
 
-/* Rulers start below the floating title bar and right of the tool rail
+/* Rulers start below the floating title bar (and any notice) and right of the tool rail
    (`--map-inset-left`, published by app/shell/visible-map-area.ts). */
 .rulerOverlay {
   position: absolute;
-  top: calc(var(--chrome-top) + var(--title-bar-height) + var(--space-1));
+  /* Just above the rails' line, which a notice under the title bar lowers. */
+  top: calc(var(--chrome-rail-top) - var(--space-2));
   right: 0;
   bottom: 0;
   left: var(--map-inset-left, 0px);
