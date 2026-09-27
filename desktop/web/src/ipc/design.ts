@@ -8,6 +8,7 @@ import type {
   DesignSaveOutcome,
   DesignSummary,
   LoadedDesign,
+  RecentDesignSummary,
 } from '../types/design'
 import { designPath } from '../app/document-session/store'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
@@ -136,6 +137,14 @@ export async function newDesign(): Promise<CanopiFile> {
 /** Get recently opened files list. */
 export async function getRecentFiles(): Promise<DesignSummary[]> {
   return invoke('get_recent_files')
+}
+
+/**
+ * Start › Recent Designs previews (counts, ground bounds, sketch) read from
+ * the listed files. Paths not on the list are skipped.
+ */
+export async function getRecentDesignPreviews(paths: readonly string[]): Promise<RecentDesignSummary[]> {
+  return invoke('get_recent_design_previews', { paths })
 }
 
 /** Start › Recent Designs › Remove from list; the file is untouched. */

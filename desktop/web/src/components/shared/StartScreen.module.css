@@ -256,6 +256,12 @@
   color: var(--color-text-muted);
 }
 
+/* The sketch fills the tile: a quiet paper ground under the Design's own marks. */
+.sketchThumb {
+  padding: var(--space-1);
+  background: var(--color-surface);
+}
+
 .draftThumb {
   border: 1.5px dashed var(--color-border-strong);
   background: transparent;

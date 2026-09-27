@@ -1,5 +1,6 @@
 use common_types::design::{
     CanopiFile, DesignDraftSummary, DesignSaveOutcome, DesignSummary, LoadedDesign,
+    RecentDesignSummary,
 };
 use tauri::State;
 
@@ -7,6 +8,7 @@ use crate::{
     db::UserDb,
     design::drafts::DesignDrafts,
     native_operation::{NativeOperationClass, NativeOperationExecutor},
+    services::recent_design_previews::RecentDesignPreviews,
 };
 
 // ---------------------------------------------------------------------------
@@ -75,6 +77,47 @@ pub async fn get_recent_files(
             NativeOperationClass::UserData,
             "recent designs read",
             move || crate::services::design_files::get_recent_files(&user_db),
+        )
+        .await
+}
+
+/// Start › Recent Designs previews: counts, ground bounds and a sketch read
+/// from each listed Design's file. Paths not on the list are skipped; files
+/// over the preview cap or unreadable come back without a preview.
+#[tauri::command]
+pub async fn get_recent_design_previews(
+    executor: State<'_, NativeOperationExecutor>,
+    user_db: State<'_, UserDb>,
+    previews: State<'_, RecentDesignPreviews>,
+    paths: Vec<String>,
+) -> Result<Vec<RecentDesignSummary>, String> {
+    recent_design_previews_with_executor(
+        executor.inner(),
+        user_db.inner().clone(),
+        previews.inner().clone(),
+        paths,
+    )
+    .await
+}
+
+async fn recent_design_previews_with_executor(
+    executor: &NativeOperationExecutor,
+    user_db: UserDb,
+    previews: RecentDesignPreviews,
+    paths: Vec<String>,
+) -> Result<Vec<RecentDesignSummary>, String> {
+    let listed = executor
+        .run(
+            NativeOperationClass::UserData,
+            "recent design preview admission",
+            move || crate::services::design_files::listed_recent_paths(&user_db, paths),
+        )
+        .await?;
+    executor
+        .run(
+            NativeOperationClass::Local,
+            "recent design previews",
+            move || Ok(previews.previews(&listed)),
         )
         .await
 }
@@ -236,6 +279,7 @@ mod tests {
             .manage(NativeOperationExecutor::production())
             .manage(user_db)
             .manage(DesignDrafts::new(root))
+            .manage(crate::services::recent_design_previews::RecentDesignPreviews::default())
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
             .unwrap()
     }
@@ -287,6 +331,50 @@ mod tests {
                 .unwrap();
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].name, "Second");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recent_design_previews_read_listed_designs_only() {
+        let root = scratch_root("previews");
+        std::fs::create_dir_all(&root).unwrap();
+        let app = mock_app(&root);
+        let listed = root.join("orchard.canopi").to_string_lossy().into_owned();
+        tauri::async_runtime::block_on(super::save_design(
+            app.state(),
+            app.state(),
+            listed.clone(),
+            design("Orchard"),
+            None,
+        ))
+        .unwrap();
+        let unlisted = root.join("elsewhere.canopi");
+        crate::design::format::export_to_file(&unlisted, &design("Elsewhere")).unwrap();
+
+        let previews = tauri::async_runtime::block_on(super::get_recent_design_previews(
+            app.state(),
+            app.state(),
+            app.state(),
+            vec![
+                listed.clone(),
+                unlisted.to_string_lossy().into_owned(),
+                listed.clone(),
+            ],
+        ))
+        .unwrap();
+
+        assert_eq!(previews.len(), 1, "only a listed path is read, once");
+        assert_eq!(previews[0].path, listed);
+        assert_eq!(
+            previews[0].preview,
+            common_types::design::RecentDesignPreview::Read {
+                plant_count: 0,
+                zone_count: 0,
+                bounds: None,
+                sketch: None,
+            }
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }

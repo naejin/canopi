@@ -8,6 +8,7 @@ pub mod health;
 pub mod lidar;
 pub mod plant_browser;
 pub mod problem_report;
+pub mod recent_design_previews;
 pub mod saved_object_stamps;
 pub mod settings;
 pub mod species_catalog;

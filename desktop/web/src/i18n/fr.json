@@ -1647,7 +1647,16 @@
     "footerWeb": "Vos Designs restent dans ce navigateur. Téléchargez une copie pour garder un fichier.",
     "designActions": "Plus d’actions pour {{name}}",
     "showInFolder": "Afficher dans le dossier",
-    "removeFromList": "Retirer de la liste"
+    "removeFromList": "Retirer de la liste",
+    "plantCount_one": "{{count, number}} plante",
+    "plantCount_few": "{{count, number}} plantes",
+    "plantCount_many": "{{count, number}} plantes",
+    "plantCount_other": "{{count, number}} plantes",
+    "zoneCount_one": "{{count, number}} zone",
+    "zoneCount_few": "{{count, number}} zones",
+    "zoneCount_many": "{{count, number}} zones",
+    "zoneCount_other": "{{count, number}} zones",
+    "cantRead": "Impossible de lire ce fichier"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

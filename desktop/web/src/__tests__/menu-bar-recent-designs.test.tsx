@@ -76,7 +76,7 @@ describe('Title bar menu: Open recent', () => {
     vi.mocked(getRecentFiles)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
-        { path: '/designs/new.canopi', name: 'Newly Saved', updated_at: '2026-06-25T00:00:00.000Z', plant_count: 1 },
+        { path: '/designs/new.canopi', name: 'Newly Saved', updated_at: '2026-06-25T00:00:00.000Z' },
       ])
 
     await renderAndOpenFileMenu()
@@ -101,12 +101,12 @@ describe('Title bar menu: Open recent', () => {
 
   it('opens recent designs from an Open Recent submenu capped to five entries', async () => {
     vi.mocked(getRecentFiles).mockResolvedValue([
-      { path: '/designs/forest.canopi', name: 'Forest Edge', updated_at: '2026-06-20T00:00:00.000Z', plant_count: 4 },
-      { path: '/designs/home.canopi', name: 'Home Guild', updated_at: '2026-06-21T00:00:00.000Z', plant_count: 2 },
-      { path: '/designs/client-a.canopi', name: 'Client A', updated_at: '2026-06-22T00:00:00.000Z', plant_count: 3 },
-      { path: '/designs/client-b.canopi', name: 'Client B', updated_at: '2026-06-23T00:00:00.000Z', plant_count: 1 },
-      { path: '/designs/client-c.canopi', name: 'Client C', updated_at: '2026-06-24T00:00:00.000Z', plant_count: 5 },
-      { path: '/designs/client-d.canopi', name: 'Client D', updated_at: '2026-06-25T00:00:00.000Z', plant_count: 6 },
+      { path: '/designs/forest.canopi', name: 'Forest Edge', updated_at: '2026-06-20T00:00:00.000Z' },
+      { path: '/designs/home.canopi', name: 'Home Guild', updated_at: '2026-06-21T00:00:00.000Z' },
+      { path: '/designs/client-a.canopi', name: 'Client A', updated_at: '2026-06-22T00:00:00.000Z' },
+      { path: '/designs/client-b.canopi', name: 'Client B', updated_at: '2026-06-23T00:00:00.000Z' },
+      { path: '/designs/client-c.canopi', name: 'Client C', updated_at: '2026-06-24T00:00:00.000Z' },
+      { path: '/designs/client-d.canopi', name: 'Client D', updated_at: '2026-06-25T00:00:00.000Z' },
     ])
 
     await renderAndOpenFileMenu()

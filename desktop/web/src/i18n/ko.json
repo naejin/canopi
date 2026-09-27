@@ -1647,7 +1647,16 @@
     "footerWeb": "디자인은 이 브라우저에 남습니다. 파일로 보관하려면 사본을 다운로드하세요.",
     "designActions": "{{name}}의 추가 작업",
     "showInFolder": "폴더에서 보기",
-    "removeFromList": "목록에서 제거"
+    "removeFromList": "목록에서 제거",
+    "plantCount_one": "식물 {{count, number}}개",
+    "plantCount_few": "식물 {{count, number}}개",
+    "plantCount_many": "식물 {{count, number}}개",
+    "plantCount_other": "식물 {{count, number}}개",
+    "zoneCount_one": "구역 {{count, number}}개",
+    "zoneCount_few": "구역 {{count, number}}개",
+    "zoneCount_many": "구역 {{count, number}}개",
+    "zoneCount_other": "구역 {{count, number}}개",
+    "cantRead": "이 파일을 읽을 수 없습니다"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

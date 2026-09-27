@@ -7,6 +7,8 @@ import type {
   LidarImportJob,
   ProcessingRun,
   RasterQuantity,
+  DesignSketch,
+  RecentDesignPreview,
   SpeciesListItem,
   SpeciesSearchRequest,
 } from '../src/generated/contracts'
@@ -112,10 +114,55 @@ function recentDesigns() {
   // First run: no recent Designs and no Drafts.
   if (state === 'empty') return []
   return ([
-    { path: '/designs/sanctuaire.canopi', name: "Le Sanctuaire d'Aylin – Verger Syntropique", updated_at: hoursAgo(1), plant_count: 2201 },
-    { path: '/designs/haie-nord.canopi', name: 'Haie fruitière nord', updated_at: hoursAgo(26), plant_count: 64 },
-    { path: '/designs/mare.canopi', name: 'Jardin de la mare', updated_at: hoursAgo(24 * 14), plant_count: 180 },
+    { path: '/designs/sanctuaire.canopi', name: "Le Sanctuaire d'Aylin – Verger Syntropique", updated_at: hoursAgo(1) },
+    { path: '/designs/haie-nord.canopi', name: 'Haie fruitière nord', updated_at: hoursAgo(26) },
+    { path: '/designs/mare.canopi', name: 'Jardin de la mare', updated_at: hoursAgo(24 * 14) },
+    { path: '/designs/ancien-verger.canopi', name: 'Ancien verger (Canopi 1)', updated_at: hoursAgo(24 * 60) },
   ]).filter(design => !removedRecentPaths.has(design.path))
+}
+/** Deterministic symbolic sketches like the ones native previews derive from a Design's file. */
+function gallerySketch(kind: 'orchard' | 'hedge' | 'pond'): DesignSketch {
+  const plants: number[] = []
+  const zones: DesignSketch['zones'] = []
+  if (kind === 'orchard') {
+    // 24 beds in a 6 × 4 grid, with plants sampled along their rows.
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 6; column += 1) {
+        const [x, y] = [20 + column * 162, 20 + row * 150]
+        zones.push({ closed: true, points: [x, y, x + 140, y, x + 140, y + 128, x, y + 128] })
+        for (let line = 0; line < 4; line += 1) {
+          for (let step = 0; step < 20; step += 1) plants.push(x + 6 + step * 6.5, y + 16 + line * 32)
+        }
+      }
+    }
+    return { width: 1000, height: 640, plants: plants.map(Math.round), zones }
+  }
+  if (kind === 'hedge') {
+    zones.push({ closed: false, points: [0, 110, 1000, 60] })
+    for (let index = 0; index < 64; index += 1) plants.push(Math.round(index * 15.8), Math.round(110 - index * 0.8 + (index % 2) * 12 - 6))
+    return { width: 1000, height: 180, plants, zones }
+  }
+  const pond: number[] = []
+  for (let index = 0; index < 16; index += 1) {
+    const angle = (index / 16) * Math.PI * 2
+    pond.push(Math.round(430 + Math.cos(angle) * 180), Math.round(380 + Math.sin(angle) * 120))
+  }
+  zones.push({ closed: true, points: pond }, { closed: true, points: [20, 20, 980, 20, 980, 740, 20, 740] })
+  for (let index = 0; index < 180; index += 1) {
+    const angle = (index / 180) * Math.PI * 2 * 3
+    const radius = 240 + (index % 3) * 60
+    plants.push(Math.round(430 + Math.cos(angle) * radius * 1.3), Math.round(380 + Math.sin(angle) * radius))
+  }
+  return { width: 1000, height: 760, plants: plants.map((value, index) => Math.max(0, Math.min(index % 2 ? 760 : 1000, value))), zones }
+}
+function recentPreview(path: string): RecentDesignPreview {
+  const bounds = { west: -0.427, south: 48.305, east: -0.413, north: 48.314 }
+  switch (path) {
+    case '/designs/sanctuaire.canopi': return { kind: 'read', plant_count: 2201, zone_count: 24, bounds, sketch: gallerySketch('orchard') }
+    case '/designs/haie-nord.canopi': return { kind: 'read', plant_count: 64, zone_count: 1, bounds, sketch: gallerySketch('hedge') }
+    case '/designs/mare.canopi': return { kind: 'read', plant_count: 180, zone_count: 2, bounds, sketch: gallerySketch('pond') }
+    default: return { kind: 'unreadable' }
+  }
 }
 let drafts = state === 'empty' ? [] : [
   { id: 'draft-untitled', name: 'Untitled', updated_at: hoursAgo(24 * 3) },
@@ -161,6 +208,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     case 'get_favorites': result = species.filter(plant => favoriteNames.has(plant.canonical_name)).map(plant => ({ ...plant, common_name: state === 'long' ? plant.common_name + ' — a particularly long local cultivar name' : plant.common_name })); break
     case 'get_recently_viewed': result = []; break
     case 'get_recent_files': result = recentDesigns(); break
+    case 'get_recent_design_previews': result = (args.paths as string[]).map(path => ({ path, preview: recentPreview(path) })); break
     case 'remove_recent_design':
       removedRecentPaths.add(String(args.path))
       activity.value = 'Removed the Design from Recent Designs in memory.'; result = undefined; break

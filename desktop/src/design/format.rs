@@ -42,6 +42,7 @@ pub(crate) enum DesignLoadError {
     },
     TooLarge {
         path: String,
+        limit: u64,
     },
     InvalidJson {
         path: String,
@@ -57,10 +58,10 @@ impl fmt::Display for DesignLoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Read { path, source } => write!(formatter, "Failed to read {path}: {source}"),
-            Self::TooLarge { path } => write!(
+            Self::TooLarge { path, limit } => write!(
                 formatter,
                 "Design file {path} exceeds the {} MiB limit",
-                MAX_CANOPI_FILE_BYTES / (1024 * 1024)
+                limit / (1024 * 1024)
             ),
             Self::InvalidJson { path, source } => {
                 write!(formatter, "Invalid JSON in {path}: {source}")
@@ -141,6 +142,21 @@ pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError>
 
 /// [`load_from_file`] plus the [`super::fingerprint`] of the exact bytes read.
 pub(crate) fn load_with_fingerprint(path: &Path) -> Result<(CanopiFile, String), DesignLoadError> {
+    let content = read_bounded(path, MAX_CANOPI_FILE_BYTES)?;
+    let fingerprint = super::fingerprint(&content);
+    let file = decode_design_bytes(path, &content)?;
+    Ok((file, fingerprint))
+}
+
+/// Load a Design only when its file is at most `limit` bytes, with the same
+/// admission as [`load_from_file`]. Recent Design previews read through it so
+/// a very large file is skipped rather than parsed.
+pub(crate) fn load_within(path: &Path, limit: u64) -> Result<CanopiFile, DesignLoadError> {
+    let content = read_bounded(path, limit.min(MAX_CANOPI_FILE_BYTES))?;
+    decode_design_bytes(path, &content)
+}
+
+fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, DesignLoadError> {
     use std::io::Read;
     let display = || path.display().to_string();
     let file = std::fs::File::open(path).map_err(|source| DesignLoadError::Read {
@@ -154,34 +170,41 @@ pub(crate) fn load_with_fingerprint(path: &Path) -> Result<(CanopiFile, String),
             source,
         })?
         .len();
-    if length > MAX_CANOPI_FILE_BYTES {
-        return Err(DesignLoadError::TooLarge { path: display() });
+    if length > limit {
+        return Err(DesignLoadError::TooLarge {
+            path: display(),
+            limit,
+        });
     }
     let mut content = Vec::new();
     // Read one byte past the limit so a file that grows while it is read is
     // still refused without buffering it whole.
-    file.take(MAX_CANOPI_FILE_BYTES + 1)
+    file.take(limit + 1)
         .read_to_end(&mut content)
         .map_err(|source| DesignLoadError::Read {
             path: display(),
             source,
         })?;
-    if content.len() as u64 > MAX_CANOPI_FILE_BYTES {
-        return Err(DesignLoadError::TooLarge { path: display() });
+    if content.len() as u64 > limit {
+        return Err(DesignLoadError::TooLarge {
+            path: display(),
+            limit,
+        });
     }
-    let fingerprint = super::fingerprint(&content);
+    Ok(content)
+}
 
+fn decode_design_bytes(path: &Path, content: &[u8]) -> Result<CanopiFile, DesignLoadError> {
+    let display = || path.display().to_string();
     let value: serde_json::Value =
-        serde_json::from_slice(&content).map_err(|source| DesignLoadError::InvalidJson {
+        serde_json::from_slice(content).map_err(|source| DesignLoadError::InvalidJson {
             path: display(),
             source,
         })?;
-
-    let file = decode_design_value(value).map_err(|source| DesignLoadError::Ingestion {
+    decode_design_value(value).map_err(|source| DesignLoadError::Ingestion {
         path: display(),
         source,
-    })?;
-    Ok((file, fingerprint))
+    })
 }
 
 #[expect(

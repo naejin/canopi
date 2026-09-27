@@ -2,6 +2,7 @@
 pub mod drafts;
 pub mod format;
 mod new_design_defaults;
+pub(crate) mod preview;
 
 use std::{
     collections::HashMap,

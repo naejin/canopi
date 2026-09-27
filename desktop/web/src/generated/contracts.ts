@@ -149,6 +149,17 @@ export type DesignDraftSummary = {
 	updated_at: string,
 };
 
+/**
+ *  A north-up WGS84 box around a Design's plants and zones. `west == east` or
+ *  `south == north` when they sit on one line or point.
+ */
+export type DesignGroundBounds = {
+	west: number,
+	south: number,
+	east: number,
+	north: number,
+};
+
 export type DesignNotebookEntry = {
 	path: string,
 	name: string,
@@ -181,11 +192,31 @@ export type DesignSaveOutcome =
  */
 { kind: "conflict"; current_fingerprint: string | null };
 
+/**
+ *  A symbolic mini-map of a Design: zones as outlines and plants as dots over
+ *  its ground bounds, north up. Coordinates are sketch units in a
+ *  `width` × `height` frame whose longer side is [`DESIGN_SKETCH_GRID`]; `x`
+ *  grows east and `y` grows south, as on screen.
+ */
+export type DesignSketch = {
+	width: number,
+	height: number,
+	// Flat `x, y` pairs, one per drawn plant.
+	plants: number[],
+	zones: DesignSketchZone[],
+};
+
+// One zone of a [`DesignSketch`]: `points` are flat `x, y` pairs.
+export type DesignSketchZone = {
+	// False for a line zone, which is drawn open.
+	closed: boolean,
+	points: number[],
+};
+
 export type DesignSummary = {
 	path: string,
 	name: string,
 	updated_at: string,
-	plant_count: number,
 };
 
 export type DynamicFilter = {
@@ -700,6 +731,21 @@ export type RasterQuantity =
 "OtherContinuous" |
 // Terrain slope, in degrees or percent (derived only).
 "Slope";
+
+// What a Recent Design's file says about it, read when the list is shown.
+export type RecentDesignPreview = { kind: "read"; plant_count: number; zone_count: number;
+// `None` when the Design has no plants or zones yet.
+bounds: DesignGroundBounds | null; sketch: DesignSketch | null } |
+// The file is larger than previews read; the row shows its name only.
+{ kind: "too_large" } |
+// The file is gone, unreadable, or not a current-version Design.
+{ kind: "unreadable" };
+
+// A Recent Design's preview, keyed by its path on the list.
+export type RecentDesignSummary = {
+	path: string,
+	preview: RecentDesignPreview,
+};
 
 export type RichTextBlock = { kind: "paragraph"; spans: RichTextSpan[] } | { kind: "bullets"; items: RichTextListItem[] };
 

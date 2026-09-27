@@ -1647,7 +1647,16 @@
     "footerWeb": "I tuoi progetti restano in questo browser. Scarica una copia per conservare un file.",
     "designActions": "Altre azioni per {{name}}",
     "showInFolder": "Mostra nella cartella",
-    "removeFromList": "Rimuovi dall’elenco"
+    "removeFromList": "Rimuovi dall’elenco",
+    "plantCount_one": "{{count, number}} pianta",
+    "plantCount_few": "{{count, number}} piante",
+    "plantCount_many": "{{count, number}} piante",
+    "plantCount_other": "{{count, number}} piante",
+    "zoneCount_one": "{{count, number}} zona",
+    "zoneCount_few": "{{count, number}} zone",
+    "zoneCount_many": "{{count, number}} zone",
+    "zoneCount_other": "{{count, number}} zone",
+    "cantRead": "Impossibile leggere questo file"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

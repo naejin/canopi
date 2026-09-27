@@ -1647,7 +1647,16 @@
     "footerWeb": "Je ontwerpen blijven in deze browser. Download een kopie om een bestand te bewaren.",
     "designActions": "Meer acties voor {{name}}",
     "showInFolder": "Tonen in map",
-    "removeFromList": "Uit de lijst verwijderen"
+    "removeFromList": "Uit de lijst verwijderen",
+    "plantCount_one": "{{count, number}} plant",
+    "plantCount_few": "{{count, number}} planten",
+    "plantCount_many": "{{count, number}} planten",
+    "plantCount_other": "{{count, number}} planten",
+    "zoneCount_one": "{{count, number}} zone",
+    "zoneCount_few": "{{count, number}} zones",
+    "zoneCount_many": "{{count, number}} zones",
+    "zoneCount_other": "{{count, number}} zones",
+    "cantRead": "Dit bestand kan niet worden gelezen"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

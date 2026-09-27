@@ -1,9 +1,21 @@
 import { signal, type Signal } from '@preact/signals'
-import { getRecentFiles, removeRecentDesign, showRecentDesignInFolder } from '../../ipc/design'
-import type { DesignSummary } from '../../types/design'
+import {
+  getRecentDesignPreviews,
+  getRecentFiles,
+  removeRecentDesign,
+  showRecentDesignInFolder,
+} from '../../ipc/design'
+import type { DesignSummary, RecentDesignPreview } from '../../types/design'
 
 export interface RecentFilesController {
   recentFiles: Signal<DesignSummary[]>
+  /**
+   * What each listed Design's file says about it (counts and sketch), by path.
+   * A path is missing until its file has been read, or when reading failed as
+   * a whole; the row then shows the name only.
+   */
+  previews: Signal<ReadonlyMap<string, RecentDesignPreview>>
+  /** Lists the Designs, then reads their previews without holding up the list. */
   load(): Promise<void>
   /** Forget a Design on the list; the file is untouched. */
   remove(path: string): Promise<void>
@@ -14,6 +26,7 @@ export interface RecentFilesController {
 
 interface CreateRecentFilesControllerOptions {
   loadRecentFiles?: typeof getRecentFiles
+  loadPreviews?: typeof getRecentDesignPreviews
   removeRecentFile?: typeof removeRecentDesign
   showRecentFileInFolder?: typeof showRecentDesignInFolder
   maxItems?: number
@@ -23,24 +36,39 @@ export function createRecentFilesController(
   options: CreateRecentFilesControllerOptions = {},
 ): RecentFilesController {
   const loadRecentFiles = options.loadRecentFiles ?? getRecentFiles
+  const loadPreviews = options.loadPreviews ?? getRecentDesignPreviews
   const removeRecentFile = options.removeRecentFile ?? removeRecentDesign
   const showInFolder = options.showRecentFileInFolder ?? showRecentDesignInFolder
   const maxItems = options.maxItems ?? 5
   const recentFiles = signal<DesignSummary[]>([])
+  const previews = signal<ReadonlyMap<string, RecentDesignPreview>>(new Map())
 
   let disposed = false
   let generation = 0
 
   async function load(): Promise<void> {
     const requestGeneration = ++generation
+    const current = () => !disposed && requestGeneration === generation
+    let files: DesignSummary[]
     try {
-      const files = await loadRecentFiles()
-      if (disposed || requestGeneration !== generation) return
-      recentFiles.value = files.slice(0, maxItems)
+      files = (await loadRecentFiles()).slice(0, maxItems)
     } catch {
-      if (disposed || requestGeneration !== generation) return
-      recentFiles.value = []
+      if (current()) recentFiles.value = []
+      return
     }
+    if (!current()) return
+    recentFiles.value = files
+    const missing = files.map((file) => file.path).filter((path) => !previews.value.has(path))
+    if (missing.length === 0) return
+    void loadPreviews(missing).then((summaries) => {
+      if (disposed) return
+      const next = new Map(previews.value)
+      for (const summary of summaries) next.set(summary.path, summary.preview)
+      previews.value = next
+    }, (error: unknown) => {
+      // The list stays usable with names only.
+      console.warn('Recent Design previews are unavailable:', error)
+    })
   }
 
   async function remove(path: string): Promise<void> {
@@ -58,6 +86,7 @@ export function createRecentFilesController(
 
   return {
     recentFiles,
+    previews,
     load,
     remove,
     showInFolder,

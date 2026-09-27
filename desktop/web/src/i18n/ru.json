@@ -1647,7 +1647,16 @@
     "footerWeb": "Проекты хранятся в этом браузере. Скачайте копию, чтобы сохранить файл.",
     "designActions": "Другие действия для {{name}}",
     "showInFolder": "Показать в папке",
-    "removeFromList": "Убрать из списка"
+    "removeFromList": "Убрать из списка",
+    "plantCount_one": "{{count, number}} растение",
+    "plantCount_few": "{{count, number}} растения",
+    "plantCount_many": "{{count, number}} растений",
+    "plantCount_other": "{{count, number}} растения",
+    "zoneCount_one": "{{count, number}} зона",
+    "zoneCount_few": "{{count, number}} зоны",
+    "zoneCount_many": "{{count, number}} зон",
+    "zoneCount_other": "{{count, number}} зоны",
+    "cantRead": "Не удаётся прочитать этот файл"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

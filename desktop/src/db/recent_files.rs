@@ -19,7 +19,6 @@ pub fn record_recent_file(
 }
 
 /// Return recent files ordered by most recently opened, up to `limit` rows.
-/// `plant_count` is 0 — we don't parse the file here, just return stored metadata.
 pub fn get_recent_files(
     conn: &Connection,
     limit: u32,
@@ -36,7 +35,6 @@ pub fn get_recent_files(
             path: row.get(0)?,
             name: row.get(1)?,
             updated_at: row.get(2)?,
-            plant_count: 0,
         })
     })?;
 
@@ -81,7 +79,7 @@ mod tests {
         let files = get_recent_files(&conn, 10).unwrap();
         assert_eq!(files.len(), 2);
 
-        // Both entries must be present; plant_count is always 0.
+        // Both entries must be present.
         let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
         assert!(
             names.contains(&"Garden"),
@@ -91,7 +89,6 @@ mod tests {
             names.contains(&"Forest"),
             "Forest should be in recent files"
         );
-        assert!(files.iter().all(|f| f.plant_count == 0));
     }
 
     #[test]

@@ -487,12 +487,12 @@ describe('design notebook workbench', () => {
     const workbench = createDesignNotebookWorkbench({
       loadNotebook: vi.fn().mockResolvedValue({ sections: [], entries: [] }),
       loadRecentDesigns: vi.fn().mockResolvedValue([
-        { path: '/a.canopi', name: 'A', updated_at: '2026-06-01T00:00:00.000Z', plant_count: 1 },
-        { path: '/b.canopi', name: 'B', updated_at: '2026-06-02T00:00:00.000Z', plant_count: 2 },
-        { path: '/c.canopi', name: 'C', updated_at: '2026-06-03T00:00:00.000Z', plant_count: 3 },
-        { path: '/d.canopi', name: 'D', updated_at: '2026-06-04T00:00:00.000Z', plant_count: 4 },
-        { path: '/e.canopi', name: 'E', updated_at: '2026-06-05T00:00:00.000Z', plant_count: 5 },
-        { path: '/f.canopi', name: 'F', updated_at: '2026-06-06T00:00:00.000Z', plant_count: 6 },
+        { path: '/a.canopi', name: 'A', updated_at: '2026-06-01T00:00:00.000Z' },
+        { path: '/b.canopi', name: 'B', updated_at: '2026-06-02T00:00:00.000Z' },
+        { path: '/c.canopi', name: 'C', updated_at: '2026-06-03T00:00:00.000Z' },
+        { path: '/d.canopi', name: 'D', updated_at: '2026-06-04T00:00:00.000Z' },
+        { path: '/e.canopi', name: 'E', updated_at: '2026-06-05T00:00:00.000Z' },
+        { path: '/f.canopi', name: 'F', updated_at: '2026-06-06T00:00:00.000Z' },
       ]),
       openDesign: vi.fn(),
     })
@@ -517,14 +517,14 @@ describe('design notebook workbench', () => {
     const secondRefresh = workbench.loadRecentDesigns()
 
     secondLoad.resolve([
-      { path: '/new.canopi', name: 'New', updated_at: '2026-06-02T00:00:00.000Z', plant_count: 2 },
+      { path: '/new.canopi', name: 'New', updated_at: '2026-06-02T00:00:00.000Z' },
     ])
     await secondRefresh
 
     expect(workbench.view.value.recentEntries.map((entry) => entry.name)).toEqual(['New'])
 
     firstLoad.resolve([
-      { path: '/old.canopi', name: 'Old', updated_at: '2026-06-01T00:00:00.000Z', plant_count: 1 },
+      { path: '/old.canopi', name: 'Old', updated_at: '2026-06-01T00:00:00.000Z' },
     ])
     await firstRefresh
 

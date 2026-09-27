@@ -97,6 +97,27 @@ pub fn remove_recent_design(user_db: &UserDb, path: &str) -> Result<(), String> 
         .map_err(|error| format!("Failed to remove the Design from Recent Designs: {error}"))
 }
 
+/// The paths, among `paths`, that are on the Recent Designs list: previews
+/// read only listed files, at most one list's worth, each once.
+pub fn listed_recent_paths(user_db: &UserDb, paths: Vec<String>) -> Result<Vec<String>, String> {
+    let conn = user_db.acquire();
+    let mut listed: Vec<String> = Vec::new();
+    for path in paths {
+        if listed.len() == RECENT_DESIGNS_LIMIT {
+            break;
+        }
+        if listed.contains(&path) {
+            continue;
+        }
+        let on_list = crate::db::recent_files::is_recent_file(&conn, &path)
+            .map_err(|error| format!("Failed to read Recent Designs: {error}"))?;
+        if on_list {
+            listed.push(path);
+        }
+    }
+    Ok(listed)
+}
+
 /// The folder holding a Recent Design, for Show in folder. Only a path on the
 /// list is accepted, so the command cannot open an arbitrary folder.
 pub fn recent_design_folder(user_db: &UserDb, path: &str) -> Result<PathBuf, String> {
@@ -291,7 +312,6 @@ mod tests {
             path: path.to_owned(),
             name: name.to_owned(),
             updated_at: "2026-07-02T00:00:00Z".to_owned(),
-            plant_count: 0,
         }
     }
 

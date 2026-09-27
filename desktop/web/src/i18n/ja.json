@@ -1647,7 +1647,16 @@
     "footerWeb": "デザインはこのブラウザーに保存されます。ファイルとして残すにはコピーをダウンロードしてください。",
     "designActions": "{{name}} のその他の操作",
     "showInFolder": "フォルダーに表示",
-    "removeFromList": "リストから削除"
+    "removeFromList": "リストから削除",
+    "plantCount_one": "{{count, number}} 株",
+    "plantCount_few": "{{count, number}} 株",
+    "plantCount_many": "{{count, number}} 株",
+    "plantCount_other": "{{count, number}} 株",
+    "zoneCount_one": "{{count, number}} ゾーン",
+    "zoneCount_few": "{{count, number}} ゾーン",
+    "zoneCount_many": "{{count, number}} ゾーン",
+    "zoneCount_other": "{{count, number}} ゾーン",
+    "cantRead": "このファイルを読み込めません"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

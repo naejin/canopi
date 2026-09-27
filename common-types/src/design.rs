@@ -707,7 +707,68 @@ pub struct DesignSummary {
     pub path: String,
     pub name: String,
     pub updated_at: String,
-    pub plant_count: u32,
+}
+
+/// Longest side of a [`DesignSketch`] frame, in sketch units.
+pub const DESIGN_SKETCH_GRID: u16 = 1000;
+/// At most this many plants are drawn in a sketch; larger Designs are sampled evenly.
+pub const DESIGN_SKETCH_MAX_PLANTS: usize = 2000;
+/// At most this many zone outline points are drawn in a sketch, across all zones.
+pub const DESIGN_SKETCH_MAX_ZONE_POINTS: usize = 2000;
+
+/// A north-up WGS84 box around a Design's plants and zones. `west == east` or
+/// `south == north` when they sit on one line or point.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct DesignGroundBounds {
+    pub west: f64,
+    pub south: f64,
+    pub east: f64,
+    pub north: f64,
+}
+
+/// One zone of a [`DesignSketch`]: `points` are flat `x, y` pairs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignSketchZone {
+    /// False for a line zone, which is drawn open.
+    pub closed: bool,
+    pub points: Vec<u16>,
+}
+
+/// A symbolic mini-map of a Design: zones as outlines and plants as dots over
+/// its ground bounds, north up. Coordinates are sketch units in a
+/// `width` × `height` frame whose longer side is [`DESIGN_SKETCH_GRID`]; `x`
+/// grows east and `y` grows south, as on screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignSketch {
+    pub width: u16,
+    pub height: u16,
+    /// Flat `x, y` pairs, one per drawn plant.
+    pub plants: Vec<u16>,
+    pub zones: Vec<DesignSketchZone>,
+}
+
+/// What a Recent Design's file says about it, read when the list is shown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RecentDesignPreview {
+    Read {
+        plant_count: u32,
+        zone_count: u32,
+        /// `None` when the Design has no plants or zones yet.
+        bounds: Option<DesignGroundBounds>,
+        sketch: Option<DesignSketch>,
+    },
+    /// The file is larger than previews read; the row shows its name only.
+    TooLarge,
+    /// The file is gone, unreadable, or not a current-version Design.
+    Unreadable,
+}
+
+/// A Recent Design's preview, keyed by its path on the list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct RecentDesignSummary {
+    pub path: String,
+    pub preview: RecentDesignPreview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

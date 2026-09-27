@@ -93,6 +93,7 @@ pub fn run() {
             commands::design::save_design,
             commands::design::load_design,
             commands::design::get_recent_files,
+            commands::design::get_recent_design_previews,
             commands::design::remove_recent_design,
             commands::design::show_recent_design_in_folder,
             commands::design::save_design_draft,
@@ -151,6 +152,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             design::drafts::remove_retired_autosave_store(&data_dir);
             app.manage(design::drafts::DesignDrafts::new(&data_dir));
+            app.manage(services::recent_design_previews::RecentDesignPreviews::default());
             let user_db_path = data_dir.join("user.db");
             let user_db = match db::UserDb::open(&user_db_path) {
                 Ok(user_db) => user_db,

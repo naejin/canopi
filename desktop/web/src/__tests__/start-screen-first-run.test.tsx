@@ -3,12 +3,15 @@ import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const recentDesigns = vi.hoisted(() => ({
-  files: [] as { path: string; name: string; updated_at: string; plant_count: number }[],
+  files: [] as { path: string; name: string; updated_at: string }[],
+  previews: null as null | ((paths: readonly string[]) => Promise<import('../types/design').RecentDesignSummary[]>),
 }))
 
 vi.mock('../ipc/design', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ipc/design')>()),
   getRecentFiles: vi.fn(async () => recentDesigns.files),
+  getRecentDesignPreviews: vi.fn(async (paths: readonly string[]) =>
+    recentDesigns.previews ? recentDesigns.previews(paths) : new Promise(() => {})),
   listDesignDrafts: vi.fn(async () => []),
 }))
 
@@ -88,16 +91,48 @@ describe('Start screen on first run', () => {
 })
 
 describe('Desktop recent Designs', () => {
-  it('shows no plant count while the recent list does not know it', async () => {
-    // Recent files carry no plant count yet (the backend reports 0 for every file).
-    recentDesigns.files = [{ path: '/d/orchard.canopi', name: 'Orchard', updated_at: new Date().toISOString(), plant_count: 0 }]
+  afterEach(() => { recentDesigns.previews = null })
+
+  it('shows the name only while the file has not been read', async () => {
+    recentDesigns.files = [{ path: '/d/orchard.canopi', name: 'Orchard', updated_at: new Date().toISOString() }]
     await act(async () => { render(<WelcomeScreen />, container) })
     await act(async () => { await Promise.resolve() })
 
     const row = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Orchard'))
     expect(row).toBeDefined()
     expect(row!.textContent).not.toMatch(/plant/i)
+    expect(row!.querySelector('[data-design-sketch]')).toBeNull()
     expect(container.textContent).not.toContain('No Designs yet')
+  })
+
+  it('shows counts and a sketch read from the file, and a quiet note for a file it cannot read', async () => {
+    recentDesigns.files = [
+      { path: '/d/orchard.canopi', name: 'Orchard', updated_at: new Date().toISOString() },
+      { path: '/d/old.canopi', name: 'Old garden', updated_at: new Date().toISOString() },
+      { path: '/d/huge.canopi', name: 'Huge estate', updated_at: new Date().toISOString() },
+    ]
+    recentDesigns.previews = async () => [
+      {
+        path: '/d/orchard.canopi',
+        preview: {
+          kind: 'read', plant_count: 2201, zone_count: 24,
+          bounds: { west: 0.1, south: 47, east: 0.2, north: 47.05 },
+          sketch: { width: 1000, height: 500, plants: [0, 500, 1000, 0], zones: [{ closed: true, points: [0, 0, 10, 0, 10, 10] }] },
+        },
+      },
+      { path: '/d/old.canopi', preview: { kind: 'unreadable' } },
+      { path: '/d/huge.canopi', preview: { kind: 'too_large' } },
+    ]
+    await act(async () => { render(<WelcomeScreen />, container) })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const rowOf = (name: string) => Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(name))!
+    expect(rowOf('Orchard').textContent).toContain('2,201 plants · 24 zones')
+    const sketch = rowOf('Orchard').querySelector('[data-design-sketch]')!
+    expect(sketch.querySelectorAll('path')[1]!.getAttribute('d')).toBe('M0 500h0M1000 0h0')
+    expect(rowOf('Old garden').textContent).toContain('Can’t read this file')
+    expect(rowOf('Old garden').querySelector('[data-design-sketch]')).toBeNull()
+    expect(rowOf('Huge estate').textContent).not.toMatch(/plant|read/i)
   })
 })
 

@@ -47,6 +47,7 @@ export function WelcomeScreen() {
         id: file.path,
         name: file.name,
         updatedAt: file.updated_at,
+        preview: recentFilesController.previews.value.get(file.path),
         open: () => { void openDesignFromPath(file.path).catch(logWelcomeError) },
         showInFolder: () => { void recentFilesController.showInFolder(file.path).catch(logWelcomeError) },
         remove: () => { void recentFilesController.remove(file.path).catch(logWelcomeError) },

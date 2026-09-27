@@ -2,7 +2,9 @@ import { useId, useState } from 'preact/hooks'
 import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { ActionMenu } from './ActionMenu'
+import type { RecentDesignPreview } from '../../types/design'
 import { ControlIcon, type ControlIconName } from './ControlIcon'
+import { DesignSketchThumbnail } from './DesignSketchThumbnail'
 import { visibleDesignName } from './DesignNameField'
 import { EmptyState } from './EmptyState'
 import { formatRelativeDate } from './relative-date'
@@ -22,6 +24,8 @@ export interface StartScreenDesign {
   readonly id: string
   readonly name: string
   readonly updatedAt: string
+  /** What the file says about the Design; absent until it has been read. */
+  readonly preview?: RecentDesignPreview
   open(): void
   /** More › Show in folder: the file's folder in the system file manager. */
   showInFolder(): void
@@ -160,14 +164,24 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
 
 function RecentRow({ design }: { readonly design: StartScreenDesign }) {
   const name = visibleDesignName(design.name)
+  const preview = design.preview
+  const sketch = preview?.kind === 'read' ? preview.sketch : null
   return (
     <li className={styles.row}>
       <div className={styles.rowLine}>
         <button type="button" className={styles.rowButton} onClick={design.open}>
-          <span className={styles.thumb} aria-hidden="true"><ControlIcon name="pin" size={20} /></span>
-          {/* Recent files do not know their plant count or place yet (canopi-h90p.23); show neither rather than a wrong "0 plants". */}
+          <span className={`${styles.thumb} ${sketch ? styles.sketchThumb : ''}`} aria-hidden="true">
+            {sketch ? <DesignSketchThumbnail sketch={sketch} /> : <ControlIcon name="pin" size={20} />}
+          </span>
+          {/* No place name yet: a Design does not store its site's name (canopi-h90p.23). */}
           <span className={styles.rowText}>
             <span className={styles.rowName}>{name}</span>
+            {preview?.kind === 'read' && (
+              <span className={styles.rowMeta}>
+                {t('start.plantCount', { count: preview.plant_count })} · {t('start.zoneCount', { count: preview.zone_count })}
+              </span>
+            )}
+            {preview?.kind === 'unreadable' && <span className={styles.rowMeta}>{t('start.cantRead')}</span>}
           </span>
           <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
         </button>
