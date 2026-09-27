@@ -7,7 +7,7 @@ import {
 import type { SceneBounds } from '../../canvas/runtime/camera'
 import type { ScenePersistedState } from '../../canvas/runtime/scene'
 import { speciesTarget } from '../../target'
-import { setMatchedPanelTargets } from '../panel-targets/presentation'
+import { clearSelectedPanelTargetsForOrigin, setMatchedPanelTargets, setSelectedPanelTargets } from '../panel-targets/presentation'
 import { readPlanningViewState } from '../planning-view/state'
 
 /**
@@ -78,6 +78,15 @@ export function zoomToSpeciesPlants(canonicalNames: readonly string[]): boolean 
   if (!queries || !viewport) return false
   const bounds = speciesPlantBounds(queries.getSceneSnapshot(), canonicalNames)
   return bounds ? viewport.focusTemporaryBounds(bounds, { paddingCssPx: ZOOM_PADDING_CSS_PX }) : false
+}
+
+/** Species detail rings its species' plants on the map while it is open; never selects or edits. */
+export function showSpeciesDetailOnMap(canonicalName: string): void {
+  setSelectedPanelTargets('species-detail', [speciesTarget(canonicalName)])
+}
+
+export function clearSpeciesDetailOnMap(): void {
+  clearSelectedPanelTargetsForOrigin('species-detail')
 }
 
 /** Selects every plant of these species through the runtime selection command. */

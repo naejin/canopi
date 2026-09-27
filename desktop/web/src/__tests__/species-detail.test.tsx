@@ -22,7 +22,7 @@ const workbench = vi.hoisted(() => ({
   toggleFavorite: vi.fn(async () => {}),
 }))
 const inDesign = vi.hoisted(() => ({ species: new Map<string, CatalogDesignSpecies>() }))
-const mapActions = vi.hoisted(() => ({ selectSpeciesPlants: vi.fn(), zoomToSpeciesPlants: vi.fn(() => true) }))
+const mapActions = vi.hoisted(() => ({ selectSpeciesPlants: vi.fn(), zoomToSpeciesPlants: vi.fn(() => true), showSpeciesDetailOnMap: vi.fn(), clearSpeciesDetailOnMap: vi.fn() }))
 
 vi.mock('../ipc/species', () => ipc)
 vi.mock('@tauri-apps/api/core', () => ({ convertFileSrc: (path: string) => `asset://${path}` }))
@@ -86,6 +86,8 @@ describe('Species detail (Desktop)', () => {
     workbench.closeSpeciesDetail.mockReset()
     mapActions.selectSpeciesPlants.mockReset()
     mapActions.zoomToSpeciesPlants.mockReset()
+    mapActions.showSpeciesDetailOnMap.mockReset()
+    mapActions.clearSpeciesDetailOnMap.mockReset()
   })
 
   afterEach(() => {
@@ -189,6 +191,7 @@ describe('Species detail (Desktop)', () => {
     expect(container.textContent).toContain('MDO')
     await act(async () => { button('Select them').click() })
     expect(mapActions.selectSpeciesPlants).toHaveBeenCalledWith(['Malus domestica'])
+    expect(mapActions.showSpeciesDetailOnMap).toHaveBeenCalledWith('Malus domestica')
     await act(async () => { button('Zoom to them').click() })
     expect(mapActions.zoomToSpeciesPlants).toHaveBeenCalledWith(['Malus domestica'])
     expect(button('Place Apple').disabled).toBe(false)

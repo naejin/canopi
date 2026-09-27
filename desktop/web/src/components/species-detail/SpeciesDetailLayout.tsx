@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
-import { selectSpeciesPlants, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
+import { clearSpeciesDetailOnMap, selectSpeciesPlants, showSpeciesDetailOnMap, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
 import { currentCanvasToolCommandSurface } from '../../canvas/session'
 import { beginPlantStampFromSpecies, type PlantStampSourceInput } from '../../canvas/plant-stamp-source'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
@@ -50,6 +50,15 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
 
   // Opening the detail moves focus to Back, whichever list opened it.
   useLayoutEffect(() => { backRef.current?.focus({ preventScroll: true }) }, [])
+
+  // The species' plants stay ringed on the map while its detail is open, so
+  // Zoom to them shows which plants they are.
+  const hasPlantsInDesign = Boolean(inDesign)
+  useEffect(() => {
+    if (!hasPlantsInDesign) return undefined
+    showSpeciesDetailOnMap(canonicalName)
+    return clearSpeciesDetailOnMap
+  }, [canonicalName, hasPlantsInDesign])
 
   return (
     <article className={styles.detail} aria-label={title} data-testid="species-detail">
