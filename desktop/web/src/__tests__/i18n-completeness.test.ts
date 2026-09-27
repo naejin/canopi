@@ -69,11 +69,11 @@ describe('i18n completeness', () => {
     })
   }
 
-  it('uses French planche terminology for saved object stamps but keeps stamp tools as tampons', () => {
-    expect(fr.savedObjectStamps.title).toBe('Planches')
-    expect(fr.savedObjectStamps.loading).toContain('planches')
-    expect(fr.savedObjectStamps.rename).toContain('planche')
-    expect(fr.canvas.tools.objectStamp).toContain('tampon')
-    expect(fr.menu['edit.saveAsStamp']).toBe('Enregistrer comme planche')
+  it('calls stamps tampons everywhere in French, never planches (garden beds)', () => {
+    const values = JSON.stringify(fr)
+    expect(values).not.toMatch(/planche/i)
+    expect(fr.savedObjectStamps.title).toBe('Tampons enregistrés')
+    expect(fr.canvas.tools.objectStamp).toBe('Placer un tampon')
+    expect(fr.menu['edit.saveAsStamp']).toBe('Enregistrer comme tampon')
   })
 })
