@@ -130,6 +130,8 @@ export interface CanvasSceneEditCommandSurface {
   selectSameSpecies(canonicalName?: string, options?: { additive?: boolean }): void
   /** Replaces the selection with every selectable plant of these species. */
   selectSpecies(canonicalNames: readonly string[]): void
+  /** Empties the selection (session state: no edit, history or dirty state). */
+  clearSelection(): void
   bringToFront(): void
   sendToBack(): void
   lockSelected(): void

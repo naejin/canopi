@@ -164,6 +164,10 @@ export class SceneRuntimeMutationController {
     this._runCommandWhenSettled(() => this._selectSpeciesWhenSettled(canonicalNames), undefined)
   }
 
+  clearSelection(): void {
+    this._runCommandWhenSettled(() => this._clearSelectionWhenSettled(), undefined)
+  }
+
   bringToFront(): void {
     this._runCommandWhenSettled(() => this._bringToFrontWhenSettled(), undefined)
   }
@@ -444,6 +448,12 @@ export class SceneRuntimeMutationController {
     const nextSelection = applySpeciesSelection(this._sceneStore.session.selectedTargets, plantIds, false)
     if (sceneDesignObjectTargetsEqual(nextSelection, this._sceneStore.session.selectedTargets)) return
     this._selection.set(nextSelection)
+    this._invalidateScene()
+  }
+
+  private _clearSelectionWhenSettled(): void {
+    if (this._sceneStore.session.selectedTargets.length === 0) return
+    this._selection.set([])
     this._invalidateScene()
   }
 

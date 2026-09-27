@@ -594,6 +594,18 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.session.selectedTargets).toHaveLength(3)
   })
 
+  it('clears the selection without editing the Design', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'Z01' }])
+
+    controller.clearSelection()
+
+    expect(sceneStore.session.selectedTargets).toEqual([])
+    expect(state.dirtyTypes).toEqual([])
+    controller.clearSelection()
+    expect(sceneStore.session.selectedTargets).toEqual([])
+  })
+
   it('updates species colors through the presentation seam', () => {
     const { controller, sceneStore, state } = createController()
 

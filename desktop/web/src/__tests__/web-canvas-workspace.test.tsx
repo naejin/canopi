@@ -901,6 +901,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       selectAll: vi.fn(),
       selectSameSpecies: vi.fn(),
       selectSpecies: vi.fn(),
+      clearSelection: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
       lockSelected: vi.fn(),

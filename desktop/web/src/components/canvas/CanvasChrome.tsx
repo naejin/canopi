@@ -7,6 +7,7 @@ import { CanvasOverview } from './CanvasOverview'
 import { DisplayLegend } from './DisplayLegend'
 import { InspectionLens } from './InspectionLens'
 import { PlantAppearancePopovers } from './PlantAppearancePopovers'
+import { SelectionChip } from './SelectionChip'
 import { SiteOnboarding } from './SiteOnboarding'
 import { SpeciesFocusChip } from './SpeciesFocusChip'
 import { ToolRail } from './ToolRail'
@@ -15,7 +16,7 @@ import { ZoomControls } from './ZoomControls'
 
 /**
  * The floating chrome over the map that both editions share: tool rail, view
- * chip, zoom group, right-click menu, plant appearance popovers, overview,
+ * chip, zoom group, the highlight and selection status chips, right-click menu, plant appearance popovers, overview,
  * inspection and New-Design guidance. The edition
  * hands over its canvas command projection.
  */
@@ -35,6 +36,7 @@ export function CanvasChrome({ projection, canvasRef, children }: {
       <InspectionLens canvasRef={canvasRef} />
       {children}
       <SpeciesFocusChip />
+      {!locating && <SelectionChip />}
       {!locating && <CanvasOverview />}
       <DisplayLegend />
       <SiteOnboarding />
