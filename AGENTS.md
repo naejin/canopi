@@ -46,7 +46,7 @@ Read the relevant guide before changing an area. Code shows current behaviour; a
 
 - **All Canopi v2 work is on `feature/geolibre-adoption`.** Commit every v2 bead there; do not open per-bead branches. Pull with `git pull --rebase=merges` before starting and push after each bead.
 - Non-v2 maintenance: start from `main`, branch by intent (`feature/`, `fix/`, `refactor/`, `test/`, `docs/`).
-- Prefer a separate worktree for implementation so the user's `cargo tauri dev` checkout is not disturbed; ask the user to pull.
+- Prefer a separate worktree for implementation so the user's `cargo tauri dev` checkout is not disturbed; ask the user to pull. Worktrees share one `CARGO_TARGET_DIR` and are removed once integrated ([disk space](docs/workflow.md)).
 - Stage only files you changed. Keep generated files in the commit that produced them. Ask before stashing unrelated changes.
 - Never run destructive git commands (`reset --hard`, `checkout -- <file>`) unless the user asks.
 - Commit messages follow the existing style: `fix(frontend): ...`, `refactor(backend): ...`, `docs: ...`.

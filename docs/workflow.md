@@ -6,7 +6,8 @@ How work is tracked, triaged, owned, delivered and documented in Canopi. The rep
 
 - **All Canopi v2 work is on `feature/geolibre-adoption`.** Commit every v2 bead there. Do not open a branch per bead. Pull with `git pull --rebase=merges` before starting and push after each bead.
 - Non-v2 maintenance starts from `main` on a branch named by intent: `feature/`, `fix/`, `refactor/`, `test/` or `docs/`. Commit directly to `main` only for explicitly requested mainline maintenance, small docs-only updates or repository administration.
-- Prefer a separate git worktree for implementation so the user's `cargo tauri dev` checkout is not disturbed, then ask the user to pull. Keep one Cargo target directory per worktree.
+- Prefer a separate git worktree for implementation so the user's `cargo tauri dev` checkout is not disturbed, then ask the user to pull.
+- Manage disk space: a Cargo target directory grows to 15–20 GB per worktree (the main checkout's to 100 GB or more). Parallel worktrees share one target directory outside their trees through `CARGO_TARGET_DIR`; Cargo locks it, so builds take turns. Check `df -h /` before launching parallel builds, remove a worktree and its caches (browser downloads, Vite caches, temporary files) once its branch is integrated, and never delete the user's checkout's `target/` without asking.
 - Preserve user work. Run `git status --short --branch` before editing and treat pre-existing dirty or untracked files as user-owned. Never stage, revert or stash them. Never run `reset --hard` or `checkout -- <file>` unless the user asks.
 - Commit messages follow the existing style (`fix(frontend): ...`, `refactor(backend): ...`, `docs: ...`). Stage only the files you changed. Generated files go in the commit that produced them.
 
