@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { storyPresentationActive } from '../../app/story-presentation'
 import { useFocusRegion } from './useFocusRegion'
 import type { MenuDefinition } from '../../app/shell-commands/menus'
 import { t } from '../../i18n'
@@ -38,7 +39,12 @@ interface WorkspaceTitleBarProps {
  * The floating title bar both editions share: logo, menu bar, Design name
  * with its save status, place search, Help and Settings.
  */
-export function WorkspaceTitleBar({
+export function WorkspaceTitleBar(props: WorkspaceTitleBarProps) {
+  // A presented story fills the window: the title bar steps aside until it ends.
+  return storyPresentationActive.value ? null : <WorkspaceTitleBarContent {...props} />
+}
+
+function WorkspaceTitleBarContent({
   menus,
   onMenuOpen,
   design,

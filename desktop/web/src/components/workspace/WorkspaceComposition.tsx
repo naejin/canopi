@@ -3,6 +3,7 @@ import { Suspense } from 'preact/compat'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
+import { storyPresentationActive } from '../../app/story-presentation'
 import type { ShellPanelBarProjection } from '../../app/shell-commands'
 import {
   activePanel,
@@ -14,6 +15,7 @@ import {
 } from '../../app/shell/state'
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
 import { SavedViewDialogs } from '../shared/SavedViewDialogs'
+import { StoryPresenter } from '../stories/StoryPresenter'
 import { RenameZoneDialog } from '../canvas/RenameZoneDialog'
 import { RotateSelectionDialog } from '../canvas/RotateSelectionDialog'
 import { GettingStartedDialog } from '../shared/GettingStartedDialog'
@@ -57,8 +59,11 @@ export function WorkspaceComposition({
   // "Where is your site?" is the one task: the dock steps aside, as the tool
   // rail does, and comes back once the site is found or skipped.
   const locating = siteLocateOpen.value
+  // A presented story fills the window; the dock comes back when it ends.
+  const presenting = storyPresentationActive.value
   const mountedSide = primary === 'canvas'
     && !locating
+    && !presenting
     && requestedSide
     && registrations.side.has(requestedSide)
       ? requestedSide
@@ -116,6 +121,7 @@ export function WorkspaceComposition({
 export function WorkspaceDialogs() {
   return (
     <>
+      <StoryPresenter />
       <CanvasPdfDialog />
       <SavedViewDialogs />
       <RotateSelectionDialog />

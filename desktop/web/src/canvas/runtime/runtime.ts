@@ -187,6 +187,12 @@ export interface CanvasLayerCommandSurface {
   setSceneLayerVisibility(name: string, visible: boolean): boolean
   setSceneLayerOpacity(name: string, opacity: number): boolean
   setSceneLayerLocked(name: string, locked: boolean): boolean
+  /**
+   * Presenting a story: the map shows only these Design layers and no
+   * selection or hover until `null`. Session state only: never a Scene edit,
+   * history entry or dirty state.
+   */
+  presentLayers(visibleLayerNames: readonly string[] | null): void
 }
 
 export interface CanvasPlantPresentationCommandSurface {

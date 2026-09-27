@@ -1834,6 +1834,27 @@
     "sharedView_many": "{{count, number}} andere stappen tonen deze weergave ook; die veranderen mee.",
     "sharedView_other": "{{count, number}} andere stappen tonen deze weergave ook; die veranderen mee.",
     "useCurrentView": "Huidige kaartweergave gebruiken",
-    "goToView": "Deze weergave tonen"
+    "goToView": "Deze weergave tonen",
+    "present": "Presenteren",
+    "presentHint": "Voeg een stap toe om dit verhaal te presenteren."
+  },
+  "presentation": {
+    "region": "{{story}} presenteren",
+    "storyStep": "{{story}} · Stap {{number}} van {{count}}",
+    "stepOf": "Stap {{number}} van {{count}}",
+    "announce": "Stap {{number}} van {{count}}: {{title}}",
+    "previous": "Vorige",
+    "next": "Volgende",
+    "steps": "Stappen van het verhaal",
+    "goToStep": "Stap {{number}}: {{title}}",
+    "keysHint": "← → of spatiebalk om te bewegen · Esc om te verlaten",
+    "swipeHint": "Veeg naar links of rechts om te bewegen",
+    "fullScreen": "Volledig scherm",
+    "exitFullScreen": "Volledig scherm verlaten",
+    "leave": "Presentatie verlaten",
+    "speciesPlants_one": "{{name}} · {{count, number}} plant",
+    "speciesPlants_few": "{{name}} · {{count, number}} planten",
+    "speciesPlants_many": "{{name}} · {{count, number}} planten",
+    "speciesPlants_other": "{{name}} · {{count, number}} planten"
   }
 }

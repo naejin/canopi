@@ -40,3 +40,15 @@ export function stepViewTags(view: SavedView): StepViewTag[] {
   })
   return tags
 }
+
+/** The species a view highlights, by name in the interface language, with how many plants the Design has of each. */
+export function highlightedSpeciesSummary(view: SavedView): { readonly canonicalName: string; readonly name: string; readonly count: number }[] {
+  const queries = currentCanvasQuerySurface.peek()
+  const names = queries?.getLocalizedCommonNames()
+  const plants = queries?.getPlacedPlants() ?? []
+  return view.highlighted.species.map((canonicalName) => ({
+    canonicalName,
+    name: names?.get(canonicalName) ?? canonicalName,
+    count: plants.filter((plant) => plant.canonical_name === canonicalName).length,
+  }))
+}

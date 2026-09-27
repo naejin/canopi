@@ -293,6 +293,7 @@ describe('LayerPanel', () => {
       setSceneLayerVisibility: vi.fn(() => true),
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
+      presentLayers: vi.fn(),
     }
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({ layers: layerCommands }),

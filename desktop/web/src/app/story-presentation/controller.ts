@@ -1,0 +1,257 @@
+import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
+import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../../canvas/session'
+import { geographicViewOf, type GeographicView } from '../../canvas/session-plane'
+import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
+import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
+import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
+import { savedViewPlantLabels } from '../design-edit/views'
+import { currentDesign, designSessionStore } from '../document-session/store'
+import { mapLayers, type MapLayersState } from '../map-layers/state'
+import { currentPlantDisplay } from '../plant-display/state'
+import { goToSavedView } from '../saved-views/current-view'
+import { setStoryPresentationOverrides, type StoryPresentationOverrides } from './overrides'
+
+// Presenting a story full-window inside Canopi. This controller is the one
+// owner of the presentation: its state, the session overrides a step applies
+// (overrides.ts, the runtime's presented layers and the Species Focus), the
+// camera it moves, the full-screen request and the listeners it adds. Every
+// one of them is undone by `leaveStoryPresentation()`, which also runs when
+// another Design replaces this one, when the story goes away and on HMR.
+// Applying a step never edits or dirties the Design.
+
+interface ActivePresentation {
+  readonly session: object
+  readonly storyId: string
+  readonly index: number
+}
+
+/** What was on screen before presenting, put back on leaving. */
+interface Restore {
+  readonly camera: GeographicView | null
+  readonly speciesFocus: string | null
+}
+
+const active = signal<ActivePresentation | null>(null)
+let restore: Restore | null = null
+let disposeWatch: (() => void) | null = null
+let enteredFullScreen = false
+
+export interface PresentedStep {
+  readonly story: Story
+  readonly step: StoryStep
+  readonly view: SavedView | null
+  /** Zero-based. */
+  readonly index: number
+  readonly count: number
+}
+
+/** The step on screen, or null when no story is presented. */
+export const presentedStep: ReadonlySignal<PresentedStep | null> = computed(() => {
+  const current = active.value
+  if (!current || current.session !== designSessionStore.sessionIdentity.value) return null
+  const design = currentDesign.value
+  const story = design?.stories?.find((entry) => entry.id === current.storyId)
+  const step = story?.steps[current.index]
+  if (!story || !step) return null
+  return {
+    story,
+    step,
+    view: design?.views?.find((entry) => entry.id === step.view_id) ?? null,
+    index: current.index,
+    count: story.steps.length,
+  }
+})
+
+/** A story is presented: editing chrome hides and editing commands stand down. */
+export const storyPresentationActive: ReadonlySignal<boolean> = computed(() => active.value !== null)
+
+export interface StoryPresentationOptions {
+  /** Jump between steps instead of flying; defaults to the platform reduced-motion preference. */
+  readonly reducedMotion?: boolean
+}
+
+let reducedMotionOverride: boolean | undefined
+
+/** Presents a story from `index` (the first step by default); false when it has no step or no map. */
+export function presentStory(storyId: string, index = 0, options: StoryPresentationOptions = {}): boolean {
+  const story = currentDesign.peek()?.stories?.find((entry) => entry.id === storyId)
+  const queries = currentCanvasQuerySurface.peek()
+  const plane = queries?.sessionPlane.peek()
+  if (!story || story.steps.length === 0 || !queries || !plane) return false
+  if (active.peek()) leaveStoryPresentation()
+  reducedMotionOverride = options.reducedMotion
+  restore = {
+    camera: geographicViewOf(queries.viewport.peek(), plane),
+    speciesFocus: queries.getSpeciesFocus().canonicalName,
+  }
+  active.value = {
+    session: designSessionStore.sessionIdentity.peek(),
+    storyId,
+    index: clampIndex(index, story.steps.length),
+  }
+  disposeWatch = effect(watchPresentation)
+  setPresentingAttribute(true)
+  return true
+}
+
+/** Shows another step; out-of-range indexes do nothing. */
+export function goToPresentedStep(index: number): void {
+  const current = active.peek()
+  const presented = presentedStep.peek()
+  if (!current || !presented || index < 0 || index >= presented.count || index === current.index) return
+  active.value = { ...current, index }
+}
+
+export function nextPresentedStep(): void {
+  const current = active.peek()
+  if (current) goToPresentedStep(current.index + 1)
+}
+
+export function previousPresentedStep(): void {
+  const current = active.peek()
+  if (current) goToPresentedStep(current.index - 1)
+}
+
+/**
+ * Ends the presentation and puts back everything it changed: the map layers,
+ * site data, labels, Design layers and rings as the user had them, the
+ * Species Focus, full screen and, in the same Design, the camera.
+ */
+export function leaveStoryPresentation(): void {
+  const current = active.peek()
+  if (!current) return
+  disposeWatch?.()
+  disposeWatch = null
+  appliedStepKey = null
+  active.value = null
+  setStoryPresentationOverrides(null)
+  setPresentingAttribute(false)
+  const sameDesign = current.session === designSessionStore.sessionIdentity.peek()
+  const commands = getCurrentCanvasCommandSurface()
+  commands?.layers.presentLayers(null)
+  const saved = restore
+  restore = null
+  if (commands && saved && sameDesign) {
+    commands.speciesFocus.focus(saved.speciesFocus)
+    if (saved.camera) commands.viewport.showPlace(saved.camera, saved.camera.zoom, { motion: 'jump' })
+  }
+  exitFullScreen()
+}
+
+/** Full screen is on while presenting; the browser or the user may end it too. */
+export const presentationFullScreen = signal(false)
+
+/** Asks the window for full screen, or leaves it. */
+export async function togglePresentationFullScreen(): Promise<void> {
+  if (!active.peek() || typeof document === 'undefined') return
+  if (document.fullscreenElement) {
+    exitFullScreen()
+    return
+  }
+  if (!document.fullscreenEnabled || typeof document.documentElement.requestFullscreen !== 'function') return
+  try {
+    await document.documentElement.requestFullscreen()
+    enteredFullScreen = true
+  } catch {
+    // The window refused (no user gesture, or not allowed): presenting goes on in the window.
+  }
+}
+
+/** Whether this window can go full screen at all. */
+export function presentationFullScreenAvailable(): boolean {
+  return typeof document !== 'undefined' && document.fullscreenEnabled === true
+}
+
+function exitFullScreen(): void {
+  if (enteredFullScreen && typeof document !== 'undefined' && document.fullscreenElement) {
+    void document.exitFullscreen?.().catch(() => undefined)
+  }
+  enteredFullScreen = false
+}
+
+function onFullScreenChange(): void {
+  presentationFullScreen.value = typeof document !== 'undefined' && document.fullscreenElement !== null
+  if (!presentationFullScreen.peek()) enteredFullScreen = false
+}
+
+if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', onFullScreenChange)
+
+let appliedStepKey: string | null = null
+
+/** Applies the presented step, and ends the presentation when its Design or story goes away. */
+function watchPresentation(): void {
+  const current = active.value
+  if (!current) return
+  const presented = presentedStep.value
+  if (!presented) {
+    // Another Design replaced this one, or the story or step went away.
+    queueMicrotask(leaveStoryPresentation)
+    return
+  }
+  // A Design object that changed elsewhere (a save stamping it) is the same step: apply once.
+  const key = `${presented.story.id}:${presented.step.id}:${presented.index}:${presented.view ? JSON.stringify(presented.view) : ''}`
+  if (key === appliedStepKey) return
+  appliedStepKey = key
+  applyStep(presented)
+}
+
+function applyStep({ view }: PresentedStep): void {
+  const commands = getCurrentCanvasCommandSurface()
+  if (!view || !commands) return
+  const labels = savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
+  setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), labels))
+  commands.layers.presentLayers(view.visible_layers.scene_layers)
+  commands.speciesFocus.focus(view.highlighted.species[0] ?? null)
+  goToSavedView(view.id, reducedMotionOverride === undefined ? {} : { reducedMotion: reducedMotionOverride })
+}
+
+/** What a view shows, over the user's own map layer settings (opacities, style choices). */
+export function stepOverrides(view: SavedView, layers: MapLayersState, plantLabels: PlantLabelMode): StoryPresentationOverrides {
+  const background = view.visible_layers.background
+  return {
+    mapLayers: {
+      ...layers,
+      basemap: {
+        ...layers.basemap,
+        visible: background.kind === 'basemap',
+        ...(background.kind === 'basemap' && isBasemapStyle(background.style) ? { style: background.style } : {}),
+      },
+      satellite: { ...layers.satellite, visible: background.kind === 'satellite' },
+      contours: { ...layers.contours, visible: view.visible_layers.terrain.contours },
+      hillshade: { ...layers.hillshade, visible: view.visible_layers.terrain.hillshade },
+    },
+    siteDataIds: new Set(view.visible_layers.site_data),
+    plantLabels,
+    targets: highlightTargets(view),
+  }
+}
+
+function highlightTargets(view: SavedView): PanelTarget[] {
+  const targets: PanelTarget[] = view.highlighted.species.map((canonicalName) => ({ kind: 'species', canonical_name: canonicalName }))
+  for (const object of view.highlighted.objects) {
+    if (object.kind === 'plant') targets.push({ kind: 'placed_plant', plant_id: object.id })
+    else if (object.kind === 'zone') targets.push({ kind: 'zone', zone_id: object.id })
+  }
+  return targets
+}
+
+function isBasemapStyle(style: string): style is MapLayersState['basemap']['style'] {
+  return (SETTINGS_BASEMAP_STYLES as readonly string[]).includes(style)
+}
+
+/** Hides the runtime's editing overlays on the map (styles/global.css). */
+function setPresentingAttribute(presenting: boolean): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.toggleAttribute('data-story-presenting', presenting)
+}
+
+function clampIndex(index: number, count: number): number {
+  return Math.max(0, Math.min(Number.isInteger(index) ? index : 0, count - 1))
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    leaveStoryPresentation()
+    if (typeof document !== 'undefined') document.removeEventListener('fullscreenchange', onFullScreenChange)
+  })
+}

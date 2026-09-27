@@ -2,6 +2,7 @@ import type { ComponentChildren, RefObject } from 'preact'
 import { useFocusRegion } from '../shared/useFocusRegion'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
+import { storyPresentationActive } from '../../app/story-presentation'
 import { toolRailShowsNamesOnMap } from '../../app/tool-rail/learning'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { CanvasOverview } from './CanvasOverview'
@@ -29,9 +30,19 @@ export function CanvasChrome({ projection, canvasRef, children }: {
   /** Edition-only chrome (Desktop: raster inspection). */
   readonly children?: ComponentChildren
 }) {
+  useFocusRegion(canvasRef, 'map')
+  // A presented story shows the map alone, under its own card.
+  if (storyPresentationActive.value) return null
+  return <CanvasChromeContent projection={projection} canvasRef={canvasRef}>{children}</CanvasChromeContent>
+}
+
+function CanvasChromeContent({ projection, canvasRef, children }: {
+  readonly projection: CanvasCommandProjection
+  readonly canvasRef: RefObject<HTMLDivElement>
+  readonly children?: ComponentChildren
+}) {
   // "Where is your site?" is the one task until it is answered or skipped.
   const locating = siteLocateOpen.value
-  useFocusRegion(canvasRef, 'map')
   return (
     <>
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}

@@ -264,6 +264,7 @@ describe('Canvas Layer Presentation', () => {
       setSceneLayerVisibility: vi.fn(() => true),
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
+      presentLayers: vi.fn(),
     }
 
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({

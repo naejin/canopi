@@ -923,6 +923,7 @@ function fakeCommandSurface(): CanvasCommandSurface {
       setSceneLayerVisibility: vi.fn(() => true),
       setSceneLayerOpacity: vi.fn(() => true),
       setSceneLayerLocked: vi.fn(() => true),
+      presentLayers: vi.fn(),
     },
     plantPresentation: {
       ensureSpeciesCacheEntries: vi.fn(async () => false),

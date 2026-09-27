@@ -15,6 +15,8 @@ import { CalendarPanel } from '../src/components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../src/components/panels/ConsortiumPanel'
 import { StoriesPanel } from '../src/components/panels/StoriesPanel'
 import { selectStep } from '../src/app/stories'
+import { presentStory } from '../src/app/story-presentation'
+import { StoryPresenter } from '../src/components/stories/StoryPresenter'
 import { notebookWorkbench } from './notebook-fixture'
 import { WebSpeciesCatalogPanel, WebSpeciesKeyPanel } from '../src/web/WebSpeciesCatalogPanel'
 import { WebLayersPanel } from '../src/web/WebLayersPanel'
@@ -158,6 +160,7 @@ function Gallery() {
           <WorkspaceComposition panelProjection={panelProjection} surfaces={workspaceSurfaces} />
           <DataDialogs />
           <GalleryDesktopFrame />
+          {selectedSurface.value === 'stories' ? <StoryPresenter /> : null}
           {selectedSurface.value === 'snapshots'
             ? <GalleryViewSnapshots ready={galleryCanvasReady.value} tiles={params.get('tiles') === '1'} />
             : null}
@@ -185,6 +188,10 @@ function GalleryCanvasWorkspace() {
 
 function setGalleryCanvasReady(ready: boolean): void {
   galleryCanvasReady.value = ready
+  // `surface=stories&present=1` presents the story from its third step once the map is ready.
+  if (ready && initial === 'stories' && params.get('present') === '1') {
+    presentStory('story-visit', 2, { reducedMotion: true })
+  }
 }
 
 function selectGallerySurface(next: GallerySurface): void {

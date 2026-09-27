@@ -6,7 +6,8 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
 } from '../../canvas/runtime/app-adapter'
 import type { CanvasMapBackdrop } from '../../canvas/runtime/scene-visuals'
-import { effectiveBackgroundOpacity, mapBackgroundOf, mapLayers, type MapLayersState } from '../map-layers/state'
+import { effectiveBackgroundOpacity, mapBackgroundOf, type MapLayersState } from '../map-layers/state'
+import { presentedMapLayers, storyPresentationOverrides } from '../story-presentation/overrides'
 import {
   gridVisible,
   layerLockState,
@@ -53,16 +54,20 @@ export function createAppCanvasRuntimeAppAdapter(
       : {}),
     presentationData: capabilities.presentationData,
     plantDisplay: {
+      // A presented story step shows its own labels; the Design's choice is untouched.
       subscribe: (onChange) => effect(() => {
-        onChange(currentPlantDisplay.value)
+        const display = currentPlantDisplay.value
+        const labels = storyPresentationOverrides.value?.plantLabels
+        onChange(labels && labels !== display.labels ? { ...display, labels } : display)
       }),
     },
     translate: t,
     settings: {
       readLocale: () => locale.value,
+      // Presenting a story shows the map without the grid and rulers.
       readChromeOverlay: () => ({
-        gridVisible: gridVisible.value,
-        rulersVisible: rulersVisible.value,
+        gridVisible: gridVisible.value && storyPresentationOverrides.value === null,
+        rulersVisible: rulersVisible.value && storyPresentationOverrides.value === null,
       }),
       readSnapToGridEnabled: () => snapToGridEnabled.value,
       readSnapToGuidesEnabled: () => snapToGuidesEnabled.value,
@@ -95,10 +100,11 @@ export function createAppCanvasRuntimeAppAdapter(
       subscribeChromeOverlay: (onChange) => effect(() => {
         void gridVisible.value
         void rulersVisible.value
+        void storyPresentationOverrides.value
         onChange()
       }),
       subscribeMapBackdrop: (onChange) => effect(() => {
-        onChange(mapBackdropOf(mapLayers.value))
+        onChange(mapBackdropOf(presentedMapLayers()))
       }),
       layerProjections: {
         syncFromLayers,

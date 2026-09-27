@@ -1,4 +1,5 @@
 import { ActionMenu } from './ActionMenu'
+import { storyPresentationActive } from '../../app/story-presentation'
 import { ButtonTooltip } from './ButtonTooltip'
 import { PanelIcon, type PanelIconName } from './PanelIcon'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
@@ -30,7 +31,15 @@ export interface PanelRailCommand {
  * (`panelRailRoom`), the last panels fold, in order, into a More menu at the
  * rail's end, so Tab still meets them in rail order.
  */
-export function PanelRail({ groups, label }: {
+export function PanelRail(props: {
+  readonly groups: readonly (readonly PanelRailCommand[])[]
+  readonly label: string
+}) {
+  // A presented story fills the window: the rail steps aside until it ends.
+  return storyPresentationActive.value ? null : <PanelRailContent {...props} />
+}
+
+function PanelRailContent({ groups, label }: {
   readonly groups: readonly (readonly PanelRailCommand[])[]
   readonly label: string
 }) {

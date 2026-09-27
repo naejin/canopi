@@ -1834,6 +1834,27 @@
     "sharedView_many": "另有 {{count, number}} 个步骤也显示此视图，并会随之变化。",
     "sharedView_other": "另有 {{count, number}} 个步骤也显示此视图，并会随之变化。",
     "useCurrentView": "使用当前地图视图",
-    "goToView": "前往此视图"
+    "goToView": "前往此视图",
+    "present": "演示",
+    "presentHint": "添加一个步骤即可演示此故事。"
+  },
+  "presentation": {
+    "region": "正在演示 {{story}}",
+    "storyStep": "{{story}} · 第 {{number}} 步，共 {{count}} 步",
+    "stepOf": "第 {{number}} 步，共 {{count}} 步",
+    "announce": "第 {{number}} 步，共 {{count}} 步：{{title}}",
+    "previous": "上一步",
+    "next": "下一步",
+    "steps": "故事步骤",
+    "goToStep": "第 {{number}} 步：{{title}}",
+    "keysHint": "← → 或空格键切换 · Esc 退出",
+    "swipeHint": "向左或向右滑动以切换",
+    "fullScreen": "全屏",
+    "exitFullScreen": "退出全屏",
+    "leave": "退出演示",
+    "speciesPlants_one": "{{name}} · {{count, number}} 株",
+    "speciesPlants_few": "{{name}} · {{count, number}} 株",
+    "speciesPlants_many": "{{name}} · {{count, number}} 株",
+    "speciesPlants_other": "{{name}} · {{count, number}} 株"
   }
 }

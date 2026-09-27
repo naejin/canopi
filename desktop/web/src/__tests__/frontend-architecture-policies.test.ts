@@ -76,6 +76,20 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    // The presentation controller writes the story overrides; the map, the runtime
+    // adapter and the target overlays only read them, so they never start or end one.
+    name: 'Map presentation reads story overrides, not the presentation controller',
+    from: [
+      'src/app/canvas-map-surface/**',
+      'src/app/canvas-runtime/**',
+      'src/app/panel-targets/**',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+    ],
+    exceptFrom: [...TEST_SOURCE_PATTERNS],
+    targets: ['src/app/story-presentation/controller.ts', 'src/app/story-presentation/index.ts'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'App modules do not import components',
     from: ['src/app/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],

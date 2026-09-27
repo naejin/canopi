@@ -1,3 +1,4 @@
+import type { SceneRendererSnapshot } from './renderers/scene-types'
 import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -952,6 +953,33 @@ describe('scene canvas runtime', () => {
     active.mutate((draft) => { draft.plants[0]!.position.x = 30 })
     expect(runtime.querySurface.captureViewScene({ viewport, visibleLayerNames: layerNames, focusedSpecies: null })).toBeNull()
     active.abort()
+    runtime.destroy()
+  })
+
+  it('presents only a story step’s layers, without selection, and changes nothing in the Scene', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    runtime.commandSurface.sceneEdits.selectAll()
+    const selection = runtime.querySurface.getSelection()
+    const scene = runtime.querySurface.getSceneSnapshot()
+    const layerNames = scene.layers.map((layer) => layer.name)
+    const presentation = (runtime as unknown as {
+      _presentation: { buildRendererSnapshot(options?: { overview?: boolean }): SceneRendererSnapshot }
+    })._presentation
+    expect(presentation.buildRendererSnapshot().selectedPlantIds.size).toBeGreaterThan(0)
+
+    runtime.commandSurface.layers.presentLayers([layerNames[1]!])
+    const presented = presentation.buildRendererSnapshot()
+    expect(presented.scene.layers.map((layer) => layer.visible)).toEqual(layerNames.map((_, index) => index === 1))
+    expect(presented.selectedPlantIds.size).toBe(0)
+    expect(presented.hoverTarget).toBeNull()
+
+    runtime.commandSurface.layers.presentLayers(null)
+    expect(presentation.buildRendererSnapshot().scene.layers.map((layer) => layer.visible))
+      .toEqual(scene.layers.map((layer) => layer.visible))
+    expect(runtime.querySurface.getSelection()).toEqual(selection)
+    expect(runtime.querySurface.getSceneSnapshot()).toEqual(scene)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     runtime.destroy()
   })
 

@@ -21,6 +21,7 @@ import {
   undoStoryDelete,
 } from '../../app/stories'
 import { currentDesign } from '../../app/document-session/store'
+import { presentStory } from '../../app/story-presentation'
 import { t } from '../../i18n'
 import type { SavedView, Story, StoryStep } from '../../types/design'
 import { ActionMenu, type ActionMenuEntry } from '../shared/ActionMenu'
@@ -63,6 +64,7 @@ export function StoriesPanel() {
       {story && (
         <footer className={styles.footer}>
           <span className={styles.count}>{t('stories.stepCount', { count: story.steps.length })}</span>
+          <PresentButton story={story} />
         </footer>
       )}
     </div>
@@ -317,4 +319,31 @@ function StoryUndoToast() {
 
 function sameOrder(a: readonly string[] | null, b: readonly string[]): boolean {
   return !!a && a.length === b.length && a.every((id, index) => id === b[index])
+}
+
+function PresentButton({ story }: { readonly story: Story }) {
+  const hintId = useId()
+  const canPresent = story.steps.length > 0 && canAddStorySteps()
+  return (
+    <>
+      <button
+        type="button"
+        className={`${styles.smallButton} ${styles.primary}`}
+        disabled={!canPresent}
+        aria-describedby={story.steps.length === 0 ? hintId : undefined}
+        onClick={() => { presentStory(story.id, selectedStepIndex(story)) }}
+      >
+        <ControlIcon name="play" size={16} />
+        {t('stories.present')}
+      </button>
+      {story.steps.length === 0 && <span className={styles.srOnly} id={hintId}>{t('stories.presentHint')}</span>}
+    </>
+  )
+}
+
+/** Presenting starts at the step being edited, else at the first. */
+function selectedStepIndex(story: Story): number {
+  const step = selectedStep.peek()
+  const index = step ? story.steps.findIndex((entry) => entry.id === step.id) : -1
+  return Math.max(0, index)
 }

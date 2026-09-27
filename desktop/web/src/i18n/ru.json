@@ -1834,6 +1834,27 @@
     "sharedView_many": "Ещё {{count, number}} шагов тоже показывают этот вид; они меняются вместе с ним.",
     "sharedView_other": "Ещё {{count, number}} шага тоже показывают этот вид; они меняются вместе с ним.",
     "useCurrentView": "Использовать текущий вид карты",
-    "goToView": "Перейти к этому виду"
+    "goToView": "Перейти к этому виду",
+    "present": "Показать",
+    "presentHint": "Добавьте шаг, чтобы показать эту историю."
+  },
+  "presentation": {
+    "region": "Показ истории «{{story}}»",
+    "storyStep": "{{story}} · Шаг {{number}} из {{count}}",
+    "stepOf": "Шаг {{number}} из {{count}}",
+    "announce": "Шаг {{number}} из {{count}}: {{title}}",
+    "previous": "Назад",
+    "next": "Далее",
+    "steps": "Шаги истории",
+    "goToStep": "Шаг {{number}}: {{title}}",
+    "keysHint": "← → или Пробел — переход · Esc — выход",
+    "swipeHint": "Проведите влево или вправо для перехода",
+    "fullScreen": "Во весь экран",
+    "exitFullScreen": "Выйти из полноэкранного режима",
+    "leave": "Завершить показ",
+    "speciesPlants_one": "{{name}} · {{count, number}} растение",
+    "speciesPlants_few": "{{name}} · {{count, number}} растения",
+    "speciesPlants_many": "{{name}} · {{count, number}} растений",
+    "speciesPlants_other": "{{name}} · {{count, number}} растения"
   }
 }

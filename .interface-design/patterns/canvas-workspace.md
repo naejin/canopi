@@ -48,3 +48,8 @@ A non-modal sheet beside the selection: glyph and "Symbol and color" title with 
 ## Inspection lens
 
 Unchanged in behaviour (see the map workspace guide): a view-only magnified preview with recentre, widen and magnify controls, collision-aware labels, keyboard pan, and an ochre source rectangle on the map. It uses the floating panel style and the shared icon-only rules.
+
+## Presenting a story
+
+Boards StoryPresent and StoryPhone. The map fills the window with nothing of the editing chrome (title bar, rails, dock, chips, grid, rulers, selection handles). A floating card (420 px, 32 px from the top left, glass, scrolls when long): "Story · Step n of m" in muted caption, the step title in Literata (28), the text at 18 px, its images with their descriptions, tags for the highlighted species with their plant counts ("Goji · 232 plants"), then Previous, step dots (buttons named "Step n: title", the current one a wide ochre bar with `aria-current="step"`) and Next (primary), and the hint "← → or Space to move · Esc to leave". Top right, a glass pill with the story name, Full screen (F) and Leave presentation (Esc). The map flies between steps (jumps with reduced motion) and rings what the step highlights. Keys: ← → PageUp PageDown, Space away from a button, Home, End, F, Esc; Tab stays inside the presenter, Previous and Next stay focusable at either end (`aria-disabled`), and each step is announced ("Step n of m: title"). Under 600 px: a bar on top with "Step n of m", small dots and Leave (44 px), and the card as a bottom sheet with full-width Previous and Next that stay in reach while the text scrolls, "Swipe left or right to move", safe-area insets.
+

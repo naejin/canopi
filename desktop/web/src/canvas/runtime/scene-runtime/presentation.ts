@@ -61,6 +61,8 @@ export class SceneRuntimePresentationController {
   private readonly _plantLabels: CanvasPlantLabelSource
   private _preparedPlantNamesRevision = 0
   private _publishedPlantNamesRevision = 0
+  /** Layers a presented story shows; null when nothing is presented. */
+  private _presentedLayerNames: ReadonlySet<string> | null = null
 
   constructor(options: SceneRuntimePresentationControllerOptions) {
     this._sceneStore = options.sceneStore
@@ -104,7 +106,24 @@ export class SceneRuntimePresentationController {
     }
   }
 
+  /**
+   * While a story is presented the map shows only the named Design layers and
+   * no selection or hover; null shows the Design as it is again. Session
+   * presentation only: the Scene, its history and dirty state never change.
+   * Returns whether anything changed.
+   */
+  presentLayers(visibleLayerNames: readonly string[] | null): boolean {
+    const next = visibleLayerNames ? new Set(visibleLayerNames) : null
+    const current = this._presentedLayerNames
+    if (next === null && current === null) return false
+    if (next && current && next.size === current.size && [...next].every((name) => current.has(name))) return false
+    this._presentedLayerNames = next
+    return true
+  }
+
   buildRendererSnapshot(options: { overview?: boolean } = {}): SceneRendererSnapshot {
+    const presented = this._presentedLayerNames
+    if (presented) return this.buildPresentedSnapshot(presented, options.overview === true)
     const scene = this._sceneStore.persisted
     const session = this._sceneStore.session
     const viewport = this._getViewport()
@@ -137,6 +156,15 @@ export class SceneRuntimePresentationController {
       ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds,
         speciesCache: this._speciesCache.getCache() }),
     }
+  }
+
+  private buildPresentedSnapshot(visible: ReadonlySet<string>, overview: boolean): SceneRendererSnapshot {
+    return this.buildViewCaptureSnapshot({
+      viewport: this._getViewport(),
+      overview,
+      visibleLayerNames: [...visible],
+      focusedSpecies: this._sceneStore.session.speciesFocus.canonicalName,
+    })
   }
 
   /**

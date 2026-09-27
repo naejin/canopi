@@ -119,6 +119,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'getLocalizedCommonNames'
     | 'refreshSpeciesCacheEntries'
     | 'publishRefresh'
+    | 'presentLayers'
   >
   readonly settings: Pick<
     CanvasRuntimeSettingsAdapter,
@@ -232,6 +233,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       setSceneLayerVisibility: (name, visible) => this.setSceneLayerState(name, { visible }),
       setSceneLayerOpacity: (name, opacity) => this.setSceneLayerOpacity(name, opacity),
       setSceneLayerLocked: (name, locked) => this.setSceneLayerState(name, { locked }),
+      presentLayers: (names) => {
+        if (this.options.presentation.presentLayers(names)) this.options.invalidate('scene')
+      },
     }
     this.plantPresentation = {
       ensureSpeciesCacheEntries: (canonicalNames, activeLocale) =>

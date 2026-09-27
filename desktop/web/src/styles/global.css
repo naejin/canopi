@@ -390,3 +390,12 @@ mark {
 .botanical-name {
   font-style: italic;
 }
+
+/* A presented story shows the map without the editing overlays the runtime
+   places on it (app/story-presentation/controller.ts sets the attribute). */
+html[data-story-presenting] [data-rotation-handle],
+html[data-story-presenting] [data-control-point-overlay],
+html[data-story-presenting] [data-locked-object-affordance],
+html[data-story-presenting] [data-hover-tooltip] {
+  display: none !important;
+}

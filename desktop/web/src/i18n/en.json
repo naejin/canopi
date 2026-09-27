@@ -1834,6 +1834,27 @@
     "sharedView_many": "{{count, number}} other steps show this view too; they change with it.",
     "sharedView_other": "{{count, number}} other steps show this view too; they change with it.",
     "useCurrentView": "Use the current map view",
-    "goToView": "Go to this view"
+    "goToView": "Go to this view",
+    "present": "Present",
+    "presentHint": "Add a step to present this story."
+  },
+  "presentation": {
+    "region": "Presenting {{story}}",
+    "storyStep": "{{story}} · Step {{number}} of {{count}}",
+    "stepOf": "Step {{number}} of {{count}}",
+    "announce": "Step {{number}} of {{count}}: {{title}}",
+    "previous": "Previous",
+    "next": "Next",
+    "steps": "Story steps",
+    "goToStep": "Step {{number}}: {{title}}",
+    "keysHint": "← → or Space to move · Esc to leave",
+    "swipeHint": "Swipe left or right to move",
+    "fullScreen": "Full screen",
+    "exitFullScreen": "Exit full screen",
+    "leave": "Leave presentation",
+    "speciesPlants_one": "{{name}} · 1 plant",
+    "speciesPlants_few": "{{name}} · {{count, number}} plants",
+    "speciesPlants_many": "{{name}} · {{count, number}} plants",
+    "speciesPlants_other": "{{name}} · {{count, number}} plants"
   }
 }

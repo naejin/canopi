@@ -1834,6 +1834,27 @@
     "sharedView_many": "Outros {{count, number}} passos também mostram esta visualização; eles mudam junto com ela.",
     "sharedView_other": "Outros {{count, number}} passos também mostram esta visualização; eles mudam junto com ela.",
     "useCurrentView": "Usar a visualização atual do mapa",
-    "goToView": "Ir para esta visualização"
+    "goToView": "Ir para esta visualização",
+    "present": "Apresentar",
+    "presentHint": "Adicione um passo para apresentar esta história."
+  },
+  "presentation": {
+    "region": "Apresentando {{story}}",
+    "storyStep": "{{story}} · Passo {{number}} de {{count}}",
+    "stepOf": "Passo {{number}} de {{count}}",
+    "announce": "Passo {{number}} de {{count}}: {{title}}",
+    "previous": "Anterior",
+    "next": "Próximo",
+    "steps": "Passos da história",
+    "goToStep": "Passo {{number}}: {{title}}",
+    "keysHint": "← → ou Espaço para avançar · Esc para sair",
+    "swipeHint": "Deslize para a esquerda ou para a direita para avançar",
+    "fullScreen": "Tela cheia",
+    "exitFullScreen": "Sair da tela cheia",
+    "leave": "Sair da apresentação",
+    "speciesPlants_one": "{{name}} · {{count, number}} planta",
+    "speciesPlants_few": "{{name}} · {{count, number}} plantas",
+    "speciesPlants_many": "{{name}} · {{count, number}} plantas",
+    "speciesPlants_other": "{{name}} · {{count, number}} plantas"
   }
 }

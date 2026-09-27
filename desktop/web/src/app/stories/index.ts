@@ -45,4 +45,4 @@ export {
   sameRichText,
   spansFragment,
 } from './rich-text'
-export { stepViewTags, type StepViewTag } from './step-view'
+export { highlightedSpeciesSummary, stepViewTags, type StepViewTag } from './step-view'

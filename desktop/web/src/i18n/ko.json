@@ -1834,6 +1834,27 @@
     "sharedView_many": "다른 단계 {{count, number}}개도 이 보기를 표시하며, 보기와 함께 바뀝니다.",
     "sharedView_other": "다른 단계 {{count, number}}개도 이 보기를 표시하며, 보기와 함께 바뀝니다.",
     "useCurrentView": "현재 지도 보기 사용",
-    "goToView": "이 보기로 이동"
+    "goToView": "이 보기로 이동",
+    "present": "발표",
+    "presentHint": "이 이야기를 발표하려면 단계를 추가하세요."
+  },
+  "presentation": {
+    "region": "{{story}} 발표 중",
+    "storyStep": "{{story}} · 단계 {{number}}/{{count}}",
+    "stepOf": "단계 {{number}}/{{count}}",
+    "announce": "단계 {{number}}/{{count}}: {{title}}",
+    "previous": "이전",
+    "next": "다음",
+    "steps": "이야기 단계",
+    "goToStep": "단계 {{number}}: {{title}}",
+    "keysHint": "← → 또는 Space로 이동 · Esc로 나가기",
+    "swipeHint": "왼쪽이나 오른쪽으로 밀어서 이동",
+    "fullScreen": "전체 화면",
+    "exitFullScreen": "전체 화면 종료",
+    "leave": "발표 나가기",
+    "speciesPlants_one": "{{name}} · 식물 {{count, number}}그루",
+    "speciesPlants_few": "{{name}} · 식물 {{count, number}}그루",
+    "speciesPlants_many": "{{name}} · 식물 {{count, number}}그루",
+    "speciesPlants_other": "{{name}} · 식물 {{count, number}}그루"
   }
 }

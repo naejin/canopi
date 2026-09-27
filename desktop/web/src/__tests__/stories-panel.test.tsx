@@ -10,6 +10,7 @@ vi.mock('../app/saved-views/thumbnails', async (importOriginal) => {
 
 import { StoriesPanel } from '../components/panels/StoriesPanel'
 import { dismissStoryUndo, selectStep, selectStory, storyUndo } from '../app/stories'
+import { leaveStoryPresentation, presentedStep } from '../app/story-presentation'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { mapZoomToStageScale } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
@@ -197,6 +198,21 @@ describe('Stories panel', () => {
     expect(stepIds()).toEqual(['s2', 's1', 's3'])
   })
 
+  it('presents the story from the selected step, and only once it has steps and a map', async () => {
+    await renderPanel()
+    expect(button('Present').disabled).toBe(true)
+    mountMap()
+    await act(async () => { selectStep('s2') })
+    expect(button('Present').disabled).toBe(false)
+    await act(async () => { button('Present').click() })
+    expect(presentedStep.value?.step.id).toBe('s2')
+    await act(async () => { leaveStoryPresentation() })
+
+    await act(async () => { selectStory('open-day') })
+    expect(button('Present').disabled).toBe(true)
+    expect(button('Present').getAttribute('aria-describedby')).not.toBeNull()
+  })
+
   it('reorders steps by dragging the handle', async () => {
     await renderPanel()
     for (const [index, row] of rows().entries()) {
@@ -376,6 +392,36 @@ describe('step editor', () => {
         { text: ' moves', bold: false, italic: false, link: null },
       ] },
     ])
+  })
+
+  it('edits and removes an embedded image, never storing a blank description, and cancels a new one', async () => {
+    replaceCurrentDesignState(design([{ ...VISIT, steps: [{ ...VISIT.steps[0]!, images: [{ src: 'data:image/png;base64,iVBORw==', alt: 'Hedge' }] }] }]), null, 'Stories')
+    const editor = await openStep('s1')
+    const alt = editor.querySelector<HTMLInputElement>('input[aria-invalid], li input')!
+    const type = async (value: string) => {
+      await act(async () => {
+        alt.value = value
+        alt.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await type('Hedge in June')
+    expect(currentDesign.value!.stories![0]!.steps[0]!.images).toEqual([{ src: 'data:image/png;base64,iVBORw==', alt: 'Hedge in June' }])
+    await type('   ')
+    expect(editor.textContent).toContain('Add a description to keep this image.')
+    expect(currentDesign.value!.stories![0]!.steps[0]!.images![0]!.alt).toBe('Hedge in June')
+
+    await act(async () => { button('Remove image 1', editor).click() })
+    expect(currentDesign.value!.stories![0]!.steps[0]!.images).toEqual([])
+
+    const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
+    Object.defineProperty(input, 'files', { value: [new File([new Uint8Array([1, 2, 3])], 'a.webp', { type: 'image/webp' })], configurable: true })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    const pendingAlt = editor.querySelector<HTMLInputElement>('input[required]')!
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    await act(async () => { pendingAlt.dispatchEvent(escape) })
+    expect(editor.querySelector('input[required]')).toBeNull()
+    expect(currentDesign.value!.stories![0]!.steps[0]!.images).toEqual([])
   })
 
   it('embeds a chosen image once it has a description, and refuses images over 1 MB or of another type', async () => {

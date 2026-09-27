@@ -1,6 +1,7 @@
 import { effect } from '@preact/signals'
 import { isSpeciesTarget, targetIdentity, speciesTarget } from '../../target'
 import type { PanelTarget } from '../../types/design'
+import { storyPresentationOverrides } from '../story-presentation/overrides'
 import {
   hoveredCanvasTargets,
   hoveredPanelTargets,
@@ -203,6 +204,9 @@ export function readPanelOriginTargets(): readonly PanelTarget[] {
 }
 
 export function readPanelTargetOverlaySnapshot(): PanelTargetOverlaySnapshot {
+  // A presented story step rings what its view highlights, and nothing else.
+  const presented = storyPresentationOverrides.value
+  if (presented) return { hoveredTargets: [], selectedTargets: presented.targets }
   return {
     hoveredTargets: hoveredPanelTargets.value,
     selectedTargets: selectedPanelTargets.value,

@@ -1834,6 +1834,27 @@
     "sharedView_many": "ほかの {{count, number}} 個のステップもこのビューを表示しており、ビューと一緒に変わります。",
     "sharedView_other": "ほかの {{count, number}} 個のステップもこのビューを表示しており、ビューと一緒に変わります。",
     "useCurrentView": "現在の地図のビューを使う",
-    "goToView": "このビューに移動"
+    "goToView": "このビューに移動",
+    "present": "発表",
+    "presentHint": "このストーリーを発表するには、ステップを追加してください。"
+  },
+  "presentation": {
+    "region": "{{story}}を発表中",
+    "storyStep": "{{story}} · ステップ {{number}}/{{count}}",
+    "stepOf": "ステップ {{number}}/{{count}}",
+    "announce": "ステップ {{number}}/{{count}}：{{title}}",
+    "previous": "前へ",
+    "next": "次へ",
+    "steps": "ストーリーのステップ",
+    "goToStep": "ステップ {{number}}：{{title}}",
+    "keysHint": "← → または Space で移動 · Esc で終了",
+    "swipeHint": "左右にスワイプして移動",
+    "fullScreen": "全画面表示",
+    "exitFullScreen": "全画面表示を終了",
+    "leave": "発表を終了",
+    "speciesPlants_one": "{{name}} · {{count, number}} 株",
+    "speciesPlants_few": "{{name}} · {{count, number}} 株",
+    "speciesPlants_many": "{{name}} · {{count, number}} 株",
+    "speciesPlants_other": "{{name}} · {{count, number}} 株"
   }
 }

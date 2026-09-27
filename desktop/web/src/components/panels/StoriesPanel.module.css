@@ -247,6 +247,17 @@
   background: transparent;
 }
 
+.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.primary:hover:not(:disabled) {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+}
+
 .footer {
   display: flex;
   flex-wrap: wrap;

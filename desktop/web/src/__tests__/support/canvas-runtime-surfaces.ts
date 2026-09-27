@@ -87,6 +87,7 @@ export function createTestCanvasCommandSurface(
       setSceneLayerVisibility: () => false,
       setSceneLayerOpacity: () => false,
       setSceneLayerLocked: () => false,
+      presentLayers: () => undefined,
     },
     plantPresentation: {
       ensureSpeciesCacheEntries: async () => true,

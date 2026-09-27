@@ -1,6 +1,7 @@
 import { designSessionStore, type DesignSessionStore } from '../document-session/store'
 import { locale } from '../settings/state'
-import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../map-layers/state'
+import { effectiveBackgroundOpacity, type MapLayersState } from '../map-layers/state'
+import { presentedMapLayers } from '../story-presentation/overrides'
 import {
   captureMapBackgroundPresentation,
   type MapBackgroundPresentation,
@@ -16,11 +17,11 @@ export interface WorkspaceActivationSnapshotReaderOptions {
   readonly readLocale?: () => string
 }
 
-/** The background band as the map layer store and locale describe it. */
+/** The background band as the map layer store (or a presented story step) and locale describe it. */
 export function readWorkspaceBackgroundPresentation(
   options: WorkspaceActivationSnapshotReaderOptions = {},
 ): MapBackgroundPresentation {
-  const layers = (options.readMapLayers ?? (() => mapLayers.value))()
+  const layers = (options.readMapLayers ?? presentedMapLayers)()
   // Soften background dims the band itself; the plants above keep their colours.
   return captureMapBackgroundPresentation({
     basemap: { ...layers.basemap, opacity: effectiveBackgroundOpacity(layers, 'basemap') },
