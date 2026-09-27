@@ -113,28 +113,14 @@
       "generatedCount": "{{count}} gegenereerd",
       "commitLimitWarning": "Vergroot het interval of verkort de lijn"
     },
-    "selectionActions": {
-      "ariaLabel": "Selectieacties",
-      "duplicate": "Dupliceren",
-      "bringForward": "Naar voren",
-      "sendBackward": "Naar achteren",
-      "pinPlantName": "Plantnaam vastzetten",
-      "unpinPlantName": "Plantnaam losmaken",
-      "selectSameSpecies": "Zelfde soort selecteren",
-      "saveObjectStamp": "Opslaan als opgeslagen stempel",
-      "group": "Groeperen",
-      "ungroup": "Groep opheffen",
-      "lock": "Vergrendelen",
+    "lockedObject": {
       "locked": "Vergrendeld",
-      "unlock": "Ontgrendelen",
-      "delete": "Verwijderen"
+      "unlock": "Ontgrendelen"
     },
     "contextMenu": {
       "ariaLabel": "Canvasbewerkingsopdrachten",
-      "copy": "Kopiëren",
-      "paste": "Plakken",
-      "saveObjectStamp": "Opslaan als opgeslagen stempel",
-      "delete": "Verwijderen"
+      "showName": "Naam tonen",
+      "hideName": "Naam verbergen"
     },
     "rotationHandle": {
       "label": "Draaien"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "Plantkleur",
-      "toolbarDesc": "Kleuren van geselecteerde planten bewerken",
       "selectedCount": "{{count}} geselecteerd",
       "suggested": "Voorgesteld op basis van bloemkleur",
       "moreColors": "Eigen kleur",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "Plantsymbool",
-      "toolbarDesc": "Symbolen van geselecteerde planten bewerken",
       "selectedCount": "{{count}} geselecteerd",
       "setSymbolForSpecies": "Instellen voor alle {{species}}",
       "mixed": "Gemengde symbolen",

@@ -63,10 +63,6 @@ import type {
   SettledSceneReader,
 } from './scene-runtime/transactions'
 import {
-  createSelectionActionToolbar,
-  type SelectionActionToolbarController,
-} from './interaction/selection-action-toolbar'
-import {
   createCanvasContextMenu,
   type CanvasContextMenuController,
 } from './interaction/canvas-context-menu'
@@ -81,8 +77,12 @@ import {
   createMeasurementGuideControlPoints,
 } from './interaction/measurement-guide-control-points'
 import type { ControlPointOverlayController } from './interaction/control-point-overlay'
-import type { CanvasDesignObjectSelectionModel, CanvasSceneEditCommandSurface } from './runtime'
-import type { CanvasRuntimeTranslator } from './app-adapter'
+import type { CanvasDesignObjectSelectionModel } from './runtime'
+import type {
+  CanvasContextMenuCommands,
+  CanvasRuntimeContextMenuAdapter,
+  CanvasRuntimeTranslator,
+} from './app-adapter'
 import {
   createLockedObjectAffordance,
   type LockedObjectAffordanceController,
@@ -97,6 +97,9 @@ import {
   runCanvasRuntimeCleanups,
   throwCanvasRuntimeCleanupErrors,
 } from './cleanup'
+
+/** A keyboard-opened menu ignores the contextmenu event the same key press sends. */
+const KEYBOARD_CONTEXT_MENU_ECHO_MS = 500
 
 type InteractionTool = 'select' | 'hand' | 'rectangle' | 'text' | 'plant-stamp' | 'object-stamp' | 'plant-spacing' | string
 
@@ -135,25 +138,12 @@ export interface SceneInteractionSessionDeps {
    */
   tryInspectAt?: (world: ScenePoint) => boolean
   getDesignObjectSelection: () => CanvasDesignObjectSelectionModel
-  selectionCommands: Pick<
-    CanvasSceneEditCommandSurface,
-    | 'copy'
-    | 'pasteAt'
-    | 'canPaste'
-    | 'duplicateSelected'
-    | 'toggleSelectedPlantNamePins'
-    | 'deleteSelected'
-    | 'bringToFront'
-    | 'sendToBack'
-    | 'selectSameSpecies'
-    | 'lockSelected'
-    | 'unlockSelected'
-    | 'groupSelected'
-    | 'ungroupSelected'
-  >
+  selectionCommands: CanvasContextMenuCommands
   contextualCommands?: {
     readonly saveSelectionAsObjectStamp?: () => void
   }
+  /** Renders the right-click menu; absent in a detached runtime. */
+  contextMenu?: CanvasRuntimeContextMenuAdapter
   setTool: (name: string) => void
   render: (kind: 'scene' | 'viewport') => void
   readSnapToGridEnabled: () => boolean
@@ -191,7 +181,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private readonly _toolRegistry: SceneToolRegistry
   private readonly _sharedGestures: SceneInteractionSharedGestures
   private readonly _annotationEditor: AnnotationInlineEditorController
-  private readonly _selectionToolbar: SelectionActionToolbarController
   private readonly _contextMenu: CanvasContextMenuController
   private readonly _rotationHandle: SelectionRotationHandleController
   private readonly _controlPointOverlays: readonly ControlPointOverlayController[]
@@ -210,6 +199,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _designObjectDragPresentationSuppressed = false
   private _pendingInteractionHostFocusFrame: number | null = null
   private _overviewMode = false
+  private _keyboardContextMenuAt = Number.NEGATIVE_INFINITY
 
   constructor(private readonly _deps: SceneInteractionSessionDeps) {
     const rollback: Array<() => void> = []
@@ -276,20 +266,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         endDesignObjectDragPresentation: () => this._endDesignObjectDragPresentation(),
         beginAnnotationTextEdit: (annotationId) => this._beginAnnotationTextEdit(annotationId),
       }), (gestures) => gestures.dispose())
-      this._selectionToolbar = own(createSelectionActionToolbar({
-        container: this._deps.container,
-        camera: this._deps.camera,
-        getSelection: this._deps.getDesignObjectSelection,
-        commands: this._deps.selectionCommands,
-        translate: this._deps.translate,
-        saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
-      }), (toolbar) => toolbar.dispose())
       this._contextMenu = own(createCanvasContextMenu({
         container: this._deps.container,
+        camera: this._deps.camera,
+        adapter: this._deps.contextMenu,
         commands: this._deps.selectionCommands,
-        translate: this._deps.translate,
-        getSelection: this._deps.getDesignObjectSelection,
         saveSelectionAsObjectStamp: this._deps.contextualCommands?.saveSelectionAsObjectStamp,
+        returnFocus: () => this._focusInteractionHost(),
       }), (menu) => menu.dispose())
       this._rotationHandle = own(createSelectionRotationHandle({
         container: this._deps.container,
@@ -400,10 +383,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     runCanvasRuntimeCleanups([
       () => this._annotationEditor.cancel(),
       () => this._cancelTransientInteraction({ releaseSpace: true }),
-      () => this._contextMenu.hide(),
+      () => this._contextMenu.close(),
       () => hideInteractionPreview(this._preview),
       () => clearSavedObjectStampGhosts(this._preview),
-      () => this._selectionToolbar.hide(),
       () => this._rotationHandle.hide(),
       ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
       () => this._clearPassiveHoverPresentation(),
@@ -417,10 +399,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       () => this._cancelPendingInteractionHostFocus(),
       () => this._annotationEditor.cancel(),
       () => this._cancelTransientInteraction({ releaseSpace: true }),
-      () => this._contextMenu.hide(),
+      () => this._contextMenu.close(),
       () => hideInteractionPreview(this._preview),
       () => clearSavedObjectStampGhosts(this._preview),
-      () => this._selectionToolbar.hide(),
       () => this._rotationHandle.hide(),
       ...this._controlPointOverlays.map((overlay) => () => overlay.hide()),
       () => this._clearPassiveHoverPresentation(),
@@ -443,7 +424,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     attempt(() => this._cancelPendingInteractionHostFocus())
     attempt(() => this._cancelTransientInteraction())
     attempt(() => this._activeToolAdapter()?.onDeactivate?.())
-    attempt(() => this._selectionToolbar.dispose())
     attempt(() => this._contextMenu.dispose())
     attempt(() => this._rotationHandle.dispose())
     for (const overlay of this._controlPointOverlays) attempt(() => overlay.dispose())
@@ -465,8 +445,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   refreshTranslations(): void {
     if (this._disposed) return
-    this._selectionToolbar.refreshTranslations()
-    this._contextMenu.refreshTranslations()
     this._rotationHandle.refreshTranslations()
     this._lockedAffordance.refreshTranslations()
     this._forEachUniqueToolHook('refreshTranslations', (refresh) => refresh())
@@ -496,10 +474,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (event.button !== 0 && event.button !== 1) return
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
     if (this._retryPendingTransientCancellation(event)) return
-    if (this._contextMenu.contains(event.target)) return
-    this._contextMenu.hide()
+    this._contextMenu.close()
     if (this._annotationEditor.contains(event.target)) return
-    if (this._selectionToolbar.contains(event.target)) return
     if (this._lockedAffordance.contains(event.target)) return
 
     this._runAdmittedSceneEvent(event, () => {
@@ -771,6 +747,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (allowsNativeContextMenuTarget(event.target) || this._isOwnedOverlayPointerTarget(event.target)) return
     if (this._retryPendingTransientCancellation(event)) return
     event.preventDefault()
+    this._contextMenu.close()
     const screen = this._screenPoint(event)
     const mode = event.deltaMode
     const size = this._deps.camera.screenSize
@@ -794,6 +771,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (allowsNativeContextMenuTarget(event.target)) return
     event.preventDefault()
     if (this._overviewMode) return
+    // The Menu key already opened the menu from keydown; its trailing event has no pointer.
+    if (event.timeStamp - this._keyboardContextMenuAt < KEYBOARD_CONTEXT_MENU_ECHO_MS) return
     this._runAdmittedSceneEvent(event, () => {
       this._showContextMenuWhenSettled(event)
     }, { resumePending: true })
@@ -807,8 +786,24 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
     const screen = this._screenPoint(event)
     const world = this._deps.camera.screenToWorld(screen)
-    const selection = this._retargetContextMenuSelection(world)
-    this._contextMenu.show(selection ? { screen, world, selection } : { screen, world })
+    this._contextMenu.openAtPointer(screen, this._retargetContextMenuSelection(world))
+  }
+
+  /** Menu key or Shift F10 while the map has focus: the menu for the current selection. */
+  private _openContextMenuFromKeyboard(event: KeyboardEvent): boolean {
+    const menuKey = event.key === 'ContextMenu'
+      || (event.key === 'F10' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey)
+    if (!menuKey || this._pointerGesture) return false
+    if (!isCanvasKeyboardShortcutTarget(event.target, this._deps.container)) return false
+    event.preventDefault()
+    event.stopPropagation()
+    if (this._hasActiveSceneEdit()) return true
+    this._keyboardContextMenuAt = event.timeStamp
+    this._runAdmittedSceneEvent(event, () => {
+      if (this._annotationEditor.hasActiveEditor()) this._annotationEditor.commit()
+      this._contextMenu.openFromKeyboard(this._deps.getDesignObjectSelection())
+    }, { resumePending: true })
+    return true
   }
 
   private readonly _onDragOver = (event: DragEvent): void => {
@@ -941,6 +936,11 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  /**
+   * The selection a right-click acts on: the object under the pointer (selected
+   * first when it was not), a disabled selection for a locked or hidden hit, or
+   * `null` for the empty map.
+   */
   private _retargetContextMenuSelection(world: ScenePoint): CanvasDesignObjectSelectionModel | null {
     const scene = this._deps.getSceneStore().persisted
     const viewportScale = this._deps.camera.viewport.scale
@@ -969,11 +969,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     )
     if (!hit) return visibleHit ? disabledContextMenuSelection() : null
     if (isContextMenuTargetStructurallyBlocked(scene, hit)) return disabledContextMenuSelection()
-    if (includesSceneDesignObjectTarget(this._deps.getSelection(), hit)) return null
-    this._deps.setSelection([hit])
-    this._deps.render('scene')
-    this._refreshSelectionDependentMeasurements()
-    return null
+    if (!includesSceneDesignObjectTarget(this._deps.getSelection(), hit)) {
+      this._deps.setSelection([hit])
+      this._deps.render('scene')
+      this._refreshSelectionDependentMeasurements()
+    }
+    return this._deps.getDesignObjectSelection()
   }
 
   private readonly _onKeyDown = (event: KeyboardEvent): void => {
@@ -995,6 +996,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
       return
     }
+    if (this._openContextMenuFromKeyboard(event)) return
     if (this._activeToolAdapter()?.keyDown?.(event) ?? false) return
     if (event.key === 'Escape' && this._pointerGesture) {
       event.preventDefault()
@@ -1057,10 +1059,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       }
       if (this._canShowSelectAffordances()) {
         this._rotationHandle.refresh()
-        this._selectionToolbar.refresh()
       } else {
         this._rotationHandle.hide()
-        this._selectionToolbar.hide()
       }
       return
     }
@@ -1075,11 +1075,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     for (const overlay of this._controlPointOverlays) overlay.refresh(canShowSelectAffordances)
     if (this._designObjectDragPresentationSuppressed || !canShowSelectAffordances) {
       this._rotationHandle.hide()
-      this._selectionToolbar.hide()
       return
     }
     this._rotationHandle.refresh()
-    this._selectionToolbar.refresh()
   }
 
   private _canShowSelectAffordances(): boolean {
@@ -1093,7 +1091,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _beginDesignObjectDragPresentation(): void {
     this._designObjectDragPresentationSuppressed = true
     this._rotationHandle.hide()
-    this._selectionToolbar.hide()
     this._clearPassiveHoverPresentation()
   }
 
@@ -1258,8 +1255,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _isOwnedOverlayPointerTarget(target: EventTarget | null): boolean {
     return this._annotationEditor.contains(target)
-      || this._selectionToolbar.contains(target)
-      || this._contextMenu.contains(target)
       || this._rotationHandle.contains(target)
       || this._controlPointOverlays.some((overlay) => overlay.contains(target))
       || this._lockedAffordance.contains(target)

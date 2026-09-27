@@ -37,6 +37,15 @@ import {
   type SceneInteractionSessionDeps,
 } from '../canvas/runtime/scene-interaction'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
+import type {
+  CanvasContextMenuRequest,
+  CanvasRuntimeContextMenuAdapter,
+} from '../canvas/runtime/app-adapter'
+import {
+  buildCanvasContextMenuEntries,
+  type CanvasContextMenuCommand,
+  type CanvasContextMenuItemId,
+} from '../app/canvas-context-menu/entries'
 import { getDesignObjectSelectionModel } from '../canvas/runtime/scene-runtime/selection'
 import { SceneHistory } from '../canvas/runtime/scene-history'
 import {
@@ -90,6 +99,54 @@ class AttachedInteractionMap implements MapLibreWorkspaceCameraMap {
   }
 }
 
+/** Stands in for the app's right-click menu: records what the runtime asks it to show. */
+const contextMenuHost = {
+  current: null as CanvasContextMenuRequest | null,
+  opened: [] as CanvasContextMenuRequest[],
+  adapter: {
+    open: (request) => {
+      contextMenuHost.current = request
+      contextMenuHost.opened.push(request)
+    },
+    close: (request) => {
+      if (contextMenuHost.current === request) contextMenuHost.current = null
+    },
+  } satisfies CanvasRuntimeContextMenuAdapter,
+  reset(): void {
+    this.current = null
+    this.opened = []
+  },
+}
+
+/** The open menu's command, as the app renders it. */
+function contextMenuCommand(id: CanvasContextMenuItemId): CanvasContextMenuCommand {
+  const request = contextMenuHost.current
+  if (!request) throw new Error('No context menu is open')
+  const entry = buildCanvasContextMenuEntries(request, { translate: t, openPlantAppearance: vi.fn() })
+    .find((candidate): candidate is CanvasContextMenuCommand => 'id' in candidate && candidate.id === id)
+  if (!entry) throw new Error(`The context menu has no '${id}' item`)
+  return entry
+}
+
+/** Right-clicks the map at a container point; returns the dispatched event. */
+function dispatchContextMenu(container: HTMLElement, client: ScenePoint): MouseEvent {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: client.x,
+    clientY: client.y,
+  })
+  container.dispatchEvent(event)
+  return event
+}
+
+function contextMenuItemIds(): readonly string[] {
+  const request = contextMenuHost.current
+  if (!request) return []
+  return buildCanvasContextMenuEntries(request, { translate: t, openPlantAppearance: vi.fn() })
+    .flatMap((entry) => 'id' in entry ? [entry.id] : [])
+}
+
 function createInteractionDeps(
   container: HTMLDivElement,
   store: SceneStore,
@@ -107,6 +164,7 @@ function createInteractionDeps(
     | 'readPlantSpacingIntervalMeters'
     | 'commitPlantSpacingIntervalMeters'
     | 'translate'
+    | 'contextMenu'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
@@ -178,6 +236,7 @@ function createInteractionDeps(
       duplicateSelected: vi.fn(),
       toggleSelectedPlantNamePins: vi.fn(),
       deleteSelected: vi.fn(),
+      selectAll: vi.fn(),
       bringToFront: vi.fn(),
       sendToBack: vi.fn(),
       selectSameSpecies: vi.fn(),
@@ -186,6 +245,7 @@ function createInteractionDeps(
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
     },
+    contextMenu: overrides.contextMenu ?? contextMenuHost.adapter,
     setTool: (overrides.setTool ?? ((name: string) => {
       void name
     })) as SceneInteractionSessionDeps['setTool'],
@@ -212,6 +272,7 @@ function createSelectionCommands(
     duplicateSelected: vi.fn(),
     toggleSelectedPlantNamePins: vi.fn(),
     deleteSelected: vi.fn(),
+    selectAll: vi.fn(),
     bringToFront: vi.fn(),
     sendToBack: vi.fn(),
     selectSameSpecies: vi.fn(),
@@ -565,10 +626,22 @@ describe('SceneInteractionSession', () => {
     return session
   }
 
+  function openContextMenu(screen: ScenePoint): MouseEvent {
+    return dispatchContextMenu(container, events.clientPoint(screen))
+  }
+
+  /** The Menu key while the map has focus: the menu for the current selection. */
+  function openContextMenuFromKeyboard(): KeyboardEvent {
+    container.tabIndex = -1
+    container.focus()
+    return events.keyDown({ key: 'ContextMenu', cancelable: true, target: container })
+  }
+
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
     events = createSceneInteractionEventHarness(container)
+    contextMenuHost.reset()
 
     camera = new CameraController()
     camera.initialize({ width: 400, height: 300 })
@@ -610,44 +683,45 @@ describe('SceneInteractionSession', () => {
     session.refreshMeasurements()
     events.pointerMove({ x: 20, y: 30 })
 
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: 300,
-      clientY: 250,
-    }))
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
     const rotationHandle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
     const lockedAffordance = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
     const unlock = lockedAffordance.querySelector<HTMLButtonElement>('[data-locked-object-unlock]')!
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const paste = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    paste.focus()
+    unlock.focus()
 
-    expect(toolbar.getAttribute('aria-label')).toBe('en:canvas.selectionActions.ariaLabel')
     expect(rotationHandle.getAttribute('aria-label')).toBe('en:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.selectionActions.unlock')
-    expect(paste.textContent).toBe('en:canvas.contextMenu.paste')
+    expect(unlock.getAttribute('aria-label')).toBe('en:canvas.lockedObject.unlock')
 
     language = 'fr'
     session.refreshTranslations()
 
-    expect(container.querySelector('[data-selection-action-toolbar]')).toBe(toolbar)
     expect(container.querySelector('[data-rotation-handle]')).toBe(rotationHandle)
     expect(container.querySelector('[data-locked-object-affordance]')).toBe(lockedAffordance)
-    expect(container.querySelector('[data-canvas-context-menu]')).toBe(menu)
-    expect(toolbar.style.display).toBe('flex')
     expect(rotationHandle.style.display).toBe('inline-flex')
     expect(lockedAffordance.style.display).toBe('inline-flex')
-    expect(menu.style.display).toBe('block')
-    expect(document.activeElement).toBe(paste)
-    expect(toolbar.getAttribute('aria-label')).toBe('fr:canvas.selectionActions.ariaLabel')
-    expect(duplicate.getAttribute('aria-label')).toContain('fr:canvas.selectionActions.duplicate')
+    expect(document.activeElement).toBe(unlock)
     expect(rotationHandle.getAttribute('aria-label')).toBe('fr:canvas.rotationHandle.label')
-    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.selectionActions.unlock')
-    expect(paste.textContent).toBe('fr:canvas.contextMenu.paste')
+    expect(unlock.getAttribute('aria-label')).toBe('fr:canvas.lockedObject.unlock')
+  })
+
+  it('shows no floating action bar: rotation is the only control on a selection', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 100, y: 100 },
+        { x: 160, y: 150 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
+    })
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([zoneTarget('zone-1')])
+    session.refreshMeasurements()
+
+    expect(container.querySelector<HTMLElement>('[data-rotation-handle]')?.style.display).toBe('inline-flex')
+    expect(container.querySelector('[role="toolbar"]')).toBeNull()
+    expect(container.querySelector('[data-selection-action-toolbar]')).toBeNull()
+    session.dispose()
   })
 
   it('refreshes Plant Spacing translations without resetting its phase, interval, count, or input selection', () => {
@@ -1137,7 +1211,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('hides Selection Action Toolbar and Rotation Handle while dragging a selected Design Object', () => {
+  it('hides the Rotation Handle while dragging a selected Design Object', () => {
     store.updatePersisted((draft) => {
       draft.zones = [makeRectZone('zone-1', [
         { x: 20, y: 80 },
@@ -1153,20 +1227,16 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
-    expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
 
     events.pointerDown({ x: 20, y: 110 }, { button: 0 })
 
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
 
     events.pointerMove({ x: 40, y: 130 }, { button: 0 })
     events.pointerUp({ x: 40, y: 130 }, { button: 0 })
 
-    expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
     session.dispose()
   })
@@ -1217,15 +1287,12 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
 
     events.pointerDown({ x: 20, y: 110 }, { button: 0 })
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
     events.pointerUp({ x: 20, y: 110 }, { button: 0 })
 
-    expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
     expect(onSceneEditCommit).not.toHaveBeenCalled()
     session.dispose()
@@ -1249,16 +1316,13 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
 
     events.pointerDown({ x: 20, y: 110 }, { button: 0 })
     events.pointerMove({ x: 40, y: 130 }, { button: 0 })
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
     session.setTool('rectangle')
 
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
     expect(store.persisted.zones[0]?.points[0]).toEqual({ x: 20, y: 80 })
     expect(onSceneEditCommit).not.toHaveBeenCalled()
@@ -1285,16 +1349,15 @@ describe('SceneInteractionSession', () => {
 
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    expect(toolbar.style.display).toBe('flex')
+    const overlay = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
 
     events.pointerDown({ x: 20, y: 30 }, { button: 0 })
-    const toolbarMove = events.pointerMove(
+    const overlayMove = events.pointerMove(
       { x: 35, y: 45 },
-      { button: 0, target: toolbar },
+      { button: 0, target: overlay },
     )
-    expect(toolbarMove.target).toBe(toolbar)
-    events.pointerUp({ x: 35, y: 45 }, { button: 0, target: toolbar })
+    expect(overlayMove.target).toBe(overlay)
+    events.pointerUp({ x: 35, y: 45 }, { button: 0, target: overlay })
 
     expect(store.persisted.plants[0]?.position).toEqual({ x: 35, y: 45 })
     expect(onSceneEditCommit).toHaveBeenCalledWith('interaction-drag')
@@ -1321,7 +1384,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('ends middle-button panning when pointer continuation targets the selection toolbar', () => {
+  it('ends middle-button panning when pointer continuation targets a runtime overlay', () => {
     store.updatePersisted((draft) => {
       draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
@@ -1332,19 +1395,18 @@ describe('SceneInteractionSession', () => {
     session.setTool('select')
     deps.setSelection([plantTarget('plant-1')])
     session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    expect(toolbar.style.display).toBe('flex')
+    const overlay = container.querySelector<HTMLElement>('[data-locked-object-affordance]')!
 
     events.pointerDown({ x: 200, y: 150 }, { pointerId: 41, button: 1 })
     events.pointerMove(
       { x: 230, y: 170 },
-      { pointerId: 41, button: 1, target: toolbar },
+      { pointerId: 41, button: 1, target: overlay },
     )
     expect(camera.viewport).toMatchObject({ x: 30, y: 20 })
 
     events.pointerUp(
       { x: 230, y: 170 },
-      { pointerId: 41, button: 1, target: toolbar },
+      { pointerId: 41, button: 1, target: overlay },
     )
     const releasedViewport = { ...camera.viewport }
     events.pointerMove({ x: 260, y: 190 }, { pointerId: 41, button: 1 })
@@ -1437,366 +1499,7 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('shows a focus-preserving Selection Action Toolbar near editable selections', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const priorFocus = document.createElement('button')
-    document.body.appendChild(priorFocus)
-    priorFocus.focus()
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        toggleSelectedPlantNamePins: vi.fn(),
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')
-    expect(toolbar).not.toBeNull()
-    expect(toolbar?.style.display).toBe('flex')
-    expect(toolbar?.getAttribute('role')).toBe('toolbar')
-    expect(toolbar?.getAttribute('aria-label')).toBe('Selection actions')
-    expect(document.activeElement).toBe(priorFocus)
-    expect(Number.parseFloat(toolbar?.style.top ?? '0')).toBe(158)
-    expect(toolbar?.querySelectorAll('button')).toHaveLength(5)
-    const duplicate = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')
-    expect(duplicate?.getAttribute('aria-label')).toContain('Duplicate')
-    expect(duplicate?.querySelector('svg')).not.toBeNull()
-    const duplicateIconStrokes = Array.from(duplicate?.querySelectorAll<SVGElement>('path, polyline') ?? [])
-      .map((element) => element.getAttribute('stroke-width'))
-    expect(duplicateIconStrokes).toEqual(['1.5', '1.5'])
-    expect(duplicate?.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Duplicate')
-
-    session.dispose()
-    priorFocus.remove()
-  })
-
-  it('shows a Selection Action Toolbar plant-name pin button only for editable plant selections', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const toggleSelectedPlantNamePins = vi.fn()
-    let selection: CanvasDesignObjectSelectionModel = {
-      editableTargets: [
-        { kind: 'plant', id: 'plant-1' },
-        { kind: 'zone', id: 'zone-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-      sameSpeciesReferenceCanonicalName: null,
-      plantNamePinning: {
-        plantIds: ['plant-1'],
-        allPinned: false,
-      },
-    }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selection,
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        toggleSelectedPlantNamePins,
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-    const pin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
-    expect(pin).not.toBeNull()
-    expect(pin.getAttribute('aria-label')).toBe('Pin plant name')
-    pin.click()
-    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(1)
-
-    selection = {
-      ...selection,
-      editableTargets: [{ kind: 'zone', id: 'zone-1' }],
-      plantNamePinning: {
-        plantIds: [],
-        allPinned: false,
-      },
-    }
-    session.refreshMeasurements()
-    expect(container.querySelector('[data-selection-action-command="pin-plant-name"]')).toBeNull()
-    session.dispose()
-  })
-
-  it('refreshes the Selection Action Toolbar plant-name pin action while it stays mounted', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const makeSelection = (allPinned: boolean): CanvasDesignObjectSelectionModel => ({
-      editableTargets: [{ kind: 'plant', id: 'plant-1' }],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-      sameSpeciesReferenceCanonicalName: null,
-      plantNamePinning: {
-        plantIds: ['plant-1'],
-        allPinned,
-      },
-    })
-    let selection = makeSelection(false)
-    const toggleSelectedPlantNamePins = vi.fn(() => {
-      selection = makeSelection(!selection.plantNamePinning!.allPinned)
-    })
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selection,
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        toggleSelectedPlantNamePins,
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-    const pin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
-    expect(pin).not.toBeNull()
-    expect(pin.getAttribute('aria-label')).toBe('Pin plant name')
-
-    pin.click()
-
-    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(1)
-    expect(container.querySelector('[data-selection-action-command="pin-plant-name"]')).toBeNull()
-    const unpin = container.querySelector<HTMLButtonElement>('[data-selection-action-command="unpin-plant-name"]')!
-    expect(unpin).not.toBeNull()
-    expect(unpin).not.toBe(pin)
-    expect(unpin.getAttribute('aria-label')).toBe('Unpin plant name')
-    expect(unpin.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Unpin plant name')
-
-    unpin.click()
-
-    expect(toggleSelectedPlantNamePins).toHaveBeenCalledTimes(2)
-    expect(container.querySelector('[data-selection-action-command="unpin-plant-name"]')).toBeNull()
-    const pinAgain = container.querySelector<HTMLButtonElement>('[data-selection-action-command="pin-plant-name"]')!
-    expect(pinAgain).not.toBeNull()
-    expect(pinAgain.getAttribute('aria-label')).toBe('Pin plant name')
-    expect(pinAgain.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Pin plant name')
-    session.dispose()
-  })
-
-  it('keeps the Selection Action Toolbar close above a single non-rotatable Plant', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 100, minY: 100, maxX: 100, maxY: 100 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    expect(toolbar.style.display).toBe('flex')
-    expect(Number.parseFloat(toolbar.style.top)).toBe(58)
-    session.dispose()
-  })
-
-  it('flips the Selection Action Toolbar near top and bottom canvas edges', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 200 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 140 })
-    let bounds = { minX: 80, minY: 6, maxX: 80, maxY: 6 }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds,
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    expect(Number.parseFloat(toolbar.style.top)).toBe(14)
-
-    bounds = { minX: 80, minY: 116, maxX: 80, maxY: 116 }
-    session.refreshMeasurements()
-
-    expect(Number.parseFloat(toolbar.style.top)).toBe(74)
-    expect(Number.parseFloat(toolbar.style.top) + 34).toBeLessThanOrEqual(140 - 8)
-    session.dispose()
-  })
-
-  it('keeps the Selection Action Toolbar clear of the Rotation Handle near the bottom edge', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 160, y: 260 },
-        { x: 220, y: 260 },
-        { x: 220, y: 292 },
-        { x: 160, y: 292 },
-      ])]
-    })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const session = createTestSession(deps)
-    deps.setSelection([zoneTarget('zone-1')])
-
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
-    const toolbarTop = Number.parseFloat(toolbar.style.top)
-    const handleTop = Number.parseFloat(handle.style.top)
-
-    expect(toolbar.style.display).toBe('flex')
-    expect(handle.style.display).toBe('inline-flex')
-    expect(toolbarTop + 34).toBeLessThanOrEqual(handleTop)
-    expect(toolbarTop).toBeGreaterThanOrEqual(8)
-    session.dispose()
-  })
-
-  it('keeps the Selection Action Toolbar inside the right canvas edge', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 200 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 186, minY: 100, maxX: 198, maxY: 150 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const buttonCount = toolbar.querySelectorAll('button').length
-    const renderedWidthPx = buttonCount * 28 + (buttonCount - 1) * 4 + 8
-    const left = Number.parseFloat(toolbar.style.left)
-
-    expect(toolbar.style.display).toBe('flex')
-    expect(buttonCount).toBe(5)
-    expect(left + renderedWidthPx).toBeLessThanOrEqual(200 - 8)
-    session.dispose()
-  })
-
-  it('keeps Selection Action Toolbar tooltips above the Rotation Handle', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    store.updatePersisted((draft) => {
-      draft.zones = [makeRectZone('zone-1', [
-        { x: 160, y: 120 },
-        { x: 220, y: 120 },
-        { x: 220, y: 170 },
-        { x: 160, y: 170 },
-      ])]
-    })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const session = createTestSession(deps)
-
-    deps.setSelection([zoneTarget('zone-1')])
-    session.refreshMeasurements()
-
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
-    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
-    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
-    duplicate.dispatchEvent(new Event('pointerenter'))
-
-    expect(toolbar.style.display).toBe('flex')
-    expect(handle.style.display).toBe('inline-flex')
-    expect(tooltip.style.display).toBe('inline-flex')
-    expect(tooltip.style.bottom).toBe('100%')
-    expect(tooltip.style.marginBottom).toBe('var(--space-1)')
-    expect(tooltip.style.top).toBe('')
-    expect(Number.parseInt(toolbar.style.zIndex, 10)).toBeGreaterThan(Number.parseInt(handle.style.zIndex, 10))
-    session.dispose()
-  })
-
-  it('clears Selection Action Toolbar tooltips when selection refreshes with unchanged actions', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    store.updatePersisted((draft) => {
-      draft.zones = [
-        makeRectZone('zone-1', [
-          { x: 80, y: 80 },
-          { x: 140, y: 80 },
-          { x: 140, y: 120 },
-          { x: 80, y: 120 },
-        ]),
-        makeRectZone('zone-2', [
-          { x: 180, y: 80 },
-          { x: 240, y: 80 },
-          { x: 240, y: 120 },
-          { x: 180, y: 120 },
-        ]),
-      ]
-    })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const session = createTestSession(deps)
-
-    deps.setSelection([zoneTarget('zone-1')])
-    session.refreshMeasurements()
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
-    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
-    duplicate.dispatchEvent(new Event('pointerenter'))
-
-    expect(toolbar.style.display).toBe('flex')
-    expect(tooltip.style.display).toBe('inline-flex')
-
-    deps.setSelection([zoneTarget('zone-2')])
-    session.refreshMeasurements()
-
-    expect(toolbar.style.display).toBe('flex')
-    expect(tooltip.style.display).toBe('none')
-    expect(toolbar.querySelectorAll('button')).toHaveLength(5)
-    session.dispose()
-  })
-
-  it('hides Selection Action Toolbar, Rotation Handle, and stale tooltips outside Select affordance states', () => {
+  it('hides the Rotation Handle outside Select affordance states', () => {
     Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
     Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
     store.updatePersisted((draft) => {
@@ -1816,403 +1519,22 @@ describe('SceneInteractionSession', () => {
     deps.setSelection([zoneTarget('zone-1')])
     session.refreshMeasurements()
 
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
     const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
-    const duplicate = toolbar.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
-    const tooltip = duplicate.querySelector<HTMLElement>('[data-selection-action-tooltip]')!
-    duplicate.dispatchEvent(new Event('pointerenter'))
-    expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
-    expect(tooltip.style.display).toBe('inline-flex')
 
     session.setTool('rectangle')
 
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
-    expect(tooltip.style.display).toBe('none')
 
     session.setTool('select')
     deps.setSelection([annotationTarget('annotation-1')])
     session.refreshMeasurements()
-    expect(toolbar.style.display).toBe('flex')
     expect(handle.style.display).toBe('inline-flex')
 
     events.keyDown({ key: 'F2', cancelable: true, target: container })
 
     expect(container.querySelector('textarea')).not.toBeNull()
-    expect(toolbar.style.display).toBe('none')
     expect(handle.style.display).toBe('none')
-    session.dispose()
-  })
-
-  it('dispatches Selection Action Toolbar commands by mouse or focused key activation only', () => {
-    const duplicateSelected = vi.fn()
-    const deleteSelected = vi.fn()
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-      selectionCommands: createSelectionCommands({
-        duplicateSelected,
-        deleteSelected,
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-    expect(duplicateSelected).not.toHaveBeenCalled()
-
-    const duplicate = container.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')!
-    expect(duplicate.tabIndex).toBe(0)
-    duplicate.click()
-    expect(duplicateSelected).toHaveBeenCalledTimes(1)
-
-    duplicate.focus()
-    duplicate.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-    expect(duplicateSelected).toHaveBeenCalledTimes(2)
-    session.refreshMeasurements()
-    expect(document.activeElement).toBe(duplicate)
-
-    const remove = container.querySelector<HTMLButtonElement>('[data-selection-action-command="delete"]')!
-    remove.focus()
-    remove.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }))
-    expect(deleteSelected).toHaveBeenCalledTimes(1)
-
-    session.dispose()
-  })
-
-  it('dispatches Selection Action Toolbar Save as Saved Object Stamp for editable and locked selections', () => {
-    const saveSelectionAsObjectStamp = vi.fn()
-    let selectionModel: CanvasDesignObjectSelectionModel = {
-      editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selectionModel,
-      contextualCommands: {
-        saveSelectionAsObjectStamp,
-      },
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-    const save = container.querySelector<HTMLButtonElement>(
-      '[data-selection-action-command="save-object-stamp"]',
-    )!
-    expect(save).not.toBeNull()
-    expect(save.disabled).toBe(false)
-    expect(save.getAttribute('aria-label')).toContain('Save as Saved Stamp')
-    save.click()
-    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
-
-    selectionModel = {
-      editableTargets: [],
-      lockedTargets: [{ kind: 'plant' as const, id: 'locked-plant' }],
-      blockedTargets: [{
-        target: { kind: 'plant' as const, id: 'locked-plant' },
-        reason: 'locked-design-object' as const,
-        layerName: 'plants',
-      }],
-      bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-    const lockedSave = container.querySelector<HTMLButtonElement>(
-      '[data-selection-action-command="save-object-stamp"]',
-    )!
-    expect(lockedSave.disabled).toBe(false)
-    lockedSave.click()
-    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(2)
-
-    selectionModel = {
-      editableTargets: [{ kind: 'measurement-guide' as const, id: 'measurement-guide-1' }],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 10 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-    expect(container.querySelector('[data-selection-action-command="save-object-stamp"]')).toBeNull()
-
-    session.dispose()
-  })
-
-  it('shows Group for mixed concrete selections and dispatches through the command surface', () => {
-    const groupSelected = vi.fn()
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [
-          { kind: 'plant' as const, id: 'plant-1' },
-          { kind: 'zone' as const, id: 'zone-1' },
-        ],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected,
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const group = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
-    expect(group).not.toBeNull()
-    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
-    expect(group?.getAttribute('aria-label')).toContain('Group')
-    expect(group?.querySelector('[data-selection-action-tooltip]')?.textContent).toContain('Group')
-
-    group?.click()
-
-    expect(groupSelected).toHaveBeenCalledTimes(1)
-    session.dispose()
-  })
-
-  it('does not expose Object Group actions for Measurement Guide selections', () => {
-    let selectionModel: CanvasDesignObjectSelectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'plant-1' },
-        { kind: 'measurement-guide' as const, id: 'measurement-guide-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selectionModel,
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
-    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
-
-    selectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'plant-1' },
-        { kind: 'zone' as const, id: 'zone-1' },
-        { kind: 'measurement-guide' as const, id: 'measurement-guide-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-
-    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
-    session.dispose()
-  })
-
-  it('shows Select Same Species only for one clear plant Species selection', () => {
-    const selectSameSpecies = vi.fn()
-    let selectionModel: CanvasDesignObjectSelectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'apple-1' },
-        { kind: 'plant' as const, id: 'apple-2' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: 'Malus domestica',
-    }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selectionModel,
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies,
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const selectSame = container.querySelector<HTMLButtonElement>('[data-selection-action-command="select-same-species"]')
-    expect(selectSame).not.toBeNull()
-    expect(selectSame?.getAttribute('aria-label')).toContain('Select same species')
-    selectSame?.click()
-    expect(selectSameSpecies).toHaveBeenCalledTimes(1)
-
-    selectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'apple-1' },
-        { kind: 'zone' as const, id: 'zone-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 60, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-
-    expect(container.querySelector('[data-selection-action-command="select-same-species"]')).toBeNull()
-    session.dispose()
-  })
-
-  it('filters Group and Ungroup actions by selection eligibility', () => {
-    const groupSelected = vi.fn()
-    const ungroupSelected = vi.fn()
-    let selectionModel: CanvasDesignObjectSelectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'plant-1' },
-        { kind: 'zone' as const, id: 'zone-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => selectionModel,
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected: vi.fn(),
-        unlockSelected: vi.fn(),
-        groupSelected,
-        ungroupSelected,
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-    const mixedGroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
-    expect(mixedGroup).not.toBeNull()
-    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
-    mixedGroup?.click()
-    expect(groupSelected).toHaveBeenCalledTimes(1)
-
-    selectionModel = {
-      editableTargets: [
-        { kind: 'plant' as const, id: 'plant-1' },
-        { kind: 'plant' as const, id: 'plant-2' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [{
-        target: { kind: 'plant' as const, id: 'missing-object' },
-        reason: 'missing-design-object' as const,
-        layerName: null,
-      }],
-      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
-    expect(container.querySelector('[data-selection-action-command="ungroup"]')).toBeNull()
-
-    selectionModel = {
-      editableTargets: [
-        { kind: 'group' as const, id: 'group-1' },
-        { kind: 'annotation' as const, id: 'annotation-1' },
-      ],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-    const regroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="group"]')
-    expect(regroup).not.toBeNull()
-    expect(container.querySelector('[data-selection-action-command="ungroup"]')).not.toBeNull()
-    regroup?.click()
-    expect(groupSelected).toHaveBeenCalledTimes(2)
-
-    selectionModel = {
-      editableTargets: [{ kind: 'group' as const, id: 'group-1' }],
-      lockedTargets: [],
-      blockedTargets: [],
-      bounds: { minX: 10, minY: 10, maxX: 40, maxY: 40 },
-      sameSpeciesReferenceCanonicalName: null,
-    }
-    session.refreshMeasurements()
-
-    expect(container.querySelector('[data-selection-action-command="group"]')).toBeNull()
-    const ungroup = container.querySelector<HTMLButtonElement>('[data-selection-action-command="ungroup"]')
-    expect(ungroup).not.toBeNull()
-    expect(ungroup?.getAttribute('aria-label')).toContain('Ungroup')
-
-    ungroup?.click()
-
-    expect(ungroupSelected).toHaveBeenCalledTimes(1)
-    session.dispose()
-  })
-
-  it('shows Lock for editable selections and dispatches through the command surface', () => {
-    const lockSelected = vi.fn()
-    const deps = {
-      ...createInteractionDeps(container, store, camera),
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'zone' as const, id: 'zone-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 160, minY: 100, maxX: 220, maxY: 150 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-      selectionCommands: createSelectionCommands({
-        duplicateSelected: vi.fn(),
-        deleteSelected: vi.fn(),
-        bringToFront: vi.fn(),
-        sendToBack: vi.fn(),
-        selectSameSpecies: vi.fn(),
-        lockSelected,
-        unlockSelected: vi.fn(),
-        groupSelected: vi.fn(),
-        ungroupSelected: vi.fn(),
-      }),
-    }
-    const session = createTestSession(deps)
-
-    session.refreshMeasurements()
-
-    const lock = container.querySelector<HTMLButtonElement>('[data-selection-action-command="lock"]')
-    expect(lock).not.toBeNull()
-    expect(lock?.getAttribute('aria-label')).toContain('Lock')
-    lock?.click()
-
-    expect(lockSelected).toHaveBeenCalledTimes(1)
     session.dispose()
   })
 
@@ -2809,10 +2131,10 @@ describe('SceneInteractionSession', () => {
     container.dispatchEvent(canvasContext)
     expect(canvasContext.defaultPrevented).toBe(true)
 
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const toolbarContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-    toolbar.dispatchEvent(toolbarContext)
-    expect(toolbarContext.defaultPrevented).toBe(true)
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const handleContext = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    handle.dispatchEvent(handleContext)
+    expect(handleContext.defaultPrevented).toBe(true)
 
     const canvasInput = document.createElement('input')
     container.appendChild(canvasInput)
@@ -2875,8 +2197,7 @@ describe('SceneInteractionSession', () => {
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(store.persisted.plants.find((plant) => plant.id === 'plant-1')?.position)
       .toEqual({ x: 40, y: 50 })
-    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
-      .toBe('none')
+    expect(contextMenuHost.opened).toHaveLength(0)
 
     events.pointerMove({ x: 50, y: 60 }, { pointerId: 31 })
     events.pointerUp({ x: 50, y: 60 }, { pointerId: 31 })
@@ -2954,8 +2275,7 @@ describe('SceneInteractionSession', () => {
     expect(recoveryCalls).toHaveBeenCalledOnce()
     expect(recoveryCalls).toHaveBeenCalledWith(true)
     expect(store.session.selectedTargets).toEqual([plantTarget('plant-1')])
-    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
-      .not.toBe('block')
+    expect(contextMenuHost.opened).toHaveLength(0)
   })
 
   it('quarantines Scene events when admission recovery throws', () => {
@@ -3007,7 +2327,7 @@ describe('SceneInteractionSession', () => {
     expect(downstreamDrop).not.toHaveBeenCalled()
   })
 
-  it('routes Enter from a focused Canvas Context Menu button instead of the active tool', () => {
+  it('opens the context menu during a drawing gesture without committing the draft', () => {
     const pasteAt = vi.fn()
     const deps = createInteractionDeps(container, store, camera, {
       selectionCommands: createSelectionCommands({
@@ -3020,24 +2340,9 @@ describe('SceneInteractionSession', () => {
     events.pointerDown({ x: 20, y: 20 })
     events.pointerDown({ x: 80, y: 20 })
     events.pointerDown({ x: 80, y: 80 })
-    const contextPoint = events.clientPoint({ x: 200, y: 180 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: contextPoint.x,
-      clientY: contextPoint.y,
-    }))
-    const paste = container.querySelector<HTMLButtonElement>(
-      '[data-canvas-context-command="paste"]',
-    )!
-    paste.focus()
 
-    const enter = events.keyDown({
-      key: 'Enter',
-      code: 'Enter',
-      target: paste,
-    })
-    if (!enter.defaultPrevented) paste.click()
+    openContextMenu({ x: 200, y: 180 })
+    contextMenuCommand('paste').run()
 
     expect(pasteAt).toHaveBeenCalledWith({ x: 200, y: 180 })
     expect(store.persisted.zones).toHaveLength(0)
@@ -3045,173 +2350,107 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
-  it('keeps the Canvas Context Menu visible through a real menu-button pointer press', () => {
-    const pasteAt = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, {
-      selectionCommands: createSelectionCommands({
-        canPaste: () => true,
-        pasteAt,
-      }),
-    }))
-    const contextPoint = events.clientPoint({ x: 200, y: 180 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: contextPoint.x,
-      clientY: contextPoint.y,
-    }))
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const paste = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
+  it('closes the context menu on a map press, wheel, overview and document replacement', () => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
 
-    events.pointerDown({ x: 205, y: 185 }, { target: paste })
+    openContextMenu({ x: 200, y: 180 })
+    expect(contextMenuHost.current).not.toBeNull()
+    events.pointerDown({ x: 20, y: 20 })
+    expect(contextMenuHost.current).toBeNull()
+    events.pointerUp({ x: 20, y: 20 })
 
-    expect(menu.style.display).toBe('block')
+    openContextMenu({ x: 200, y: 180 })
+    events.wheel({ x: 200, y: 180 }, { deltaY: 10 })
+    expect(contextMenuHost.current).toBeNull()
 
-    events.pointerUp({ x: 205, y: 185 }, { target: paste })
-    paste.click()
-
-    expect(pasteAt).toHaveBeenCalledWith({ x: 200, y: 180 })
-    expect(menu.style.display).toBe('none')
-    session.dispose()
-  })
-
-  it('invalidates hidden Canvas Context Menu actions before document replacement', () => {
-    const pasteAt = vi.fn()
-    const session = createTestSession(createInteractionDeps(container, store, camera, {
-      selectionCommands: createSelectionCommands({
-        canPaste: () => true,
-        pasteAt,
-      }),
-    }))
-    const contextPoint = events.clientPoint({ x: 200, y: 180 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: contextPoint.x,
-      clientY: contextPoint.y,
-    }))
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const paste = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    paste.focus()
-
+    openContextMenu({ x: 200, y: 180 })
     session.prepareForDocumentReplacement()
-    paste.click()
+    expect(contextMenuHost.current).toBeNull()
 
-    expect(menu.style.display).toBe('none')
-    expect(document.activeElement).not.toBe(paste)
-    expect(pasteAt).not.toHaveBeenCalled()
-  })
+    openContextMenu({ x: 200, y: 180 })
+    session.setOverviewMode(true)
+    expect(contextMenuHost.current).toBeNull()
+    const overviewContext = openContextMenu({ x: 200, y: 180 })
+    expect(overviewContext.defaultPrevented).toBe(true)
+    expect(contextMenuHost.current).toBeNull()
 
-  it('opens a Canvas Context Menu with disabled edit commands on empty canvas', () => {
-    const session = createTestSession(createInteractionDeps(container, store, camera))
-    const point = events.clientPoint({ x: 320, y: 260 })
-
-    const canvasContext = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    })
-    container.dispatchEvent(canvasContext)
-
-    expect(canvasContext.defaultPrevented).toBe(true)
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')
-    expect(menu).not.toBeNull()
-    expect(menu?.getAttribute('role')).toBe('menu')
-    const copy = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')
-    const paste = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')
-    const remove = menu?.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')
-    expect(copy?.textContent).toBe('Copy')
-    expect(paste?.textContent).toBe('Paste')
-    expect(remove?.textContent).toBe('Delete')
-    expect(copy?.disabled).toBe(true)
-    expect(paste?.disabled).toBe(true)
-    expect(remove?.disabled).toBe(true)
-
+    session.setOverviewMode(false)
+    openContextMenu({ x: 200, y: 180 })
     session.dispose()
+    expect(contextMenuHost.current).toBeNull()
   })
 
-  it('keeps the Canvas Context Menu visible inside the canvas edge', () => {
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 400 })
-    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
-    const session = createTestSession(createInteractionDeps(container, store, camera))
-    const point = events.clientPoint({ x: 396, y: 296 })
-
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
+  it('opens the empty-map menu with Paste and Select all at the pointer', () => {
+    const pasteAt = vi.fn()
+    const selectAll = vi.fn()
+    let canPaste = false
+    const session = createTestSession(createInteractionDeps(container, store, camera, {
+      selectionCommands: createSelectionCommands({ canPaste: () => canPaste, pasteAt, selectAll }),
     }))
 
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    expect(menu.style.display).toBe('block')
-    expect(Number.parseFloat(menu.style.left)).toBeLessThanOrEqual(244)
-    expect(Number.parseFloat(menu.style.top)).toBeLessThanOrEqual(200)
-    expect(Number.parseInt(menu.style.zIndex, 10)).toBeGreaterThan(28)
+    const event = openContextMenu({ x: 320, y: 260 })
 
+    expect(event.defaultPrevented).toBe(true)
+    const request = contextMenuHost.current!
+    expect(request.selection).toBeNull()
+    expect(request.anchor).toEqual({ left: 320, top: 260, right: 320, bottom: 260 })
+    expect(request.world).toEqual({ x: 320, y: 260 })
+    expect(contextMenuItemIds()).toEqual(['paste', 'select-all'])
+    expect(contextMenuCommand('paste').disabled).toBe(true)
+    contextMenuCommand('select-all').run()
+    expect(selectAll).toHaveBeenCalledOnce()
+
+    canPaste = true
+    openContextMenu({ x: 320, y: 260 })
+    contextMenuCommand('paste').run()
+    expect(pasteAt).toHaveBeenCalledWith({ x: 320, y: 260 })
     session.dispose()
   })
 
-  it('dispatches Canvas Context Menu edit commands through the scene edit surface', () => {
-    const copy = vi.fn()
-    const pasteAt = vi.fn()
-    const deleteSelected = vi.fn()
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
-        lockedTargets: [],
-        blockedTargets: [],
-        bounds: { minX: 20, minY: 20, maxX: 24, maxY: 24 },
-        sameSpeciesReferenceCanonicalName: 'Malus domestica',
-      }),
+  it('keeps the current selection when right-clicking the empty map', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
     })
-    const deps = {
-      ...baseDeps,
-      selectionCommands: {
-        ...baseDeps.selectionCommands,
-        copy,
-        pasteAt,
-        canPaste: vi.fn(() => true),
-        deleteSelected,
-      },
-    }
+    const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([plantTarget('plant-1')])
+    vi.mocked(deps.setSelection).mockClear()
 
-    const openMenu = () => {
-      const point = events.clientPoint({ x: 80, y: 90 })
-      container.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: point.x,
-        clientY: point.y,
-      }))
-      return container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    }
+    openContextMenu({ x: 300, y: 250 })
 
-    let menu = openMenu()
-    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
-    expect(copyButton.disabled).toBe(false)
-    copyButton.click()
-    expect(copy).toHaveBeenCalledTimes(1)
-    expect(menu.style.display).toBe('none')
-
-    menu = openMenu()
-    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    expect(pasteButton.disabled).toBe(false)
-    pasteButton.click()
-    expect(pasteAt).toHaveBeenCalledWith({ x: 80, y: 90 })
-
-    menu = openMenu()
-    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
-    expect(deleteButton.disabled).toBe(false)
-    deleteButton.click()
-    expect(deleteSelected).toHaveBeenCalledTimes(1)
-
+    expect(contextMenuHost.current?.selection).toBeNull()
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(deps.setSelection).not.toHaveBeenCalled()
     session.dispose()
   })
 
-  it('dispatches Canvas Context Menu Save as Saved Object Stamp and disables it for structural blockers', () => {
+  it('runs Context Menu edit commands through the scene edit surface', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 })]
+    })
+    const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
+    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
+    const session = createTestSession(deps)
+    session.setTool('select')
+
+    openContextMenu({ x: 20, y: 30 })
+
+    expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-1')])
+    expect(contextMenuHost.current?.commands).toBe(commands)
+    contextMenuCommand('copy').run()
+    expect(commands.copy).toHaveBeenCalledOnce()
+    contextMenuCommand('paste').run()
+    expect(commands.pasteAt).toHaveBeenCalledWith({ x: 20, y: 30 })
+    contextMenuCommand('duplicate').run()
+    expect(commands.duplicateSelected).toHaveBeenCalledOnce()
+    contextMenuCommand('delete').run()
+    expect(commands.deleteSelected).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it('offers Save as stamp only with the saved-stamp capability and disables it for structural blockers', () => {
     const saveSelectionAsObjectStamp = vi.fn()
     let selectionModel: CanvasDesignObjectSelectionModel = {
       editableTargets: [{ kind: 'plant' as const, id: 'plant-1' }],
@@ -3223,37 +2462,65 @@ describe('SceneInteractionSession', () => {
     const baseDeps = createInteractionDeps(container, store, camera, {
       getDesignObjectSelection: () => selectionModel,
     })
-    const deps = {
-      ...baseDeps,
-      contextualCommands: {
-        saveSelectionAsObjectStamp,
-      },
-    }
-    const session = createTestSession(deps)
+    const withoutStamps = createTestSession(baseDeps)
+    openContextMenuFromKeyboard()
+    expect(contextMenuItemIds()).not.toContain('save-as-stamp')
+    withoutStamps.dispose()
 
-    const openMenu = () => {
-      const point = events.clientPoint({ x: 80, y: 90 })
-      container.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        clientX: point.x,
-        clientY: point.y,
-      }))
-      return container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    }
-
-    let menu = openMenu()
-    const saveButton = menu.querySelector<HTMLButtonElement>(
-      '[data-canvas-context-command="save-object-stamp"]',
-    )!
-    expect(saveButton).not.toBeNull()
-    expect(saveButton.textContent).toBe('Save as Saved Stamp')
-    expect(saveButton.disabled).toBe(false)
-    saveButton.click()
-    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
+    const session = createTestSession({ ...baseDeps, contextualCommands: { saveSelectionAsObjectStamp } })
+    openContextMenuFromKeyboard()
+    const save = contextMenuCommand('save-as-stamp')
+    expect(save.label).toBe('Save as stamp')
+    expect(save.disabled).toBe(false)
+    save.run()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledOnce()
 
     selectionModel = {
+      ...selectionModel,
+      blockedTargets: [{
+        target: { kind: 'plant' as const, id: 'grouped-plant' },
+        reason: 'grouped-member' as const,
+        layerName: 'plants',
+        groupId: 'group-1',
+      }],
+    }
+    openContextMenuFromKeyboard()
+    expect(contextMenuCommand('save-as-stamp').disabled).toBe(true)
+    contextMenuCommand('save-as-stamp').run()
+    expect(saveSelectionAsObjectStamp).toHaveBeenCalledOnce()
+    session.dispose()
+  })
+
+  it('keeps Cut, Copy and Delete disabled for mixed editable and locked or blocked selections', () => {
+    let selectionModel: CanvasDesignObjectSelectionModel = {
       editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
+      lockedTargets: [{ kind: 'plant' as const, id: 'locked-plant' }],
+      blockedTargets: [{
+        target: { kind: 'plant' as const, id: 'locked-plant' },
+        reason: 'locked-design-object' as const,
+        layerName: 'plants',
+      }],
+      bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
+      sameSpeciesReferenceCanonicalName: null,
+    }
+    const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
+    const session = createTestSession(createInteractionDeps(container, store, camera, {
+      getDesignObjectSelection: () => selectionModel,
+      selectionCommands: commands,
+    }))
+
+    openContextMenuFromKeyboard()
+    for (const id of ['cut', 'copy', 'delete'] as const) {
+      expect(contextMenuCommand(id).disabled).toBe(true)
+      contextMenuCommand(id).run()
+    }
+    expect(contextMenuCommand('paste').disabled).toBe(false)
+    expect(contextMenuCommand('unlock').disabled).toBe(false)
+    expect(commands.copy).not.toHaveBeenCalled()
+    expect(commands.deleteSelected).not.toHaveBeenCalled()
+
+    selectionModel = {
+      ...selectionModel,
       lockedTargets: [],
       blockedTargets: [{
         target: { kind: 'plant' as const, id: 'grouped-plant' },
@@ -3261,116 +2528,16 @@ describe('SceneInteractionSession', () => {
         layerName: 'plants',
         groupId: 'group-1',
       }],
-      bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
-      sameSpeciesReferenceCanonicalName: null,
     }
-    menu = openMenu()
-    const blockedSaveButton = menu.querySelector<HTMLButtonElement>(
-      '[data-canvas-context-command="save-object-stamp"]',
-    )!
-    expect(blockedSaveButton.disabled).toBe(true)
-    blockedSaveButton.click()
-    expect(saveSelectionAsObjectStamp).toHaveBeenCalledTimes(1)
-
+    openContextMenuFromKeyboard()
+    expect(contextMenuCommand('copy').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(contextMenuCommand('paste').disabled).toBe(false)
+    expect(contextMenuCommand('unlock').disabled).toBe(true)
     session.dispose()
   })
 
-  it('keeps Canvas Context Menu Copy and Delete disabled for mixed editable and locked selections', () => {
-    const copy = vi.fn()
-    const pasteAt = vi.fn()
-    const deleteSelected = vi.fn()
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
-        lockedTargets: [{ kind: 'plant' as const, id: 'locked-plant' }],
-        blockedTargets: [{
-          target: { kind: 'plant' as const, id: 'locked-plant' },
-          reason: 'locked-design-object' as const,
-          layerName: 'plants',
-        }],
-        bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-    })
-    const deps = {
-      ...baseDeps,
-      selectionCommands: {
-        ...baseDeps.selectionCommands,
-        copy,
-        pasteAt,
-        canPaste: vi.fn(() => true),
-        deleteSelected,
-      },
-    }
-    const session = createTestSession(deps)
-    const point = events.clientPoint({ x: 80, y: 90 })
-
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
-
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
-    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
-
-    expect(copyButton.disabled).toBe(true)
-    expect(pasteButton.disabled).toBe(false)
-    expect(deleteButton.disabled).toBe(true)
-
-    copyButton.click()
-    deleteButton.click()
-
-    expect(copy).not.toHaveBeenCalled()
-    expect(deleteSelected).not.toHaveBeenCalled()
-
-    session.dispose()
-  })
-
-  it('keeps Canvas Context Menu Copy and Delete disabled for mixed editable and structurally blocked selections', () => {
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => ({
-        editableTargets: [{ kind: 'plant' as const, id: 'editable-plant' }],
-        lockedTargets: [],
-        blockedTargets: [{
-          target: { kind: 'plant' as const, id: 'grouped-plant' },
-          reason: 'grouped-member' as const,
-          layerName: 'plants',
-          groupId: 'group-1',
-        }],
-        bounds: { minX: 20, minY: 20, maxX: 60, maxY: 24 },
-        sameSpeciesReferenceCanonicalName: null,
-      }),
-    })
-    const deps = {
-      ...baseDeps,
-      selectionCommands: {
-        ...baseDeps.selectionCommands,
-        canPaste: vi.fn(() => true),
-      },
-    }
-    const session = createTestSession(deps)
-    const point = events.clientPoint({ x: 80, y: 90 })
-
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
-
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')?.disabled).toBe(true)
-    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')?.disabled).toBe(false)
-    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')?.disabled).toBe(true)
-
-    session.dispose()
-  })
-
-  it('disables Canvas Context Menu edits when a blocked hit would otherwise preserve another selection', () => {
+  it('disables Context Menu edits when a blocked hit would otherwise preserve another selection', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
@@ -3387,58 +2554,29 @@ describe('SceneInteractionSession', () => {
         layer.name === 'zones' ? { ...layer, locked: true } : layer,
       )
     })
-    const copy = vi.fn()
-    const pasteAt = vi.fn()
-    const deleteSelected = vi.fn()
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const deps = {
-      ...baseDeps,
-      selectionCommands: {
-        ...baseDeps.selectionCommands,
-        copy,
-        pasteAt,
-        canPaste: vi.fn(() => true),
-        deleteSelected,
-      },
-    }
+    const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
+    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
     const session = createTestSession(deps)
 
     deps.setSelection([plantTarget('plant-1')])
     vi.mocked(deps.setSelection).mockClear()
-    const point = events.clientPoint({ x: 110, y: 30 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
+    openContextMenu({ x: 110, y: 30 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1']))
     expect(deps.setSelection).not.toHaveBeenCalled()
-
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
-    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
-
-    expect(copyButton.disabled).toBe(true)
-    expect(pasteButton.disabled).toBe(false)
-    expect(deleteButton.disabled).toBe(true)
-
-    copyButton.click()
-    deleteButton.click()
-    pasteButton.click()
-
-    expect(copy).not.toHaveBeenCalled()
-    expect(deleteSelected).not.toHaveBeenCalled()
-    expect(pasteAt).toHaveBeenCalledWith({ x: 110, y: 30 })
-
+    expect(contextMenuCommand('copy').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(contextMenuCommand('paste').disabled).toBe(false)
+    contextMenuCommand('copy').run()
+    contextMenuCommand('delete').run()
+    contextMenuCommand('paste').run()
+    expect(commands.copy).not.toHaveBeenCalled()
+    expect(commands.deleteSelected).not.toHaveBeenCalled()
+    expect(commands.pasteAt).toHaveBeenCalledWith({ x: 110, y: 30 })
     session.dispose()
   })
 
-  it('disables Canvas Context Menu edits for a topmost blocked hit over an editable target', () => {
+  it('disables Context Menu edits for a topmost blocked hit over an editable target', () => {
     store.updatePersisted((draft) => {
       draft.zones = [
         makeRectZone('editable-zone', [
@@ -3455,125 +2593,131 @@ describe('SceneInteractionSession', () => {
         layer.name === 'plants' ? { ...layer, locked: true } : layer,
       )
     })
-    const copy = vi.fn()
-    const pasteAt = vi.fn()
-    const deleteSelected = vi.fn()
-    const baseDeps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const deps = {
-      ...baseDeps,
-      selectionCommands: {
-        ...baseDeps.selectionCommands,
-        copy,
-        pasteAt,
-        canPaste: vi.fn(() => true),
-        deleteSelected,
-      },
-    }
+    const commands = createSelectionCommands({ canPaste: vi.fn(() => true) })
+    const deps = createInteractionDeps(container, store, camera, { selectionCommands: commands })
     const session = createTestSession(deps)
 
-    const point = events.clientPoint({ x: 120, y: 30 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
+    openContextMenu({ x: 120, y: 30 })
 
     expect(selectedObjectIds.value).toEqual(new Set())
     expect(deps.setSelection).not.toHaveBeenCalled()
-
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    const copyButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')!
-    const pasteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="paste"]')!
-    const deleteButton = menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')!
-
-    expect(copyButton.disabled).toBe(true)
-    expect(pasteButton.disabled).toBe(false)
-    expect(deleteButton.disabled).toBe(true)
-
-    copyButton.click()
-    deleteButton.click()
-    pasteButton.click()
-
-    expect(copy).not.toHaveBeenCalled()
-    expect(deleteSelected).not.toHaveBeenCalled()
-    expect(pasteAt).toHaveBeenCalledWith({ x: 120, y: 30 })
-
+    expect(contextMenuHost.current?.selection).not.toBeNull()
+    expect(contextMenuCommand('copy').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    contextMenuCommand('paste').run()
+    expect(commands.pasteAt).toHaveBeenCalledWith({ x: 120, y: 30 })
     session.dispose()
   })
 
-  it('updates Canvas Context Menu target selection like a design tool', () => {
+  it('updates Context Menu target selection like a design tool', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('plant-1', 'Malus domestica', { x: 20, y: 30 }),
         makePlant('plant-2', 'Pyrus communis', { x: 80, y: 30 }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
+    const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
     session.setTool('select')
 
     deps.setSelection([plantTarget('plant-1')])
     vi.mocked(deps.setSelection).mockClear()
-    const plantTwoContext = events.clientPoint({ x: 80, y: 30 })
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: plantTwoContext.x,
-      clientY: plantTwoContext.y,
-    }))
+    openContextMenu({ x: 80, y: 30 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-2']))
     expect(deps.setSelection).toHaveBeenCalledWith([plantTarget('plant-2')])
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([plantTarget('plant-2')])
 
     deps.setSelection([plantTarget('plant-1'), plantTarget('plant-2')])
     vi.mocked(deps.setSelection).mockClear()
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: plantTwoContext.x,
-      clientY: plantTwoContext.y,
-    }))
+    openContextMenu({ x: 80, y: 30 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['plant-1', 'plant-2']))
     expect(deps.setSelection).not.toHaveBeenCalled()
-
+    expect(contextMenuHost.current?.selection?.editableTargets).toHaveLength(2)
     session.dispose()
   })
 
-  it('selects directly locked Canvas Context Menu targets with mutation commands disabled', () => {
+  it('selects directly locked Context Menu targets with mutation commands disabled', () => {
     store.updatePersisted((draft) => {
       draft.plants = [
         makePlant('locked-plant', 'Malus domestica', { x: 20, y: 30 }, { locked: true }),
       ]
     })
-    const deps = createInteractionDeps(container, store, camera, {
-      getDesignObjectSelection: () => getDesignObjectSelectionFromStore(store, camera),
-    })
-    const session = createTestSession(deps)
+    const session = createTestSession(createInteractionDeps(container, store, camera))
     session.setTool('select')
-    const point = events.clientPoint({ x: 20, y: 30 })
 
-    container.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: point.x,
-      clientY: point.y,
-    }))
+    openContextMenu({ x: 20, y: 30 })
 
     expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
-    const menu = container.querySelector<HTMLElement>('[data-canvas-context-menu]')!
-    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="copy"]')?.disabled).toBe(true)
-    expect(menu.querySelector<HTMLButtonElement>('[data-canvas-context-command="delete"]')?.disabled).toBe(true)
-
+    expect(contextMenuCommand('copy').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(contextMenuCommand('unlock').disabled).toBe(false)
     session.dispose()
   })
 
-  it('selects locked Design Objects for toolbar unlock without allowing drag mutations', () => {
+  it('opens the menu from the Menu key or Shift F10 beside the selection bounds', () => {
+    store.updatePersisted((draft) => {
+      draft.zones = [makeRectZone('zone-1', [
+        { x: 100, y: 100 },
+        { x: 160, y: 100 },
+        { x: 160, y: 150 },
+        { x: 100, y: 150 },
+      ])]
+    })
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('select')
+    deps.setSelection([zoneTarget('zone-1')])
+    container.tabIndex = -1
+    container.focus()
+
+    const menuKey = events.keyDown({ key: 'ContextMenu', cancelable: true, target: container })
+
+    expect(menuKey.defaultPrevented).toBe(true)
+    const request = contextMenuHost.current!
+    expect(request.selection?.editableTargets).toEqual([zoneTarget('zone-1')])
+    expect(request.anchor.left).toBeCloseTo(100)
+    expect(request.anchor.top).toBeCloseTo(100)
+    expect(request.anchor.right).toBeCloseTo(160)
+    expect(request.anchor.bottom).toBeCloseTo(150)
+    expect(request.world.x).toBeCloseTo(130)
+    expect(request.world.y).toBeCloseTo(125)
+
+    // The key's own trailing contextmenu event does not reopen the menu at a pointer.
+    openContextMenu({ x: 0, y: 0 })
+    expect(contextMenuHost.opened).toHaveLength(1)
+
+    contextMenuHost.reset()
+    container.blur()
+    document.body.focus()
+    events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: document.body })
+    expect(contextMenuHost.current).toBeNull()
+
+    container.focus()
+    events.keyDown({ key: 'F10', shiftKey: true, cancelable: true, target: container })
+    expect(contextMenuHost.current?.selection?.editableTargets).toEqual([zoneTarget('zone-1')])
+
+    contextMenuHost.current!.returnFocus()
+    expect(document.activeElement).toBe(container)
+    session.dispose()
+  })
+
+  it('opens the empty-map menu mid-map from the keyboard without a selection', () => {
+    const session = createTestSession(createInteractionDeps(container, store, camera))
+    container.tabIndex = -1
+    container.focus()
+
+    events.keyDown({ key: 'ContextMenu', cancelable: true, target: container })
+
+    const request = contextMenuHost.current!
+    expect(request.selection).toBeNull()
+    expect(request.anchor).toEqual({ left: 200, top: 150, right: 200, bottom: 150 })
+    expect(request.world).toEqual({ x: 200, y: 150 })
+    session.dispose()
+  })
+
+  it('selects locked Design Objects for right-click Unlock without allowing drag mutations', () => {
     store.updatePersisted((draft) => {
       draft.plants = [{
         kind: 'plant',
@@ -3622,27 +2766,27 @@ describe('SceneInteractionSession', () => {
     expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
     expect(store.persisted.plants[0]?.position).toEqual({ x: 20, y: 30 })
 
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')
-    expect(toolbar?.style.display).toBe('flex')
-    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')?.disabled).toBe(true)
-    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="bring-forward"]')?.disabled).toBe(true)
-    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="send-backward"]')?.disabled).toBe(true)
-    expect(toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="delete"]')?.disabled).toBe(true)
-    expect(toolbar?.querySelector('[data-selection-action-command="lock"]')).toBeNull()
-    const unlock = toolbar?.querySelector<HTMLButtonElement>('[data-selection-action-command="unlock"]')
-    expect(unlock?.disabled).toBe(false)
-    expect(unlock?.getAttribute('aria-label')).toContain('Unlock')
+    openContextMenu({ x: 20, y: 30 })
+    expect(contextMenuCommand('duplicate').disabled).toBe(true)
+    expect(contextMenuCommand('bring-to-front').disabled).toBe(true)
+    expect(contextMenuCommand('send-to-back').disabled).toBe(true)
+    expect(contextMenuCommand('delete').disabled).toBe(true)
+    expect(contextMenuCommand('lock').disabled).toBe(true)
+    const unlock = contextMenuCommand('unlock')
+    expect(unlock.disabled).toBe(false)
+    expect(unlock.label).toBe('Unlock')
 
-    unlock?.click()
+    unlock.run()
     session.refreshMeasurements()
 
     expect(unlockSelected).toHaveBeenCalledTimes(1)
     expect(onSceneEditCommit).toHaveBeenCalledWith('unlock-selected')
     expect(store.persisted.plants[0]?.locked).toBe(false)
     expect(selectedObjectIds.value).toEqual(new Set(['locked-plant']))
-    expect(container.querySelector('[data-selection-action-command="unlock"]')).toBeNull()
-    expect(container.querySelector<HTMLButtonElement>('[data-selection-action-command="lock"]')?.disabled).toBe(false)
-    expect(container.querySelector<HTMLButtonElement>('[data-selection-action-command="duplicate"]')?.disabled).toBe(false)
+    openContextMenu({ x: 20, y: 30 })
+    expect(contextMenuCommand('unlock').disabled).toBe(true)
+    expect(contextMenuCommand('lock').disabled).toBe(false)
+    expect(contextMenuCommand('duplicate').disabled).toBe(false)
     session.dispose()
   })
 
@@ -10259,19 +9403,19 @@ describe('SceneInteractionSession', () => {
     events = createSceneInteractionEventHarness(container, { trackListeners: true })
     const deps = createInteractionDeps(container, store, camera)
     const session = createTestSession(deps)
-    const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
-    const removeToolbar = vi.spyOn(toolbar, 'remove').mockImplementation(() => {
-      throw new Error('toolbar removal failed')
+    const handle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+    const removeHandle = vi.spyOn(handle, 'remove').mockImplementation(() => {
+      throw new Error('rotation handle removal failed')
     })
 
-    expect(() => session.dispose()).toThrow('toolbar removal failed')
+    expect(() => session.dispose()).toThrow('rotation handle removal failed')
 
     expect(events.listenerLog?.containerRemoves('pointerdown')).toHaveLength(1)
     expect(events.listenerLog?.windowRemoves('pointermove')).toHaveLength(1)
-    expect(container.querySelector('[data-canvas-context-menu]')).toBeNull()
+    expect(container.querySelector('[data-locked-object-affordance]')).toBeNull()
     expect(container.querySelector('[data-hover-tooltip]')).toBeNull()
     expect(() => session.dispose()).not.toThrow()
-    removeToolbar.mockRestore()
+    removeHandle.mockRestore()
   })
 
   it('attempts every host-listener removal when one removal fails', () => {
@@ -10354,15 +9498,15 @@ describe('SceneInteractionSession', () => {
     const originalAppendChild = container.appendChild.bind(container)
     const appendChild = vi.spyOn(container, 'appendChild').mockImplementation(
       (<T extends Node>(node: T): T => {
-        if (node instanceof HTMLElement && node.dataset.canvasContextMenu === 'true') {
-          throw new Error('context menu construction failed')
+        if (node instanceof HTMLElement && node.dataset.rotationHandle === 'true') {
+          throw new Error('rotation handle construction failed')
         }
         return originalAppendChild(node) as T
       }) as typeof container.appendChild,
     )
 
     try {
-      expect(() => createSceneInteractionSession(deps)).toThrow('context menu construction failed')
+      expect(() => createSceneInteractionSession(deps)).toThrow('rotation handle construction failed')
     } finally {
       appendChild.mockRestore()
     }
@@ -10534,18 +9678,19 @@ describe('SceneInteractionSession', () => {
       const session = createTestSession(deps)
       session.setTool('select')
       session.refreshMeasurements()
-      const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+      const rotationHandle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+      const settledHandleDisplay = kind === 'Zone' ? 'inline-flex' : 'none'
       const handle = kind === 'Zone'
         ? container.querySelector<HTMLElement>('[data-zone-control-point-kind="rect-corner"]')!
         : container.querySelector<HTMLElement>('[data-measurement-guide-control-point-index="1"]')!
       const start = kind === 'Zone'
         ? zoneControlPointCenter(container, 'rect-corner', Number(handle.dataset.zoneControlPointIndex))
         : measurementGuideControlPointCenter(container, 1)
-      expect(toolbar.style.display).toBe('flex')
+      expect(rotationHandle.style.display).toBe(settledHandleDisplay)
 
       events.pointerDown(start, { pointerId: 22, target: handle })
       events.pointerMove({ x: 90, y: 70 }, { pointerId: 22 })
-      expect(toolbar.style.display).toBe('none')
+      expect(rotationHandle.style.display).toBe('none')
 
       failRender = true
       const errors = captureWindowErrors(() => {
@@ -10555,7 +9700,7 @@ describe('SceneInteractionSession', () => {
 
       expect(errors).toHaveLength(1)
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} cancellation render failed` }))
-      expect(toolbar.style.display).toBe('flex')
+      expect(rotationHandle.style.display).toBe(settledHandleDisplay)
       session.dispose()
     },
   )
@@ -10593,7 +9738,9 @@ describe('SceneInteractionSession', () => {
       session.setTool('select')
       session.refreshMeasurements()
       const persistedBefore = store.snapshot().persisted
-      const toolbar = container.querySelector<HTMLElement>('[data-selection-action-toolbar]')!
+      const rotationHandle = container.querySelector<HTMLElement>('[data-rotation-handle]')!
+      const settledHandleDisplay = kind === 'Measurement Guide Control Point' ? 'none' : 'inline-flex'
+      expect(rotationHandle.style.display).toBe(settledHandleDisplay)
 
       let handle: HTMLElement
       let start: ScenePoint
@@ -10628,7 +9775,7 @@ describe('SceneInteractionSession', () => {
       expect(errors[0]).toEqual(expect.objectContaining({ message: `${kind} commit failed` }))
       expect(onSceneEditCommit).toHaveBeenCalledTimes(1)
       expect(store.persisted).toEqual(persistedBefore)
-      expect(toolbar.style.display).toBe('flex')
+      expect(rotationHandle.style.display).toBe(settledHandleDisplay)
       if (kind === 'Rotation Handle') {
         expect(handle.dataset.rotationHandleActive).toBeUndefined()
         expect(handle.style.cursor).toBe('grab')
@@ -10857,7 +10004,6 @@ describe('SceneInteractionSession', () => {
     expect(abortFailure.abortCalls()).toBe(2)
     expect(abortFailure.beginCalls()).toBe(1)
     expect(store.persisted).toEqual(persistedBefore)
-    expect(container.querySelector<HTMLElement>('[data-selection-action-toolbar]')?.style.display).toBe('flex')
     session.dispose()
     expect(abortFailure.abortCalls()).toBe(2)
   })

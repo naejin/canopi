@@ -113,28 +113,14 @@
       "generatedCount": "{{count}} создано",
       "commitLimitWarning": "Увеличьте интервал или укоротите линию"
     },
-    "selectionActions": {
-      "ariaLabel": "Действия с выделением",
-      "duplicate": "Дублировать",
-      "bringForward": "На передний план",
-      "sendBackward": "На задний план",
-      "pinPlantName": "Закрепить название растения",
-      "unpinPlantName": "Открепить название растения",
-      "selectSameSpecies": "Выбрать тот же вид",
-      "saveObjectStamp": "Сохранить как сохраненный штамп",
-      "group": "Сгруппировать",
-      "ungroup": "Разгруппировать",
-      "lock": "Заблокировать",
+    "lockedObject": {
       "locked": "Заблокировано",
-      "unlock": "Разблокировать",
-      "delete": "Удалить"
+      "unlock": "Разблокировать"
     },
     "contextMenu": {
       "ariaLabel": "Команды редактирования холста",
-      "copy": "Копировать",
-      "paste": "Вставить",
-      "saveObjectStamp": "Сохранить как сохраненный штамп",
-      "delete": "Удалить"
+      "showName": "Показать название",
+      "hideName": "Скрыть название"
     },
     "rotationHandle": {
       "label": "Повернуть"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "Цвет растения",
-      "toolbarDesc": "Изменить цвета выбранных растений",
       "selectedCount": "Выбрано: {{count}}",
       "suggested": "Подсказка по цвету цветка",
       "moreColors": "Свой цвет",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "Символ растения",
-      "toolbarDesc": "Изменить символы выбранных растений",
       "selectedCount": "Выбрано: {{count}}",
       "setSymbolForSpecies": "Задать для всех {{species}}",
       "mixed": "Смешанные символы",

@@ -18,6 +18,7 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { lastView, locale, plantSpacingIntervalM, theme } from '../settings/state'
 import { composeDocumentForSave } from '../contracts/document'
 import { setCanvasClean } from '../document-session/store'
+import { closeCanvasContextMenu, openCanvasContextMenu } from '../canvas-context-menu/state'
 import { t } from '../../i18n'
 
 export interface CanvasRuntimeAppCapabilities {
@@ -39,6 +40,7 @@ export function createAppCanvasRuntimeAppAdapter(
   return {
     cleanState: { setCanvasClean },
     document: { composeDocumentForSave },
+    contextMenu: { open: openCanvasContextMenu, close: closeCanvasContextMenu },
     // Read per gesture, so an inspection session needs no runtime rebuild, and
     // absent in an edition that has no raster capability.
     ...(capabilities.tryInspectAt ? { tryInspectAt: capabilities.tryInspectAt } : {}),

@@ -9,7 +9,7 @@ import {
 } from '../../canvas/runtime/scene'
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
-import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
 import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import { AppearanceSelection } from './AppearanceSelection'
@@ -17,13 +17,13 @@ import shared from './appearance.module.css'
 import styles from './PlantSymbolMenu.module.css'
 
 interface PlantSymbolMenuProps {
-  buttonRef: { current: HTMLButtonElement | null }
+  buttonRef: AppearanceAnchorRef
 }
 
 const ABSTRACT_SYMBOLS = ['round', 'square', 'triangle', 'cross'] as const satisfies readonly PlantSymbolId[]
 const BOTANICAL_SYMBOLS = PLANT_SYMBOL_IDS.filter((symbol) => !ABSTRACT_SYMBOLS.some((abstract) => abstract === symbol))
 
-function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
+function closeMenu(buttonRef?: AppearanceAnchorRef) {
   plantSymbolMenuOpen.value = false
   buttonRef?.current?.focus()
 }

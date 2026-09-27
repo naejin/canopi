@@ -222,7 +222,9 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(interactionSource).toContain('_cancelTransientInteraction')
     expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
     expect(interactionSource).toContain('prepareForDocumentReplacement')
-    expect(interactionSource).toContain('_selectionToolbar.dispose()')
+    expect(interactionSource).toContain('_contextMenu.dispose()')
+    expect(interactionSource).toContain('_rotationHandle.dispose()')
+    expect(sourceExists('../canvas/runtime/interaction/selection-action-toolbar.ts')).toBe(false)
     expect(sourceExists('../canvas/runtime/interaction/frame.ts')).toBe(false)
   })
 

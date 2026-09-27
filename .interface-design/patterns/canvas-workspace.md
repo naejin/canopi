@@ -4,7 +4,7 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 ## Chrome
 
-- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right. The labelled rail is a fixed 224 px so it does not jump between tools. Until the right-click menu lands, plant colour and symbol stay on the rail when plants are selected.
+- Tool rail (left, floating): groups separated by rules; the active tool is solid ochre with `aria-pressed`. Arrow keys move between tools (roving tabindex). Labels and key hints show until each tool has been used once (per device), then the rail shrinks to 52 px icons with labelled tooltips on the right. The labelled rail is a fixed 224 px so it does not jump between tools. Plant colour and symbol are not on the rail; they open from the right-click menu.
 - View chip (bottom left): Grid, Snap to grid, Rulers as pressed toggles with a check icon; off by default except Snap.
 - Zoom group (bottom right): scale bar, zoom out, scale ratio (a menu of common scales), zoom in, Fit to Design (Shift F). The attribution pill sits immediately left of the group so it never collides with panels. Below 0.1 px/m the Design is shown as one pin ("Return to …"), editing tools are disabled and a top-centre chip says "Zoom in to edit" with Return to Design.
 - The map is always the background; there is no grid or ruler frame unless turned on.
@@ -18,9 +18,11 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 ## Selection and the right-click menu
 
-- Selection box: 2 px ochre over a 5 px cream casing, square corner handles, and an ochre ring on each selected plant. Rotatable selections keep one rotate handle above (drag, or Rotate… Ctrl Alt R). There is no action bar.
+- Selection box: 2 px ochre over a 5 px cream casing, square corner handles, and an ochre ring on each selected plant. Rotatable selections keep one rotate handle above; it is the only control drawn on a selection. There is no action bar.
 - A status chip at the bottom centre names the selection ("3 selected · Framboisier · 0.52 m apart").
-- Right-click opens the context menu in plain words with shortcuts: a heading naming the selection; Cut, Copy, Paste, Duplicate; Symbol and color…, Show names of this species, Select all of this species, Species details; Add to calendar…, Set unit cost…; Group, Arrange ▸, Rotate…, Save as stamp…; Lock (Unlock on locked objects), Delete (danger). Zones get the same menu with zone commands. Every item also lives in the menu bar.
+- Right-click on an object selects it (unless it is already in the selection) and opens the context menu in plain words with the menu bar's shortcuts, grouped by separators: Cut, Copy, Paste, Duplicate · on plants: Select all of this species, Plant color ▸, Plant symbol ▸, Show name (Hide name when every name shows) · Bring to front, Send to back · Group, Ungroup, Save as stamp (Desktop) · Lock, Unlock · Delete, last, in danger red. Zones get the same menu without the plant group. Right-click on the empty map offers Paste (at the pointer) and Select all; the selection is kept.
+- Items that do not apply stay listed and focusable with `aria-disabled`. Plant color ▸ and Plant symbol ▸ open the colour sheet and symbol picker beside the menu; Escape there returns focus to the map.
+- The menu opens at the pointer, flipping left or up to stay in view. The Menu key or Shift F10, while the map has focus, opens it for the selection just below its bounds (mid-map without a selection). Items are `menuitem`s; arrow keys, Home and End move; Enter runs; Escape and Tab close and return focus to the map; an outside press or scroll closes without moving focus. A locked or hidden hit shows the menu with everything but Paste disabled.
 
 ## Tools
 

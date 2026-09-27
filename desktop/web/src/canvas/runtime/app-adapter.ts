@@ -4,8 +4,12 @@ import type {
   CanvasPlantLabelSource,
   CanvasSpeciesPresentationCache,
 } from './presentation-data'
-import type { ScenePersistedState } from './scene'
-import type { CanvasDesignObjectSelectionModel, CanvasRuntimeDocumentMetadata } from './runtime'
+import type { ScenePersistedState, ScenePoint } from './scene'
+import type {
+  CanvasDesignObjectSelectionModel,
+  CanvasRuntimeDocumentMetadata,
+  CanvasSceneEditCommandSurface,
+} from './runtime'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -41,6 +45,60 @@ export interface CanvasRuntimeSavedObjectStampCapture {
 
 export interface CanvasRuntimeSavedObjectStampAdapter {
   saveCurrentSelection(capture: CanvasRuntimeSavedObjectStampCapture): void | Promise<unknown>
+}
+
+/** The scene edits a right-click menu may run; there is no other mutation path. */
+export type CanvasContextMenuCommands = Pick<
+  CanvasSceneEditCommandSurface,
+  | 'copy'
+  | 'pasteAt'
+  | 'canPaste'
+  | 'duplicateSelected'
+  | 'toggleSelectedPlantNamePins'
+  | 'deleteSelected'
+  | 'selectAll'
+  | 'selectSameSpecies'
+  | 'bringToFront'
+  | 'sendToBack'
+  | 'lockSelected'
+  | 'unlockSelected'
+  | 'groupSelected'
+  | 'ungroupSelected'
+>
+
+/** A viewport (client) rectangle; a pointer is a rectangle of zero size. */
+export interface CanvasContextMenuAnchor {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+export interface CanvasContextMenuRequest {
+  /** The menu opens below and right of this rectangle, flipping to stay in view. */
+  readonly anchor: CanvasContextMenuAnchor
+  /** Where Paste puts the clipboard, in the session plane. */
+  readonly world: ScenePoint
+  /**
+   * The selection the menu acts on (already retargeted to the right-clicked
+   * object), or `null` for the empty map.
+   */
+  readonly selection: CanvasDesignObjectSelectionModel | null
+  readonly commands: CanvasContextMenuCommands
+  /** Present only in an edition that keeps saved stamps. */
+  readonly saveSelectionAsObjectStamp?: () => void
+  /** Gives keyboard focus back to the map. */
+  returnFocus(): void
+}
+
+/**
+ * The right-click menu is app chrome: the runtime decides what it acts on and
+ * where it opens, the app renders it and runs its commands on `commands`.
+ */
+export interface CanvasRuntimeContextMenuAdapter {
+  open(request: CanvasContextMenuRequest): void
+  /** Closes this request's menu if it is still the open one. */
+  close(request: CanvasContextMenuRequest): void
 }
 
 export interface CanvasRuntimeSettingsAdapter {
@@ -80,6 +138,8 @@ export interface CanvasRuntimeAppAdapter {
   readonly cleanState: CanvasRuntimeCleanStateAdapter
   readonly document: CanvasRuntimeDocumentAdapter
   readonly savedObjectStamps?: CanvasRuntimeSavedObjectStampAdapter
+  /** Absent in a detached runtime, where right-click only suppresses the native menu. */
+  readonly contextMenu?: CanvasRuntimeContextMenuAdapter
   /**
    * Numeric inspection hook, when a surface has inspection active.
    *

@@ -6,7 +6,15 @@ import styles from './ActionMenu.module.css'
 
 export interface ActionMenuCommand {
   readonly label: string
-  run(): void
+  /**
+   * Runs after the menu closes. `itemBounds` is where the item was, so a
+   * command that opens a popover can place it beside the menu.
+   */
+  run(itemBounds?: DOMRect): void
+  /** Stable id for the item (`data-command`). */
+  readonly id?: string
+  /** The command opens a dialog beside the menu; the item shows a chevron. */
+  readonly opensDialog?: boolean
   readonly danger?: boolean
   /** Disabled commands stay focusable (`aria-disabled`) so they can be discovered. */
   readonly disabled?: boolean
@@ -27,6 +35,18 @@ export interface ActionMenuSubmenu {
 export type ActionMenuEntry = ActionMenuCommand | ActionMenuSubmenu | { readonly separator: true }
 
 const VIEWPORT_MARGIN = 8
+
+/** A viewport rectangle the menu opens beside; a pointer is a rectangle of zero size. */
+export interface MenuAnchorRect {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+interface MenuAnchor {
+  getBoundingClientRect(): MenuAnchorRect
+}
 
 /** A compact command menu, portalled so scrollable lists cannot clip actions. */
 export function ActionMenu({ label, items }: {
@@ -82,12 +102,56 @@ function isCommand(entry: ActionMenuEntry): entry is ActionMenuCommand {
   return 'run' in entry
 }
 
+/**
+ * A context menu opened at a pointer or beside a selection. It closes on an
+ * outside press, focus leaving it, resize or scroll (`restoreFocus` false), and
+ * on Escape, Tab or a chosen command (`restoreFocus` true).
+ */
+export function ContextMenu({ label, entries, anchor, onClose }: {
+  readonly label: string
+  readonly entries: readonly ActionMenuEntry[]
+  readonly anchor: MenuAnchorRect
+  onClose(restoreFocus: boolean): void
+}) {
+  const menuId = useId()
+  const close = useRef(onClose)
+  close.current = onClose
+
+  useEffect(() => {
+    const inside = (target: EventTarget | null) => {
+      const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+      return !!element?.closest(`[data-action-menu="${menuId}"]`)
+    }
+    // The secondary button's own release follows the press that opened the menu.
+    const outside = (event: PointerEvent) => { if (event.button !== 2 && !inside(event.target)) close.current(false) }
+    const leave = (event: FocusEvent) => { if (!inside(event.target)) close.current(false) }
+    const dismiss = (event: Event) => { if (!inside(event.target)) close.current(false) }
+    document.addEventListener('pointerup', outside)
+    document.addEventListener('focusin', leave)
+    window.addEventListener('resize', dismiss)
+    window.addEventListener('scroll', dismiss, true)
+    return () => {
+      document.removeEventListener('pointerup', outside)
+      document.removeEventListener('focusin', leave)
+      window.removeEventListener('resize', dismiss)
+      window.removeEventListener('scroll', dismiss, true)
+    }
+  }, [menuId])
+
+  const restore = () => close.current(true)
+  return (
+    <MenuPopup menuId={menuId} label={label} entries={entries} anchor={{ getBoundingClientRect: () => anchor }}
+      placement="point" onClose={restore} onBack={restore} />
+  )
+}
+
 function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack }: {
   readonly menuId: string
   readonly label: string
   readonly entries: readonly ActionMenuEntry[]
-  readonly anchor: HTMLElement
-  readonly placement: 'below' | 'side'
+  readonly anchor: MenuAnchor
+  /** `below` a trigger, to the `side` of a parent item, or at a `point`. */
+  readonly placement: 'below' | 'side' | 'point'
   /** Close the whole menu and return focus to its trigger. */
   onClose(): void
   /** Close this level only (Escape, or ArrowLeft in a submenu). */
@@ -105,7 +169,15 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
     const rect = popup.getBoundingClientRect()
     const maxLeft = window.innerWidth - rect.width - VIEWPORT_MARGIN
     const maxTop = window.innerHeight - rect.height - VIEWPORT_MARGIN
-    if (placement === 'below') {
+    if (placement === 'point') {
+      // Below and right of the anchor; else above or left of it; else as far as the viewport allows.
+      const left = bounds.left <= maxLeft ? bounds.left
+        : bounds.right - rect.width >= VIEWPORT_MARGIN ? bounds.right - rect.width : maxLeft
+      const top = bounds.bottom <= maxTop ? bounds.bottom
+        : bounds.top - rect.height >= VIEWPORT_MARGIN ? bounds.top - rect.height : maxTop
+      popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft))}px`
+      popup.style.top = `${Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop))}px`
+    } else if (placement === 'below') {
       popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(bounds.right - rect.width, maxLeft))}px`
       popup.style.top = `${Math.max(VIEWPORT_MARGIN, bounds.bottom + rect.height + VIEWPORT_MARGIN <= window.innerHeight ? bounds.bottom + 4 : bounds.top - rect.height - 4)}px`
     } else {
@@ -128,8 +200,9 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
       setOpenSubmenu(index)
       return
     }
+    const itemBounds = items.current[index]?.getBoundingClientRect()
     onClose()
-    entry.run()
+    entry.run(itemBounds)
   }
 
   items.current.length = entries.length
@@ -138,6 +211,7 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
 
   return createPortal(<>
     <div ref={menu} className={styles.menu} role="menu" aria-label={label} data-preserve-overlays="true" data-action-menu={menuId}
+      onContextMenu={event => event.preventDefault()}
       onKeyDown={event => {
         const buttons = items.current.filter((item): item is HTMLButtonElement => item !== null)
         const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
@@ -162,7 +236,8 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
           return <div key={`separator-${index}`} className={styles.separator} role="separator" />
         }
         const submenu = isSubmenu(entry)
-        const checked = isCommand(entry) ? entry.checked : undefined
+        const command = isCommand(entry) ? entry : null
+        const checked = command?.checked
         return (
           <button key={entry.label} ref={(item) => { items.current[index] = item }} type="button"
             className={styles.item}
@@ -170,16 +245,17 @@ function MenuPopup({ menuId, label, entries, anchor, placement, onClose, onBack 
             aria-checked={checked}
             aria-label={entry.label}
             aria-disabled={entry.disabled ? true : undefined}
-            aria-haspopup={submenu ? 'menu' : undefined}
+            aria-haspopup={submenu ? 'menu' : command?.opensDialog ? 'dialog' : undefined}
             aria-expanded={submenu ? openSubmenu === index : undefined}
-            aria-keyshortcuts={isCommand(entry) ? entry.keyShortcuts : undefined}
-            data-danger={isCommand(entry) && entry.danger ? 'true' : undefined}
+            aria-keyshortcuts={command?.keyShortcuts}
+            data-command={command?.id}
+            data-danger={command?.danger ? 'true' : undefined}
             onPointerEnter={() => { if (openSubmenu !== null && openSubmenu !== index) setOpenSubmenu(null) }}
             onClick={() => activate(index)}>
             {checkable && <span className={styles.check}>{checked && <ControlIcon name="check" />}</span>}
             <span className={styles.label}>{entry.label}</span>
-            {isCommand(entry) && entry.shortcut && <span className={styles.shortcut}>{entry.shortcut}</span>}
-            {submenu && <ControlIcon name="chevron-right" className={styles.submenuChevron} />}
+            {command?.shortcut && <span className={styles.shortcut}>{command.shortcut}</span>}
+            {(submenu || command?.opensDialog) && <ControlIcon name="chevron-right" className={styles.submenuChevron} />}
           </button>
         )
       })}

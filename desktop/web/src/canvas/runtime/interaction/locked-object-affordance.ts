@@ -112,8 +112,8 @@ export function createLockedObjectAffordance(
   root.replaceChildren(status, unlockButton)
 
   function refreshTranslations(): void {
-    statusText.textContent = options.translate('canvas.selectionActions.locked')
-    unlockButton.setAttribute('aria-label', options.translate('canvas.selectionActions.unlock'))
+    statusText.textContent = options.translate('canvas.lockedObject.locked')
+    unlockButton.setAttribute('aria-label', options.translate('canvas.lockedObject.unlock'))
   }
 
   try {

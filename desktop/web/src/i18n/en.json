@@ -113,28 +113,14 @@
       "generatedCount": "{{count}} generated",
       "commitLimitWarning": "Increase interval or shorten the line"
     },
-    "selectionActions": {
-      "ariaLabel": "Selection actions",
-      "duplicate": "Duplicate",
-      "bringForward": "Bring forward",
-      "sendBackward": "Send backward",
-      "pinPlantName": "Pin plant name",
-      "unpinPlantName": "Unpin plant name",
-      "selectSameSpecies": "Select same species",
-      "saveObjectStamp": "Save as Saved Stamp",
-      "group": "Group",
-      "ungroup": "Ungroup",
-      "lock": "Lock",
+    "lockedObject": {
       "locked": "Locked",
-      "unlock": "Unlock",
-      "delete": "Delete"
+      "unlock": "Unlock"
     },
     "contextMenu": {
       "ariaLabel": "Canvas edit commands",
-      "copy": "Copy",
-      "paste": "Paste",
-      "saveObjectStamp": "Save as Saved Stamp",
-      "delete": "Delete"
+      "showName": "Show name",
+      "hideName": "Hide name"
     },
     "rotationHandle": {
       "label": "Rotate"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "Plant color",
-      "toolbarDesc": "Edit selected plant colors",
       "selectedCount": "{{count}} selected",
       "suggested": "Suggested from flower color",
       "moreColors": "Custom color",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "Plant symbol",
-      "toolbarDesc": "Edit selected plant symbols",
       "selectedCount": "{{count}} selected",
       "setSymbolForSpecies": "Set for all {{species}}",
       "mixed": "Mixed symbols",

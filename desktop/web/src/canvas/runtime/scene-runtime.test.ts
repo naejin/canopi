@@ -29,6 +29,7 @@ import {
   selectedPanelTargets,
 } from '../../app/panel-targets/state'
 import { createAppCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/app-adapter'
+import { canvasContextMenuRequest } from '../../app/canvas-context-menu/state'
 import { createDesktopCanvasRuntimeAppAdapter } from '../../app/canvas-runtime/desktop-adapter'
 import { createAppSceneRuntimePanelTargetAdapter } from '../../app/canvas-runtime/panel-target-adapter'
 import { locale, plantSpacingIntervalM } from '../../app/settings/state'
@@ -740,7 +741,9 @@ describe('scene canvas runtime', () => {
   })
 
   it('cannot invoke an old Context Menu action against a replacement document', async () => {
-    const runtime = new SceneCanvasRuntime()
+    const runtime = new SceneCanvasRuntime({
+      appAdapter: createAppCanvasRuntimeAppAdapter({ presentationData: {} }),
+    })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
     const events = createSceneInteractionEventHarness(container)
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
@@ -753,23 +756,17 @@ describe('scene canvas runtime', () => {
       clientX: point.x,
       clientY: point.y,
     }))
-    const remove = container.querySelector<HTMLButtonElement>(
-      '[data-canvas-context-command="delete"]',
-    )!
-    remove.focus()
+    expect(canvasContextMenuRequest.value).not.toBeNull()
 
     runtime.documentSurface.replaceDocument(
       fileWithOnlyPlants('plant-2'),
       createCanvasDocumentReplacementToken(),
       () => {},
     )
-    remove.click()
 
+    expect(canvasContextMenuRequest.value).toBeNull()
     expect(runtime.querySurface.getSceneSnapshot().plants.map((plant) => plant.id))
       .toEqual(['plant-2'])
-    expect(container.querySelector<HTMLElement>('[data-canvas-context-menu]')?.style.display)
-      .toBe('none')
-    expect(document.activeElement).not.toBe(remove)
     events.dispose()
     runtime.destroy()
   })
@@ -1078,11 +1075,12 @@ describe('scene canvas runtime', () => {
     const withoutStampsMount = await initRuntimeWithStubbedRenderer(withoutStamps)
     withoutStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     withoutStamps.commandSurface.sceneEdits.selectAll()
+    openContextMenuFromKeyboard(withoutStampsMount.container)
 
-    expect(withoutStampsMount.container.querySelector(
-      '[data-selection-action-command="save-object-stamp"]',
-    )).toBeNull()
+    expect(canvasContextMenuRequest.value?.selection?.editableTargets).toHaveLength(1)
+    expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeUndefined()
     withoutStamps.destroy()
+    expect(canvasContextMenuRequest.value).toBeNull()
 
     const withStamps = new SceneCanvasRuntime({
       appAdapter: createAppCanvasRuntimeAppAdapter({
@@ -1093,10 +1091,9 @@ describe('scene canvas runtime', () => {
     const withStampsMount = await initRuntimeWithStubbedRenderer(withStamps)
     withStamps.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
     withStamps.commandSurface.sceneEdits.selectAll()
+    openContextMenuFromKeyboard(withStampsMount.container)
 
-    expect(withStampsMount.container.querySelector(
-      '[data-selection-action-command="save-object-stamp"]',
-    )).not.toBeNull()
+    expect(canvasContextMenuRequest.value?.saveSelectionAsObjectStamp).toBeTypeOf('function')
     withStamps.destroy()
   })
 
@@ -3080,3 +3077,13 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.getSelectedPlantSymbolContext().singleSpeciesCommonName).toBe('Pommier')
   })
 })
+
+/** The Menu key while the map has focus opens the right-click menu for the selection. */
+function openContextMenuFromKeyboard(container: HTMLElement): void {
+  // Keyboard shortcuts reach the session through window, so the map must be in the document.
+  document.body.appendChild(container)
+  container.tabIndex = -1
+  container.focus()
+  container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))
+  container.remove()
+}

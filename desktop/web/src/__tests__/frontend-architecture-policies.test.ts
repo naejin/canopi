@@ -288,6 +288,18 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
+    name: 'Tool Rail renders its projection without reading Canvas state',
+    from: ['src/components/canvas/ToolRail.tsx'],
+    targets: ['src/canvas/session.ts', 'src/canvas/plant-color-menu-state.ts', 'src/canvas/plant-symbol-menu-state.ts'],
+  },
+  {
+    kind: 'forbid-imports',
+    name: 'The right-click menu runs only its request’s scene edits',
+    from: ['src/app/canvas-context-menu/**', 'src/components/canvas/CanvasContextMenu.tsx'],
+    targets: ['src/canvas/session.ts', 'src/app/workspace-commands/**', 'src/commands/**'],
+  },
+  {
+    kind: 'forbid-imports',
     name: 'Menu Bar does not own session or Canvas state',
     from: ['src/components/shared/MenuBar.tsx'],
     targets: ['src/app/document-session/store.ts', 'src/canvas/session.ts'],
@@ -1157,8 +1169,8 @@ const NAMED_IMPORT_POLICIES = [
   },
   {
     kind: 'named-imports',
-    name: 'Tool Rail reads Canvas queries and selection only',
-    from: ['src/components/canvas/ToolRail.tsx'],
+    name: 'Plant appearance popovers read Canvas queries and selection only',
+    from: ['src/components/canvas/PlantAppearancePopovers.tsx'],
     target: 'src/canvas/session.ts',
     requiredNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],
     allowedNames: ['currentCanvasQuerySurface', 'currentCanvasSelection'],

@@ -19,7 +19,7 @@ import {
 } from '../../canvas/plant-colors'
 import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
-import { navigateAppearanceChoices, useAppearancePopover } from './useAppearancePopover'
+import { navigateAppearanceChoices, useAppearancePopover, type AppearanceAnchorRef } from './useAppearancePopover'
 import { createPortal } from 'preact/compat'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import { AppearanceSelection } from './AppearanceSelection'
@@ -27,7 +27,7 @@ import shared from './appearance.module.css'
 import styles from './PlantColorMenu.module.css'
 
 interface PlantColorMenuProps {
-  buttonRef: { current: HTMLButtonElement | null }
+  buttonRef: AppearanceAnchorRef
 }
 
 const DEFAULT_HSL = hexToHsl(DEFAULT_PLANT_COLOR) ?? { h: 122, s: 39, l: 49 }
@@ -44,7 +44,7 @@ const HUE_STRIP_BACKGROUND = `
   )
 `
 
-function closeMenu(buttonRef?: { current: HTMLButtonElement | null }) {
+function closeMenu(buttonRef?: AppearanceAnchorRef) {
   plantColorMenuOpen.value = false
   buttonRef?.current?.focus()
 }

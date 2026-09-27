@@ -7,6 +7,7 @@ import panelStyles from '../src/components/panels/Panels.module.css'
 import { CanvasRuntimeCleanupError } from '../src/canvas/runtime/cleanup'
 import { acquireCanvasRuntimeLifecycle } from '../src/canvas/runtime/lifecycle-owner'
 import { getCurrentCanvasSession, setCurrentCanvasSession } from '../src/canvas/session'
+import { closeCanvasContextMenu, openCanvasContextMenu } from '../src/app/canvas-context-menu/state'
 import type { CanopiFile } from '../src/types/design'
 import {
   createGalleryWorkspaceRuntimeComposition,
@@ -181,6 +182,34 @@ export function GalleryCanvasSurface({
       release()
     }
   }, [cameraState, createRuntimeComposition, dense, design, onReadyChange])
+
+  useEffect(() => {
+    const surface = activeSurface.value
+    const session = getCurrentCanvasSession()
+    const container = canvas.current
+    if (!ready.value || !surface.startsWith('menu-') || !session || !container) return
+    // The review surfaces open the right-click menu as the runtime would, beside the map's centre.
+    const { sceneEdits } = session.commands
+    if (surface === 'menu-mixed') sceneEdits.selectAll()
+    else sceneEdits.selectSameSpecies(specimens[0][0])
+    const rect = container.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + 96
+    const request = {
+      anchor: { left: x, top: y, right: x, bottom: y },
+      world: { x: 0, y: 0 },
+      selection: surface === 'menu-empty' ? null : session.queries.getDesignObjectSelection(),
+      commands: sceneEdits,
+      saveSelectionAsObjectStamp: () => sceneEdits.saveSelectionAsObjectStamp(),
+      returnFocus: () => container.focus(),
+    }
+    // Opened after the first layout settles: a resize or scroll closes a context menu.
+    const timer = window.setTimeout(() => openCanvasContextMenu(request), 1500)
+    return () => {
+      window.clearTimeout(timer)
+      closeCanvasContextMenu(request)
+    }
+  }, [activeSurface.value, ready.value])
 
   useEffect(() => {
     if (!ready.value || activeSurface.value !== 'lens') return

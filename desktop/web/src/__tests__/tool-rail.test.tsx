@@ -13,8 +13,6 @@ import {
 } from '../app/tool-rail/learning'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
-import { plantColorMenuOpen } from '../canvas/plant-color-menu-state'
-import { plantSymbolMenuOpen } from '../canvas/plant-symbol-menu-state'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import { activePanel, sidePanel } from '../app/shell/state'
 import {
@@ -41,8 +39,6 @@ describe('ToolRail', () => {
   let container: HTMLDivElement
   const canUndo = signal(false)
   const canRedo = signal(false)
-  const getSelectedPlantColorContext = vi.fn()
-  const getSelectedPlantSymbolContext = vi.fn()
   const setTool = vi.fn()
   const undo = vi.fn()
   const redo = vi.fn()
@@ -64,8 +60,6 @@ describe('ToolRail', () => {
     toggleSnapToGrid.mockReset()
     toggleRulers.mockReset()
     selectedObjectIds.value = new Set()
-    plantColorMenuOpen.value = false
-    plantSymbolMenuOpen.value = false
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -73,50 +67,6 @@ describe('ToolRail', () => {
     rulersVisible.value = true
     usedCanvasTools.value = []
     toolNamesVisible.value = null
-    getSelectedPlantColorContext.mockImplementation(() => {
-      if (selectedObjectIds.value.size === 0) {
-        return {
-          plantIds: [],
-          singleSpeciesCanonicalName: null,
-          singleSpeciesCommonName: null,
-          sharedCurrentColor: null,
-          suggestedColor: null,
-          singleSpeciesDefaultColor: null,
-        }
-      }
-      return {
-        plantIds: ['plant-1'],
-        singleSpeciesCanonicalName: 'Malus domestica',
-        singleSpeciesCommonName: 'Apple',
-        sharedCurrentColor: null,
-        suggestedColor: '#C8A51E',
-        singleSpeciesDefaultColor: null,
-      }
-    })
-    getSelectedPlantSymbolContext.mockImplementation(() => {
-      if (selectedObjectIds.value.size === 0) {
-        return {
-          plantIds: [],
-          singleSpeciesCanonicalName: null,
-          singleSpeciesCommonName: null,
-          sharedCurrentSymbol: null,
-          sharedEffectiveSymbol: 'round',
-          inheritedSymbol: null,
-          singleSpeciesDefaultSymbol: null,
-          canClearSelectedSymbol: false,
-        }
-      }
-      return {
-        plantIds: ['plant-1'],
-        singleSpeciesCanonicalName: 'Malus domestica',
-        singleSpeciesCommonName: 'Apple',
-        sharedCurrentSymbol: null,
-        sharedEffectiveSymbol: 'round',
-        inheritedSymbol: null,
-        singleSpeciesDefaultSymbol: null,
-        canClearSelectedSymbol: false,
-      }
-    })
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       commands: createTestCanvasCommandSurface({
         tools: { setTool },
@@ -131,18 +81,8 @@ describe('ToolRail', () => {
           toggleSnapToGrid,
           toggleRulers,
         },
-        plantPresentation: {
-          ensureSpeciesCacheEntries: vi.fn().mockResolvedValue(false),
-          setSelectedPlantColor: vi.fn(),
-          setPlantColorForSpecies: vi.fn(),
-          clearPlantSpeciesColor: vi.fn(),
-        },
       }),
-      queries: {
-        ...createTestCanvasQuerySurface(),
-        getSelectedPlantColorContext,
-        getSelectedPlantSymbolContext,
-      },
+      queries: createTestCanvasQuerySurface(),
     }))
   })
 
@@ -151,8 +91,6 @@ describe('ToolRail', () => {
     container.remove()
     activeTool.value = 'select'
     selectedObjectIds.value = new Set()
-    plantColorMenuOpen.value = false
-    plantSymbolMenuOpen.value = false
     activePanel.value = 'canvas'
     sidePanel.value = null
     gridVisible.value = true
@@ -274,29 +212,19 @@ describe('ToolRail', () => {
     expect(redo).toHaveBeenCalledOnce()
   })
 
-  it('offers plant color and symbol only while plants are selected', async () => {
+  it('keeps plant color and symbol off the rail: they live in the right-click menu', async () => {
     await mount()
-    expect(container.querySelector('button[aria-label="Plant color"]')).toBeNull()
-
     await act(async () => {
       usedCanvasTools.value = [...RAIL_TOOL_IDS]
       selectedObjectIds.value = new Set(['plant-1'])
     })
-    const color = container.querySelector<HTMLButtonElement>('button[aria-label="Plant color"]')!
-    const symbol = container.querySelector<HTMLButtonElement>('button[aria-label="Plant symbol"]')!
-    expect(color).not.toBeNull()
 
-    await act(async () => { color.click() })
-    expect(plantColorMenuOpen.value).toBe(true)
-    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
-
-    await act(async () => { symbol.click() })
-    expect(plantColorMenuOpen.value).toBe(false)
-    expect(plantSymbolMenuOpen.value).toBe(true)
-    expect(document.body.querySelector('[role="dialog"][aria-label="Plant symbol"]')).not.toBeNull()
-
-    await act(async () => { selectedObjectIds.value = new Set() })
-    expect(plantSymbolMenuOpen.value).toBe(false)
+    const labels = [...container.querySelectorAll('button')].map((button) =>
+      button.getAttribute('aria-label') ?? button.textContent)
+    expect(labels.some((label) => /plant (color|symbol)/i.test(label ?? ''))).toBe(false)
+    expect(container.querySelectorAll('button[data-rail-item]')).toHaveLength(
+      RAIL_TOOL_IDS.length + 2,
+    )
   })
 })
 

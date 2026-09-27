@@ -113,28 +113,14 @@
       "generatedCount": "{{count}}개 생성",
       "commitLimitWarning": "간격을 늘리거나 선을 줄이세요"
     },
-    "selectionActions": {
-      "ariaLabel": "선택 작업",
-      "duplicate": "복제",
-      "bringForward": "앞으로 보내기",
-      "sendBackward": "뒤로 보내기",
-      "pinPlantName": "식물 이름 고정",
-      "unpinPlantName": "식물 이름 고정 해제",
-      "selectSameSpecies": "같은 종 선택",
-      "saveObjectStamp": "저장된 스탬프로 저장",
-      "group": "그룹화",
-      "ungroup": "그룹 해제",
-      "lock": "잠금",
+    "lockedObject": {
       "locked": "잠김",
-      "unlock": "잠금 해제",
-      "delete": "삭제"
+      "unlock": "잠금 해제"
     },
     "contextMenu": {
       "ariaLabel": "캔버스 편집 명령",
-      "copy": "복사",
-      "paste": "붙여넣기",
-      "saveObjectStamp": "저장된 스탬프로 저장",
-      "delete": "삭제"
+      "showName": "이름 표시",
+      "hideName": "이름 숨기기"
     },
     "rotationHandle": {
       "label": "회전"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "식물 색상",
-      "toolbarDesc": "선택한 식물 색상 편집",
       "selectedCount": "{{count}}개 선택됨",
       "suggested": "꽃 색상 기반 추천",
       "moreColors": "사용자 지정 색상",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "식물 심볼",
-      "toolbarDesc": "선택한 식물 심볼 편집",
       "selectedCount": "{{count}}개 선택됨",
       "setSymbolForSpecies": "모든 {{species}}에 설정",
       "mixed": "여러 심볼",

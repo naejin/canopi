@@ -124,10 +124,6 @@
   color: inherit;
 }
 
-.popoverAnchor {
-  position: relative;
-}
-
 /* Short canvases: tighter buttons keep Undo and Redo above the view chip. */
 @container (max-height: 720px) {
   .icons .button,

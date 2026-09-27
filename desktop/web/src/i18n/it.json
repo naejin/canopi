@@ -113,28 +113,14 @@
       "generatedCount": "{{count}} generate",
       "commitLimitWarning": "Aumenta l'intervallo o accorcia la linea"
     },
-    "selectionActions": {
-      "ariaLabel": "Azioni selezione",
-      "duplicate": "Duplica",
-      "bringForward": "Porta avanti",
-      "sendBackward": "Manda indietro",
-      "pinPlantName": "Fissa nome pianta",
-      "unpinPlantName": "Rimuovi nome fissato",
-      "selectSameSpecies": "Seleziona stessa specie",
-      "saveObjectStamp": "Salva come timbro salvato",
-      "group": "Raggruppa",
-      "ungroup": "Separa",
-      "lock": "Blocca",
+    "lockedObject": {
       "locked": "Bloccato",
-      "unlock": "Sblocca",
-      "delete": "Elimina"
+      "unlock": "Sblocca"
     },
     "contextMenu": {
       "ariaLabel": "Comandi di modifica della tela",
-      "copy": "Copia",
-      "paste": "Incolla",
-      "saveObjectStamp": "Salva come timbro salvato",
-      "delete": "Elimina"
+      "showName": "Mostra nome",
+      "hideName": "Nascondi nome"
     },
     "rotationHandle": {
       "label": "Ruota"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "Colore della pianta",
-      "toolbarDesc": "Modifica i colori delle piante selezionate",
       "selectedCount": "{{count}} selezionate",
       "suggested": "Suggerito dal colore del fiore",
       "moreColors": "Colore personalizzato",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "Simbolo pianta",
-      "toolbarDesc": "Modifica i simboli delle piante selezionate",
       "selectedCount": "{{count}} selezionate",
       "setSymbolForSpecies": "Imposta per tutti {{species}}",
       "mixed": "Simboli misti",

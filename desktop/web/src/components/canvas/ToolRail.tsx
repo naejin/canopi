@@ -1,17 +1,11 @@
-import { createPortal } from 'preact/compat'
-import { useEffect, useRef } from 'preact/hooks'
+import { useRef } from 'preact/hooks'
 import type {
   CanvasCommandProjection,
   CanvasProjectedCommand,
 } from '../../app/canvas-commands'
-import { plantColorMenuOpen } from '../../canvas/plant-color-menu-state'
-import { plantSymbolMenuOpen } from '../../canvas/plant-symbol-menu-state'
-import { currentCanvasQuerySurface, currentCanvasSelection } from '../../canvas/session'
 import { t } from '../../i18n'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
-import { PlantColorMenu } from './PlantColorMenu'
-import { PlantSymbolMenu } from './PlantSymbolMenu'
-import { PaletteIcon, PlantSymbolIcon, ToolIcon, type ToolIconName } from './toolbar-icons'
+import { ToolIcon, type ToolIconName } from './toolbar-icons'
 import styles from './ToolRail.module.css'
 
 interface ToolRailProps {
@@ -93,70 +87,6 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
         <div className={styles.rule} role="separator" />
         {projection.historyActions.map((command) => renderCommand(command, command.id as ToolIconName))}
       </div>
-      <PlantAppearanceTools showNames={showNames} />
-    </div>
-  )
-}
-
-/**
- * Symbol and colour for selected plants. They stay on the rail, shown only
- * while plants are selected, until the right-click menu carries them.
- */
-function PlantAppearanceTools({ showNames }: { readonly showNames: boolean }) {
-  void currentCanvasSelection.value
-  const querySurface = currentCanvasQuerySurface.value
-  const colorButton = useRef<HTMLButtonElement>(null)
-  const symbolButton = useRef<HTMLButtonElement>(null)
-  const hasSelectedPlants = (querySurface?.getSelectedPlantColorContext().plantIds.length ?? 0) > 0
-
-  // The popovers act on the selected plants; they close when none remain.
-  useEffect(() => {
-    if (hasSelectedPlants) return
-    plantColorMenuOpen.value = false
-    plantSymbolMenuOpen.value = false
-  }, [hasSelectedPlants])
-
-  if (!hasSelectedPlants) return null
-  const colorLabel = t('canvas.plantColor.label')
-  const symbolLabel = t('canvas.plantSymbol.label')
-  return (
-    <div className={`${styles.group} ${styles.popoverAnchor}`} data-preserve-overlays="true">
-      <div className={styles.rule} role="separator" />
-      <button
-        ref={colorButton}
-        type="button"
-        className={styles.button}
-        data-rail-item
-        aria-label={showNames ? undefined : colorLabel}
-        aria-pressed={plantColorMenuOpen.value}
-        tabIndex={-1}
-        onClick={() => {
-          plantSymbolMenuOpen.value = false
-          plantColorMenuOpen.value = !plantColorMenuOpen.value
-        }}
-      >
-        <PaletteIcon className={styles.icon} />
-        {showNames ? <span className={styles.label}>{colorLabel}</span> : <ButtonTooltip label={colorLabel} />}
-      </button>
-      {/* Portalled: the rail's backdrop blur would otherwise contain the fixed popover. */}
-      {plantColorMenuOpen.value && createPortal(<PlantColorMenu buttonRef={colorButton} />, document.body)}
-      <button
-        ref={symbolButton}
-        type="button"
-        className={styles.button}
-        data-rail-item
-        aria-label={showNames ? undefined : symbolLabel}
-        aria-pressed={plantSymbolMenuOpen.value}
-        tabIndex={-1}
-        onClick={() => {
-          plantColorMenuOpen.value = false
-          plantSymbolMenuOpen.value = !plantSymbolMenuOpen.value
-        }}
-      >
-        <PlantSymbolIcon className={styles.icon} />
-        {showNames ? <span className={styles.label}>{symbolLabel}</span> : <ButtonTooltip label={symbolLabel} />}
-      </button>
-      {plantSymbolMenuOpen.value && createPortal(<PlantSymbolMenu buttonRef={symbolButton} />, document.body)}
     </div>
   )
 }

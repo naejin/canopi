@@ -113,28 +113,14 @@
       "generatedCount": "{{count}} générées",
       "commitLimitWarning": "Augmentez l'intervalle ou raccourcissez la ligne"
     },
-    "selectionActions": {
-      "ariaLabel": "Actions de sélection",
-      "duplicate": "Dupliquer",
-      "bringForward": "Avancer",
-      "sendBackward": "Reculer",
-      "pinPlantName": "Épingler le nom de la plante",
-      "unpinPlantName": "Détacher le nom de la plante",
-      "selectSameSpecies": "Sélectionner la même espèce",
-      "saveObjectStamp": "Enregistrer comme planche",
-      "group": "Grouper",
-      "ungroup": "Dégrouper",
-      "lock": "Verrouiller",
+    "lockedObject": {
       "locked": "Verrouillé",
-      "unlock": "Déverrouiller",
-      "delete": "Supprimer"
+      "unlock": "Déverrouiller"
     },
     "contextMenu": {
       "ariaLabel": "Commandes d'édition de la zone de dessin",
-      "copy": "Copier",
-      "paste": "Coller",
-      "saveObjectStamp": "Enregistrer comme planche",
-      "delete": "Supprimer"
+      "showName": "Afficher le nom",
+      "hideName": "Masquer le nom"
     },
     "rotationHandle": {
       "label": "Pivoter"
@@ -152,7 +138,6 @@
     },
     "plantColor": {
       "label": "Couleur de plante",
-      "toolbarDesc": "Modifier les couleurs des plantes sélectionnées",
       "selectedCount": "{{count}} sélectionnées",
       "suggested": "Suggestion basée sur la couleur de la fleur",
       "moreColors": "Couleur personnalisée",
@@ -165,7 +150,6 @@
     },
     "plantSymbol": {
       "label": "Symbole de plante",
-      "toolbarDesc": "Modifier les symboles des plantes sélectionnées",
       "selectedCount": "{{count}} sélectionnées",
       "setSymbolForSpecies": "Définir pour tous les {{species}}",
       "mixed": "Symboles mixtes",

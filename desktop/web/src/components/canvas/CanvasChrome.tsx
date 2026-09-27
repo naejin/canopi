@@ -2,9 +2,11 @@ import type { ComponentChildren, RefObject } from 'preact'
 import type { CanvasCommandProjection } from '../../app/canvas-commands'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { toolRailShowsNames } from '../../app/tool-rail/learning'
+import { CanvasContextMenu } from './CanvasContextMenu'
 import { CanvasOverview } from './CanvasOverview'
 import { DisplayLegend } from './DisplayLegend'
 import { InspectionLens } from './InspectionLens'
+import { PlantAppearancePopovers } from './PlantAppearancePopovers'
 import { SiteOnboarding } from './SiteOnboarding'
 import { SpeciesFocusChip } from './SpeciesFocusChip'
 import { ToolRail } from './ToolRail'
@@ -13,7 +15,8 @@ import { ZoomControls } from './ZoomControls'
 
 /**
  * The floating chrome over the map that both editions share: tool rail, view
- * chip, zoom group, overview, inspection and New-Design guidance. The edition
+ * chip, zoom group, right-click menu, plant appearance popovers, overview,
+ * inspection and New-Design guidance. The edition
  * hands over its canvas command projection.
  */
 export function CanvasChrome({ projection, canvasRef, children }: {
@@ -35,6 +38,8 @@ export function CanvasChrome({ projection, canvasRef, children }: {
       {!locating && <CanvasOverview />}
       <DisplayLegend />
       <SiteOnboarding />
+      <CanvasContextMenu />
+      <PlantAppearancePopovers canvasRef={canvasRef} />
     </>
   )
 }
