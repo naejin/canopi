@@ -259,6 +259,7 @@
       "basemap": "기본 지도",
       "basemapLoading": "기본 지도를 불러오는 중...",
       "mapUnavailable": "지도를 사용할 수 없음",
+      "layerSkipped": "지도 레이어를 표시할 수 없습니다",
       "references": "부지 참조",
       "sceneStack": "설계 레이어",
       "topToBottom": "위에서 아래로",

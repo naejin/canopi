@@ -259,6 +259,7 @@
       "basemap": "底图",
       "basemapLoading": "正在加载底图...",
       "mapUnavailable": "地图不可用",
+      "layerSkipped": "无法显示某个地图图层",
       "references": "场地参考",
       "sceneStack": "设计图层",
       "topToBottom": "从上到下",

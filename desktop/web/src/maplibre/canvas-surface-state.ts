@@ -7,6 +7,8 @@ export interface MapLibreCanvasSurfaceState {
   readonly errorMessage: string | null
   readonly terrainStatus: MapLibreCanvasSurfaceStatus
   readonly terrainErrorMessage: string | null
+  /** An optional map contribution (overlay, raster band) was skipped; the map stays editable. */
+  readonly layerSkipped: boolean
 }
 
 export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
@@ -14,6 +16,7 @@ export const IDLE_MAPLIBRE_CANVAS_SURFACE_STATE: MapLibreCanvasSurfaceState = {
   errorMessage: null,
   terrainStatus: 'idle',
   terrainErrorMessage: null,
+  layerSkipped: false,
 }
 
 export function mapLibreCanvasSurfaceStateEquals(
@@ -25,6 +28,7 @@ export function mapLibreCanvasSurfaceStateEquals(
     && left.errorMessage === right.errorMessage
     && left.terrainStatus === right.terrainStatus
     && left.terrainErrorMessage === right.terrainErrorMessage
+    && left.layerSkipped === right.layerSkipped
   )
 }
 

@@ -7,6 +7,7 @@ const READY_MAP_STATE: MapLibreCanvasSurfaceState = {
   errorMessage: null,
   terrainStatus: 'idle',
   terrainErrorMessage: null,
+  layerSkipped: false,
 }
 
 function translate(key: string): string {
@@ -14,6 +15,7 @@ function translate(key: string): string {
     'canvas.layers.mapUnavailable': 'Map unavailable',
     'canvas.layers.basemapLoading': 'Loading',
     'canvas.layers.mapSection': 'Map Layers',
+    'canvas.layers.layerSkipped': 'A map layer couldn’t be shown',
   }[key] ?? key
 }
 
@@ -61,6 +63,20 @@ describe('Map Notice read model', () => {
       mapSurfaceVisible: true,
       tone: 'ready',
       statusText: 'Map Layers: dem fetch failed',
+    })
+  })
+
+  it('reports a skipped optional layer as a quiet ready notice', () => {
+    expect(getMapNoticeReadModel({
+      hasDesign: true,
+      mapVisible: true,
+      mapSurface: { ...READY_MAP_STATE, layerSkipped: true },
+      t: translate,
+    })).toEqual({
+      visible: true,
+      mapSurfaceVisible: true,
+      tone: 'ready',
+      statusText: 'A map layer couldn’t be shown',
     })
   })
 

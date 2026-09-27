@@ -259,6 +259,7 @@
       "basemap": "Basiskaart",
       "basemapLoading": "Basiskaart laden...",
       "mapUnavailable": "Kaart niet beschikbaar",
+      "layerSkipped": "Een kaartlaag kon niet worden weergegeven",
       "references": "Terreinreferenties",
       "sceneStack": "Tekenlagen",
       "topToBottom": "Van boven naar beneden",

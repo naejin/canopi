@@ -382,9 +382,10 @@ describe('WorkspaceMapControls', () => {
     expect(map.addSource).toHaveBeenCalledTimes(mutations)
   })
 
-  it('rejects and releases initial contribution failure before any failure watcher is installed', async () => {
+  it('admits the map when a Target overlay fails during initial contribution work', async () => {
     const states = vi.fn()
-    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const logError = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states }, logError })
     const acquisition = controls.createMap(new AbortController().signal)
     controls.updateMapContributions(targetContribution(controls.sessionIdentity))
     const map = await waitForMap(maps)
@@ -394,49 +395,120 @@ describe('WorkspaceMapControls', () => {
       if (layer.id?.startsWith('panel-target-')) throw error
       add(layer, before)
     })
-    const remove = map.removeSource.getMockImplementation()!
-    map.removeSource.mockImplementation((id) => {
-      remove(id)
-      if (id.startsWith('panel-target-')) map.emit('error', { error: new Error('cleanup failed') })
-    })
-    const rejected = expect(acquisition).rejects.toBe(error)
     map.emit('style.load')
-    await rejected
-    expect(map.remove).toHaveBeenCalledOnce()
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
-    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
-    expect(map.remove).toHaveBeenCalledOnce()
+    await expect(acquisition).resolves.toBe(map)
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+    expect([...map.layers.keys()].some((id) => id.startsWith('panel-target-'))).toBe(false)
+    expect(logError).toHaveBeenCalledWith('Skipped a map overlay that failed to sync:', error)
   })
 
-  it.each(['live', 'reload'] as const)('reports contribution failure once during %s work and retains error through release', async (phase) => {
+  it.each([
+    ['live', 'addSource'], ['live', 'addLayer'], ['reload', 'addSource'], ['reload', 'addLayer'],
+  ] as const)('keeps the map admitted and editable when a Target overlay %s %s throws', async (phase, method) => {
     const states = vi.fn()
-    const { controls, maps } = createControls({ contributions: { onStateChange: states } })
+    const { controls, maps } = createControls({ contributions: { onStateChange: states }, logError: vi.fn() })
     const acquisition = controls.createMap(new AbortController().signal)
     const map = await waitForMap(maps)
     map.emit('style.load')
     const admitted = await acquisition
     const failure = vi.fn()
     controls.watchFailure(admitted, failure)
-    controls.installStyleRestorer(admitted, () => {})
+    const restorer = vi.fn()
+    controls.installStyleRestorer(admitted, restorer)
     if (phase === 'reload') controls.updateMapContributions(targetContribution(controls.sessionIdentity))
-    const error = new Error('target source failed')
-    const add = map.addSource.getMockImplementation()!
-    map.addSource.mockImplementation((id, source) => {
-      if (id.startsWith('panel-target-')) throw error
-      add(id, source)
-    })
+    const error = new Error('target contribution failed')
+    if (method === 'addSource') {
+      const add = map.addSource.getMockImplementation()!
+      map.addSource.mockImplementation((id, source) => {
+        if (id.startsWith('panel-target-')) throw error
+        add(id, source)
+      })
+    } else {
+      const add = map.addLayer.getMockImplementation()!
+      map.addLayer.mockImplementation((layer, before) => {
+        if (layer.id?.startsWith('panel-target-')) throw error
+        add(layer, before)
+      })
+    }
     if (phase === 'reload') {
       map.clearStyle()
       map.emit('style.load')
+      expect(restorer).toHaveBeenCalledOnce()
     } else controls.updateMapContributions(targetContribution(controls.sessionIdentity))
-    expect(failure).toHaveBeenCalledExactlyOnceWith(error)
-    const mutations = map.addSource.mock.calls.length
-    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    expect(failure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', layerSkipped: true })
+    // The background band and later style reloads keep working.
+    map.clearStyle()
     map.emit('style.load')
-    expect(map.addSource).toHaveBeenCalledTimes(mutations)
-    controls.releaseMap(admitted)
-    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'error', errorMessage: error.message })
-    expect(failure).toHaveBeenCalledOnce()
+    expect(map.getLayer(MAPLIBRE_SATELLITE_LAYER_ID)).toBeTruthy()
+    expect(failure).not.toHaveBeenCalled()
+  })
+
+  it('keeps the map admitted when MapLibre rejects an overlay source specification', async () => {
+    const states = vi.fn()
+    const logError = vi.fn()
+    const { controls, maps } = createControls({ contributions: { onStateChange: states }, logError })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const failure = vi.fn()
+    controls.watchFailure(admitted, failure)
+    const add = map.addSource.getMockImplementation()!
+    map.addSource.mockImplementation((id, source) => {
+      // MapLibre validates, emits an error event and does not add the source.
+      if (id.startsWith('panel-target-')) map.emit('error', { error: new Error(`sources.${id}: unknown property "id"`) })
+      else add(id, source)
+    })
+    const addLayer = map.addLayer.getMockImplementation()!
+    map.addLayer.mockImplementation((layer, before) => {
+      if (layer.id?.startsWith('panel-target-') && !map.sources.has(String((layer as { source?: unknown }).source))) {
+        map.emit('error', { error: new Error(`layers.${layer.id}: source "${String((layer as { source?: unknown }).source)}" not found`) })
+        return
+      }
+      addLayer(layer, before)
+    })
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    expect(failure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+    expect(states.mock.lastCall?.[0]).toMatchObject({ status: 'ready', layerSkipped: true })
+  })
+
+  it.each([
+    ['terrain source', { sourceId: 'terrain-dem', error: new Error('dem tile failed') }],
+    ['terrain layer', { error: new Error('layers.hillshade-layer.paint.hillshade-exaggeration: number expected') }],
+    ['raster tile', { sourceId: 'mlrcog0-src-lidar-a', error: new Error('tile failed') }],
+    ['basemap layer', { error: new Error('layers.ofm:water.paint.fill-color: color expected') }],
+  ] as const)('keeps the map admitted for an optional %s error', async (_name, event) => {
+    const { controls, maps } = createControls({ logError: vi.fn() })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const failure = vi.fn()
+    controls.watchFailure(admitted, failure)
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    map.emit('error', event)
+    expect(failure).not.toHaveBeenCalled()
+    expect(map.remove).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['unattributed engine', { error: new Error('map engine failed') }],
+    ['shared scene layer', { layer: { id: MAPLIBRE_SHARED_SCENE_LAYER_ID }, error: new Error('scene draw failed') }],
+  ] as const)('still reports a core %s failure', async (_name, event) => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    const failure = vi.fn()
+    controls.watchFailure(admitted, failure)
+    controls.updateMapContributions(targetContribution(controls.sessionIdentity))
+    map.emit('error', event)
+    expect(failure).toHaveBeenCalledExactlyOnceWith(event.error)
   })
 
   it.each(['loader', 'constructor', 'webgl', 'pre-admission'] as const)('publishes the acquisition error for %s failure', async (stage) => {

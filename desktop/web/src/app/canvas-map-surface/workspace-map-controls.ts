@@ -2,7 +2,11 @@ import { WorkspaceMapContributions, type WorkspaceMapContributionsOptions } from
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
 import { createMapLibreSurfaceAdapter } from '../../maplibre/surface-adapter'
-import { MAPLIBRE_SATELLITE_SOURCE_ID } from '../../maplibre/config'
+import {
+  MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID,
+  MAPLIBRE_SATELLITE_LAYER_ID,
+  MAPLIBRE_SATELLITE_SOURCE_ID,
+} from '../../maplibre/config'
 import { BasemapTileAuth } from '../../maplibre/basemap-tile-auth'
 import {
   captureMapBackgroundPresentation,
@@ -11,7 +15,8 @@ import {
   type MapBackgroundMap,
   type MapBackgroundPresentation,
 } from '../../maplibre/map-background'
-import { OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
+import { OPENFREEMAP_LAYER_PREFIX, OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
+import { mapErrorResourceId } from '../../maplibre/map-error-owner'
 import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
@@ -159,9 +164,13 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
           attempt.contributions.attach(context)
           const isLive = () => !attempt.released && !attempt.signal.aborted && context.isCurrent()
           if (!isLive()) return
+          // Errors are classified by owner. After admission, an error naming an
+          // optional contribution or the background band only skips that
+          // contribution; context loss, pre-admission engine failure and any
+          // error that is unattributed or names the shared scene layer are core.
           const reportMapError = (event: unknown) => {
             if (!isLive()) return
-            if (attempt.admitted && attempt.contributions.handleSourceError(event)) return
+            if (attempt.admitted && attempt.contributions.handleMapError(event)) return
             if (attempt.admitted && isPassiveBasemapError(event)) {
               this.logError('Passive MapLibre workspace basemap error:', describeMapErrorEvent(event))
               return
@@ -481,11 +490,14 @@ function contextLossError(event: unknown): Error {
 }
 
 function isPassiveBasemapError(event: unknown): boolean {
-  return typeof event === 'object'
-    && event !== null
-    && 'sourceId' in event
-    && typeof event.sourceId === 'string'
-    && (event.sourceId === MAPLIBRE_SATELLITE_SOURCE_ID || event.sourceId.startsWith(OPENFREEMAP_SOURCE_PREFIX))
+  const id = mapErrorResourceId(event)
+  return id !== null && (
+    id === MAPLIBRE_SATELLITE_SOURCE_ID
+    || id === MAPLIBRE_SATELLITE_LAYER_ID
+    || id === MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID
+    || id.startsWith(OPENFREEMAP_SOURCE_PREFIX)
+    || id.startsWith(OPENFREEMAP_LAYER_PREFIX)
+  )
 }
 
 function mapError(event: unknown): Error {

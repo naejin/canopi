@@ -44,7 +44,8 @@ function getMapNoticeStatusText(mapSurface: MapLibreCanvasSurfaceState, t: (key:
     return `${t('canvas.layers.mapUnavailable')}: ${mapSurface.errorMessage ?? ''}`.trim()
   }
   if (mapSurface.status !== 'ready') return t('canvas.layers.basemapLoading')
-  return mapSurface.terrainStatus === 'error'
-    ? `${t('canvas.layers.mapSection')}: ${mapSurface.terrainErrorMessage ?? ''}`.trim()
-    : ''
+  if (mapSurface.terrainStatus === 'error') {
+    return `${t('canvas.layers.mapSection')}: ${mapSurface.terrainErrorMessage ?? ''}`.trim()
+  }
+  return mapSurface.layerSkipped ? t('canvas.layers.layerSkipped') : ''
 }

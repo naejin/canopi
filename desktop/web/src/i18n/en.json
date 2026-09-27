@@ -259,6 +259,7 @@
       "basemap": "Basemap",
       "basemapLoading": "Loading basemap...",
       "mapUnavailable": "Map unavailable",
+      "layerSkipped": "A map layer couldn’t be shown",
       "references": "Site references",
       "sceneStack": "Scene stack",
       "topToBottom": "Top to bottom",

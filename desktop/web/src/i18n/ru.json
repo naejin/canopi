@@ -259,6 +259,7 @@
       "basemap": "Базовая карта",
       "basemapLoading": "Загрузка базовой карты...",
       "mapUnavailable": "Карта недоступна",
+      "layerSkipped": "Не удалось показать слой карты",
       "references": "Данные участка",
       "sceneStack": "Слои проекта",
       "topToBottom": "Сверху вниз",

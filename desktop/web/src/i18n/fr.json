@@ -259,6 +259,7 @@
       "basemap": "Fond de carte",
       "basemapLoading": "Chargement du fond de carte...",
       "mapUnavailable": "Carte indisponible",
+      "layerSkipped": "Une couche de carte n’a pas pu être affichée",
       "references": "Repères du site",
       "sceneStack": "Calques du dessin",
       "topToBottom": "De haut en bas",

@@ -259,6 +259,7 @@
       "basemap": "Basiskarte",
       "basemapLoading": "Basiskarte wird geladen...",
       "mapUnavailable": "Karte nicht verfügbar",
+      "layerSkipped": "Eine Kartenebene konnte nicht angezeigt werden",
       "references": "Standortreferenzen",
       "sceneStack": "Zeichenebenen",
       "topToBottom": "Von oben nach unten",

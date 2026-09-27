@@ -130,7 +130,7 @@ describe('WorkspaceMapContributions', () => {
       remove(id)
     })
     if (reason === 'rebuild') f.manager.restoreStyle()
-    else f.manager.handleSourceError({ sourceId: 'terrain-dem', error: new Error('terrain tile failed') })
+    else f.manager.handleMapError({ sourceId: 'terrain-dem', error: new Error('terrain tile failed') })
     await flush()
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(cleanup)
     expect(f.states.at(-1)).toMatchObject({ status: 'error', errorMessage: cleanup.message, terrainStatus: 'idle' })
@@ -143,7 +143,6 @@ describe('WorkspaceMapContributions', () => {
   })
 
   it.each([
-    ['overlay', 'initial'], ['overlay', 'live'], ['overlay', 'reload'],
     ['order', 'initial'], ['order', 'live'], ['order', 'reload'],
   ] as const)('fails once for %s failure during %s work and fences subsequent updates', (kind, phase) => {
     const f = fixture()
@@ -158,18 +157,8 @@ describe('WorkspaceMapContributions', () => {
       f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene', 'lidar-a')
     }
     const error = new Error(`${kind} failed`)
-    if (kind === 'overlay') {
-      const add = f.map.addLayer.getMockImplementation()!
-      f.map.addLayer.mockImplementation((layer) => {
-        if (String(layer.id).startsWith('panel-target-')) throw error
-        add(layer)
-      })
-      const overlay = f.map.order.indexOf('panel-target-hover-zones-fill')
-      if (overlay >= 0) f.map.order.splice(overlay, 1)
-    } else {
-      f.map.moveLayer.mockImplementation(() => { throw error })
-      if (phase === 'live') f.map.order.reverse()
-    }
+    f.map.moveLayer.mockImplementation(() => { throw error })
+    if (phase === 'live') f.map.order.reverse()
     if (phase === 'live') f.manager.update(input)
     else f.manager.restoreStyle()
     expect(f.failure).toHaveBeenCalledExactlyOnceWith(error)
@@ -259,7 +248,7 @@ describe('WorkspaceMapContributions', () => {
     expect(f.states.at(-1)?.status).toBe('ready')
     expect(f.map.getLayer('panel-target-hover-zones-fill')).toBeTruthy()
     expect(f.logError).toHaveBeenCalled()
-    expect(f.manager.handleSourceError({ sourceId: 'mlrcog0-src-lidar-a', error: new Error('tile') })).toBe(true)
+    expect(f.manager.handleMapError({ sourceId: 'mlrcog0-src-lidar-a', error: new Error('tile') })).toBe(true)
     expect(f.failure).not.toHaveBeenCalled()
   })
 
@@ -358,8 +347,8 @@ describe('WorkspaceMapContributions', () => {
     f.manager.restoreStyle()
     f.manager.update(null)
     const published = f.states.length
-    expect(f.manager.handleSourceError({ sourceId: 'mlrcog0-src-lidar-a' })).toBe(true)
-    expect(f.manager.handleSourceError({ sourceId: 'terrain-dem' })).toBe(true)
+    expect(f.manager.handleMapError({ sourceId: 'mlrcog0-src-lidar-a' })).toBe(true)
+    expect(f.manager.handleMapError({ sourceId: 'terrain-dem' })).toBe(true)
     expect(f.states).toHaveLength(published)
     expect(f.states.at(-1)?.status).toBe('idle')
   })
@@ -380,6 +369,124 @@ describe('WorkspaceMapContributions', () => {
     expect([...f.map.listeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
     expect(f.bounds).toHaveBeenLastCalledWith(null)
     expect(f.diagnostics).toHaveBeenLastCalledWith(null)
-    expect(f.states.at(-1)).toEqual({ status: 'idle', errorMessage: null, terrainStatus: 'idle', terrainErrorMessage: null })
+    expect(f.states.at(-1)).toEqual({ status: 'idle', errorMessage: null, terrainStatus: 'idle', terrainErrorMessage: null, layerSkipped: false })
+  })
+
+  describe('optional overlay failures', () => {
+    it.each(['initial', 'live', 'reload'] as const)('keeps the map ready when the overlay fails during %s work', (phase) => {
+      const f = fixture()
+      const input = snapshot(f.identity)
+      f.manager.update(input)
+      if (phase !== 'initial') f.manager.restoreStyle()
+      if (phase === 'reload') {
+        f.map.sources.clear()
+        f.map.order.splice(0, f.map.order.length, 'canopi-shared-scene')
+      }
+      const error = new Error('overlay failed')
+      const add = f.map.addLayer.getMockImplementation()!
+      f.map.addLayer.mockImplementation((candidate) => {
+        if (String(candidate.id).startsWith('panel-target-')) throw error
+        add(candidate)
+      })
+      if (phase === 'live') {
+        // A new selection adds the selection overlay on the live map.
+        f.manager.update({ ...input, overlays: { ...input.overlays, selectedTargets: [{ kind: 'zone', zone_name: 'plot' }] } })
+      } else f.manager.restoreStyle()
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+      expect(f.map.sources.has('panel-target-hover-source')).toBe(false)
+      expect(f.raster.disposed).toBe(false)
+    })
+
+    it.each(['addSource', 'addLayer'] as const)('skips the Target overlay when %s throws and keeps the map ready', (method) => {
+      const f = fixture()
+      const error = new Error(`overlay ${method} failed`)
+      const original = f.map[method].getMockImplementation()! as (...args: unknown[]) => void
+      ;(f.map[method] as ReturnType<typeof vi.fn>).mockImplementation((...args: unknown[]) => {
+        const id = typeof args[0] === 'string' ? args[0] : String((args[0] as { id?: unknown }).id)
+        if (id.startsWith('panel-target-')) throw error
+        original(...args)
+      })
+      f.manager.update(snapshot(f.identity))
+      f.manager.restoreStyle()
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', errorMessage: null, layerSkipped: true })
+      expect(f.map.getSource('panel-target-hover-source')).toBeUndefined()
+      expect(f.map.order.some((id) => id.startsWith('panel-target-'))).toBe(false)
+      expect(f.logError).toHaveBeenCalledWith(expect.stringContaining('overlay'), error)
+      // The other contributions are untouched.
+      expect(f.raster.syncs.at(-1)?.ids).toEqual(['lidar-a'])
+    })
+
+    it('does not retry the same failing Targets until they change, then clears the notice', () => {
+      const f = fixture()
+      const add = f.map.addSource.getMockImplementation()!
+      let broken = true
+      f.map.addSource.mockImplementation((id, source) => {
+        if (broken && id.startsWith('panel-target-')) throw new Error('overlay rejected')
+        add(id, source)
+      })
+      f.manager.update(snapshot(f.identity))
+      f.manager.restoreStyle()
+      const attempts = f.map.addSource.mock.calls.length
+      f.manager.update(snapshot(f.identity))
+      expect(f.map.addSource).toHaveBeenCalledTimes(attempts)
+      expect(f.logError).toHaveBeenCalledOnce()
+      broken = false
+      const next = snapshot(f.identity)
+      f.manager.update({ ...next, overlays: { ...next.overlays, selectedTargets: [{ kind: 'zone', zone_name: 'plot' }] } })
+      expect(f.map.getSource('panel-target-hover-source')).toBeTruthy()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: false })
+    })
+
+    it('skips the overlay on a MapLibre validation event that names its source', () => {
+      const f = fixture()
+      const add = f.map.addSource.getMockImplementation()!
+      f.map.addSource.mockImplementation((id, source) => {
+        if (id.startsWith('panel-target-')) {
+          // MapLibre validates without throwing: it emits and does not add.
+          expect(f.manager.handleMapError({ error: new Error(`sources.${id}: unknown property "id"`) })).toBe(true)
+          return
+        }
+        add(id, source)
+      })
+      f.manager.update(snapshot(f.identity))
+      f.manager.restoreStyle()
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', layerSkipped: true })
+      expect(f.map.order.some((id) => id.startsWith('panel-target-'))).toBe(false)
+    })
+
+    it('treats a failed overlay rollback as a hard failure', () => {
+      const f = fixture()
+      const addLayer = f.map.addLayer.getMockImplementation()!
+      f.map.addLayer.mockImplementation((candidate) => {
+        addLayer(candidate)
+        if (String(candidate.id).startsWith('panel-target-')) throw new Error('partial overlay')
+      })
+      const cleanup = new Error('overlay rollback failed')
+      f.map.removeLayer.mockImplementation(() => { throw cleanup })
+      f.manager.update(snapshot(f.identity))
+      f.manager.restoreStyle()
+      expect(f.failure).toHaveBeenCalledExactlyOnceWith(cleanup)
+    })
+
+    it('routes terrain layer and style events to terrain without failing the map', async () => {
+      const f = fixture()
+      f.manager.update(snapshot(f.identity, { terrain: { ...snapshot(f.identity).terrain, hillshadeVisible: true } }))
+      f.manager.restoreStyle()
+      await flush()
+      expect(f.manager.handleMapError({ error: new Error('layers.hillshade-layer.paint.hillshade-exaggeration: number expected') })).toBe(true)
+      expect(f.failure).not.toHaveBeenCalled()
+      expect(f.states.at(-1)).toMatchObject({ status: 'ready', terrainStatus: 'error' })
+    })
+
+    it('leaves unowned and shared scene errors to the map owner', () => {
+      const f = fixture()
+      f.manager.update(snapshot(f.identity))
+      f.manager.restoreStyle()
+      expect(f.manager.handleMapError({ error: new Error('map engine failed') })).toBe(false)
+      expect(f.manager.handleMapError({ layer: { id: 'canopi-shared-scene' }, error: new Error('scene draw failed') })).toBe(false)
+    })
   })
 })

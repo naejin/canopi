@@ -259,6 +259,7 @@
       "basemap": "ベースマップ",
       "basemapLoading": "ベースマップを読み込み中...",
       "mapUnavailable": "地図を利用できません",
+      "layerSkipped": "地図レイヤーを表示できませんでした",
       "references": "敷地の参照情報",
       "sceneStack": "設計レイヤー",
       "topToBottom": "上から下へ",

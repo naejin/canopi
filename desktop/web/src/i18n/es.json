@@ -259,6 +259,7 @@
       "basemap": "Mapa base",
       "basemapLoading": "Cargando mapa base...",
       "mapUnavailable": "Mapa no disponible",
+      "layerSkipped": "No se pudo mostrar una capa del mapa",
       "references": "Referencias del lugar",
       "sceneStack": "Capas del diseño",
       "topToBottom": "De arriba abajo",

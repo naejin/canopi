@@ -259,6 +259,7 @@
       "basemap": "Mapa base",
       "basemapLoading": "Carregando mapa base...",
       "mapUnavailable": "Mapa indisponível",
+      "layerSkipped": "Não foi possível mostrar uma camada do mapa",
       "references": "Referências do local",
       "sceneStack": "Camadas do desenho",
       "topToBottom": "De cima para baixo",
