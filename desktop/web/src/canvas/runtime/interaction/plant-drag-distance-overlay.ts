@@ -101,8 +101,9 @@ function nearestDistanceGuides(
 }
 
 /**
- * A dashed distance line between two screen points with its label at the
- * middle; `marker` names the data attributes (`<marker>Line`, `<marker>Label`).
+ * A dashed distance line between two screen points with its label centred at
+ * `labelAt` (the middle by default); `marker` names the data attributes
+ * (`<marker>Line`, `<marker>Label`).
  */
 export function appendDistanceGuide(
   svg: SVGSVGElement,
@@ -111,6 +112,7 @@ export function appendDistanceGuide(
   end: ScenePoint,
   text: string,
   marker: string,
+  labelAt?: ScenePoint,
 ): void {
   // Dark casing first so the light distance line reads on any imagery.
   svg.appendChild(createGuideLine(start, end, 'var(--canvas-overlay-casing)', 3.5))
@@ -118,7 +120,7 @@ export function appendDistanceGuide(
   line.dataset[`${marker}Line`] = 'true'
   svg.appendChild(line)
 
-  const midpoint = {
+  const midpoint = labelAt ?? {
     x: start.x + (end.x - start.x) / 2,
     y: start.y + (end.y - start.y) / 2,
   }

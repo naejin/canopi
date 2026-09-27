@@ -56,7 +56,7 @@ export function createPlantPlacementPreview(
 
   function clear(): void {
     svg.replaceChildren()
-    for (const label of root.querySelectorAll('[data-plant-placement-label]')) label.remove()
+    for (const label of [...root.children]) if (label !== svg) label.remove()
   }
 
   return {
@@ -72,22 +72,27 @@ export function createPlantPlacementPreview(
         }), 'mature-width')
       }
 
+      const glyph = document.createElementNS(SVG_NS, 'g')
+      glyph.dataset.plantPlacementGlyph = source.canonical_name
+      const plant = plantEntityFromStampSource(scene, source, world, PREVIEW_PLANT_ID)
+      const glyphRadius = appendPlantSymbolGhost(glyph, camera, plant, plantContext, PREVIEW_OPACITY)
+
       const nearest = nearestPlant(scene, world)
       if (nearest) {
         const neighbour = camera.worldToScreen(nearest.plant.position)
         if (Math.hypot(neighbour.x - center.x, neighbour.y - center.y) <= NEAREST_PLANT_MAX_SCREEN_PX) {
           const name = commonNames.get(nearest.plant.canonicalName) ?? nearest.plant.commonName ?? nearest.plant.canonicalName
+          // Below the symbol, so a close neighbour's label never hides it.
+          const labelAt = { x: center.x, y: center.y + Math.max(glyphRadius ?? 0, 6) + 16 }
           appendDistanceGuide(svg, root, center, neighbour, translate('canvas.placePreview.nearest', {
             distance: formatMetricDistance(nearest.distance),
             name,
-          }), 'plantPlacementNearest')
+          }), 'plantPlacementNearest', labelAt)
         }
       }
 
-      const glyph = document.createElementNS(SVG_NS, 'g')
-      glyph.dataset.plantPlacementGlyph = source.canonical_name
-      const plant = plantEntityFromStampSource(scene, source, world, PREVIEW_PLANT_ID)
-      if (appendPlantSymbolGhost(glyph, camera, plant, plantContext, PREVIEW_OPACITY)) svg.appendChild(glyph)
+      // Last, so the symbol draws over the distance line.
+      if (glyphRadius !== null) svg.appendChild(glyph)
       root.style.display = 'block'
     },
     hide() {

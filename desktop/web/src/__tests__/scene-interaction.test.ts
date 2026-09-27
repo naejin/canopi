@@ -10638,7 +10638,9 @@ describe('SceneInteractionSession', () => {
       events.pointerMove({ x: 120, y: 100 })
 
       expect(store.persisted.plants).toHaveLength(1)
-      expect(container.querySelector('[data-plant-placement-nearest-label]')?.textContent).toBe('2 m to Apple')
+      events.pointerMove({ x: 130, y: 100 })
+      const labels = container.querySelectorAll('[data-plant-placement-nearest-label]')
+      expect([...labels].map((label) => label.textContent)).toEqual(['3 m to Apple'])
       session.dispose()
     })
   })

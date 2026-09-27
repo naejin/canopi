@@ -320,13 +320,13 @@ function appendPlantGhost(
 ): void {
   const group = createSvgElement('g')
   group.dataset.savedObjectStampPart = 'plant-symbol'
-  if (appendPlantSymbolGhost(group, context.camera, plant, plantContext, STAMP_GHOST_OPACITY)) svg.appendChild(group)
+  if (appendPlantSymbolGhost(group, context.camera, plant, plantContext, STAMP_GHOST_OPACITY) !== null) svg.appendChild(group)
 }
 
 /**
  * Draws a plant as the map would, from the shared symbol contours, into
- * `group` at `opacity`: stamp ghosts and the Place plants preview. False when
- * the plant has no presentation.
+ * `group` at `opacity`: stamp ghosts and the Place plants preview. Returns
+ * the symbol's screen radius, or null when the plant has no presentation.
  */
 export function appendPlantSymbolGhost(
   group: SVGGElement,
@@ -334,16 +334,16 @@ export function appendPlantSymbolGhost(
   plant: ScenePlantEntity,
   plantContext: PlantPresentationContext,
   opacity: number,
-): boolean {
+): number | null {
   const entry = buildPlantPresentationEntries([plant], plantContext, new Set())[0]
-  if (!entry) return false
+  if (!entry) return null
   setSvgAttributes(group, {
     opacity,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
   })
   appendPlantSymbolCommands(group, camera, entry, renderedPlantSymbol(entry))
-  return true
+  return entry.radiusWorld * camera.viewport.scale
 }
 
 function renderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
