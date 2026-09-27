@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} tot {{name}}",
       "matureWidth": "Volgroeide breedte tot {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Selectie draaien",
+      "angle": "Hoek",
+      "hint": "Draait de selectie om het midden. Positieve hoeken draaien met de klok mee.",
+      "invalid": "Typ een hoek in graden, bijvoorbeeld 45 of -30.",
+      "add": "{{degrees}}° optellen",
+      "subtract": "{{degrees}}° aftrekken",
+      "cancel": "Annuleren",
+      "rotate": "Draaien"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "Geen",
     "view.labelsCodes": "Codes",
     "view.labelsNames": "Namen",
-    "view.cycleLabels": "Labels: geen, codes, namen"
+    "view.cycleLabels": "Labels: geen, codes, namen",
+    "edit.rotate": "Draaien…"
   },
   "titleBar": {
     "untitledDesign": "Naamloos ontwerp",

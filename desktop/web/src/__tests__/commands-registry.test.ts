@@ -682,6 +682,7 @@ describe('command registry canvas tool switching', () => {
       'canvas.cut', 'canvas.copy', 'canvas.paste', 'canvas.duplicateSelected', 'canvas.deleteSelected',
       'canvas.selectAll', 'canvas.selectSameSpecies', 'edit.findPlants',
       'canvas.groupSelected', 'canvas.ungroupSelected', 'canvas.bringToFront', 'canvas.sendToBack',
+      'canvas.rotateSelected',
       'canvas.lockSelected', 'canvas.unlockSelected', 'canvas.saveSelectionAsStamp',
     ])
     expect(byMenu.view).toEqual([

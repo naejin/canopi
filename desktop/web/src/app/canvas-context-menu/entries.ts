@@ -10,6 +10,7 @@ import {
   selectionIncludesPlants,
 } from '../../canvas/runtime/interaction/contextual-selection-actions'
 import type { PlantAppearanceAnchor, PlantAppearanceKind } from './state'
+import { openRotateSelectionDialog } from '../rotate-selection/state'
 
 export type CanvasContextMenuItemId =
   | CanvasEditAction
@@ -103,6 +104,10 @@ export function buildCanvasContextMenuEntries(
     SEPARATOR,
     edit('group', !can.group, () => commands.groupSelected()),
     edit('ungroup', !can.ungroup, () => commands.ungroupSelected()),
+    edit('rotate', !can.rotate, () => openRotateSelectionDialog({
+      rotate: (degrees) => commands.rotateSelected(degrees),
+      returnFocus: () => request.returnFocus(),
+    })),
     ...request.saveSelectionAsObjectStamp
       ? [edit('save-as-stamp', !can.saveAsStamp, request.saveSelectionAsObjectStamp)]
       : [],

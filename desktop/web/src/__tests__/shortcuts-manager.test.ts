@@ -12,6 +12,8 @@ import {
 } from './support/canvas-runtime-surfaces'
 import { registerPlantFinder } from '../app/plant-finder/focus'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
 
 function mountCanvasCommandSurface(overrides: Parameters<typeof createTestCanvasCommandSurface>[0]): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
@@ -296,5 +298,33 @@ describe('shortcut manager canvas tool switching', () => {
     expect(groupSelected).toHaveBeenCalledTimes(1)
     expect(ungroupSelected).toHaveBeenCalledTimes(1)
     expect(placeSearchFocusRequest.value).toBe(focusRequest + 1)
+  })
+  it('opens Rotate… with Ctrl Alt R only for a selection that can turn', () => {
+    const rotateSelected = vi.fn()
+    const queries = createTestCanvasQuerySurface()
+    let rotatable = false
+    queries.getDesignObjectSelection = () => ({
+      editableTargets: rotatable ? [{ kind: 'zone', id: 'zone-1' }] : [{ kind: 'plant', id: 'plant-1' }],
+      lockedTargets: [],
+      blockedTargets: [],
+      bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+      sameSpeciesReferenceCanonicalName: null,
+    })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      commands: createTestCanvasCommandSurface({ sceneEdits: { rotateSelected } }),
+      queries,
+    }))
+    selectedObjectIds.value = new Set(['plant-1'])
+
+    // A lone plant has nothing to turn.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true, altKey: true, code: 'KeyR' }))
+    expect(rotateSelectionDialog.value).toBeNull()
+
+    rotatable = true
+    selectedObjectIds.value = new Set(['zone-1'])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '®', metaKey: true, altKey: true, code: 'KeyR' }))
+    expect(rotateSelectionDialog.value).not.toBeNull()
+    applyRotateSelection('-30')
+    expect(rotateSelected).toHaveBeenCalledWith(-30)
   })
 })

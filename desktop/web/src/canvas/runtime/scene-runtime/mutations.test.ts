@@ -594,6 +594,54 @@ describe('scene runtime mutation controller', () => {
     expect(sceneStore.session.selectedTargets).toHaveLength(3)
   })
 
+  it('rotates the selection about its centre as one undoable edit', () => {
+    const { controller, sceneStore, state } = createController()
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }])
+    const [first, second] = sceneStore.persisted.plants.map((plant) => plant.position)
+    const centre = { x: (first!.x + second!.x) / 2, y: (first!.y + second!.y) / 2 }
+
+    controller.rotateSelected(90)
+
+    const [rotatedFirst, rotatedSecond] = sceneStore.persisted.plants.map((plant) => plant.position)
+    // Clockwise on the map (the plane's y grows southward): north of the centre turns to east.
+    const turned = (point: { x: number; y: number }) => ({
+      x: centre.x - (point.y - centre.y),
+      y: centre.y + (point.x - centre.x),
+    })
+    expect(rotatedFirst!.x).toBeCloseTo(turned(first!).x)
+    expect(rotatedFirst!.y).toBeCloseTo(turned(first!).y)
+    expect(rotatedSecond!.x).toBeCloseTo(turned(second!).x)
+    expect(rotatedSecond!.y).toBeCloseTo(turned(second!).y)
+    expect(state.dirtyTypes).toEqual(['rotate-selected'])
+  })
+
+  it('turns a rectangle zone and keeps its shape', () => {
+    const { controller, sceneStore } = createController()
+    sceneStore.setSelection([{ kind: 'zone', id: 'zone-1' }])
+
+    controller.rotateSelected(-30)
+
+    expect(sceneStore.persisted.zones[0]!.rotationDeg).toBeCloseTo(330)
+  })
+
+  it('never rotates locked objects, and ignores a zero or non-finite angle', () => {
+    const file = makeFile()
+    file.plants[1] = { ...file.plants[1]!, locked: true }
+    const { controller, sceneStore, state } = createController(file)
+    const before = sceneStore.persisted.plants.map((plant) => ({ ...plant.position }))
+    sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }])
+
+    controller.rotateSelected(45)
+    sceneStore.setSelection([{ kind: 'zone', id: 'zone-1' }])
+    controller.rotateSelected(0)
+    controller.rotateSelected(Number.NaN)
+    controller.rotateSelected(360)
+
+    expect(sceneStore.persisted.plants.map((plant) => plant.position)).toEqual(before)
+    expect(sceneStore.persisted.zones[0]!.rotationDeg).toBe(0)
+    expect(state.dirtyTypes).toEqual([])
+  })
+
   it('clears the selection without editing the Design', () => {
     const { controller, sceneStore, state } = createController()
     sceneStore.setSelection([{ kind: 'plant', id: 'plant-1' }, { kind: 'zone', id: 'Z01' }])

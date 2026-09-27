@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} hasta {{name}}",
       "matureWidth": "Anchura adulta hasta {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Girar la selección",
+      "angle": "Ángulo",
+      "hint": "Gira la selección sobre su centro. Los ángulos positivos giran en el sentido de las agujas del reloj.",
+      "invalid": "Escriba un ángulo en grados, por ejemplo 45 o -30.",
+      "add": "Sumar {{degrees}}°",
+      "subtract": "Restar {{degrees}}°",
+      "cancel": "Cancelar",
+      "rotate": "Girar"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "Ninguna",
     "view.labelsCodes": "Códigos",
     "view.labelsNames": "Nombres",
-    "view.cycleLabels": "Etiquetas: ninguna, códigos, nombres"
+    "view.cycleLabels": "Etiquetas: ninguna, códigos, nombres",
+    "edit.rotate": "Girar…"
   },
   "titleBar": {
     "untitledDesign": "Diseño sin título",

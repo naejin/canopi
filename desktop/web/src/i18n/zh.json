@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "距 {{name}} {{distance}}",
       "matureWidth": "成熟冠幅最多 {{width}}"
+    },
+    "rotateDialog": {
+      "title": "旋转所选对象",
+      "angle": "角度",
+      "hint": "绕所选对象的中心旋转。正角度为顺时针。",
+      "invalid": "请输入以度为单位的角度，例如 45 或 -30。",
+      "add": "增加 {{degrees}}°",
+      "subtract": "减少 {{degrees}}°",
+      "cancel": "取消",
+      "rotate": "旋转"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "无",
     "view.labelsCodes": "代码",
     "view.labelsNames": "名称",
-    "view.cycleLabels": "标签：无、代码、名称"
+    "view.cycleLabels": "标签：无、代码、名称",
+    "edit.rotate": "旋转…"
   },
   "titleBar": {
     "untitledDesign": "未命名设计",

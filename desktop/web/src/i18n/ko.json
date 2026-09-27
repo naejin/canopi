@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{name}}까지 {{distance}}",
       "matureWidth": "다 자란 폭 최대 {{width}}"
+    },
+    "rotateDialog": {
+      "title": "선택 항목 회전",
+      "angle": "각도",
+      "hint": "선택 항목을 중심을 기준으로 회전합니다. 양수 각도는 시계 방향입니다.",
+      "invalid": "각도를 도 단위로 입력하세요(예: 45, -30).",
+      "add": "{{degrees}}° 더하기",
+      "subtract": "{{degrees}}° 빼기",
+      "cancel": "취소",
+      "rotate": "회전"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "없음",
     "view.labelsCodes": "코드",
     "view.labelsNames": "이름",
-    "view.cycleLabels": "레이블: 없음, 코드, 이름"
+    "view.cycleLabels": "레이블: 없음, 코드, 이름",
+    "edit.rotate": "회전…"
   },
   "titleBar": {
     "untitledDesign": "제목 없는 디자인",

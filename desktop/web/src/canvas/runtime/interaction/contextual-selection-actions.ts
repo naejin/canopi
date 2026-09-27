@@ -1,4 +1,5 @@
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
+import { isRotatableSelection } from '../scene-runtime/selection-rotation'
 
 /**
  * Which selection commands can run on a selection read model. Chrome that
@@ -12,6 +13,8 @@ export interface SelectionCommandAvailability {
   readonly edit: boolean
   readonly group: boolean
   readonly ungroup: boolean
+  /** Rotate…: what the rotation handle turns (never a locked object or a lone plant). */
+  readonly rotate: boolean
   readonly unlock: boolean
   readonly selectSameSpecies: boolean
   /** Editable plants whose colour, symbol and pinned name can change. */
@@ -36,6 +39,7 @@ export function selectionCommandAvailability(
       && selection.editableTargets.length >= 2
       && !selection.editableTargets.some((target) => target.kind === 'measurement-guide'),
     ungroup: unblocked && selection.editableTargets.some((target) => target.kind === 'group'),
+    rotate: isRotatableSelection(selection),
     unlock: locked,
     selectSameSpecies: unblocked && selection.sameSpeciesReferenceCanonicalName !== null,
     plantAppearance: unblocked && plantIds.length > 0,

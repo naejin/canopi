@@ -60,5 +60,6 @@ function shortcutInput(event: KeyboardEvent): CanvasCommandShortcutInput {
     metaKey: event.metaKey,
     shiftKey: event.shiftKey,
     altKey: event.altKey,
+    code: event.code,
   }
 }

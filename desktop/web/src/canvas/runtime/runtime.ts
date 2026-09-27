@@ -152,6 +152,12 @@ export interface CanvasSceneEditCommandSurface {
   groupSelected(): void
   ungroupSelected(): void
   /**
+   * Turns the editable selection about its centre by `degrees`, clockwise on
+   * the map for positive values, as one undoable edit. A selection holding a
+   * locked object, a measurement or a single plant does not turn.
+   */
+  rotateSelected(degrees: number): void
+  /**
    * Moves the editable selection by `delta` session-plane metres (the arrow
    * keys on the map). Nudges until `endNudge()` are one undoable edit; locked
    * objects never move. False when nothing editable moved.

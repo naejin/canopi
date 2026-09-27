@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} to {{name}}",
       "matureWidth": "Mature width up to {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Rotate selection",
+      "angle": "Angle",
+      "hint": "Turns the selection about its centre. Positive angles turn clockwise.",
+      "invalid": "Type an angle in degrees, such as 45 or -30.",
+      "add": "Add {{degrees}}°",
+      "subtract": "Subtract {{degrees}}°",
+      "cancel": "Cancel",
+      "rotate": "Rotate"
     }
   },
   "worldMap": {
@@ -1142,7 +1152,8 @@
     "view.labelsNone": "None",
     "view.labelsCodes": "Codes",
     "view.labelsNames": "Names",
-    "view.cycleLabels": "Labels: none, codes, names"
+    "view.cycleLabels": "Labels: none, codes, names",
+    "edit.rotate": "Rotate…"
   },
   "titleBar": {
     "untitledDesign": "Untitled Design",

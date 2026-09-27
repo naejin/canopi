@@ -18,6 +18,7 @@ function canvasProjection(): CanvasCommandProjection {
       spatialEditingAvailable: true,
       hasSelection: false,
       sameSpeciesSelectionAvailable: false,
+      rotateAvailable: false,
       canUndo: false,
       canRedo: false,
       settingsAvailable: false,

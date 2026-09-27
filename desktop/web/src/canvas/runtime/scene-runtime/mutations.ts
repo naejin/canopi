@@ -46,6 +46,10 @@ import {
   type SceneSelectionTarget,
 } from './selection'
 import {
+  applyRotationTransformToDraft,
+  captureRotationTransformState,
+} from './selection-rotation'
+import {
   applySpeciesSelection,
   getSameSpeciesReferenceCanonicalName,
   getSelectablePlantIdsForSpecies,
@@ -77,6 +81,8 @@ const EMPTY_PLANT_SYMBOL_CONTEXT: SelectedPlantSymbolContext = {
 }
 
 const NORMAL_PASTE_OFFSET_M: ScenePoint = { x: 1, y: 0 }
+/** A whole turn, or less than this, leaves the selection where it is. */
+const ROTATION_EPSILON_DEG = 1e-6
 
 interface SceneRuntimeMutationControllerOptions {
   sceneStore: SceneStateReader
@@ -186,6 +192,11 @@ export class SceneRuntimeMutationController {
 
   groupSelected(): void {
     this._runCommandWhenSettled(() => this._groupSelectedWhenSettled(), undefined)
+  }
+
+  /** Turns the selection about its centre, clockwise for positive degrees. */
+  rotateSelected(degrees: number): void {
+    this._runCommandWhenSettled(() => this._rotateSelectedWhenSettled(degrees), undefined)
   }
 
   ungroupSelected(): void {
@@ -484,6 +495,19 @@ export class SceneRuntimeMutationController {
       tx.mutate((draft) => {
         setSceneDesignObjectLocks(draft, selected, false)
       })
+    })
+  }
+
+  private _rotateSelectedWhenSettled(degrees: number): void {
+    if (!Number.isFinite(degrees)) return
+    const turn = degrees % 360
+    if (Math.abs(turn) < ROTATION_EPSILON_DEG) return
+    const selection = this._getSelectionModel()
+    const state = captureRotationTransformState(this._sceneStore.persisted, selection)
+    const pivot = centerOfBounds(selection.bounds)
+    if (!state || !pivot) return
+    this._sceneEdits.run('rotate-selected', (tx) => {
+      tx.mutate((draft) => applyRotationTransformToDraft(draft, state, pivot, turn))
     })
   }
 

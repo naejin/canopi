@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} до «{{name}}»",
       "matureWidth": "Ширина взрослого растения до {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Повернуть выделенное",
+      "angle": "Угол",
+      "hint": "Поворачивает выделенное вокруг его центра. Положительный угол — по часовой стрелке.",
+      "invalid": "Введите угол в градусах, например 45 или -30.",
+      "add": "Прибавить {{degrees}}°",
+      "subtract": "Вычесть {{degrees}}°",
+      "cancel": "Отмена",
+      "rotate": "Повернуть"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "Нет",
     "view.labelsCodes": "Коды",
     "view.labelsNames": "Названия",
-    "view.cycleLabels": "Подписи: нет, коды, названия"
+    "view.cycleLabels": "Подписи: нет, коды, названия",
+    "edit.rotate": "Повернуть…"
   },
   "titleBar": {
     "untitledDesign": "Безымянный проект",

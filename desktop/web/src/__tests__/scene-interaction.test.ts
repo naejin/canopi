@@ -258,6 +258,7 @@ function createInteractionDeps(
       unlockSelected: vi.fn(),
       groupSelected: vi.fn(),
       ungroupSelected: vi.fn(),
+      rotateSelected: vi.fn(),
     },
     contextMenu: overrides.contextMenu ?? contextMenuHost.adapter,
     setTool: (overrides.setTool ?? ((name: string) => {
@@ -296,6 +297,7 @@ function createSelectionCommands(
     unlockSelected: vi.fn(),
     groupSelected: vi.fn(),
     ungroupSelected: vi.fn(),
+    rotateSelected: vi.fn(),
     ...overrides,
   }
 }

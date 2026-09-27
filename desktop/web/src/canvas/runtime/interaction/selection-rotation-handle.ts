@@ -1,7 +1,14 @@
 import type { CanvasRuntimeTranslator } from '../app-adapter'
 import type { WorkspaceCameraFrameReader, SceneBounds } from '../camera'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
-import { resolveSceneObjectGroupMembers, type ScenePersistedState, type ScenePoint, type SceneStateReader } from '../scene'
+import type { ScenePoint, SceneStateReader } from '../scene'
+import {
+  applyRotationTransformToDraft,
+  captureRotationTransformState,
+  centerOfBounds,
+  isRotatableSelection,
+  type RotationTransformState,
+} from '../scene-runtime/selection-rotation'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { SceneToolPointerDrag, SceneToolPointerEvent } from './tool-adapter'
@@ -39,29 +46,6 @@ interface ActiveRotationDrag {
   readonly pivot: ScenePoint
   readonly startPointerAngleDeg: number
   lastDeltaDeg: number
-}
-
-type RotatableTarget =
-  | { readonly kind: 'plant'; readonly id: string }
-  | { readonly kind: 'zone'; readonly id: string }
-  | { readonly kind: 'annotation'; readonly id: string }
-  | { readonly kind: 'group'; readonly id: string }
-
-interface RotationTransformState {
-  readonly plants: Map<string, ScenePoint>
-  readonly zones: Map<string, ZoneRotationStart>
-  readonly annotations: Map<string, AnnotationRotationStart>
-}
-
-interface ZoneRotationStart {
-  readonly zoneType: string
-  readonly points: readonly ScenePoint[]
-  readonly rotationDeg: number
-}
-
-interface AnnotationRotationStart {
-  readonly position: ScenePoint
-  readonly rotationDeg: number
 }
 
 const HANDLE_SIZE_PX = 28
@@ -296,95 +280,6 @@ export function createSelectionRotationHandle(
   }
 }
 
-function isRotatableSelection(selection: CanvasDesignObjectSelectionModel): selection is CanvasDesignObjectSelectionModel & {
-  readonly bounds: SceneBounds
-  readonly editableTargets: readonly RotatableTarget[]
-} {
-  if (!selection.bounds || selection.blockedTargets.length > 0 || selection.editableTargets.length === 0) return false
-  if (selection.editableTargets.some((target) => target.kind === 'measurement-guide')) return false
-  if (selection.editableTargets.length > 1) return true
-  const target = selection.editableTargets[0]!
-  return target.kind === 'zone' || target.kind === 'annotation' || target.kind === 'group'
-}
-
-function captureRotationTransformState(
-  scene: ScenePersistedState,
-  selection: CanvasDesignObjectSelectionModel,
-): RotationTransformState | null {
-  if (!isRotatableSelection(selection)) return null
-  const state = createRotationTransformState()
-  for (const target of selection.editableTargets) captureTopLevelTarget(scene, state, target)
-  if (
-    state.plants.size === 0
-    && state.zones.size === 0
-    && state.annotations.size === 0
-  ) {
-    return null
-  }
-  return state
-}
-
-function createRotationTransformState(): RotationTransformState {
-  return {
-    plants: new Map(),
-    zones: new Map(),
-    annotations: new Map(),
-  }
-}
-
-function captureTopLevelTarget(
-  scene: ScenePersistedState,
-  state: RotationTransformState,
-  target: RotatableTarget,
-): void {
-  if (target.kind === 'group') {
-    const group = scene.groups.find((entry) => entry.id === target.id)
-    if (!group) return
-    for (const member of resolveSceneObjectGroupMembers(scene, group)) captureMemberTarget(scene, state, member)
-    return
-  }
-  captureMemberTarget(scene, state, target)
-}
-
-function captureMemberTarget(
-  scene: ScenePersistedState,
-  state: RotationTransformState,
-  target: { kind: 'plant' | 'zone' | 'annotation'; id: string },
-): void {
-  const plant = target.kind === 'plant' ? scene.plants.find((entry) => entry.id === target.id) : null
-  if (plant) {
-    state.plants.set(plant.id, { ...plant.position })
-    return
-  }
-
-  const zone = target.kind === 'zone' ? scene.zones.find((entry) => entry.name === target.id) : null
-  if (zone) {
-    state.zones.set(zone.name, {
-      zoneType: zone.zoneType,
-      points: zone.points.map((point) => ({ ...point })),
-      rotationDeg: zone.rotationDeg,
-    })
-    return
-  }
-
-  const annotation = target.kind === 'annotation'
-    ? scene.annotations.find((entry) => entry.id === target.id)
-    : null
-  if (annotation) {
-    state.annotations.set(annotation.id, {
-      position: { ...annotation.position },
-      rotationDeg: annotation.rotationDeg ?? 0,
-    })
-  }
-}
-
-function centerOfBounds(bounds: SceneBounds): ScenePoint {
-  return {
-    x: bounds.minX + (bounds.maxX - bounds.minX) / 2,
-    y: bounds.minY + (bounds.maxY - bounds.minY) / 2,
-  }
-}
-
 function resolveDeltaDeg(active: ActiveRotationDrag, context: SceneToolPointerEvent): number {
   const currentAngleDeg = angleDeg(active.pivot, context.rawWorld)
   const rawDeltaDeg = signedAngleDeltaDeg(active.startPointerAngleDeg, currentAngleDeg)
@@ -401,123 +296,6 @@ function signedAngleDeltaDeg(startDeg: number, currentDeg: number): number {
   if (delta > 180) delta -= 360
   if (delta <= -180) delta += 360
   return delta
-}
-
-function normalizeRotationDeg(degrees: number): number {
-  const normalized = degrees % 360
-  return cleanDegrees(normalized < 0 ? normalized + 360 : normalized)
-}
-
-function applyRotationTransformToDraft(
-  draft: ScenePersistedState,
-  state: RotationTransformState,
-  pivot: ScenePoint,
-  deltaDeg: number,
-): void {
-  draft.plants = draft.plants.map((plant) => {
-    const start = state.plants.get(plant.id)
-    if (!start) return plant
-    return {
-      ...plant,
-      position: rotatePointAround(start, pivot, deltaDeg),
-    }
-  })
-
-  draft.annotations = draft.annotations.map((annotation) => {
-    const start = state.annotations.get(annotation.id)
-    if (!start) return annotation
-    return {
-      ...annotation,
-      position: rotatePointAround(start.position, pivot, deltaDeg),
-      rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
-    }
-  })
-
-  draft.zones = draft.zones.map((zone) => {
-    const start = state.zones.get(zone.name)
-    if (!start) return zone
-    return rotateZone(zone, start, pivot, deltaDeg)
-  })
-
-}
-
-function rotateZone(
-  zone: ScenePersistedState['zones'][number],
-  start: ZoneRotationStart,
-  pivot: ScenePoint,
-  deltaDeg: number,
-): ScenePersistedState['zones'][number] {
-  if (start.zoneType === 'ellipse' && start.points.length >= 2) {
-    return {
-      ...zone,
-      points: [
-        rotatePointAround(start.points[0]!, pivot, deltaDeg),
-        { ...start.points[1]! },
-      ],
-      rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
-    }
-  }
-
-  if (start.zoneType === 'rect' && start.points.length >= 4) {
-    const bounds = pointsBounds(start.points.slice(0, 4))
-    const center = {
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height / 2,
-    }
-    return {
-      ...zone,
-      points: rectPointsAroundCenter(rotatePointAround(center, pivot, deltaDeg), bounds.width, bounds.height),
-      rotationDeg: normalizeRotationDeg(start.rotationDeg + deltaDeg),
-    }
-  }
-
-  return {
-    ...zone,
-    points: start.points.map((point) => rotatePointAround(point, pivot, deltaDeg)),
-    rotationDeg: start.rotationDeg,
-  }
-}
-
-function rotatePointAround(point: ScenePoint, pivot: ScenePoint, degrees: number): ScenePoint {
-  const radians = (degrees * Math.PI) / 180
-  const dx = point.x - pivot.x
-  const dy = point.y - pivot.y
-  const cos = Math.cos(radians)
-  const sin = Math.sin(radians)
-  return {
-    x: cleanDegrees(pivot.x + dx * cos - dy * sin),
-    y: cleanDegrees(pivot.y + dx * sin + dy * cos),
-  }
-}
-
-function rectPointsAroundCenter(center: ScenePoint, width: number, height: number): ScenePoint[] {
-  const halfWidth = width / 2
-  const halfHeight = height / 2
-  return [
-    { x: center.x - halfWidth, y: center.y - halfHeight },
-    { x: center.x + halfWidth, y: center.y - halfHeight },
-    { x: center.x + halfWidth, y: center.y + halfHeight },
-    { x: center.x - halfWidth, y: center.y + halfHeight },
-  ]
-}
-
-function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const point of points) {
-    if (point.x < minX) minX = point.x
-    if (point.y < minY) minY = point.y
-    if (point.x > maxX) maxX = point.x
-    if (point.y > maxY) maxY = point.y
-  }
-  return {
-    x: minX,
-    y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
-  }
 }
 
 function radiansToDegrees(radians: number): number {
@@ -595,10 +373,6 @@ function clamp(value: number, min: number, max: number): number {
 
 function rootFallbackNumber(...values: readonly number[]): number {
   return values.find((value) => Number.isFinite(value) && value > 0) ?? 1
-}
-
-function cleanDegrees(value: number): number {
-  return Math.abs(value) < 0.0000001 ? 0 : value
 }
 
 function stopCanvasEvent(event: Event): void {

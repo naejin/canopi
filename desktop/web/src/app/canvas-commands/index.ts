@@ -33,6 +33,7 @@ export type CanvasEditAction =
   | 'ungroup'
   | 'bring-to-front'
   | 'send-to-back'
+  | 'rotate'
   | 'lock'
   | 'unlock'
   | 'save-as-stamp'
@@ -67,6 +68,7 @@ export type CanvasCommandId =
   | 'canvas.ungroupSelected'
   | 'canvas.bringToFront'
   | 'canvas.sendToBack'
+  | 'canvas.rotateSelected'
   | 'canvas.lockSelected'
   | 'canvas.unlockSelected'
   | 'canvas.saveSelectionAsStamp'
@@ -96,6 +98,8 @@ export interface CanvasCommandProjectionState {
   readonly hasSelection: boolean
   /** The selection names one species, so "Select all of this species" can run. */
   readonly sameSpeciesSelectionAvailable: boolean
+  /** The selection can turn: editable, nothing locked, more than one plant alone. */
+  readonly rotateAvailable: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly settingsAvailable: boolean
@@ -292,6 +296,7 @@ export const canvasCommandDefinitions: readonly CanvasCommandDefinition[] = [
   edit('ungroup', 'canvas.ungroupSelected', 'menu.edit.ungroup', ['Ctrl+Shift+G']),
   edit('bring-to-front', 'canvas.bringToFront', 'menu.edit.bringToFront', [']']),
   edit('send-to-back', 'canvas.sendToBack', 'menu.edit.sendToBack', ['[']),
+  edit('rotate', 'canvas.rotateSelected', 'menu.edit.rotate', ['Ctrl+Alt+R']),
   edit('lock', 'canvas.lockSelected', 'menu.edit.lock', ['Ctrl+Shift+L']),
   edit('unlock', 'canvas.unlockSelected', 'menu.edit.unlock'),
   edit('save-as-stamp', 'canvas.saveSelectionAsStamp', 'menu.edit.saveAsStamp'),
@@ -374,6 +379,7 @@ const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([
   'ungroup',
   'bring-to-front',
   'send-to-back',
+  'rotate',
   'lock',
   'unlock',
   'save-as-stamp',
@@ -389,6 +395,7 @@ const MUTATING_EDITS: ReadonlySet<CanvasEditAction> = new Set([
   'ungroup',
   'bring-to-front',
   'send-to-back',
+  'rotate',
   'lock',
   'unlock',
   'save-as-stamp',
@@ -416,6 +423,7 @@ export function isCanvasCommandDisabled(
       if (!state.canvasAvailable) return true
       if (MUTATING_EDITS.has(intent.action) && !state.spatialEditingAvailable) return true
       if (intent.action === 'select-same-species') return !state.sameSpeciesSelectionAvailable
+      if (intent.action === 'rotate') return !state.rotateAvailable
       return SELECTION_EDITS.has(intent.action) && !state.hasSelection
     }
   }

@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} bis {{name}}",
       "matureWidth": "Breite ausgewachsen bis {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Auswahl drehen",
+      "angle": "Winkel",
+      "hint": "Dreht die Auswahl um ihre Mitte. Positive Winkel drehen im Uhrzeigersinn.",
+      "invalid": "Geben Sie einen Winkel in Grad ein, etwa 45 oder -30.",
+      "add": "{{degrees}}° hinzufügen",
+      "subtract": "{{degrees}}° abziehen",
+      "cancel": "Abbrechen",
+      "rotate": "Drehen"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "Keine",
     "view.labelsCodes": "Kürzel",
     "view.labelsNames": "Namen",
-    "view.cycleLabels": "Beschriftungen: keine, Kürzel, Namen"
+    "view.cycleLabels": "Beschriftungen: keine, Kürzel, Namen",
+    "edit.rotate": "Drehen…"
   },
   "titleBar": {
     "untitledDesign": "Unbenanntes Design",

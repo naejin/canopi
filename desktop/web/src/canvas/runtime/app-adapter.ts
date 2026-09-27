@@ -66,6 +66,7 @@ export type CanvasContextMenuCommands = Pick<
   | 'unlockSelected'
   | 'groupSelected'
   | 'ungroupSelected'
+  | 'rotateSelected'
 >
 
 /** A viewport (client) rectangle; a pointer is a rectangle of zero size. */

@@ -12,6 +12,7 @@ import type {
 } from '../canvas/runtime/app-adapter'
 import type { CanvasDesignObjectSelectionModel } from '../canvas/runtime/runtime'
 import { t } from '../i18n'
+import { applyRotateSelection, rotateSelectionDialog } from '../app/rotate-selection/state'
 
 function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): CanvasContextMenuCommands {
   return {
@@ -29,6 +30,7 @@ function createCommands(overrides: Partial<CanvasContextMenuCommands> = {}): Can
     unlockSelected: vi.fn(),
     groupSelected: vi.fn(),
     ungroupSelected: vi.fn(),
+    rotateSelected: vi.fn(),
     ...overrides,
   }
 }
@@ -98,7 +100,7 @@ describe('canvas context menu entries', () => {
       'cut', 'copy', 'paste', 'duplicate', '—',
       'select-same-species', 'plant-color', 'plant-symbol', 'toggle-plant-names', '—',
       'bring-to-front', 'send-to-back', '—',
-      'group', 'ungroup', 'save-as-stamp', '—',
+      'group', 'ungroup', 'rotate', 'save-as-stamp', '—',
       'lock', 'unlock', '—',
       'delete',
     ])
@@ -107,7 +109,7 @@ describe('canvas context menu entries', () => {
       'Cut', 'Copy', 'Paste', 'Duplicate',
       'Select all of this species', 'Plant color', 'Plant symbol', 'Show name',
       'Bring to front', 'Send to back',
-      'Group', 'Ungroup', 'Save as stamp',
+      'Group', 'Ungroup', 'Rotate…', 'Save as stamp',
       'Lock', 'Unlock',
       'Delete',
     ])
@@ -115,6 +117,8 @@ describe('canvas context menu entries', () => {
     expect(entries.filter((entry) => 'danger' in entry && entry.danger)).toHaveLength(1)
     expect(item(entries, 'plant-color').opensDialog).toBe(true)
     expect(item(entries, 'plant-symbol').opensDialog).toBe(true)
+    // Rotate… opens a modal dialog, not a popover beside the menu: its ellipsis says so, no chevron.
+    expect(item(entries, 'rotate').opensDialog).toBeUndefined()
   })
 
   it('shows the menu-bar shortcuts beside each command', () => {
@@ -127,6 +131,7 @@ describe('canvas context menu entries', () => {
     expect(item(entries, 'select-same-species').shortcut).toBe('Ctrl Shift A')
     expect(item(entries, 'bring-to-front').shortcut).toBe(']')
     expect(item(entries, 'group').shortcut).toBe('Ctrl G')
+    expect(item(entries, 'rotate').shortcut).toBe('Ctrl Alt R')
     expect(item(entries, 'lock').shortcut).toBe('Ctrl Shift L')
     expect(item(entries, 'lock').keyShortcuts).toBe('Control+Shift+L Meta+Shift+L')
     expect(item(entries, 'delete').shortcut).toBe('Del')
@@ -231,6 +236,32 @@ describe('canvas context menu entries', () => {
     expect(commands.lockSelected).toHaveBeenCalledOnce()
     run('delete')
     expect(commands.deleteSelected).toHaveBeenCalledTimes(2)
+  })
+
+  it('asks for an angle with Rotate… and turns the selection on the request’s surface', () => {
+    const returnFocus = vi.fn()
+    const { entries, commands } = build(ONE_ZONE, { returnFocus })
+
+    item(entries, 'rotate').run()
+    expect(rotateSelectionDialog.value).not.toBeNull()
+    expect(applyRotateSelection('45')).toBe(true)
+
+    expect(commands.rotateSelected).toHaveBeenCalledWith(45)
+    expect(returnFocus).toHaveBeenCalledOnce()
+    expect(rotateSelectionDialog.value).toBeNull()
+  })
+
+  it('keeps Rotate… disabled for a lone plant and for a selection with a locked object', () => {
+    const lonePlant = build(selection({ editableTargets: [{ kind: 'plant', id: 'apple-1' }] })).entries
+    expect(item(lonePlant, 'rotate').disabled).toBe(true)
+    const withLocked = build(selection({
+      editableTargets: [{ kind: 'zone', id: 'zone-1' }],
+      lockedTargets: [{ kind: 'plant', id: 'locked-apple' }],
+      blockedTargets: [{ target: { kind: 'plant', id: 'locked-apple' }, reason: 'locked-design-object', layerName: 'plants' }],
+    })).entries
+    item(withLocked, 'rotate').run()
+    expect(item(withLocked, 'rotate').disabled).toBe(true)
+    expect(rotateSelectionDialog.value).toBeNull()
   })
 
   it('opens the plant color and symbol popovers beside the item, returning focus to the map', () => {

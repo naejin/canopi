@@ -10,6 +10,8 @@ export interface ShortcutInput {
   readonly metaKey: boolean
   readonly shiftKey: boolean
   readonly altKey: boolean
+  /** The physical key (`KeyR`); macOS Option turns `key` into another character. */
+  readonly code?: string
 }
 
 interface ParsedShortcut {
@@ -92,8 +94,11 @@ export function matchesShortcut(shortcut: string, input: ShortcutInput): boolean
   if (!primary || input.altKey !== parsed.alt) return false
   if (parsed.key === 'Plus') return input.key === '+' || input.key === '='
   if (parsed.key === 'Minus') return (input.key === '-' || input.key === '_') && !input.shiftKey
-  return input.shiftKey === parsed.shift
-    && input.key.toLowerCase() === parsed.key.toLowerCase()
+  if (input.shiftKey !== parsed.shift) return false
+  if (input.key.toLowerCase() === parsed.key.toLowerCase()) return true
+  // Option on macOS types another character (⌘⌥R types ®): match that letter by its key.
+  // Only with Cmd, so AltGr (Ctrl Alt elsewhere) typing a character never runs a command.
+  return parsed.alt && input.metaKey && /^[A-Z]$/i.test(parsed.key) && input.code === `Key${parsed.key.toUpperCase()}`
 }
 
 /** Whether a shortcut is a key alone or Shift and a key: those act only while the map has focus. */

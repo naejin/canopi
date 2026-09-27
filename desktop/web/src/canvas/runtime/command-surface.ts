@@ -101,6 +101,7 @@ interface SceneCanvasCommandSurfaceOptions {
     | 'unlockSelected'
     | 'groupSelected'
     | 'ungroupSelected'
+    | 'rotateSelected'
     | 'setSelectedPlantColor'
     | 'setSelectedPlantSymbol'
     | 'setPlantColorForSpecies'
@@ -214,6 +215,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       unlockSelected: () => this.runSpatialEdit(() => this.options.mutations.unlockSelected()),
       groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
       ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
+      rotateSelected: (degrees) => this.runSpatialEdit(() => this.options.mutations.rotateSelected(degrees)),
       nudgeSelected: (delta) => this.nudgeSelected(delta),
       endNudge: (options) => this.endNudge(options),
     }

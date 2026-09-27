@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{distance}} da {{name}}",
       "matureWidth": "Larghezza adulta fino a {{width}}"
+    },
+    "rotateDialog": {
+      "title": "Ruota la selezione",
+      "angle": "Angolo",
+      "hint": "Ruota la selezione attorno al suo centro. Gli angoli positivi ruotano in senso orario.",
+      "invalid": "Inserisci un angolo in gradi, ad esempio 45 o -30.",
+      "add": "Aggiungi {{degrees}}°",
+      "subtract": "Sottrai {{degrees}}°",
+      "cancel": "Annulla",
+      "rotate": "Ruota"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "Nessuna",
     "view.labelsCodes": "Codici",
     "view.labelsNames": "Nomi",
-    "view.cycleLabels": "Etichette: nessuna, codici, nomi"
+    "view.cycleLabels": "Etichette: nessuna, codici, nomi",
+    "edit.rotate": "Ruota…"
   },
   "titleBar": {
     "untitledDesign": "Progetto senza titolo",

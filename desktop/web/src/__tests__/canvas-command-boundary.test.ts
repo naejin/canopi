@@ -167,6 +167,7 @@ describe('Canvas Command Projection boundaries', () => {
       'canvas.ungroupSelected',
       'canvas.bringToFront',
       'canvas.sendToBack',
+      'canvas.rotateSelected',
       'canvas.lockSelected',
       'canvas.unlockSelected',
       'canvas.saveSelectionAsStamp',

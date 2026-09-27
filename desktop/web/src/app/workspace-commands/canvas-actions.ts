@@ -27,6 +27,8 @@ import {
   setCurrentCanvasTool,
 } from '../../canvas/session'
 import type { CanvasCommandSurface } from '../../canvas/runtime/runtime'
+import { selectionCommandAvailability } from '../../canvas/runtime/interaction/contextual-selection-actions'
+import { openRotateSelectionDialog } from '../rotate-selection/state'
 import { t } from '../../i18n'
 
 /**
@@ -39,15 +41,17 @@ export function readWorkspaceCanvasProjectionState(): CanvasCommandProjectionSta
   const queries = currentCanvasQuerySurface.value
   void currentCanvasSelection.value
   const canvasAvailable = surface !== null
+  const hasSelection = currentCanvasHasSelection.value
+  const selection = hasSelection ? queries?.getDesignObjectSelection() ?? null : null
   return {
     activeTool: currentCanvasTool.value,
     canvasAvailable,
     // Choosing a tool before the canvas mounts primes the tool it starts with.
     toolSelectionAvailable: true,
     spatialEditingAvailable: queries?.viewport.value.mode !== 'overview',
-    hasSelection: currentCanvasHasSelection.value,
-    sameSpeciesSelectionAvailable: currentCanvasHasSelection.value
-      && (queries?.getDesignObjectSelection().sameSpeciesReferenceCanonicalName ?? null) !== null,
+    hasSelection,
+    sameSpeciesSelectionAvailable: (selection?.sameSpeciesReferenceCanonicalName ?? null) !== null,
+    rotateAvailable: selection !== null && selectionCommandAvailability(selection).rotate,
     canUndo: surface?.history.canUndo.value ?? false,
     canRedo: surface?.history.canRedo.value ?? false,
     settingsAvailable: canvasAvailable,
@@ -85,6 +89,12 @@ export function runCanvasEditAction(action: CanvasEditAction): void {
       case 'ungroup': sceneEdits.ungroupSelected(); return
       case 'bring-to-front': sceneEdits.bringToFront(); return
       case 'send-to-back': sceneEdits.sendToBack(); return
+      case 'rotate':
+        // Rotate… asks for the angle; the dialog turns whatever canvas is current then.
+        openRotateSelectionDialog({
+          rotate: (degrees) => currentCanvasCommandSurface.peek()?.sceneEdits.rotateSelected(degrees),
+        })
+        return
       case 'lock': sceneEdits.lockSelected(); return
       case 'unlock': sceneEdits.unlockSelected(); return
       case 'save-as-stamp': sceneEdits.saveSelectionAsObjectStamp()

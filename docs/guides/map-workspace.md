@@ -153,6 +153,7 @@ MapLibre errors are routed by the resource they name, read by `maplibre/map-erro
 
 ## Geometry
 
+- `canvas/runtime/scene-runtime/selection-rotation.ts` is the one selection rotation: which selections turn (editable, nothing locked or blocked, no measurement, more than a lone plant), the pivot (the selection bounds' centre) and how plants, notes and zones turn (clockwise for positive degrees, since the plane's y grows southward). The rotation handle's drag and `sceneEdits.rotateSelected(degrees)` (Rotate…, one `rotate-selected` edit) both use it.
 - `canvas/runtime/zone-geometry.ts` is the only zone geometry: rectangle and ellipse are oriented shapes (`rotationDeg`, clockwise from north); ellipses store centre plus radius vector; linear and polygonal zones rotate their points. Rendering, hit testing, band select, bounds, fit, measurements, stamps and Target overlays all use it.
 - Zone selection is boundary-proximity (about 6 px screen tolerance); band select is area-based. Control-point drags keep the zone type, snap to grid and guides and commit one edit only when geometry changed.
 - Zone measurements are derived, pointer-transparent screen overlays shown while drawing and for one selected zone; they describe the snapped preview geometry.

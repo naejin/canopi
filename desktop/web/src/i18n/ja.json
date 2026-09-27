@@ -745,6 +745,16 @@
     "placePreview": {
       "nearest": "{{name}} まで {{distance}}",
       "matureWidth": "成木の幅 最大 {{width}}"
+    },
+    "rotateDialog": {
+      "title": "選択を回転",
+      "angle": "角度",
+      "hint": "選択を中心の周りで回転します。正の角度は時計回りです。",
+      "invalid": "角度を度数で入力してください（例: 45、-30）。",
+      "add": "{{degrees}}° 増やす",
+      "subtract": "{{degrees}}° 減らす",
+      "cancel": "キャンセル",
+      "rotate": "回転"
     }
   },
   "worldMap": {
@@ -1020,7 +1030,8 @@
     "view.labelsNone": "なし",
     "view.labelsCodes": "コード",
     "view.labelsNames": "名前",
-    "view.cycleLabels": "ラベル：なし、コード、名前"
+    "view.cycleLabels": "ラベル：なし、コード、名前",
+    "edit.rotate": "回転…"
   },
   "titleBar": {
     "untitledDesign": "無題のデザイン",

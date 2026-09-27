@@ -29,6 +29,7 @@ function state(overrides: Partial<CanvasCommandProjectionState> = {}): CanvasCom
     spatialEditingAvailable: true,
     hasSelection: false,
     sameSpeciesSelectionAvailable: false,
+    rotateAvailable: false,
     canUndo: false,
     canRedo: false,
     settingsAvailable: true,
@@ -48,7 +49,7 @@ const KEY_NAMES: Record<string, string> = {
 }
 const tagged = (k: string) => KEY_NAMES[k] ?? `t:${k}`
 
-const key = (value: string, modifiers: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) => ({
+const key = (value: string, modifiers: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; code: string }> = {}) => ({
   key: value,
   ctrlKey: false,
   metaKey: false,
@@ -94,6 +95,12 @@ describe('Canvas Command Projection', () => {
     expect(canvasCommandIdForShortcut(key('A', { ctrlKey: true, shiftKey: true }))).toBe('canvas.selectSameSpecies')
     expect(canvasCommandIdForShortcut(key('Backspace'))).toBe('canvas.deleteSelected')
     expect(canvasCommandIdForShortcut(key('E', { shiftKey: true }))).toBeNull()
+    expect(canvasCommandIdForShortcut(key('r', { ctrlKey: true, altKey: true }))).toBe('canvas.rotateSelected')
+    // macOS Option changes the character (⌥R is ®); the physical key still names the shortcut.
+    expect(canvasCommandIdForShortcut(key('®', { metaKey: true, altKey: true, code: 'KeyR' }))).toBe('canvas.rotateSelected')
+    expect(canvasCommandIdForShortcut(key('r', { ctrlKey: true }))).toBeNull()
+    // AltGr (Ctrl Alt) typing a character on Windows or Linux is not the shortcut.
+    expect(canvasCommandIdForShortcut(key('¶', { ctrlKey: true, altKey: true, code: 'KeyR' }))).toBeNull()
   })
 
   it('shows shortcuts with spaces and localized key names, and exposes both modifiers to assistive tech', () => {
@@ -137,18 +144,25 @@ describe('Canvas Command Projection', () => {
     const disabled = (projection: typeof empty) => projection.editActions.filter((edit) => edit.disabled).map((edit) => edit.id)
     expect(disabled(empty)).toEqual([
       'cut', 'copy', 'duplicate', 'delete', 'select-same-species', 'group', 'ungroup',
-      'bring-to-front', 'send-to-back', 'lock', 'unlock', 'save-as-stamp',
+      'bring-to-front', 'send-to-back', 'rotate', 'lock', 'unlock', 'save-as-stamp',
     ])
+    const onePlant = createCanvasCommandProjection({ state: state({ hasSelection: true }), intents: intentAdapter(), translate: (k) => k })
+    // A single plant, a measurement or a locked object cannot turn.
+    expect(disabled(onePlant)).toEqual(['select-same-species', 'rotate'])
 
     const intents = intentAdapter()
     const selected = createCanvasCommandProjection({
-      state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true }),
+      state: state({ hasSelection: true, sameSpeciesSelectionAvailable: true, rotateAvailable: true }),
       intents,
       translate: (k) => k,
     })
     expect(disabled(selected)).toEqual([])
     selected.editActions.find((edit) => edit.id === 'select-same-species')!.action()
     expect(intents.edit).toHaveBeenCalledWith('select-same-species')
+    const rotate = selected.editActions.find((edit) => edit.id === 'rotate')!
+    expect(rotate).toMatchObject({ commandId: 'canvas.rotateSelected', label: 'menu.edit.rotate', ariaShortcut: 'Control+Alt+R Meta+Alt+R' })
+    rotate.action()
+    expect(intents.edit).toHaveBeenCalledWith('rotate')
 
     const noCanvas = createCanvasCommandProjection({ state: state({ canvasAvailable: false }), intents: intentAdapter(), translate: (k) => k })
     expect(noCanvas.editActions.every((edit) => edit.disabled)).toBe(true)
