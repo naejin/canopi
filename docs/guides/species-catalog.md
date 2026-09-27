@@ -65,10 +65,19 @@ When canopi-data adds or removes columns, update everything in one change:
 
 - `species_search_fts` has weighted columns: canonical name, common names, family/genus, uses text and other text. Use the full table name in `MATCH`. Strip FTS metacharacters, and an empty sanitized query skips FTS.
 - Generated `species_search_name_entries` and `species_search_name_entry_tokens` hold selected-language Common Names plus `__canonical__` and `__taxonomy__` rows for active search. `species_search_common_name_tokens` serves the plans without that index. Query tokenization must match `prepare-db.py` `common_name_tokens()`.
-- Ranking: exact displayed Common Name, then prefix, then contains-all-tokens, then selected-language alternate (Matched) Common Names, then `bm25(species_search_fts, 8, 10, 5, 1, 1)`. English names never stand in for another selected language. Browse uses Canonical Name order. There are no user sort controls.
+- Ranking: exact displayed Common Name, then prefix, then contains-all-tokens, then selected-language alternate (Matched) Common Names, then `bm25(species_search_fts, 8, 10, 5, 1, 1)`. English names never stand in for another selected language. An active search text always ranks by relevance; the chosen browse order returns when the text is cleared.
 - Admission (shared by every runtime): no normalized token browses, one token stays local as too short, and two or more tokens search with exact first-page counts omitted (`include_total=false`). Paginate with `next_cursor`, never `total_estimate`.
 - Desktop search runs in the executor's `Catalog` class with generation checks, a generation-aware SQLite progress handler and interrupt-based supersession (`supersede_species_search`, a reviewed synchronous command). Deliver the interrupt while holding the cancellation mutex. Only the search that currently owns the connection is interruptible. Species Detail records Recently Viewed only after it releases the plant DB guard.
 - Latency harness: `cargo test -p canopi-desktop services::species_catalog_read::search::tests::bundled_species_search_latency_harness_reports_list_and_count_timings -- --ignored --nocapture` (uses `CANOPI_PLANT_DB_PATH` or the bundled DB).
+
+## Browse order
+
+Without search text the catalog browses in a `Sort` order (`common-types/src/species.rs`): **Recommended** (the default), Name, Height (tallest first) or Edibility. The panel's Sort menu offers the orders the edition's workbench lists in `browseSorts`.
+
+- **Recommended** puts what an agroforestry designer can use first, from signals the catalog already has: species with PFAF-style use ratings (about 8,200 of 175,473) by edibility, then other uses, then medicinal rating; then unrated species with a Common Name in the interface language; then the rest. Each group is in scientific-name order. Obscure species with no name and no data no longer open the list.
+- Height and Edibility list species with a value first (highest first), then the rest by scientific name. Name is scientific-name order.
+- Desktop pages each order as keyset **phases** (`desktop/src/db/query_builder/`): each phase has an indexed predicate and either a numeric key or the Canonical Name, and the cursor carries the phase, the key and the Canonical Name. The list statement unions one `LIMIT`ed subquery per remaining phase in a `MATERIALIZED` CTE, so every page is an index walk: the rated phase sorts at most the rated species (about 22 ms on the full catalog), and every other phase walks `idx_species_canonical`, `idx_species_edibility` or `idx_species_height_max` (1–7 ms; the latency harness below reports pages 1, 100 and 250 of each order). A cursor that does not fit the order restarts the browse. Never order a browse by an expression over the whole table or page with `OR … IS NULL` cursors: both fall back to a full sort (700–950 ms).
+- Web: the artifact has no ratings or heights, so Web offers Recommended (species with a Common Name in the interface language first, then the rest, by scientific name) and Name only.
 
 ## Translations and common names
 
