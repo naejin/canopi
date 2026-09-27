@@ -1,8 +1,8 @@
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useRef } from 'preact/hooks'
 import { plantDbStatus } from '../../app/health/state'
 import { t } from '../../i18n'
 import { Notice } from './Notice'
-import { useMapOccluder } from './useMapChrome'
+import { useChromeRow } from './useMapChrome'
 import { useModalInertRegion } from './useModalLayer'
 import styles from './DegradedBanner.module.css'
 
@@ -17,33 +17,11 @@ export function DegradedBanner() {
   return <DegradedNotice message={message} />
 }
 
-/**
- * A row of its own below the title bar. Everything that starts under the title
- * bar (rails, dock, tool cards, chips, the start screen) is placed from
- * `--chrome-rail-top`, so the notice lowers that line on its container while it
- * shows instead of covering controls.
- */
+/** A row of its own below the title bar (`useChromeRow`). */
 function DegradedNotice({ message }: { readonly message: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  // Fits and chips keep below it too.
-  useMapOccluder(ref, 'top')
+  useChromeRow(ref)
   useModalInertRegion(ref)
-
-  useLayoutEffect(() => {
-    const notice = ref.current
-    const host = notice?.parentElement
-    if (!notice || !host) return
-    const reserve = () => {
-      host.style.setProperty('--chrome-rail-top', `calc(${notice.offsetTop + notice.offsetHeight}px + var(--space-2))`)
-    }
-    reserve()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reserve)
-    observer?.observe(notice)
-    return () => {
-      observer?.disconnect()
-      host.style.removeProperty('--chrome-rail-top')
-    }
-  }, [])
 
   return (
     <div ref={ref} className={styles.banner}>

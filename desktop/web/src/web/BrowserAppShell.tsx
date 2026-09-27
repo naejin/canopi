@@ -6,6 +6,7 @@ import { ControlIcon } from "../components/shared/ControlIcon";
 import { DesignNameField } from "../components/shared/DesignNameField";
 import { PanelRail } from "../components/shared/PanelRail";
 import { SaveStatusLabel } from "../components/shared/SaveStatusLabel";
+import { useChromeRow } from "../components/shared/useMapChrome";
 import { useModalInertRegion } from "../components/shared/useModalLayer";
 import { WorkspaceTitleBar } from "../components/shared/WorkspaceTitleBar";
 import titleBarStyles from "../components/shared/WorkspaceTitleBar.module.css";
@@ -14,7 +15,11 @@ import {
   type BrowserShellDesignIdentity,
   type BrowserShellProjectedCommand,
 } from "./browser-shell-commands";
-import { browserShellNotice, dismissBrowserShellNotice } from "./browser-shell-notice";
+import {
+  browserShellNotice,
+  dismissBrowserShellNotice,
+  type BrowserShellNotice as BrowserShellNoticeState,
+} from "./browser-shell-notice";
 import styles from "./BrowserAppShell.module.css";
 
 interface BrowserAppShellProps {
@@ -102,25 +107,33 @@ export function BrowserAppShell({
           commandProjection.panelBar.planning,
         ]}
       />
-      {notice ? (
-        <div
-          className={styles.notice}
-          role={notice.tone === "error" ? "alert" : "status"}
-          data-tone={notice.tone}
-          data-web-shell-notice
-        >
-          <span className={styles.noticeTitle}>{notice.title}</span>
-          <span className={styles.noticeMessage}>{notice.message}</span>
-          <button
-            type="button"
-            className={styles.noticeDismiss}
-            aria-label={t("webShell.dismissNotice")}
-            onClick={dismissBrowserShellNotice}
-          >
-            <ControlIcon name="close" />
-          </button>
-        </div>
-      ) : null}
+      {notice ? <ShellNotice notice={notice} /> : null}
+    </div>
+  );
+}
+
+/** The one dismissible Web notice: a row of its own below the title bar (`useChromeRow`). */
+function ShellNotice({ notice }: { readonly notice: BrowserShellNoticeState }) {
+  const row = useRef<HTMLDivElement>(null);
+  useChromeRow(row);
+  return (
+    <div
+      ref={row}
+      className={styles.notice}
+      role={notice.tone === "error" ? "alert" : "status"}
+      data-tone={notice.tone}
+      data-web-shell-notice
+    >
+      <span className={styles.noticeTitle}>{notice.title}</span>
+      <span className={styles.noticeMessage}>{notice.message}</span>
+      <button
+        type="button"
+        className={styles.noticeDismiss}
+        aria-label={t("webShell.dismissNotice")}
+        onClick={dismissBrowserShellNotice}
+      >
+        <ControlIcon name="close" />
+      </button>
     </div>
   );
 }

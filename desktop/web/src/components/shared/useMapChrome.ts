@@ -42,3 +42,29 @@ export function usePublishedWidth(ref: RefObject<HTMLElement>, property: `--${st
     }
   }, [ref, property])
 }
+
+/**
+ * An app-wide notice's own row below the title bar. Everything that starts
+ * under the title bar (rails, dock, tool cards, chips, the start screen) is
+ * placed from `--chrome-rail-top`, so the row lowers that line on its
+ * container while it shows instead of covering controls; fitting and chips
+ * keep below it too.
+ */
+export function useChromeRow(ref: RefObject<HTMLElement>): void {
+  useMapOccluder(ref, 'top')
+  useLayoutEffect(() => {
+    const row = ref.current
+    const host = row?.parentElement
+    if (!row || !host) return
+    const reserve = () => {
+      host.style.setProperty('--chrome-rail-top', `calc(${row.offsetTop + row.offsetHeight}px + var(--space-2))`)
+    }
+    reserve()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reserve)
+    observer?.observe(row)
+    return () => {
+      observer?.disconnect()
+      host.style.removeProperty('--chrome-rail-top')
+    }
+  }, [ref])
+}

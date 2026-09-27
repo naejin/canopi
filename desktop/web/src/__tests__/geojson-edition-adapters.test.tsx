@@ -216,12 +216,17 @@ describe('Web GeoJSON file adapter and notice', () => {
       const notice = container.querySelector<HTMLElement>('[data-web-shell-notice]')!
       expect(notice.getAttribute('role')).toBe('alert')
       expect(notice.textContent).toContain('Feature 2 has invalid geometry.')
+      // Its own row below the title bar: the rail, the dock and the chips start below it.
+      const shell = container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!
+      expect(notice.parentElement).toBe(shell)
+      expect(shell.style.getPropertyValue('--chrome-rail-top')).toMatch(/^calc\(\d+px \+ var\(--space-2\)\)$/)
 
       await act(async () => {
         notice.querySelector('button')!.click()
       })
       expect(browserShellNotice.value).toBeNull()
       expect(container.querySelector('[data-web-shell-notice]')).toBeNull()
+      expect(container.querySelector<HTMLElement>('[data-testid="browser-app-shell"]')!.style.getPropertyValue('--chrome-rail-top')).toBe('')
     } finally {
       render(null, container)
       container.remove()
