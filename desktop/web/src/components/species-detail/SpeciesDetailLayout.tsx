@@ -93,8 +93,8 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
               {titleIsScientific ? <i>{title}</i> : title}
               {englishFallback && (
                 <>
-                  {' '}<span className={styles.fallbackMark} aria-hidden="true">(en)</span>
-                  <span className={row.srOnly}>{t('plantDetail.englishFallbackNote')}</span>
+                  {' '}<span className={styles.fallbackMark} aria-hidden="true">{t('speciesName.englishMark')}</span>
+                  <span className={row.srOnly}>{t('speciesName.englishFallbackNote')}</span>
                 </>
               )}
             </h2>

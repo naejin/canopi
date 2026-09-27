@@ -33,7 +33,7 @@ export const canvasPdf = createPdfWorkflow({
     detail: t('pdf.detail'), measurementSummary: t('pdf.measurementSummary'), zone: t('pdf.zone'), longSide: t('pdf.longSide'), width: t('pdf.width'), guides: t('pdf.guides'),
     metres: t('pdf.metres'), diameters: t('pdf.diameters'), outerSides: t('pdf.outerSides'), quantity: t('pdf.quantity'), species: t('pdf.species'), plantKey: t('pdf.plantKey'),
     habitTree: t('pdf.habitTree'), habitShrub: t('pdf.habitShrub'), habitHerbaceous: t('pdf.habitHerbaceous'), habitClimber: t('pdf.habitClimber'),
-    habitOther: t('pdf.habitOther'), continued: t('pdf.continued'), englishFallback: t('pdf.englishFallback'), symbols: t('pdf.symbols'), north: t('pdf.north'),
+    habitOther: t('pdf.habitOther'), continued: t('pdf.continued'), englishFallback: t('pdf.englishFallback', { mark: t('speciesName.englishMark') }), englishMark: t('speciesName.englishMark'), symbols: t('pdf.symbols'), north: t('pdf.north'),
     symbolNames: symbolNames() }),
   namePrintArea: (number) => t('pdf.areaName', { number }),
   fontBaseUrl: () => new URL(`${import.meta.env.BASE_URL}pdf-fonts/`, document.baseURI).href,

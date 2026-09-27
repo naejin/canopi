@@ -64,7 +64,7 @@ describe('Title bar menu: Open recent', () => {
     await renderAndOpenFileMenu()
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
     expect(openRecent.getAttribute('aria-disabled')).toBe('true')
@@ -86,7 +86,7 @@ describe('Title bar menu: Open recent', () => {
     })
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
     expect(getRecentFiles).toHaveBeenCalledTimes(2)
@@ -112,7 +112,7 @@ describe('Title bar menu: Open recent', () => {
     await renderAndOpenFileMenu()
 
     const openRecent = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent?.includes('Open Recent'))
+      .find((button) => button.textContent?.includes('Open recent'))
     if (!openRecent) throw new Error('Missing Open Recent item')
 
     expect(openRecent.getAttribute('aria-disabled')).toBeNull()

@@ -70,7 +70,7 @@ export function CommandPalette() {
           ref={inputRef}
           className={styles.input}
           type="text"
-          placeholder={t("commands.searchPlaceholder") || "Type a command..."}
+          placeholder={t("commands.searchPlaceholder")}
           value={query}
           onInput={(e) => {
             setQuery((e.target as HTMLInputElement).value);

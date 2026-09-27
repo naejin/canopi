@@ -155,7 +155,7 @@ describe('Canvas Layer Presentation', () => {
       },
       {
         id: 'measurement-guides',
-        label: 'Measurement Guides',
+        label: 'Measurement guides',
         authority: 'scene',
         active: false,
         visible: true,

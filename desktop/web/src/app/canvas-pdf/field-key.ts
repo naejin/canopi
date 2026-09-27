@@ -71,7 +71,7 @@ export function fieldKey(drawing: FieldDrawing, sourceId: string, geometry: (ind
     const indent = 16 * MM, result: Row[] = []
     const samplesPerRow = Math.max(1, Math.floor((available - 10 * MM) / (2 * PRINT.marker + MM)))
     const nameSize = body.compact ? 9.5 : 10, canonicalSize = body.compact ? 7.5 : 8
-    result.push({ lines: text.wrap(entry.englishFallback ? `${entry.name} (en)` : entry.name, nameSize, available - indent - 8 * MM), size: nameSize, color: PRINT.ink, indent, samples: entry.appearances.slice(0, 1) })
+    result.push({ lines: text.wrap(entry.englishFallback ? `${entry.name} ${wording.englishMark}` : entry.name, nameSize, available - indent - 8 * MM), size: nameSize, color: PRINT.ink, indent, samples: entry.appearances.slice(0, 1) })
     const secondary = entry.name !== entry.canonicalName ? entry.canonicalName : ''
     if (secondary) result.push({ lines: text.wrap(secondary, canonicalSize, available - (body.compact ? 0 : indent)), size: canonicalSize, color: '#655f55', indent: body.compact ? 0 : indent })
     for (let i = 1; i < entry.appearances.length; i += samplesPerRow)

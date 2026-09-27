@@ -33,7 +33,7 @@ it('opens with one overview and explicitly adds a whole-design field sheet', asy
     expect(container.querySelector('[role="alert"]')).toBeNull()
     expect(workflow.state.value.result!.plan.pages).toHaveLength(1)
     await act(async () => { inSheet(button('Add field sheet')).click() })
-    await act(async () => { inSheet(button('Whole design')).click() })
+    await act(async () => { inSheet(button('Whole Design')).click() })
     for (const name of ['Fit', 'Zoom in', 'Zoom out', 'Automatic', 'Portrait', 'Landscape', 'Split into readable sheets']) inSheet(button(name))
     inSheet(container.querySelector<HTMLInputElement>('input[aria-label="Canvas zoom (%)"]')!)
     // Displacement is keyboard-driven on the focusable page editor.

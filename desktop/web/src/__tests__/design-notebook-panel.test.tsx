@@ -271,7 +271,7 @@ describe('DesignNotebookPanel', () => {
     expect(container.querySelector('button[aria-label="Pin Forest Edge"]')).toBeNull()
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Forest Edge from Notebook"]')
+      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Forest Edge from the notebook"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await Promise.resolve()
     })
@@ -353,7 +353,7 @@ describe('DesignNotebookPanel', () => {
     await act(flushEffects)
     expect(container.textContent).toContain('Garden')
     expect(container.querySelector('[aria-label="Notebook section for current Design"]')).toBeNull()
-    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Add current design to notebook"]')!.click(); await flushEffects() })
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Add the current Design to the notebook"]')!.click(); await flushEffects() })
     expect(addDesignReference).toHaveBeenCalledWith('/designs/current.canopi', testDesign())
     expect(moveEntryToSection).toHaveBeenCalledWith('/designs/current.canopi', 'garden')
     workbench.dispose()
@@ -401,7 +401,7 @@ describe('DesignNotebookPanel', () => {
     })
     await act(flushEffects)
 
-    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')
+    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add the current Design to the notebook"]')
     if (!addButton) throw new Error('Missing add-current button')
 
     await act(async () => {
@@ -412,7 +412,7 @@ describe('DesignNotebookPanel', () => {
 
     expect(saveAsCurrent).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Current Design')
-    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Add current design to notebook"]')?.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Add the current Design to the notebook"]')?.disabled).toBe(true)
   })
 
   it('drags Notebook Sections directly by title', async () => {

@@ -218,7 +218,7 @@ describe('CanvasPanel basemap feedback', () => {
     })
 
     const status = container.querySelector('[role="status"]')
-    expect(status?.textContent).toContain('Map Layers: dem fetch failed')
+    expect(status?.textContent).toContain('Map layers: dem fetch failed')
     expect(container.querySelector('[data-map-active="true"]')).toBeTruthy()
   })
 })

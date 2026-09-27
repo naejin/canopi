@@ -162,7 +162,7 @@ describe('Species detail (Desktop)', () => {
     expect(facts().soil).toBe('pH 5,5–7')
   })
 
-  it('marks an English fallback name with "(en)" when the language has none', async () => {
+  it('marks an English fallback name with the localized English mark when the language has none', async () => {
     locale.value = 'fr'
     ipc.getCommonNames.mockResolvedValue({ 'Ribes nigrum': 'Blackcurrant' })
     await open(emptySpeciesDetail('Ribes nigrum'))
@@ -171,7 +171,7 @@ describe('Species detail (Desktop)', () => {
     expect(ipc.getCommonNames).toHaveBeenCalledWith(['Ribes nigrum'], 'en')
     expect(title.getAttribute('lang')).toBe('en')
     expect(title.textContent).toContain('Blackcurrant')
-    expect(title.textContent).toContain('(en)')
+    expect(title.textContent).toContain('(angl.)')
     expect(container.querySelector('p i[lang="la"]')?.textContent).toBe('Ribes nigrum')
   })
 

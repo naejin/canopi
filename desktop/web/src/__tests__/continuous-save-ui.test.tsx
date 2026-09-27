@@ -186,7 +186,7 @@ describe('SaveProblemDialog', () => {
       decision = requestSaveProblemDecision({ kind: 'conflict', fileGone: true })
     })
     expect(container.textContent).toContain('File moved or deleted')
-    expect(labels()).toEqual(['Save As…', 'Keep my version', 'Cancel'])
+    expect(labels()).toEqual(['Save as…', 'Keep my version', 'Cancel'])
     await act(async () => {
       buttons()[1]?.click()
     })

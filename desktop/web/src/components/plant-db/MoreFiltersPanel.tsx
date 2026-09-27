@@ -68,7 +68,7 @@ export function MoreFiltersPanel({ open, onClose }: Props) {
           <input
             type="text"
             className={styles.searchInput}
-            placeholder={t('filters.searchFields', 'Search fields...')}
+            placeholder={t('filters.searchFields')}
             value={searchQuery.value}
             onInput={(e) => { searchQuery.value = (e.target as HTMLInputElement).value }}
           />
@@ -262,7 +262,7 @@ function FieldRow({ field }: { field: FieldDef }) {
             />
           )}
 
-          {isLoading && <span className={styles.loading}>{t('plantDb.loading', 'Loading...')}</span>}
+          {isLoading && <span className={styles.loading}>{t('plantDb.loading')}</span>}
           {!isLoading && error && (
             <div className={styles.errorState}>
               <span className={styles.errorText}>

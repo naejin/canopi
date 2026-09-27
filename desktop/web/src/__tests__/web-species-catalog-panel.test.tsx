@@ -531,7 +531,7 @@ describe('Web Edition Species Catalog panel', () => {
 
     const title = requiredElement<HTMLHeadingElement>('[data-testid="species-detail"] h2')
     expect(title.textContent).toContain('Blackcurrant')
-    expect(title.textContent).toContain('(en)')
+    expect(title.textContent).toContain('(angl.)')
     expect(container.querySelector('[data-testid="species-detail"] p i[lang="la"]')?.textContent).toBe('Ribes nigrum')
     expect(Array.from(container.querySelectorAll('[data-fact] dd')).map((cell) => cell.textContent))
       .toEqual(['Non renseigné', 'Non renseigné', 'Non renseigné'])

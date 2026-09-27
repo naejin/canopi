@@ -77,7 +77,7 @@ describe('Layers data band', () => {
   it('sends an empty Design to the Data Library to add data', async () => {
     act(() => { render(<LidarLayersSection />, container) })
     expect(container.textContent).toContain('No data in this Design')
-    await click(button('Open Data Library'))
+    await click(button('Open the Data library'))
     expect(sidePanel.value).toBe('data')
   })
 
@@ -105,7 +105,7 @@ describe('Layers data band', () => {
     await click(container.querySelector('li strong')!.closest('button')!)
 
     expect(container.querySelector('[aria-label="Legend"]')).not.toBeNull()
-    await click(button('Open in Data Library'))
+    await click(button('Open in the Data library'))
     expect(libraryFocusRequest.value).toBe('a')
     expect(sidePanel.value).toBe('data')
     await click(button('Analyze…'))

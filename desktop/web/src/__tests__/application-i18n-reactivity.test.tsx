@@ -65,7 +65,7 @@ describe('application translation authority', () => {
     })
 
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
-      .toBe('Command Palette')
+      .toBe('Command palette')
     expect(container.textContent).toContain('New Design')
 
     await act(async () => {

@@ -96,7 +96,7 @@ describe('ProblemReportDialog', () => {
 
     const dialog = container.querySelector('[role="dialog"]')
     expect(dialog).not.toBeNull()
-    expect(dialog!.textContent).toContain('Report a Problem')
+    expect(dialog!.textContent).toContain('Report a problem')
 
     const description = container.querySelector('textarea') as HTMLTextAreaElement
     const currentDesignAttachment = container.querySelector(
@@ -128,7 +128,7 @@ describe('ProblemReportDialog', () => {
 
     await act(async () => {
       const copyButton = Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent?.includes('Copy Summary'))!
+        .find((button) => button.textContent?.includes('Copy summary'))!
       copyButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
@@ -190,7 +190,7 @@ describe('ProblemReportDialog', () => {
     })
 
     const showButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Show Folder'),
+      button.textContent?.includes('Show folder'),
     )
     expect(showButton).toBeDefined()
 

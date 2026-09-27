@@ -330,7 +330,7 @@ describe('FavoritesPanel', () => {
     expect(saveSelectionMock).not.toHaveBeenCalled()
 
     const importButton = [...container.querySelectorAll('button')]
-      .find((button) => button.getAttribute('aria-label') === 'Import')
+      .find((button) => button.getAttribute('aria-label') === 'Import stamps…')
     expect(importButton).toBeTruthy()
 
     await act(async () => {
@@ -351,7 +351,7 @@ describe('FavoritesPanel', () => {
     expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
 
     await openStampActions()
-    const exportButton = document.querySelector<HTMLButtonElement>('button[aria-label="Export"]')
+    const exportButton = document.querySelector<HTMLButtonElement>('button[aria-label="Export stamp…"]')
     expect(exportButton).toBeTruthy()
 
     await act(async () => {
@@ -409,7 +409,7 @@ describe('FavoritesPanel', () => {
 
     await openStampActions()
     expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeTruthy()
-    expect(document.querySelector('button[aria-label="Export"]')).toBeTruthy()
+    expect(document.querySelector('button[aria-label="Export stamp…"]')).toBeTruthy()
     expect(document.querySelector('button[aria-label="Rename"]')).toBeTruthy()
     expect(document.querySelector('button[aria-label="Delete"]')).toBeTruthy()
 
@@ -423,7 +423,7 @@ describe('FavoritesPanel', () => {
     const renameInput = container.querySelector<HTMLInputElement>('input[aria-label="Stamp name"]')
     expect(renameInput).toBeTruthy()
     expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
-    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export stamp…"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
 
@@ -465,7 +465,7 @@ describe('FavoritesPanel', () => {
     })
     expect(container.textContent).toContain('Delete this saved stamp?')
     expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
-    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export stamp…"]')).toBeNull()
     expect(document.querySelector('button[aria-label="Rename"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm delete"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel delete"]')).toBeTruthy()
@@ -577,7 +577,7 @@ describe('FavoritesPanel', () => {
     expect(renameInput?.selectionStart).toBe(0)
     expect(renameInput?.selectionEnd).toBe('Pommier, Lavande'.length)
     expect(container.querySelector('button[aria-label^="Place stamp "]')).toBeNull()
-    expect(document.querySelector('button[aria-label="Export"]')).toBeNull()
+    expect(document.querySelector('button[aria-label="Export stamp…"]')).toBeNull()
     expect(container.querySelector('button[aria-label="Confirm rename"]')).toBeTruthy()
     expect(container.querySelector('button[aria-label="Cancel rename"]')).toBeTruthy()
   })
