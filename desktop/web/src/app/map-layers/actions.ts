@@ -58,3 +58,12 @@ export function saveGoogleMapsApiKey(key: string | null): void {
     settings.googleMapsApiKey = trimmed || null
   }, { persist: 'immediate' })
 }
+
+/**
+ * Display on the map › Soften background: dims the Basemap or Satellite under
+ * the Design so plant symbols stand out. A device setting, like the rest of
+ * the map layer store; it never changes plant colours.
+ */
+export function setSoftenBackground(soften: boolean): void {
+  updateMapLayers((state) => ({ ...state, softenBackground: soften }), 'immediate')
+}

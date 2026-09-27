@@ -27,6 +27,7 @@ import { speciesTarget } from '../target'
 import type { CanopiFile, PlacedPlant } from '../types/design'
 import { designSessionFixture, replaceCurrentDesignState } from './support/design-session-state'
 import { currentDesign } from '../app/document-session/store'
+import { mapLayers } from '../app/map-layers/state'
 import { setPlantLabels } from '../app/plant-display/actions'
 import { PLANT_LABELS_CHIP_MS, PlantLabelsChip } from '../components/canvas/PlantLabelsChip'
 import { NO_STRATUM_DISPLAY_COLOR, STRATUM_DISPLAY_COLORS } from '../canvas/runtime/plant-display'
@@ -355,6 +356,33 @@ describe('Plants in this Design', () => {
     expect(queries.getSceneSnapshot().plants.every((plant) => plant.color === '#3e8e4e')).toBe(true)
   })
 
+  it('sets symbol size and outline for the Design and softens the background on this device', async () => {
+    replaceCurrentDesignState(emptyDesign(), null, 'Display')
+    readPlanningViewState().plantsDisplayOpen.value = true
+    await act(() => render(<SpeciesKeyPanel />, container))
+    const size = container.querySelector<HTMLInputElement>('input[type="range"]')!
+    expect(size.getAttribute('aria-valuetext')).toBe('100%')
+    await act(() => {
+      size.value = '150'
+      size.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ symbol_scale: 1.5 })
+
+    const outline = switchNamed('Outline')
+    expect(outline.checked).toBe(true)
+    await act(() => outline.click())
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ outline: false })
+
+    const soften = switchNamed('Soften background')
+    expect(soften.checked).toBe(false)
+    await act(() => soften.click())
+    expect(mapLayers.value.softenBackground).toBe(true)
+    // A device setting: the Design keeps no trace of it.
+    expect(JSON.stringify(currentDesign.value?.extra)).not.toContain('soften')
+    await act(() => switchNamed('Soften background').click())
+    expect(mapLayers.value.softenBackground).toBe(false)
+  })
+
   it('says how many plants in view carry a label', async () => {
     replaceCurrentDesignState(emptyDesign(), null, 'Display')
     readPlanningViewState().plantsDisplayOpen.value = true
@@ -387,6 +415,11 @@ describe('Plants in this Design', () => {
 
   function buttonNamed(name: string): HTMLButtonElement {
     return [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === name)!
+  }
+
+  function switchNamed(name: string): HTMLInputElement {
+    return [...container.querySelectorAll<HTMLInputElement>('input[role="switch"]')]
+      .find((input) => input.closest('label')?.textContent?.startsWith(name))!
   }
 
   function glyphColor(name: string): string {

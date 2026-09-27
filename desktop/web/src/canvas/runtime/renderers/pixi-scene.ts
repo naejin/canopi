@@ -844,15 +844,18 @@ function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, 
   const color = toPixiColor(entry.color, 0)
   if (entry.lod === 'dot' || symbol === 'round') {
     graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: opacity })
-    if (entry.lod !== 'dot') graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width: getPlantSymbolEdgeWidth(r * 2), alpha: opacity })
+    const width = getPlantSymbolEdgeWidth(r * 2)
+    if (entry.lod !== 'dot' && width > 0) graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width, alpha: opacity })
     return
   }
   const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
   const width = getPlantSymbolEdgeWidth(r * 2)
   const art = getPlantSymbolArt(symbol, r * 2)
-  // Halo under the whole silhouette, then the body, then cut-outs in the outline colour.
-  tracePlantSymbolContours(graphics, art.body, x, y, r)
-  graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' })
+  // Halo under the whole silhouette (unless Outline is off), then the body, then cut-outs in the outline colour.
+  if (width > 0) {
+    tracePlantSymbolContours(graphics, art.body, x, y, r)
+    graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' })
+  }
   tracePlantSymbolContours(graphics, art.body, x, y, r)
   graphics.fill({ color, alpha: opacity })
   if (art.cutouts.length === 0) return

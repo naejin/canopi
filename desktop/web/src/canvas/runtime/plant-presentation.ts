@@ -262,7 +262,9 @@ function resolvePlantRadiusPresentation(
 ): { radiusWorld: number; radiusScreenPx: number; usesCanopyRadius: boolean } {
   const scale = Math.max(context.viewport.scale, .001)
   const spacing = context.plants ? nearestPlantSpacing(context.plants, plant.position) : Infinity
-  const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42))
+  // Display › Symbol size scales the footprint, so drawing, hit testing and bounds agree.
+  const radiusScreenPx = Math.max(.65, Math.min(getSymbolicPlantRadiusScreenPx(scale), spacing * scale * .42)
+    * getCanvasPlantDisplay().symbolScale)
   return { radiusWorld: radiusScreenPx / scale, radiusScreenPx, usesCanopyRadius: false }
 }
 

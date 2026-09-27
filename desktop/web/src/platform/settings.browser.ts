@@ -59,6 +59,7 @@ function readBrowserSettings(stored: Record<string, unknown> | null): Settings {
       value.hillshade_opacity,
       DEFAULT_SETTINGS.hillshade_opacity,
     ),
+    soften_background: readBoolean(value.soften_background, DEFAULT_SETTINGS.soften_background),
     plant_spacing_interval_m: readFiniteNumber(
       value.plant_spacing_interval_m,
       DEFAULT_SETTINGS.plant_spacing_interval_m,

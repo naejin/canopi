@@ -53,6 +53,9 @@ pub struct Settings {
     pub contour_interval: u32,
     pub hillshade_visible: bool,
     pub hillshade_opacity: f32,
+    /// Display on the map › Soften background: dims the Basemap or Satellite
+    /// under every Design so plant symbols stand out. A device preference.
+    pub soften_background: bool,
     #[serde(default = "default_plant_spacing_interval_m")]
     pub plant_spacing_interval_m: f64,
     /// The camera view last shown on a Design; a new Design opens here.
@@ -92,6 +95,7 @@ impl Default for Settings {
             contour_interval: 0,
             hillshade_visible: false,
             hillshade_opacity: 0.55,
+            soften_background: false,
             plant_spacing_interval_m: default_plant_spacing_interval_m(),
             last_view: None,
             used_canvas_tools: Vec::new(),
@@ -180,6 +184,17 @@ mod tests {
 
             assert_eq!(settings.basemap_style, *style);
         }
+    }
+
+    #[test]
+    fn soften_background_defaults_off_and_round_trips() {
+        assert!(!Settings::default().soften_background);
+        let settings: Settings =
+            serde_json::from_value(serde_json::json!({ "soften_background": true }))
+                .expect("soften background should load");
+        assert!(settings.soften_background);
+        let value = serde_json::to_value(&settings).expect("settings should serialize");
+        assert_eq!(value["soften_background"], serde_json::json!(true));
     }
 
     #[test]

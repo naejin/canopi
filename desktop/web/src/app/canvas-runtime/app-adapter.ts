@@ -6,7 +6,7 @@ import type {
   CanvasRuntimeSavedObjectStampAdapter,
 } from '../../canvas/runtime/app-adapter'
 import type { CanvasMapBackdrop } from '../../canvas/runtime/scene-visuals'
-import { mapBackgroundOf, mapLayers, type MapLayersState } from '../map-layers/state'
+import { effectiveBackgroundOpacity, mapBackgroundOf, mapLayers, type MapLayersState } from '../map-layers/state'
 import {
   gridVisible,
   layerLockState,
@@ -114,9 +114,9 @@ const BACKDROP_OPACITY_THRESHOLD = 0.5
 function mapBackdropOf(state: MapLayersState): CanvasMapBackdrop {
   switch (mapBackgroundOf(state)) {
     case 'satellite':
-      return state.satellite.opacity < BACKDROP_OPACITY_THRESHOLD ? 'paper' : 'satellite'
+      return effectiveBackgroundOpacity(state, 'satellite') < BACKDROP_OPACITY_THRESHOLD ? 'paper' : 'satellite'
     case 'basemap':
-      if (state.basemap.opacity < BACKDROP_OPACITY_THRESHOLD) return 'paper'
+      if (effectiveBackgroundOpacity(state, 'basemap') < BACKDROP_OPACITY_THRESHOLD) return 'paper'
       return state.basemap.style === 'dark' ? 'dark-basemap' : 'basemap'
     case 'none':
       return 'paper'

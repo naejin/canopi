@@ -31,9 +31,12 @@ import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SegmentedControl } from '../shared/SegmentedControl'
+import { Switch } from '../shared/Switch'
 import {
   NO_STRATUM_DISPLAY_COLOR,
   PLANT_DISPLAY_STRATA,
+  PLANT_SYMBOL_SCALE_MAX,
+  PLANT_SYMBOL_SCALE_MIN,
   STRATUM_DISPLAY_COLORS,
   type PlantColorMode,
   type PlantLabelMode,
@@ -41,6 +44,8 @@ import {
 import { setPlantDisplayOptions, setPlantLabels } from '../../app/plant-display/actions'
 import { plantLabelCoverageText } from '../../app/plant-display/coverage'
 import { currentPlantDisplay, displayedPlantColor } from '../../app/plant-display/state'
+import { setSoftenBackground } from '../../app/map-layers/actions'
+import { mapLayers } from '../../app/map-layers/state'
 import { currentDesign } from '../../app/document-session/store'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import row from '../shared/species-row.module.css'
@@ -187,6 +192,7 @@ function DisplayOnMap() {
   const bodyId = useId()
   const display = currentPlantDisplay.value
   const hasDesign = currentDesign.value !== null
+  const sizePercent = Math.round(display.symbolScale * 100)
   const hint = display.colorBy === 'stratum'
     ? t('speciesKey.stratumHint')
     : display.colorBy === 'one-color' ? t('speciesKey.oneColorHint') : t('speciesKey.swatchHint')
@@ -230,6 +236,29 @@ function DisplayOnMap() {
             </label>
           )}
           {display.colorBy === 'stratum' && <StratumLegend />}
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              {t('speciesKey.symbolSize')}
+              <output className={styles.fieldValue}>{formatPercent(sizePercent)}</output>
+            </span>
+            <input
+              type="range"
+              className={styles.slider}
+              min={PLANT_SYMBOL_SCALE_MIN * 100}
+              max={PLANT_SYMBOL_SCALE_MAX * 100}
+              step={10}
+              value={sizePercent}
+              disabled={!hasDesign}
+              aria-valuetext={formatPercent(sizePercent)}
+              onInput={(event) => setPlantDisplayOptions({ symbolScale: Number(event.currentTarget.value) / 100 })}
+            />
+          </label>
+          <Switch
+            label={t('speciesKey.outline')}
+            checked={display.outline}
+            disabled={!hasDesign}
+            onChange={(outline) => setPlantDisplayOptions({ outline })}
+          />
           <div className={styles.field}>
             <span className={styles.fieldLabel}>{t('speciesKey.labels')}</span>
             <SegmentedControl<PlantLabelMode>
@@ -244,11 +273,21 @@ function DisplayOnMap() {
             />
             <PlantLabelCoverageLine />
           </div>
+          <Switch
+            label={t('speciesKey.softenBackground')}
+            hint={t('speciesKey.softenBackgroundHint')}
+            checked={mapLayers.value.softenBackground}
+            onChange={setSoftenBackground}
+          />
           <p className={styles.hint}>{hint}</p>
         </div>
       )}
     </section>
   )
+}
+
+function formatPercent(percent: number): string {
+  return new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)
 }
 
 /** The stratum colours, so Colour by stratum reads without the Consortium panel. */

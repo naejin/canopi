@@ -215,6 +215,7 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     contour_interval: draft.mapLayers.contours.intervalMeters,
     hillshade_visible: draft.mapLayers.hillshade.visible,
     hillshade_opacity: draft.mapLayers.hillshade.opacity,
+    soften_background: draft.mapLayers.softenBackground,
     used_canvas_tools: [...draft.toolRail.usedTools],
     tool_names_visible: draft.toolRail.namesVisible,
   }
@@ -291,6 +292,7 @@ function projectSettingsToSignals(settings: Settings): Settings {
         visible: settings.hillshade_visible,
         opacity: settings.hillshade_opacity,
       },
+      softenBackground: settings.soften_background,
     },
     toolRail: {
       usedTools: settings.used_canvas_tools,

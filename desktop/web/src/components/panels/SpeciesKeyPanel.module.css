@@ -65,9 +65,18 @@
 }
 
 .fieldLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--text-xs);
   font-weight: 600;
+}
+
+.fieldValue {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 /* One color: the label and its swatch on one line. */
@@ -78,6 +87,45 @@
   gap: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
+}
+
+.slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  /* As tall as the thumb, with the track drawn as a centred line, so the thumb needs no offset. */
+  height: var(--slider-thumb-size);
+  margin: 0;
+  background: linear-gradient(var(--color-border-strong), var(--color-border-strong)) center / 100% var(--slider-track-size) no-repeat;
+  cursor: pointer;
+}
+
+.slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.slider::-moz-range-thumb {
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* Colour by stratum: the four stratum colours and "No stratum yet". */

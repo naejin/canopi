@@ -56,6 +56,7 @@ function layers(overrides: {
     satellite: { ...defaults.satellite, ...overrides.satellite },
     contours: { ...defaults.contours, ...overrides.contours },
     hillshade: { ...defaults.hillshade, ...overrides.hillshade },
+    softenBackground: false,
   }
 }
 

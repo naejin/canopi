@@ -45,6 +45,7 @@ describe('generated settings defaults', () => {
         visible: DEFAULT_SETTINGS.hillshade_visible,
         opacity: DEFAULT_SETTINGS.hillshade_opacity,
       },
+      softenBackground: DEFAULT_SETTINGS.soften_background,
     })
   })
 })

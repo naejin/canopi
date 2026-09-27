@@ -26,6 +26,19 @@ export interface MapLayersState {
     readonly visible: boolean
     readonly opacity: number
   }
+  /** Display on the map › Soften background: the background band is dimmed to SOFTENED_BACKGROUND_OPACITY_FACTOR. */
+  readonly softenBackground: boolean
+}
+
+/**
+ * Soften background multiplies the Basemap or Satellite opacity by this, so
+ * the map's light paper shows through and plant symbols stand out.
+ */
+export const SOFTENED_BACKGROUND_OPACITY_FACTOR = 0.4
+
+/** The opacity the background band is drawn with: its own, dimmed when softened. */
+export function effectiveBackgroundOpacity(state: MapLayersState, layer: 'basemap' | 'satellite'): number {
+  return state[layer].opacity * (state.softenBackground ? SOFTENED_BACKGROUND_OPACITY_FACTOR : 1)
 }
 
 export function createDefaultMapLayers(): MapLayersState {
@@ -48,6 +61,7 @@ export function createDefaultMapLayers(): MapLayersState {
       visible: DEFAULT_SETTINGS.hillshade_visible,
       opacity: DEFAULT_SETTINGS.hillshade_opacity,
     },
+    softenBackground: DEFAULT_SETTINGS.soften_background,
   })
 }
 
@@ -90,6 +104,7 @@ export function normalizeMapLayers(state: MapLayersState): MapLayersState {
       visible: state.hillshade.visible === true,
       opacity: unitInterval(state.hillshade.opacity, DEFAULT_SETTINGS.hillshade_opacity),
     }),
+    softenBackground: state.softenBackground === true,
   })
 }
 
@@ -104,6 +119,7 @@ export function mapLayersEqual(left: MapLayersState, right: MapLayersState): boo
     && left.contours.intervalMeters === right.contours.intervalMeters
     && left.hillshade.visible === right.hillshade.visible
     && left.hillshade.opacity === right.hillshade.opacity
+    && left.softenBackground === right.softenBackground
 }
 
 function unitInterval(value: number, fallback: number): number {

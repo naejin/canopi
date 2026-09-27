@@ -1,5 +1,6 @@
 import { getCanvasColor, isThemeManagedZoneFill, markCanvasPaintChanged } from '../theme-refresh'
 import { contrastRatio } from '../plant-colors'
+import { getCanvasPlantDisplay } from './plant-display'
 import type {
   ScenePersistedState,
   SceneZoneEntity,
@@ -207,7 +208,9 @@ export function getPlantSymbolEdgeColor(color: string, background = mapBackdropC
   return contrastRatio(color, background) < 3 ? resolveBackdropInk(background).text : background
 }
 
+/** The halo width around a plant symbol; 0 when Display › Outline is off. */
 export function getPlantSymbolEdgeWidth(diameterPx: number): number {
+  if (!getCanvasPlantDisplay().outline) return 0
   return diameterPx < 10 ? .5 : .7
 }
 

@@ -63,6 +63,7 @@ describe('Canvas Layer Presentation', () => {
       contour_interval: 12,
       hillshade_visible: true,
       hillshade_opacity: 0.45,
+      soften_background: false,
       plant_spacing_interval_m: 0.5,
       last_view: null,
       used_canvas_tools: [],

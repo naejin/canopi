@@ -72,11 +72,13 @@ export function isMeasurementLabelVisible(snapshot: SceneRendererSnapshot, id: s
 }
 
 // Pan does not affect admission. Keep the main view and an inspection view warm.
-const layouts = new WeakMap<ScenePersistedState, Map<number, CanvasDetailLayout>>()
+// Symbol size changes plant bounds, so it is part of the key.
+const layouts = new WeakMap<ScenePersistedState, Map<string, CanvasDetailLayout>>()
 
 export function getCanvasDetailLayout(scene: ScenePersistedState, scale: number): CanvasDetailLayout {
   let cache = layouts.get(scene)
-  const previous = cache?.get(scale)
+  const key = `${scale}|${getCanvasPlantDisplay().symbolScale}`
+  const previous = cache?.get(key)
   if (previous) return previous
   const occupied = new LabelCollisionIndex()
   const bounds: LabelBounds[] = []
@@ -113,7 +115,7 @@ export function getCanvasDetailLayout(scene: ScenePersistedState, scale: number)
   const result = { annotationIds, measurementIds, bounds }
   if (!cache) { cache = new Map(); layouts.set(scene, cache) }
   if (cache.size >= 2) cache.delete(cache.keys().next().value!)
-  cache.set(scale, result)
+  cache.set(key, result)
   return result
 }
 

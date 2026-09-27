@@ -773,6 +773,11 @@ export type Settings = {
 	contour_interval: number,
 	hillshade_visible: boolean,
 	hillshade_opacity: number,
+	/**
+	 *  Display on the map › Soften background: dims the Basemap or Satellite
+	 *  under every Design so plant symbols stand out. A device preference.
+	 */
+	soften_background: boolean,
 	plant_spacing_interval_m: number,
 	// The camera view last shown on a Design; a new Design opens here.
 	last_view: LastView | null,

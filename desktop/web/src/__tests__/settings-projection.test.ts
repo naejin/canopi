@@ -44,6 +44,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     contour_interval: 0,
     hillshade_visible: false,
     hillshade_opacity: 0.55,
+    soften_background: false,
     plant_spacing_interval_m: 0.5,
     saved_stamps_frame_height: 220,
     last_view: null,
@@ -141,6 +142,7 @@ describe('settings projection', () => {
       contour_interval: 12,
       hillshade_visible: true,
       hillshade_opacity: 0.2,
+      soften_background: true,
       plant_spacing_interval_m: 0.75,
     }))
 
@@ -155,6 +157,7 @@ describe('settings projection', () => {
       satellite: { visible: true, opacity: 0.7 },
       contours: { visible: true, opacity: 0.45, intervalMeters: 12 },
       hillshade: { visible: true, opacity: 0.2 },
+      softenBackground: true,
     })
     expect(plantSpacingIntervalM.value).toBe(0.75)
     expect(saveSettings).not.toHaveBeenCalled()
@@ -175,6 +178,7 @@ describe('settings projection', () => {
         satellite: { visible: true, opacity: 0.8 },
         contours: { visible: true, opacity: 0.3, intervalMeters: 18 },
         hillshade: { visible: true, opacity: 0.25 },
+        softenBackground: false,
       }
       settings.plantSpacingIntervalM = 0.25
     }, { persist: 'none' })
@@ -196,6 +200,7 @@ describe('settings projection', () => {
       contour_interval: 18,
       hillshade_visible: true,
       hillshade_opacity: 0.25,
+      soften_background: false,
       plant_spacing_interval_m: 0.25,
       google_maps_api_key: null,
       last_view: null,
@@ -272,6 +277,7 @@ describe('settings projection', () => {
         satellite: { ...settings.mapLayers.satellite, opacity: 5 },
         contours: { ...settings.mapLayers.contours, opacity: Number.POSITIVE_INFINITY, intervalMeters: 7.6 },
         hillshade: { ...settings.mapLayers.hillshade, opacity: 3 },
+        softenBackground: false,
       }
       settings.plantSpacingIntervalM = Number.POSITIVE_INFINITY
       settings.sidePanel.width = 120

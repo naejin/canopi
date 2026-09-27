@@ -13,7 +13,7 @@ import {
 import type { BasemapStyle } from '../../generated/contracts'
 import type { SavedView } from '../../types/design'
 import { locale } from '../settings/state'
-import { mapLayers, type MapLayersState } from '../map-layers/state'
+import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../map-layers/state'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */
 export const VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS = 8_000
@@ -100,8 +100,8 @@ export function savedViewBackgroundPresentation(
     ? background.style
     : layers.basemap.style
   return captureMapBackgroundPresentation({
-    basemap: { style, visible: background.kind === 'basemap', opacity: layers.basemap.opacity },
-    satellite: { visible: background.kind === 'satellite', opacity: layers.satellite.opacity },
+    basemap: { style, visible: background.kind === 'basemap', opacity: effectiveBackgroundOpacity(layers, 'basemap') },
+    satellite: { visible: background.kind === 'satellite', opacity: effectiveBackgroundOpacity(layers, 'satellite') },
     locale: activeLocale,
   })
 }

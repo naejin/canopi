@@ -199,22 +199,27 @@ function drawPlantSymbolGlyph(
     ctx.beginPath()
     ctx.arc(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS, 0, Math.PI * 2)
     ctx.fill()
-    if (entry.lod !== 'dot') {
+    const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
+    if (entry.lod !== 'dot' && edgeWidth > 0) {
       ctx.strokeStyle = getPlantSymbolEdgeColor(entry.color, lensPaper())
-      ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
+      ctx.lineWidth = edgeWidth / viewportScale
       ctx.stroke()
     }
     return
   }
   const edge = getPlantSymbolEdgeColor(entry.color, lensPaper())
   const art = getPlantSymbolArt(symbol, entry.radiusScreenPx * 2)
+  const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
   ctx.strokeStyle = edge
-  ctx.lineWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2) / viewportScale
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   ctx.beginPath()
   tracePlantSymbolContours(ctx, art.body, x, y, r)
-  ctx.stroke()
+  // A zero line width is ignored by Canvas2D, so Outline off skips the stroke.
+  if (edgeWidth > 0) {
+    ctx.lineWidth = edgeWidth / viewportScale
+    ctx.stroke()
+  }
   ctx.fill('nonzero')
   if (art.cutouts.length === 0) return
   ctx.fillStyle = edge
