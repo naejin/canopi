@@ -2,6 +2,7 @@ import { ButtonTooltip } from './ButtonTooltip'
 import { PanelIcon, type PanelIconName } from './PanelIcon'
 import { useRef } from 'preact/hooks'
 import { useMapOccluder } from './useMapChrome'
+import { useModalInertRegion } from './useModalLayer'
 import styles from './PanelRail.module.css'
 
 /** One panel entry as the command projection hands it over. */
@@ -29,6 +30,7 @@ export function PanelRail({ groups, label }: {
   const visibleGroups = groups.filter((group) => group.length > 0)
   const rail = useRef<HTMLElement>(null)
   useMapOccluder(rail, 'right')
+  useModalInertRegion(rail)
   return (
     <nav ref={rail} className={styles.rail} aria-label={label} data-panel-rail>
       {visibleGroups.map((group, index) => (

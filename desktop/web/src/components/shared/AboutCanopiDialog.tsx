@@ -6,6 +6,7 @@ import {
   CANOPI_VERSION,
 } from '../../app/about/metadata'
 import { t } from '../../i18n'
+import { useModalLayer } from './useModalLayer'
 import styles from './AboutCanopiDialog.module.css'
 
 export function AboutCanopiDialog() {
@@ -15,6 +16,7 @@ export function AboutCanopiDialog() {
 
 function AboutCanopiDialogContent() {
   const closeRef = useRef<HTMLButtonElement>(null)
+  useModalLayer()
   useEffect(() => {
     closeRef.current?.focus()
   }, [])

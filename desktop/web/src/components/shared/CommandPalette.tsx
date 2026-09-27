@@ -3,6 +3,7 @@ import { useSignalEffect } from "@preact/signals";
 import { appCommandGraphChromeProjection, commandPaletteOpen } from "../../commands/registry";
 import { saveProblem } from "../../app/document-session/save-problem";
 import { savedViewDialogOpen } from "../../app/saved-views";
+import { modalLayerOpen } from "../../app/shell/modal-layer";
 import { t } from "../../i18n";
 import styles from "./CommandPalette.module.css";
 
@@ -21,7 +22,7 @@ export function CommandPalette() {
   });
 
   // Modal dialogs: the palette must not run commands under them.
-  if (!commandPaletteOpen.value || saveProblem.value !== null || savedViewDialogOpen.value) return null;
+  if (!commandPaletteOpen.value || saveProblem.value !== null || savedViewDialogOpen.value || modalLayerOpen.value) return null;
 
   const commands = appCommandGraphChromeProjection.value.paletteCommands;
   const filtered = commands.filter((cmd) =>

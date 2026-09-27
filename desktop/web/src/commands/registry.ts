@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import { saveProblem } from '../app/document-session/save-problem'
 import { savedViewDialogOpen } from '../app/saved-views'
+import { modalLayerOpen } from '../app/shell/modal-layer'
 import {
   isCommandPaletteEscapeEvent,
   isCommandPaletteToggleEvent,
@@ -26,7 +27,7 @@ export const commandPaletteOpen = signal(false)
 
 export function handleAppCommandKeyDown(event: KeyboardEvent): boolean {
   // Modal dialogs: while one asks, no command may change the Design under it.
-  if (saveProblem.peek() !== null || savedViewDialogOpen.peek()) return false
+  if (saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek()) return false
 
   if (isCommandPaletteToggleEvent(event)) {
     event.preventDefault()

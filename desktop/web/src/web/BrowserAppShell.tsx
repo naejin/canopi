@@ -1,10 +1,12 @@
 import type { ComponentChildren } from "preact";
+import { useRef } from "preact/hooks";
 import { t } from "../i18n";
 import { ButtonTooltip } from "../components/shared/ButtonTooltip";
 import { ControlIcon } from "../components/shared/ControlIcon";
 import { DesignNameField } from "../components/shared/DesignNameField";
 import { PanelRail } from "../components/shared/PanelRail";
 import { SaveStatusLabel } from "../components/shared/SaveStatusLabel";
+import { useModalInertRegion } from "../components/shared/useModalLayer";
 import { WorkspaceTitleBar } from "../components/shared/WorkspaceTitleBar";
 import titleBarStyles from "../components/shared/WorkspaceTitleBar.module.css";
 import {
@@ -39,6 +41,9 @@ export function BrowserAppShell({
   children,
 }: BrowserAppShellProps) {
   const notice = browserShellNotice.value;
+  // The whole frame sits behind a modal dialog; the dialogs mount outside it.
+  const shell = useRef<HTMLDivElement>(null);
+  useModalInertRegion(shell);
   const commands = commandProjection.commands;
   const help = requireCommand(commands.get("help.shortcuts"), "help.shortcuts");
   const settings = requireCommand(commands.get("app.settings"), "app.settings");
@@ -50,7 +55,7 @@ export function BrowserAppShell({
   };
 
   return (
-    <div className={styles.shell} data-testid="browser-app-shell">
+    <div ref={shell} className={styles.shell} data-testid="browser-app-shell">
       <main className={styles.workspace} aria-label={t("webShell.workspace")}>
         {children}
       </main>

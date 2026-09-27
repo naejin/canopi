@@ -3,6 +3,7 @@ import { plantDbStatus } from '../../app/health/state'
 import { t } from '../../i18n'
 import { Notice } from './Notice'
 import { useMapOccluder } from './useMapChrome'
+import { useModalInertRegion } from './useModalLayer'
 import styles from './DegradedBanner.module.css'
 
 export function DegradedBanner() {
@@ -26,6 +27,7 @@ function DegradedNotice({ message }: { readonly message: string }) {
   const ref = useRef<HTMLDivElement>(null)
   // Fits and chips keep below it too.
   useMapOccluder(ref, 'top')
+  useModalInertRegion(ref)
 
   useLayoutEffect(() => {
     const notice = ref.current

@@ -1,6 +1,6 @@
 import type { ComponentType } from 'preact'
 import { Suspense } from 'preact/compat'
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { usePlanningViewState } from '../../app/planning-view/state'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import type { ShellPanelBarProjection } from '../../app/shell-commands'
@@ -15,6 +15,7 @@ import {
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
 import { SavedViewDialogs } from '../shared/SavedViewDialogs'
 import { SidePanelDock } from '../shared/SidePanelDock'
+import { useModalInertRegion } from '../shared/useModalLayer'
 import styles from './WorkspaceComposition.module.css'
 
 type PrimaryPanel = Exclude<Panel, SidePanel>
@@ -60,6 +61,9 @@ export function WorkspaceComposition({
       ? requestedSide
       : null
   const planningView = usePlanningViewState()
+  // The map, its chrome and the dock sit behind every modal dialog.
+  const root = useRef<HTMLDivElement>(null)
+  useModalInertRegion(root)
   const PrimarySurface = surfaces.primary[primary]
   const SideSurface = mountedSide ? surfaces.side[mountedSide] : undefined
 
@@ -77,6 +81,7 @@ export function WorkspaceComposition({
 
   return (
     <div
+      ref={root}
       className={styles.root}
       data-workspace-composition
       data-workspace-primary-panel={primary}

@@ -18,7 +18,7 @@ Shipped so far (canopi-h90p app frame): File keeps Save (Ctrl S) beside Save as�
 
 ## Dialogs, notices and states
 
-- Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus.
+- Dialogs: Literata 20 title, body 14.5, footer actions right-aligned and wrapping, a leading ghost action aligned with the text. Modal, focus-trapped, Esc closes and returns focus. Modal means everything else is inert under the scrim: the title bar (menus, place field and the window controls, as an app-modal dialog disables its window on Windows and macOS; the system still moves and closes it), rails, dock, chips and notices take no press, focus or key, and no shortcut runs.
 - Saved views (`SavedViewDialogs.tsx`): Save current view… has Name (selected, default "View n") and an optional Title, then Cancel and Save view. Manage views… lists each view with Go to, Rename (in place: Enter keeps, Esc cancels only the rename) and Delete; a view that stories show asks first in an inline danger box listing the stories, with focus on Cancel. The Undo toast sits in the dialog while it is open and floats bottom-centre after it closes.
 - Notices: info (surface-2), warning (amber), error (red, alert). Toasts are dark, carry Undo when it applies, and do not time out while hovered or focused.
 - Notices never cover controls. An app-wide notice (the plant database is missing or corrupt, `DegradedBanner`) takes its own row under the title bar, as wide as the title bar, and lowers `--chrome-rail-top` on its container while it shows, so rails, the dock, tool cards, chips and both Start columns move down below it.

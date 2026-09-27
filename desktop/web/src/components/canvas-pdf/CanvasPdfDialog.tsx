@@ -4,6 +4,7 @@ import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
 import { PDF_PLANT_COLORS, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
+import { useModalLayer } from '../shared/useModalLayer'
 import { PdfPageEditor } from './PdfPageEditor'
 import { PdfPageRail } from './PdfPageRail'
 import { PdfPageToolbar } from './PdfPageToolbar'
@@ -30,10 +31,9 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
   const page = adding ? plan?.pickerPage ?? plan?.pages[0] : plan?.pages.find((page) => page.id === pageId)
     ?? (!preparing ? plan?.pages.find((page) => page.id === pageId.split(':legend:')[0]) ?? plan?.pages[0] : undefined)
   const disabled = delivering || preparing
+  useModalLayer()
   useEffect(() => {
-    const previous = document.activeElement
     root.current?.querySelector<HTMLButtonElement>('button')?.focus()
-    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
   }, [])
   useEffect(() => {
     if (page && focusPage.current === page.id && !preparing) {

@@ -1,6 +1,7 @@
 import { canvasCommandDefinitionForShortcut } from '../app/canvas-commands'
 import { saveProblem } from '../app/document-session/save-problem'
 import { savedViewDialogOpen } from '../app/saved-views'
+import { modalLayerOpen } from '../app/shell/modal-layer'
 import { runFindPlantsShortcut } from '../app/plant-finder/focus'
 import { matchShellCommandShortcut, type ShellCommandState } from '../app/shell-commands'
 import { dispatchWorkspaceCanvasIntent } from '../app/workspace-commands/canvas-actions'
@@ -34,7 +35,7 @@ export function installWebCanvasShortcuts(
 
   const handler = (event: KeyboardEvent): void => {
     // Modal dialogs: no shortcut may change the Design under them.
-    if (saveProblem.peek() !== null || savedViewDialogOpen.peek()) return
+    if (saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek()) return
     // Ctrl F belongs to the open panel's plant finder, even while a field has focus.
     if (runFindPlantsShortcut(event)) return
     const shellCommand = shell ? matchShellCommandShortcut(shell.catalog, event) : null

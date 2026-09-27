@@ -27,6 +27,7 @@ vi.mock('../components/panels/WorldMapPanel', () => ({
 }))
 import { createMemoryDesignSessionStore } from '../app/document-session/store'
 import { activePanel, navigateTo, sidePanel } from '../app/shell/state'
+import { closeSettingsDialog } from '../app/shell/dialogs'
 import { locale, theme } from '../app/settings/state'
 import {
   installSettingsProjection,
@@ -124,6 +125,8 @@ describe('Web Edition Browser App Shell', () => {
   })
 
   afterEach(() => {
+    // A Settings dialog left open would make the next test's shell inert.
+    closeSettingsDialog()
     render(null, container)
     container.remove()
     resetSettingsProjectionForTests()

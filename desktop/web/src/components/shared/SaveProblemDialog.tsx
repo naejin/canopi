@@ -6,6 +6,7 @@ import {
   type SaveProblemRequest,
 } from '../../app/document-session/save-problem'
 import { t } from '../../i18n'
+import { useModalLayer } from './useModalLayer'
 import styles from './save-problem-dialog.module.css'
 
 interface DialogAction {
@@ -23,6 +24,7 @@ export function SaveProblemDialog() {
 
 function SaveProblemDialogContent({ request }: { readonly request: SaveProblemRequest }) {
   const firstActionRef = useRef<HTMLButtonElement>(null)
+  useModalLayer()
   useEffect(() => {
     firstActionRef.current?.focus()
   }, [request])

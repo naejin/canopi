@@ -6,6 +6,7 @@ import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { MenuBar } from './MenuBar'
 import { useRef } from 'preact/hooks'
 import { useMapOccluder } from './useMapChrome'
+import { useModalInertRegion } from './useModalLayer'
 import styles from './WorkspaceTitleBar.module.css'
 
 /** A title-bar command button: label, shortcut and action come from the command projection. */
@@ -49,6 +50,7 @@ export function WorkspaceTitleBar({
 }: WorkspaceTitleBarProps) {
   const titleBar = useRef<HTMLElement>(null)
   useMapOccluder(titleBar, 'top')
+  useModalInertRegion(titleBar)
   return (
     <header ref={titleBar} className={styles.titleBar} onMouseDown={onMouseDown} data-workspace-title-bar>
       <img

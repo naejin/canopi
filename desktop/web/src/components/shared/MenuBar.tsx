@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
 import { flattenMenuActions, type MenuAction, type MenuDefinition, type MenuEntry } from '../../app/shell-commands/menus'
+import { modalLayerOpen } from '../../app/shell/modal-layer'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
 import { focusMenuItem, placeSidePopupVertically } from '../../utils/floating-position'
@@ -47,6 +48,11 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
   const submenuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const submenuRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
+  // A modal dialog makes the bar inert; a menu open under it closes.
+  useSignalEffect(() => {
+    if (modalLayerOpen.value && openMenuId.peek() !== null) closeAll(false)
+  })
+
   useSignalEffect(() => {
     if (!openMenuId.value) return
     const handleOutside = (event: Event) => {
@@ -76,6 +82,7 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
   }
 
   function openRootMenu(menuId: string): void {
+    if (modalLayerOpen.peek()) return
     openMenuId.value = menuId
     openSubmenuId.value = null
     onMenuOpen?.(menuId === 'compact' ? 'file' : menuId)

@@ -321,6 +321,12 @@ body {
   user-select: none;
 }
 
+/* Chrome behind a modal dialog (`app/shell/modal-layer.ts`) drops its blur, so
+   no engine composites the glass above the dialog's scrim. */
+[inert], [inert] * {
+  backdrop-filter: none;
+}
+
 input, textarea, [contenteditable="true"] {
   -webkit-user-select: text;
   user-select: text;

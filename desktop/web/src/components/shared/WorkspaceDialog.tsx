@@ -2,13 +2,15 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { ControlIcon } from './ControlIcon'
+import { useModalLayer } from './useModalLayer'
 import styles from './WorkspaceDialog.module.css'
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
 
 /**
  * A modal workspace dialog: Literata title, close button, focus moved in on
- * open, trapped while open and returned on close; Escape closes.
+ * open, trapped while open and returned on close (`useModalLayer`, which also
+ * makes the chrome behind it inert); Escape closes.
  */
 export function WorkspaceDialog({ title, onClose, children, footer, wide = false }: {
   readonly title: string
@@ -20,12 +22,11 @@ export function WorkspaceDialog({ title, onClose, children, footer, wide = false
   const dialog = useRef<HTMLElement>(null)
   const titleId = useId()
 
+  useModalLayer()
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
     const initial = dialog.current?.querySelector<HTMLElement>('[data-dialog-initial-focus]')
       ?? dialog.current?.querySelector<HTMLElement>(FOCUSABLE)
     initial?.focus()
-    return () => previous?.focus?.()
   }, [])
 
   return (
