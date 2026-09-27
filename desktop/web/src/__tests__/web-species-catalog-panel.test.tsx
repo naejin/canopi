@@ -120,6 +120,7 @@ vi.mock('../app/plant-browser', async () => ({
 vi.mock('../canvas/session', () => ({
   currentCanvasToolCommandSurface: mockCanvasSession.currentToolCommandSurface,
   currentCanvasQuerySurface: { value: null },
+  currentCanvasTool: { value: 'select' },
 }))
 
 import { WebSpeciesCatalogPanel } from '../web/WebSpeciesCatalogPanel'

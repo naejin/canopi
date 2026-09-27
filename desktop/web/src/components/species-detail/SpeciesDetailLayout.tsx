@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { clearSpeciesDetailOnMap, selectSpeciesPlants, showSpeciesDetailOnMap, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
-import { currentCanvasToolCommandSurface } from '../../canvas/session'
+import { currentCanvasTool, currentCanvasToolCommandSurface } from '../../canvas/session'
 import { beginPlantStampFromSpecies, type PlantStampSourceInput } from '../../canvas/plant-stamp-source'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { useCatalogDesignSpecies } from '../plant-db/design-species'
@@ -54,11 +54,13 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
   // The species' plants stay ringed on the map while its detail is open, so
   // Zoom to them shows which plants they are.
   const hasPlantsInDesign = Boolean(inDesign)
+  // Placing plants never keeps a species ringed: the chooser rings a species only while its row is pointed at.
+  const placing = currentCanvasTool.value === 'plant-stamp'
   useEffect(() => {
-    if (!hasPlantsInDesign) return undefined
+    if (!hasPlantsInDesign || placing) return undefined
     showSpeciesDetailOnMap(canonicalName)
     return clearSpeciesDetailOnMap
-  }, [canonicalName, hasPlantsInDesign])
+  }, [canonicalName, hasPlantsInDesign, placing])
 
   return (
     <article className={styles.detail} aria-label={title} data-testid="species-detail">

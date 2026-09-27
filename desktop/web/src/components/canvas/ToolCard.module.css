@@ -27,20 +27,46 @@
 }
 
 .title {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) + var(--space-0-5));
   font-size: var(--text-base);
   font-weight: 600;
+}
+
+/* The species or stamp glyph at the start of the card, as on the boards. */
+.lead {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}
+
+.subject {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .instruction {
   display: block;
   margin-top: var(--space-1);
   font-size: var(--text-sm);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
-.subject {
-  font-weight: 600;
+/* Below its subject the instruction starts its own sentence. */
+.afterSubject {
+  margin-top: 0;
+}
+
+.afterSubject::first-letter {
+  text-transform: uppercase;
 }
 
 /* Plant a row: the spacing field and the row's count. */
@@ -162,20 +188,17 @@
 }
 
 .option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   width: 100%;
   min-height: var(--control-size-xl, 40px);
   padding: var(--space-1) var(--space-1);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
   color: var(--color-text);
-  font: inherit;
   font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
+}
+
+.optionNames {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .option:hover {

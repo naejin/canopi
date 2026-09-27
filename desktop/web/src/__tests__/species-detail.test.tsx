@@ -1,4 +1,5 @@
 import { render } from 'preact'
+import { setCanvasTool } from '../canvas/session-state'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '../app/settings/state'
@@ -91,6 +92,7 @@ describe('Species detail (Desktop)', () => {
   })
 
   afterEach(() => {
+    setCanvasTool('select')
     render(null, container)
     container.remove()
     locale.value = 'en'
@@ -197,6 +199,20 @@ describe('Species detail (Desktop)', () => {
     await act(async () => { button('Zoom to them').click() })
     expect(mapActions.zoomToSpeciesPlants).toHaveBeenCalledWith(['Malus domestica'])
     expect(button('Place Apple').disabled).toBe(false)
+  })
+
+  it('drops its rings while Place plants is armed, so placing never keeps the species ringed', async () => {
+    inDesign.species = new Map([['Malus domestica', { code: 'MDO', count: 6, symbol: 'canopy', color: '#B06045' }]])
+    await open()
+    expect(mapActions.showSpeciesDetailOnMap).toHaveBeenCalledTimes(1)
+
+    mapActions.showSpeciesDetailOnMap.mockClear()
+    await act(async () => { setCanvasTool('plant-stamp') })
+    expect(mapActions.clearSpeciesDetailOnMap).toHaveBeenCalled()
+    expect(mapActions.showSpeciesDetailOnMap).not.toHaveBeenCalled()
+
+    await act(async () => { setCanvasTool('select') })
+    expect(mapActions.showSpeciesDetailOnMap).toHaveBeenCalledWith('Malus domestica')
   })
 
   it('shows no in-Design actions for a species not in the Design', async () => {

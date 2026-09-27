@@ -13,6 +13,11 @@ import { currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
 import { MatchText, PlantFinder } from '../shared/PlantFinder'
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
+import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/presentation'
+import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
+import { speciesTarget } from '../../target'
+import { PlantSymbolGlyph } from './PlantSymbolGlyph'
+import row from '../shared/species-row.module.css'
 import styles from './ToolCard.module.css'
 
 type SectionId = 'design' | 'favorites' | 'recent'
@@ -123,26 +128,43 @@ function OptionList({ entries, onChoose }: {
   readonly entries: readonly { entry: ChooserSpecies, hit: PlantFinderHit<string> | null }[]
   onChoose(entry: ChooserSpecies): void
 }) {
+  const scene = currentCanvasQuerySurface.value?.getSceneSnapshot() ?? NO_SPECIES_APPEARANCE
+  // A row pointed at or focused rings its species' plants with the hover stroke, never for the whole placing session.
+  const ring = (entry: ChooserSpecies) => setHoveredPanelTargets([speciesTarget(entry.source.canonical_name)])
+  useEffect(() => clearHoveredPanelTargets, [])
   return (
     <ul className={styles.optionList}>
       {entries.map(({ entry, hit }) => {
         const common = entry.shownName
         const canonical = entry.source.canonical_name
         const marks = (text: string) => hit?.marks.find((mark) => mark.text === text)?.ranges ?? []
+        const appearance = speciesPlacementAppearance(scene, { canonicalName: canonical, stratum: entry.source.stratum })
         return (
           <li key={canonical}>
             <button
               type="button"
-              className={styles.option}
+              className={`${row.main} ${styles.option}`}
               data-species-option={canonical}
-              onClick={() => onChoose(entry)}
+              onClick={() => {
+                clearHoveredPanelTargets()
+                onChoose(entry)
+              }}
+              onMouseEnter={() => ring(entry)}
+              onMouseLeave={clearHoveredPanelTargets}
+              onFocus={() => ring(entry)}
+              onBlur={clearHoveredPanelTargets}
             >
-              {common && (
-                <span className={styles.optionName}>
-                  <SpeciesCommonName name={<MatchText text={common} ranges={marks(common)} />} englishFallback={entry.englishFallback} />
-                </span>
-              )}
-              <i lang="la" className={styles.optionLatin}><MatchText text={canonical} ranges={marks(canonical)} /></i>
+              <span className={row.glyph} aria-hidden="true" data-species-glyph style={{ color: appearance.color }}>
+                <PlantSymbolGlyph symbol={appearance.symbol} size={22} />
+              </span>
+              <span className={styles.optionNames}>
+                {common && (
+                  <span className={styles.optionName}>
+                    <SpeciesCommonName name={<MatchText text={common} ranges={marks(common)} />} englishFallback={entry.englishFallback} />
+                  </span>
+                )}
+                <i lang="la" className={styles.optionLatin}><MatchText text={canonical} ranges={marks(canonical)} /></i>
+              </span>
             </button>
           </li>
         )
@@ -150,6 +172,8 @@ function OptionList({ entries, onChoose }: {
     </ul>
   )
 }
+
+const NO_SPECIES_APPEARANCE = { plantSpeciesSymbols: {}, plantSpeciesColors: {} }
 
 function toFinderSpecies(entry: ChooserSpecies) {
   return { canonicalName: entry.source.canonical_name, commonName: entry.shownName }

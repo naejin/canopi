@@ -1,4 +1,5 @@
 import { computed, signal } from '@preact/signals'
+import type { PlantSymbolId } from '../generated/known-canopi-keys'
 
 export const activeTool = signal<string>('select')
 export const selectedObjectIds = signal<Set<string>>(new Set())
@@ -50,6 +51,8 @@ export interface CanvasPlantRowGuidance {
   readonly phase: 'pick' | 'missed' | 'row'
   /** The picked plant's shown name. */
   readonly plantName: string | null
+  /** The picked plant's symbol and colour, for the card's glyph. */
+  readonly glyph: { readonly symbol: PlantSymbolId; readonly color: string } | null
   /** The spacing field's text, as typed. */
   readonly interval: string
   readonly intervalValid: boolean
@@ -96,6 +99,7 @@ function stampGuidanceEqual(a: CanvasStampGuidance | null, b: CanvasStampGuidanc
 function plantRowGuidanceEqual(a: CanvasPlantRowGuidance | null, b: CanvasPlantRowGuidance | null): boolean {
   if (a === null || b === null) return a === b
   return a.phase === b.phase && a.plantName === b.plantName && a.interval === b.interval
+    && a.glyph?.symbol === b.glyph?.symbol && a.glyph?.color === b.glyph?.color
     && a.intervalValid === b.intervalValid && a.count === b.count && a.density === b.density
     && a.focusRequest === b.focusRequest
 }

@@ -12,11 +12,17 @@ import { createUuid } from '../../../utils/ids'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   getPlantWorldBounds,
+  resolvePlantBaseColor,
   resolvePlantDisplayColor,
   type PlantPresentationContext,
 } from '../plant-presentation'
 import type { ScenePlantEntity, ScenePoint, SceneStateReader } from '../scene'
-import { isSceneDesignObjectLocked, isSceneObjectGroupMemberTarget } from '../scene'
+import {
+  isSceneDesignObjectLocked,
+  isSceneObjectGroupMemberTarget,
+  resolvePlantSymbolForPlant,
+  type PlantSymbolId,
+} from '../scene'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
@@ -38,6 +44,8 @@ interface PlantSpacingSource {
   sourceId: string
   plant: ScenePlantEntity
   label: string
+  /** The picked plant's symbol and colour, read once when it is picked. */
+  glyph: { symbol: PlantSymbolId; color: string }
 }
 
 export interface PlantSpacingPointerDownResult {
@@ -110,6 +118,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     return {
       phase: source ? 'row' : missed ? 'missed' : 'pick',
       plantName: source?.label ?? null,
+      glyph: source?.glyph ?? null,
       interval: intervalText,
       intervalValid,
       count: source ? shownCount?.count ?? null : null,
@@ -167,6 +176,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
       sourceId: plant.id,
       plant: clonePlantForPlantSpacing(plant),
       label: labelForPlant(plant),
+      glyph: sourceGlyph(plant),
     }
     intervalText = formatPlantSpacingIntervalInput(context.readPlantSpacingIntervalMeters())
     intervalValid = true
@@ -375,6 +385,13 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     return context.getLocalizedCommonNames().get(plant.canonicalName)
       ?? plant.commonName
       ?? plant.canonicalName
+  }
+
+  function sourceGlyph(plant: ScenePlantEntity): { symbol: PlantSymbolId; color: string } {
+    return {
+      symbol: resolvePlantSymbolForPlant(plant, context.getSceneStore().persisted.plantSpeciesSymbols),
+      color: resolvePlantBaseColor(plant, context.getSpeciesCache()),
+    }
   }
 
   function ghostColor(plant: ScenePlantEntity): string {

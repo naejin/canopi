@@ -23,6 +23,7 @@ import {
   createTestCanvasDocumentSurface,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 const locating = vi.hoisted(() => ({ open: null as null | { value: boolean } }))
 vi.mock('../app/site-onboarding/state', async (importOriginal) => {
@@ -88,9 +89,44 @@ describe('Tool card', () => {
     await choose('plant-stamp')
 
     expect(card()!.getAttribute('aria-label')).toBe('Place plants')
-    expect(lines()).toEqual(['Place plants', 'Apple · click the map to place one', 'Esc to stop placing'])
+    // The species takes its own line, so the instruction never breaks around it.
+    expect(lines()).toEqual(['Place plants', 'Apple', 'click the map to place one', 'Esc to stop placing'])
     expect(live().querySelector('b')?.textContent).toBe('Apple')
     expect(card()!.querySelector('button')?.textContent).toBe('Change species')
+  })
+
+  it('leads the card with the species glyph in the colour and symbol a click places', async () => {
+    await act(() => {
+      setCanvasRuntimeSurfaces({
+        commands: createTestCanvasCommandSurface(),
+        queries: createTestCanvasQuerySurface({
+          scene: {
+            ...createDefaultScenePersistedState(),
+            plantSpeciesColors: { 'Malus domestica': '#b06045' },
+            plantSpeciesSymbols: { 'Malus domestica': 'apple' },
+          },
+        }),
+        documents: createTestCanvasDocumentSurface(),
+      })
+    })
+    selectPlantStampSource(APPLE)
+    await choose('plant-stamp')
+
+    const lead = card()!.querySelector<HTMLElement>('[data-tool-card-lead]')!
+    expect(lead.getAttribute('aria-hidden')).toBe('true')
+    expect(lead.querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('apple')
+    expect(lead.style.color).toBe('rgb(176, 96, 69)')
+
+    // No species yet: no glyph.
+    await act(() => { clearPlantStampSource() })
+    expect(card()!.querySelector('[data-tool-card-lead]')).toBeNull()
+  })
+
+  it('leads a stamp card with the stamp icon, and drawing tools with none', async () => {
+    await choose('object-stamp', { stamp: { kind: 'group', name: 'Pear guild', plants: 10, species: 4 } })
+    expect(card()!.querySelector('[data-tool-card-lead="stamp"] svg')).not.toBeNull()
+    await choose('polygon')
+    expect(card()!.querySelector('[data-tool-card-lead]')).toBeNull()
   })
 
   it('announces a tool change in the same live region', async () => {
@@ -146,10 +182,10 @@ describe('Tool card', () => {
     expect(lines()).toEqual(['Place a stamp', 'Click a plant, zone, note or group to copy it', 'Esc to stop placing'])
 
     await choose('object-stamp', { stamp: { kind: 'group', name: 'Pear guild', plants: 10, species: 4 } })
-    expect(lines()[1]).toBe('Pear guild · 10 plants · 4 species · click to place')
+    expect(lines().slice(1, 3)).toEqual(['Pear guild', '10 plants · 4 species · click to place'])
 
     await choose('object-stamp', { stamp: { kind: 'zone', name: null, plants: 0, species: 0 } })
-    expect(lines()[1]).toBe('Zone · click to place')
+    expect(lines().slice(1, 3)).toEqual(['Zone', 'click to place'])
   })
 
   it('names a saved stamp from Favorites with its counts', async () => {
@@ -176,12 +212,12 @@ describe('Tool card', () => {
       }, { setTool } as never)
     })
 
-    expect(lines()).toEqual(['Place a stamp', 'Guilde pommier · 3 plants · 2 species · click to place', 'Esc to stop placing'])
+    expect(lines()).toEqual(['Place a stamp', 'Guilde pommier', '3 plants · 2 species · click to place', 'Esc to stop placing'])
   })
 
   describe('Plant a row', () => {
     const ROW: CanvasPlantRowGuidance = {
-      phase: 'row', plantName: 'Apple', interval: '50 cm', intervalValid: true, count: null, density: 'normal', focusRequest: 1,
+      phase: 'row', plantName: 'Apple', glyph: { symbol: 'berry', color: '#ab5268' }, interval: '50 cm', intervalValid: true, count: null, density: 'normal', focusRequest: 1,
     }
     const field = () => container.querySelector<HTMLInputElement>('[data-plant-spacing-interval-input]')
     const count = () => container.querySelector<HTMLElement>('[data-plant-spacing-generated-count]')
@@ -204,19 +240,22 @@ describe('Tool card', () => {
     })
 
     it('asks for a plant to repeat in the shared card, then says a missed click needs a usable plant', async () => {
-      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'pick', plantName: null, focusRequest: 0 } })
+      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'pick', plantName: null, glyph: null, focusRequest: 0 } })
       expect(card()!.getAttribute('data-tool-card')).toBe('plant-spacing')
       expect(lines()).toEqual(['Plant a row', 'Click a placed plant to repeat it along a row', 'Esc to go back to Select'])
       expect(field()).toBeNull()
 
-      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'missed', plantName: null, focusRequest: 0 } })
+      await choose('plant-spacing', { plantRow: { ...ROW, phase: 'missed', plantName: null, glyph: null, focusRequest: 0 } })
       expect(lines()).toEqual(['Plant a row', 'Click a visible, unlocked placed plant', 'Esc to go back to Select'])
     })
 
     it('names the picked plant, holds the spacing field and counts the row with its density', async () => {
       await choose('plant-spacing', { gesture: true, plantRow: ROW })
-      expect(live().textContent).toContain('Apple · drag along the row')
+      expect(lines().slice(1, 3)).toEqual(['Apple', 'drag along the row'])
       expect(live().querySelector('b')?.textContent).toBe('Apple')
+      const lead = card()!.querySelector<HTMLElement>('[data-tool-card-lead]')!
+      expect(lead.querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('berry')
+      expect(lead.style.color).toBe('rgb(171, 82, 104)')
       expect(live().textContent).toContain('Shift keeps 45° angles · Esc to cancel')
       const input = field()!
       expect(input.value).toBe('50 cm')

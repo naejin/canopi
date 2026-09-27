@@ -2,7 +2,9 @@ import type { RefObject } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
-import { readPlantStampSource } from '../../canvas/plant-stamp-source'
+import { readPlantStampSource, type PlantStampSource } from '../../canvas/plant-stamp-source'
+import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
+import type { PlantSymbolId } from '../../canvas/runtime/scene'
 import {
   readSavedObjectStampName,
   readSavedObjectStampSource,
@@ -13,9 +15,11 @@ import {
   currentCanvasToolCommandSurface,
   currentCanvasToolGuidance,
 } from '../../canvas/session'
-import type { CanvasPlantRowGuidance } from '../../canvas/session-state'
+import type { CanvasPlantRowGuidance, CanvasToolGuidance } from '../../canvas/session-state'
 import { t } from '../../i18n'
+import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { SpeciesChooser } from './SpeciesChooser'
+import { ToolIcon } from './toolbar-icons'
 import styles from './ToolCard.module.css'
 
 /**
@@ -47,6 +51,7 @@ export function ToolCard({ canvasRef }: {
         translate: t,
       })
   const choosing = content?.tool === 'plant-stamp' && (source === null || changingSpecies)
+  const lead = content ? cardLead(content.tool, source, guidance) : null
   // Each click on the map with no species chosen points to the chooser again.
   const prompts = useRef(0)
   const lastPrompt = useRef(false)
@@ -77,9 +82,13 @@ export function ToolCard({ canvasRef }: {
       <div role="status" aria-live="polite">
         {content && (
           <>
-            <span className={styles.title}>{content.title}</span>
-            <span className={styles.instruction}>
-              {content.subject && <><b className={styles.subject}>{content.subject}</b>{' · '}</>}
+            <span className={styles.title}>
+              {lead && <CardLead lead={lead} />}
+              {content.title}
+            </span>
+            {/* The subject takes its own line, so a long name never breaks the instruction. */}
+            {content.subject && <b className={styles.subject}>{content.subject}</b>}
+            <span className={content.subject ? `${styles.instruction} ${styles.afterSubject}` : styles.instruction}>
               {content.instruction}
             </span>
             {guidance.plantRow?.phase === 'row' && <SpacingField row={guidance.plantRow} />}
@@ -102,6 +111,34 @@ export function ToolCard({ canvasRef }: {
         />
       )}
     </section>
+  )
+}
+
+type Lead = { readonly kind: 'species'; readonly symbol: PlantSymbolId; readonly color: string } | { readonly kind: 'stamp' }
+
+/** The glyph at the start of the card: the species a click places or a row repeats, or the stamp. */
+function cardLead(tool: string, source: PlantStampSource | null, guidance: CanvasToolGuidance): Lead | null {
+  if (tool === 'plant-stamp' && source) {
+    const scene = currentCanvasQuerySurface.value?.getSceneSnapshot()
+    const appearance = speciesPlacementAppearance(
+      scene ?? { plantSpeciesSymbols: {}, plantSpeciesColors: {} },
+      { canonicalName: source.canonical_name, stratum: source.stratum },
+    )
+    return { kind: 'species', ...appearance }
+  }
+  if (tool === 'plant-spacing' && guidance.plantRow?.glyph) return { kind: 'species', ...guidance.plantRow.glyph }
+  if ((tool === 'object-stamp' && guidance.stamp) || tool === 'saved-object-stamp') return { kind: 'stamp' }
+  return null
+}
+
+function CardLead({ lead }: { readonly lead: Lead }) {
+  if (lead.kind === 'stamp') {
+    return <span className={styles.lead} aria-hidden="true" data-tool-card-lead="stamp"><ToolIcon name="object-stamp" /></span>
+  }
+  return (
+    <span className={styles.lead} aria-hidden="true" data-tool-card-lead="species" style={{ color: lead.color }}>
+      <PlantSymbolGlyph symbol={lead.symbol} size={22} />
+    </span>
   )
 }
 

@@ -19,6 +19,8 @@ import {
   setCanvasToolGuidance,
 } from '../canvas/session-state'
 import type { SpeciesListItem } from '../types/species'
+import { hoveredPanelTargets, selectedPanelTargets } from '../app/panel-targets/state'
+import { speciesTarget } from '../target'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
@@ -146,13 +148,39 @@ describe('Place plants species chooser', () => {
 
     const fig = options().find((option) => option.dataset.speciesOption === 'Ficus carica')!
     expect(fig.querySelector('[lang="en"]')?.textContent).toBe('Common fig')
-    expect(fig.querySelector('[aria-hidden="true"]')?.textContent).toBe('(angl.)')
+    expect([...fig.querySelectorAll('[aria-hidden="true"]')].map((node) => node.textContent)).toContain('(angl.)')
     expect(fig.textContent).toContain('Nom anglais : pas encore de nom dans cette langue')
     const apple = options().find((option) => option.dataset.speciesOption === 'Malus domestica')!
     expect(apple.textContent).not.toContain('(angl.)')
     // Rubus idaeus is a Favorite: the catalog gives no English name for it here.
     const raspberry = options().find((option) => option.dataset.speciesOption === 'Rubus idaeus')!
     expect(raspberry.querySelector('[lang="en"]')).toBeNull()
+  })
+
+  it('shows each species with the glyph and colour it has, or would take, on the map', async () => {
+    const glyph = (name: string) => options().find((option) => option.dataset.speciesOption === name)!
+      .querySelector<HTMLElement>('[data-species-glyph]')!
+    // Apple is in the Design; Raspberry, from Favorites, would take the default symbol.
+    expect(glyph('Malus domestica').getAttribute('aria-hidden')).toBe('true')
+    expect(glyph('Malus domestica').querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('round')
+    expect(glyph('Malus domestica').style.color).not.toBe('')
+    expect(glyph('Rubus idaeus').querySelector('svg')?.getAttribute('data-plant-symbol')).toBe('round')
+  })
+
+  it('rings a species\' plants with the hover stroke only while its row is pointed at or focused', async () => {
+    const apple = options().find((option) => option.dataset.speciesOption === 'Malus domestica')!
+    expect(hoveredPanelTargets.value).toEqual([])
+    await act(() => { apple.dispatchEvent(new MouseEvent('mouseenter')) })
+    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    await act(() => { apple.dispatchEvent(new MouseEvent('mouseleave')) })
+    expect(hoveredPanelTargets.value).toEqual([])
+
+    await act(() => { apple.focus() })
+    expect(hoveredPanelTargets.value).toEqual([speciesTarget('Malus domestica')])
+    // Choosing ends the ring: placing never keeps the species' plants ringed.
+    await act(() => apple.click())
+    expect(hoveredPanelTargets.value).toEqual([])
+    expect(selectedPanelTargets.value).toEqual([])
   })
 
   it('loads Favorites when none are loaded yet', async () => {
@@ -182,7 +210,7 @@ describe('Place plants species chooser', () => {
       canonical_name: 'Rubus idaeus', common_name: 'Raspberry', stratum: null, width_max_m: 1.5,
     })
     expect(recentPlantStampSources.value[0]?.canonical_name).toBe('Rubus idaeus')
-    expect(container.querySelector('[role="status"]')!.textContent).toContain('Raspberry · click the map to place one')
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('Raspberryclick the map to place one')
     expect(options()).toHaveLength(0)
     expect(document.activeElement).toBe(map)
   })

@@ -8,6 +8,41 @@ import type { SpeciesCacheEntry } from './species-cache'
 
 const EMPTY_SPECIES_CACHE = new Map<string, SpeciesCacheEntry>()
 
+/** A species' symbol and colour on the map. */
+export interface SpeciesAppearance {
+  readonly symbol: PlantSymbolId
+  readonly color: string
+}
+
+/**
+ * The symbol and colour a new plant of this species takes in this Design:
+ * the Design's species symbol and colour, else the default symbol and the
+ * stratum colour. The same rules as a placed plant without overrides.
+ */
+export function speciesPlacementAppearance(
+  scene: Pick<ScenePersistedState, 'plantSpeciesSymbols' | 'plantSpeciesColors'>,
+  species: { readonly canonicalName: string; readonly stratum: string | null },
+): SpeciesAppearance {
+  return {
+    symbol: resolvePlantSymbolForPlant({ canonicalName: species.canonicalName }, scene.plantSpeciesSymbols),
+    color: resolvePlantBaseColor({
+      kind: 'plant',
+      id: '',
+      canonicalName: species.canonicalName,
+      commonName: null,
+      color: scene.plantSpeciesColors[species.canonicalName] ?? null,
+      stratum: species.stratum,
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+      locked: false,
+    }, EMPTY_SPECIES_CACHE),
+  }
+}
+
 /** Codes belong to a Design; removed species keep their reservation. */
 export function allocateSpeciesCodes(
   existing: Readonly<Record<string, string>>,
