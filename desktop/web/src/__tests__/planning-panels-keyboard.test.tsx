@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { CalendarPanel } from '../components/panels/CalendarPanel'
 import { ConsortiumPanel } from '../components/panels/ConsortiumPanel'
 import { disposePlanningViewState, readPlanningViewState } from '../app/planning-view/state'
@@ -120,6 +120,10 @@ describe('planning panel keyboard hierarchy', () => {
   })
 
   it('restores one operable date-grid tab stop after toolbar month navigation', async () => {
+    // Today takes the tab stop when it is visible, so keep it out of both grids.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-06-15T12:00:00'))
+    onTestFinished(() => { vi.useRealTimers() })
     const view = readPlanningViewState()
     view.calendarMonth.value = '2026-09-01'
     sidePanel.value = 'calendar'
