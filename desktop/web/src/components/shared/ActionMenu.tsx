@@ -30,6 +30,8 @@ export interface ActionMenuCommand {
 
 export interface ActionMenuSubmenu {
   readonly label: string
+  /** Stable id for the item (`data-command`). */
+  readonly id?: string
   readonly submenu: readonly ActionMenuEntry[]
   readonly disabled?: boolean
 }
@@ -165,11 +167,11 @@ export function ContextMenu({ label, heading, entries, anchor, onClose }: {
   const restore = () => close.current(true)
   return (
     <MenuPopup menuId={menuId} label={label} heading={heading} entries={entries} anchor={{ getBoundingClientRect: () => anchor }}
-      placement="point" onClose={restore} onBack={restore} />
+      placement="point" fitLabels onClose={restore} onBack={restore} />
   )
 }
 
-function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose, onBack }: {
+function MenuPopup({ menuId, label, heading, entries, anchor, placement, fitLabels = false, onClose, onBack }: {
   readonly menuId: string
   readonly label: string
   readonly heading?: string
@@ -177,6 +179,11 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
   readonly anchor: MenuAnchor
   /** `below` a trigger, to the `side` of a parent item, or at a `point`. */
   readonly placement: 'below' | 'side' | 'point'
+  /**
+   * As wide as its longest label and shortcut on one line, up to a cap (the
+   * right-click menu and its submenus), instead of the compact default.
+   */
+  readonly fitLabels?: boolean
   /** Close the whole menu and return focus to its trigger. */
   onClose(): void
   /** Close this level only (Escape, or ArrowLeft in a submenu). */
@@ -194,23 +201,33 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
     popup.style.maxHeight = ''
     const rect = popup.getBoundingClientRect()
     const maxLeft = window.innerWidth - rect.width - VIEWPORT_MARGIN
-    const vertical = placement === 'side'
-      ? placeSidePopupVertically(bounds.top - 5, rect.height, window.innerHeight, { margin: VIEWPORT_MARGIN })
-      : placePopupVertically(bounds, rect.height, window.innerHeight, {
-        gap: placement === 'point' ? 0 : 4,
-        margin: VIEWPORT_MARGIN,
-      })
     let left: number
+    // A menu at a pointer (not a keyboard-opened one over a selection's bounds)
+    // that opens right or left of it may slide up rather than scroll: it never
+    // covers the pointer.
+    let besidePointer = false
     if (placement === 'point') {
       // Right of the anchor; else left of it; else as far as the viewport allows.
-      left = bounds.left <= maxLeft ? bounds.left
-        : bounds.right - rect.width >= VIEWPORT_MARGIN ? bounds.right - rect.width : maxLeft
+      besidePointer = bounds.left === bounds.right && bounds.top === bounds.bottom
+      if (bounds.left <= maxLeft) left = bounds.left
+      else if (bounds.right - rect.width >= VIEWPORT_MARGIN) left = bounds.right - rect.width
+      else {
+        left = maxLeft
+        besidePointer = false
+      }
     } else if (placement === 'below') {
       left = Math.min(bounds.right - rect.width, maxLeft)
     } else {
       const right = bounds.right + 2
       left = right <= maxLeft ? right : bounds.left - rect.width - 2
     }
+    const vertical = placement === 'side'
+      ? placeSidePopupVertically(bounds.top - 5, rect.height, window.innerHeight, { margin: VIEWPORT_MARGIN })
+      : placePopupVertically(bounds, rect.height, window.innerHeight, {
+        gap: placement === 'point' ? 0 : 4,
+        margin: VIEWPORT_MARGIN,
+        slide: besidePointer,
+      })
     popup.style.left = `${Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft))}px`
     popup.style.top = `${vertical.top}px`
     popup.style.maxHeight = `${vertical.maxHeight}px`
@@ -240,6 +257,7 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
 
   return createPortal(<>
     <div ref={menu} className={styles.menu} role="menu" aria-label={label} data-preserve-overlays="true" data-action-menu={menuId}
+      data-fit-labels={fitLabels ? 'true' : undefined}
       onContextMenu={event => event.preventDefault()}
       onKeyDown={event => {
         const buttons = items.current.filter((item): item is HTMLButtonElement => item !== null)
@@ -260,7 +278,9 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
         }
       }}>
       {/* The menu's accessible name already says this; the line is for sighted users. */}
+      {/* Outside the scrolling items, so it stays in view. */}
       {heading && <div className={styles.heading} role="presentation" aria-hidden="true">{heading}</div>}
+      <div className={styles.items} data-menu-items>
       {entries.map((entry, index) => {
         if ('separator' in entry) {
           items.current[index] = null
@@ -279,7 +299,7 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
             aria-haspopup={submenu ? 'menu' : command?.opensDialog ? 'dialog' : undefined}
             aria-expanded={submenu ? openSubmenu === index : undefined}
             aria-keyshortcuts={command?.keyShortcuts}
-            data-command={command?.id}
+            data-command={command?.id ?? (submenu ? entry.id : undefined)}
             data-danger={command?.danger ? 'true' : undefined}
             onPointerEnter={() => { if (openSubmenu !== null && openSubmenu !== index) setOpenSubmenu(null) }}
             onClick={() => activate(index)}>
@@ -290,10 +310,11 @@ function MenuPopup({ menuId, label, heading, entries, anchor, placement, onClose
           </button>
         )
       })}
+      </div>
     </div>
     {submenuEntry && isSubmenu(submenuEntry) && submenuAnchor && openSubmenu !== null && (
       <MenuPopup menuId={menuId} label={submenuEntry.label} entries={submenuEntry.submenu} anchor={submenuAnchor}
-        placement="side" onClose={onClose} onBack={() => closeSubmenu(openSubmenu)} />
+        placement="side" fitLabels={fitLabels} onClose={onClose} onBack={() => closeSubmenu(openSubmenu)} />
     )}
   </>, document.body)
 }

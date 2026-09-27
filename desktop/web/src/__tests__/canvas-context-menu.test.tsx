@@ -140,7 +140,7 @@ describe('CanvasContextMenu', () => {
     vi.unstubAllGlobals()
   })
 
-  it('names the selection above its commands, in the selection chip’s words', async () => {
+  async function selectTwoApples(): Promise<void> {
     const scene = createDefaultScenePersistedState()
     scene.plants = [1, 2].map((index) => ({
       kind: 'plant' as const,
@@ -162,6 +162,10 @@ describe('CanvasContextMenu', () => {
       selection: [{ kind: 'plant', id: 'plant-1' }, { kind: 'plant', id: 'plant-2' }],
     })
     await act(async () => { setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries })) })
+  }
+
+  it('names the selection above its commands, in the selection chip’s words', async () => {
+    await selectTwoApples()
     const menu = await open()
 
     expect(menu.querySelector('[role="presentation"]')?.textContent).toBe('2 plants · Apple · 1 m apart')
@@ -252,19 +256,73 @@ describe('CanvasContextMenu', () => {
     expect(menu.style.left).toBe('800px')
     expect(menu.style.top).toBe('400px')
 
-    // Too tall to open below or above the pointer: it takes the roomier side,
-    // capped to that room, and scrolls instead of covering the pointer.
     menu = await open(request({ anchor: { left: 120, top: 200, right: 120, bottom: 200 } }))
     expect(menu.style.top).toBe('200px')
     const innerHeight = window.innerHeight
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
     try {
+      // Too tall for either side of the pointer but not for the window: it
+      // slides up beside the pointer and shows every item without scrolling.
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
       menu = await open(request({ anchor: { left: 120, top: 250, right: 120, bottom: 250 } }))
-      expect(menu.style.top).toBe('250px')
-      expect(menu.style.maxHeight).toBe('242px')
+      expect(menu.style.left).toBe('120px')
+      expect(menu.style.top).toBe('192px')
+      expect(menu.style.maxHeight).toBe('484px')
+      // Taller than the window: capped to it, and it scrolls.
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 250 })
+      menu = await open(request({ anchor: { left: 120, top: 125, right: 120, bottom: 125 } }))
+      expect(menu.style.top).toBe('8px')
+      expect(menu.style.maxHeight).toBe('234px')
+      // Opened by the keyboard for a selection, it never slides over the selection's bounds.
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 500 })
+      menu = await open(request({ anchor: { left: 120, top: 240, right: 220, bottom: 260 } }))
+      expect(menu.style.top).toBe('260px')
+      expect(menu.style.maxHeight).toBe('232px')
     } finally {
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
     }
+  })
+
+  it('keeps its heading in view while the items scroll', async () => {
+    await selectTwoApples()
+    const menu = await open()
+    const heading = menu.querySelector<HTMLElement>('[role="presentation"]')!
+    const items = menu.querySelector<HTMLElement>('[data-menu-items]')!
+
+    expect(heading.textContent).toBe('2 plants · Apple · 1 m apart')
+    expect(items.contains(menuItem('cut'))).toBe(true)
+    // The heading sits outside the scrolling items, so it never scrolls away.
+    expect(items.contains(heading)).toBe(false)
+    expect(menu.contains(heading)).toBe(true)
+  })
+
+  it('groups stacking and grouping under Arrange ▸: ArrowRight opens it, Escape returns to it', async () => {
+    const menu = await open()
+    const arrange = menuItem('arrange')
+
+    expect(arrange.getAttribute('aria-haspopup')).toBe('menu')
+    expect(arrange.getAttribute('aria-expanded')).toBe('false')
+    expect(menu.querySelector('[data-command="bring-to-front"]')).toBeNull()
+
+    await act(async () => { arrange.focus(); key(arrange, 'ArrowRight') })
+    const submenu = document.querySelector<HTMLElement>('[role="menu"][aria-label="Arrange"]')!
+    expect(submenu).not.toBeNull()
+    expect(arrange.getAttribute('aria-expanded')).toBe('true')
+    const labels = [...submenu.querySelectorAll('[role="menuitem"]')].map((entry) => entry.getAttribute('aria-label'))
+    expect(labels).toEqual(['Bring to front', 'Send to back', 'Group', 'Ungroup'])
+    expect(document.activeElement).toBe(submenu.querySelector('[data-command="bring-to-front"]'))
+
+    await act(async () => { key(document.activeElement!, 'Escape') })
+    expect(document.querySelector('[role="menu"][aria-label="Arrange"]')).toBeNull()
+    expect(document.activeElement).toBe(menuItem('arrange'))
+    expect(canvasContextMenuRequest.value).not.toBeNull()
+
+    await act(async () => { key(arrange, 'ArrowRight') })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[role="menu"][aria-label="Arrange"] [data-command="bring-to-front"]')!.click()
+    })
+    expect(commands.bringToFront).toHaveBeenCalledOnce()
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+    expect(returnFocus).toHaveBeenCalledOnce()
   })
 
   it('reopens at the new place for a new request and swallows a native menu on itself', async () => {

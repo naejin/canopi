@@ -145,8 +145,10 @@ function contextMenuEntryOptions() {
 function contextMenuCommand(id: CanvasContextMenuItemId): CanvasContextMenuCommand {
   const request = contextMenuHost.current
   if (!request) throw new Error('No context menu is open')
+  // Arrange ▸ holds stacking and grouping one level down.
   const entry = buildCanvasContextMenuEntries(request, contextMenuEntryOptions())
-    .find((candidate): candidate is CanvasContextMenuCommand => 'id' in candidate && candidate.id === id)
+    .flatMap((candidate) => 'submenu' in candidate ? candidate.submenu : [candidate])
+    .find((candidate): candidate is CanvasContextMenuCommand => 'run' in candidate && candidate.id === id)
   if (!entry) throw new Error(`The context menu has no '${id}' item`)
   return entry
 }

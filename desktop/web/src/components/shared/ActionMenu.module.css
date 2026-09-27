@@ -22,24 +22,48 @@
 .menu {
   position: fixed;
   z-index: 50;
+  display: flex;
+  flex-direction: column;
   min-width: 200px;
   max-width: calc(100vw - var(--space-4));
   max-height: calc(100dvh - var(--space-4));
-  overflow-y: auto;
-  padding: var(--space-1);
+  overflow: hidden;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
 }
 
+/*
+ * The right-click menu is as wide as its longest label and shortcut on one
+ * line (English, French, German), capped so a long label wraps instead.
+ */
+.menu[data-fit-labels="true"] {
+  width: max-content;
+  min-width: 240px;
+  max-width: min(400px, calc(100vw - var(--space-4)));
+}
+
+/* The items scroll inside the menu; the heading above them stays put. */
+.items {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
 .heading {
+  flex-shrink: 0;
   max-width: 320px;
-  padding: calc(var(--space-1-5) + var(--space-0-25)) calc(var(--space-2) + var(--space-0-5)) var(--space-0-75);
+  padding: calc(var(--space-2) + var(--space-0-75)) calc(var(--space-3) + var(--space-0-5)) 0;
   color: var(--color-text-muted);
   font-size: var(--text-2xs);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.heading + .items {
+  padding-top: var(--space-0-75);
 }
 
 .item {

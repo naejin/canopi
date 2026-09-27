@@ -37,7 +37,19 @@ export interface CanvasContextMenuCommand {
   run(itemBounds?: DOMRect): void
 }
 
-export type CanvasContextMenuEntry = CanvasContextMenuCommand | { readonly separator: true }
+/** Arrange ▸: stacking and grouping, one level down so the plant menu fits a short window. */
+export interface CanvasContextMenuSubmenu {
+  readonly id: 'arrange'
+  readonly label: string
+  /** Disabled while nothing in it applies. */
+  readonly disabled: boolean
+  readonly submenu: readonly CanvasContextMenuEntry[]
+}
+
+export type CanvasContextMenuEntry =
+  | CanvasContextMenuCommand
+  | CanvasContextMenuSubmenu
+  | { readonly separator: true }
 
 export interface CanvasContextMenuEntryOptions {
   readonly translate: (key: string) => string
@@ -139,6 +151,13 @@ export function buildCanvasContextMenuEntries(
       ]
     : []
 
+  const arrange = [
+    edit('bring-to-front', !can.edit, () => commands.bringToFront()),
+    edit('send-to-back', !can.edit, () => commands.sendToBack()),
+    SEPARATOR,
+    edit('group', !can.group, () => commands.groupSelected()),
+    edit('ungroup', !can.ungroup, () => commands.ungroupSelected()),
+  ]
   return [
     edit('cut', !can.copy, () => {
       commands.copy()
@@ -150,11 +169,12 @@ export function buildCanvasContextMenuEntries(
     SEPARATOR,
     ...plantEntries,
     ...planningEntries,
-    edit('bring-to-front', !can.edit, () => commands.bringToFront()),
-    edit('send-to-back', !can.edit, () => commands.sendToBack()),
-    SEPARATOR,
-    edit('group', !can.group, () => commands.groupSelected()),
-    edit('ungroup', !can.ungroup, () => commands.ungroupSelected()),
+    {
+      id: 'arrange',
+      label: options.translate('menu.edit.arrange'),
+      disabled: arrange.every((entry) => 'separator' in entry || entry.disabled),
+      submenu: arrange,
+    },
     edit('rotate', !can.rotate, () => openRotateSelectionDialog({
       rotate: (degrees) => commands.rotateSelected(degrees),
       returnFocus: () => request.returnFocus(),

@@ -69,6 +69,13 @@ describe('menus fit the viewport', () => {
     expect(placePopupVertically({ top: 100, bottom: 130 }, 200, 800)).toEqual({ direction: 'down', top: 134, maxHeight: 658 })
     expect(placePopupVertically({ top: 700, bottom: 730 }, 300, 800)).toEqual({ direction: 'up', top: 396, maxHeight: 688 })
     expect(placePopupVertically({ top: 20, bottom: 50 }, 2000, 800)).toEqual({ direction: 'down', top: 54, maxHeight: 738 })
+    // A popup beside a pointer may slide instead: it ends inside the viewport without scrolling.
+    expect(placePopupVertically({ top: 400, bottom: 400 }, 600, 800, { gap: 0, slide: true }))
+      .toEqual({ direction: 'down', top: 192, maxHeight: 784 })
+    expect(placePopupVertically({ top: 400, bottom: 400 }, 300, 800, { gap: 0, slide: true }))
+      .toEqual({ direction: 'down', top: 400, maxHeight: 392 })
+    expect(placePopupVertically({ top: 400, bottom: 400 }, 2000, 800, { gap: 0, slide: true }))
+      .toEqual({ direction: 'down', top: 8, maxHeight: 784 })
     expect(placeSidePopupVertically(700, 400, 800)).toEqual({ top: 392, maxHeight: 784 })
     expect(placeSidePopupVertically(100, 2000, 800)).toEqual({ top: 8, maxHeight: 784 })
   })
@@ -123,15 +130,16 @@ describe('menus fit the viewport', () => {
     expect(menu.style.maxHeight).toBe(`${700 - 4 - 8}px`)
   })
 
-  it('caps a context menu opened near the bottom to the roomier side of the pointer', async () => {
+  it('caps a context menu taller than the window to the window, beside the pointer', async () => {
     defaultPopupHeight = 900
     await act(async () => {
       render(<ContextMenu label="Plant" anchor={{ left: 400, top: 300, right: 400, bottom: 300 }} onClose={vi.fn()}
         entries={Array.from({ length: 30 }, (_, index) => ({ label: `Command ${index}`, run: vi.fn() }))} />, container)
     })
     const menu = document.querySelector<HTMLElement>('[role="menu"]')!
-    expect(menu.style.maxHeight).toBe(`${800 - 8 - 300}px`)
-    expect(menu.style.top).toBe('300px')
+    expect(menu.style.maxHeight).toBe(`${800 - 8 - 8}px`)
+    expect(menu.style.top).toBe('8px')
+    expect(menu.style.left).toBe('400px')
 
     const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
     await act(async () => { menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })

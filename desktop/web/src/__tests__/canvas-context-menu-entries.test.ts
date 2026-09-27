@@ -5,6 +5,7 @@ import {
   type CanvasContextMenuEntry,
   type CanvasContextMenuEntryOptions,
   type CanvasContextMenuItemId,
+  type CanvasContextMenuSubmenu,
 } from '../app/canvas-context-menu/entries'
 import type {
   CanvasContextMenuCommands,
@@ -110,9 +111,20 @@ function ids(entries: readonly CanvasContextMenuEntry[]): string[] {
   return entries.map((entry) => 'separator' in entry ? '—' : entry.id)
 }
 
+/** Every command, submenus included, in menu order. */
+function commandsOf(entries: readonly CanvasContextMenuEntry[]): CanvasContextMenuCommand[] {
+  return entries.flatMap((entry) => 'submenu' in entry ? commandsOf(entry.submenu) : 'run' in entry ? [entry] : [])
+}
+
 function item(entries: readonly CanvasContextMenuEntry[], id: CanvasContextMenuItemId): CanvasContextMenuCommand {
-  const found = entries.find((entry): entry is CanvasContextMenuCommand => 'id' in entry && entry.id === id)
+  const found = commandsOf(entries).find((entry) => entry.id === id)
   if (!found) throw new Error(`missing ${id}`)
+  return found
+}
+
+function arrange(entries: readonly CanvasContextMenuEntry[]): CanvasContextMenuSubmenu {
+  const found = entries.find((entry): entry is CanvasContextMenuSubmenu => 'submenu' in entry && entry.id === 'arrange')
+  if (!found) throw new Error('missing Arrange')
   return found
 }
 
@@ -120,25 +132,28 @@ describe('canvas context menu entries', () => {
   it('lists plant commands in plain words, grouped, with Delete last and in red', () => {
     const { entries } = build(TWO_APPLES, { saveSelectionAsObjectStamp: vi.fn() })
 
+    // Stacking and grouping share Arrange ▸, so the plant menu fits a 800 px window.
     expect(ids(entries)).toEqual([
       'cut', 'copy', 'paste', 'duplicate', '—',
       'select-same-species', 'plant-color', 'plant-symbol', 'toggle-plant-names', 'species-details', '—',
       'add-to-calendar', 'set-unit-cost', '—',
-      'bring-to-front', 'send-to-back', '—',
-      'group', 'ungroup', 'rotate', 'save-as-stamp', '—',
+      'arrange', 'rotate', 'save-as-stamp', '—',
       'lock', 'unlock', '—',
       'delete',
     ])
+    expect(ids(arrange(entries).submenu)).toEqual(['bring-to-front', 'send-to-back', '—', 'group', 'ungroup'])
     const labels = entries.flatMap((entry) => 'label' in entry ? [entry.label] : [])
     expect(labels).toEqual([
       'Cut', 'Copy', 'Paste', 'Duplicate',
       'Select all of this species', 'Plant color', 'Plant symbol', 'Show name', 'Species details',
       'Add to calendar…', 'Set unit cost…',
-      'Bring to front', 'Send to back',
-      'Group', 'Ungroup', 'Rotate…', 'Save as stamp',
+      'Arrange', 'Rotate…', 'Save as stamp',
       'Lock', 'Unlock',
       'Delete',
     ])
+    expect(commandsOf(arrange(entries).submenu).map((entry) => entry.label))
+      .toEqual(['Bring to front', 'Send to back', 'Group', 'Ungroup'])
+    expect(arrange(entries).disabled).toBe(false)
     expect(item(entries, 'delete').danger).toBe(true)
     expect(entries.filter((entry) => 'danger' in entry && entry.danger)).toHaveLength(1)
     expect(item(entries, 'plant-color').opensDialog).toBe(true)
@@ -220,8 +235,10 @@ describe('canvas context menu entries', () => {
     const enabled = entries.flatMap((entry) => 'id' in entry && !entry.disabled ? [entry.id] : [])
     // Species details and the Budget price read or plan, never move the locked plant.
     expect(enabled).toEqual(['species-details', 'set-unit-cost', 'save-as-stamp', 'unlock'])
-    for (const entry of entries) {
-      if ('id' in entry && entry.disabled) entry.run()
+    // Arrange ▸ stays listed, disabled, while nothing in it applies.
+    expect(arrange(entries).disabled).toBe(true)
+    for (const entry of commandsOf(entries)) {
+      if (entry.disabled) entry.run()
     }
     for (const command of Object.values(commands)) {
       if (command !== commands.canPaste) expect(command).not.toHaveBeenCalled()

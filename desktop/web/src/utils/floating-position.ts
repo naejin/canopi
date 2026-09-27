@@ -64,15 +64,24 @@ export interface PopupVerticalPlacement {
  * Places a popup of `height` below its anchor, or above it when only that side
  * fits it. When neither side fits, the roomier side wins and the popup's height
  * is capped to that room, so it never covers its anchor or leaves the viewport.
+ *
+ * `slide` is for a popup that opens beside a pointer rather than over it (a
+ * context menu to the right or left of the pointer): when neither side fits,
+ * it moves up just enough to end inside the viewport, capped to the viewport,
+ * so it shows whole instead of scrolling.
  */
 export function placePopupVertically(
   anchor: { readonly top: number; readonly bottom: number },
   height: number,
   viewportHeight: number,
-  { gap = 4, margin = 8 }: { readonly gap?: number; readonly margin?: number } = {},
+  { gap = 4, margin = 8, slide = false }: { readonly gap?: number; readonly margin?: number; readonly slide?: boolean } = {},
 ): PopupVerticalPlacement {
   const below = Math.max(0, viewportHeight - margin - anchor.bottom - gap)
   const above = Math.max(0, anchor.top - gap - margin)
+  if (slide && height > below && height > above) {
+    const beside = placeSidePopupVertically(anchor.bottom + gap, height, viewportHeight, { margin })
+    return { direction: 'down', ...beside }
+  }
   const direction: 'up' | 'down' = height <= below || below >= above ? 'down' : 'up'
   const maxHeight = direction === 'down' ? below : above
   const shown = Math.min(height, maxHeight)
