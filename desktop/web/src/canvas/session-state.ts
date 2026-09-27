@@ -47,15 +47,21 @@ export interface CanvasToolGuidance {
   readonly gesture: boolean
   /** Place a stamp: the object picked to copy, once there is one. */
   readonly stamp: CanvasStampGuidance | null
+  /** Place plants: the map was clicked with no species chosen, so the card points to its chooser. */
+  readonly promptSpecies: boolean
 }
 
-export const IDLE_CANVAS_TOOL_GUIDANCE: CanvasToolGuidance = Object.freeze({ gesture: false, stamp: null })
+export const IDLE_CANVAS_TOOL_GUIDANCE: CanvasToolGuidance = Object.freeze({ gesture: false, stamp: null, promptSpecies: false })
 
 const toolGuidance = signal<CanvasToolGuidance>(IDLE_CANVAS_TOOL_GUIDANCE)
 
 export function setCanvasToolGuidance(next: CanvasToolGuidance): void {
   const current = toolGuidance.peek()
-  if (current.gesture === next.gesture && stampGuidanceEqual(current.stamp, next.stamp)) return
+  if (
+    current.gesture === next.gesture
+    && current.promptSpecies === next.promptSpecies
+    && stampGuidanceEqual(current.stamp, next.stamp)
+  ) return
   toolGuidance.value = next
 }
 

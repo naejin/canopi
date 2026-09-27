@@ -74,3 +74,99 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+/* Place plants' species chooser: the plant finder over a short list. */
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.options {
+  max-height: min(280px, calc(100cqh - var(--chrome-rail-top) - 260px));
+  min-height: 96px;
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--space-1));
+}
+
+.section {
+  margin: 0;
+  padding: var(--space-1-5) var(--space-1) var(--space-0-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.optionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: var(--control-size-xl, 40px);
+  padding: var(--space-1) var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--color-control-hover);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.optionName {
+  font-weight: 600;
+}
+
+.optionLatin {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.catalogLink {
+  align-self: flex-start;
+  min-height: var(--control-size-md);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catalogLink:hover {
+  background: var(--color-control-hover);
+}
+
+.catalogLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

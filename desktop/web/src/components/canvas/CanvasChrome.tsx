@@ -32,7 +32,7 @@ export function CanvasChrome({ projection, canvasRef, children }: {
   return (
     <>
       {!locating && <ToolRail projection={projection} showNames={toolRailShowsNamesOnMap.value} />}
-      <ToolCard />
+      <ToolCard canvasRef={canvasRef} />
       <ViewChip toggles={projection.settingsToggles} />
       <ZoomControls viewActions={projection.viewActions} />
       <InspectionLens canvasRef={canvasRef} />

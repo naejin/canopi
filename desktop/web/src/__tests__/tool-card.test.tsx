@@ -45,7 +45,7 @@ describe('Tool card', () => {
       queries: createTestCanvasQuerySurface(),
       documents: createTestCanvasDocumentSurface(),
     })
-    await act(() => render(<ToolCard />, container))
+    await act(() => render(<ToolCard canvasRef={{ current: null }} />, container))
   })
 
   afterEach(() => {
@@ -88,9 +88,7 @@ describe('Tool card', () => {
     expect(card()!.getAttribute('aria-label')).toBe('Place plants')
     expect(lines()).toEqual(['Place plants', 'Apple · click the map to place one', 'Esc to stop placing'])
     expect(live().querySelector('b')?.textContent).toBe('Apple')
-
-    await act(() => card()!.querySelector<HTMLButtonElement>('button')!.click())
-    expect(sidePanel.value).toBe('plant-db')
+    expect(card()!.querySelector('button')?.textContent).toBe('Change species')
   })
 
   it('announces a tool change in the same live region', async () => {

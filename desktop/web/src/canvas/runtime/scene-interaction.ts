@@ -1105,6 +1105,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     publish({
       gesture: described.gesture ?? adapter?.hasActiveSceneEdit?.() ?? false,
       stamp: described.stamp ?? null,
+      promptSpecies: described.promptSpecies ?? false,
     })
   }
 

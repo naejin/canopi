@@ -12,7 +12,7 @@ export interface SavedStampSummary {
 export interface ToolCardInput {
   readonly tool: string
   readonly guidance: CanvasToolGuidance
-  /** Place plants: the chosen species' shown name, or null before one is chosen. */
+  /** Place plants: the chosen species' shown name, or null while the card offers its chooser. */
   readonly speciesName: string | null
   readonly savedStamp: SavedStampSummary | null
   readonly translate: Translate
@@ -75,7 +75,9 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
 
   switch (tool) {
     case 'plant-stamp':
-      return card(input.speciesName, translate('canvas.toolCard.placeOne'))
+      return input.speciesName
+        ? card(input.speciesName, translate('canvas.toolCard.placeOne'))
+        : card(null, translate(guidance.promptSpecies ? 'canvas.toolCard.chooseFirst' : 'canvas.toolCard.chooseSpecies'))
     case 'object-stamp':
       return guidance.stamp
         ? card(stampName(guidance.stamp, translate), stampInstruction(guidance.stamp, translate))

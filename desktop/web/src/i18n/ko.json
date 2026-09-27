@@ -682,7 +682,15 @@
       "plants_many": "식물 {{count, number}}그루",
       "species_many": "{{count, number}}종",
       "plants_other": "식물 {{count, number}}그루",
-      "species_other": "{{count, number}}종"
+      "species_other": "{{count, number}}종",
+      "chooseSpecies": "배치할 종을 고르세요",
+      "chooseFirst": "먼저 종을 고른 뒤 지도를 클릭하세요",
+      "inDesign": "이 디자인에 있음",
+      "favorites": "즐겨찾기",
+      "recent": "최근",
+      "openCatalog": "전체 카탈로그 열기",
+      "noSpecies": "아직 종이 없습니다.",
+      "noMatch": "“{{query}}”와 일치하는 종이 없습니다."
     }
   },
   "worldMap": {

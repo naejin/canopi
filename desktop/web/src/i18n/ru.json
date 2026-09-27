@@ -682,7 +682,15 @@
       "plants_many": "{{count, number}} растений",
       "species_many": "{{count, number}} видов",
       "plants_other": "{{count, number}} растения",
-      "species_other": "{{count, number}} вида"
+      "species_other": "{{count, number}} вида",
+      "chooseSpecies": "Выберите вид для посадки",
+      "chooseFirst": "Сначала выберите вид, затем щёлкните по карте",
+      "inDesign": "В этом проекте",
+      "favorites": "Избранное",
+      "recent": "Недавние",
+      "openCatalog": "Открыть весь каталог",
+      "noSpecies": "Здесь пока нет видов.",
+      "noMatch": "Нет видов, подходящих к «{{query}}»."
     }
   },
   "worldMap": {

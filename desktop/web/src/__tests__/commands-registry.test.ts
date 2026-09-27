@@ -30,7 +30,6 @@ import { flattenMenuActions } from '../app/shell-commands/menus'
 import { designRenameRequest } from '../app/shell/requests'
 import { keyboardShortcutsDialogOpen, settingsDialogOpen } from '../app/shell/dialogs'
 import { placeSearchFocusRequest } from '../app/geocoding/place-search-ui'
-import { clearPlantStampSource, selectPlantStampSource } from '../canvas/plant-stamp-source'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasRuntimeSurfaces,
@@ -759,19 +758,16 @@ describe('command registry canvas tool switching', () => {
     expect(copy).not.toHaveBeenCalled()
   })
 
-  it('opens the Plant catalog from Place plants until a species is chosen', () => {
+  it('arms Place plants without a species, for the tool card to offer its chooser', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })
+    sidePanel.value = null
 
-    getCommand('canvas.tool.plantStamp').action()
-    expect(sidePanel.value).toBe('plant-db')
-    expect(setTool).not.toHaveBeenCalled()
-
-    selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: null })
     getCommand('canvas.tool.plantStamp').action()
     expect(setTool).toHaveBeenCalledWith('plant-stamp')
-    clearPlantStampSource()
+    expect(sidePanel.value).toBeNull()
   })
+
 })
 
 function emptyDesign() {

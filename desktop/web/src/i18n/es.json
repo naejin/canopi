@@ -682,7 +682,15 @@
       "plants_many": "{{count, number}} de plantas",
       "species_many": "{{count, number}} de especies",
       "plants_other": "{{count, number}} plantas",
-      "species_other": "{{count, number}} especies"
+      "species_other": "{{count, number}} especies",
+      "chooseSpecies": "Elige una especie para colocar",
+      "chooseFirst": "Elige primero una especie y luego haz clic en el mapa",
+      "inDesign": "En este diseño",
+      "favorites": "Favoritos",
+      "recent": "Recientes",
+      "openCatalog": "Abrir el catálogo completo",
+      "noSpecies": "Aún no hay especies aquí.",
+      "noMatch": "Ninguna especie coincide con «{{query}}»."
     }
   },
   "worldMap": {

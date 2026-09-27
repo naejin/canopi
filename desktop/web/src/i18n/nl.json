@@ -682,7 +682,15 @@
       "plants_many": "{{count, number}} planten",
       "species_many": "{{count, number}} soorten",
       "plants_other": "{{count, number}} planten",
-      "species_other": "{{count, number}} soorten"
+      "species_other": "{{count, number}} soorten",
+      "chooseSpecies": "Kies een soort om te plaatsen",
+      "chooseFirst": "Kies eerst een soort en klik dan op de kaart",
+      "inDesign": "In dit ontwerp",
+      "favorites": "Favorieten",
+      "recent": "Recent",
+      "openCatalog": "De volledige catalogus openen",
+      "noSpecies": "Nog geen soorten hier.",
+      "noMatch": "Geen soorten komen overeen met ‘{{query}}’."
     }
   },
   "worldMap": {

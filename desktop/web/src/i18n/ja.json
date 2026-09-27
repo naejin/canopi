@@ -682,7 +682,15 @@
       "plants_many": "{{count, number}} 株",
       "species_many": "{{count, number}} 種",
       "plants_other": "{{count, number}} 株",
-      "species_other": "{{count, number}} 種"
+      "species_other": "{{count, number}} 種",
+      "chooseSpecies": "配置する種を選んでください",
+      "chooseFirst": "先に種を選んでから地図をクリックしてください",
+      "inDesign": "このデザイン内",
+      "favorites": "お気に入り",
+      "recent": "最近",
+      "openCatalog": "カタログ全体を開く",
+      "noSpecies": "まだ種がありません。",
+      "noMatch": "「{{query}}」に一致する種はありません。"
     }
   },
   "worldMap": {

@@ -10427,7 +10427,7 @@ describe('SceneInteractionSession', () => {
     it('reports a polygon draft as a gesture until it is cancelled', () => {
       const { session, latest } = guidedSession()
       session.setTool('polygon')
-      expect(latest()).toEqual({ gesture: false, stamp: null })
+      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false })
 
       events.pointerDown({ x: 10, y: 10 })
       events.pointerUp({ x: 10, y: 10 })
@@ -10505,7 +10505,7 @@ describe('SceneInteractionSession', () => {
 
       session.dispose()
 
-      expect(latest()).toEqual({ gesture: false, stamp: null })
+      expect(latest()).toEqual({ gesture: false, stamp: null, promptSpecies: false })
     })
   })
 
@@ -10524,5 +10524,30 @@ describe('SceneInteractionSession', () => {
     expect(second!.x).toBeCloseTo(Math.hypot(50, 4) + 10)
     expect(third).toEqual({ x: 60, y: 50 })
     session.dispose()
+  })
+  describe('Place plants without a species', () => {
+    it('places nothing and asks the tool card to point to the species chooser', () => {
+      const published: CanvasToolGuidance[] = []
+      const deps = createInteractionDeps(container, store, camera, {
+        publishToolGuidance: (guidance) => { published.push(guidance) },
+      })
+      const session = createTestSession(deps)
+      session.setTool('plant-stamp')
+      expect(published.at(-1)?.promptSpecies).toBe(false)
+
+      events.pointerDown({ x: 40, y: 40 })
+      events.pointerUp({ x: 40, y: 40 })
+
+      expect(store.persisted.plants).toHaveLength(0)
+      expect(published.at(-1)?.promptSpecies).toBe(true)
+
+      selectPlantStampSource({ canonical_name: 'Malus domestica', common_name: 'Apple', stratum: null, width_max_m: 6 })
+      events.pointerDown({ x: 40, y: 40 })
+      events.pointerUp({ x: 40, y: 40 })
+
+      expect(store.persisted.plants).toHaveLength(1)
+      expect(published.at(-1)?.promptSpecies).toBe(false)
+      session.dispose()
+    })
   })
 })

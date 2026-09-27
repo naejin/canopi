@@ -682,7 +682,15 @@
       "plants_many": "{{count, number}} 株植物",
       "species_many": "{{count, number}} 个物种",
       "plants_other": "{{count, number}} 株植物",
-      "species_other": "{{count, number}} 个物种"
+      "species_other": "{{count, number}} 个物种",
+      "chooseSpecies": "选择要放置的物种",
+      "chooseFirst": "请先选择物种，再点击地图",
+      "inDesign": "本设计中",
+      "favorites": "收藏",
+      "recent": "最近",
+      "openCatalog": "打开完整目录",
+      "noSpecies": "这里还没有物种。",
+      "noMatch": "没有与“{{query}}”匹配的物种。"
     }
   },
   "worldMap": {

@@ -13,12 +13,17 @@ export interface PlantStampToolContext {
 
 export interface PlantStampTool {
   readonly pointerDown: (world: ScenePoint) => void
+  /** A click found no species chosen, and none has been chosen since. */
+  readonly promptsSpecies: () => boolean
   readonly clear: () => void
 }
 
 export function createPlantStampTool(context: PlantStampToolContext): PlantStampTool {
+  let speciesPrompted = false
+
   function pointerDown(world: ScenePoint): void {
     const source = readPlantStampSource()
+    speciesPrompted = source === null
     if (!source) return
     if (!isSceneLayerOpenForCreation(context.getSceneStore().persisted, 'plants')) return
 
@@ -33,7 +38,9 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
 
   return {
     pointerDown,
+    promptsSpecies: () => speciesPrompted && readPlantStampSource() === null,
     clear() {
+      speciesPrompted = false
       clearPlantStampSource()
     },
   }
@@ -42,6 +49,7 @@ export function createPlantStampTool(context: PlantStampToolContext): PlantStamp
 export function createPlantStampToolAdapter(tool: PlantStampTool): SceneToolAdapter {
   return {
     onDeactivate: tool.clear,
+    describeGuidance: () => ({ promptSpecies: tool.promptsSpecies() }),
     pointerDown({ rawWorld }) {
       tool.pointerDown(rawWorld)
       return true

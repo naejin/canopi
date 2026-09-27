@@ -17,7 +17,6 @@ import {
 } from '../canvas-settings/signals'
 import { requestPlaceSearchFocus } from '../geocoding/place-search-ui'
 import { activePanel, selectPanel } from '../shell/state'
-import { readPlantStampSource } from '../../canvas/plant-stamp-source'
 import {
   currentCanvasCommandSurface,
   currentCanvasHasSelection,
@@ -62,15 +61,8 @@ function withCanvas(run: (canvas: CanvasCommandSurface) => void): void {
   if (canvas) run(canvas)
 }
 
-/**
- * Place plants needs a species: without one chosen in the catalog, the
- * command opens the Plant catalog instead of arming a tool that cannot place.
- */
+/** Place plants arms without a species too: its tool card offers the species chooser. */
 export function selectCanvasTool(tool: CanvasToolId): void {
-  if (tool === 'plant-stamp' && !readPlantStampSource()) {
-    selectPanel('plant-db')
-    return
-  }
   if (activePanel.peek() !== 'canvas') selectPanel('canvas')
   setCurrentCanvasTool(tool)
 }

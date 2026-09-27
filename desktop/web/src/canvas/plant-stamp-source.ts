@@ -31,6 +31,9 @@ type DragDataTypes = {
 type ReadableDragData = Pick<DataTransfer, 'getData'> & DragDataTypes
 
 const selectedPlantStampSource = signal<PlantStampSource | null>(null)
+const RECENT_PLANT_STAMP_SOURCE_LIMIT = 8
+/** Species chosen to place this session, newest first; Place plants' chooser offers them. */
+export const recentPlantStampSources = signal<readonly PlantStampSource[]>([])
 
 export function plantStampSourceFromSpecies(source: PlantStampSourceInput): PlantStampSource {
   return {
@@ -48,6 +51,10 @@ export function readPlantStampSource(): PlantStampSource | null {
 export function selectPlantStampSource(source: PlantStampSourceInput): PlantStampSource {
   const next = plantStampSourceFromSpecies(source)
   selectedPlantStampSource.value = next
+  recentPlantStampSources.value = [
+    next,
+    ...recentPlantStampSources.peek().filter((entry) => entry.canonical_name !== next.canonical_name),
+  ].slice(0, RECENT_PLANT_STAMP_SOURCE_LIMIT)
   return next
 }
 
