@@ -1,3 +1,4 @@
+import { logMapError } from '../../maplibre/redact-credentials'
 import type { MapFrame } from '../../canvas/maplibre-camera'
 import type { MapLibreSurfaceContext } from '../../maplibre/surface-adapter'
 import type { MapLibreMapInstance } from '../../maplibre/loader'
@@ -342,7 +343,7 @@ export class WorkspaceMapContributions {
   }
 
   private log(message: string, error: unknown): void {
-    (this.options.logError ?? console.error)(message, error)
+    (this.options.logError ?? logMapError)(message, error)
   }
 }
 

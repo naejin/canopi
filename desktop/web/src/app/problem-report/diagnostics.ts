@@ -1,3 +1,4 @@
+import { redactCredentials } from '../../maplibre/redact-credentials'
 import type { FrontendDiagnosticEntry } from '../../generated/contracts'
 
 type FrontendDiagnosticLevel = 'error' | 'warning' | 'info'
@@ -43,12 +44,9 @@ const PATH_TOKEN = String.raw`(?:[^\n\r"')\]},;:]|:(?!\s|$))+`
 const FILE_URL_PATH = new RegExp(String.raw`\bfile:\/\/\/${PATH_TOKEN}`, 'g')
 const UNIX_PATH = new RegExp(String.raw`(^|[\s"'([{=])\/${PATH_TOKEN}`, 'g')
 const WINDOWS_PATH = new RegExp(String.raw`(^|[\s"'([{=])[A-Za-z]:[\\/]${PATH_TOKEN}`, 'g')
-// Credential query parameters such as the Google Maps `key=`.
-const CREDENTIAL_QUERY_VALUE = /(^|[?&;\s])(key|api-key|api_key|apikey)=[^\s&#"')\]},;<>]+/gi
 
 function sanitizeDiagnosticText(text: string): string {
-  return text
-    .replace(CREDENTIAL_QUERY_VALUE, '$1$2=<redacted>')
+  return redactCredentials(text)
     .replace(FILE_URL_PATH, 'file://<path>')
     .replace(UNIX_PATH, '$1<path>')
     .replace(WINDOWS_PATH, '$1<path>')

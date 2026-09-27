@@ -1,3 +1,4 @@
+import { logMapError } from './redact-credentials'
 import {
   loadMapLibre as defaultLoadMapLibre,
   type MapLibreApi,
@@ -343,7 +344,7 @@ class ImperativeMapLibreHost implements MapLibreHost {
   }
 
   private logError(message?: unknown, ...optionalParams: unknown[]): void {
-    const log = this.deps.logError ?? console.error
+    const log = this.deps.logError ?? logMapError
     log(message, ...optionalParams)
   }
 

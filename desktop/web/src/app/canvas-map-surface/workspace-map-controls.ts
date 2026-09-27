@@ -12,6 +12,7 @@ import {
   type MapBackgroundPresentation,
 } from '../../maplibre/map-background'
 import { OPENFREEMAP_SOURCE_PREFIX } from '../../maplibre/openfreemap-basemap'
+import { describeMapErrorEvent, logMapError, redactCredentials, redactError } from '../../maplibre/redact-credentials'
 import type { MapLibreSurfaceLifetime } from '../../maplibre/surface-adapter'
 import { IDLE_MAPLIBRE_CANVAS_SURFACE_STATE } from '../../maplibre/canvas-surface-state'
 import { toMapLibreSurfaceErrorMessage } from '../../maplibre/canvas-surface-errors'
@@ -77,7 +78,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
 
   constructor(private readonly options: WorkspaceActivationMapControlsOptions) {
     this.surface = options.surface ?? createMapLibreSurfaceAdapter()
-    this.logError = options.logError ?? console.error
+    this.logError = options.logError ?? logMapError
   }
 
   createMap(
@@ -161,7 +162,7 @@ export class WorkspaceMapControls implements WorkspaceActivationMapControls {
             if (!isLive()) return
             if (attempt.admitted && attempt.contributions.handleSourceError(event)) return
             if (attempt.admitted && isPassiveBasemapError(event)) {
-              this.logError('Passive MapLibre workspace basemap error:', event)
+              this.logError('Passive MapLibre workspace basemap error:', describeMapErrorEvent(event))
               return
             }
             const error = mapError(event)
@@ -479,11 +480,11 @@ function isPassiveBasemapError(event: unknown): boolean {
 }
 
 function mapError(event: unknown): Error {
-  if (event instanceof Error) return event
-  if (typeof event === 'string' && event.length > 0) return new Error(event)
+  if (event instanceof Error) return redactError(event)
+  if (typeof event === 'string' && event.length > 0) return new Error(redactCredentials(event))
   if (typeof event === 'object' && event !== null && 'message' in event
     && typeof event.message === 'string' && event.message.length > 0) {
-    return new Error(event.message)
+    return new Error(redactCredentials(event.message))
   }
   if (
     typeof event === 'object'

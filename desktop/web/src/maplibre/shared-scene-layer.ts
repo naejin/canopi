@@ -1,4 +1,5 @@
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
+import { logMapError } from './redact-credentials'
 import 'pixi.js/unsafe-eval'
 import { Container, Text, WebGLRenderer } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
@@ -139,7 +140,7 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
     try {
       options.onFailure?.(error)
     } catch (observerError) {
-      console.error('Shared map scene failure observer failed:', observerError)
+      logMapError('Shared map scene failure observer failed:', observerError)
     }
   }
 

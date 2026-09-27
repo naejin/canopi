@@ -1,3 +1,4 @@
+import { logMapError } from '../../maplibre/redact-credentials'
 import { captureWorkspaceMapContributions, type WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import { throwCanvasRuntimeCleanupErrors } from '../../canvas/runtime/cleanup'
 import type { SceneCanvasRuntime } from '../../canvas/runtime/scene-runtime'
@@ -448,7 +449,7 @@ export class WorkspaceActivationCoordinator {
     // Design replacement is synchronous. Keep a terminal observation here so
     // an intentionally unjoined cleanup cannot become an unhandled rejection.
     void cleanup.catch((error) => {
-      console.error('Shared workspace Design-replacement cleanup failed:', error)
+      logMapError('Shared workspace Design-replacement cleanup failed:', error)
     })
     return cleanup
   }
@@ -795,14 +796,14 @@ export class WorkspaceActivationCoordinator {
     if (this.observedOwnedReentryResults.has(result)) return
     this.observedOwnedReentryResults.add(result)
     void result.catch((error) => {
-      console.error('Reentrant shared workspace lifecycle operation failed:', error)
+      logMapError('Reentrant shared workspace lifecycle operation failed:', error)
     })
   }
 
   private observeFailure(current: ActivationGeneration, error: unknown): void {
     void this.reportFailureFor(current, error).catch((failure) => {
       if (this.isCurrent(current)) {
-        console.error('Shared workspace map failure handling failed:', failure)
+        logMapError('Shared workspace map failure handling failed:', failure)
       }
     })
   }
@@ -861,7 +862,7 @@ export class WorkspaceActivationCoordinator {
     try {
       this.runOwnedCallback('stale map release', () => this.options.map.releaseMap(map))
     } catch (error) {
-      console.error('Failed to release stale MapLibre workspace map:', error)
+      logMapError('Failed to release stale MapLibre workspace map:', error)
     }
   }
 

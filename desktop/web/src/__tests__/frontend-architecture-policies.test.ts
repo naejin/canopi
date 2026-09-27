@@ -2103,3 +2103,20 @@ describe('declarative frontend architecture policies', () => {
     expect(collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES)).toEqual([])
   }, 20_000)
 })
+
+describe('map error logging', () => {
+  it('routes every map-layer console write through the credential redactor', async () => {
+    const { readdirSync } = await import('node:fs')
+    const roots = ['../maplibre', '../app/canvas-map-surface']
+    const offenders: string[] = []
+    for (const root of roots) {
+      const dir = new URL(`${root}/`, import.meta.url)
+      for (const name of readdirSync(dir)) {
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name) || name === 'redact-credentials.ts') continue
+        const source = readFileSync(new URL(name, dir), 'utf8')
+        if (/\bconsole\.(error|warn|log|info|debug)\b/.test(source)) offenders.push(`${root}/${name}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})

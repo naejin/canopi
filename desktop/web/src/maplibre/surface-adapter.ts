@@ -1,3 +1,4 @@
+import { logMapError } from './redact-credentials'
 import {
   createMapLibreHost,
   type MapLibreHost,
@@ -76,7 +77,7 @@ class HostedMapLibreSurfaceAdapter<TMap extends MapLibreMapInstance>
 
   constructor(deps: MapLibreHostDeps) {
     this.host = createMapLibreHost(deps)
-    this.logError = deps.logError ?? console.error
+    this.logError = deps.logError ?? logMapError
   }
 
   get map(): TMap | null {

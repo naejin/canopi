@@ -1,3 +1,4 @@
+import { logMapError } from './redact-credentials'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
 import type { SceneViewportState } from '../canvas/runtime/scene'
 import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../canvas/workspace-camera-policy'
@@ -506,7 +507,7 @@ async function teardownInstance(instance: SnapshotInstance): Promise<void> {
     errors.push(error)
   }
   instance.container.remove()
-  if (errors.length > 0) console.error('View snapshot map teardown failed:', errors[0])
+  if (errors.length > 0) logMapError('View snapshot map teardown failed:', errors[0])
 }
 
 function validateRequest(request: ViewSnapshotRequest): string | null {

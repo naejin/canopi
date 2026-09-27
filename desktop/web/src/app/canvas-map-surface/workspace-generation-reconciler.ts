@@ -1,3 +1,4 @@
+import { logMapError } from '../../maplibre/redact-credentials'
 import { mapBackgroundPresentationsEqual } from '../../maplibre/map-background'
 import type {
   WorkspaceActivationOutcome,
@@ -204,15 +205,15 @@ export class WorkspaceGenerationReconciler {
   private reportFailure(error: unknown): void {
     try {
       if (this.options.onFailure) this.options.onFailure(error)
-      else console.error('Shared workspace activation failed:', error)
+      else logMapError('Shared workspace activation failed:', error)
     } catch (observerError) {
-      console.error('Shared workspace failure observer failed:', observerError)
+      logMapError('Shared workspace failure observer failed:', observerError)
     }
   }
 
   private observeTerminalTeardown(result: Promise<void>): void {
     void result.catch((error) => {
-      console.error('Shared workspace teardown failed:', error)
+      logMapError('Shared workspace teardown failed:', error)
     })
   }
 }

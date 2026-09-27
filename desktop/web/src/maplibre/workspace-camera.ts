@@ -1,3 +1,4 @@
+import { logMapError } from './redact-credentials'
 import {
   CameraController,
   clampCameraScale,
@@ -471,7 +472,7 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
       try {
         observer(failure)
       } catch (observerError) {
-        console.error('MapLibre workspace camera failure observer failed:', observerError)
+        logMapError('MapLibre workspace camera failure observer failed:', observerError)
       }
     }
   }

@@ -248,6 +248,14 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+const LEAKED_KEY = 'AIzaLeakedTestKey123'
+
+function serializedCalls(calls: unknown[][]): string {
+  return JSON.stringify(calls, (_key, value) => value instanceof Error
+    ? { ...value, name: value.name, message: value.message }
+    : value)
+}
+
 describe('WorkspaceMapControls', () => {
   it('acceptance: repeated Satellite hide/show releases mount-owned movement listeners', async () => {
     const { controls, maps } = createControls()
@@ -1177,7 +1185,7 @@ describe('WorkspaceMapControls', () => {
     expect(map.remove).not.toHaveBeenCalled()
     expect(logError).toHaveBeenCalledWith(
       'Passive MapLibre workspace basemap error:',
-      event,
+      `source ${MAPLIBRE_SATELLITE_SOURCE_ID} · tile request failed immediately`,
     )
     logError.mockRestore()
   })
@@ -1307,6 +1315,47 @@ describe('WorkspaceMapControls', () => {
     expect(map.remove).toHaveBeenCalledOnce()
   })
 
+  it('never logs a Google tile key from a passive Satellite tile error', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { controls, maps } = createControls()
+      const acquisition = controls.createMap(new AbortController().signal)
+      const map = await waitForMap(maps)
+      map.emit('style.load')
+      await acquisition
+      const url = `https://tile.googleapis.com/v1/2dtiles/18/1/2?session=s1&key=${LEAKED_KEY}`
+
+      map.emit('error', {
+        type: 'error',
+        sourceId: MAPLIBRE_SATELLITE_SOURCE_ID,
+        error: Object.assign(new Error(`AJAXError: Forbidden (403): ${url}`), { status: 403, url }),
+        tile: { tileID: { canonical: { z: 18, x: 1, y: 2 } }, url },
+      })
+
+      expect(logged).toHaveBeenCalled()
+      expect(serializedCalls(logged.mock.calls)).not.toContain(LEAKED_KEY)
+      expect(serializedCalls(logged.mock.calls)).toContain(MAPLIBRE_SATELLITE_SOURCE_ID)
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('strips a tile key from a MapLibre error before it reaches a failure watcher', async () => {
+    const { controls, maps } = createControls()
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    await acquisition
+    const reportFailure = vi.fn()
+    controls.watchFailure(map as never, reportFailure)
+
+    map.emit('error', { error: new Error(`AJAXError: Forbidden (403): https://example.test/style.json?key=${LEAKED_KEY}`) })
+
+    expect(reportFailure).toHaveBeenCalledOnce()
+    expect(String((reportFailure.mock.calls[0]?.[0] as Error).message)).not.toContain(LEAKED_KEY)
+    expect(String((reportFailure.mock.calls[0]?.[0] as Error).message)).toContain('key=<redacted>')
+  })
+
   it('retains post-admission context loss until the coordinator registers its watcher', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)
@@ -1366,7 +1415,10 @@ describe('WorkspaceMapControls', () => {
     }
     map.emit('error', event)
     expect(map.remove).not.toHaveBeenCalled()
-    expect(logError).toHaveBeenCalledWith('Passive MapLibre workspace basemap error:', event)
+    expect(logError).toHaveBeenCalledWith(
+      'Passive MapLibre workspace basemap error:',
+      `source ${MAPLIBRE_SATELLITE_SOURCE_ID} · tile unavailable`,
+    )
     logError.mockRestore()
   })
 
@@ -1385,7 +1437,10 @@ describe('WorkspaceMapControls', () => {
 
     expect(map.remove).not.toHaveBeenCalled()
     expect(reportFailure).not.toHaveBeenCalled()
-    expect(logError).toHaveBeenCalledWith('Passive MapLibre workspace basemap error:', event)
+    expect(logError).toHaveBeenCalledWith(
+      'Passive MapLibre workspace basemap error:',
+      'source ofm-openmaptiles · vector tile unavailable',
+    )
   })
 
   it('cancels module loading and style waiting without leaving a map alive', async () => {
