@@ -61,6 +61,8 @@ export interface WorkspaceMenuInput<Id extends ShellCommandId> {
   /** Null while no canvas runtime is mounted: Edit and Tools still list their commands, disabled. */
   readonly canvas: CanvasCommandProjection
   readonly translate: (key: string) => string
+  /** View › Saved views ▸: one entry per saved view of the open Design. */
+  readonly savedViews?: readonly MenuAction[]
   /** Extra File entries placed right after a shell command (Open recent after Open Design…). */
   readonly fileInsertions?: readonly { readonly after: Id; readonly entry: MenuEntry }[]
 }
@@ -86,6 +88,7 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
   shell,
   canvas,
   translate,
+  savedViews = [],
   fileInsertions = [],
 }: WorkspaceMenuInput<Id>): MenuDefinition[] {
   const shellMenu = (id: 'file' | 'edit' | 'view' | 'help') => shell.menus.find((menu) => menu.id === id)
@@ -137,6 +140,10 @@ export function composeWorkspaceMenus<Id extends ShellCommandId>({
     label: viewMenu?.label ?? translate('menu.view'),
     items: joinSections([
       canvas.viewActions.map((command) => canvasAction(command)),
+      // Saved views, then the commands that save and manage them (shell section 2).
+      viewSections[2]
+        ? [submenu('view.savedViews', translate('menu.view.savedViews'), savedViews), ...shellSectionEntries(viewSections[2], translate)]
+        : [],
       [
         ...canvas.settingsToggles.map((command) => canvasAction(command, command.pressed ?? false)),
         ...shellSectionEntries(viewSections[0] ?? [], translate),

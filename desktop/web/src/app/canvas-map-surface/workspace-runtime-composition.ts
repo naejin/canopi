@@ -34,9 +34,7 @@ import { WorkspaceMapControls } from './workspace-map-controls'
 import type { WorkspaceActivationMapControls, WorkspaceActivationSnapshot } from './workspace-activation'
 import type { WorkspaceMapContributionAdapter, WorkspaceMapContributionSnapshot } from './workspace-map-contribution-adapter'
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
-import { DEFAULT_NEW_DESIGN_VIEW, type SessionPlane } from '../../canvas/session-plane'
-import { stageScaleToMapZoom, viewportCenterWorld } from '../../canvas/projection'
-import type { CameraViewportSnapshot } from '../../canvas/runtime/camera'
+import { DEFAULT_NEW_DESIGN_VIEW, geographicViewOf, type GeographicView } from '../../canvas/session-plane'
 
 export type WorkspaceRuntimeStartOutcome = WorkspaceActivationOutcome | 'no-design'
 
@@ -58,11 +56,7 @@ export interface WorkspaceRuntimeMountOptions {
 }
 
 /** The geographic view a settled camera shows, for the app's last-view setting. */
-export interface WorkspaceSettledView {
-  readonly lon: number
-  readonly lat: number
-  readonly zoom: number
-}
+export type WorkspaceSettledView = GeographicView
 
 export const WORKSPACE_VIEW_SETTLE_MS = 750
 
@@ -222,7 +216,7 @@ export function createWorkspaceRuntimeComposition(
               // Before a Design is loaded and fitted the camera shows its
               // default viewport, which is not a view the user chose.
               if (!documents.hasLoadedDocument()) return
-              const view = settledViewOf(frame, plane)
+              const view = geographicViewOf(frame, plane)
               if (view) onViewSettled(view)
             }, WORKSPACE_VIEW_SETTLE_MS)
           })
@@ -280,14 +274,6 @@ export function createWorkspaceRuntimeComposition(
       return disposeResult
     },
   }
-}
-
-function settledViewOf(frame: CameraViewportSnapshot, plane: SessionPlane): WorkspaceSettledView | null {
-  const centre = plane.toGeo(viewportCenterWorld(frame.viewport, frame.screenSize))
-  const zoom = stageScaleToMapZoom(frame.viewport.scale, centre.lat)
-  return [centre.lon, centre.lat, zoom].every(Number.isFinite)
-    ? { lon: centre.lon, lat: centre.lat, zoom }
-    : null
 }
 
 function reportCompositionFailure(

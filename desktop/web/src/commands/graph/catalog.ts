@@ -51,6 +51,8 @@ type DesktopShellCapabilityId =
   | 'exportGeoJson'
   | 'openSettings'
   | 'findPlants'
+  | 'saveCurrentView'
+  | 'manageViews'
   | 'exitApp'
   | 'navigateCanvas'
   | 'navigateLayers'

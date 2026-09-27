@@ -163,7 +163,7 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       zoomToFit: () => this.zoomToFit(),
       returnToDesign: () => this.returnToDesign(),
       focusTemporaryBounds: (bounds, options) => this.focusTemporaryBounds(bounds, options),
-      showPlace: (place, zoom) => this.showPlace(place, zoom),
+      showPlace: (place, zoom, options) => this.showPlace(place, zoom, options),
       returnFromTemporaryFocus: () => this.returnFromTemporaryFocus(),
     }
     this.history = {
@@ -302,10 +302,16 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     this.options.invalidate('viewport')
   }
 
-  private showPlace(place: { readonly lon: number; readonly lat: number }, zoom: number): boolean {
+  private showPlace(
+    place: { readonly lon: number; readonly lat: number },
+    zoom: number,
+    options?: { readonly motion?: 'fly' | 'jump' },
+  ): boolean {
     if (![place.lon, place.lat, zoom].every(Number.isFinite)) return false
     const point = this.options.sceneStore.sessionPlane.toPlane(place)
-    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, place.lat))
+    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, place.lat), {
+      animate: options?.motion === 'fly',
+    })
     this.options.invalidate('viewport')
     return true
   }

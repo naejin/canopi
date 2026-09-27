@@ -87,7 +87,7 @@ export default defineConfig(({ mode }) => {
         exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**", "src/vendor/**"],
         reporter: ["text-summary", "json-summary"],
         // Ratchet: the floor is the measured baseline; raise it, never lower it.
-        thresholds: { statements: 87.6, branches: 78.2, functions: 88.4, lines: 90.9 },
+        thresholds: { statements: 87.9, branches: 78.4, functions: 88.7, lines: 91.1 },
       },
     },
   };

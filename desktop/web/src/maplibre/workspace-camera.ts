@@ -2,11 +2,12 @@ import {
   CameraController,
   clampCameraScale,
   createInitialCameraFrame,
+  type CameraMoveOptions,
   type CameraScreenMetrics,
   type CameraViewportPublication,
   type WorkspaceCameraOwner,
 } from '../canvas/runtime/camera'
-import type { SceneViewportState } from '../canvas/runtime/scene'
+import type { ScenePoint, SceneViewportState } from '../canvas/runtime/scene'
 import type { SessionPlaneTransform } from '../canvas/session-plane'
 import { createMapFrame } from '../canvas/maplibre-camera'
 import { mapZoomToStageScale } from '../canvas/projection'
@@ -41,7 +42,7 @@ export type MapLibreWorkspaceCameraMap = Required<Pick<MapLibreMapInstance,
   | 'getMaxZoom'
   | 'getCenter'
   | 'getCanvas'
->>
+>> & Pick<MapLibreMapInstance, 'flyTo'>
 
 export type MapLibreWorkspaceCameraFailure =
   | { readonly kind: 'invalid-projection'; readonly reason: string }
@@ -192,6 +193,17 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     return this.jumpAttachedMap(active, viewport)
   }
 
+  override centerOn(
+    point: ScenePoint,
+    scale: number,
+    options?: CameraMoveOptions,
+  ): SceneViewportState {
+    const active = this.active
+    if (!options?.animate || !active?.attachment.map.flyTo) return super.centerOn(point, scale)
+    this.clearTemporaryFocus()
+    return this.flyAttachedMap(active, this.centredViewport(point, scale))
+  }
+
   /**
    * While attached, the map is the camera: a session-plane move changes only
    * how its unchanged view is expressed in metres, which the origin refresh
@@ -250,6 +262,35 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
     } catch (error) {
       this.failAttachment(active, { kind: 'attachment-error', error })
       if (!this.disposed && this.active === null) return super.setViewport(boundedViewport)
+      return this.viewport
+    }
+  }
+
+  // Starts a MapLibre flight; each animation frame publishes through the move
+  // listener, and any later jump (pan, zoom, fit) stops the flight.
+  private flyAttachedMap(
+    active: ActiveAttachment,
+    viewport: SceneViewportState,
+  ): SceneViewportState {
+    try {
+      const map = active.attachment.map
+      const boundedViewport = this.boundAttachedViewport(map, viewport)
+      if (sameViewport(boundedViewport, this.snapshot.peek().viewport)) return this.viewport
+      const frame = createMapFrame(
+        boundedViewport,
+        this.mapScreenMetrics(map),
+        active.attachment.readOrigin(),
+        this.policy,
+      )
+      if (!frame) throw new Error('Cannot fly MapLibre without a finite CSS-pixel frame.')
+      map.flyTo!({
+        center: [frame.center[0], frame.center[1]],
+        zoom: frame.zoom,
+        bearing: frame.bearing,
+      })
+      return this.viewport
+    } catch (error) {
+      this.failAttachment(active, { kind: 'attachment-error', error })
       return this.viewport
     }
   }

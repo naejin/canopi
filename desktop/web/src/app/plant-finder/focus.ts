@@ -1,4 +1,5 @@
 import { saveProblem } from '../document-session/save-problem'
+import { savedViewDialogOpen } from '../saved-views/dialogs'
 
 /**
  * Ctrl F (Cmd F) focuses the plant finder of the open panel. Each mounted finder
@@ -34,8 +35,8 @@ export function isFindPlantsShortcut(event: {
 
 /** Shared by both editions' key routing; true when the shortcut focused a finder. */
 export function runFindPlantsShortcut(event: KeyboardEvent): boolean {
-  // The save dialog is modal: the finder under it must not take focus.
-  if (!isFindPlantsShortcut(event) || saveProblem.peek() !== null) return false
+  // Modal dialogs: the finder under them must not take focus.
+  if (!isFindPlantsShortcut(event) || saveProblem.peek() !== null || savedViewDialogOpen.peek()) return false
   if (!focusOpenPlantFinder()) return false
   event.preventDefault()
   return true

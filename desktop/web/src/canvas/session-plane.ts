@@ -12,6 +12,8 @@ import {
   geoToMercator,
   mercatorToGeo,
   mercatorUnitsPerMeterAtLat,
+  stageScaleToMapZoom,
+  viewportCenterWorld,
 } from './projection'
 
 export interface GeoPosition {
@@ -43,6 +45,28 @@ export interface SessionPlane {
   // Mercator units per plane metre; exposed for affine camera math.
   readonly mercatorUnitsPerMeter: number
   readonly mercatorOrigin: PlanePoint
+}
+
+/** A geographic camera: the view centre and its MapLibre zoom. */
+export interface GeographicView {
+  readonly lon: number
+  readonly lat: number
+  readonly zoom: number
+}
+
+/** The geographic view a plane viewport shows, or null when it is not finite. */
+export function geographicViewOf(
+  frame: {
+    readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
+    readonly screenSize: { readonly width: number; readonly height: number }
+  },
+  plane: SessionPlane,
+): GeographicView | null {
+  const centre = plane.toGeo(viewportCenterWorld(frame.viewport, frame.screenSize))
+  const zoom = stageScaleToMapZoom(frame.viewport.scale, centre.lat)
+  return [centre.lon, centre.lat, zoom].every(Number.isFinite)
+    ? { lon: centre.lon, lat: centre.lat, zoom }
+    : null
 }
 
 export function createSessionPlane(origin: GeoPosition): SessionPlane {

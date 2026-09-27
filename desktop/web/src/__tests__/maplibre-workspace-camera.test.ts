@@ -438,4 +438,42 @@ describe('MapLibreWorkspaceCameraOwner', () => {
     firstMap.emit('move')
     expect(owner.snapshot.value.viewport).toEqual({ x: 20, y: 30, scale: 3 })
   })
+
+  it('flies an attached map to an animated centre and jumps otherwise', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const map = new FakeMap()
+    const flyTo = vi.fn()
+    Object.assign(map, { flyTo })
+    owner.attach(attachmentFor(map))
+    const jumps = map.jumpTo.mock.calls.length
+    const scale = mapZoomToStageScale(19, 48.8566)
+    const expected = createMapFrame(
+      { x: 200 - 40 * scale, y: 150 - 25 * scale, scale },
+      { width: 400, height: 300 },
+      { lat: 48.8566, lon: 2.3522 },
+    )!
+
+    owner.centerOn({ x: 40, y: 25 }, scale, { animate: true })
+
+    expect(flyTo).toHaveBeenCalledTimes(1)
+    expect(flyTo.mock.calls[0]![0].center[0]).toBeCloseTo(expected.center[0], 9)
+    expect(flyTo.mock.calls[0]![0].center[1]).toBeCloseTo(expected.center[1], 9)
+    expect(flyTo.mock.calls[0]![0].zoom).toBeCloseTo(expected.zoom, 9)
+    expect(flyTo.mock.calls[0]![0].bearing).toBe(0)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps)
+
+    owner.centerOn({ x: 40, y: 25 }, scale)
+    expect(flyTo).toHaveBeenCalledTimes(1)
+    expect(map.jumpTo).toHaveBeenCalledTimes(jumps + 1)
+  })
+
+  it('jumps a detached camera even when asked to animate', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+
+    owner.centerOn({ x: 10, y: 20 }, 2, { animate: true })
+
+    expect(owner.viewport).toEqual({ x: 180, y: 110, scale: 2 })
+  })
 })

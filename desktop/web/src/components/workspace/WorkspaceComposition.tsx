@@ -12,6 +12,7 @@ import {
   type SidePanel,
 } from '../../app/shell/state'
 import { CanvasPdfDialog } from '../canvas-pdf/CanvasPdfDialog'
+import { SavedViewDialogs } from '../shared/SavedViewDialogs'
 import { SidePanelDock } from '../shared/SidePanelDock'
 import styles from './WorkspaceComposition.module.css'
 
@@ -100,7 +101,12 @@ export function WorkspaceComposition({
 }
 
 export function WorkspaceDialogs() {
-  return <CanvasPdfDialog />
+  return (
+    <>
+      <CanvasPdfDialog />
+      <SavedViewDialogs />
+    </>
+  )
 }
 
 export function validateWorkspaceSurfaces(

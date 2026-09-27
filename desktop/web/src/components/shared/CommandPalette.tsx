@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { useSignalEffect } from "@preact/signals";
 import { appCommandGraphChromeProjection, commandPaletteOpen } from "../../commands/registry";
 import { saveProblem } from "../../app/document-session/save-problem";
+import { savedViewDialogOpen } from "../../app/saved-views";
 import { t } from "../../i18n";
 import styles from "./CommandPalette.module.css";
 
@@ -19,8 +20,8 @@ export function CommandPalette() {
     setActiveIdx(0);
   });
 
-  // The save dialog is modal; the palette must not run commands under it.
-  if (!commandPaletteOpen.value || saveProblem.value !== null) return null;
+  // Modal dialogs: the palette must not run commands under them.
+  if (!commandPaletteOpen.value || saveProblem.value !== null || savedViewDialogOpen.value) return null;
 
   const commands = appCommandGraphChromeProjection.value.paletteCommands;
   const filtered = commands.filter((cmd) =>

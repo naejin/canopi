@@ -34,6 +34,8 @@ export interface MapLibreGetResourceResponse<T = ArrayBuffer> {
 
 export interface MapLibreMapInstance {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
+  // Animated camera move; honours the platform reduced-motion preference.
+  flyTo?(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   remove(): void
   on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void

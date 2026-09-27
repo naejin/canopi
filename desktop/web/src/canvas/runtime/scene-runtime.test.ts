@@ -902,6 +902,22 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('asks the camera to fly to a place only for fly motion', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const navigation = (runtime as unknown as {
+      _cameraNavigation: { centerOn(point: unknown, scale: number, options?: { animate?: boolean }): unknown }
+    })._cameraNavigation
+    const centerOn = vi.spyOn(navigation, 'centerOn')
+    const place = runtime.querySurface.sessionPlane.value!.toGeo({ x: 40, y: 10 })
+
+    runtime.commandSurface.viewport.showPlace(place, 18, { motion: 'fly' })
+    runtime.commandSurface.viewport.showPlace(place, 18)
+
+    expect(centerOn.mock.calls.map((call) => call[2])).toEqual([{ animate: true }, { animate: false }])
+    runtime.destroy()
+  })
+
   it('retries a quarantined history replay through the public command surface', () => {
     const runtime = new SceneCanvasRuntime()
     runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))

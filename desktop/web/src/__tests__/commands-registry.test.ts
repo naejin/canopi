@@ -230,7 +230,7 @@ describe('command registry canvas tool switching', () => {
 
   it('routes file commands through document-session actions', () => {
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -277,7 +277,7 @@ describe('command registry canvas tool switching', () => {
     expect(saveCommand.disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -331,7 +331,7 @@ describe('command registry canvas tool switching', () => {
     expect(zoomIn().disabled()).toBe(true)
 
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -402,7 +402,7 @@ describe('command registry canvas tool switching', () => {
     expect(sidePanel.value).toBe(null)
 
     designSessionFixture.file = {
-      version: 7,
+      version: 8,
       name: 'test',
       description: null,
       plant_species_colors: {},
@@ -660,6 +660,7 @@ describe('command registry canvas tool switching', () => {
     ])
     expect(byMenu.view).toEqual([
       'view.zoomIn', 'view.zoomOut', 'view.fitToDesign', 'view.searchPlace',
+      'view.saveCurrentView', 'view.manageViews',
       'canvas.toggleGrid', 'canvas.toggleSnapToGrid', 'canvas.toggleRulers', 'view.toggleToolNames',
       'nav.layers', 'nav.data', 'nav.speciesKey', 'nav.plantDb', 'nav.favorites',
       'nav.calendar', 'nav.budget', 'nav.consortium', 'nav.designNotebook',
@@ -687,7 +688,7 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
   })
 
-  it('marks checkable View items with their state and groups Export, Arrange and Background as submenus', () => {
+  it('marks checkable View items with their state and groups Export, Arrange, Saved views and Background as submenus', () => {
     theme.value = 'dark'
     gridVisible.value = true
     snapToGridEnabled.value = false
@@ -700,7 +701,7 @@ describe('command registry canvas tool switching', () => {
     expect(item('view.backgroundMap').check).toBe('radio')
     expect(item('view.zoomIn').check).toBeUndefined()
     const submenus = menus().flatMap((menu) => menu.items).flatMap((entry) => entry.type === 'submenu' ? [entry.id] : [])
-    expect(submenus).toEqual(['file.openRecent', 'submenu.export', 'edit.arrange', 'submenu.background'])
+    expect(submenus).toEqual(['file.openRecent', 'submenu.export', 'edit.arrange', 'view.savedViews', 'submenu.background'])
   })
 
   it('routes F2, Ctrl , and F1 to the title bar and dialogs from anywhere', () => {

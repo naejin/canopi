@@ -7,6 +7,12 @@ import { mutateSettingsProjection } from '../settings/projection'
 import { theme } from '../settings/state'
 import { openKeyboardShortcutsDialog, openSettingsDialog } from '../shell/dialogs'
 import { requestDesignRename } from '../shell/requests'
+import {
+  canShowSavedViews,
+  currentSavedViews,
+  openManageViewsDialog,
+  openSaveViewDialog,
+} from '../saved-views'
 import type { ShellCommandCapabilities } from '../shell-commands'
 import { toggleToolNames, toolRailShowsNames } from '../tool-rail/learning'
 
@@ -22,6 +28,14 @@ export function createWorkspaceShellCapabilities() {
     },
     openSettings: { execute: openSettingsDialog },
     findPlants: { execute: findPlants },
+    saveCurrentView: {
+      execute: openSaveViewDialog,
+      isExecutionDisabled: (state) => !state.hasDesign || !canShowSavedViews(),
+    },
+    manageViews: {
+      execute: openManageViewsDialog,
+      isExecutionDisabled: (state) => !state.hasDesign || currentSavedViews().length === 0,
+    },
     toggleToolNames: {
       execute: toggleToolNames,
       isChecked: () => toolRailShowsNames.value,

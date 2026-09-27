@@ -15,3 +15,10 @@ export {
   type CalendarActionFormData,
 } from './timeline'
 export { moveConsortiumEntry } from './consortium'
+export {
+  addSavedView,
+  deleteSavedView,
+  renameSavedView,
+  restoreSavedView,
+  type SavedViewDeletion,
+} from './views'

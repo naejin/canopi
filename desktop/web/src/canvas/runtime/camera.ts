@@ -81,8 +81,15 @@ export interface WorkspaceCameraNavigation {
   clearTemporaryFocus(): void
   /** Keeps the same view after the session plane moved: next = previous * scale + offset. */
   reprojectViewport(transform: SessionPlaneTransform): SceneViewportState
-  /** Puts a plane point at the centre of the screen at `scale`. */
-  centerOn(point: ScenePoint, scale: number): SceneViewportState
+  /**
+   * Puts a plane point at the centre of the screen at `scale`. `animate` asks
+   * an attached map to fly there; a detached camera always jumps.
+   */
+  centerOn(point: ScenePoint, scale: number, options?: CameraMoveOptions): SceneViewportState
+}
+
+export interface CameraMoveOptions {
+  readonly animate?: boolean
 }
 
 /** Owns the paired read and command roles admitted into one active workspace. */
@@ -292,14 +299,18 @@ export class CameraController implements
     return true
   }
 
-  centerOn(point: ScenePoint, scale: number): SceneViewportState {
+  centerOn(point: ScenePoint, scale: number, _options?: CameraMoveOptions): SceneViewportState {
     this.clearTemporaryFocus()
+    return this.setViewport(this.centredViewport(point, scale))
+  }
+
+  protected centredViewport(point: ScenePoint, scale: number): SceneViewportState {
     const screen = this._snapshot.peek().screenSize
-    return this.setViewport({
+    return {
       x: screen.width / 2 - point.x * scale,
       y: screen.height / 2 - point.y * scale,
       scale,
-    })
+    }
   }
 
   reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {

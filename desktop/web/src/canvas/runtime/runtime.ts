@@ -72,8 +72,15 @@ export interface CanvasViewportCommandSurface {
   returnToDesign(): void
   focusTemporaryBounds(bounds: SceneBounds, options: TemporaryBoundsFocusOptions): boolean
   returnFromTemporaryFocus(): boolean
-  /** Moves the view to a place; design objects never move. */
-  showPlace(place: { readonly lon: number; readonly lat: number }, zoom: number): boolean
+  /**
+   * Moves the view to a place; design objects never move. `fly` animates the
+   * move on the map; the default jumps.
+   */
+  showPlace(
+    place: { readonly lon: number; readonly lat: number },
+    zoom: number,
+    options?: { readonly motion?: 'fly' | 'jump' },
+  ): boolean
 }
 
 export interface CanvasHistoryCommandSurface {

@@ -15,6 +15,7 @@ import {
 } from '../../app/shell-commands/menus'
 import type { Panel } from '../../app/shell/state'
 import { designNotebookWorkbench } from '../../app/design-notebook'
+import { savedViewMenuActions } from '../../app/saved-views'
 import { t } from '../../i18n'
 import {
   APP_COMMANDS,
@@ -141,6 +142,7 @@ export const appCommandGraphChromeProjection = computed<AppCommandGraphChromePro
       shell,
       canvas: appCommandGraphToolbarProjection.value,
       translate: t,
+      savedViews: savedViewMenuActions(),
       fileInsertions: [{ after: 'file.open', entry: openRecent }],
     }),
     paletteCommands,
