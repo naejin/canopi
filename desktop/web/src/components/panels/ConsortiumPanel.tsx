@@ -22,6 +22,7 @@ import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
+import { displayedPlantColor } from '../../app/plant-display/state'
 import row from '../shared/species-row.module.css'
 import styles from './ConsortiumPanel.module.css'
 
@@ -306,7 +307,7 @@ function ConsortiumRow({ row: item, workbench }: { row: ConsortiumPlanningRow; w
         <span className={row.srOnly}>{t('canvas.consortium.showOnMap')} </span>
         <span className={row.glyph} aria-hidden="true">
           {item.appearances.slice(0, 1).map((appearance) => (
-            <span key={`${appearance.color}:${appearance.symbol}`} style={{ color: appearance.color }}>
+            <span key={`${appearance.color}:${appearance.symbol}`} style={{ color: displayedPlantColor(appearance.color, item.canonicalName) }}>
               <PlantSymbolGlyph symbol={appearance.symbol} size={22} />
             </span>
           ))}

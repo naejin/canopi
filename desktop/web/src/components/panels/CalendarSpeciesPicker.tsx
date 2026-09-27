@@ -8,6 +8,7 @@ import { ControlIcon } from '../shared/ControlIcon'
 import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
+import { displayedPlantColor } from '../../app/plant-display/state'
 import row from '../shared/species-row.module.css'
 import styles from './CalendarSpeciesPicker.module.css'
 
@@ -159,7 +160,7 @@ export function CalendarSpeciesPicker({ species, chosen, unavailable, onToggle, 
                 </span>
                 <span className={row.glyph} aria-hidden="true">
                   {option.appearance && (
-                    <span style={{ color: option.appearance.color }}>
+                    <span style={{ color: displayedPlantColor(option.appearance.color, option.canonical_name) }}>
                       <PlantSymbolGlyph symbol={option.appearance.symbol} size={20} />
                     </span>
                   )}

@@ -31,6 +31,8 @@ import { mapLayers } from '../app/map-layers/state'
 import { setPlantLabels } from '../app/plant-display/actions'
 import { PLANT_LABELS_CHIP_MS, PlantLabelsChip } from '../components/canvas/PlantLabelsChip'
 import { NO_STRATUM_DISPLAY_COLOR, STRATUM_DISPLAY_COLORS } from '../canvas/runtime/plant-display'
+import type { Signal } from '@preact/signals'
+import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 
 const plants = [
   { id: 'apple-1', canonicalName: 'Malus domestica', commonName: 'Pommier cultivé', x: 0 },
@@ -356,6 +358,37 @@ describe('Plants in this Design', () => {
     expect(queries.getSceneSnapshot().plants.every((plant) => plant.color === '#3e8e4e')).toBe(true)
   })
 
+  it('recolours a whole stratum from its legend swatch, keeping species colours', async () => {
+    replaceCurrentDesignState(emptyDesign({
+      consortiums: [
+        { target: { kind: 'species', canonical_name: 'Malus domestica' }, stratum: 'high', start_phase: 0, end_phase: 2 },
+      ],
+      extra: { plant_display: { color_by: 'stratum' } },
+    }), null, 'Display')
+    readPlanningViewState().plantsDisplayOpen.value = true
+    await act(() => render(<SpeciesKeyPanel />, container))
+    const legend = container.querySelector<HTMLElement>('[aria-label="Stratum colors"]')!
+    const high = legend.querySelector<HTMLInputElement>('input[type="color"][aria-label="Color of High"]')!
+    expect(high.value).toBe(STRATUM_DISPLAY_COLORS.high.toLowerCase())
+    expect(legend.querySelector('input[aria-label="Color of No stratum yet"]')).not.toBeNull()
+    expect(container.textContent).toContain('A swatch recolors its whole stratum')
+    expect(buttonNamed('Reset stratum colors')).toBeUndefined()
+
+    await act(() => {
+      high.value = '#112233'
+      high.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ stratum_colors: { high: '#112233' } })
+    expect(glyphColor('Pommier cultivé')).toBe(rgb('#112233'))
+    expect(glyphColor('Menthe verte')).toBe(rgb(NO_STRATUM_DISPLAY_COLOR))
+    expect(setPlantColorForSpecies).not.toHaveBeenCalled()
+    expect(queries.getSceneSnapshot().plants.every((plant) => plant.color === '#3e8e4e')).toBe(true)
+
+    await act(() => buttonNamed('Reset stratum colors').click())
+    expect(currentDesign.value?.extra?.plant_display).not.toHaveProperty('stratum_colors')
+    expect(glyphColor('Pommier cultivé')).toBe(rgb(STRATUM_DISPLAY_COLORS.high))
+  })
+
   it('sets symbol size and outline for the Design and softens the background on this device', async () => {
     replaceCurrentDesignState(emptyDesign(), null, 'Display')
     readPlanningViewState().plantsDisplayOpen.value = true
@@ -396,6 +429,41 @@ describe('Plants in this Design', () => {
     expect(container.textContent).toContain('Labels are off')
   })
 
+  it('offers to zoom in when no plant in view is labelled at this zoom', async () => {
+    replaceCurrentDesignState(emptyDesign(), null, 'Display')
+    readPlanningViewState().plantsDisplayOpen.value = true
+    const zoomIn = vi.fn()
+    const zoomBy = vi.fn()
+    let coverage = { labelled: 0, inView: 282 }
+    queries = { ...queries, getPlantLabelCoverage: () => coverage }
+    commands = { ...commands, viewport: { ...commands.viewport, zoomIn, zoomBy } }
+    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+    await act(() => render(<SpeciesKeyPanel />, container))
+
+    expect(container.textContent).toContain('Names shown for 0 of 282 plants in view')
+    // Straight to the scale where names start to show (the test map is at 1 px/m) …
+    await act(() => buttonNamed('Zoom in to see names').click())
+    expect(zoomBy).toHaveBeenCalledWith(105)
+    // … and one step at a time once there, for plants too close for their names.
+    ;(queries.viewport as Signal<CameraViewportSnapshot>).value = {
+      ...queries.viewport.value, viewport: { x: 0, y: 0, scale: 120 },
+    }
+    await act(() => buttonNamed('Zoom in to see names').click())
+    expect(zoomIn).toHaveBeenCalledOnce()
+
+    await act(() => setPlantLabels('codes'))
+    expect(buttonNamed('Zoom in to see codes')).toBeDefined()
+
+    coverage = { labelled: 12, inView: 282 }
+    await act(() => setPlantLabels('names'))
+    expect(buttonNamed('Zoom in to see names')).toBeUndefined()
+
+    // Zooming cannot help while labels are off.
+    coverage = { labelled: 0, inView: 282 }
+    await act(() => setPlantLabels('none'))
+    expect(container.textContent).not.toContain('Zoom in')
+  })
+
   it('shows a chip after the labels change, then lets it go', async () => {
     vi.useFakeTimers()
     try {
@@ -408,6 +476,13 @@ describe('Plants in this Design', () => {
       expect(container.querySelector('[data-plant-labels-chip]')?.textContent).toBe('Codes shown for 70 of 282 plants in view')
       await act(() => { vi.advanceTimersByTime(PLANT_LABELS_CHIP_MS) })
       expect(container.querySelector('[data-plant-labels-chip]')).toBeNull()
+
+      // With none labelled at this zoom, the chip offers to zoom in.
+      queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 0, inView: 282 }) }
+      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+      await act(() => setPlantLabels('names'))
+      expect(container.querySelector('[data-plant-labels-chip]')?.textContent)
+        .toBe('Names shown for 0 of 282 plants in viewZoom in to see names')
     } finally {
       vi.useRealTimers()
     }

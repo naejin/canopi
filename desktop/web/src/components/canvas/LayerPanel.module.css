@@ -7,17 +7,21 @@
   overflow: hidden;
 }
 
-/* The list scrolls; the active row's settings stay in view below it. */
+/*
+ * The active row's settings show whole below the list, which takes the room
+ * left above them and scrolls (a zero basis, so the list gives way first).
+ * The settings scroll too only when they leave the list less than four rows.
+ */
 .scroll {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 1 1 0;
+  min-height: calc(var(--control-size-lg) * 4);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .footer {
   flex: 0 1 auto;
-  max-height: 60%;
+  min-height: 0;
   overflow-y: auto;
   border-top: 1px solid var(--color-border-strong);
   background: var(--color-surface);

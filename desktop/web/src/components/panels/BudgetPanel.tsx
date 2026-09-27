@@ -12,6 +12,7 @@ import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, QuickFilterChip, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
+import { displayedPlantColor } from '../../app/plant-display/state'
 import { CURRENCY_ITEMS } from '../canvas/budget-currencies'
 import row from '../shared/species-row.module.css'
 import styles from './BudgetPanel.module.css'
@@ -136,7 +137,7 @@ export function BudgetPanel() {
                   >
                     <span className={row.glyph} aria-hidden="true">
                       {item.appearances.slice(0, 1).map((appearance) => (
-                        <span key={`${appearance.color}:${appearance.symbol}`} style={{ color: appearance.color }}>
+                        <span key={`${appearance.color}:${appearance.symbol}`} style={{ color: displayedPlantColor(appearance.color, item.canonical) }}>
                           <PlantSymbolGlyph symbol={appearance.symbol} size={22} />
                         </span>
                       ))}

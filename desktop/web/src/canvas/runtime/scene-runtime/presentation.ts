@@ -12,6 +12,7 @@ import {
   type CanvasSpeciesPresentationCache,
 } from '../presentation-data'
 import type { SceneRendererHoverTarget, SceneRendererSnapshot } from '../renderers/scene-types'
+import type { PlantLabelMode } from '../plant-display'
 import type {
   SceneDesignObjectTarget,
   ScenePersistedState,
@@ -147,6 +148,7 @@ export class SceneRuntimePresentationController {
     readonly overview: boolean
     readonly visibleLayerNames: readonly string[]
     readonly focusedSpecies: string | null
+    readonly plantLabels?: PlantLabelMode
   }): SceneRendererSnapshot {
     const persisted = this._sceneStore.persisted
     const visible = new Set(request.visibleLayerNames)
@@ -177,6 +179,7 @@ export class SceneRuntimePresentationController {
       hoveredCanonicalName: null,
       hoverTarget: null,
       ...projectScenePlantLabels({ scene, viewport, localizedCommonNames, selectionLabelPlantIds, speciesCache }),
+      ...request.plantLabels ? { plantLabels: request.plantLabels } : {},
     }
   }
 

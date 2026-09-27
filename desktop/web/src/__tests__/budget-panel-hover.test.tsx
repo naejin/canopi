@@ -13,6 +13,7 @@ import {
   type TestCanvasQuerySurface,
 } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 
 function makeDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {
   return {
@@ -49,6 +50,27 @@ function makePlant(canonicalName: string, commonName: string): PlacedPlant {
     planted_date: null,
     quantity: 1,
     locked: false,
+  }
+}
+
+function sceneWithApple(): ScenePersistedState {
+  return {
+    ...createDefaultScenePersistedState(),
+    plants: [{
+      kind: 'plant',
+      id: 'apple',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#3E8E4E',
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }],
   }
 }
 
@@ -106,6 +128,21 @@ describe('BudgetPanel hover bridge', () => {
       row!.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false }))
     })
     expect(hoveredPanelTargets.value).toEqual([])
+  })
+
+  it('draws each row glyph in the colour the map draws it with', async () => {
+    designSessionFixture.file = {
+      ...makeDesign(),
+      extra: { plant_display: { color_by: 'one_color', one_color: '#AA3355' } },
+    }
+    querySurface = createTestCanvasQuerySurface({ scene: sceneWithApple(), plants: [makePlant('Malus domestica', 'Apple')] })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: querySurface }))
+    await act(async () => {
+      render(<BudgetPanel />, container)
+    })
+
+    const glyph = container.querySelector<HTMLElement>('li [aria-hidden="true"] > span[style]')
+    expect(glyph?.style.color).toBe('rgb(170, 51, 85)')
   })
 
   it('refreshes localized species names when switching to a cached locale', async () => {

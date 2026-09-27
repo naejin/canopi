@@ -21,6 +21,7 @@ import type {
   CameraFrameInsets,
 } from './camera'
 import type { ScenePersistedState, SceneViewportState } from './scene'
+import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 
 export interface CanvasRuntimeDocumentMetadata {
@@ -208,6 +209,8 @@ export interface CanvasViewSceneRequest {
   readonly visibleLayerNames: readonly string[]
   /** Species the view focuses; others are dimmed as Species Focus does. */
   readonly focusedSpecies: string | null
+  /** Labels the view shows; absent, the workspace's choice. */
+  readonly plantLabels?: PlantLabelMode
 }
 
 /** How many plants in view carry a label on the map now ("Codes shown for 70 of 282 plants in view"). */

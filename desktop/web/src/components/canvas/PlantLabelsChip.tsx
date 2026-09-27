@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { plantLabelCoverageText } from '../../app/plant-display/coverage'
+import { plantLabelCoverage, zoomInForPlantLabels } from '../../app/plant-display/coverage'
 import { currentPlantDisplay } from '../../app/plant-display/state'
 import { plantFinderMapMatches } from '../../app/plant-finder/map-matches'
 import { currentCanvasQuerySurface } from '../../canvas/session'
@@ -27,11 +27,14 @@ export function PlantLabelsChip() {
   if (!visible) return null
   const queries = currentCanvasQuerySurface.value
   if (!queries || queries.getSpeciesFocus().canonicalName || plantFinderMapMatches.value) return null
-  const text = plantLabelCoverageText()
-  if (!text) return null
+  const coverage = plantLabelCoverage()
+  if (!coverage) return null
   return (
     <div className={styles.chip} data-plant-labels-chip>
-      <span className={styles.text} role="status">{text}</span>
+      <span className={styles.text} role="status">{coverage.text}</span>
+      {coverage.zoomIn && (
+        <button type="button" className={styles.button} onClick={zoomInForPlantLabels}>{coverage.zoomIn}</button>
+      )}
     </div>
   )
 }

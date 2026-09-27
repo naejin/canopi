@@ -14,6 +14,10 @@ import type { BasemapStyle } from '../../generated/contracts'
 import type { SavedView } from '../../types/design'
 import { locale } from '../settings/state'
 import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../map-layers/state'
+import { savedViewPlantLabels } from '../design-edit/views'
+import { currentDesign } from '../document-session/store'
+import { currentPlantDisplay } from '../plant-display/state'
+import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */
 export const VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS = 8_000
@@ -38,14 +42,16 @@ export interface SavedViewSnapshotContext {
   readonly queries: Pick<CanvasQuerySurface, 'sessionPlane' | 'viewport' | 'captureViewScene'>
   readonly mapLayers: MapLayersState
   readonly locale: string
+  /** The labels the view shows: its recorded choice, else the Design's current one. */
+  readonly plantLabels: PlantLabelMode
 }
 
 /**
  * The off-screen capture request for a saved view of the open Design, or null
  * when no Design is open on a map. The camera is the view's centre, with the
  * zoom fitted so the image shows what the workspace showed at its current
- * size. Background, Design layers and the focused species come from the view;
- * opacities and locale from the user's current settings.
+ * size. Background, Design layers, the focused species and the labels come
+ * from the view; opacities and locale from the user's current settings.
  */
 export function describeSavedViewSnapshot(
   view: SavedView,
@@ -70,7 +76,9 @@ export function describeSavedViewSnapshot(
     scene: {
       origin: plane.origin,
       build(viewport) {
-        const snapshot = context.queries.captureViewScene({ viewport, visibleLayerNames, focusedSpecies })
+        const snapshot = context.queries.captureViewScene({
+          viewport, visibleLayerNames, focusedSpecies, plantLabels: context.plantLabels,
+        })
         if (!snapshot) throw new ViewSnapshotSceneBusyError()
         return snapshot
       },
@@ -88,6 +96,11 @@ export class ViewSnapshotSceneBusyError extends Error {
     super('The Design was being edited; the view snapshot was not taken.')
     this.name = 'ViewSnapshotSceneBusyError'
   }
+}
+
+/** The labels a view is presented with: those recorded with it, else the Design's current choice. */
+export function savedViewPresentedLabels(view: Pick<SavedView, 'id'>): PlantLabelMode {
+  return savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
 }
 
 export function savedViewBackgroundPresentation(
@@ -124,6 +137,7 @@ export async function captureSavedViewSnapshot(
     queries,
     mapLayers: mapLayers.peek(),
     locale: locale.peek(),
+    plantLabels: savedViewPresentedLabels(view),
   })
   if (!request) return null
   owner ??= createViewSnapshotMap()

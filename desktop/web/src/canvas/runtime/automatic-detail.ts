@@ -8,15 +8,15 @@ import { getSceneLayerStyle } from './scene-visuals'
 import { getCanvasTextOpacity } from './text-visibility'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { PlantNameLabel } from './selection-labels'
-import { getCanvasPlantDisplay } from './plant-display'
+import { getCanvasPlantDisplay, PLANT_LABEL_MIN_SCALE } from './plant-display'
 
 export function getCanvasPlantNameLabels(snapshot: SceneRendererSnapshot): readonly PlantNameLabel[] {
   const { scene, viewport } = snapshot
   // Labels › None keeps only names the user pinned or a single selection shows.
-  const mode = getCanvasPlantDisplay().labels
+  const mode = snapshot.plantLabels ?? getCanvasPlantDisplay().labels
   const automatic = mode !== 'none'
   const codes = mode === 'codes'
-  const minimumScale = codes ? 50 : 100
+  const minimumScale = PLANT_LABEL_MIN_SCALE[codes ? 'codes' : 'names']
   const layer = getSceneLayerStyle(scene, 'plants')
   if (!layer.visible || layer.opacity === 0) return []
   if ((!automatic || viewport.scale < minimumScale) && snapshot.pinnedPlantNameLabels.length === 0) return []

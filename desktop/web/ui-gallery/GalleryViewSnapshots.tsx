@@ -3,6 +3,7 @@ import { useEffect } from 'preact/hooks'
 import {
   captureSavedViewSnapshot,
   describeSavedViewSnapshot,
+  savedViewPresentedLabels,
   VIEW_SNAPSHOT_EXPORT,
   VIEW_SNAPSHOT_THUMBNAIL,
   type SavedViewSnapshot,
@@ -128,7 +129,7 @@ async function capture(
 function describe(view: SavedView, size: { width: number; height: number }, signal: AbortSignal) {
   const queries = currentCanvasQuerySurface.peek()
   return queries
-    ? describeSavedViewSnapshot(view, { ...size, signal }, { queries, mapLayers: mapLayers.peek(), locale: locale.peek() })
+    ? describeSavedViewSnapshot(view, { ...size, signal }, { queries, mapLayers: mapLayers.peek(), locale: locale.peek(), plantLabels: savedViewPresentedLabels(view) })
     : null
 }
 

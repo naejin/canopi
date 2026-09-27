@@ -9,6 +9,10 @@ export type PlantColorMode = 'species' | 'stratum' | 'one-color'
 export type PlantLabelMode = 'none' | 'codes' | 'names'
 /** The Design's stratum for a species, as Consortium assigns it. */
 export type PlantDisplayStratum = 'emergent' | 'high' | 'medium' | 'low'
+/** A stratum colour key: a stratum, or `none` for "No stratum yet". */
+export type StratumColorKey = PlantDisplayStratum | 'none'
+/** The user's colour for some strata (#RRGGBB); the others keep their default colour. */
+export type StratumColors = { readonly [K in StratumColorKey]?: string }
 
 export interface PlantDisplay {
   readonly colorBy: PlantColorMode
@@ -19,6 +23,8 @@ export interface PlantDisplay {
   /** Draw the halo around each symbol. */
   readonly outline: boolean
   readonly labels: PlantLabelMode
+  /** Colour by stratum: the user's colour for a whole stratum, over the defaults. */
+  readonly stratumColors: StratumColors
   /** Consortium stratum per canonical name; absent means "No stratum yet". */
   readonly strata: ReadonlyMap<string, PlantDisplayStratum>
 }
@@ -26,6 +32,16 @@ export interface PlantDisplay {
 export const PLANT_COLOR_MODES: readonly PlantColorMode[] = ['species', 'stratum', 'one-color']
 export const PLANT_LABEL_MODES: readonly PlantLabelMode[] = ['none', 'codes', 'names']
 export const PLANT_DISPLAY_STRATA: readonly PlantDisplayStratum[] = ['emergent', 'high', 'medium', 'low']
+export const STRATUM_COLOR_KEYS: readonly StratumColorKey[] = [...PLANT_DISPLAY_STRATA, 'none']
+
+/**
+ * The smallest map scale (px per metre) at which automatic labels show:
+ * codes are short, so they show from further out than names.
+ */
+export const PLANT_LABEL_MIN_SCALE: { readonly [K in Exclude<PlantLabelMode, 'none'>]: number } = {
+  codes: 50,
+  names: 100,
+}
 
 export const PLANT_SYMBOL_SCALE_MIN = 0.5
 export const PLANT_SYMBOL_SCALE_MAX = 2
@@ -49,8 +65,34 @@ export const DEFAULT_PLANT_DISPLAY: PlantDisplay = Object.freeze({
   symbolScale: 1,
   outline: true,
   labels: 'names',
+  stratumColors: Object.freeze({}),
   strata: new Map<string, PlantDisplayStratum>(),
 })
+
+/** The colour a stratum (or `none`, "No stratum yet") is drawn with: the user's, else its default. */
+export function stratumDisplayColor(key: StratumColorKey, display: Pick<PlantDisplay, 'stratumColors'>): string {
+  return display.stratumColors[key] ?? defaultStratumColor(key)
+}
+
+export function defaultStratumColor(key: StratumColorKey): string {
+  return key === 'none' ? NO_STRATUM_DISPLAY_COLOR : STRATUM_DISPLAY_COLORS[key]
+}
+
+/** Valid overrides only (#RRGGBB for a known key), without the ones that match their default. */
+export function normalizeStratumColors(value: unknown): StratumColors {
+  const colors: { [K in StratumColorKey]?: string } = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return Object.freeze(colors)
+  const stored = value as Record<string, unknown>
+  for (const key of STRATUM_COLOR_KEYS) {
+    const color = normalizeHexColor(stored[key] as string | undefined)
+    if (color && color !== defaultStratumColor(key)) colors[key] = color
+  }
+  return Object.freeze(colors)
+}
+
+export function stratumColorsEqual(left: StratumColors, right: StratumColors): boolean {
+  return STRATUM_COLOR_KEYS.every((key) => left[key] === right[key])
+}
 
 /** The colour a plant is drawn with: its stored colour, its stratum's, or the one colour. */
 export function resolveDisplayedPlantColor(
@@ -59,10 +101,7 @@ export function resolveDisplayedPlantColor(
   display: PlantDisplay,
 ): string {
   if (display.colorBy === 'one-color') return display.oneColor
-  if (display.colorBy === 'stratum') {
-    const stratum = display.strata.get(canonicalName)
-    return stratum ? STRATUM_DISPLAY_COLORS[stratum] : NO_STRATUM_DISPLAY_COLOR
-  }
+  if (display.colorBy === 'stratum') return stratumDisplayColor(display.strata.get(canonicalName) ?? 'none', display)
   return storedColor
 }
 
@@ -83,6 +122,7 @@ export function plantDisplaysEqual(left: PlantDisplay, right: PlantDisplay): boo
     || left.symbolScale !== right.symbolScale
     || left.outline !== right.outline
     || left.labels !== right.labels
+    || !stratumColorsEqual(left.stratumColors, right.stratumColors)
     || left.strata.size !== right.strata.size
   ) return false
   for (const [name, stratum] of left.strata) if (right.strata.get(name) !== stratum) return false
@@ -103,6 +143,7 @@ export function normalizePlantDisplay(value: Partial<PlantDisplay>): PlantDispla
     labels: PLANT_LABEL_MODES.includes(value.labels as PlantLabelMode)
       ? value.labels as PlantLabelMode
       : DEFAULT_PLANT_DISPLAY.labels,
+    stratumColors: normalizeStratumColors(value.stratumColors),
     strata: value.strata ?? DEFAULT_PLANT_DISPLAY.strata,
   })
 }

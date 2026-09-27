@@ -2,7 +2,11 @@ import { nextPlantLabelMode, type PlantLabelMode } from '../../canvas/runtime/pl
 import { readPlantDisplayOptions, setPlantDisplayOptions } from '../design-edit/plant-display'
 import { currentDesign } from '../document-session/store'
 
-export { setPlantDisplayOptions } from '../design-edit/plant-display'
+export {
+  resetStratumDisplayColors,
+  setPlantDisplayOptions,
+  setStratumDisplayColor,
+} from '../design-edit/plant-display'
 
 export function setPlantLabels(labels: PlantLabelMode): void {
   setPlantDisplayOptions({ labels })

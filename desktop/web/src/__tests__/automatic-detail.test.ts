@@ -42,6 +42,17 @@ describe('Automatic Detail', () => {
     expect(getCanvasPlantNameLabels({ ...snapshot, viewport: { x: 0, y: 0, scale: 10 } })).toEqual([])
   })
 
+  it('draws the labels a snapshot asks for over the workspace choice (a saved view)', () => {
+    const snapshot = createTestSceneRendererSnapshot({
+      scene: { plants: [plant('a', 0, 0), plant('b', .27, 0)], plantSpeciesCodes: { 'Mentha spicata': 'MSP' } },
+      viewport: { x: 0, y: 0, scale: 400 },
+    })
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'none' })).toEqual([])
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'codes' }).map((label) => label.text)).toEqual(['MSP', 'MSP'])
+    expect(getCanvasPlantNameLabels({ ...snapshot, plantLabels: 'names' }).map((label) => label.text))
+      .toEqual(['Menthe verte', 'Menthe verte'])
+  })
+
   it('keeps collision admission stable during panning and a round trip through overview zoom', () => {
     const snapshot = createTestSceneRendererSnapshot({
       scene: { plants: [plant('a', 0, 0), plant('b', .4, 0), plant('c', .8, 0)] },

@@ -110,6 +110,7 @@ describe('saved view snapshot request', () => {
       queries: surface,
       mapLayers: createDefaultMapLayers(),
       locale: 'fr',
+      plantLabels: 'codes',
     })!
 
     // The workspace is 400 × 300; a 320 × 200 image shows the same ground at
@@ -122,7 +123,9 @@ describe('saved view snapshot request', () => {
 
     const viewport = { x: 1, y: 2, scale: 3 }
     const scene = request.scene.build(viewport)
-    expect(build).toHaveBeenCalledWith({ viewport, visibleLayerNames: ['plants'], focusedSpecies: 'Rubus idaeus' })
+    expect(build).toHaveBeenCalledWith({
+      viewport, visibleLayerNames: ['plants'], focusedSpecies: 'Rubus idaeus', plantLabels: 'codes',
+    })
     expect(scene.scene.layers.map((layer) => [layer.name, layer.visible])).toEqual([['plants', true], ['zones', false]])
   })
 
@@ -130,7 +133,7 @@ describe('saved view snapshot request', () => {
     const surface = queries()
     const screen = surface.viewport as Signal<CameraViewportSnapshot>
     screen.value = { ...screen.value, screenSize: { width: 0, height: 0 } }
-    const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en' }
+    const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
     expect(describeSavedViewSnapshot(VIEW, { width: 320, height: 200 }, context)!.camera.zoom).toBe(19)
     const deep = { ...VIEW, camera: { ...VIEW.camera, zoom: 27 } }
     screen.value = { ...screen.value, screenSize: { width: 100, height: 100 } }
@@ -139,7 +142,7 @@ describe('saved view snapshot request', () => {
 
   it('refuses a scene while an edit owns it, and a Design without a map frame', () => {
     const surface = queries()
-    const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en' }
+    const context = { queries: surface, mapLayers: createDefaultMapLayers(), locale: 'en', plantLabels: 'names' as const }
     const request = describeSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL, context)!
     surface.setSettled(false)
     expect(() => request.scene.build({ x: 0, y: 0, scale: 1 })).toThrow(ViewSnapshotSceneBusyError)
@@ -203,5 +206,20 @@ describe('capturing a saved view', () => {
 
     await disposeViewSnapshots()
     expect(snapshotOwner.disposed).toBe(1)
+  })
+
+  it('draws the labels recorded with the view, else the Design’s current choice', async () => {
+    replaceCurrentDesignState({
+      ...design(),
+      extra: { plant_display: { labels: 'codes' }, saved_view_display: { hedges: { labels: 'none' } } },
+    }, null, 'Orchard')
+    const surface = queries()
+    const build = vi.spyOn(surface, 'captureViewScene')
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries: surface }))
+
+    await captureSavedViewSnapshot(VIEW, VIEW_SNAPSHOT_THUMBNAIL)
+    await captureSavedViewSnapshot({ ...VIEW, id: 'older' }, VIEW_SNAPSHOT_THUMBNAIL)
+
+    expect(build.mock.calls.map(([request]) => request.plantLabels)).toEqual(['none', 'codes'])
   })
 })

@@ -34,6 +34,7 @@ export {
   describeSavedViewSnapshot,
   disposeViewSnapshots,
   savedViewBackgroundPresentation,
+  savedViewPresentedLabels,
   ViewSnapshotSceneBusyError,
   VIEW_SNAPSHOT_DEFAULT_TIMEOUT_MS,
   VIEW_SNAPSHOT_EXPORT,

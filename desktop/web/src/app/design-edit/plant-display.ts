@@ -4,8 +4,12 @@ import {
   PLANT_COLOR_MODES,
   PLANT_LABEL_MODES,
   clampPlantSymbolScale,
+  normalizeStratumColors,
+  stratumColorsEqual,
   type PlantColorMode,
   type PlantLabelMode,
+  type StratumColorKey,
+  type StratumColors,
 } from '../../canvas/runtime/plant-display'
 import { normalizeHexColor } from '../../canvas/plant-colors'
 import { editCurrentDesign } from './core'
@@ -24,6 +28,8 @@ export interface PlantDisplayOptions {
   readonly symbolScale: number
   readonly outline: boolean
   readonly labels: PlantLabelMode
+  /** Colour by stratum: the user's colour for whole strata. */
+  readonly stratumColors: StratumColors
 }
 
 interface StoredPlantDisplay {
@@ -32,6 +38,8 @@ interface StoredPlantDisplay {
   symbol_scale: number
   outline: boolean
   labels: PlantLabelMode
+  /** Only the recoloured strata (`none` is "No stratum yet"); absent when none is. */
+  stratum_colors?: StratumColors
 }
 
 export const DEFAULT_PLANT_DISPLAY_OPTIONS: PlantDisplayOptions = Object.freeze({
@@ -40,6 +48,7 @@ export const DEFAULT_PLANT_DISPLAY_OPTIONS: PlantDisplayOptions = Object.freeze(
   symbolScale: DEFAULT_PLANT_DISPLAY.symbolScale,
   outline: DEFAULT_PLANT_DISPLAY.outline,
   labels: DEFAULT_PLANT_DISPLAY.labels,
+  stratumColors: DEFAULT_PLANT_DISPLAY.stratumColors,
 })
 
 /** The Design's display options; unknown or invalid stored values fall back to defaults. */
@@ -60,6 +69,7 @@ export function readPlantDisplayOptions(design: Pick<CanopiFile, 'extra'> | null
     labels: PLANT_LABEL_MODES.includes(stored.labels as PlantLabelMode)
       ? stored.labels as PlantLabelMode
       : DEFAULT_PLANT_DISPLAY_OPTIONS.labels,
+    stratumColors: normalizeStratumColors(stored.stratum_colors),
   })
 }
 
@@ -69,6 +79,7 @@ function sameOptions(left: PlantDisplayOptions, right: PlantDisplayOptions): boo
     && left.symbolScale === right.symbolScale
     && left.outline === right.outline
     && left.labels === right.labels
+    && stratumColorsEqual(left.stratumColors, right.stratumColors)
 }
 
 function storedFrom(options: PlantDisplayOptions): StoredPlantDisplay {
@@ -78,15 +89,34 @@ function storedFrom(options: PlantDisplayOptions): StoredPlantDisplay {
     symbol_scale: options.symbolScale,
     outline: options.outline,
     labels: options.labels,
+    ...Object.keys(options.stratumColors).length > 0 ? { stratum_colors: { ...options.stratumColors } } : {},
   }
 }
 
 /** Changes some display options of the current Design; a change to nothing leaves it untouched. */
 export function setPlantDisplayOptions(change: Partial<PlantDisplayOptions>): void {
+  editPlantDisplay(() => change)
+}
+
+/**
+ * Recolours a whole stratum (or `none`, "No stratum yet") while colouring by
+ * stratum; null or its default colour restores the default. Stored species
+ * colours never change.
+ */
+export function setStratumDisplayColor(key: StratumColorKey, color: string | null): void {
+  editPlantDisplay((current) => ({ stratumColors: { ...current.stratumColors, [key]: color ?? undefined } }))
+}
+
+/** Every stratum back to its default colour. */
+export function resetStratumDisplayColors(): void {
+  setPlantDisplayOptions({ stratumColors: {} })
+}
+
+function editPlantDisplay(change: (current: PlantDisplayOptions) => Partial<PlantDisplayOptions>): void {
   editCurrentDesign((design) => {
     const current = readPlantDisplayOptions(design)
     const next = readPlantDisplayOptions({
-      extra: { [PLANT_DISPLAY_EXTRA_KEY]: storedFrom({ ...current, ...change }) },
+      extra: { [PLANT_DISPLAY_EXTRA_KEY]: storedFrom({ ...current, ...change(current) }) },
     })
     if (sameOptions(current, next)) return design
     const extra: Record<string, unknown> = { ...design.extra }

@@ -21,6 +21,8 @@ import {
   undoDeleteView,
 } from '../app/saved-views'
 import { composeSavedView } from '../app/saved-views/model'
+import { savedViewPlantLabels } from '../app/design-edit/views'
+import { setPlantLabels } from '../app/plant-display/actions'
 import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
@@ -172,6 +174,23 @@ describe('saving the current view', () => {
     expect(designSessionStore.designDirty.value).toBe(true)
   })
 
+  it('records the label choice with the view, and presents the view with it', () => {
+    replaceCurrentDesignState(design(), null, 'Orchard')
+    mountCanvas()
+    setPlantLabels('codes')
+
+    const saved = saveCurrentView({ name: 'Hedges' })!
+
+    expect(savedViewPlantLabels(currentDesign.value, saved.id)).toBe('codes')
+    // The file format keeps views as they are; the choice is Design extra data.
+    expect(currentDesign.value?.extra?.saved_view_display).toEqual({ [saved.id]: { labels: 'codes' } })
+    expect(Object.keys(saved)).not.toContain('labels')
+    setPlantLabels('none')
+    expect(savedViewPlantLabels(currentDesign.value, saved.id)).toBe('codes')
+    // A view saved before labels were recorded shows the Design's current choice.
+    expect(savedViewPlantLabels(currentDesign.value, 'unknown')).toBeNull()
+  })
+
   it('stores a blank title as none', () => {
     replaceCurrentDesignState(design(), null, 'Orchard')
     mountCanvas()
@@ -290,6 +309,22 @@ describe('managing views', () => {
     undoDeleteView()
     expect(currentDesign.value?.views?.map((view) => view.id)).toEqual(['berries', 'pond'])
     expect(savedViewUndo.value).toBeNull()
+  })
+
+  it('forgets a deleted view’s label choice and brings it back with Undo', () => {
+    replaceCurrentDesignState(
+      { ...design([BERRIES, POND]), extra: { saved_view_display: { berries: { labels: 'none' }, pond: { labels: 'codes' } } } },
+      null,
+      'Orchard',
+    )
+    requestDeleteView('berries')
+    expect(currentDesign.value?.extra?.saved_view_display).toEqual({ pond: { labels: 'codes' } })
+    undoDeleteView()
+    expect(savedViewPlantLabels(currentDesign.value, 'berries')).toBe('none')
+
+    requestDeleteView('pond')
+    requestDeleteView('berries')
+    expect(currentDesign.value?.extra).not.toHaveProperty('saved_view_display')
   })
 
   it('asks first, naming the stories, when stories show the view', () => {

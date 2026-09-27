@@ -2,6 +2,7 @@ import type { SpeciesFocus } from '../species-key'
 import type { ScenePersistedState, SceneViewportState } from '../scene'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
+import type { PlantLabelMode } from '../plant-display'
 
 export type SceneRendererHoverState =
   | 'hover'
@@ -33,6 +34,8 @@ export interface SceneRendererSnapshot {
   readonly hoverTarget: SceneRendererHoverTarget | null
   readonly pinnedPlantNameLabels: readonly PlantNameLabel[]
   readonly selectionLabels: readonly SelectionLabel[]
+  /** Labels a saved view's snapshot draws; absent, the workspace's plant display decides. */
+  readonly plantLabels?: PlantLabelMode
 }
 
 export interface SceneRendererContext {

@@ -1,4 +1,5 @@
-import type { SavedView, StoryStep } from '../../types/design'
+import type { CanopiFile, SavedView, StoryStep } from '../../types/design'
+import { PLANT_LABEL_MODES, type PlantLabelMode } from '../../canvas/runtime/plant-display'
 import { editCurrentDesign } from './core'
 
 // Saved views are Design Edit data (ADR 0011): every command dirties the Design
@@ -6,19 +7,62 @@ import { editCurrentDesign } from './core'
 // nothing returns the Design untouched. Stories are admitted and saved with the
 // Design; their commands come with the Stories panel.
 
+/**
+ * How each saved view shows the Design's plants, by view id, as the Design
+ * stores it in `extra.saved_view_display` (a root key the format keeps as
+ * unknown `extra`, like `plant_display`): `{ "<view id>": { "labels": "codes" } }`.
+ * A saved view has no field for it, and the format stays as it is.
+ */
+export const SAVED_VIEW_DISPLAY_EXTRA_KEY = 'saved_view_display'
+
+export interface SavedViewDisplay {
+  readonly labels: PlantLabelMode
+}
+
+/** The labels recorded with a view, or null for a view saved without them. */
+export function savedViewPlantLabels(design: Pick<CanopiFile, 'extra'> | null, viewId: string): PlantLabelMode | null {
+  return readSavedViewDisplay(design, viewId)?.labels ?? null
+}
+
+function readSavedViewDisplay(design: Pick<CanopiFile, 'extra'> | null, viewId: string): SavedViewDisplay | null {
+  const all = design?.extra?.[SAVED_VIEW_DISPLAY_EXTRA_KEY]
+  if (!all || typeof all !== 'object' || Array.isArray(all)) return null
+  const entry = (all as Record<string, unknown>)[viewId]
+  if (!entry || typeof entry !== 'object') return null
+  const labels = (entry as { labels?: unknown }).labels
+  return PLANT_LABEL_MODES.includes(labels as PlantLabelMode) ? { labels: labels as PlantLabelMode } : null
+}
+
+/** The Design with `viewId`'s display set, or removed with null; the key goes when empty. */
+function withSavedViewDisplay(design: CanopiFile, viewId: string, display: SavedViewDisplay | null): CanopiFile {
+  const stored = design.extra?.[SAVED_VIEW_DISPLAY_EXTRA_KEY]
+  const all: Record<string, unknown> = stored && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {}
+  if (display) all[viewId] = { labels: display.labels }
+  else if (viewId in all) delete all[viewId]
+  else return design
+  const extra: Record<string, unknown> = { ...design.extra }
+  if (Object.keys(all).length === 0) delete extra[SAVED_VIEW_DISPLAY_EXTRA_KEY]
+  else extra[SAVED_VIEW_DISPLAY_EXTRA_KEY] = all
+  return { ...design, extra }
+}
+
 /** What deleting a view removed, so Undo can put it back where it was. */
 export interface SavedViewDeletion {
   readonly view: SavedView
+  /** How the view showed plants, if recorded. */
+  readonly display: SavedViewDisplay | null
   readonly index: number
   /** Story steps that showed the view, in story order, with their positions. */
   readonly steps: readonly { readonly storyId: string; readonly step: StoryStep; readonly index: number }[]
 }
 
-export function addSavedView(view: SavedView): void {
+/** Adds a view, with how it shows plants when given, as one edit. */
+export function addSavedView(view: SavedView, display: SavedViewDisplay | null = null): void {
   editCurrentDesign((design) => {
     const views = design.views ?? []
     if (views.some((existing) => existing.id === view.id)) return design
-    return { ...design, views: [...views, view] }
+    const added = { ...design, views: [...views, view] }
+    return display ? withSavedViewDisplay(added, view.id, display) : added
   })
 }
 
@@ -55,12 +99,12 @@ export function deleteSavedView(id: string): SavedViewDeletion | null {
       })
       return steps.length === story.steps.length ? story : { ...story, steps }
     })
-    deletion = { view: views[index]!, index, steps: removedSteps }
-    return {
+    deletion = { view: views[index]!, display: readSavedViewDisplay(design, id), index, steps: removedSteps }
+    return withSavedViewDisplay({
       ...design,
       views: views.filter((view) => view.id !== id),
       stories: removedSteps.length === 0 ? stories : nextStories,
-    }
+    }, id, null)
   })
   return deletion
 }
@@ -87,6 +131,7 @@ export function restoreSavedView(deletion: SavedViewDeletion): void {
       }
       return { ...story, steps }
     })
-    return { ...design, views: nextViews, stories: nextStories }
+    const restored = { ...design, views: nextViews, stories: nextStories }
+    return deletion.display ? withSavedViewDisplay(restored, deletion.view.id, deletion.display) : restored
   })
 }

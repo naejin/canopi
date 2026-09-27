@@ -11,6 +11,7 @@ import type { CanopiFile, PlacedPlant } from '../types/design'
 import { designSessionFixture } from './support/design-session-state'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 
 function plant(canonicalName: string, commonName: string): PlacedPlant {
   return {
@@ -130,6 +131,34 @@ describe('Consortium panel', () => {
     })
     expect(rowNames()).toEqual(['Menthe verte'])
     expect(container.querySelectorAll('[data-match-dot]')).toHaveLength(3)
+  })
+
+  it('draws each row glyph in the colour the map draws it with', async () => {
+    designSessionFixture.file = { ...design(), extra: { plant_display: { color_by: 'stratum' } } }
+    const scene = createDefaultScenePersistedState()
+    scene.plants = [{
+      kind: 'plant',
+      id: 'plant-Malus domestica',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Pommier cultivé',
+      color: '#3E8E4E',
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }]
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ scene, plants: [plant('Malus domestica', 'Pommier cultivé')] }),
+    }))
+    await act(async () => { render(<ConsortiumPanel />, container) })
+
+    const glyph = container.querySelector<HTMLElement>('article [aria-hidden="true"] > span[style]')
+    // Colour by stratum: the High stratum's colour, not the stored species colour.
+    expect(glyph?.style.color).toBe('rgb(0, 158, 115)')
   })
 
   it('shows the empty state without plants', async () => {

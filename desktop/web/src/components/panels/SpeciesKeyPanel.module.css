@@ -144,13 +144,19 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  cursor: pointer;
+}
+
+.legendBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
 }
 
 .legendSwatch {
-  width: var(--space-3);
-  height: var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  width: var(--control-size-sm);
+  height: var(--control-size-sm);
 }
 
 .hint {
@@ -274,4 +280,25 @@
 
 .linkButton:hover {
   text-decoration: underline;
+}
+
+/* An action inside a hint line ("Zoom in to see names"). */
+.inlineLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.inlineLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }

@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodeCanopiDesign } from '../app/contracts/design-ingestion'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import { composeDocumentForSave } from '../app/contracts/document'
-import { readPlantDisplayOptions, setPlantDisplayOptions } from '../app/design-edit/plant-display'
+import {
+  readPlantDisplayOptions,
+  resetStratumDisplayColors,
+  setPlantDisplayOptions,
+  setStratumDisplayColor,
+} from '../app/design-edit/plant-display'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { cyclePlantLabels } from '../app/plant-display/actions'
 import { currentPlantDisplay, designStrata } from '../app/plant-display/state'
@@ -20,6 +25,8 @@ import {
   STRATUM_DISPLAY_COLORS,
   nextPlantLabelMode,
   normalizePlantDisplay,
+  plantDisplaysEqual,
+  stratumDisplayColor,
   resolveDisplayedPlantColor,
   setCanvasPlantDisplay,
   type PlantDisplay,
@@ -103,6 +110,23 @@ describe('plant display rules', () => {
     expect(resolveDisplayedPlantColor('#3E8E4E', 'Malus domestica', one)).toBe('#AA3355')
   })
 
+  it('recolours a whole stratum, or No stratum yet, over the default stratum colours', () => {
+    const display = normalizePlantDisplay({
+      colorBy: 'stratum',
+      strata: new Map([['Malus domestica', 'high'], ['Mentha spicata', 'low']]),
+      stratumColors: { high: '#112233', none: '#445566' },
+    })
+    expect(resolveDisplayedPlantColor('#3E8E4E', 'Malus domestica', display)).toBe('#112233')
+    expect(resolveDisplayedPlantColor('#3E8E4E', 'Mentha spicata', display)).toBe(STRATUM_DISPLAY_COLORS.low)
+    expect(resolveDisplayedPlantColor('#3E8E4E', 'Rubus idaeus', display)).toBe('#445566')
+    expect(stratumDisplayColor('high', display)).toBe('#112233')
+    expect(stratumDisplayColor('emergent', display)).toBe(STRATUM_DISPLAY_COLORS.emergent)
+    // Only while colouring by stratum: species colours stay as stored otherwise.
+    expect(resolveDisplayedPlantColor('#3E8E4E', 'Malus domestica', { ...display, colorBy: 'species' })).toBe('#3E8E4E')
+    expect(normalizePlantDisplay({ stratumColors: { high: 'teal', canopy: '#112233' } as never }).stratumColors).toEqual({})
+    expect(plantDisplaysEqual(display, { ...display, stratumColors: { high: '#112233' } })).toBe(false)
+  })
+
   it('keeps the stratum colours apart from each other and from the no-stratum grey', () => {
     const colors = [...Object.values(STRATUM_DISPLAY_COLORS), NO_STRATUM_DISPLAY_COLOR]
     expect(new Set(colors).size).toBe(5)
@@ -172,7 +196,7 @@ describe('plant display as Design data', () => {
     const wire = encodeCanopiDesign(saved)
     expect(wire.plant_display).toMatchObject({ color_by: 'one_color' })
     expect(readPlantDisplayOptions(decodeCanopiDesign(wire))).toEqual({
-      colorBy: 'one-color', oneColor: '#AA3355', symbolScale: 1.3, outline: false, labels: 'codes',
+      colorBy: 'one-color', oneColor: '#AA3355', symbolScale: 1.3, outline: false, labels: 'codes', stratumColors: {},
     })
   })
 
@@ -187,11 +211,27 @@ describe('plant display as Design data', () => {
     expect(currentDesign.value?.extra).not.toHaveProperty('plant_display')
   })
 
+  it('stores a stratum colour with the display, never touching stored species colours', () => {
+    replaceCurrentDesignState(design({ plant_species_colors: { 'Malus domestica': '#3E8E4E' } }), null, 'Display')
+
+    setStratumDisplayColor('high', '#112233')
+    setStratumDisplayColor('none', '#445566')
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ stratum_colors: { high: '#112233', none: '#445566' } })
+    expect(currentPlantDisplay.value.stratumColors).toEqual({ high: '#112233', none: '#445566' })
+    expect(currentDesign.value?.plant_species_colors).toEqual({ 'Malus domestica': '#3E8E4E' })
+
+    // Its default colour again, or a reset, drops the override; no overrides leave the key out.
+    setStratumDisplayColor('high', STRATUM_DISPLAY_COLORS.high)
+    expect(currentPlantDisplay.value.stratumColors).toEqual({ none: '#445566' })
+    resetStratumDisplayColors()
+    expect(currentDesign.value?.extra).not.toHaveProperty('plant_display')
+  })
+
   it('reads invalid stored options as defaults', () => {
     expect(readPlantDisplayOptions(design({ extra: { plant_display: 'loud' } }))).toMatchObject({ colorBy: 'species', labels: 'names' })
     expect(readPlantDisplayOptions(design({
       extra: { plant_display: { color_by: 'stratum', one_color: 'nope', symbol_scale: 40, outline: 'yes', labels: 'codes' } },
-    }))).toEqual({ colorBy: 'stratum', oneColor: DEFAULT_PLANT_DISPLAY.oneColor, symbolScale: 2, outline: true, labels: 'codes' })
+    }))).toEqual({ colorBy: 'stratum', oneColor: DEFAULT_PLANT_DISPLAY.oneColor, symbolScale: 2, outline: true, labels: 'codes', stratumColors: {} })
   })
 
   it('cycles labels from the Design value', () => {

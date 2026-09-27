@@ -33,16 +33,21 @@ import { PlantFinder, finderHighlight, finderSummary } from '../shared/PlantFind
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { Switch } from '../shared/Switch'
 import {
-  NO_STRATUM_DISPLAY_COLOR,
-  PLANT_DISPLAY_STRATA,
   PLANT_SYMBOL_SCALE_MAX,
   PLANT_SYMBOL_SCALE_MIN,
-  STRATUM_DISPLAY_COLORS,
+  STRATUM_COLOR_KEYS,
+  stratumDisplayColor,
   type PlantColorMode,
+  type PlantDisplay,
   type PlantLabelMode,
 } from '../../canvas/runtime/plant-display'
-import { setPlantDisplayOptions, setPlantLabels } from '../../app/plant-display/actions'
-import { plantLabelCoverageText } from '../../app/plant-display/coverage'
+import {
+  resetStratumDisplayColors,
+  setPlantDisplayOptions,
+  setPlantLabels,
+  setStratumDisplayColor,
+} from '../../app/plant-display/actions'
+import { plantLabelCoverage, zoomInForPlantLabels } from '../../app/plant-display/coverage'
 import { currentPlantDisplay, displayedPlantColor } from '../../app/plant-display/state'
 import { setSoftenBackground } from '../../app/map-layers/actions'
 import { mapLayers } from '../../app/map-layers/state'
@@ -235,7 +240,7 @@ function DisplayOnMap() {
               />
             </label>
           )}
-          {display.colorBy === 'stratum' && <StratumLegend />}
+          {display.colorBy === 'stratum' && <StratumLegend display={display} />}
           <label className={styles.field}>
             <span className={styles.fieldLabel}>
               {t('speciesKey.symbolSize')}
@@ -290,32 +295,58 @@ function formatPercent(percent: number): string {
   return new Intl.NumberFormat(locale.value, { style: 'percent' }).format(percent / 100)
 }
 
-/** The stratum colours, so Colour by stratum reads without the Consortium panel. */
-function StratumLegend() {
-  const entries = [
-    ...PLANT_DISPLAY_STRATA.map((stratum) => ({
-      key: stratum,
-      color: STRATUM_DISPLAY_COLORS[stratum],
-      label: t(`filters.stratum_${stratum}`),
-    })),
-    { key: 'none', color: NO_STRATUM_DISPLAY_COLOR, label: t('speciesKey.noStratumYet') },
-  ]
+/**
+ * The stratum colours, so Colour by stratum reads without the Consortium
+ * panel. A swatch recolours its whole stratum for this Design's display.
+ */
+function StratumLegend({ display }: { readonly display: PlantDisplay }) {
+  const recoloured = Object.keys(display.stratumColors).length > 0
   return (
-    <ul className={styles.legend} aria-label={t('speciesKey.stratumLegend')}>
-      {entries.map((entry) => (
-        <li key={entry.key} className={styles.legendEntry}>
-          <span className={styles.legendSwatch} style={{ background: entry.color }} aria-hidden="true" />
-          {entry.label}
-        </li>
-      ))}
-    </ul>
+    <div className={styles.legendBlock}>
+      <ul className={styles.legend} aria-label={t('speciesKey.stratumLegend')}>
+        {STRATUM_COLOR_KEYS.map((key) => {
+          const label = key === 'none' ? t('speciesKey.noStratumYet') : t(`filters.stratum_${key}`)
+          return (
+            <li key={key}>
+              <label className={styles.legendEntry}>
+                <input
+                  type="color"
+                  className={`${styles.swatch} ${styles.legendSwatch}`}
+                  value={stratumDisplayColor(key, display).toLowerCase()}
+                  aria-label={t('speciesKey.stratumColorOf', { stratum: label })}
+                  onChange={(event) => setStratumDisplayColor(key, event.currentTarget.value)}
+                />
+                {label}
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      {recoloured && (
+        <button type="button" className={styles.linkButton} onClick={resetStratumDisplayColors}>
+          {t('speciesKey.resetStratumColors')}
+        </button>
+      )}
+    </div>
   )
 }
 
-/** "Codes shown for 70 of 282 plants in view": follows the camera, so it re-renders alone. */
+/**
+ * "Codes shown for 70 of 282 plants in view", with "Zoom in to see codes"
+ * when none shows at this zoom: follows the camera, so it re-renders alone.
+ */
 function PlantLabelCoverageLine() {
-  const text = plantLabelCoverageText()
-  return text ? <p className={styles.hint} role="status">{text}</p> : null
+  const coverage = plantLabelCoverage()
+  if (!coverage) return null
+  return (
+    <p className={styles.hint}>
+      <span role="status">{coverage.text}</span>
+      {coverage.zoomIn && <>
+        {' · '}
+        <button type="button" className={styles.inlineLink} onClick={zoomInForPlantLabels}>{coverage.zoomIn}</button>
+      </>}
+    </p>
+  )
 }
 
 function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {

@@ -9,6 +9,7 @@ import { createUuid } from '../../utils/ids'
 import { addSavedView } from '../design-edit'
 import { currentDesign } from '../document-session/store'
 import { mapLayers } from '../map-layers/state'
+import { currentPlantDisplay } from '../plant-display/state'
 import { composeSavedView } from './model'
 
 /** The views of the open Design, in saved order. */
@@ -34,8 +35,8 @@ export interface SaveCurrentViewInput {
 
 /**
  * Saves what the map shows now as Design Edit data: camera, map background and
- * terrain, visible Design layers and site data, the focused species and the
- * selection, with a name and an optional title.
+ * terrain, visible Design layers and site data, the focused species, the
+ * selection and the plant label choice, with a name and an optional title.
  */
 export function saveCurrentView({ name, title = '' }: SaveCurrentViewInput): SavedView | null {
   const queries = currentCanvasQuerySurface.value
@@ -57,7 +58,8 @@ export function saveCurrentView({ name, title = '' }: SaveCurrentViewInput): Sav
     focusedSpecies: queries.getSpeciesFocus().canonicalName,
     selection: queries.getSelection(),
   })
-  addSavedView(saved)
+  // The label choice travels as Design extra data: a saved view has no field for it.
+  addSavedView(saved, { labels: currentPlantDisplay.peek().labels })
   return saved
 }
 

@@ -80,6 +80,27 @@ function button(container: HTMLElement, name: string): HTMLButtonElement {
   return result
 }
 
+function sceneWithApple(): ScenePersistedState {
+  return {
+    ...createDefaultScenePersistedState(),
+    plants: [{
+      kind: 'plant',
+      id: 'apple',
+      locked: false,
+      canonicalName: 'Malus domestica',
+      commonName: 'Apple',
+      color: '#3E8E4E',
+      stratum: null,
+      canopySpreadM: null,
+      position: { x: 0, y: 0 },
+      rotationDeg: null,
+      notes: null,
+      plantedDate: null,
+      quantity: 1,
+    }],
+  }
+}
+
 describe('Calendar action editor', () => {
   let container: HTMLDivElement
 
@@ -233,6 +254,23 @@ describe('Calendar action editor', () => {
       speciesTarget('Lavandula angustifolia'),
       speciesTarget('Lavandula latifolia'),
     ])
+  })
+
+  it('draws each species glyph in the colour the map draws it with', async () => {
+    designSessionFixture.file = {
+      ...design(),
+      extra: { plant_display: { color_by: 'one_color', one_color: '#AA3355' } },
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ plants, scene: sceneWithApple() }),
+    }))
+    await act(async () => { render(null, container) })
+    readPlanningViewState().calendarMonth.value = '2026-09-01'
+    await act(async () => { render(<CalendarPanel />, container) })
+    const editor = await openEdit()
+    const glyph = editor.querySelector<HTMLElement>('[data-calendar-species-option="Malus domestica"] [aria-hidden="true"] > span[style]')
+
+    expect(glyph?.style.color).toBe('rgb(170, 51, 85)')
   })
 
   it('moves focus into the editor and restores its trigger on Escape', async () => {
