@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "植物数据库",
     "favorites": "收藏夹"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "代码标记此设计中已有的物种。"
   },
   "health": {
-    "plantDbMissing": "未找到植物数据库。请运行 prepare-db.py 生成。植物搜索不可用。",
-    "plantDbCorrupt": "植物数据库已损坏。请重新安装或使用 prepare-db.py 重新生成。植物搜索不可用。"
+    "plantDbMissing": "植物目录的数据库文件缺失，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。",
+    "plantDbCorrupt": "植物目录的数据库文件已损坏，因此无法搜索和查看植物详情。您的设计不受影响。请重新安装 Canopi 以恢复该文件。"
   },
   "canvas": {
     "inspection": {

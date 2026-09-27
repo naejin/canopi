@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "Base de plantas",
     "favorites": "Favoritos"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "Os códigos marcam as espécies que já estão neste design."
   },
   "health": {
-    "plantDbMissing": "Banco de dados de plantas não encontrado. Execute prepare-db.py. A pesquisa de plantas está indisponível.",
-    "plantDbCorrupt": "Banco de dados de plantas corrompido. Reinstale ou regenere com prepare-db.py. A pesquisa de plantas está indisponível."
+    "plantDbMissing": "O arquivo de banco de dados do catálogo de plantas está ausente, por isso a pesquisa e os detalhes das plantas estão indisponíveis. Seus Designs estão seguros. Reinstale o Canopi para restaurá-lo.",
+    "plantDbCorrupt": "O arquivo de banco de dados do catálogo de plantas está danificado, por isso a pesquisa e os detalhes das plantas estão indisponíveis. Seus Designs estão seguros. Reinstale o Canopi para restaurá-lo."
   },
   "canvas": {
     "inspection": {

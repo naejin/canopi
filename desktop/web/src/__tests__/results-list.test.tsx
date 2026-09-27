@@ -152,6 +152,26 @@ describe('ResultsList', () => {
     vi.doUnmock('../app/plant-browser')
   })
 
+  it('says why plant search is off when the plant database is unavailable, not the internal error', async () => {
+    const { plantDbStatus } = await import('../app/health/state')
+    plantDbStatus.value = 'missing'
+    searchResponses.push(Promise.reject(new Error('Plant database unavailable: bundled plant database is missing')))
+    try {
+      workbench.mount()
+      await flushMicrotasks()
+      await act(async () => {
+        render(<ResultsList designSpecies={new Map()} />, container)
+      })
+      const alert = container.querySelector('[role="alert"]')!
+      expect(alert.textContent).toContain("The plant catalog's database file is missing")
+      expect(alert.textContent).not.toContain('bundled plant database')
+      // Retrying cannot bring the file back.
+      expect(alert.querySelector('button')).toBeNull()
+    } finally {
+      plantDbStatus.value = 'available'
+    }
+  })
+
   it('keeps the existing virtualizer when only more rows are appended', async () => {
     searchResponses.push({
       items: [

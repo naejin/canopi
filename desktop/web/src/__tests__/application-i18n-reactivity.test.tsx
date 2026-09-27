@@ -36,13 +36,13 @@ describe('application translation authority', () => {
       render(<DegradedBanner />, container)
     })
 
-    expect(container.textContent).toContain('Plant database not found')
+    expect(container.textContent).toContain("The plant catalog's database file is missing")
 
     await act(async () => {
       locale.value = 'fr'
     })
 
-    expect(container.textContent).toContain('Base de données végétale introuvable')
+    expect(container.textContent).toContain('Le fichier de base de données du catalogue des plantes est introuvable')
   })
 
   it('pins interpolation, count, and fallback reads to the observed locale synchronously', () => {

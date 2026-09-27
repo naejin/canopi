@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "Plant Database",
     "favorites": "Favorites"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "Codes appear on species already in this Design."
   },
   "health": {
-    "plantDbMissing": "Plant database not found. Run prepare-db.py to generate it. Plant search is unavailable.",
-    "plantDbCorrupt": "Plant database is corrupt. Reinstall or regenerate with prepare-db.py. Plant search is unavailable."
+    "plantDbMissing": "The plant catalog's database file is missing, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it.",
+    "plantDbCorrupt": "The plant catalog's database file is damaged, so plant search and details are unavailable. Your Designs are safe. Reinstall Canopi to restore it."
   },
   "canvas": {
     "inspection": {

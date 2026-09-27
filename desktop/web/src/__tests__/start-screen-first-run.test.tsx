@@ -109,7 +109,7 @@ describe('Plant database notice', () => {
     await act(async () => { render(<DegradedBanner />, host) })
 
     const alert = host.querySelector('[role="alert"]')!
-    expect(alert.textContent).toContain('Plant database is corrupt')
+    expect(alert.textContent).toContain("The plant catalog's database file is damaged")
     // The chrome below the title bar starts from --chrome-rail-top; the notice pushes it.
     expect(host.style.getPropertyValue('--chrome-rail-top')).toMatch(/^calc\(\d+px \+ var\(--space-2\)\)$/)
 

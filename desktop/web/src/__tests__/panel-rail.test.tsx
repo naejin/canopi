@@ -124,7 +124,7 @@ describe('Panel rail', () => {
     expect(panelButton('Favorites and stamps').disabled).toBe(true)
   })
 
-  it('keeps an active no-design Plant Database panel button enabled so it can close the panel', async () => {
+  it('keeps an active no-design Plant catalog panel button enabled so it can close the panel', async () => {
     designSessionFixture.file = null
     const panels = appCommandGraphPanelProjection.value
     const plantDb = [...panels.primary, ...panels.design, ...panels.planning]

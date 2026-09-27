@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "Plantendatabase",
     "favorites": "Favorieten"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "Codes markeren soorten die al in dit ontwerp staan."
   },
   "health": {
-    "plantDbMissing": "Plantendatabase niet gevonden. Voer prepare-db.py uit om deze te genereren. Planten zoeken is niet beschikbaar.",
-    "plantDbCorrupt": "Plantendatabase is beschadigd. Herinstalleer of genereer opnieuw met prepare-db.py. Planten zoeken is niet beschikbaar."
+    "plantDbMissing": "Het databasebestand van de plantencatalogus ontbreekt, dus zoeken en plantdetails zijn niet beschikbaar. Uw Designs zijn veilig. Installeer Canopi opnieuw om het te herstellen.",
+    "plantDbCorrupt": "Het databasebestand van de plantencatalogus is beschadigd, dus zoeken en plantdetails zijn niet beschikbaar. Uw Designs zijn veilig. Installeer Canopi opnieuw om het te herstellen."
   },
   "canvas": {
     "inspection": {

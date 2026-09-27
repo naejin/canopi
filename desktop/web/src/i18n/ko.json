@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "식물 데이터베이스",
     "favorites": "즐겨찾기"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "코드는 이 디자인에 이미 있는 종을 표시합니다."
   },
   "health": {
-    "plantDbMissing": "식물 데이터베이스를 찾을 수 없습니다. prepare-db.py를 실행하여 생성하세요. 식물 검색을 사용할 수 없습니다.",
-    "plantDbCorrupt": "식물 데이터베이스가 손상되었습니다. prepare-db.py로 재설치하거나 재생성하세요. 식물 검색을 사용할 수 없습니다."
+    "plantDbMissing": "식물 카탈로그의 데이터베이스 파일이 없어 식물 검색과 상세 정보를 사용할 수 없습니다. 디자인은 안전합니다. Canopi를 다시 설치하여 복원하세요.",
+    "plantDbCorrupt": "식물 카탈로그의 데이터베이스 파일이 손상되어 식물 검색과 상세 정보를 사용할 수 없습니다. 디자인은 안전합니다. Canopi를 다시 설치하여 복원하세요."
   },
   "canvas": {
     "inspection": {

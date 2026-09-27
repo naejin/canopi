@@ -1,6 +1,5 @@
 {
   "nav": {
-    "plantDb": "Base de plantes",
     "favorites": "Favoris"
   },
   "webShell": {
@@ -94,8 +93,8 @@
     "codesHint": "Les codes marquent les espèces déjà présentes dans ce Design."
   },
   "health": {
-    "plantDbMissing": "Base de données végétale introuvable. Exécutez prepare-db.py. La recherche de plantes est indisponible.",
-    "plantDbCorrupt": "Base de données végétale corrompue. Réinstallez ou régénérez avec prepare-db.py. La recherche de plantes est indisponible."
+    "plantDbMissing": "Le fichier de base de données du catalogue des plantes est introuvable : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir.",
+    "plantDbCorrupt": "Le fichier de base de données du catalogue des plantes est endommagé : la recherche et les fiches des plantes sont indisponibles. Vos Designs ne sont pas touchés. Réinstallez Canopi pour le rétablir."
   },
   "canvas": {
     "inspection": {
