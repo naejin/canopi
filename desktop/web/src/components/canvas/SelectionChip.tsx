@@ -1,5 +1,6 @@
 import { canvasCommandDefinitions } from '../../app/canvas-commands'
 import { useMapSelectionSummary, type MapSelectionSummary } from '../../app/map-selection/summary'
+import { formatArea, formatLength, zoneTypeLabel } from '../../app/map-selection/zone-label'
 import { ariaKeyShortcuts } from '../../app/shell-commands/shortcut-text'
 import { currentCanvasQuerySurface, currentCanvasSceneEditCommandSurface } from '../../canvas/session'
 import { locale } from '../../app/settings/state'
@@ -60,12 +61,6 @@ interface ChipDetail {
   readonly measure?: boolean
 }
 
-const ZONE_TYPE_KEYS: Readonly<Record<string, string>> = {
-  rect: 'canvas.selectionChip.zoneRect',
-  ellipse: 'canvas.selectionChip.zoneEllipse',
-  polygon: 'canvas.selectionChip.zonePolygon',
-  line: 'canvas.selectionChip.zoneLine',
-}
 const NOTE_PREVIEW_GRAPHEMES = 40
 
 function isOnlyPlants(summary: MapSelectionSummary): boolean {
@@ -103,9 +98,7 @@ function describe(summary: MapSelectionSummary, activeLocale: string): { head: s
   if (zoneCount === 1) {
     const zone = zones[0]!
     // A zone the user has not named is named by its type, never by its id.
-    const head = zone.name === null
-      ? t(ZONE_TYPE_KEYS[zone.zoneType] ?? 'canvas.selectionChip.zone')
-      : t('canvas.selectionChip.zone')
+    const head = zone.name === null ? zoneTypeLabel(zone.zoneType) : t('canvas.selectionChip.zone')
     return {
       head,
       details: [
@@ -132,20 +125,4 @@ function notePreview(text: string): string {
   const line = text.split('\n').map((part) => part.trim()).find(Boolean) ?? ''
   const graphemes = textGraphemes(line)
   return graphemes.length > NOTE_PREVIEW_GRAPHEMES ? `${graphemes.slice(0, NOTE_PREVIEW_GRAPHEMES - 1).join('').trimEnd()}…` : line
-}
-
-/** Lengths as the map labels them: two decimals below 1 m, one below 100 m, none above. */
-export function formatLength(meters: number, activeLocale: string): string {
-  const digits = meters < 1 ? 2 : meters < 100 ? 1 : 0
-  return new Intl.NumberFormat(activeLocale, { style: 'unit', unit: 'meter', unitDisplay: 'short', maximumFractionDigits: digits }).format(meters)
-}
-
-/** Areas in m² (one decimal below 10 m²), or in hectares from 1 ha. */
-export function formatArea(squareMeters: number, activeLocale: string): string {
-  if (squareMeters >= 10_000) {
-    return new Intl.NumberFormat(activeLocale, { style: 'unit', unit: 'hectare', unitDisplay: 'short', maximumFractionDigits: 2 }).format(squareMeters / 10_000)
-  }
-  // Intl has no square-metre unit; the symbol m² is the same in every interface language.
-  const value = new Intl.NumberFormat(activeLocale, { maximumFractionDigits: squareMeters < 10 ? 1 : 0 }).format(squareMeters)
-  return `${value}\u00a0m²`
 }

@@ -12,6 +12,7 @@ import { currentDesign, designSessionFixture } from './support/design-session-st
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { dropdownTrigger } from './support/dropdown-trigger'
+import { createDefaultScenePersistedState, type ScenePersistedState } from '../canvas/runtime/scene'
 
 const plants: PlacedPlant[] = [
   plant('apple', 'Malus domestica', 'Apple'),
@@ -313,5 +314,45 @@ describe('Calendar action editor', () => {
     })
     expect([...document.querySelectorAll<HTMLElement>('[role="dialog"]')]).toEqual([editor])
     expect(document.activeElement).toBe(endTrigger)
+  })
+
+  it('names an unnamed zone by its type and area, never by its id', async () => {
+    const unnamed = 'zone-ee08f9f9-634f-4723-bbde-1200610562dc'
+    const deleted = 'zone-0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b'
+    const scene: ScenePersistedState = {
+      ...createDefaultScenePersistedState(),
+      zones: [
+        {
+          kind: 'zone', name: unnamed, locked: false, zoneType: 'rect', rotationDeg: 0, fillColor: null, notes: null,
+          points: [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }, { x: 0, y: 10 }],
+        },
+        {
+          kind: 'zone', name: 'Herb spiral', locked: false, zoneType: 'ellipse', rotationDeg: 0, fillColor: null, notes: null,
+          points: [{ x: 0, y: 0 }, { x: 2, y: 2 }],
+        },
+      ],
+    }
+    designSessionFixture.file = {
+      ...design(),
+      timeline: [{ ...action(), targets: [{ kind: 'zone', zone_name: unnamed }] }, {
+        ...action(), id: 'water-deleted', description: 'Water', order: 1, targets: [{ kind: 'zone', zone_name: deleted }],
+      }],
+    }
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ scene, plants }),
+    }))
+    await act(async () => { render(<CalendarPanel />, container) })
+
+    expect(container.textContent).not.toMatch(/zone-[0-9a-f]{8}/)
+    expect(container.textContent).toContain('Rectangle zone · 120\u00a0m²')
+
+    const editor = await openEdit()
+    const zoneTrigger = dropdownTrigger(editor, 'Zone')!
+    expect(zoneTrigger.textContent).toContain('Rectangle zone · 120\u00a0m²')
+    await act(async () => { zoneTrigger.click() })
+    const zoneMenu = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Zone"]')!
+    expect([...zoneMenu.querySelectorAll('button')].map((option) => option.textContent))
+      .toEqual(['Choose a zone', 'Rectangle zone · 120\u00a0m²', 'Herb spiral'])
+    expect(document.body.textContent).not.toMatch(/zone-[0-9a-f]{8}/)
   })
 })

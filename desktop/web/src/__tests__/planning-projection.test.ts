@@ -245,7 +245,7 @@ describe('Planning Projection', () => {
         targets: [speciesTarget('Missing species'), { kind: 'zone', zone_name: 'Missing zone' }],
       })],
       plants: [],
-      zoneNames: [],
+      zones: [],
       month: '2026-04-01',
       search: '',
       actionType: 'all',

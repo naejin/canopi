@@ -1,6 +1,7 @@
 import type { PanelTarget, PlacedPlant, TimelineAction } from '../../types/design'
 import { normalizeSearchText } from '../../utils/normalize-search'
 import type { CalendarCompletionFilter } from '../planning-view/state'
+import { missingZoneLabel } from '../map-selection/zone-label'
 import {
   buildCivilMonthGrid,
   civilDateInRange,
@@ -18,6 +19,12 @@ export interface CalendarTargetLabel {
   readonly kind: PanelTarget['kind']
   readonly label: string
   readonly unavailable: boolean
+}
+
+/** A zone a Calendar action can target: its name (its identity) and how lists show it. */
+export interface PlanningZoneOption {
+  readonly name: string
+  readonly label: string
 }
 
 export interface CalendarPlanningAction {
@@ -64,7 +71,7 @@ export function buildCalendarPlanningProjection(options: {
   readonly actions: readonly TimelineAction[]
   readonly plants: readonly PlacedPlant[]
   readonly localizedNames?: ReadonlyMap<string, string | null>
-  readonly zoneNames?: readonly string[]
+  readonly zones?: readonly PlanningZoneOption[]
   readonly month: string
   readonly search: string
   readonly actionType: string
@@ -78,7 +85,7 @@ export function buildCalendarPlanningProjection(options: {
     action,
     options.plants,
     options.localizedNames,
-    options.zoneNames ?? [],
+    options.zones ?? [],
   ))
   const needle = normalizeSearchText(options.search.trim())
   const filtered = projected.filter((action) => {
@@ -137,7 +144,7 @@ function projectCalendarAction(
   action: TimelineAction,
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
-  zoneNames: readonly string[],
+  zones: readonly PlanningZoneOption[],
 ): CalendarPlanningAction {
   const parsedStart = parseCivilDate(action.start_date)
   const parsedEnd = parseCivilDate(action.end_date)
@@ -145,7 +152,7 @@ function projectCalendarAction(
     target,
     plants,
     localizedNames,
-    zoneNames,
+    zones,
   ))
   return {
     id: action.id,
@@ -192,7 +199,7 @@ function projectCalendarTargetLabel(
   target: PanelTarget,
   plants: readonly PlacedPlant[],
   localizedNames: ReadonlyMap<string, string | null> | undefined,
-  zoneNames: readonly string[],
+  zones: readonly PlanningZoneOption[],
 ): CalendarTargetLabel {
   switch (target.kind) {
     case 'manual':
@@ -221,12 +228,14 @@ function projectCalendarTargetLabel(
         unavailable: plant === undefined,
       }
     }
-    case 'zone':
+    case 'zone': {
+      const zone = zones.find((candidate) => candidate.name === target.zone_name)
       return {
         target,
         kind: target.kind,
-        label: target.zone_name,
-        unavailable: !zoneNames.includes(target.zone_name),
+        label: zone?.label ?? missingZoneLabel(target.zone_name),
+        unavailable: zone === undefined,
       }
+    }
   }
 }

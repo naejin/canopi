@@ -19,6 +19,7 @@ import {
   useCalendarPlanningSurface,
   type CalendarPlanningAction,
   type CalendarPlanningProjection,
+  type PlanningZoneOption,
   type TimelineSpeciesOption,
 } from '../planning-projection'
 import {
@@ -53,7 +54,7 @@ export interface CalendarWorkbench {
   readonly projection: CalendarPlanningProjection
   readonly actions: readonly TimelineAction[]
   readonly speciesList: readonly TimelineSpeciesOption[]
-  readonly zoneNames: readonly string[]
+  readonly zones: readonly PlanningZoneOption[]
   readonly selectedPlantCount: number
   readonly activeLocale: string
   readonly month: string
@@ -371,7 +372,7 @@ export function useCalendarWorkbench(): CalendarWorkbench {
     projection: surface.projection,
     actions: surface.actions,
     speciesList: surface.speciesList,
-    zoneNames: surface.zoneNames,
+    zones: surface.zones,
     selectedPlantCount: surface.selectedPlantIds.length,
     activeLocale: surface.activeLocale,
     month,

@@ -8,7 +8,8 @@ import type { BudgetItem, Consortium, PlacedPlant, TimelineAction } from '../../
 import { buildBudgetPlanningProjection, type BudgetPlanningProjection } from './budget'
 import { buildConsortiumPlanningProjection, type ConsortiumPlanningProjection } from './consortium'
 import { buildTimelineSpeciesOptions, type TimelineSpeciesOption } from './timeline'
-import { buildCalendarPlanningProjection, type CalendarPlanningProjection } from './calendar'
+import { buildCalendarPlanningProjection, type CalendarPlanningProjection, type PlanningZoneOption } from './calendar'
+import { zoneLabel } from '../map-selection/zone-label'
 
 const EMPTY_PLANTS: readonly PlacedPlant[] = []
 const EMPTY_NAMES: ReadonlyMap<string, string | null> = new Map()
@@ -24,7 +25,7 @@ export interface PlanningProjectionCanvasSnapshot {
   /** The English catalog names shown for species with no name in the UI language. */
   readonly englishFallbackNames: ReadonlyMap<string, string>
   readonly speciesKey: readonly SpeciesKeyEntry[]
-  readonly zoneNames: readonly string[]
+  readonly zones: readonly PlanningZoneOption[]
   readonly selectedPlantIds: readonly string[]
 }
 
@@ -41,7 +42,7 @@ export interface CalendarPlanningSurface {
   readonly activeLocale: string
   readonly selectedPlantIds: readonly string[]
   readonly readSelectedPlantIds: () => readonly string[]
-  readonly zoneNames: readonly string[]
+  readonly zones: readonly PlanningZoneOption[]
   readonly speciesList: readonly TimelineSpeciesOption[]
 }
 
@@ -68,7 +69,7 @@ function usePlanningProjectionCanvasSnapshot(): PlanningProjectionCanvasSnapshot
       speciesKey: session
         ? buildSpeciesKey(session.getSceneSnapshot(), localizedNames, englishFallbackNames)
         : [],
-      zoneNames: session?.getSceneSnapshot().zones.map((zone) => zone.name) ?? [],
+      zones: session?.getSceneSnapshot().zones.map((zone) => ({ name: zone.name, label: zoneLabel(zone, activeLocale) })) ?? [],
       selectedPlantIds: session?.getSelectedPlantColorContext().plantIds ?? [],
     }
   }, [session, sceneRevision, plantNamesRevision, selection, activeLocale])
@@ -128,7 +129,7 @@ export function useCalendarPlanningSurface(options: {
     actions,
     plants: snapshot.plants,
     localizedNames: snapshot.localizedNames,
-    zoneNames: snapshot.zoneNames,
+    zones: snapshot.zones,
     month: options.month,
     search: options.search,
     actionType: options.actionType,
@@ -143,7 +144,7 @@ export function useCalendarPlanningSurface(options: {
     options.search,
     snapshot.localizedNames,
     snapshot.plants,
-    snapshot.zoneNames,
+    snapshot.zones,
   ])
   return {
     actions,
@@ -153,7 +154,7 @@ export function useCalendarPlanningSurface(options: {
     readSelectedPlantIds: () => (
       currentCanvasQuerySurface.peek()?.getSelectedPlantColorContext().plantIds ?? []
     ),
-    zoneNames: snapshot.zoneNames,
+    zones: snapshot.zones,
     speciesList: buildTimelineSpeciesOptions(
       snapshot.plants, snapshot.localizedNames, activeLocale, snapshot.speciesKey, snapshot.englishFallbackNames,
     ),

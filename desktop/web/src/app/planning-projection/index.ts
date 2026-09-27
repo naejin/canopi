@@ -3,7 +3,9 @@ export {
   type CalendarPlanningAction,
   type CalendarPlanningProjection,
   type CalendarTargetLabel,
+  type PlanningZoneOption,
 } from './calendar'
+export { missingZoneLabel } from '../map-selection/zone-label'
 export {
   buildBudgetListProjection,
   type BudgetListProjection,

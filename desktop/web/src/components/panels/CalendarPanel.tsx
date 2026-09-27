@@ -14,7 +14,7 @@ import {
   startOfCivilMonth,
   type CivilDate,
 } from '../../app/timeline/civil-date'
-import { ACTION_TYPES, type CalendarDayProjection, type CalendarPlanningAction, type CalendarTargetLabel } from '../../app/planning-projection'
+import { ACTION_TYPES, missingZoneLabel, type CalendarDayProjection, type CalendarPlanningAction, type CalendarTargetLabel } from '../../app/planning-projection'
 import type { CalendarCompletionFilter, CalendarDisplay } from '../../app/planning-view/state'
 import { sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
@@ -578,10 +578,10 @@ function CalendarEditor({ workbench, onCancel, onClose }: {
   }))
   const zoneItems: DropdownItem<string>[] = [
     { value: '', label: t('canvas.calendar.chooseZone') },
-    ...(!workbench.zoneNames.includes(selectedZone) && selectedZone
-      ? [{ value: selectedZone, label: `${selectedZone} · ${t('canvas.calendar.unavailable')}` }]
+    ...(selectedZone && !workbench.zones.some((zone) => zone.name === selectedZone)
+      ? [{ value: selectedZone, label: `${missingZoneLabel(selectedZone)} · ${t('canvas.calendar.unavailable')}` }]
       : []),
-    ...workbench.zoneNames.map((zone) => ({ value: zone, label: zone })),
+    ...workbench.zones.map((zone) => ({ value: zone.name, label: zone.label })),
   ]
 
   useLayoutEffect(() => {
