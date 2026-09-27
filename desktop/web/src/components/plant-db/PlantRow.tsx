@@ -10,6 +10,7 @@ import {
 import type { SpeciesListItem } from '../../types/species'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { ControlIcon } from '../shared/ControlIcon'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import row from '../shared/species-row.module.css'
 import { secondaryCommonNameForDisplay } from './common-name-display'
 import type { CatalogDesignSpecies } from './design-species'
@@ -20,6 +21,8 @@ interface Props {
   plant: SpeciesListItem
   /** The species' plants in the open Design, when it has some: glyph, colour and code. */
   inDesign?: CatalogDesignSpecies
+  /** The English catalog name, shown marked "(en)" when the species has none in the interface language. */
+  englishName?: string
   /** Renders a name with the search matches marked. */
   highlight?: (text: string) => ComponentChildren
 }
@@ -29,10 +32,12 @@ interface Props {
  * facts line · code when the species is in this Design · Place · favourite star. The row
  * body opens details and drags onto the map.
  */
-export function PlantRow({ plant, inDesign, highlight }: Props) {
+export function PlantRow({ plant, inDesign, englishName, highlight }: Props) {
   const session = currentCanvasToolCommandSurface.value
   const show = highlight ?? ((text: string) => text)
-  const name = plant.common_name || plant.canonical_name
+  const english = plant.common_name ? undefined : englishName
+  const commonName = plant.common_name || english
+  const name = commonName || plant.canonical_name
   const showMatchedCommonName = speciesCatalogWorkbench.isActiveSearchText(speciesCatalogWorkbench.intent.value.text)
   const matchedName = showMatchedCommonName ? secondaryCommonNameForDisplay(plant, true) : null
   const facts = catalogFacts(plant, locale.value)
@@ -73,8 +78,8 @@ export function PlantRow({ plant, inDesign, highlight }: Props) {
           <PlantSymbolGlyph symbol={inDesign?.symbol ?? catalogHabitSymbol(plant.habit)} size={22} />
         </span>
         <span className={styles.rowNames}>
-          <strong className={plant.is_name_fallback ? styles.nameFallback : undefined}>
-            {show(name)}
+          <strong className={plant.is_name_fallback && !commonName ? styles.nameFallback : undefined}>
+            {english ? <SpeciesCommonName name={show(english)} englishFallback /> : show(name)}
             {matchedName && <span className={styles.matchedName}> · {show(matchedName)}</span>}
           </strong>
           {name !== plant.canonical_name && <em lang="la">{show(plant.canonical_name)}</em>}

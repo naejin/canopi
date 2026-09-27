@@ -6,8 +6,17 @@ import {
   type PlantFinderHit,
   type PlantFinderRange,
 } from '../../app/plant-finder/matcher'
+import type {
+  SpeciesFormChoice,
+  SpeciesQuickFilters,
+  SpeciesQuickFilterValue,
+  SpeciesStratumChoice,
+} from '../../app/plant-finder/quick-filters'
+import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
+import { formatCount } from '../../utils/format-count'
 import { ControlIcon } from './ControlIcon'
+import { Dropdown } from './Dropdown'
 import { SurfaceSearch } from './SurfaceSearch'
 import styles from './PlantFinder.module.css'
 
@@ -125,6 +134,85 @@ export function QuickFilterChip({ pressed, onChange, label, accessibleLabel }: {
       {label}
     </button>
   )
+}
+
+/**
+ * A quick filter that picks one choice from a menu: its name until a choice is made,
+ * then "Stratum: High" in the pressed look. Each choice carries how many species it
+ * holds; "All …" clears it.
+ */
+export function QuickFilterMenu<T extends string>({ label, allLabel, value, choices, onChange }: {
+  readonly label: string
+  readonly allLabel: string
+  readonly value: T | null
+  readonly choices: readonly { readonly value: T; readonly label: string; readonly count: number }[]
+  onChange(value: T | null): void
+}) {
+  const chosen = choices.find((choice) => choice.value === value)
+  const currentLocale = locale.value
+  return (
+    <Dropdown<T | ''>
+      trigger={chosen
+        ? <><span aria-hidden="true">{t('plantFinder.filterChoice', { filter: label, choice: chosen.label })}</span><span className={styles.srOnly}>{chosen.label}</span></>
+        : <><span aria-hidden="true">{label}</span><span className={styles.srOnly}>{allLabel}</span></>}
+      ariaLabel={label}
+      value={chosen ? chosen.value : ''}
+      items={[
+        { value: '', label: allLabel },
+        ...choices.map((choice) => ({ value: choice.value, label: `${choice.label} · ${formatCount(choice.count, currentLocale)}` })),
+      ]}
+      onChange={(next) => onChange(next === '' ? null : next)}
+      triggerClassName={chosen ? `${styles.menuChip} ${styles.menuChipActive}` : styles.menuChip}
+      floating
+    />
+  )
+}
+
+const STRATUM_LABEL_KEYS: Readonly<Record<SpeciesStratumChoice, string>> = {
+  emergent: 'filters.stratum_emergent',
+  high: 'filters.stratum_high',
+  medium: 'filters.stratum_medium',
+  low: 'filters.stratum_low',
+  none: 'speciesKey.noStratumYet',
+}
+
+const FORM_LABEL_KEYS: Readonly<Record<SpeciesFormChoice, string>> = {
+  tree: 'filters.habit_Tree',
+  shrub: 'filters.habit_Shrub',
+  herbaceous: 'filters.habit_Herbaceous',
+  climber: 'filters.habit_Climber',
+  none: 'plantFinder.formNotRecorded',
+}
+
+/** The Stratum and Form quick filters (`app/plant-finder/quick-filters.ts`) as two menus. */
+export function StratumFormFilters({ filters, onChange }: {
+  readonly filters: SpeciesQuickFilters
+  onChange(value: SpeciesQuickFilterValue): void
+}) {
+  const { value } = filters
+  return <>
+    <QuickFilterMenu<SpeciesStratumChoice>
+      label={t('plantFinder.stratum')}
+      allLabel={t('plantFinder.allStrata')}
+      value={value.stratum}
+      choices={withChosen(filters.stratumCounts, value.stratum).map(([choice, count]) => ({ value: choice, label: t(STRATUM_LABEL_KEYS[choice]), count }))}
+      onChange={(stratum) => onChange({ ...value, stratum })}
+    />
+    <QuickFilterMenu<SpeciesFormChoice>
+      label={t('plantFinder.form')}
+      allLabel={t('plantFinder.allForms')}
+      value={value.form}
+      choices={withChosen(filters.formCounts, value.form).map(([choice, count]) => ({ value: choice, label: t(FORM_LABEL_KEYS[choice]), count }))}
+      onChange={(form) => onChange({ ...value, form })}
+    />
+  </>
+}
+
+/** The counted choices, plus the chosen one when the list no longer holds it, so it still shows and can be cleared. */
+function withChosen<T>(counts: ReadonlyMap<T, number>, chosen: T | null): [T, number][] {
+  const choices = [...counts]
+  if (chosen !== null && !counts.has(chosen)) choices.push([chosen, 0])
+  return choices
 }
 
 /** A name with its finder matches marked. */

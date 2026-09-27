@@ -1391,7 +1391,8 @@
       "black": "Negro"
     },
     "northArrow": "Flecha del norte y escala",
-    "pageOptions": "Página seleccionada"
+    "pageOptions": "Página seleccionada",
+    "findInKey": "Buscar en la clave"
   },
   "speciesKey": {
     "title": "Plantas de este diseño",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} seleccionadas en el mapa",
     "noMatches": "Ninguna planta coincide con «{{query}}».",
     "noneSelected": "Selecciona plantas en el mapa para ver aquí sus especies.",
-    "searchHint": "La búsqueda abarca los nombres comunes en todos los idiomas que conoce Canopi, los nombres científicos y los códigos. Los acentos, las mayúsculas y las pequeñas erratas no importan."
+    "searchHint": "La búsqueda abarca los nombres comunes en todos los idiomas que conoce Canopi, los nombres científicos y los códigos. Los acentos, las mayúsculas y las pequeñas erratas no importan.",
+    "stratum": "Estrato",
+    "form": "Hábito",
+    "allStrata": "Todos los estratos",
+    "allForms": "Todos los hábitos",
+    "formNotRecorded": "Sin registrar",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "Ninguna planta coincide con estos filtros."
   },
   "analyses": {
     "groups": {

@@ -197,7 +197,13 @@ function searchCatalog(request: SpeciesSearchRequest) {
   const sorted = request.sort === 'Name' ? [...items].sort((a, b) => a.canonical_name.localeCompare(b.canonical_name))
     : request.sort === 'Height' ? [...items].sort((a, b) => (b.height_max_m ?? -1) - (a.height_max_m ?? -1))
       : items
-  return { items: sorted, total_estimate: request.include_total ? sorted.length : 0, next_cursor: null }
+  return { items: sorted.map(plant => localized(plant, request.locale)), total_estimate: request.include_total ? sorted.length : 0, next_cursor: null }
+}
+/** Rows carry the name in the requested language only, as the catalog does; French has a few. */
+function localized(plant: SpeciesListItem, locale: unknown): SpeciesListItem {
+  if (locale !== 'fr') return plant
+  const common_name = frenchNames[plant.canonical_name] ?? null
+  return { ...plant, common_name, is_name_fallback: common_name === null }
 }
 export function convertFileSrc(path: string) { return path }
 export async function invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -205,7 +211,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
   const plant = species.find(plant => plant.canonical_name === canonicalName) ?? species[0]!
   let result: unknown
   switch (command) {
-    case 'get_favorites': result = species.filter(plant => favoriteNames.has(plant.canonical_name)).map(plant => ({ ...plant, common_name: state === 'long' ? plant.common_name + ' — a particularly long local cultivar name' : plant.common_name })); break
+    case 'get_favorites': result = species.filter(plant => favoriteNames.has(plant.canonical_name)).map(plant => localized({ ...plant, common_name: state === 'long' ? plant.common_name + ' — a particularly long local cultivar name' : plant.common_name }, args.locale)); break
     case 'get_recently_viewed': result = []; break
     case 'get_recent_files': result = recentDesigns(); break
     case 'get_recent_design_previews': result = (args.paths as string[]).map(path => ({ path, preview: recentPreview(path) })); break
@@ -232,7 +238,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
     // Wild strawberry has no catalog habit, so the PDF key shows the Other group.
     case 'get_species_habits': result = Object.fromEntries(specimens.flatMap(([name, , symbol]): [string, string][] =>
       symbol === 'canopy' ? [[name, 'Tree']] : symbol === 'shrub' ? [[name, 'Shrub']] : symbol === 'herb' ? [[name, 'Herbaceous']] : [])); break
-    case 'get_common_names': result = args.locale === 'fr' ? frenchNames : Object.fromEntries(species.map(plant => [plant.canonical_name, plant.common_name])); break
+    case 'get_common_names': result = args.locale === 'fr' ? frenchNames : Object.fromEntries([...catalogSpecies, ...species].flatMap(plant => plant.common_name ? [[plant.canonical_name, plant.common_name]] : [])); break
     case 'get_species_images': result = canonicalName === 'Malus domestica'
       ? applePhotos.map((url, sort_order) => ({ id: `photo-${sort_order}`, species_id: 'apple', url, sort_order }))
       : []; break

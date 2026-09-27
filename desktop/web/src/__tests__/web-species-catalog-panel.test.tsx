@@ -92,6 +92,7 @@ const mockWorkbench = vi.hoisted(() => ({
   setBrowseSort: vi.fn(),
   loadDynamicOptions: vi.fn(async () => {}),
   removeExtraFilter: vi.fn(),
+  resolveCommonNames: vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({})),
 }))
 
 vi.mock('@tanstack/virtual-core', () => ({
@@ -245,6 +246,29 @@ describe('Web Edition Species Catalog panel', () => {
     expect(container.textContent).toContain('Peach')
     expect(container.textContent).toContain('Lemon balm')
     expect(container.querySelector('[data-testid="web-species-row-metadata"]')).toBeNull()
+  })
+
+  it('shows English names marked "(en)" in Favorites and Recently viewed when the interface language has none', async () => {
+    locale.value = 'fr'
+    mockWorkbench.favorites.value = {
+      items: [makeSpeciesListItem('Prunus persica', null, true)],
+      loading: false,
+      revision: 0,
+    }
+    mockWorkbench.sidebar.value = { favoriteNames: ['Prunus persica'], recentlyViewed: [] }
+    mockWorkbench.resolveCommonNames.mockImplementation(async (names, requested): Promise<Record<string, string>> => (
+      requested === 'en' && names.includes('Prunus persica') ? { 'Prunus persica': 'Peach' } : {}
+    ))
+    await act(async () => {
+      render(<WebSpeciesCatalogPanel mode="favorites" />, container)
+      await Promise.resolve()
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const row = container.querySelector<HTMLElement>('[data-testid="web-species-row"]')!
+    expect(row.querySelector('[lang="en"]')?.textContent).toBe('Peach')
+    expect(row.textContent).toContain('(angl.)')
+    expect(row.querySelector('[lang="la"]')?.textContent).toBe('Prunus persica')
+    expect(row.querySelector('[data-testid="web-species-place"]')?.getAttribute('aria-label')).toBe('Placer Peach')
   })
 
   it('matches accented Favorites and restores focus after full-detail navigation', async () => {
@@ -656,6 +680,8 @@ function resetWorkbench(): void {
     error: null,
   }
   mockWorkbench.mount.mockReturnValue(vi.fn())
+  mockWorkbench.resolveCommonNames.mockReset()
+  mockWorkbench.resolveCommonNames.mockImplementation(async () => ({}))
   mockWorkbench.isSearchLoading.mockReturnValue(false)
 }
 
@@ -713,7 +739,7 @@ function emptyFilters(): SpeciesFilter {
 
 function makeSpeciesListItem(
   canonicalName: string,
-  commonName: string,
+  commonName: string | null,
   isFavorite = false,
 ): SpeciesListItem {
   return {

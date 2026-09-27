@@ -1391,7 +1391,8 @@
       "black": "Schwarz"
     },
     "northArrow": "Nordpfeil und Maßstab",
-    "pageOptions": "Ausgewählte Seite"
+    "pageOptions": "Ausgewählte Seite",
+    "findInKey": "In der Legende suchen"
   },
   "speciesKey": {
     "title": "Pflanzen in diesem Design",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} auf der Karte ausgewählt",
     "noMatches": "Keine Pflanzen passen zu „{{query}}“.",
     "noneSelected": "Wählen Sie Pflanzen auf der Karte aus, um ihre Arten hier aufzulisten.",
-    "searchHint": "Die Suche findet Trivialnamen in allen Sprachen, die Canopi kennt, sowie wissenschaftliche Namen und Codes. Akzente, Groß- und Kleinschreibung und kleine Tippfehler spielen keine Rolle."
+    "searchHint": "Die Suche findet Trivialnamen in allen Sprachen, die Canopi kennt, sowie wissenschaftliche Namen und Codes. Akzente, Groß- und Kleinschreibung und kleine Tippfehler spielen keine Rolle.",
+    "stratum": "Schicht",
+    "form": "Wuchsform",
+    "allStrata": "Alle Schichten",
+    "allForms": "Alle Wuchsformen",
+    "formNotRecorded": "Nicht erfasst",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "Keine Pflanze passt zu diesen Filtern."
   },
   "analyses": {
     "groups": {

@@ -1391,7 +1391,8 @@
       "black": "Noir"
     },
     "northArrow": "Flèche du nord et échelle",
-    "pageOptions": "Page sélectionnée"
+    "pageOptions": "Page sélectionnée",
+    "findInKey": "Chercher dans la légende"
   },
   "speciesKey": {
     "title": "Plantes de ce Design",
@@ -1545,7 +1546,14 @@
     "summarySelected": "Sélection sur la carte : {{species}} · {{plants}}",
     "noMatches": "Aucune plante ne correspond à « {{query}} ».",
     "noneSelected": "Sélectionnez des plantes sur la carte pour lister leurs espèces ici.",
-    "searchHint": "La recherche porte sur les noms communs dans toutes les langues connues de Canopi, les noms scientifiques et les codes. Les accents, les majuscules et les petites fautes de frappe n’ont pas d’importance."
+    "searchHint": "La recherche porte sur les noms communs dans toutes les langues connues de Canopi, les noms scientifiques et les codes. Les accents, les majuscules et les petites fautes de frappe n’ont pas d’importance.",
+    "stratum": "Strate",
+    "form": "Port",
+    "allStrata": "Toutes les strates",
+    "allForms": "Tous les ports",
+    "formNotRecorded": "Non renseigné",
+    "filterChoice": "{{filter}} : {{choice}}",
+    "noFilterMatches": "Aucune plante ne correspond à ces filtres."
   },
   "analyses": {
     "groups": {

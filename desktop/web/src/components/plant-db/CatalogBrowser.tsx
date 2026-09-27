@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench, type SpeciesBrowseSort } from '../../app/plant-browser'
+import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { findPlants } from '../../app/plant-finder/matcher'
 import { plantFinderRecord } from '../../app/plant-finder/records'
 import { formatCount } from '../../utils/format-count'
@@ -45,13 +46,17 @@ export function CatalogBrowser({ onMoreFilters, searchScope }: {
   const designSpecies = useCatalogDesignSpecies()
   const query = intent.text.trim()
   const searching = speciesCatalogWorkbench.isActiveSearchText(intent.text)
+  const englishNames = useEnglishFallbackNames(useMemo(() => results.items.map((item) => ({
+    canonicalName: item.canonical_name,
+    commonName: item.common_name,
+  })), [results.items]))
   const marks = useMemo(() => searching
     ? findPlants(results.items.map((item) => plantFinderRecord({
       canonicalName: item.canonical_name,
-      commonName: item.common_name,
+      commonName: item.common_name || englishNames.get(item.canonical_name),
       otherNames: [item.matched_common_name],
     })), query)
-    : null, [results.items, query, searching])
+    : null, [englishNames, results.items, query, searching])
   const browseSorts = speciesCatalogWorkbench.browseSorts
   const loc = locale.value
 
@@ -121,6 +126,7 @@ export function CatalogBrowser({ onMoreFilters, searchScope }: {
       <ResultsList
         id={listId}
         designSpecies={designSpecies}
+        englishNames={englishNames}
         highlight={marks ? (canonicalName) => finderHighlight(marks.byKey.get(canonicalName)) : undefined}
         footer={<p className={styles.hint}>
           {searching ? t('plantDb.searchedIn', { scope: searchScope }) : designSpecies.size > 0 ? t('plantDb.codesHint') : null}

@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { useEffect, useMemo } from 'preact/hooks'
 import { SUPPORTED_LOCALES } from '../../i18n'
 import { speciesCatalogWorkbench } from '../plant-browser'
+import { locale } from '../settings/state'
 
 /**
  * Common names in every catalog language for the species a list shows, so the finder
@@ -14,6 +15,8 @@ const pending = new Set<string>()
 const revision = signal(0)
 
 const EMPTY: readonly string[] = []
+const NO_ENGLISH_NAMES: ReadonlyMap<string, string> = new Map()
+const ENGLISH = 'en'
 
 export function useCatalogNamesInEveryLanguage(
   canonicalNames: readonly string[],
@@ -34,8 +37,39 @@ export function useCatalogNamesInEveryLanguage(
   }, [currentRevision])
 }
 
-export async function loadCatalogNames(canonicalNames: readonly string[]): Promise<void> {
-  await Promise.all(SUPPORTED_LOCALES.map(async (locale) => {
+/**
+ * The English catalog name of each listed species that has no name in the interface
+ * language, for lists that show it marked "(en)" (`SpeciesIdentity`'s `englishFallback`).
+ * Only those species load, through the same cache; the map is empty in English.
+ */
+export function useEnglishFallbackNames(
+  species: readonly { readonly canonicalName: string; readonly commonName?: string | null }[],
+): ReadonlyMap<string, string> {
+  const english = locale.value.split('-')[0] === ENGLISH
+  const key = english
+    ? ''
+    : [...new Set(species.filter((entry) => !entry.commonName?.trim()).map((entry) => entry.canonicalName))].sort().join('\n')
+  useEffect(() => {
+    if (key) void loadCatalogNames(key.split('\n'), [ENGLISH])
+  }, [key])
+  const currentRevision = revision.value
+  return useMemo(() => {
+    void currentRevision
+    if (!key) return NO_ENGLISH_NAMES
+    const names = new Map<string, string>()
+    for (const canonicalName of key.split('\n')) {
+      const name = namesByLocaleAndSpecies.get(cacheKey(ENGLISH, canonicalName))?.trim()
+      if (name) names.set(canonicalName, name)
+    }
+    return names.size > 0 ? names : NO_ENGLISH_NAMES
+  }, [key, currentRevision])
+}
+
+export async function loadCatalogNames(
+  canonicalNames: readonly string[],
+  locales: readonly string[] = SUPPORTED_LOCALES,
+): Promise<void> {
+  await Promise.all(locales.map(async (locale) => {
     const missing = canonicalNames.filter((name) => {
       const entry = cacheKey(locale, name)
       return !namesByLocaleAndSpecies.has(entry) && !pending.has(entry)

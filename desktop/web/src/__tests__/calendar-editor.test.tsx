@@ -181,6 +181,22 @@ describe('Calendar action editor', () => {
     expect(currentDesign.value?.timeline[0]).toMatchObject({ start_date: null, end_date: null })
   })
 
+  it('marks a species target shown by its English name in the agenda and the saved targets', async () => {
+    render(null, container)
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({
+        plants,
+        localizedNames: new Map([['Malus domestica', null]]),
+        englishFallbackNames: new Map([['Malus domestica', 'Apple']]),
+      }),
+    }))
+    locale.value = 'fr'
+    await act(async () => { render(<CalendarPanel />, container) })
+    const row = container.querySelector<HTMLElement>('[data-calendar-agenda-action="prune-apple"]')!
+    expect(row.querySelector('[lang="en"]')?.textContent).toBe('Apple')
+    expect(row.textContent).toContain('(angl.)')
+  })
+
   it('heads the editor with the shared panel header: Back, title and Close', async () => {
     const editor = await openEdit()
     const header = editor.querySelector('header')!

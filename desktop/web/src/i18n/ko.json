@@ -1391,7 +1391,8 @@
       "black": "검정"
     },
     "northArrow": "방위표와 축척",
-    "pageOptions": "선택한 페이지"
+    "pageOptions": "선택한 페이지",
+    "findInKey": "범례에서 찾기"
   },
   "speciesKey": {
     "title": "이 디자인의 식물",
@@ -1545,7 +1546,14 @@
     "summarySelected": "지도에서 선택됨: {{species}} · {{plants}}",
     "noMatches": "‘{{query}}’와 일치하는 식물이 없습니다.",
     "noneSelected": "지도에서 식물을 선택하면 해당 종이 여기에 나열됩니다.",
-    "searchHint": "Canopi가 지원하는 모든 언어의 일반명, 학명, 코드를 검색합니다. 악센트, 대소문자, 사소한 오타는 상관없습니다."
+    "searchHint": "Canopi가 지원하는 모든 언어의 일반명, 학명, 코드를 검색합니다. 악센트, 대소문자, 사소한 오타는 상관없습니다.",
+    "stratum": "층위",
+    "form": "습성",
+    "allStrata": "모든 층위",
+    "allForms": "모든 습성",
+    "formNotRecorded": "기록 없음",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "이 필터와 일치하는 식물이 없습니다."
   },
   "analyses": {
     "groups": {

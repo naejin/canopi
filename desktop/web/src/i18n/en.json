@@ -1391,7 +1391,8 @@
       "black": "Black"
     },
     "northArrow": "North arrow and scale",
-    "pageOptions": "Selected page"
+    "pageOptions": "Selected page",
+    "findInKey": "Find in key"
   },
   "speciesKey": {
     "title": "Plants in this Design",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} selected on the map",
     "noMatches": "No plants match “{{query}}”.",
     "noneSelected": "Select plants on the map to list their species here.",
-    "searchHint": "Search matches common names in every language Canopi knows, scientific names and codes. Accents, capitals and small typos don’t matter."
+    "searchHint": "Search matches common names in every language Canopi knows, scientific names and codes. Accents, capitals and small typos don’t matter.",
+    "stratum": "Stratum",
+    "form": "Form",
+    "allStrata": "All strata",
+    "allForms": "All forms",
+    "formNotRecorded": "Not recorded",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "No plants match these filters."
   },
   "analyses": {
     "groups": {

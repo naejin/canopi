@@ -36,6 +36,7 @@ type ToggleFavoriteAdapter = (canonicalName: string) => Promise<boolean>
 type SpeciesSelectedAdapter = (canonicalName: string) => void | Promise<void>
 type SpeciesDetailAdapter = (canonicalName: string, locale: string) => Promise<SpeciesCatalogDetail | null>
 type CommonNamesAdapter = (canonicalNames: readonly string[], locale: string) => Promise<Readonly<Record<string, string>>>
+type HabitsAdapter = (canonicalNames: readonly string[]) => Promise<Readonly<Record<string, string>>>
 
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
@@ -125,6 +126,8 @@ export interface SpeciesCatalogWorkbench {
   isActiveSearchText(text: string): boolean
   /** Best Common Name per species in one catalog language; species without one are absent. */
   resolveCommonNames(canonicalNames: readonly string[], locale: string): Promise<Readonly<Record<string, string>>>
+  /** Catalog habit (`Tree`, `Shrub`, `Herbaceous`, `Climber`) per species; species without one are absent. */
+  resolveHabits(canonicalNames: readonly string[]): Promise<Readonly<Record<string, string>>>
   /**
    * One unfiltered first page for `text` in the active locale, outside the catalog view's
    * own search session (so the catalog panel keeps its query and results).
@@ -143,6 +146,7 @@ export interface SpeciesCatalogWorkbenchOptions {
   readonly toggleFavorite?: ToggleFavoriteAdapter
   readonly getSpeciesDetail?: SpeciesDetailAdapter
   readonly resolveCommonNames?: CommonNamesAdapter
+  readonly resolveHabits?: HabitsAdapter
   readonly onSpeciesSelected?: SpeciesSelectedAdapter
   readonly locale?: ReadonlySignal<string>
   /** Browse orders the search adapter serves; defaults to all of them. */
@@ -163,6 +167,7 @@ const emptyRecentlyViewedAdapter: RecentlyViewedAdapter = async () => []
 const emptyToggleFavoriteAdapter: ToggleFavoriteAdapter = async () => false
 const emptySpeciesDetailAdapter: SpeciesDetailAdapter = async () => null
 const emptyCommonNamesAdapter: CommonNamesAdapter = async () => ({})
+const emptyHabitsAdapter: HabitsAdapter = async () => ({})
 
 export function createSpeciesCatalogWorkbench({
   search = missingSearchAdapter,
@@ -175,6 +180,7 @@ export function createSpeciesCatalogWorkbench({
   toggleFavorite: toggleFavoriteAdapter = emptyToggleFavoriteAdapter,
   getSpeciesDetail: getSpeciesDetailAdapter = emptySpeciesDetailAdapter,
   resolveCommonNames: resolveCommonNamesAdapter = emptyCommonNamesAdapter,
+  resolveHabits: resolveHabitsAdapter = emptyHabitsAdapter,
   onSpeciesSelected,
   locale: localeSignal = locale,
   browseSorts = SPECIES_BROWSE_SORTS,
@@ -717,6 +723,11 @@ export function createSpeciesCatalogWorkbench({
     resolveCommonNames(canonicalNames, requestedLocale) {
       if (disposed || canonicalNames.length === 0) return Promise.resolve({})
       return resolveCommonNamesAdapter(canonicalNames, requestedLocale)
+    },
+
+    resolveHabits(canonicalNames) {
+      if (disposed || canonicalNames.length === 0) return Promise.resolve({})
+      return resolveHabitsAdapter(canonicalNames)
     },
 
     async searchCloseMatches(text, limit) {

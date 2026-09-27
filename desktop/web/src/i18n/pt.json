@@ -1391,7 +1391,8 @@
       "black": "Preto"
     },
     "northArrow": "Seta do norte e escala",
-    "pageOptions": "Página selecionada"
+    "pageOptions": "Página selecionada",
+    "findInKey": "Buscar na legenda"
   },
   "speciesKey": {
     "title": "Plantas deste design",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} selecionadas no mapa",
     "noMatches": "Nenhuma planta corresponde a “{{query}}”.",
     "noneSelected": "Selecione plantas no mapa para listar as espécies delas aqui.",
-    "searchHint": "A pesquisa abrange nomes populares em todos os idiomas que o Canopi conhece, nomes científicos e códigos. Acentos, maiúsculas e pequenos erros de digitação não importam."
+    "searchHint": "A pesquisa abrange nomes populares em todos os idiomas que o Canopi conhece, nomes científicos e códigos. Acentos, maiúsculas e pequenos erros de digitação não importam.",
+    "stratum": "Estrato",
+    "form": "Hábito",
+    "allStrata": "Todos os estratos",
+    "allForms": "Todos os hábitos",
+    "formNotRecorded": "Não registrado",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "Nenhuma planta corresponde a estes filtros."
   },
   "analyses": {
     "groups": {

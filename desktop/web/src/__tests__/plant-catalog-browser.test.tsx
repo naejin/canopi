@@ -34,6 +34,8 @@ const flush = async () => {
 }
 
 // Intl uses narrow no-break spaces as French group separators.
+const englishNames: Record<string, string> = { 'Malus domestica': 'Apple' }
+
 const spaces = (text: string | null | undefined) => (text ?? '').replace(/\s/g, ' ')
 
 function apple(): SpeciesListItem {
@@ -71,6 +73,9 @@ describe('Plant catalog browser', () => {
         requests.push(request)
         return respond(request)
       },
+      resolveCommonNames: async (names, requested) => Object.fromEntries(names.flatMap((name) => (
+        requested === 'en' && englishNames[name] ? [[name, englishNames[name]!]] : []
+      ))),
       getFilterOptions: async () => ({
         families: [],
         growth_rates: [],
@@ -141,6 +146,20 @@ describe('Plant catalog browser', () => {
     expect(bare.querySelector('em')).toBeNull()
     expect(bare.querySelector('[data-plant-symbol="round"]')).not.toBeNull()
     expect(container.textContent).toContain('Codes appear on species already in this Design.')
+  })
+
+  it('shows the English name marked "(en)" for a species with no name in the interface language', async () => {
+    respond = () => ({ items: [{ ...apple(), common_name: null, is_name_fallback: true }], next_cursor: null, total_estimate: 1 })
+    await act(async () => { locale.value = 'fr'; await flush() })
+    await act(async () => { await flush() })
+    const row = container.querySelector('[data-testid="catalog-species-row"]')!
+    expect(row.querySelector('strong [lang="en"]')?.textContent).toBe('Apple')
+    expect(row.querySelector('strong')?.textContent).toContain('(angl.)')
+    expect(row.querySelector('em[lang="la"]')?.textContent).toBe('Malus domestica')
+    expect(row.querySelector('button[aria-label="Placer Apple"]')).not.toBeNull()
+
+    await act(async () => { locale.value = 'en'; await flush() })
+    expect(container.querySelector('[data-testid="catalog-species-row"] strong [lang="en"]')).toBeNull()
   })
 
   it('keeps filters behind "Filters" and shows active ones as removable tokens', async () => {

@@ -1,5 +1,6 @@
 import type { RefObject } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { toolCardContent, type SavedStampSummary } from '../../app/tool-card/content'
 import { siteLocateOpen } from '../../app/site-onboarding/state'
 import { readPlantStampSource, type PlantStampSource } from '../../canvas/plant-stamp-source'
@@ -17,6 +18,7 @@ import {
 } from '../../canvas/session'
 import type { CanvasPlantRowGuidance, CanvasToolGuidance } from '../../canvas/session-state'
 import { t } from '../../i18n'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { SpeciesChooser } from './SpeciesChooser'
 import { ToolIcon } from './toolbar-icons'
@@ -42,12 +44,13 @@ export function ToolCard({ canvasRef }: {
   const savedStamp = readSavedStampSummary()
   const overview = currentCanvasQuerySurface.value?.viewport.value.mode === 'overview'
   const [changingSpecies, setChangingSpecies] = useState(false)
+  const species = usePlantStampSpeciesName(source)
   const content = siteLocateOpen.value || overview
     ? null
     : toolCardContent({
         tool,
         guidance,
-        speciesName: source ? source.common_name ?? source.canonical_name : null,
+        speciesName: species?.name ?? null,
         savedStamp,
         translate: t,
       })
@@ -88,7 +91,13 @@ export function ToolCard({ canvasRef }: {
               {content.title}
             </span>
             {/* The subject takes its own line, so a long name never breaks the instruction. */}
-            {content.subject && <b className={styles.subject}>{content.subject}</b>}
+            {content.subject && (
+              <b className={styles.subject}>
+                {content.tool === 'plant-stamp' && species?.englishFallback
+                  ? <SpeciesCommonName name={content.subject} englishFallback />
+                  : content.subject}
+              </b>
+            )}
             <span className={content.subject ? `${styles.instruction} ${styles.afterSubject}` : styles.instruction}>
               {content.instruction}
             </span>
@@ -114,6 +123,31 @@ export function ToolCard({ canvasRef }: {
     </section>
   )
 }
+
+/**
+ * The chosen species as the card names it: its name in the interface language, else
+ * its English catalog name marked "(en)" (from the runtime for Design species, from
+ * the catalog for the others), else the name saved with the source, else the
+ * scientific name.
+ */
+function usePlantStampSpeciesName(source: PlantStampSource | null): { name: string; englishFallback: boolean } | null {
+  const queries = currentCanvasQuerySurface.value
+  void queries?.revision.plantNames.value
+  const catalogEnglish = useEnglishFallbackNames(source && !source.common_name
+    ? [{ canonicalName: source.canonical_name, commonName: null }]
+    : NO_SPECIES)
+  if (!source) return null
+  const canonicalName = source.canonical_name
+  const localized = queries?.getLocalizedCommonNames().get(canonicalName)
+  if (localized) return { name: localized, englishFallback: false }
+  const runtimeEnglish = queries?.getEnglishFallbackNames().get(canonicalName)
+  if (runtimeEnglish) return { name: runtimeEnglish, englishFallback: true }
+  if (source.common_name) return { name: source.common_name, englishFallback: false }
+  const english = catalogEnglish.get(canonicalName)
+  return english ? { name: english, englishFallback: true } : { name: canonicalName, englishFallback: false }
+}
+
+const NO_SPECIES: readonly { canonicalName: string }[] = []
 
 type Lead = { readonly kind: 'species'; readonly symbol: PlantSymbolId; readonly color: string } | { readonly kind: 'stamp' }
 

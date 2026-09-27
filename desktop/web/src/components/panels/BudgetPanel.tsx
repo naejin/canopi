@@ -9,7 +9,7 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
-import { PlantFinder, QuickFilterChip, finderHighlight, finderSummary } from '../shared/PlantFinder'
+import { PlantFinder, QuickFilterChip, StratumFormFilters, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { displayedPlantColor } from '../../app/plant-display/state'
@@ -49,7 +49,7 @@ export function BudgetPanel() {
     input?.select()
   }, [workbench.priceFocusRequest])
 
-  const filtered = finder.active || workbench.selectedOnMap || workbench.missingPriceOnly
+  const filtered = finder.active || workbench.selectedOnMap || workbench.missingPriceOnly || workbench.quickFilters.allowed !== null
   const listPlants = list.rows.reduce((sum, item) => sum + item.count, 0)
 
   return (
@@ -81,6 +81,7 @@ export function BudgetPanel() {
               onChange: workbench.setSelectedOnMap,
             }}
             filters={<>
+              <StratumFormFilters filters={workbench.quickFilters} onChange={workbench.setQuickFilters} />
               <QuickFilterChip
                 pressed={workbench.missingPriceOnly}
                 onChange={workbench.setMissingPriceOnly}

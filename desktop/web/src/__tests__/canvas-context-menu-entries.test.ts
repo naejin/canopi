@@ -65,7 +65,7 @@ const PLANT_AND_ZONE = selection({
 
 const APPLE_SUMMARY: MapSelectionSummary = {
   plantCount: 2,
-  species: [{ canonicalName: 'Malus domestica', name: 'Apple', selectedCount: 2, designCount: 5 }],
+  species: [{ canonicalName: 'Malus domestica', name: 'Apple', englishFallback: false, selectedCount: 2, designCount: 5 }],
   plantSpacingM: 1.5,
   zones: [],
   noteCount: 0,
@@ -314,7 +314,7 @@ describe('canvas context menu entries', () => {
 
   it('keeps Species details and Set unit cost… for one species only, and aims Add to calendar… at a lone zone', () => {
     const mixed = build(TWO_APPLES, {
-      summary: { ...APPLE_SUMMARY, species: [...APPLE_SUMMARY.species, { canonicalName: 'Pyrus communis', name: 'Pear', selectedCount: 1, designCount: 1 }] },
+      summary: { ...APPLE_SUMMARY, species: [...APPLE_SUMMARY.species, { canonicalName: 'Pyrus communis', name: 'Pear', englishFallback: false, selectedCount: 1, designCount: 1 }] },
     })
     expect(item(mixed.entries, 'species-details').disabled).toBe(true)
     expect(item(mixed.entries, 'set-unit-cost').disabled).toBe(true)

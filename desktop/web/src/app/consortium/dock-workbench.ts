@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import { batch, useSignal } from '@preact/signals'
 import { currentCanvasQuerySurface, currentCanvasSpeciesFocusCommands } from '../../canvas/session'
 import { consortiumTarget } from '../../target'
 import { moveConsortiumEntry } from '../design-edit'
@@ -14,6 +14,12 @@ import {
 } from '../planning-projection'
 import { usePlanningViewState, type ConsortiumListFilter } from '../planning-view/state'
 import type { PlantFinderResult } from '../plant-finder/matcher'
+import {
+  NO_SPECIES_QUICK_FILTERS,
+  useSpeciesQuickFilters,
+  type SpeciesQuickFilters,
+  type SpeciesQuickFilterValue,
+} from '../plant-finder/quick-filters'
 import { useMapSelectionSpecies } from '../plant-finder/selection'
 import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from './time-model'
@@ -40,7 +46,9 @@ export interface ConsortiumDockWorkbench {
   readonly finder: PlantFinderResult<string>
   readonly selectedOnMap: boolean
   readonly mapSelectionPlantCount: number
-  /** Species the finder or the map selection narrows to; null when neither is on. */
+  /** Stratum and Form, with their counts. */
+  readonly quickFilters: SpeciesQuickFilters
+  /** Species the finder, the quick filters or the map selection narrow to; null when none is on. */
   readonly highlightedSpecies: ReadonlySet<string> | null
   readonly filter: ConsortiumListFilter | null
   readonly expandedStrata: ReadonlySet<string>
@@ -51,6 +59,7 @@ export interface ConsortiumDockWorkbench {
   readonly scrollTop: number
   readonly setSearch: (value: string) => void
   readonly setSelectedOnMap: (value: boolean) => void
+  readonly setQuickFilters: (value: SpeciesQuickFilterValue) => void
   readonly clearFilters: () => void
   readonly setFilter: (filter: ConsortiumListFilter | null) => void
   readonly toggleStratum: (stratum: string) => void
@@ -91,16 +100,19 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     () => selectedOnMap ? new Set(mapSelection.plantCountBySpecies.keys()) : null,
     [mapSelection, selectedOnMap],
   )
+  const canonicalNames = useMemo(() => surface.projection.rows.map((row) => row.canonicalName), [surface.projection.rows])
+  const quickFilters = useSpeciesQuickFilters(canonicalNames, view.consortiumQuickFilters.value)
   const highlightedSpecies = useMemo(() => {
-    if (!matches) return selectedSpecies
-    if (!selectedSpecies) return matches
-    return new Set([...matches].filter((name) => selectedSpecies.has(name)))
-  }, [matches, selectedSpecies])
+    const narrowing = [matches, selectedSpecies, quickFilters.allowed].filter((set): set is ReadonlySet<string> => set !== null)
+    if (narrowing.length <= 1) return narrowing[0] ?? null
+    return new Set([...narrowing[0]!].filter((name) => narrowing.every((set) => set.has(name))))
+  }, [matches, quickFilters, selectedSpecies])
   const list = useMemo(() => buildConsortiumListProjection(surface.projection, {
     matches,
     selectedSpecies,
+    quickFilterSpecies: quickFilters.allowed,
     filter,
-  }), [filter, matches, selectedSpecies, surface.projection])
+  }), [filter, matches, quickFilters, selectedSpecies, surface.projection])
 
   useEffect(() => {
     if (view.consortiumExpansionInitialized.peek()) return
@@ -227,6 +239,7 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     finder,
     selectedOnMap,
     mapSelectionPlantCount: mapSelection.plantCount,
+    quickFilters,
     highlightedSpecies,
     filter,
     expandedStrata,
@@ -237,11 +250,15 @@ export function useConsortiumDockWorkbench(): ConsortiumDockWorkbench {
     scrollTop: view.consortiumScrollTop,
     setSearch: (value) => { view.consortiumSearch.value = value },
     setSelectedOnMap: (value) => { view.consortiumSelectedOnMap.value = value },
+    setQuickFilters: (value) => { view.consortiumQuickFilters.value = value },
     clearFilters: () => {
-      view.consortiumSearch.value = ''
-      view.consortiumSelectedOnMap.value = false
-      view.consortiumFilter.value = null
-      movedOutsideFilter.value = false
+      batch(() => {
+        view.consortiumSearch.value = ''
+        view.consortiumSelectedOnMap.value = false
+        view.consortiumQuickFilters.value = NO_SPECIES_QUICK_FILTERS
+        view.consortiumFilter.value = null
+        movedOutsideFilter.value = false
+      })
     },
     setFilter,
     toggleStratum,

@@ -1391,7 +1391,8 @@
       "black": "黑色"
     },
     "northArrow": "指北针和比例尺",
-    "pageOptions": "所选页面"
+    "pageOptions": "所选页面",
+    "findInKey": "在图例中查找"
   },
   "speciesKey": {
     "title": "此设计中的植物",
@@ -1545,7 +1546,14 @@
     "summarySelected": "地图上已选 {{species}} · {{plants}}",
     "noMatches": "没有植物匹配“{{query}}”。",
     "noneSelected": "在地图上选择植物，即可在此列出其物种。",
-    "searchHint": "搜索可匹配 Canopi 支持的所有语言中的俗名、学名和代码。重音、大小写和轻微拼写错误均不影响结果。"
+    "searchHint": "搜索可匹配 Canopi 支持的所有语言中的俗名、学名和代码。重音、大小写和轻微拼写错误均不影响结果。",
+    "stratum": "层次",
+    "form": "习性",
+    "allStrata": "所有层次",
+    "allForms": "所有习性",
+    "formNotRecorded": "未记录",
+    "filterChoice": "{{filter}}：{{choice}}",
+    "noFilterMatches": "没有植物符合这些筛选条件。"
   },
   "analyses": {
     "groups": {

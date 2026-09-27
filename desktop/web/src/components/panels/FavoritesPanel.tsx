@@ -37,6 +37,7 @@ import {
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
 import { navigateTo } from '../../app/shell/state'
+import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
 import { findPlants } from '../../app/plant-finder/matcher'
 import { useMapSelectionSpecies } from '../../app/plant-finder/selection'
 import { usePlantFinder } from '../../app/plant-finder/use-plant-finder'
@@ -134,6 +135,7 @@ export function FavoritesPanel() {
     code: scene?.plantSpeciesCodes[item.canonical_name],
   })), [items, scene])
   const finder = usePlantFinder(finderSpecies, search)
+  const englishNames = useEnglishFallbackNames(finderSpecies)
   const visibleItems = useMemo(() => {
     const shown = items.filter((item) => (
       (!selectedOnMap || mapSelection.plantCountBySpecies.has(item.canonical_name))
@@ -344,6 +346,7 @@ export function FavoritesPanel() {
                   <FavoriteSpeciesRow
                     key={plant.canonical_name}
                     plant={plant}
+                    englishName={englishNames.get(plant.canonical_name)}
                     code={scene?.plantSpeciesCodes[plant.canonical_name] ?? ''}
                     color={scene?.plantSpeciesColors[plant.canonical_name] ?? null}
                     symbol={scene?.plantSpeciesSymbols[plant.canonical_name]}
@@ -568,14 +571,17 @@ function clearPreviewTimer(ref: { current: ReturnType<typeof globalThis.setTimeo
 }
 
 /** One favourite species: star first, the row opens details, Place arms placement. */
-function FavoriteSpeciesRow({ plant, code, color, symbol, highlight }: {
+function FavoriteSpeciesRow({ plant, englishName, code, color, symbol, highlight }: {
   plant: SpeciesListItem
+  /** The English catalog name, shown marked "(en)" when the species has none in the interface language. */
+  englishName: string | undefined
   code: string
   color: string | null
   symbol: string | undefined
   highlight: ((text: string) => ComponentChildren) | undefined
 }) {
-  const name = plant.common_name || plant.canonical_name
+  const commonName = plant.common_name || englishName
+  const name = commonName || plant.canonical_name
   return (
     <div className={row.row} role="listitem" data-favorite-species={plant.canonical_name}>
       <button
@@ -600,7 +606,12 @@ function FavoriteSpeciesRow({ plant, code, color, symbol, highlight }: {
         <span className={row.glyph} aria-hidden="true" style={{ color: color ?? 'var(--color-text-muted)' }}>
           <PlantSymbolGlyph symbol={resolvePlantSymbolId(symbol)} size={22} />
         </span>
-        <SpeciesIdentity commonName={plant.common_name} canonicalName={plant.canonical_name} highlight={highlight} />
+        <SpeciesIdentity
+          commonName={commonName}
+          canonicalName={plant.canonical_name}
+          englishFallback={!plant.common_name && Boolean(englishName)}
+          highlight={highlight}
+        />
         <span className={row.code}>{code}</span>
       </button>
       <button

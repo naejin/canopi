@@ -41,8 +41,10 @@ export interface MapSelectionZone {
 
 export interface MapSelectionSpecies {
   readonly canonicalName: string
-  /** The common name in the current language, else the Design's, else the scientific name. */
+  /** The common name in the current language, else the English catalog name, else the Design's, else the scientific name. */
   readonly name: string
+  /** `name` is the English catalog name: the species has none in the current language. */
+  readonly englishFallback: boolean
   readonly selectedCount: number
   /** Every plant of this species in the Design. */
   readonly designCount: number
@@ -97,12 +99,16 @@ export function readMapSelectionSummary(queries: CanvasQuerySurface | null): Map
     plantCount += 1
   }
   const localized = queries.getLocalizedCommonNames()
+  const english = queries.getEnglishFallbackNames()
   const species: MapSelectionSpecies[] = []
   for (const [canonicalName, entry] of counts) {
     if (entry.selected === 0) continue
+    const localizedName = localized.get(canonicalName)
+    const englishName = localizedName ? undefined : english.get(canonicalName)
     species.push({
       canonicalName,
-      name: localized.get(canonicalName) || entry.commonName || canonicalName,
+      name: localizedName || englishName || entry.commonName || canonicalName,
+      englishFallback: Boolean(englishName),
       selectedCount: entry.selected,
       designCount: entry.design,
     })

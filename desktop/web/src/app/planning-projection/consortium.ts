@@ -90,6 +90,8 @@ export function buildConsortiumListProjection(
     readonly matches: ReadonlySet<string> | null
     /** Species selected on the map; null when that filter is off. */
     readonly selectedSpecies: ReadonlySet<string> | null
+    /** Species passing the Stratum and Form quick filters; null when neither is chosen. */
+    readonly quickFilterSpecies?: ReadonlySet<string> | null
     readonly filter: ConsortiumListFilter | null
   },
 ): ConsortiumListProjection {
@@ -102,6 +104,7 @@ export function buildConsortiumListProjection(
         && !(row.startPhase <= options.filter.phase && row.endPhase >= options.filter.phase)
       ) return false
       if (options.selectedSpecies && !options.selectedSpecies.has(row.canonicalName)) return false
+      if (options.quickFilterSpecies && !options.quickFilterSpecies.has(row.canonicalName)) return false
       return !options.matches || options.matches.has(row.canonicalName)
     })
     return {
@@ -114,7 +117,8 @@ export function buildConsortiumListProjection(
   return {
     groups,
     visibleCount: groups.reduce((sum, group) => sum + group.rows.length, 0),
-    restricted: options.matches !== null || options.selectedSpecies !== null || options.filter !== null,
+    restricted: options.matches !== null || options.selectedSpecies !== null
+      || (options.quickFilterSpecies ?? null) !== null || options.filter !== null,
   }
 }
 

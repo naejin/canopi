@@ -13,6 +13,12 @@ import { designSessionStore } from '../document-session/store'
 import { usePlanningViewState, type BudgetSort } from '../planning-view/state'
 import { currentCanvasQuerySurface, currentCanvasSpeciesFocusCommands } from '../../canvas/session'
 import type { PlantFinderResult } from '../plant-finder/matcher'
+import {
+  NO_SPECIES_QUICK_FILTERS,
+  useSpeciesQuickFilters,
+  type SpeciesQuickFilters,
+  type SpeciesQuickFilterValue,
+} from '../plant-finder/quick-filters'
 import { useMapSelectionSpecies } from '../plant-finder/selection'
 import { usePlantFinder } from '../plant-finder/use-plant-finder'
 import { exportBudgetCsv, isBudgetExportCancelled } from './export'
@@ -33,6 +39,8 @@ export interface BudgetItemWorkbench {
   readonly activeLocale: string
   readonly search: string
   readonly finder: PlantFinderResult<string>
+  /** Stratum and Form, with their counts. */
+  readonly quickFilters: SpeciesQuickFilters
   readonly sort: BudgetSort
   readonly missingPriceOnly: boolean
   readonly missingPriceCount: number
@@ -52,6 +60,7 @@ export interface BudgetItemWorkbench {
   readonly setSort: (value: BudgetSort) => void
   readonly setMissingPriceOnly: (value: boolean) => void
   readonly setSelectedOnMap: (value: boolean) => void
+  readonly setQuickFilters: (value: SpeciesQuickFilterValue) => void
   readonly clearFilters: () => void
   /** The unit cost as the field shows it: the draft while editing, else locale decimals. */
   readonly priceInputValue: (row: BudgetPlanningRow) => string
@@ -98,6 +107,8 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     code: row.code,
   })), [projection.rows])
   const finder = usePlantFinder(finderSpecies, search)
+  const canonicalNames = useMemo(() => projection.rows.map((row) => row.canonical), [projection.rows])
+  const quickFilters = useSpeciesQuickFilters(canonicalNames, view.budgetQuickFilters.value)
   const editingCanonical = useSignal<string | null>(null)
   const editPrice = useSignal('')
   const priceInvalid = useSignal(false)
@@ -109,10 +120,11 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   const list = useMemo(() => buildBudgetListProjection(projection, {
     matches: finder.active ? new Set(finder.byKey.keys()) : null,
     selectedSpecies: selectedOnMap ? new Set(mapSelection.plantCountBySpecies.keys()) : null,
+    quickFilterSpecies: quickFilters.allowed,
     missingPriceOnly,
     sort,
     locale: activeLocale,
-  }), [activeLocale, finder, mapSelection, missingPriceOnly, projection, selectedOnMap, sort])
+  }), [activeLocale, finder, mapSelection, missingPriceOnly, projection, quickFilters, selectedOnMap, sort])
   const listRef = useRef(list)
   projectionRef.current = projection
   listRef.current = list
@@ -219,6 +231,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
         view.budgetSearch.value = ''
         view.budgetMissingPriceOnly.value = false
         view.budgetSelectedOnMap.value = false
+        view.budgetQuickFilters.value = NO_SPECIES_QUICK_FILTERS
       }
       startPriceEdit(canonical)
       priceFocusRequest.value += 1
@@ -264,6 +277,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     activeLocale,
     search,
     finder,
+    quickFilters,
     sort,
     missingPriceOnly,
     missingPriceCount: projection.rows.length - projection.pricedCount,
@@ -282,10 +296,14 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     setSort: (value) => { view.budgetSort.value = value },
     setMissingPriceOnly: (value) => { view.budgetMissingPriceOnly.value = value },
     setSelectedOnMap: (value) => { view.budgetSelectedOnMap.value = value },
+    setQuickFilters: (value) => { view.budgetQuickFilters.value = value },
     clearFilters: () => {
-      view.budgetSearch.value = ''
-      view.budgetMissingPriceOnly.value = false
-      view.budgetSelectedOnMap.value = false
+      batch(() => {
+        view.budgetSearch.value = ''
+        view.budgetMissingPriceOnly.value = false
+        view.budgetSelectedOnMap.value = false
+        view.budgetQuickFilters.value = NO_SPECIES_QUICK_FILTERS
+      })
     },
     priceInputValue: (row) => (
       editingCanonical.value === row.canonical

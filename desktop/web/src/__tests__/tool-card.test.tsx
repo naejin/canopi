@@ -95,6 +95,38 @@ describe('Tool card', () => {
     expect(card()!.querySelector('button')?.textContent).toBe('Change species')
   })
 
+  it('names a species with no name in the interface language by its English name, marked', async () => {
+    await act(() => {
+      locale.value = 'fr'
+      setCanvasRuntimeSurfaces({
+        commands: createTestCanvasCommandSurface(),
+        queries: createTestCanvasQuerySurface({ englishFallbackNames: new Map([['Malus domestica', 'Apple']]) }),
+        documents: createTestCanvasDocumentSurface(),
+      })
+    })
+    selectPlantStampSource({ ...APPLE, common_name: null })
+    await choose('plant-stamp')
+
+    const subject = live().querySelector('b')!
+    expect(subject.querySelector('[lang="en"]')?.textContent).toBe('Apple')
+    expect(subject.textContent).toContain(t('speciesName.englishMark'))
+    expect(subject.textContent).toContain(t('speciesName.englishFallbackNote'))
+  })
+
+  it('prefers the name in the interface language over the one saved with the source', async () => {
+    await act(() => {
+      locale.value = 'fr'
+      setCanvasRuntimeSurfaces({
+        commands: createTestCanvasCommandSurface(),
+        queries: createTestCanvasQuerySurface({ localizedNames: new Map([['Malus domestica', 'Pommier']]) }),
+        documents: createTestCanvasDocumentSurface(),
+      })
+    })
+    selectPlantStampSource(APPLE)
+    await choose('plant-stamp')
+    expect(live().querySelector('b')?.textContent).toBe('Pommier')
+  })
+
   it('leads the card with the species glyph in the colour and symbol a click places', async () => {
     await act(() => {
       setCanvasRuntimeSurfaces({

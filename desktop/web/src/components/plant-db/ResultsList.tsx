@@ -42,9 +42,11 @@ function makeVirtOpts(
   }
 }
 
-export function ResultsList({ id, designSpecies, highlight, footer }: {
+export function ResultsList({ id, designSpecies, englishNames, highlight, footer }: {
   readonly id?: string
   readonly designSpecies: ReadonlyMap<string, CatalogDesignSpecies>
+  /** English catalog names of rows with no name in the interface language, shown marked "(en)". */
+  readonly englishNames?: ReadonlyMap<string, string>
   /** Marks a row's names with the search matches, by canonical name. */
   readonly highlight?: (canonicalName: string) => ((text: string) => ComponentChildren) | undefined
   /** A quiet hint under the rows. */
@@ -180,6 +182,7 @@ export function ResultsList({ id, designSpecies, highlight, footer }: {
               <PlantRow
                 plant={plant}
                 inDesign={designSpecies.get(plant.canonical_name)}
+                englishName={englishNames?.get(plant.canonical_name)}
                 highlight={highlight?.(plant.canonical_name)}
               />
             </div>

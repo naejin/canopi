@@ -1391,7 +1391,8 @@
       "black": "Nero"
     },
     "northArrow": "Freccia del nord e scala",
-    "pageOptions": "Pagina selezionata"
+    "pageOptions": "Pagina selezionata",
+    "findInKey": "Cerca nella legenda"
   },
   "speciesKey": {
     "title": "Piante di questo progetto",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} selezionate sulla mappa",
     "noMatches": "Nessuna pianta corrisponde a «{{query}}».",
     "noneSelected": "Seleziona piante sulla mappa per elencarne qui le specie.",
-    "searchHint": "La ricerca trova i nomi comuni in tutte le lingue note a Canopi, i nomi scientifici e i codici. Accenti, maiuscole e piccoli errori di battitura non contano."
+    "searchHint": "La ricerca trova i nomi comuni in tutte le lingue note a Canopi, i nomi scientifici e i codici. Accenti, maiuscole e piccoli errori di battitura non contano.",
+    "stratum": "Strato",
+    "form": "Portamento",
+    "allStrata": "Tutti gli strati",
+    "allForms": "Tutti i portamenti",
+    "formNotRecorded": "Non registrato",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "Nessuna pianta corrisponde a questi filtri."
   },
   "analyses": {
     "groups": {

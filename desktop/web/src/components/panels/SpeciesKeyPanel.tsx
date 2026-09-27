@@ -17,6 +17,7 @@ import { usePlanningViewState } from '../../app/planning-view/state'
 import { findPlants, type PlantFinderResult } from '../../app/plant-finder/matcher'
 import { plantFinderRecord } from '../../app/plant-finder/records'
 import { useMapSelectionSpecies } from '../../app/plant-finder/selection'
+import { useSpeciesQuickFilters } from '../../app/plant-finder/quick-filters'
 import { usePlantFinder } from '../../app/plant-finder/use-plant-finder'
 import {
   clearPlantFinderMatchesOnMap,
@@ -29,7 +30,7 @@ import { ControlIcon } from '../shared/ControlIcon'
 import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
-import { PlantFinder, finderHighlight, finderSummary } from '../shared/PlantFinder'
+import { PlantFinder, StratumFormFilters, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SegmentedControl } from '../shared/SegmentedControl'
 import { Switch } from '../shared/Switch'
 import {
@@ -92,6 +93,7 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
   const view = usePlanningViewState()
   const query = view.plantsSearch.value
   const selectedOnMap = view.plantsSelectedOnMap.value
+  const quickFilterValue = view.plantsQuickFilters.value
   const queries = currentCanvasQuerySurface.value
   const revision = queries?.revision.scene.value
   const namesRevision = queries?.revision.plantNames.value
@@ -107,17 +109,20 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
     code: entry.code,
   })), [entries])
   const result = usePlantFinder(finderSpecies, query)
+  const canonicalNames = useMemo(() => entries.map((entry) => entry.canonicalName), [entries])
+  const quickFilters = useSpeciesQuickFilters(canonicalNames, quickFilterValue)
   const mapSelection = useMapSelectionSpecies()
   const focus = queries?.getSpeciesFocus()
   const visible = useMemo(() => {
     const shown = entries.filter((entry) => (
       (!selectedOnMap || mapSelection.plantCountBySpecies.has(entry.canonicalName))
+      && (!quickFilters.allowed || quickFilters.allowed.has(entry.canonicalName))
       && (!result.active || result.byKey.has(entry.canonicalName))
     ))
     if (!result.active) return shown
     const rank = new Map(result.hits.map((hit, index) => [hit.key, index]))
     return shown.sort((left, right) => rank.get(left.canonicalName)! - rank.get(right.canonicalName)!)
-  }, [entries, mapSelection, result, selectedOnMap])
+  }, [entries, mapSelection, quickFilters, result, selectedOnMap])
   const totalPlants = entries.reduce((total, entry) => total + entry.count, 0)
   const visiblePlants = visible.reduce((total, entry) => total + (
     selectedOnMap ? mapSelection.plantCountBySpecies.get(entry.canonicalName) ?? 0 : entry.count
@@ -139,7 +144,7 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
     </>
   }
 
-  const filtered = result.active || selectedOnMap
+  const filtered = result.active || selectedOnMap || quickFilters.allowed !== null
   return <>
     <DockPanelHeader title={t('speciesKey.title')} />
     <p className={styles.subtitle}>{t('speciesKey.subtitle', {
@@ -157,6 +162,7 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
           plantCount: mapSelection.plantCount,
           onChange: (pressed) => { view.plantsSelectedOnMap.value = pressed },
         }}
+        filters={<StratumFormFilters filters={quickFilters} onChange={(value) => { view.plantsQuickFilters.value = value }} />}
         summary={filtered ? finderSummary(visible.length, visiblePlants, selectedOnMap) : undefined}
       />
     </div>
@@ -174,10 +180,17 @@ function PlantsInDesign({ renderDetail, onOpenDetail }: {
         ))}
       </ul>}
       {visible.length === 0 && (
-        <EmptyState status>
+        <EmptyState
+          status
+          action={!query.trim() && quickFilters.allowed !== null && !(selectedOnMap && mapSelection.plantCount === 0)
+            ? { label: t('plantDb.clearFilters'), onClick: () => { view.plantsQuickFilters.value = { stratum: null, form: null } } }
+            : undefined}
+        >
           {selectedOnMap && mapSelection.plantCount === 0
             ? t('plantFinder.noneSelected')
-            : t('plantFinder.noMatches', { query: query.trim() })}
+            : query.trim()
+              ? t('plantFinder.noMatches', { query: query.trim() })
+              : t('plantFinder.noFilterMatches')}
         </EmptyState>
       )}
       {result.active && (

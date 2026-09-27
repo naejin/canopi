@@ -12,6 +12,10 @@ interface EditorProps {
   readonly inspecting?: boolean
   readonly navigationOnly?: boolean
   readonly highlightedPage?: string | null
+  /** Find in key: the matching key entries on this page, ringed. */
+  readonly keyMatches?: readonly PrintBounds[]
+  /** The entry Find in key showed last, ringed more strongly and scrolled into view. */
+  readonly keyCurrent?: PrintBounds | null
   readonly onPrintArea?: (bounds: PrintBounds) => void
   readonly onPage?: (id: string) => void
   /** Delta of the view centre in metres, committed once per completed gesture. */
@@ -24,8 +28,12 @@ interface Gesture {
   readonly pageId?: string
 }
 export function PdfPageEditor({ page, plan, adding = false, disabled = false, inspecting = false, navigationOnly = false, highlightedPage,
-  onPrintArea, onPage, onMove }: EditorProps) {
+  keyMatches = NO_KEY_MATCHES, keyCurrent = null, onPrintArea, onPage, onMove }: EditorProps) {
   const root = useRef<SVGSVGElement>(null)
+  const currentKeyMatch = useRef<SVGRectElement>(null)
+  useEffect(() => {
+    currentKeyMatch.current?.scrollIntoView?.({ block: 'center', inline: 'center' })
+  }, [keyCurrent?.x, keyCurrent?.y, page.id, inspecting])
   const drag = useRef<Gesture | null>(null)
   const [selection, setSelection] = useState<PrintBounds | null>(null)
   const clipId = useId()
@@ -112,5 +120,14 @@ export function PdfPageEditor({ page, plan, adding = false, disabled = false, in
         <title>{detail.areaName}</title></rect>)}
       {selection && <rect data-print-area-draft {...selection} fill="var(--color-primary-bg)" stroke="var(--color-primary)" stroke-width="1" stroke-dasharray="4 2" pointer-events="none" />}
     </g>
+    {keyMatches.map((bounds) => {
+      const current = keyCurrent !== null && bounds.x === keyCurrent.x && bounds.y === keyCurrent.y
+      return <rect key={`${bounds.x}:${bounds.y}`} ref={current ? currentKeyMatch : undefined} data-pdf-key-match={current ? 'current' : 'match'}
+        x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} rx="2"
+        fill={current ? 'var(--color-accent-soft)' : 'none'} stroke="var(--color-accent)" stroke-width={current ? 2 : 1}
+        vector-effect="non-scaling-stroke" pointer-events="none" />
+    })}
   </svg>
 }
+
+const NO_KEY_MATCHES: readonly PrintBounds[] = []

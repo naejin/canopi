@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import type { JSX } from 'preact'
+import { Fragment, type JSX } from 'preact'
 import { useCalendarWorkbench, type CalendarTargetMode } from '../../app/timeline/calendar-workbench'
 import {
   addCivilDays,
@@ -26,6 +26,7 @@ import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { DatePicker } from '../shared/DatePicker'
 import { EmptyState } from '../shared/EmptyState'
 import { SegmentedControl, type SegmentedOption } from '../shared/SegmentedControl'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { SurfaceHeader } from '../shared/SurfaceHeader'
 import { Switch } from '../shared/Switch'
 import { CalendarSpeciesPicker } from './CalendarSpeciesPicker'
@@ -526,7 +527,7 @@ function CalendarActionRow({ action, workbench }: { action: CalendarPlanningActi
       />
       <button type="button" className={styles.actionBody} onClick={() => workbench.openEdit(action.id)}>
         <strong>{actionDescription(action)}</strong>
-        <span>{actionTypeLabel(action.actionType)} · {targetSummary(action)}</span>
+        <span>{actionTypeLabel(action.actionType)} · <TargetSummary action={action} /></span>
         <span>{actionDateSummary(action, workbench.activeLocale, workbench.projection.month)}</span>
       </button>
       <button
@@ -705,7 +706,7 @@ function CalendarEditor({ workbench, onCancel, onClose }: {
           ) && (
             <ul className={styles.savedTargetList}>
               {action.targetLabels.map((target, index) => (
-                <li key={`${target.kind}:${target.label}:${index}`}>{calendarTargetLabel(target)}</li>
+                <li key={`${target.kind}:${target.label}:${index}`}><CalendarTargetName target={target} /></li>
               ))}
             </ul>
           )}
@@ -780,18 +781,24 @@ function knownActionType(actionType: string): boolean {
   return ACTION_TYPES.includes(actionType as (typeof ACTION_TYPES)[number])
 }
 
-function targetSummary(action: CalendarPlanningAction): string {
-  if (action.targetLabels.length === 0) return t('canvas.calendar.noTarget')
-  return action.targetLabels.map(calendarTargetLabel).join(', ')
+function TargetSummary({ action }: { action: CalendarPlanningAction }) {
+  if (action.targetLabels.length === 0) return <>{t('canvas.calendar.noTarget')}</>
+  return <>{action.targetLabels.map((target, index) => (
+    <Fragment key={index}>{index > 0 && ', '}<CalendarTargetName target={target} /></Fragment>
+  ))}</>
 }
 
-function calendarTargetLabel(target: CalendarTargetLabel): string {
+/** A target's name; a species shown by its English catalog name carries the "(en)" mark. */
+function CalendarTargetName({ target }: { target: CalendarTargetLabel }) {
   const label = target.kind === 'manual'
     ? t('canvas.calendar.wholeDesign')
     : target.kind === 'none'
       ? t('canvas.calendar.noTarget')
       : target.label
-  return target.unavailable ? `${label} · ${t('canvas.calendar.unavailable')}` : label
+  return <>
+    <SpeciesCommonName name={label} englishFallback={target.englishFallback} />
+    {target.unavailable && ` · ${t('canvas.calendar.unavailable')}`}
+  </>
 }
 
 function actionDateSummary(action: CalendarPlanningAction, locale: string, month: CivilDate): string {

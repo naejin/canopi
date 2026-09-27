@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { JSX } from 'preact'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
+import { useEnglishFallbackNames } from '../../app/plant-finder/catalog-names'
+import {
+  NO_SPECIES_QUICK_FILTERS,
+  useSpeciesQuickFilters,
+  type SpeciesQuickFilterValue,
+} from '../../app/plant-finder/quick-filters'
 import { usePlantFinder } from '../../app/plant-finder/use-plant-finder'
 import type { PlantFinderHit } from '../../app/plant-finder/matcher'
 import { selectPanel } from '../../app/shell/state'
@@ -11,7 +17,7 @@ import {
 } from '../../canvas/plant-stamp-source'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
-import { MatchText, PlantFinder } from '../shared/PlantFinder'
+import { MatchText, PlantFinder, StratumFormFilters } from '../shared/PlantFinder'
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { clearHoveredPanelTargets, setHoveredPanelTargets } from '../../app/panel-targets/presentation'
 import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
@@ -52,9 +58,12 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
   onEscape(): void
 }) {
   const [query, setQuery] = useState('')
+  const [quickFilterValue, setQuickFilterValue] = useState<SpeciesQuickFilterValue>(NO_SPECIES_QUICK_FILTERS)
   const input = useRef<HTMLInputElement | null>(null)
   const species = useChooserSpecies()
   const finder = usePlantFinder(species.map(toFinderSpecies), query)
+  const canonicalNames = useMemo(() => species.map((entry) => entry.source.canonical_name), [species])
+  const quickFilters = useSpeciesQuickFilters(canonicalNames, quickFilterValue)
   const listId = 'tool-card-species-options'
 
   useEffect(() => {
@@ -82,12 +91,14 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
   }
 
   const bySpecies = new Map(species.map((entry) => [entry.source.canonical_name, entry]))
-  const matches: readonly { entry: ChooserSpecies, hit: PlantFinderHit<string> | null }[] = finder.active
+  const allowed = quickFilters.allowed
+  const matches: readonly { entry: ChooserSpecies, hit: PlantFinderHit<string> | null }[] = (finder.active
     ? finder.hits.flatMap((hit) => {
         const entry = bySpecies.get(hit.key)
         return entry ? [{ entry, hit }] : []
       })
     : species.map((entry) => ({ entry, hit: null }))
+  ).filter(({ entry }) => !allowed || allowed.has(entry.source.canonical_name))
 
   return (
     <div className={styles.chooser}>
@@ -98,6 +109,7 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
         onKeyDown={handleKeyDown}
         controls={listId}
         correction={finder.correction}
+        filters={species.length > 0 && <StratumFormFilters filters={quickFilters} onChange={setQuickFilterValue} />}
       />
       <div id={listId} className={styles.options}>
         {finder.active
@@ -114,7 +126,9 @@ export function SpeciesChooser({ autoFocus, focusRequest, onChosen, onEscape }: 
             })}
         {matches.length === 0 && (
           <p className={styles.empty}>
-            {finder.active ? t('canvas.toolCard.noMatch', { query: query.trim() }) : t('canvas.toolCard.noSpecies')}
+            {finder.active
+              ? t('canvas.toolCard.noMatch', { query: query.trim() })
+              : allowed ? t('plantFinder.noFilterMatches') : t('canvas.toolCard.noSpecies')}
           </p>
         )}
       </div>
@@ -189,6 +203,11 @@ function useChooserSpecies(): readonly ChooserSpecies[] {
   const favoriteItems = speciesCatalogWorkbench.favorites.value.items
   const recent = recentPlantStampSources.value
   const design = useMemo(() => designSpecies(), [queries, sceneRevision, namesRevision])
+  // Favorites and recent picks with no name in the UI language take their English catalog name.
+  const catalogEnglish = useEnglishFallbackNames(useMemo(() => [
+    ...favoriteItems.map((item) => ({ canonicalName: item.canonical_name, commonName: item.common_name })),
+    ...recent.map((source) => ({ canonicalName: source.canonical_name, commonName: source.common_name })),
+  ], [favoriteItems, recent]))
   return useMemo(() => {
     const seen = new Set<string>()
     const entries: ChooserSpecies[] = []
@@ -197,18 +216,22 @@ function useChooserSpecies(): readonly ChooserSpecies[] {
       seen.add(source.canonical_name)
       entries.push({ source, section, shownName: englishName ?? source.common_name, englishFallback: Boolean(englishName) })
     }
+    const catalogFallback = (source: PlantStampSource) => (
+      source.common_name ? undefined : catalogEnglish.get(source.canonical_name)
+    )
     for (const { source, englishName } of design) add(source, 'design', englishName)
     for (const item of favoriteItems) {
-      add({
+      const source = {
         canonical_name: item.canonical_name,
         common_name: item.common_name,
         stratum: item.stratum,
         width_max_m: item.width_max_m,
-      }, 'favorites')
+      }
+      add(source, 'favorites', catalogFallback(source))
     }
-    for (const source of recent) add(source, 'recent')
+    for (const source of recent) add(source, 'recent', catalogFallback(source))
     return entries
-  }, [design, favoriteItems, recent])
+  }, [catalogEnglish, design, favoriteItems, recent])
 }
 
 function designSpecies(): readonly { source: PlantStampSource, englishName?: string }[] {

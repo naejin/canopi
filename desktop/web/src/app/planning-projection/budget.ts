@@ -114,6 +114,8 @@ export function buildBudgetListProjection(
     readonly matches: ReadonlySet<string> | null
     /** Species selected on the map; null when that filter is off. */
     readonly selectedSpecies: ReadonlySet<string> | null
+    /** Species passing the Stratum and Form quick filters; null when neither is chosen. */
+    readonly quickFilterSpecies?: ReadonlySet<string> | null
     readonly missingPriceOnly: boolean
     readonly sort: BudgetSort
     readonly locale: string
@@ -131,6 +133,7 @@ export function buildBudgetListProjection(
       (!options.missingPriceOnly || !row.hasPrice)
       && (!options.matches || options.matches.has(row.canonical))
       && (!options.selectedSpecies || options.selectedSpecies.has(row.canonical))
+      && (!options.quickFilterSpecies || options.quickFilterSpecies.has(row.canonical))
     ))
     .sort((left, right) => {
       if (options.sort === 'highest-total') {

@@ -50,7 +50,7 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 
 ## Finding plants
 
-Every plant list uses the shared finder: search (Ctrl F) over names in every language, scientific names, synonyms and codes, tolerant of accents, capitals and small typos, stating what it searched; quick filters (Selected on map, then list-specific ones); a live count. Matches are highlighted, ringed on the map, and one action zooms to them or selects them.
+Every plant list uses the shared finder: search (Ctrl F) over names in every language, scientific names, synonyms and codes, tolerant of accents, capitals and small typos, stating what it searched; quick filters (Selected on map, Stratum and Form, then list-specific ones); a live count. Matches are highlighted, ringed on the map, and one action zooms to them or selects them.
 
 ## Layout and interaction
 

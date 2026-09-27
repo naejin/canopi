@@ -30,6 +30,8 @@ import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './sup
 const favorites = vi.hoisted(() => ({
   view: null as null | { value: { items: readonly unknown[], loading: boolean, revision: number } },
   load: null as null | ReturnType<typeof vi.fn>,
+  englishNames: {} as Record<string, string>,
+  habits: { 'Malus domestica': 'Tree', 'Ficus carica': 'Shrub', 'Rubus idaeus': 'Shrub' } as Record<string, string>,
 }))
 vi.mock('../app/plant-browser', async (importOriginal) => {
   const original = await importOriginal<typeof import('../app/plant-browser')>()
@@ -42,14 +44,23 @@ vi.mock('../app/plant-browser', async (importOriginal) => {
       get(target, property) {
         if (property === 'favorites') return view
         if (property === 'loadFavorites') return favorites.load
-        if (property === 'resolveCommonNames') return async () => ({})
+        if (property === 'resolveHabits') {
+          return async (names: readonly string[]) => Object.fromEntries(names.flatMap((name) => (
+            favorites.habits[name] ? [[name, favorites.habits[name]!]] : []
+          )))
+        }
+        if (property === 'resolveCommonNames') {
+          return async (names: readonly string[], requested: string) => Object.fromEntries(names.flatMap((name) => (
+            requested === 'en' && favorites.englishNames[name] ? [[name, favorites.englishNames[name]!]] : []
+          )))
+        }
         return Reflect.get(target, property)
       },
     }),
   }
 })
 
-function favorite(canonical_name: string, common_name: string, width_max_m: number | null = null): SpeciesListItem {
+function favorite(canonical_name: string, common_name: string | null, width_max_m: number | null = null): SpeciesListItem {
   return {
     canonical_name, common_name, width_max_m, stratum: null, is_favorite: true,
   } as unknown as SpeciesListItem
@@ -110,6 +121,7 @@ describe('Place plants species chooser', () => {
     setCanvasToolGuidance(IDLE_CANVAS_TOOL_GUIDANCE)
     clearPlantStampSource()
     recentPlantStampSources.value = []
+    favorites.englishNames = {}
     setCanvasRuntimeSurfaces(null)
     sidePanel.value = null
     activePanel.value = 'canvas'
@@ -155,6 +167,37 @@ describe('Place plants species chooser', () => {
     // Rubus idaeus is a Favorite: the catalog gives no English name for it here.
     const raspberry = options().find((option) => option.dataset.speciesOption === 'Rubus idaeus')!
     expect(raspberry.querySelector('[lang="en"]')).toBeNull()
+  })
+
+  it('marks the English catalog name of a Favorite or recent pick with no name in the UI language', async () => {
+    // Species no other test lists: the catalog name cache lives as long as the module.
+    favorites.englishNames = { 'Sambucus nigra': 'Elder', 'Allium ursinum': 'Wild garlic' }
+    await act(async () => {
+      locale.value = 'fr'
+      favorites.view!.value = { items: [favorite('Sambucus nigra', null, 3)], loading: false, revision: 2 }
+      recentPlantStampSources.value = [{ canonical_name: 'Allium ursinum', common_name: null, stratum: null, width_max_m: null }]
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    for (const [canonical, english] of [['Sambucus nigra', 'Elder'], ['Allium ursinum', 'Wild garlic']] as const) {
+      const option = options().find((candidate) => candidate.dataset.speciesOption === canonical)!
+      expect(option.querySelector('[lang="en"]')?.textContent).toBe(english)
+      expect(option.textContent).toContain('(angl.)')
+    }
+  })
+
+  it('narrows the chooser by Stratum and Form, with counts', async () => {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const trigger = (label: string) => [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')]
+      .find((button) => button.textContent?.startsWith(label))!
+    await act(() => trigger('Form').click())
+    expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent))
+      .toEqual(['All forms', 'Tree · 1', 'Shrub · 2'])
+    await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((option) => option.textContent === 'Shrub · 2')!.click())
+    expect(options().map((option) => option.dataset.speciesOption)).toEqual(['Ficus carica', 'Rubus idaeus'])
+
+    await act(() => trigger('Stratum').click())
+    expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent))
+      .toEqual(['All strata', 'No stratum yet · 3'])
   })
 
   it('shows each species with the glyph and colour it has, or would take, on the map', async () => {

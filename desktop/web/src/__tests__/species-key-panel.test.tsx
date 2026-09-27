@@ -257,7 +257,8 @@ describe('Plants in this Design', () => {
     const swatch = container.querySelector<HTMLInputElement>('input[aria-label="Color of Menthe verte"]')!
     await act(() => {
       swatch.value = '#aa3355'
-      swatch.dispatchEvent(new Event('change', { bubbles: true }))
+      // preact/compat (loaded with the finder's menus, as in the app) reads a colour input's onChange as input.
+      swatch.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(setPlantColorForSpecies).toHaveBeenCalledWith('Mentha spicata', '#aa3355')
   })
@@ -350,7 +351,8 @@ describe('Plants in this Design', () => {
     const one = container.querySelector<HTMLInputElement>('input[aria-label="Color for every plant"]')!
     await act(() => {
       one.value = '#aa3355'
-      one.dispatchEvent(new Event('change', { bubbles: true }))
+      // preact/compat (loaded with the finder's menus, as in the app) reads a colour input's onChange as input.
+      one.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(currentDesign.value?.extra?.plant_display).toMatchObject({ color_by: 'one_color', one_color: '#AA3355' })
     expect(glyphColor('Menthe verte')).toBe(rgb('#AA3355'))
@@ -376,7 +378,8 @@ describe('Plants in this Design', () => {
 
     await act(() => {
       high.value = '#112233'
-      high.dispatchEvent(new Event('change', { bubbles: true }))
+      // preact/compat (loaded with the finder's menus, as in the app) reads a colour input's onChange as input.
+      high.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(currentDesign.value?.extra?.plant_display).toMatchObject({ stratum_colors: { high: '#112233' } })
     expect(glyphColor('Pommier cultivé')).toBe(rgb('#112233'))

@@ -11,11 +11,20 @@ import { formatArea, formatLength, zoneTypeLabel } from './zone-label'
 export interface ChipDetail {
   readonly text: string
   readonly measure?: boolean
+  /** The text is a species' English catalog name, shown marked "(en)". */
+  readonly englishFallback?: boolean
 }
 
 const NOTE_PREVIEW_GRAPHEMES = 40
 
-export function describeMapSelection(summary: MapSelectionSummary, activeLocale: string): { head: string; details: ChipDetail[] } {
+export interface MapSelectionDescription {
+  readonly head: string
+  /** The head is a species' English catalog name, shown marked "(en)". */
+  readonly headEnglishFallback?: boolean
+  readonly details: readonly ChipDetail[]
+}
+
+export function describeMapSelection(summary: MapSelectionSummary, activeLocale: string): MapSelectionDescription {
   const { plantCount, species, zones, noteCount, measurementCount } = summary
   const zoneCount = zones.length
   const kinds = [plantCount, zoneCount, noteCount, measurementCount].filter((count) => count > 0).length
@@ -33,12 +42,14 @@ export function describeMapSelection(summary: MapSelectionSummary, activeLocale:
     }
   }
   if (plantCount > 0) {
-    if (plantCount === 1) return { head: species[0]!.name, details: [] }
+    if (plantCount === 1) return { head: species[0]!.name, headEnglishFallback: species[0]!.englishFallback, details: [] }
     const spacing = summary.plantSpacingM
     return {
       head: t('canvas.selectionChip.plants', { count: plantCount }),
       details: [
-        plain(species.length === 1 ? species[0]!.name : t('canvas.selectionChip.species', { count: species.length })),
+        species.length === 1
+          ? { text: species[0]!.name, englishFallback: species[0]!.englishFallback }
+          : plain(t('canvas.selectionChip.species', { count: species.length })),
         ...(spacing === null ? [] : [measure(t('canvas.selectionChip.apart', { distance: formatLength(spacing, activeLocale) }))]),
       ],
     }
@@ -75,8 +86,9 @@ function notePreview(text: string): string {
   return graphemes.length > NOTE_PREVIEW_GRAPHEMES ? `${graphemes.slice(0, NOTE_PREVIEW_GRAPHEMES - 1).join('').trimEnd()}…` : line
 }
 
-/** One line naming the selection, as the chip reads it. */
+/** One line naming the selection, as the chip reads it; an English fallback name carries its mark. */
 export function mapSelectionHeading(summary: MapSelectionSummary, activeLocale: string): string {
-  const { head, details } = describeMapSelection(summary, activeLocale)
-  return [head, ...details.map((detail) => detail.text)].join(' · ')
+  const { head, headEnglishFallback, details } = describeMapSelection(summary, activeLocale)
+  const marked = (text: string, english: boolean | undefined) => english ? `${text} ${t('speciesName.englishMark')}` : text
+  return [marked(head, headEnglishFallback), ...details.map((detail) => marked(detail.text, detail.englishFallback))].join(' · ')
 }

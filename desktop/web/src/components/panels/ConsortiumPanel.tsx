@@ -19,7 +19,7 @@ import { DockPanelHeader } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
-import { PlantFinder, finderHighlight } from '../shared/PlantFinder'
+import { PlantFinder, StratumFormFilters, finderHighlight } from '../shared/PlantFinder'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { displayedPlantColor } from '../../app/plant-display/state'
@@ -109,6 +109,7 @@ export function ConsortiumPanel() {
                   plantCount: workbench.mapSelectionPlantCount,
                   onChange: workbench.setSelectedOnMap,
                 }}
+                filters={<StratumFormFilters filters={workbench.quickFilters} onChange={workbench.setQuickFilters} />}
                 summary={workbench.highlightedSpecies
                   ? t('canvas.consortium.foundInCells', {
                     count: matchedCells,

@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { findInPdfKey, pdfKeyLocations, type PdfKeyLocation } from '../../app/canvas-pdf/key-finder'
 import { canvasPdf } from '../../app/canvas-pdf/live'
+import { isFindPlantsShortcut } from '../../app/plant-finder/focus'
 import type { PdfWorkflow } from '../../app/canvas-pdf/workflow'
 import { PDF_PLANT_COLORS, type PdfPlan, type PdfPaper } from '../../app/canvas-pdf/types'
 import { t } from '../../i18n'
 import { Dropdown } from '../shared/Dropdown'
 import { useModalLayer } from '../shared/useModalLayer'
+import { PdfKeyFinder } from './PdfKeyFinder'
 import { PdfPageEditor } from './PdfPageEditor'
 import { PdfPageRail } from './PdfPageRail'
 import { PdfPageToolbar } from './PdfPageToolbar'
@@ -31,6 +34,17 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
   const page = adding ? plan?.pickerPage ?? plan?.pages[0] : plan?.pages.find((page) => page.id === pageId)
     ?? (!preparing ? plan?.pages.find((page) => page.id === pageId.split(':legend:')[0]) ?? plan?.pages[0] : undefined)
   const disabled = delivering || preparing
+  const [keyQuery, setKeyQuery] = useState('')
+  // The entry last shown from Find in key, by page and species so a rebuilt plan keeps it.
+  const [keyTarget, setKeyTarget] = useState<{ pageId: string; canonicalName: string } | null>(null)
+  const keyLocations = useMemo(() => pdfKeyLocations(plan), [plan])
+  const keySearch = useMemo(() => findInPdfKey(keyLocations, keyQuery), [keyLocations, keyQuery])
+  const keyCurrent = keyTarget && keySearch.active
+    ? keyLocations.find((location) => location.pageId === keyTarget.pageId && location.entry.canonicalName === keyTarget.canonicalName) ?? null
+    : null
+  const keyMatchesOnPage = page && !adding
+    ? keySearch.results.filter((result) => result.location.pageId === page.id).map((result) => result.location.bounds)
+    : []
   useModalLayer()
   useEffect(() => {
     root.current?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -47,8 +61,17 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
   function beginAdd() { focusPage.current = 'overview'; returnPage.current = pageId; setAdding(true); setInspecting(false); setPageId('overview') }
   function openCreatedPage(id: string) { focusPage.current = id; selectPage(id) }
   function cancelAdd() { focusPage.current = returnPage.current; setAdding(false); setPageId(returnPage.current) }
+  function showKeyEntry(location: PdfKeyLocation) { setKeyTarget({ pageId: location.pageId, canonicalName: location.entry.canonicalName }); selectPage(location.pageId) }
   function keyDown(event: KeyboardEvent) {
     event.stopPropagation()
+    // Ctrl F finds in the key while the export screen is open.
+    const keyField = root.current?.querySelector<HTMLInputElement>('[data-pdf-key-finder] input')
+    if (keyField && isFindPlantsShortcut(event)) {
+      event.preventDefault()
+      keyField.focus()
+      keyField.select()
+      return
+    }
     if (event.key === 'Escape') {
       if (root.current?.querySelector('[aria-expanded="true"]')) return
       event.preventDefault()
@@ -113,6 +136,9 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
             </section>
               : page && !adding && <PdfPageToolbar key={page.id} page={page} workflow={workflow} disabled={delivering} inspecting={inspecting}
                 onSplit={disabled ? undefined : () => { workflow.previewSplit(page.id); selectPage('overview') }} onInspect={() => setInspecting(!inspecting)} />}
+            {keyLocations.length > 0 && !splitPreview && <PdfKeyFinder query={keyQuery} search={keySearch} current={keyCurrent}
+              sheetName={(location) => plan?.pages.find((source) => source.id === location.sourceId)?.areaName ?? t('pdf.overview')}
+              onQuery={setKeyQuery} onShow={showKeyEntry} />}
             <div className={styles.sheetPages}>
               {adding ? <button type="button" onClick={cancelAdd}>← {t('pdf.cancel')}</button>
                 : <button type="button" className={styles.addPage} aria-label={t('pdf.addPage')} disabled={disabled || !!splitPreview || !plan?.pages.length}
@@ -136,6 +162,7 @@ function PrintWorkspace({ workflow }: { readonly workflow: PdfWorkflow }) {
           <div className={styles.paper} aria-busy={preparing}>
             {page && plan && <PdfPageEditor page={page} plan={plan} adding={adding} inspecting={inspecting} navigationOnly={!!splitPreview} disabled={disabled}
               highlightedPage={hoveredPage} onPage={selectPage}
+              keyMatches={keyMatchesOnPage} keyCurrent={keyCurrent?.pageId === page.id ? keyCurrent.bounds : null}
               onPrintArea={(bounds) => { const id = workflow.addPrintArea(bounds); if (id) openCreatedPage(id) }}
               onMove={(delta) => {
                 const offset = setup.views?.[page.id]?.offset ?? { x: 0, y: 0 }

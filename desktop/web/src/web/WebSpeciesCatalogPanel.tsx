@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { speciesCatalogWorkbench } from '../app/plant-browser'
+import { useEnglishFallbackNames } from '../app/plant-finder/catalog-names'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
   beginPlantStampFromSpecies,
@@ -17,6 +18,7 @@ import {
 } from '../components/plant-db/favorite-species-presentation'
 import { SpeciesKeyPanel } from '../components/panels/SpeciesKeyPanel'
 import { DockPanelHeader } from '../components/shared/DockPanelHeader'
+import { SpeciesCommonName } from '../components/shared/SpeciesIdentity'
 import { SurfaceSearch } from '../components/shared/SurfaceSearch'
 import { FactsGrid, OtherNames } from '../components/species-detail/FactsGrid'
 import type { SpeciesPhoto } from '../components/species-detail/photo-attribution'
@@ -37,6 +39,10 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
   const detailView = speciesCatalogWorkbench.detail.value
   const isCatalog = mode === 'catalog'
   const visibleItems = filterFavoriteSpecies(favoritesView.items, favoriteSearch)
+  const englishNames = useEnglishFallbackNames(useMemo(() => [...favoritesView.items, ...sidebar.recentlyViewed].map((item) => ({
+    canonicalName: item.canonical_name,
+    commonName: item.common_name,
+  })), [favoritesView.items, sidebar.recentlyViewed]))
   const title = isCatalog ? t('plantDb.title') : t('nav.favorites')
 
   const mainRef = useRef<HTMLDivElement>(null)
@@ -64,6 +70,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
             <h3 className={styles.sectionTitle}>{t('canvas.layers.plants')}</h3>
             <SpeciesList
               items={visibleItems}
+              englishNames={englishNames}
               loading={favoritesView.loading}
               emptyLabel={t(favoriteSearch ? 'speciesKey.noResults' : 'plantDb.noFavorites')}
             />
@@ -72,7 +79,7 @@ export function WebSpeciesCatalogPanel({ mode }: WebSpeciesCatalogPanelProps) {
               {sidebar.recentlyViewed.length === 0 ? (
                 <div className={styles.empty}>{t('plantDb.noRecentlyViewed')}</div>
               ) : (
-                sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)
+                sidebar.recentlyViewed.map((item) => <SpeciesRow key={item.canonical_name} item={item} englishName={englishNames.get(item.canonical_name)} />)
               )}
             </div>
           </div>
@@ -147,10 +154,12 @@ function webSpeciesFacts(detail: SpeciesCatalogDetail, currentLocale: string): S
 
 function SpeciesList({
   items,
+  englishNames,
   loading,
   emptyLabel,
 }: {
   readonly items: readonly SpeciesListItem[]
+  readonly englishNames: ReadonlyMap<string, string>
   readonly loading: boolean
   readonly emptyLabel: string
 }) {
@@ -164,21 +173,26 @@ function SpeciesList({
 
   return (
     <div className={styles.list} role="list">
-      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} />)}
+      {items.map((item) => <SpeciesRow key={item.canonical_name} item={item} englishName={englishNames.get(item.canonical_name)} />)}
     </div>
   )
 }
 
-/** A Favorites or Recently viewed row: names, Place, star and Details. */
-function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
+/**
+ * A Favorites or Recently viewed row: names, Place, star and Details. A species with no
+ * name in the interface language shows its English catalog name marked "(en)".
+ */
+function SpeciesRow({ item, englishName }: { readonly item: SpeciesListItem; readonly englishName?: string }) {
   const commandSurface = currentCanvasToolCommandSurface.value
-  const commonName = item.common_name?.trim() ?? ''
+  const localized = item.common_name?.trim() ?? ''
+  const english = localized ? '' : englishName ?? ''
+  const commonName = localized || english
   const displayName = commonName.length > 0 ? commonName : item.canonical_name
   const showCanonicalName = displayName !== item.canonical_name
   const handleDragStart = (event: DragEvent) => {
     writePlantStampDragData(event.dataTransfer, item)
     const preview = document.createElement('div')
-    preview.textContent = item.common_name || item.canonical_name
+    preview.textContent = displayName
     Object.assign(preview.style, {
       position: 'absolute',
       top: '-1000px',
@@ -216,11 +230,13 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
     >
       <span className={styles.nameBlock}>
         <span className={styles.nameLine} data-testid="web-species-name-line">
-          <span className={styles.commonName}>{displayName}</span>
+          <span className={styles.commonName}>
+            {english ? <SpeciesCommonName name={english} englishFallback /> : displayName}
+          </span>
           {showCanonicalName && (
             <>
               <span className={styles.nameSeparator} aria-hidden="true">·</span>
-              <span className={styles.botanicalName}>{item.canonical_name}</span>
+              <span className={styles.botanicalName} lang="la">{item.canonical_name}</span>
             </>
           )}
         </span>
@@ -229,7 +245,7 @@ function SpeciesRow({ item }: { readonly item: SpeciesListItem }) {
         <button
           type="button"
           className={styles.placeButton}
-          aria-label={t('plantDb.placeSpecies', { name: item.common_name ?? item.canonical_name })}
+          aria-label={t('plantDb.placeSpecies', { name: displayName })}
           data-testid="web-species-place"
           onClick={handlePlace}
         >

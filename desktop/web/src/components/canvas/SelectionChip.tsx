@@ -6,6 +6,7 @@ import { loneEditableZoneId, openRenameZoneDialog } from '../../app/rename-zone/
 import { currentCanvasQuerySurface, currentCanvasSceneEditCommandSurface } from '../../canvas/session'
 import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
+import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import styles from './SelectionChip.module.css'
 
 /**
@@ -25,7 +26,7 @@ export function SelectionChip() {
   const queries = currentCanvasQuerySurface.value
   const overview = queries?.viewport.value.mode === 'overview'
   if (!summary || overview) return null
-  const { head, details } = describeMapSelection(summary, locale.value)
+  const { head, headEnglishFallback, details } = describeMapSelection(summary, locale.value)
   const [only] = summary.species
   const wholeSpecies = summary.species.length === 1 && isOnlyPlants(summary) && only!.selectedCount < only!.designCount
   // The summary hook re-renders the chip on selection and scene changes (locks included).
@@ -33,9 +34,11 @@ export function SelectionChip() {
   return (
     <div className={styles.chip} role="group" aria-label={t('canvas.selectionChip.label')} data-selection-chip="bottom">
       <span className={styles.text} role="status" aria-live="polite">
-        <b>{head}</b>
+        <b><SpeciesCommonName name={head} englishFallback={headEnglishFallback} /></b>
         {details.map((detail, index) => (
-          <span key={index} className={detail.measure ? `${styles.muted} ${styles.measure}` : styles.muted}> · {detail.text}</span>
+          <span key={index} className={detail.measure ? `${styles.muted} ${styles.measure}` : styles.muted}>
+            {' · '}<SpeciesCommonName name={detail.text} englishFallback={detail.englishFallback} />
+          </span>
         ))}
       </span>
       {wholeSpecies && (

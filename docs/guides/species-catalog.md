@@ -6,6 +6,7 @@ This guide covers the plant catalog: the Desktop SQLite plant DB, the query buil
 
 - Shared UI consumes the Species Catalog Workbench (`app/plant-browser/workbench.ts`, dependency-injected and free of IPC imports) through `speciesCatalogWorkbench`. The live instance comes from `#species-catalog-live`: Desktop uses `live.desktop.ts` (Tauri IPC over SQLite) and Web uses `live.browser.ts` with `browser-runtime.ts`, `web/duckdb-wasm-catalog.ts` and `web/reduced-species-catalog.ts`.
 - Storage engines are adapters behind caller-oriented read projections. Shared UI never depends on SQLite or DuckDB.
+- Plant lists outside the catalog view read two batch projections through the workbench: `resolveCommonNames(names, locale)` (the finder's names in every language and the "(en)" fallback names) and `resolveHabits(names)` (the finder's Form filter; Desktop `get_species_habits`, at most 500 names per call, so the Desktop adapter batches; Web the artifact rows' `habit`). Both are index lookups on canonical names.
 - Site Adaptation (compatibility checks, replacement suggestions) is retired. Do not keep hardiness-compatibility or replacement projections.
 
 ## Storage contract

@@ -97,6 +97,7 @@ describe('FavoritesPanel', () => {
   let savedStampsFrameHeight: typeof import('../app/settings/state').savedStampsFrameHeight
   let workbench: SpeciesCatalogWorkbench
   let getFavoritesMock: ReturnType<typeof vi.fn>
+  let resolveCommonNamesMock: ReturnType<typeof vi.fn>
   let loadStampLibraryMock: ReturnType<typeof vi.fn>
   let saveSelectionMock: ReturnType<typeof vi.fn>
   let saveCanvasSelectionMock: ReturnType<typeof vi.fn>
@@ -131,9 +132,11 @@ describe('FavoritesPanel', () => {
     getFavoritesMock = vi.fn(async () => [
       makeSpeciesListItem('Malus domestica', true),
     ])
+    resolveCommonNamesMock = vi.fn(async () => ({}))
     workbench = await createTestSpeciesCatalogWorkbench({
       locale,
       getFavorites: getFavoritesMock as unknown as (locale: string) => Promise<SpeciesListItem[]>,
+      resolveCommonNames: resolveCommonNamesMock as unknown as (names: readonly string[], locale: string) => Promise<Record<string, string>>,
     })
     loadStampLibraryMock = vi.fn(async () => {})
     saveSelectionMock = vi.fn(async () => null)
@@ -274,6 +277,24 @@ describe('FavoritesPanel', () => {
     expect(container.querySelector('[data-favorite-species]')?.textContent).toContain('Malus domestica')
     expect(workbench.favorites.value.items).toHaveLength(1)
     expect(document.activeElement).toBe(input)
+  })
+
+  it('shows the English catalog name marked (en) for a favourite with no name in the interface language', async () => {
+    resolveCommonNamesMock.mockImplementation(async (names: readonly string[], requested: string) => (
+      requested === 'en' && names.includes('Malus domestica') ? { 'Malus domestica': 'Apple' } : {}
+    ))
+    getFavoritesMock.mockImplementation(async () => [{ ...makeSpeciesListItem('Malus domestica', true), common_name: null }])
+    locale.value = 'fr'
+    await act(async () => { render(<FavoritesPanel />, container); await flushEffects() })
+    await act(async () => { await workbench.loadFavorites(); await flushEffects() })
+    await act(async () => { await flushEffects() })
+    const favorite = container.querySelector<HTMLElement>('[data-favorite-species="Malus domestica"]')!
+    expect(favorite.querySelector('strong [lang="en"]')?.textContent).toBe('Apple')
+    expect(favorite.querySelector('strong')?.textContent).toContain('(angl.)')
+    expect(favorite.querySelector('em[lang="la"]')?.textContent).toBe('Malus domestica')
+    expect(resolveCommonNamesMock).toHaveBeenCalledWith(['Malus domestica'], 'en')
+    const buttons = [...favorite.querySelectorAll<HTMLButtonElement>(':scope > button')]
+    expect(buttons.at(-1)!.getAttribute('aria-label')).toContain('Apple')
   })
 
   it('leads favourite rows with the star and names Place with its plant', async () => {

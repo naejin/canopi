@@ -164,6 +164,35 @@ describe('Selection chip', () => {
     expect(status()).toBe('Mentha spicata')
   })
 
+  it('names a species with no name in the interface language by its English name, marked', async () => {
+    await act(() => render(<SelectionChip />, container))
+    await act(() => {
+      locale.value = 'fr'
+      queries.setEnglishFallbackNames(new Map([['Mentha spicata', 'Spearmint']]))
+      queries.bumpPlantNamesRevision()
+    })
+    await select([{ kind: 'plant', id: 'mint-1' }])
+    const live = chip()!.querySelector('[role="status"]')!
+    expect(live.querySelector('b [lang="en"]')?.textContent).toBe('Spearmint')
+    expect(live.querySelector('b [aria-hidden="true"]')?.textContent).toBe('(angl.)')
+  })
+
+  it('marks the English name in the one-species detail and the right-click heading', async () => {
+    const { readMapSelectionSummary } = await import('../app/map-selection/summary')
+    const { mapSelectionHeading } = await import('../app/map-selection/summary-text')
+    await act(() => {
+      locale.value = 'fr'
+      queries.setLocalizedNames(new Map([['Prunus armeniaca', null]]))
+      queries.setEnglishFallbackNames(new Map([['Prunus armeniaca', 'Apricot']]))
+      queries.bumpPlantNamesRevision()
+    })
+    await act(() => render(<SelectionChip />, container))
+    await select([{ kind: 'plant', id: 'apricot-1' }, { kind: 'plant', id: 'apricot-2' }])
+    const detail = [...chip()!.querySelectorAll('[role="status"] span')].find((span) => span.querySelector('[lang="en"]'))
+    expect(detail?.querySelector('[lang="en"]')?.textContent).toBe('Apricot')
+    expect(mapSelectionHeading(readMapSelectionSummary(queries)!, 'fr').replace(/\s+/g, ' ')).toBe('2 plantes · Apricot (angl.) · espacées de 5 m')
+  })
+
   it('gives the spacing of the selected plants', async () => {
     await act(() => render(<SelectionChip />, container))
     // Plants sit 5 m apart in a row; the mean nearest-neighbour distance is 5 m.

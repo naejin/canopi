@@ -1391,7 +1391,8 @@
       "black": "Zwart"
     },
     "northArrow": "Noordpijl en schaal",
-    "pageOptions": "Geselecteerde pagina"
+    "pageOptions": "Geselecteerde pagina",
+    "findInKey": "Zoeken in de legenda"
   },
   "speciesKey": {
     "title": "Planten in dit ontwerp",
@@ -1545,7 +1546,14 @@
     "summarySelected": "{{species}} · {{plants}} geselecteerd op de kaart",
     "noMatches": "Geen planten gevonden voor ‘{{query}}’.",
     "noneSelected": "Selecteer planten op de kaart om hun soorten hier te tonen.",
-    "searchHint": "De zoekfunctie vindt gewone namen in alle talen die Canopi kent, wetenschappelijke namen en codes. Accenten, hoofdletters en kleine typfouten maken niet uit."
+    "searchHint": "De zoekfunctie vindt gewone namen in alle talen die Canopi kent, wetenschappelijke namen en codes. Accenten, hoofdletters en kleine typfouten maken niet uit.",
+    "stratum": "Etage",
+    "form": "Habitus",
+    "allStrata": "Alle etages",
+    "allForms": "Elke habitus",
+    "formNotRecorded": "Niet vastgelegd",
+    "filterChoice": "{{filter}}: {{choice}}",
+    "noFilterMatches": "Geen planten komen overeen met deze filters."
   },
   "analyses": {
     "groups": {

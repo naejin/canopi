@@ -1391,7 +1391,8 @@
       "black": "黒"
     },
     "northArrow": "方位記号と縮尺",
-    "pageOptions": "選択したページ"
+    "pageOptions": "選択したページ",
+    "findInKey": "凡例で検索"
   },
   "speciesKey": {
     "title": "このデザインの植物",
@@ -1545,7 +1546,14 @@
     "summarySelected": "地図で選択中：{{species}} · {{plants}}",
     "noMatches": "「{{query}}」に一致する植物はありません。",
     "noneSelected": "地図上で植物を選択すると、その種がここに一覧表示されます。",
-    "searchHint": "Canopi が対応するすべての言語の一般名、学名、コードを検索します。アクセント、大文字・小文字、軽微な入力ミスは区別されません。"
+    "searchHint": "Canopi が対応するすべての言語の一般名、学名、コードを検索します。アクセント、大文字・小文字、軽微な入力ミスは区別されません。",
+    "stratum": "階層",
+    "form": "樹形",
+    "allStrata": "すべての階層",
+    "allForms": "すべての樹形",
+    "formNotRecorded": "記録なし",
+    "filterChoice": "{{filter}}：{{choice}}",
+    "noFilterMatches": "これらのフィルターに一致する植物はありません。"
   },
   "analyses": {
     "groups": {
