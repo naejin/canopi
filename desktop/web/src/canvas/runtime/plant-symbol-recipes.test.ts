@@ -20,7 +20,54 @@ function signedArea(contour: PlantSymbolContour): number {
   }, 0)
 }
 
+/** Flattens a contour to points (cubics sampled), in the recipe's -1..1 units. */
+function flatten(contour: PlantSymbolContour, steps = 16): Array<[number, number]> {
+  const points: Array<[number, number]> = []
+  let current: [number, number] = [0, 0]
+  for (const command of contour) {
+    if (command[0] !== 'C') {
+      current = [command[1], command[2]]
+      points.push(current)
+      continue
+    }
+    const [, x1, y1, x2, y2, x3, y3] = command
+    const [x0, y0] = current
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps
+      const a = (1 - t) ** 3, b = 3 * (1 - t) ** 2 * t, c = 3 * (1 - t) * t * t, d = t ** 3
+      points.push([a * x0 + b * x1 + c * x2 + d * x3, a * y0 + b * y1 + c * y2 + d * y3])
+    }
+    current = [x3, y3]
+  }
+  return points
+}
+
+function insidePolygon([x, y]: [number, number], polygon: ReadonlyArray<[number, number]>): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const [xi, yi] = polygon[i]!
+    const [xj, yj] = polygon[j]!
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
 describe('plant symbol recipes', () => {
+  it('keeps the bamboo nodes under the leaves that cover them, as in the v3 artwork', () => {
+    const { body, cutouts } = PLANT_SYMBOL_RECIPES.bamboo.detailed
+    // Body order: three culms, then three leaves.
+    const leaves = body.slice(3).map((contour) => flatten(contour, 64))
+    expect(leaves).toHaveLength(3)
+    const covered = cutouts.flatMap((contour) => flatten(contour))
+      .filter((point) => leaves.some((leaf) => insidePolygon(point, leaf)))
+      // A point on the leaf's own edge is not covered; allow for sampling of the curve.
+      .filter((point) => leaves.every((leaf) => leaf.every(([x, y]) => Math.hypot(x - point[0], y - point[1]) > 0.01)))
+    expect(covered).toEqual([])
+    // The node the left leaf crosses keeps its uncovered part.
+    expect(cutouts).toHaveLength(7)
+  })
+
+
   it('draws every symbol id at compact and detailed sizes with finite, closed contours inside the footprint', () => {
     expect(Object.keys(PLANT_SYMBOL_RECIPES)).toEqual([...PLANT_SYMBOL_IDS])
     for (const symbol of PLANT_SYMBOL_IDS) {

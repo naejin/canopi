@@ -19,9 +19,17 @@ vi.mock('pixi.js', () => {
     children: unknown[] = []
     visible = true
     alpha = 1
+    filters: MockAlphaFilter[] | null = null
+    filterArea: unknown = null
+    sortableChildren = false
+    parent: MockContainer | null = null
     position = { set: vi.fn() }
     scale = { set: vi.fn() }
     addChild(...children: unknown[]) {
+      for (const child of children as Array<{ parent?: MockContainer | null }>) {
+        if (child.parent) child.parent.children = child.parent.children.filter((entry) => entry !== child)
+        child.parent = this
+      }
       this.children.push(...children)
       return children[0]
     }
@@ -60,8 +68,22 @@ vi.mock('pixi.js', () => {
     }
   }
 
+  class MockAlphaFilter {
+    alpha: number
+    destroy = vi.fn()
+    constructor(public readonly options: { alpha: number }) {
+      this.alpha = options.alpha
+    }
+  }
+
+  class MockRectangle {
+    constructor(public x: number, public y: number, public width: number, public height: number) {}
+  }
+
   class MockGraphics {
     private _context: MockGraphicsContext
+    parent: MockContainer | null = null
+    zIndex = 0
     position = { set: vi.fn() }
     visible = true
     alpha = 1
@@ -77,7 +99,10 @@ vi.mock('pixi.js', () => {
     closePath = vi.fn(() => this)
     fill = vi.fn(() => this)
     stroke = vi.fn(() => this)
-    removeFromParent = vi.fn()
+    removeFromParent = vi.fn(() => {
+      if (this.parent) this.parent.children = this.parent.children.filter((entry) => entry !== this)
+      this.parent = null
+    })
     destroy = vi.fn((options?: boolean | { context?: boolean }) => {
       if (options === true || (typeof options === 'object' && options.context)) this._context.destroy()
     })
@@ -124,6 +149,8 @@ vi.mock('pixi.js', () => {
   }
 
   return {
+    AlphaFilter: MockAlphaFilter,
+    Rectangle: MockRectangle,
     Container: MockContainer,
     Graphics: MockGraphics,
     GraphicsContext: MockGraphicsContext,
@@ -228,7 +255,7 @@ describe('createPixiScenePresentation', () => {
     expect(text.style).not.toBe(style)
     renderer.dispose()
   })
-  it('shares exact botanical geometry and refreshes it for zoom, colour, and interaction', async () => {
+  it('shares exact botanical geometry, refreshes it for zoom and colour, and rings interaction apart', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
         graphics: Array<{
@@ -261,8 +288,10 @@ describe('createPixiScenePresentation', () => {
     expect(firstPlant!.position.set).toHaveBeenLastCalledWith(40, 50)
     expect(firstPlant!.context).toBe(sharedContext)
     renderer.renderScene({ ...snapshot, selectedPlantIds: new Set(['b']) })
+    // Selection rings the plant in its own graphic; the symbol geometry stays shared.
     expect(firstPlant!.context).toBe(sharedContext)
-    expect(secondPlant!.context).not.toBe(sharedContext)
+    expect(secondPlant!.context).toBe(sharedContext)
+    expect(pixi.__pixiMockState.graphics).toHaveLength(3)
     renderer.setViewport({ x: 0, y: 0, scale: 60 })
     expect(firstPlant!.context).not.toBe(sharedContext)
     const zoomContext = firstPlant!.context
@@ -357,9 +386,11 @@ describe('createPixiScenePresentation', () => {
     pixi.__pixiMockState.texts.length = 0
   })
 
-  it('restores full opacity after clearing Species focus, including camera-only updates', async () => {
+  it('dims Species focus as one composite per plant and keeps rings and camera-only updates at full strength', async () => {
     const pixi = await import('pixi.js') as unknown as {
-      __pixiMockState: { graphics: Array<{ alpha: number; circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }> }
+      __pixiMockState: {
+        graphics: Array<{ parent: { filters: Array<{ alpha: number }> | null } | null; circle: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }>
+      }
     }
     const renderer = mountPresentation(document.createElement('div'))
     const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
@@ -367,15 +398,52 @@ describe('createPixiScenePresentation', () => {
       createPlant({ id: 'mint', canonicalName: 'Mentha spicata', position: { x: 3, y: 0 } }),
     ] }, selectedTargets: [{ kind: 'plant', id: 'mint' }], speciesFocus: { canonicalName: 'Malus domestica' } })
     renderer.renderScene(snapshot)
-    const marks = pixi.__pixiMockState.graphics.filter((graphic) => graphic.circle.mock.calls.length)
-    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
-    const selectionOpacity = marks[1]!.stroke.mock.calls.at(-1)?.[0].alpha
-    expect(marks[1]!.alpha).toBe(1)
+    const [apple, mint] = pixi.__pixiMockState.graphics
+    const ring = pixi.__pixiMockState.graphics.find((graphic) => graphic.stroke.mock.calls.length > 0)!
+    const layerAlpha = (graphic: typeof apple) => graphic!.parent?.filters?.map((filter) => filter.alpha) ?? []
+    // Every path is opaque; the dimmed plant's container applies 0.16 once, so its parts never double-blend.
+    const fillAlphas = () => [apple, mint].map((mark) => mark!.fill.mock.calls.at(-1)?.[0].alpha ?? 1)
+    expect(fillAlphas()).toEqual([1, 1])
+    expect(layerAlpha(apple)).toEqual([])
+    expect(layerAlpha(mint)).toEqual([0.16])
+    // The dimmed plant's selection ring is drawn outside the dimmed composite, at full strength.
+    expect(layerAlpha(ring)).toEqual([])
+    expect(ring.stroke.mock.calls.at(-1)?.[0].alpha).toBe(1)
     renderer.setViewport({ x: 10, y: 20, scale: 2 })
-    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, .16])
+    expect(layerAlpha(mint)).toEqual([0.16])
     renderer.renderScene({ ...snapshot, speciesFocus: { canonicalName: null } })
-    expect(marks.map((mark) => mark.fill.mock.calls.at(-1)?.[0].alpha)).toEqual([1, 1])
-    expect(marks[1]!.stroke.mock.calls.at(-1)?.[0].alpha).toBe(selectionOpacity)
+    expect(fillAlphas()).toEqual([1, 1])
+    expect(layerAlpha(apple)).toEqual([])
+    expect(layerAlpha(mint)).toEqual([])
+    renderer.dispose()
+  })
+
+  it('applies Plants layer opacity once to the whole layer instead of to each overlapping path', async () => {
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: {
+        graphics: Array<{ fill: ReturnType<typeof vi.fn>; stroke: ReturnType<typeof vi.fn> }>
+        containers: Array<{ alpha: number; filters: Array<{ alpha: number }> | null; filterArea: { width: number; height: number } | null }>
+      }
+    }
+    const host = document.createElement('div')
+    Object.defineProperties(host, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
+    const renderer = mountPresentation(host)
+    const snapshot = createTestSceneRendererSnapshot({ scene: {
+      plants: [createPlant({ id: 'a', symbol: 'shrub', position: { x: 2, y: 2 } })],
+      layers: [{ kind: 'layer', name: 'plants', visible: true, locked: false, opacity: 0.4 }],
+    }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const fills = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.fill.mock.calls.map(([fill]) => fill.alpha ?? 1))
+    expect(fills.length).toBeGreaterThan(0)
+    expect(new Set(fills)).toEqual(new Set([1]))
+    const filtered = pixi.__pixiMockState.containers.filter((container) => container.filters?.length)
+    expect(filtered.map((container) => container.filters!.map((filter) => filter.alpha))).toEqual([[0.4]])
+    expect(filtered[0]!.alpha).toBe(1)
+    expect(filtered[0]!.filterArea).toMatchObject({ width: 400, height: 300 })
+    renderer.resize(640, 480)
+    expect(filtered[0]!.filterArea).toMatchObject({ width: 640, height: 480 })
+    renderer.renderScene({ ...snapshot, scene: { ...snapshot.scene, layers: [] } })
+    expect(pixi.__pixiMockState.containers.filter((container) => container.filters?.length)).toEqual([])
     renderer.dispose()
   })
 
@@ -552,10 +620,10 @@ describe('createPixiScenePresentation', () => {
       vi.clearAllMocks()
       const snapshot = createRendererSnapshot({ plants: [plant], viewport: { x: 0, y: 0, scale } })
       renderer.renderScene({ ...snapshot, highlightedPlantIds: new Set(['a']) })
-      const graphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.circle.mock.calls.length > 1)!
-      const radii = graphic.circle.mock.calls.map((call) => call[2] as number)
-      const glyphRadius = Math.min(...radii)
-      const ringRadius = Math.max(...radii)
+      const graphic = pixi.__pixiMockState.graphics.find((graphics) => graphics.stroke.mock.calls.length > 1)!
+      const glyph = pixi.__pixiMockState.graphics.find((graphics) => graphics !== graphic && graphics.circle.mock.calls.length > 0)!
+      const glyphRadius = Math.max(...glyph.circle.mock.calls.map((call) => call[2] as number))
+      const ringRadius = Math.min(...graphic.circle.mock.calls.map((call) => call[2] as number))
       expect(ringRadius, `scale ${scale}`).toBeGreaterThanOrEqual(8)
       expect(ringRadius, `scale ${scale}`).toBeGreaterThan(glyphRadius + 2)
       const [casing, stroke] = graphic.stroke.mock.calls.slice(-2).map((call) => call[0] as { width: number; alpha: number })
@@ -1008,12 +1076,15 @@ describe('createPixiScenePresentation', () => {
     }))
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 0.625 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
+    // The plant's ring is its own graphic above the symbol, in CSS pixels.
+    const plantRing = pixi.__pixiMockState.graphics.find((graphics) => graphics !== zoneGraphic && graphics.stroke.mock.calls.length > 0)
+    expect(plantGraphic?.stroke).not.toHaveBeenCalled()
+    expect(plantRing?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
 
     renderer.setViewport({ x: 0, y: 0, scale: 2 })
 
     expect(zoneGraphic?.stroke.mock.calls.slice(-1)[0]?.[0]).toMatchObject({ width: 1.25 })
-    expect(plantGraphic?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
+    expect(plantRing?.stroke.mock.calls.slice(-2).map(([stroke]) => stroke.width)).toEqual([5.5, 2.5])
     renderer.dispose()
   })
 

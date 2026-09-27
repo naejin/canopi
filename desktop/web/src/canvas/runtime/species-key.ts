@@ -93,11 +93,14 @@ export interface SpeciesFocusCommands {
   focus(canonicalName: string | null): void
 }
 
+/** Opacity of the plants Species Focus leaves out, applied to each one as a whole. */
+export const SPECIES_FOCUS_DIM_OPACITY = 0.16
+
 export function speciesFocusOpacity(
   focus: SpeciesFocus,
   canonicalName: string,
 ): number {
-  return focus.canonicalName && focus.canonicalName !== canonicalName ? 0.16 : 1
+  return focus.canonicalName && focus.canonicalName !== canonicalName ? SPECIES_FOCUS_DIM_OPACITY : 1
 }
 
 const NO_ENGLISH_FALLBACKS: ReadonlyMap<string, string> = new Map()

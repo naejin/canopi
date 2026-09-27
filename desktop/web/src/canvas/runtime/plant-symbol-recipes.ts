@@ -109,6 +109,45 @@ function ring(cx: number, cy: number, rx: number, ry: number, innerRx: number, i
   return [...outer, ['L', cx + innerRx, cy], ...inner.slice(1), ['L', cx + rx, cy]]
 }
 
+/** The first edge of `lens(x0, y0, x1, y1, w)` as a quadratic: start, control, end. */
+function lensEdge(x0: number, y0: number, x1: number, y1: number, w: number, bulge = 0.5): readonly [Point, Point, Point] {
+  const dx = x1 - x0
+  const dy = y1 - y0
+  const length = Math.hypot(dx, dy)
+  return [[x0, y0], [x0 + dx * bulge - dy / length * w * 1.33, y0 + dy * bulge + dx / length * w * 1.33], [x1, y1]]
+}
+
+/**
+ * The part of the band (x, y, width, height) above a quadratic edge that starts on
+ * the band's right side below it and rises leftwards across it: a cut-out trimmed
+ * where a shape painted over it in the artwork covers it.
+ */
+function bandAboveQuad(x: number, y: number, width: number, height: number, [p0, p1, p2]: readonly [Point, Point, Point]): GridContour {
+  const at = (t: number): Point => [
+    (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+    (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1],
+  ]
+  // Smallest t in [0, 1] where the edge reaches height `level`.
+  const crossing = (level: number): number => {
+    const a = p0[1] - 2 * p1[1] + p2[1]
+    const b = 2 * (p1[1] - p0[1])
+    const c = p0[1] - level
+    const roots = Math.abs(a) < 1e-9 ? [-c / b] : [1, -1].map((sign) => (-b + sign * Math.sqrt(b * b - 4 * a * c)) / (2 * a))
+    return Math.min(...roots.filter((t) => t >= 0 && t <= 1))
+  }
+  const bottom = crossing(y + height)
+  const top = crossing(y)
+  const start = at(bottom)
+  const derivative = (t: number): Point => [
+    (1 - t) * (p1[0] - p0[0]) + t * (p2[0] - p1[0]),
+    (1 - t) * (p1[1] - p0[1]) + t * (p2[1] - p1[1]),
+  ]
+  const slope = derivative(bottom)
+  const control: Point = [start[0] + (top - bottom) * slope[0], start[1] + (top - bottom) * slope[1]]
+  const right = x + width
+  return [['M', right, y], ['L', right, y + height], ['L', ...start], quadTo(start, control, at(top))]
+}
+
 function qbez(p0: Point, p1: Point, p2: Point, n = 24): Point[] {
   return Array.from({ length: n + 1 }, (_, i) => {
     const t = i / n
@@ -253,6 +292,8 @@ interface Drawing {
 
 const path = (grid: GridPath): GridContour[] => grid.map((contour) => [...contour])
 
+const BAMBOO_LEFT_LEAF = [8.2, 11, 1.4, 7.8] as const
+
 // Literal outlines of the approved artwork, in absolute grid units.
 const canopyTrunk: GridPath = [[['M', 10.3, 22], ['L', 10.8, 13], ['L', 13.2, 13], ['L', 13.7, 22]]]
 const coniferOutline: GridPath = [[['M', 12, 1.5], ['L', 17.4, 8], ['L', 15, 8], ['L', 19.8, 13.8], ['L', 16.8, 13.8], ['L', 21.5, 19.8], ['L', 13.3, 19.8], ['L', 13.3, 22], ['L', 10.7, 22], ['L', 10.7, 19.8], ['L', 2.5, 19.8], ['L', 7.2, 13.8], ['L', 4.2, 13.8], ['L', 9, 8], ['L', 6.6, 8]]]
@@ -374,9 +415,13 @@ function drawings(): Record<PlantSymbolId, Drawing> {
     },
     bamboo: {
       body: [rect(4.6, 4.5, 3.6, 17.5), rect(10.2, 1.8, 3.6, 20.2), rect(15.8, 7, 3.6, 15),
-        lens(13.8, 6, 21.6, 3.2, 1.7), lens(8.2, 11, 1.4, 7.8, 1.6), lens(19.4, 11.8, 23, 15.8, 1.4)],
-      fine: ([[4.6, [9.2, 14.6]], [10.2, [6.6, 12, 17.4]], [15.8, [12, 17]]] as const)
-        .flatMap(([x, ys]) => ys.map((y) => rect(x, y, 3.6, 1.1))),
+        lens(13.8, 6, 21.6, 3.2, 1.7), lens(...BAMBOO_LEFT_LEAF, 1.6), lens(19.4, 11.8, 23, 15.8, 1.4)],
+      // The artwork paints the leaves over the nodes, so the node the left leaf crosses keeps only its uncovered part.
+      fine: [
+        bandAboveQuad(4.6, 9.2, 3.6, 1.1, lensEdge(...BAMBOO_LEFT_LEAF, 1.6)),
+        ...([[4.6, [14.6]], [10.2, [6.6, 12, 17.4]], [15.8, [12, 17]]] as const)
+          .flatMap(([x, ys]) => ys.map((y) => rect(x, y, 3.6, 1.1))),
+      ],
     },
     fern: fernDrawing(),
     climber: { body: [...band(vine, 1.3), ...path(climberLeaves), circle(17.4, 9.6, 2.7)], cutouts: [circle(17.4, 9.6, 1.1)] },

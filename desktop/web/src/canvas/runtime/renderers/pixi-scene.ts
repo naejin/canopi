@@ -1,8 +1,8 @@
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
-import { speciesFocusOpacity } from '../species-key'
+import { SPECIES_FOCUS_DIM_OPACITY, speciesFocusOpacity } from '../species-key'
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import 'pixi.js/unsafe-eval'
-import { Container, Graphics, GraphicsContext, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
+import { AlphaFilter, Container, Graphics, GraphicsContext, Rectangle, Text, TextStyle, type TextStyleOptions } from 'pixi.js'
 import {
   getAnnotationVisualWorldCorners,
   getAnnotationPresentation,
@@ -188,7 +188,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   const world = new Container()
   const zonesLayer = new Container()
   const measurementGuideLayer = new Container()
-  const plantsLayer = new Container()
+  const plantLayers = createPlantLayers(viewSize)
   const plantsOverlayLayer = new Container()
   const annotationTextLayer = new Container()
   const annotationHighlightLayer = new Container()
@@ -197,7 +197,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   // Rasterize text and tessellate symbols at their readable CSS-pixel size.
   // Tiny world-unit primitives lose detail before the camera enlarges them.
   const screen = new Container()
-  screen.addChild(plantsLayer)
+  screen.addChild(plantLayers.root)
   screen.addChild(plantsOverlayLayer)
   screen.addChild(annotationTextLayer)
   screen.addChild(annotationHighlightLayer)
@@ -215,6 +215,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const measurementGuideLabelById = new Map<string, Text>()
   const plantGraphicsById = new Map<string, Graphics>()
+  const plantRingGraphicsById = new Map<string, Graphics>()
   // Passing one external empty context avoids the unused owned context that
   // `new Graphics()` would otherwise allocate for every Plant before its exact
   // shared geometry is assigned.
@@ -237,6 +238,9 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
         destroySharedPlantGraphics(graphics)
       }
       plantGraphicsById.clear()
+      for (const ring of plantRingGraphicsById.values()) ring.destroy()
+      plantRingGraphicsById.clear()
+      plantLayers.dispose()
       visiblePlantIds.clear()
       emptyPlantGraphicsContext.destroy()
       plantGraphicsContexts.dispose()
@@ -244,6 +248,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
     resize(width, height) {
       viewSize.width = width
       viewSize.height = height
+      plantLayers.resize(width, height)
     },
     renderScene(nextSnapshot) {
       const { plantNameLabels } = presentation.setScene(nextSnapshot)
@@ -259,9 +264,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       )
       syncPlants(
         createText,
-        plantsLayer,
+        plantLayers,
         plantsOverlayLayer,
         plantGraphicsById,
+        plantRingGraphicsById,
         emptyPlantGraphicsContext,
         visiblePlantIds,
         plantGraphicsContexts,
@@ -302,9 +308,10 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       )
       syncPlants(
         createText,
-        plantsLayer,
+        plantLayers,
         plantsOverlayLayer,
         plantGraphicsById,
+        plantRingGraphicsById,
         emptyPlantGraphicsContext,
         visiblePlantIds,
         plantGraphicsContexts,
@@ -646,11 +653,80 @@ function drawClosedZonePath(graphics: Graphics, points: readonly { x: number; y:
   return graphics.closePath()
 }
 
+/**
+ * Plant symbols draw opaque into containers that apply opacity once, as a
+ * composite: Pixi multiplies a container's alpha into every triangle, so the
+ * overlapping contours of one symbol (and its halo under the fill) would show
+ * darker. Species Focus dims the other plants through `dimmed`; the Plants
+ * layer opacity applies to `root`. Interaction rings sit above both, so a
+ * dimmed plant's selection ring stays at full strength. The filters run only
+ * while something is dimmed or the layer is translucent.
+ */
+interface PlantLayers {
+  readonly root: Container
+  readonly dimmed: Container
+  readonly symbols: Container
+  readonly rings: Container
+  setLayerOpacity(opacity: number): void
+  setDimmed(active: boolean): void
+  resize(width: number, height: number): void
+  dispose(): void
+}
+
+function createPlantLayers(viewSize: { width: number; height: number }): PlantLayers {
+  const root = new Container()
+  const dimmed = new Container()
+  const symbols = new Container()
+  const rings = new Container()
+  // Children keep scene order through zIndex, whichever container holds them.
+  dimmed.sortableChildren = true
+  symbols.sortableChildren = true
+  root.addChild(dimmed)
+  root.addChild(symbols)
+  root.addChild(rings)
+  // Plants draw in CSS pixels in the untransformed screen layer, so the view is the filter area.
+  const area = new Rectangle(0, 0, viewSize.width, viewSize.height)
+  const filterOptions = { resolution: 'inherit', antialias: 'inherit' } as const
+  const layerFilter = new AlphaFilter({ alpha: 1, ...filterOptions })
+  const dimFilter = new AlphaFilter({ alpha: SPECIES_FOCUS_DIM_OPACITY, ...filterOptions })
+  root.filterArea = area
+  dimmed.filterArea = area
+  let layerFiltered = false
+  let dimFiltered = false
+  return {
+    root,
+    dimmed,
+    symbols,
+    rings,
+    setLayerOpacity(opacity) {
+      layerFilter.alpha = opacity
+      const filtered = opacity < 1
+      if (filtered !== layerFiltered) root.filters = filtered ? [layerFilter] : null
+      layerFiltered = filtered
+    },
+    setDimmed(active) {
+      if (active !== dimFiltered) dimmed.filters = active ? [dimFilter] : null
+      dimFiltered = active
+    },
+    resize(width, height) {
+      area.width = width
+      area.height = height
+    },
+    dispose() {
+      root.filters = null
+      dimmed.filters = null
+      layerFilter.destroy()
+      dimFilter.destroy()
+    },
+  }
+}
+
 function syncPlants(
   createText: () => Text,
-  symbolLayer: Container,
+  layers: PlantLayers,
   overlay: Container,
   plantGraphicsById: Map<string, Graphics>,
+  plantRingGraphicsById: Map<string, Graphics>,
   emptyPlantGraphicsContext: GraphicsContext,
   visiblePlantIds: Set<string>,
   plantGraphicsContexts: PlantGraphicsContextCache,
@@ -662,8 +738,8 @@ function syncPlants(
   reconcileRemoved: boolean,
 ): void {
   const layer = getSceneLayerStyle(snapshot.scene, 'plants')
-  symbolLayer.visible = layer.visible
-  symbolLayer.alpha = layer.opacity
+  layers.root.visible = layer.visible
+  layers.setLayerOpacity(layer.opacity)
   overlay.visible = layer.visible
   overlay.alpha = layer.opacity
   if (!layer.visible) return
@@ -671,16 +747,18 @@ function syncPlants(
   // Keep display order stable even when a previously unseen Plant enters the view.
   const nextIds = new Set<string>()
   measurePixiSceneWork('plantObjects', () => {
-    for (const plant of snapshot.scene.plants) {
+    snapshot.scene.plants.forEach((plant, index) => {
       nextIds.add(plant.id)
       let graphic = plantGraphicsById.get(plant.id)
       if (!graphic) {
         graphic = new Graphics(emptyPlantGraphicsContext)
         graphic.visible = false
         plantGraphicsById.set(plant.id, graphic)
-        symbolLayer.addChild(graphic)
+        layers.symbols.addChild(graphic)
       }
-    }
+      graphic.zIndex = index
+    })
+    for (const ring of plantRingGraphicsById.values()) ring.visible = false
     for (const badge of plantBadgeGraphicsById.values()) badge.visible = false
     for (const text of plantBadgeTextById.values()) text.visible = false
   })
@@ -707,17 +785,35 @@ function syncPlants(
   }
   plantGraphicsContexts.beginGeneration()
 
+  let anyDimmed = false
   measurePixiSceneWork('plantDraw', () => { for (const entry of entries) {
     const graphic = plantGraphicsById.get(entry.plant.id)!
-    const hovered = snapshot.hoveredCanonicalName
-    const highlighted = snapshot.highlightedPlantIds.has(entry.plant.id)
-    const hoverState = hoverStateForTarget(snapshot, 'plant', entry.plant.id)
-    const glyphOpacity = speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName)
-    const { context, created } = plantGraphicsContexts.acquire(plantGeometryKey(entry, hovered, highlighted, hoverState, glyphOpacity))
+    const dimmed = speciesFocusOpacity(snapshot.speciesFocus, entry.plant.canonicalName) < 1
+    anyDimmed ||= dimmed
+    const target = dimmed ? layers.dimmed : layers.symbols
+    if (graphic.parent !== target) target.addChild(graphic)
+    const { context, created } = plantGraphicsContexts.acquire(plantGeometryKey(entry))
     graphic.context = context
     graphic.position.set(entry.screenPoint.x, entry.screenPoint.y)
-    if (created) drawPlantGeometry(context, entry, hovered, highlighted, hoverState, glyphOpacity)
+    if (created) drawPlantGlyph(context, entry)
     if (!visiblePlantIds.has(entry.plant.id)) graphic.visible = true
+
+    const interactionState = resolvePlantInteractionState(
+      entry,
+      snapshot.hoveredCanonicalName,
+      snapshot.highlightedPlantIds.has(entry.plant.id),
+      hoverStateForTarget(snapshot, 'plant', entry.plant.id),
+    )
+    if (interactionState) {
+      let ring = plantRingGraphicsById.get(entry.plant.id)
+      if (!ring) {
+        ring = new Graphics()
+        plantRingGraphicsById.set(entry.plant.id, ring)
+        layers.rings.addChild(ring)
+      }
+      drawPlantRing(ring, entry, interactionState)
+      ring.visible = true
+    }
 
     const stackCount = stackCounts.get(entry.plant.id)
     if (stackCount) {
@@ -757,6 +853,7 @@ function syncPlants(
     }
   } })
 
+  layers.setDimmed(anyDimmed)
   visiblePlantIds.clear()
   for (const plantId of nextVisiblePlantIds) visiblePlantIds.add(plantId)
 
@@ -766,6 +863,12 @@ function syncPlants(
     graphics.removeFromParent()
     destroySharedPlantGraphics(graphics)
     plantGraphicsById.delete(plantId)
+  }
+  for (const [plantId, ring] of plantRingGraphicsById) {
+    if (ring.visible) continue
+    ring.removeFromParent()
+    ring.destroy()
+    plantRingGraphicsById.delete(plantId)
   }
   for (const [plantId, badge] of plantBadgeGraphicsById) {
     if (nextIds.has(plantId)) continue
@@ -790,63 +893,41 @@ function destroySharedPlantGraphics(graphics: Graphics): void {
   graphics.destroy({ context: true })
 }
 
-function plantGeometryKey(
-  entry: PlantPresentationEntry,
-  hoveredCanonicalName: string | null,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-  glyphOpacity: number,
-): string {
-  const selected = entry.selected
-  const interactionState = resolvePlantInteractionState(entry, hoveredCanonicalName, highlighted, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
+function plantGeometryKey(entry: PlantPresentationEntry): string {
   const renderedSymbol = resolveRenderedPlantSymbol(entry)
   const edgeColor = getPlantSymbolEdgeColor(entry.color)
   const edgeWidth = getPlantSymbolEdgeWidth(entry.radiusScreenPx * 2)
-  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${glyphOpacity}|${selected ? 1 : 0}`
-    + `|${interactionState ?? ''}|${interactionVisual?.color ?? ''}|${interactionVisual?.widthPx ?? ''}`
-    + `|${interactionVisual?.alpha ?? ''}|${interactionVisual?.casingColor ?? ''}|${interactionVisual?.casingWidthPx ?? ''}`
-    + `|${edgeColor}|${edgeWidth}`
+  return `${entry.radiusScreenPx}|${renderedSymbol}|${entry.lod}|${entry.color}|${edgeColor}|${edgeWidth}`
 }
 
-function drawPlantGeometry(
-  graphics: GraphicsContext,
-  entry: PlantPresentationEntry,
-  hoveredCanonicalName: string | null,
-  highlighted: boolean,
-  hoverState: SceneRendererHoverState | null,
-  glyphOpacity: number,
-): void {
-  const selected = entry.selected
-  const interactionState = resolvePlantInteractionState(entry, hoveredCanonicalName, highlighted, hoverState)
-  const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
-  const x = 0
-  const y = 0
-  const r = entry.radiusScreenPx
-  const renderedSymbol = resolveRenderedPlantSymbol(entry)
-  drawPlantSymbolGlyph(graphics, renderedSymbol, { ...entry, screenPoint: { x, y } }, glyphOpacity)
+/** The symbol alone, opaque; its container applies any dimming or layer opacity once. */
+function drawPlantGlyph(graphics: GraphicsContext, entry: PlantPresentationEntry): void {
+  drawPlantSymbolGlyph(graphics, resolveRenderedPlantSymbol(entry), { ...entry, screenPoint: { x: 0, y: 0 } })
+}
 
-  if (interactionVisual) {
-    // Plants draw in the CSS-pixel layer, so ring widths need no camera scaling.
-    const ring = casedStroke(interactionVisual, 1)
-    const ringRadius = selected ? r : Math.max(r * 1.4, MIN_PLANT_RING_RADIUS_PX)
-    graphics.circle(x, y, ringRadius).stroke(ring.casing)
-    graphics.circle(x, y, ringRadius).stroke(ring.stroke)
-  }
+function drawPlantRing(ring: Graphics, entry: PlantPresentationEntry, state: CanvasInteractionVisualState): void {
+  // Plants draw in the CSS-pixel layer, so ring widths need no camera scaling.
+  const visual = casedStroke(getCanvasInteractionStrokeVisual(state), 1)
+  const r = entry.radiusScreenPx
+  const radius = entry.selected ? r : Math.max(r * 1.4, MIN_PLANT_RING_RADIUS_PX)
+  ring.clear()
+  ring.position.set(entry.screenPoint.x, entry.screenPoint.y)
+  ring.circle(0, 0, radius).stroke(visual.casing)
+  ring.circle(0, 0, radius).stroke(visual.stroke)
 }
 
 function resolveRenderedPlantSymbol(entry: PlantPresentationEntry): PlantSymbolId {
   return entry.lod === 'dot' || entry.usesCanopyRadius ? 'round' : entry.symbol
 }
 
-function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, entry: PlantPresentationEntry, opacity: number): void {
+function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, entry: PlantPresentationEntry): void {
   const { x, y } = entry.screenPoint
   const r = entry.radiusScreenPx
   const color = toPixiColor(entry.color, 0)
   if (entry.lod === 'dot' || symbol === 'round') {
-    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color, alpha: opacity })
+    graphics.circle(x, y, entry.lod === 'dot' ? r : r * ROUND_PLANT_SYMBOL_RADIUS).fill({ color })
     const width = getPlantSymbolEdgeWidth(r * 2)
-    if (entry.lod !== 'dot' && width > 0) graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width, alpha: opacity })
+    if (entry.lod !== 'dot' && width > 0) graphics.stroke({ color: toPixiColor(getPlantSymbolEdgeColor(entry.color), 0), width })
     return
   }
   const edge = toPixiColor(getPlantSymbolEdgeColor(entry.color), 0)
@@ -855,13 +936,13 @@ function drawPlantSymbolGlyph(graphics: GraphicsContext, symbol: PlantSymbolId, 
   // Halo under the whole silhouette (unless Outline is off), then the body, then cut-outs in the outline colour.
   if (width > 0) {
     tracePlantSymbolContours(graphics, art.body, x, y, r)
-    graphics.stroke({ color: edge, width, alpha: opacity, join: 'round', cap: 'round' })
+    graphics.stroke({ color: edge, width, join: 'round', cap: 'round' })
   }
   tracePlantSymbolContours(graphics, art.body, x, y, r)
-  graphics.fill({ color, alpha: opacity })
+  graphics.fill({ color })
   if (art.cutouts.length === 0) return
   tracePlantSymbolContours(graphics, art.cutouts, x, y, r)
-  graphics.fill({ color: edge, alpha: opacity })
+  graphics.fill({ color: edge })
 }
 
 function screenPxToWorldPx(px: number, viewportScale: number): number {
