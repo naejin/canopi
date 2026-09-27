@@ -14,7 +14,7 @@ import { mapLayers, type MapLayersState } from '../src/app/map-layers/state'
 import { savedObjectStampWorkbench } from '../src/app/saved-object-stamps'
 import type { CanopiFile } from '../src/types/design'
 import { createBrowserWorkspaceMapContributionAdapter } from '../src/web/browser-workspace-map-contribution-adapter'
-import { species } from './fixtures'
+import { frenchNames, species } from './fixtures'
 
 export interface GalleryWorkspaceRuntimeOptions extends WorkspaceRuntimeMountOptions {
   readonly design: CanopiFile
@@ -58,9 +58,12 @@ function readOfflineMapLayers(): MapLayersState {
 
 function createGalleryCanvasRuntimeAppAdapter(design: CanopiFile) {
   const names = new Map(design.plants.map(plant => [plant.canonical_name, plant.common_name]))
+  // The catalog has names in English, and in French for a few species; every other species shows its English name, marked.
+  const localized = (locale: string) => locale === 'en' ? names : new Map(locale === 'fr' ? Object.entries(frenchNames) : [])
+  const englishFallbacks = (locale: string) => new Map([...names].filter((entry): entry is [string, string] => entry[1] !== null && !localized(locale).has(entry[0])))
   return createAppCanvasRuntimeAppAdapter({
     presentationData: {
-      plantLabels: { getLocaleSnapshot: () => names, getEnglishFallbackSnapshot: () => new Map(), ensureEntries: async () => false },
+      plantLabels: { getLocaleSnapshot: localized, getEnglishFallbackSnapshot: englishFallbacks, ensureEntries: async () => false },
       speciesCache: {
         getCache: () => new Map(species.map(plant => [plant.canonical_name, { ...plant }])),
         ensureEntries: async () => false,
