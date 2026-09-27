@@ -39,7 +39,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 - **Relative arrangements.** Saved object stamps stay relative arrangements in metres. Design templates are current-format `.canopi` files and are placed relative to the view on insert.
 - **LiDAR** sampling and coverage fit use the session plane.
 - **View, not placement.** Pan, zoom, fit and place search move the camera only. Objects never move unless the user edits them (cut and paste relocates objects).
-- **New Design view.** A new Design opens at the app's last view (`last_view {lon, lat, zoom}` in settings); without one, at lat 23.0, lon 13.0, zoom 4 and asks "Where is your site?" before "Start your Design". Opening a Design fits the camera to its objects; an empty Design uses the last view.
+- **New Design view.** A new Design opens at an overview: centred on the app's last view (`last_view {lon, lat, zoom}` in settings) but zoomed out to at most country level (zoom 5); without one, at lat 23.0, lon 13.0, zoom 4. It asks "Where is your site?" (flying to the chosen place) before "Start your Design". Opening a Design fits the camera to its objects; an empty Design uses that overview.
 
 ## Map stack
 

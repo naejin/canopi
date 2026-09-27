@@ -172,8 +172,6 @@
 
   /* Canvas — the garden (separate from the tool chrome) */
   --canvas-bg: #EFE9DD;                                /* paper behind lens previews */
-  --canvas-grid: rgba(39, 35, 29, 0.07);
-  --canvas-grid-major: rgba(39, 35, 29, 0.14);
   --canvas-ruler-bg: #F3EEE3;
   --canvas-ruler-text: #645A4C;
   --canvas-selection: rgba(156, 90, 22, 0.14);         /* band selection fill */
@@ -184,10 +182,6 @@
   --canvas-locked-layer-stroke: rgba(168, 51, 42, 0.88);
   --canvas-guide-line: #FFF3D6;                        /* guides and drawing previews over the map */
   --canvas-overlay-casing: rgba(20, 16, 10, 0.6);      /* dark casing under light overlay strokes */
-  --canvas-stack-badge-bg: #27231D;
-  --canvas-stack-badge-text: #FBF3E4;
-  --canvas-plant-label: #27231D;
-  --canvas-annotation-text: #27231D;
   --canvas-zone-stroke: #FFF3D6;
   --canvas-zone-fill: rgba(255, 243, 214, 0.1);
 }
@@ -259,8 +253,6 @@
   --color-close-active: #E07466;
 
   --canvas-bg: #161510;
-  --canvas-grid: rgba(239, 232, 218, 0.06);
-  --canvas-grid-major: rgba(239, 232, 218, 0.12);
   --canvas-ruler-bg: #2A2721;
   --canvas-ruler-text: #B5AC9D;
   --canvas-selection: rgba(227, 160, 76, 0.2);
@@ -271,10 +263,6 @@
   --canvas-locked-layer-stroke: rgba(240, 138, 124, 0.9);
   --canvas-guide-line: #FFF3D6;
   --canvas-overlay-casing: rgba(20, 16, 10, 0.6);
-  --canvas-stack-badge-bg: #EFE8DA;
-  --canvas-stack-badge-text: #1D1A14;
-  --canvas-plant-label: #EFE8DA;
-  --canvas-annotation-text: #EFE8DA;
   --canvas-zone-stroke: #FFF3D6;
   --canvas-zone-fill: rgba(255, 243, 214, 0.08);
 

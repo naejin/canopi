@@ -108,7 +108,7 @@ export interface CanvasRuntimeSettingsAdapter {
   readSnapToGridEnabled(): boolean
   readSnapToGuidesEnabled(): boolean
   readPlantSpacingIntervalMeters(): number
-  /** Where a new or empty Design opens: the app's last view, if any. */
+  /** Where a new or empty Design opens: an overview of the app's last view (zoom capped by the app), if any. */
   readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
   commitPlantSpacingIntervalMeters(meters: number): void
   toggleGridVisible(): void

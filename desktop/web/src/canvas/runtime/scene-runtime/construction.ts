@@ -129,7 +129,7 @@ export function createSceneRuntimeConstruction(
     const view = readEmptyDesignView()
     return { lon: view.lon, lat: view.lat }
   })
-  // Fitting an empty Design shows the last view: its centre is the plane origin.
+  // Fitting an empty Design shows the new-Design overview: its centre is the plane origin.
   const readEmptySceneScale = () => mapZoomToStageScale(
     readEmptyDesignView().zoom,
     sceneStore.sessionPlane.origin.lat,
