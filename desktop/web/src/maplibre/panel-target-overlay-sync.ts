@@ -53,7 +53,9 @@ export function syncPanelTargetMapOverlay(
   if (existingSource) {
     existingSource.setData(overlay.source.data)
   } else {
-    map.addSource(overlay.source.id, overlay.source as unknown as Record<string, unknown>)
+    // The id names the source; MapLibre rejects it inside the specification.
+    const { id, ...specification } = overlay.source
+    map.addSource(id, specification as unknown as Record<string, unknown>)
   }
 
   for (const layer of overlay.layers) {
