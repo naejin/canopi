@@ -12,7 +12,6 @@ import { createUuid } from '../../../utils/ids'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import {
   getPlantWorldBounds,
-  resolvePlantBaseColor,
   resolvePlantDisplayColor,
   type PlantPresentationContext,
 } from '../plant-presentation'
@@ -390,7 +389,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   function sourceGlyph(plant: ScenePlantEntity): { symbol: PlantSymbolId; color: string } {
     return {
       symbol: resolvePlantSymbolForPlant(plant, context.getSceneStore().persisted.plantSpeciesSymbols),
-      color: resolvePlantBaseColor(plant, context.getSpeciesCache()),
+      color: resolvePlantDisplayColor(plant, context.getSpeciesCache()),
     }
   }
 

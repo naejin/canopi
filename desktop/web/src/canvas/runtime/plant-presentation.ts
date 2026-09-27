@@ -14,6 +14,7 @@ import {
 } from './scene'
 import type { SpeciesCacheEntry } from './species-cache'
 import { nearestPlantSpacing } from '../plant-spacing'
+import { getCanvasPlantDisplay, resolveDisplayedPlantColor, type PlantDisplay } from './plant-display'
 
 export const STACK_BADGE_RADIUS_PX = 7
 export const STACK_BADGE_GAP_PX = 2
@@ -90,6 +91,7 @@ export function buildPlantPresentationEntries(
     const radiusWorld = radiusPresentation.radiusWorld
     const radiusScreenPx = radiusPresentation.radiusScreenPx
     const baseColor = resolvePlantBaseColor(plant, context.speciesCache)
+    const color = resolveDisplayedPlantColor(baseColor, plant.canonicalName, getCanvasPlantDisplay())
     const symbol = resolvePlantSymbolForPlant(plant, context.plantSpeciesSymbols ?? {})
     const selected = selectedPlantIds.has(plant.id)
     const screenPoint = worldToScreen(plant.position, context.viewport)
@@ -98,7 +100,7 @@ export function buildPlantPresentationEntries(
       plant,
       radiusWorld,
       radiusScreenPx,
-      color: baseColor,
+      color,
       baseColor,
       symbol,
       usesCanopyRadius: radiusPresentation.usesCanopyRadius,
@@ -201,11 +203,13 @@ export function resolvePlantCanopySpreadM(
     : null
 }
 
+/** The colour the plant is drawn with under the current plant display; its stored colour never changes. */
 export function resolvePlantDisplayColor(
   plant: ScenePlantEntity,
   speciesCache: ReadonlyMap<string, SpeciesCacheEntry>,
+  display: PlantDisplay = getCanvasPlantDisplay(),
 ): string {
-  return resolvePlantBaseColor(plant, speciesCache)
+  return resolveDisplayedPlantColor(resolvePlantBaseColor(plant, speciesCache), plant.canonicalName, display)
 }
 
 export function resolveStackBadgeDecisions(

@@ -18,6 +18,7 @@ import { speciesPlacementAppearance } from '../../canvas/runtime/species-key'
 import { speciesTarget } from '../../target'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import row from '../shared/species-row.module.css'
+import { displayedPlantColor } from '../../app/plant-display/state'
 import styles from './ToolCard.module.css'
 
 type SectionId = 'design' | 'favorites' | 'recent'
@@ -138,7 +139,8 @@ function OptionList({ entries, onChoose }: {
         const common = entry.shownName
         const canonical = entry.source.canonical_name
         const marks = (text: string) => hit?.marks.find((mark) => mark.text === text)?.ranges ?? []
-        const appearance = speciesPlacementAppearance(scene, { canonicalName: canonical, stratum: entry.source.stratum })
+        const placement = speciesPlacementAppearance(scene, { canonicalName: canonical, stratum: entry.source.stratum })
+        const appearance = { ...placement, color: displayedPlantColor(placement.color, canonical) }
         return (
           <li key={canonical}>
             <button

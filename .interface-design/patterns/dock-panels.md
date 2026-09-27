@@ -17,7 +17,7 @@ Every panel that lists plants starts with the finder (see the design system): se
 
 ## Plants in this Design
 
-Title with a muted "N plants · N species" subtitle, then a collapsible "Display on the map" section (Color by Species / Stratum / One color, Symbol size, Outline Light / Dark / None, Labels None / Codes / Names, Soften background), then species rows with a colour swatch first. A swatch recolours the whole species (or stratum, or all plants). Activating a row highlights that species on the map with a top chip: "Framboisier · 142 plants highlighted · Select these plants · Clear". "In the catalog, not in this Design" lists close matches with Open in catalog.
+Title with a muted "N plants · N species" subtitle, then a collapsible "Display on the map" section: Color by (Species / Stratum / One color segments; One color adds a colour swatch, Stratum a legend of the four stratum colours and "No stratum yet"), Symbol size, Outline, Labels (None / Codes / Names segments with a status line "Codes shown for 70 of 282 plants in view"), Soften background, then a one-line hint for the colour mode. Then species rows with a colour swatch first while colouring by species; the glyph always shows the colour the map draws. A swatch recolours the whole species. The options are saved with the Design. Activating a row highlights that species on the map with a top chip: "Framboisier · 142 plants highlighted · Select these plants · Clear". "In the catalog, not in this Design" lists close matches with Open in catalog.
 
 ## Layers, data and analysis
 

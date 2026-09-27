@@ -1,5 +1,5 @@
 import type { CanvasPrintSnapshot, PrintMarkPath, PrintZone } from '../print'
-import { resolvePlantBaseColor, type PlantPresentationContext } from './plant-presentation'
+import { resolvePlantDisplayColor, type PlantPresentationContext } from './plant-presentation'
 import { resolvePlantSymbolForPlant, type ScenePersistedState } from './scene'
 import { getPlantSymbolArt, plantSymbolPath, type PlantSymbolArt } from './plant-symbol-recipes'
 import { getRectangularZoneCorners, getZoneWorldBounds } from './zone-geometry'
@@ -13,7 +13,8 @@ export function buildCanvasPrintSnapshot(
     plants: scene.plants.map((plant) => {
       const symbol = resolvePlantSymbolForPlant(plant, scene.plantSpeciesSymbols)
       return { id: plant.id, canonicalName: plant.canonicalName, speciesCode: scene.plantSpeciesCodes[plant.canonicalName], position: { ...plant.position },
-        color: resolvePlantBaseColor(plant, context.speciesCache), symbol,
+        // Print carries the colour mode, never the stored colour it would override.
+        color: resolvePlantDisplayColor(plant, context.speciesCache), symbol,
         mark: markPaths(getPlantSymbolArt(symbol, 24)),
         smallMark: markPaths(getPlantSymbolArt(symbol, 12)), pinnedName: plant.pinnedName === true }
     }),

@@ -31,10 +31,16 @@ import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
 import { PlantFinder, finderHighlight, finderSummary } from '../shared/PlantFinder'
 import { SegmentedControl } from '../shared/SegmentedControl'
-import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
-import { setPlantLabels } from '../../app/plant-display/actions'
+import {
+  NO_STRATUM_DISPLAY_COLOR,
+  PLANT_DISPLAY_STRATA,
+  STRATUM_DISPLAY_COLORS,
+  type PlantColorMode,
+  type PlantLabelMode,
+} from '../../canvas/runtime/plant-display'
+import { setPlantDisplayOptions, setPlantLabels } from '../../app/plant-display/actions'
 import { plantLabelCoverageText } from '../../app/plant-display/coverage'
-import { currentPlantDisplay } from '../../app/plant-display/state'
+import { currentPlantDisplay, displayedPlantColor } from '../../app/plant-display/state'
 import { currentDesign } from '../../app/document-session/store'
 import { SpeciesIdentity } from '../shared/SpeciesIdentity'
 import row from '../shared/species-row.module.css'
@@ -181,6 +187,9 @@ function DisplayOnMap() {
   const bodyId = useId()
   const display = currentPlantDisplay.value
   const hasDesign = currentDesign.value !== null
+  const hint = display.colorBy === 'stratum'
+    ? t('speciesKey.stratumHint')
+    : display.colorBy === 'one-color' ? t('speciesKey.oneColorHint') : t('speciesKey.swatchHint')
   return (
     <section className={styles.display}>
       <button
@@ -196,6 +205,32 @@ function DisplayOnMap() {
       {open && (
         <div id={bodyId} className={styles.displayBody}>
           <div className={styles.field}>
+            <span className={styles.fieldLabel}>{t('speciesKey.colorBy')}</span>
+            <SegmentedControl<PlantColorMode>
+              label={t('speciesKey.colorBy')}
+              options={[
+                { value: 'species', label: t('speciesKey.colorBySpecies'), disabled: !hasDesign },
+                { value: 'stratum', label: t('speciesKey.colorByStratum'), disabled: !hasDesign },
+                { value: 'one-color', label: t('speciesKey.colorByOneColor'), disabled: !hasDesign },
+              ]}
+              value={display.colorBy}
+              onChange={(colorBy) => setPlantDisplayOptions({ colorBy })}
+            />
+          </div>
+          {display.colorBy === 'one-color' && (
+            <label className={styles.inlineField}>
+              <span>{t('speciesKey.oneColor')}</span>
+              <input
+                type="color"
+                className={styles.swatch}
+                value={display.oneColor.toLowerCase()}
+                aria-label={t('speciesKey.oneColorLabel')}
+                onChange={(event) => setPlantDisplayOptions({ oneColor: event.currentTarget.value })}
+              />
+            </label>
+          )}
+          {display.colorBy === 'stratum' && <StratumLegend />}
+          <div className={styles.field}>
             <span className={styles.fieldLabel}>{t('speciesKey.labels')}</span>
             <SegmentedControl<PlantLabelMode>
               label={t('speciesKey.labels')}
@@ -209,10 +244,32 @@ function DisplayOnMap() {
             />
             <PlantLabelCoverageLine />
           </div>
-          <p className={styles.hint}>{t('speciesKey.swatchHint')}</p>
+          <p className={styles.hint}>{hint}</p>
         </div>
       )}
     </section>
+  )
+}
+
+/** The stratum colours, so Colour by stratum reads without the Consortium panel. */
+function StratumLegend() {
+  const entries = [
+    ...PLANT_DISPLAY_STRATA.map((stratum) => ({
+      key: stratum,
+      color: STRATUM_DISPLAY_COLORS[stratum],
+      label: t(`filters.stratum_${stratum}`),
+    })),
+    { key: 'none', color: NO_STRATUM_DISPLAY_COLOR, label: t('speciesKey.noStratumYet') },
+  ]
+  return (
+    <ul className={styles.legend} aria-label={t('speciesKey.stratumLegend')}>
+      {entries.map((entry) => (
+        <li key={entry.key} className={styles.legendEntry}>
+          <span className={styles.legendSwatch} style={{ background: entry.color }} aria-hidden="true" />
+          {entry.label}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -231,10 +288,12 @@ function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {
 }) {
   const name = entry.commonName || entry.canonicalName
   const color = entry.appearances[0]?.color
+  // The swatch sets the stored species colour, so it shows only while the map colours by species.
+  const bySpecies = currentPlantDisplay.value.colorBy === 'species'
   return (
     <li className={row.row} data-selected={focused}>
       {/* While searching, Select takes the swatch's room (FindPlants board). */}
-      {!result.active && color && /^#[0-9a-f]{6}$/i.test(color) && (
+      {bySpecies && !result.active && color && /^#[0-9a-f]{6}$/i.test(color) && (
         <input
           type="color"
           className={styles.swatch}
@@ -254,7 +313,7 @@ function SpeciesRow({ entry, result, focused, detail, onOpenDetail }: {
         <span className={row.srOnly}>{t('speciesKey.highlight')} </span>
         <span className={row.glyph} aria-hidden="true">
           {entry.appearances.slice(0, 1).map((appearance) => (
-            <span key={appearance.color + appearance.symbol} style={{ color: appearance.color }}>
+            <span key={appearance.color + appearance.symbol} style={{ color: displayedPlantColor(appearance.color, entry.canonicalName) }}>
               <PlantSymbolGlyph symbol={appearance.symbol} size={22} />
             </span>
           ))}

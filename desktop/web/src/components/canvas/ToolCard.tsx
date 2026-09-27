@@ -20,6 +20,7 @@ import { t } from '../../i18n'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import { SpeciesChooser } from './SpeciesChooser'
 import { ToolIcon } from './toolbar-icons'
+import { displayedPlantColor } from '../../app/plant-display/state'
 import styles from './ToolCard.module.css'
 
 /**
@@ -124,7 +125,7 @@ function cardLead(tool: string, source: PlantStampSource | null, guidance: Canva
       scene ?? { plantSpeciesSymbols: {}, plantSpeciesColors: {} },
       { canonicalName: source.canonical_name, stratum: source.stratum },
     )
-    return { kind: 'species', ...appearance }
+    return { kind: 'species', ...appearance, color: displayedPlantColor(appearance.color, source.canonical_name) }
   }
   if (tool === 'plant-spacing' && guidance.plantRow?.glyph) return { kind: 'species', ...guidance.plantRow.glyph }
   if ((tool === 'object-stamp' && guidance.stamp) || tool === 'saved-object-stamp') return { kind: 'stamp' }

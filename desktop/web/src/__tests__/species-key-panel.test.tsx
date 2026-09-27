@@ -29,6 +29,7 @@ import { designSessionFixture, replaceCurrentDesignState } from './support/desig
 import { currentDesign } from '../app/document-session/store'
 import { setPlantLabels } from '../app/plant-display/actions'
 import { PLANT_LABELS_CHIP_MS, PlantLabelsChip } from '../components/canvas/PlantLabelsChip'
+import { NO_STRATUM_DISPLAY_COLOR, STRATUM_DISPLAY_COLORS } from '../canvas/runtime/plant-display'
 
 const plants = [
   { id: 'apple-1', canonicalName: 'Malus domestica', commonName: 'Pommier cultivé', x: 0 },
@@ -318,6 +319,42 @@ describe('Plants in this Design', () => {
     return container.querySelector('p[role="status"]')?.textContent ?? ''
   }
 
+  it('colours plants by the Design stratum or one colour without touching stored colours', async () => {
+    replaceCurrentDesignState(emptyDesign({
+      consortiums: [
+        { target: { kind: 'species', canonical_name: 'Malus domestica' }, stratum: 'high', start_phase: 0, end_phase: 2 },
+        { target: { kind: 'species', canonical_name: 'Mentha spicata' }, stratum: 'unassigned', start_phase: 0, end_phase: 2 },
+      ],
+    }), null, 'Display')
+    readPlanningViewState().plantsDisplayOpen.value = true
+    await act(() => render(<SpeciesKeyPanel />, container))
+    const colorBy = container.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Color by"]')!
+    expect(container.querySelector('input[aria-label="Color of Menthe verte"]')).not.toBeNull()
+
+    await act(() => radioNamed(colorBy, 'Stratum').click())
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ color_by: 'stratum' })
+    const legend = container.querySelector<HTMLElement>('[aria-label="Stratum colors"]')!
+    expect(legend.textContent).toContain('Emergent')
+    expect(legend.textContent).toContain('No stratum yet')
+    // A row swatch sets the stored species colour, so it hides while colours follow strata.
+    expect(container.querySelector('input[aria-label="Color of Menthe verte"]')).toBeNull()
+    expect(glyphColor('Pommier cultivé')).toBe(rgb(STRATUM_DISPLAY_COLORS.high))
+    expect(glyphColor('Menthe verte')).toBe(rgb(NO_STRATUM_DISPLAY_COLOR))
+    expect(glyphColor('Pommier sauvage')).toBe(rgb(NO_STRATUM_DISPLAY_COLOR))
+    expect(container.textContent).toContain('Consortium')
+
+    await act(() => radioNamed(colorBy, 'One color').click())
+    const one = container.querySelector<HTMLInputElement>('input[aria-label="Color for every plant"]')!
+    await act(() => {
+      one.value = '#aa3355'
+      one.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(currentDesign.value?.extra?.plant_display).toMatchObject({ color_by: 'one_color', one_color: '#AA3355' })
+    expect(glyphColor('Menthe verte')).toBe(rgb('#AA3355'))
+    expect(setPlantColorForSpecies).not.toHaveBeenCalled()
+    expect(queries.getSceneSnapshot().plants.every((plant) => plant.color === '#3e8e4e')).toBe(true)
+  })
+
   it('says how many plants in view carry a label', async () => {
     replaceCurrentDesignState(emptyDesign(), null, 'Display')
     readPlanningViewState().plantsDisplayOpen.value = true
@@ -351,10 +388,20 @@ describe('Plants in this Design', () => {
   function buttonNamed(name: string): HTMLButtonElement {
     return [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === name)!
   }
+
+  function glyphColor(name: string): string {
+    const row = [...container.querySelectorAll('li')].find((item) => item.textContent?.includes(name))!
+    return row.querySelector<HTMLElement>('[aria-hidden="true"] > span')!.style.color
+  }
 })
 
 function radioNamed(group: HTMLElement, name: string): HTMLButtonElement {
   return [...group.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((radio) => radio.textContent === name)!
+}
+
+function rgb(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16))
+  return `rgb(${r}, ${g}, ${b})`
 }
 
 function emptyDesign(overrides: Partial<CanopiFile> = {}): CanopiFile {

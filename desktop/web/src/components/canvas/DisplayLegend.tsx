@@ -1,6 +1,7 @@
 import { buildPinnedPlantNameLegendEntries } from '../../canvas/pinned-plant-name-legend'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { t } from '../../i18n'
+import { currentPlantDisplay } from '../../app/plant-display/state'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
 import styles from './DisplayLegend.module.css'
 
@@ -11,7 +12,7 @@ export function DisplayLegend() {
 
   if (!querySurface) return null
 
-  const pinnedEntries = buildPinnedPlantNameLegendEntries(querySurface)
+  const pinnedEntries = buildPinnedPlantNameLegendEntries(querySurface, currentPlantDisplay.value)
   if (pinnedEntries.length === 0) return null
 
   return (

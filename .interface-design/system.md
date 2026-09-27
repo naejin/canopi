@@ -44,7 +44,7 @@ Code ownership and frontend rules: [frontend guide](../docs/guides/frontend.md).
 
 ## Plants
 
-- Symbols: 29 single-colour glyphs from the shared recipes (`canvas/runtime/plant-symbol-recipes.ts`), in three families: plant form, what it gives, what it does, plus four abstract marks. The picker shows them by family, five to a row; review them in the UI gallery (`?surface=symbols`, and `?surface=workspace&state=planting` for a dense planting). Detail is cut out and takes the outline colour. Colour by species (default), stratum or one colour; any species can take any colour.
+- Symbols: 29 single-colour glyphs from the shared recipes (`canvas/runtime/plant-symbol-recipes.ts`), in three families: plant form, what it gives, what it does, plus four abstract marks. The picker shows them by family, five to a row; review them in the UI gallery (`?surface=symbols`, and `?surface=workspace&state=planting` for a dense planting). Detail is cut out and takes the outline colour. Colour by species (default), stratum or one colour; any species can take any colour. Stratum colours are Okabe-Ito hues told apart with colour-vision deficiencies (Emergent blue, High bluish green, Mid orange, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour.
 - One species row: glyph 22 · common name (600) over italic scientific name (`lang="la"`) · mono code (44 px, right-aligned) · count (40 px, tabular) · actions. Common name alone when there is no scientific name; never a code instead of a name.
 - Strata are Emergent, High, Mid, Low; plant forms are a separate vocabulary.
 
