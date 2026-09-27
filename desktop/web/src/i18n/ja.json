@@ -1680,7 +1680,12 @@
     "zoneCount_few": "{{count, number}} ゾーン",
     "zoneCount_many": "{{count, number}} ゾーン",
     "zoneCount_other": "{{count, number}} ゾーン",
-    "cantRead": "このファイルを読み込めません"
+    "cantRead": "このファイルを読み込めません",
+    "inFolder": "{{folder}} 内",
+    "cantReadMissing": "ファイルが見つかりません：移動または削除されました",
+    "cantReadOlderVersion": "古いバージョンの Canopi で作成されたため開けません",
+    "cantReadNewerVersion": "新しいバージョンの Canopi で作成されました。開くには Canopi を更新してください",
+    "cantReadDamaged": "ファイルを読み込めません：破損しています"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

@@ -46,6 +46,7 @@ export function WelcomeScreen() {
       recent={recentFilesController.recentFiles.value.map((file) => ({
         id: file.path,
         name: file.name,
+        path: file.path,
         updatedAt: file.updated_at,
         preview: recentFilesController.previews.value.get(file.path),
         open: () => { void openDesignFromPath(file.path).catch(logWelcomeError) },

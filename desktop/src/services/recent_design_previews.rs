@@ -12,7 +12,10 @@ use std::{
     time::SystemTime,
 };
 
-use common_types::design::{RecentDesignPreview, RecentDesignSummary};
+use common_types::design::{
+    CURRENT_CANOPI_FILE_VERSION, RecentDesignPreview, RecentDesignSummary,
+    RecentDesignUnreadableReason,
+};
 
 use crate::design::format::{self, DesignLoadError};
 
@@ -56,7 +59,8 @@ impl RecentDesignPreviews {
                 modified: metadata.modified().ok(),
                 len: metadata.len(),
             },
-            _ => return RecentDesignPreview::Unreadable,
+            Ok(_) => return unreadable(RecentDesignUnreadableReason::Unknown),
+            Err(error) => return unreadable(io_reason(&error)),
         };
         if let Some(cached) = self.cached(path, stamp) {
             return cached;
@@ -104,14 +108,40 @@ fn read_preview(path: &Path, len: u64) -> (RecentDesignPreview, bool) {
     match format::load_within(path, RECENT_PREVIEW_MAX_BYTES) {
         Ok(file) => (crate::design::preview::preview_of(&file), true),
         Err(DesignLoadError::TooLarge { .. }) => (RecentDesignPreview::TooLarge, true),
-        Err(DesignLoadError::Read { .. }) => {
+        Err(DesignLoadError::Read { source, .. }) => {
             tracing::warn!("A Recent Design could not be read for its preview");
-            (RecentDesignPreview::Unreadable, false)
+            (unreadable(io_reason(&source)), false)
         }
-        Err(DesignLoadError::InvalidJson { .. } | DesignLoadError::Ingestion { .. }) => {
-            tracing::info!("A Recent Design is not a current Design file; no preview");
-            (RecentDesignPreview::Unreadable, true)
+        Err(DesignLoadError::InvalidJson { .. }) => {
+            tracing::info!("A Recent Design is not a Design file; no preview");
+            (unreadable(RecentDesignUnreadableReason::Damaged), true)
         }
+        Err(DesignLoadError::Ingestion { source, .. }) => {
+            let reason = match source.found_unsupported_version() {
+                Some(version) if version < u64::from(CURRENT_CANOPI_FILE_VERSION) => {
+                    RecentDesignUnreadableReason::OlderVersion
+                }
+                Some(_) => RecentDesignUnreadableReason::NewerVersion,
+                None => RecentDesignUnreadableReason::Damaged,
+            };
+            tracing::info!(
+                ?reason,
+                "A Recent Design is not a current Design file; no preview"
+            );
+            (unreadable(reason), true)
+        }
+    }
+}
+
+fn unreadable(reason: RecentDesignUnreadableReason) -> RecentDesignPreview {
+    RecentDesignPreview::Unreadable { reason }
+}
+
+fn io_reason(error: &std::io::Error) -> RecentDesignUnreadableReason {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        RecentDesignUnreadableReason::Missing
+    } else {
+        RecentDesignUnreadableReason::Unknown
     }
 }
 
@@ -182,27 +212,61 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_moved_and_other_version_files_have_no_preview() {
+    fn unreadable_files_say_why_without_logging_their_paths() {
         let root = scratch("unreadable");
         let garbage = root.join("garbage.canopi");
         std::fs::write(&garbage, "not json").unwrap();
+        let invalid = root.join("invalid.canopi");
+        std::fs::write(
+            &invalid,
+            format!(r#"{{"version": {CURRENT_CANOPI_FILE_VERSION}, "plants": 3}}"#),
+        )
+        .unwrap();
         let old = root.join("old.canopi");
         std::fs::write(&old, r#"{"version": 8, "name": "Old"}"#).unwrap();
+        let unversioned = root.join("unversioned.canopi");
+        std::fs::write(&unversioned, r#"{"name": "Canopi 1"}"#).unwrap();
+        let newer = root.join("newer.canopi");
+        std::fs::write(
+            &newer,
+            format!(
+                r#"{{"version": {}, "name": "Next"}}"#,
+                CURRENT_CANOPI_FILE_VERSION + 1
+            ),
+        )
+        .unwrap();
         let moved = root.join("moved.canopi");
         let previews = RecentDesignPreviews::default();
+        let paths = [
+            &garbage,
+            &invalid,
+            &old,
+            &unversioned,
+            &newer,
+            &moved,
+            &root,
+        ]
+        .map(|path| path.to_string_lossy().into_owned());
 
-        let (result, logs) = crate::services::design_files::capture_logs(|| {
-            previews.previews(&[
-                garbage.to_string_lossy().into_owned(),
-                old.to_string_lossy().into_owned(),
-                moved.to_string_lossy().into_owned(),
-                root.to_string_lossy().into_owned(),
-            ])
-        });
-        assert!(
-            result
-                .iter()
-                .all(|summary| summary.preview == RecentDesignPreview::Unreadable)
+        let (result, logs) =
+            crate::services::design_files::capture_logs(|| previews.previews(&paths));
+        let reasons: Vec<_> = result
+            .iter()
+            .map(|summary| summary.preview.clone())
+            .collect();
+        use RecentDesignUnreadableReason::*;
+        assert_eq!(
+            reasons,
+            [
+                Damaged,
+                Damaged,
+                OlderVersion,
+                OlderVersion,
+                NewerVersion,
+                Missing,
+                Unknown
+            ]
+            .map(unreadable)
         );
         assert!(!logs.contains(&*root.to_string_lossy()), "{logs}");
 

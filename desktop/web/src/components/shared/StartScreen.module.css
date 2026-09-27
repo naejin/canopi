@@ -283,6 +283,13 @@
   white-space: nowrap;
 }
 
+/* The file name or folder that tells a row from another with the same name; a long path wraps. */
+.rowPlace {
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
 .rowMeta,
 .rowDate {
   color: var(--color-text-muted);

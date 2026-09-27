@@ -760,8 +760,26 @@ pub enum RecentDesignPreview {
     },
     /// The file is larger than previews read; the row shows its name only.
     TooLarge,
-    /// The file is gone, unreadable, or not a current-version Design.
-    Unreadable,
+    /// The file cannot be opened, and why when that is known.
+    Unreadable {
+        reason: RecentDesignUnreadableReason,
+    },
+}
+
+/// Why a Recent Design's file cannot be opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum RecentDesignUnreadableReason {
+    /// Nothing is at the path any more: the file was moved, renamed or deleted.
+    Missing,
+    /// A Design from an older file version, which this build does not open.
+    OlderVersion,
+    /// A Design from a newer file version than this build knows.
+    NewerVersion,
+    /// The file is not a valid Design (not JSON, or not a valid document).
+    Damaged,
+    /// The file exists but could not be read (permissions, a folder, an I/O error).
+    Unknown,
 }
 
 /// A Recent Design's preview, keyed by its path on the list.

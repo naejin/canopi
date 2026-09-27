@@ -1680,7 +1680,12 @@
     "zoneCount_few": "{{count, number}} зоны",
     "zoneCount_many": "{{count, number}} зон",
     "zoneCount_other": "{{count, number}} зоны",
-    "cantRead": "Не удаётся прочитать этот файл"
+    "cantRead": "Не удаётся прочитать этот файл",
+    "inFolder": "В папке {{folder}}",
+    "cantReadMissing": "Файл не найден: он перемещён или удалён",
+    "cantReadOlderVersion": "Создан в более старой версии Canopi; открыть нельзя",
+    "cantReadNewerVersion": "Создан в более новой версии Canopi; обновите Canopi, чтобы открыть",
+    "cantReadDamaged": "Не удаётся прочитать файл: он повреждён"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

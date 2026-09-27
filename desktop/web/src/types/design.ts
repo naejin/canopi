@@ -12,6 +12,7 @@ export type TimelineAction = Contracts.TimelineAction
 export type BudgetItem = Contracts.BudgetItem
 export type DesignSummary = Contracts.DesignSummary
 export type RecentDesignPreview = Contracts.RecentDesignPreview
+export type RecentDesignUnreadableReason = Contracts.RecentDesignUnreadableReason
 export type RecentDesignSummary = Contracts.RecentDesignSummary
 export type DesignSketch = Contracts.DesignSketch
 export type DesignNotebookEntry = Contracts.DesignNotebookEntry

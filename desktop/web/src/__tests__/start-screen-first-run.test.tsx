@@ -120,7 +120,7 @@ describe('Desktop recent Designs', () => {
           sketch: { width: 1000, height: 500, plants: [0, 500, 1000, 0], zones: [{ closed: true, points: [0, 0, 10, 0, 10, 10] }] },
         },
       },
-      { path: '/d/old.canopi', preview: { kind: 'unreadable' } },
+      { path: '/d/old.canopi', preview: { kind: 'unreadable', reason: 'unknown' } },
       { path: '/d/huge.canopi', preview: { kind: 'too_large' } },
     ]
     await act(async () => { render(<WelcomeScreen />, container) })
@@ -133,6 +133,40 @@ describe('Desktop recent Designs', () => {
     expect(rowOf('Old garden').textContent).toContain('Can’t read this file')
     expect(rowOf('Old garden').querySelector('[data-design-sketch]')).toBeNull()
     expect(rowOf('Huge estate').textContent).not.toMatch(/plant|read/i)
+  })
+
+  it('says why a file cannot be opened when that is known', async () => {
+    const reasons = ['missing', 'older_version', 'newer_version', 'damaged'] as const
+    recentDesigns.files = reasons.map((reason) => ({ path: `/d/${reason}.canopi`, name: `Garden ${reason}`, updated_at: new Date().toISOString() }))
+    recentDesigns.previews = async (paths) => paths.map((path, index) => ({ path, preview: { kind: 'unreadable', reason: reasons[index]! } }))
+    await act(async () => { render(<WelcomeScreen />, container) })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const rowOf = (name: string) => Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(name))!
+    expect(rowOf('Garden missing').textContent).toContain('moved or deleted')
+    expect(rowOf('Garden older_version').textContent).toContain('older version of Canopi')
+    expect(rowOf('Garden newer_version').textContent).toContain('newer version of Canopi')
+    expect(rowOf('Garden damaged').textContent).toContain('damaged')
+  })
+
+  it('tells rows with the same Design name apart by file name, or by folder when that is the same too', async () => {
+    recentDesigns.files = [
+      { path: '/home/ana/Designs/orchard.canopi', name: 'Orchard', updated_at: new Date().toISOString() },
+      { path: '/home/ana/Designs/orchard-copy.canopi', name: 'Orchard', updated_at: new Date().toISOString() },
+      { path: 'C:\\Users\\ana\\2025\\hedge.canopi', name: 'Hedge', updated_at: new Date().toISOString() },
+      { path: 'C:\\Users\\ana\\2026\\hedge.canopi', name: ' hedge ', updated_at: new Date().toISOString() },
+      { path: '/home/ana/Designs/pond.canopi', name: 'Pond', updated_at: new Date().toISOString() },
+    ]
+    await act(async () => { render(<WelcomeScreen />, container) })
+    await act(async () => { await Promise.resolve() })
+
+    const rows = Array.from(container.querySelectorAll('li button:first-child')).map((button) => button.textContent ?? '')
+    expect(rows[0]).toContain('orchard.canopi')
+    expect(rows[1]).toContain('orchard-copy.canopi')
+    expect(rows[2]).toContain('In 2025')
+    expect(rows[3]).toContain('In 2026')
+    // A name no other row has needs nothing more.
+    expect(rows[4]).not.toMatch(/pond\.canopi|In /)
   })
 })
 

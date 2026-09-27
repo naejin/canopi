@@ -2,7 +2,8 @@ import { useId, useState } from 'preact/hooks'
 import { locale } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { ActionMenu } from './ActionMenu'
-import type { RecentDesignPreview } from '../../types/design'
+import { recentDesignLocations, type RecentDesignLocation } from '../../app/recent-files/locations'
+import type { RecentDesignPreview, RecentDesignUnreadableReason } from '../../types/design'
 import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { DesignSketchThumbnail } from './DesignSketchThumbnail'
 import { visibleDesignName } from './DesignNameField'
@@ -23,6 +24,8 @@ export interface StartScreenLink extends StartScreenAction {
 export interface StartScreenDesign {
   readonly id: string
   readonly name: string
+  /** The file's path, shown in part only when another row has the same name. */
+  readonly path?: string
   readonly updatedAt: string
   /** What the file says about the Design; absent until it has been read. */
   readonly preview?: RecentDesignPreview
@@ -65,6 +68,9 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
   const needle = fold(query.trim())
   const matches = (name: string) => !needle || fold(visibleDesignName(name)).includes(needle)
   const visibleRecent = recent?.filter((design) => matches(design.name)) ?? null
+  // Namesakes are found across the whole list, so a row keeps its label while searching.
+  const recentLocations = recentDesignLocations((recent ?? []).map((design) => ({ name: visibleDesignName(design.name), path: design.path })))
+  const locationById = new Map((recent ?? []).map((design, index) => [design.id, recentLocations[index] ?? null]))
   const visibleDrafts = drafts.filter((draft) => matches(draft.name))
   const nothingMatches = needle !== '' && (visibleRecent?.length ?? 0) === 0 && visibleDrafts.length === 0
   const nothingSaved = (recent?.length ?? 0) === 0 && drafts.length === 0
@@ -142,7 +148,7 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
             <section className={styles.section} aria-labelledby={`${searchId}-recent`}>
               <h2 className={styles.sectionTitle} id={`${searchId}-recent`}>{t('start.recentDesigns')}</h2>
               <ul className={styles.rows}>
-                {visibleRecent.map((design) => <RecentRow key={design.id} design={design} />)}
+                {visibleRecent.map((design) => <RecentRow key={design.id} design={design} location={locationById.get(design.id) ?? null} />)}
               </ul>
             </section>
           )}
@@ -162,10 +168,22 @@ export function StartScreen({ newDesign, openDesign, links, footer, recent, draf
   )
 }
 
-function RecentRow({ design }: { readonly design: StartScreenDesign }) {
+const UNREADABLE_MESSAGE_KEYS: Record<RecentDesignUnreadableReason, string> = {
+  missing: 'start.cantReadMissing',
+  older_version: 'start.cantReadOlderVersion',
+  newer_version: 'start.cantReadNewerVersion',
+  damaged: 'start.cantReadDamaged',
+  unknown: 'start.cantRead',
+}
+
+function RecentRow({ design, location }: { readonly design: StartScreenDesign; readonly location: RecentDesignLocation | null }) {
   const name = visibleDesignName(design.name)
   const preview = design.preview
   const sketch = preview?.kind === 'read' ? preview.sketch : null
+  const status = preview?.kind === 'read'
+    ? `${t('start.plantCount', { count: preview.plant_count })} · ${t('start.zoneCount', { count: preview.zone_count })}`
+    : preview?.kind === 'unreadable' ? t(UNREADABLE_MESSAGE_KEYS[preview.reason]) : null
+  const place = location?.kind === 'file' ? location.text : location ? t('start.inFolder', { folder: location.text }) : null
   return (
     <li className={styles.row}>
       <div className={styles.rowLine}>
@@ -176,12 +194,13 @@ function RecentRow({ design }: { readonly design: StartScreenDesign }) {
           {/* No place name yet: a Design does not store its site's name (canopi-h90p.23). */}
           <span className={styles.rowText}>
             <span className={styles.rowName}>{name}</span>
-            {preview?.kind === 'read' && (
+            {(place || status) && (
               <span className={styles.rowMeta}>
-                {t('start.plantCount', { count: preview.plant_count })} · {t('start.zoneCount', { count: preview.zone_count })}
+                {place && <span className={styles.rowPlace}>{place}</span>}
+                {place && status && ' · '}
+                {status}
               </span>
             )}
-            {preview?.kind === 'unreadable' && <span className={styles.rowMeta}>{t('start.cantRead')}</span>}
           </span>
           <span className={styles.rowDate}>{formatRelativeDate(design.updatedAt, locale.value)}</span>
         </button>

@@ -13,6 +13,8 @@ use super::new_design_defaults::NEW_DESIGN_LAYER_DEFAULTS;
 pub(crate) struct CanopiDesignIngestionError {
     kind: CanopiDesignIngestionErrorKind,
     message: String,
+    /// The file's version when it is one this build does not open.
+    unsupported_version: Option<u64>,
 }
 
 impl CanopiDesignIngestionError {
@@ -20,7 +22,25 @@ impl CanopiDesignIngestionError {
         Self {
             kind,
             message: message.into(),
+            unsupported_version: None,
         }
+    }
+
+    fn unsupported_version(version: u64) -> Self {
+        Self {
+            unsupported_version: Some(version),
+            ..Self::new(
+                CanopiDesignIngestionErrorKind::UnsupportedVersion,
+                format!(
+                    "$.version: unsupported Canopi Design version {version}; current version is {CURRENT_CANOPI_FILE_VERSION}",
+                ),
+            )
+        }
+    }
+
+    /// The version of a well-formed Design this build does not open, if that is the error.
+    pub(crate) fn found_unsupported_version(&self) -> Option<u64> {
+        self.unsupported_version
     }
 }
 
@@ -216,12 +236,7 @@ fn decode_design_value(
 ) -> Result<CanopiFile, CanopiDesignIngestionError> {
     let version = read_design_version(&value)?;
     if version != CURRENT_CANOPI_FILE_VERSION as u64 {
-        return Err(CanopiDesignIngestionError::new(
-            CanopiDesignIngestionErrorKind::UnsupportedVersion,
-            format!(
-                "$.version: unsupported Canopi Design version {version}; current version is {CURRENT_CANOPI_FILE_VERSION}",
-            ),
-        ));
+        return Err(CanopiDesignIngestionError::unsupported_version(version));
     }
 
     let object = value

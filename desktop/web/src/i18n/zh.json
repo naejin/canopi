@@ -1680,7 +1680,12 @@
     "zoneCount_few": "{{count, number}} 个区域",
     "zoneCount_many": "{{count, number}} 个区域",
     "zoneCount_other": "{{count, number}} 个区域",
-    "cantRead": "无法读取此文件"
+    "cantRead": "无法读取此文件",
+    "inFolder": "位于 {{folder}}",
+    "cantReadMissing": "找不到此文件：已被移动或删除",
+    "cantReadOlderVersion": "由旧版 Canopi 创建，无法打开",
+    "cantReadNewerVersion": "由新版 Canopi 创建，请更新 Canopi 后打开",
+    "cantReadDamaged": "无法读取此文件：文件已损坏"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

@@ -1680,7 +1680,12 @@
     "zoneCount_few": "구역 {{count, number}}개",
     "zoneCount_many": "구역 {{count, number}}개",
     "zoneCount_other": "구역 {{count, number}}개",
-    "cantRead": "이 파일을 읽을 수 없습니다"
+    "cantRead": "이 파일을 읽을 수 없습니다",
+    "inFolder": "{{folder}} 폴더",
+    "cantReadMissing": "파일을 찾을 수 없습니다: 이동되었거나 삭제되었습니다",
+    "cantReadOlderVersion": "이전 버전의 Canopi로 만든 파일이라 열 수 없습니다",
+    "cantReadNewerVersion": "최신 버전의 Canopi로 만든 파일입니다. 열려면 Canopi를 업데이트하세요",
+    "cantReadDamaged": "파일을 읽을 수 없습니다: 손상되었습니다"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

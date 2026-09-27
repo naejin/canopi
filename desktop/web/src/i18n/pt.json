@@ -1680,7 +1680,12 @@
     "zoneCount_few": "{{count, number}} zonas",
     "zoneCount_many": "{{count, number}} zonas",
     "zoneCount_other": "{{count, number}} zonas",
-    "cantRead": "Não é possível ler este arquivo"
+    "cantRead": "Não é possível ler este arquivo",
+    "inFolder": "Em {{folder}}",
+    "cantReadMissing": "Arquivo não encontrado: foi movido ou excluído",
+    "cantReadOlderVersion": "Criado com uma versão anterior do Canopi; não pode ser aberto",
+    "cantReadNewerVersion": "Criado com uma versão mais recente do Canopi; atualize o Canopi para abri-lo",
+    "cantReadDamaged": "Não é possível ler o arquivo: está danificado"
   },
   "shortcutKeys": {
     "ctrl": "Ctrl",

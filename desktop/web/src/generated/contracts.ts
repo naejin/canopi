@@ -746,14 +746,27 @@ export type RecentDesignPreview = { kind: "read"; plant_count: number; zone_coun
 bounds: DesignGroundBounds | null; sketch: DesignSketch | null } |
 // The file is larger than previews read; the row shows its name only.
 { kind: "too_large" } |
-// The file is gone, unreadable, or not a current-version Design.
-{ kind: "unreadable" };
+// The file cannot be opened, and why when that is known.
+{ kind: "unreadable"; reason: RecentDesignUnreadableReason };
 
 // A Recent Design's preview, keyed by its path on the list.
 export type RecentDesignSummary = {
 	path: string,
 	preview: RecentDesignPreview,
 };
+
+// Why a Recent Design's file cannot be opened.
+export type RecentDesignUnreadableReason =
+// Nothing is at the path any more: the file was moved, renamed or deleted.
+"missing" |
+// A Design from an older file version, which this build does not open.
+"older_version" |
+// A Design from a newer file version than this build knows.
+"newer_version" |
+// The file is not a valid Design (not JSON, or not a valid document).
+"damaged" |
+// The file exists but could not be read (permissions, a folder, an I/O error).
+"unknown";
 
 export type RichTextBlock = { kind: "paragraph"; spans: RichTextSpan[] } | { kind: "bullets"; items: RichTextListItem[] };
 

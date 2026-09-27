@@ -43,8 +43,8 @@ describe('recent files controller', () => {
     expect(controller.previews.value.size).toBe(0)
     expect(loadPreviews).toHaveBeenCalledWith(['/a', '/b'])
 
-    answer([{ path: '/a', preview: { kind: 'unreadable' } }])
-    await vi.waitFor(() => expect(controller.previews.value.get('/a')).toEqual({ kind: 'unreadable' }))
+    answer([{ path: '/a', preview: { kind: 'unreadable', reason: 'damaged' } }])
+    await vi.waitFor(() => expect(controller.previews.value.get('/a')).toEqual({ kind: 'unreadable', reason: 'damaged' }))
     expect(controller.previews.value.has('/b')).toBe(false)
 
     // A read preview is not asked for again.

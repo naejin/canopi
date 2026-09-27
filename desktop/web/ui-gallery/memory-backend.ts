@@ -116,6 +116,8 @@ function recentDesigns() {
   return ([
     { path: '/designs/sanctuaire.canopi', name: "Le Sanctuaire d'Aylin – Verger Syntropique", updated_at: hoursAgo(1) },
     { path: '/designs/haie-nord.canopi', name: 'Haie fruitière nord', updated_at: hoursAgo(26) },
+    // An older copy with the same name and file name: the rows name their folders.
+    { path: '/designs/2025/haie-nord.canopi', name: 'Haie fruitière nord', updated_at: hoursAgo(24 * 9) },
     { path: '/designs/mare.canopi', name: 'Jardin de la mare', updated_at: hoursAgo(24 * 14) },
     { path: '/designs/ancien-verger.canopi', name: 'Ancien verger (Canopi 1)', updated_at: hoursAgo(24 * 60) },
   ]).filter(design => !removedRecentPaths.has(design.path))
@@ -161,7 +163,8 @@ function recentPreview(path: string): RecentDesignPreview {
     case '/designs/sanctuaire.canopi': return { kind: 'read', plant_count: 2201, zone_count: 24, bounds, sketch: gallerySketch('orchard') }
     case '/designs/haie-nord.canopi': return { kind: 'read', plant_count: 64, zone_count: 1, bounds, sketch: gallerySketch('hedge') }
     case '/designs/mare.canopi': return { kind: 'read', plant_count: 180, zone_count: 2, bounds, sketch: gallerySketch('pond') }
-    default: return { kind: 'unreadable' }
+    case '/designs/2025/haie-nord.canopi': return { kind: 'unreadable', reason: 'missing' }
+    default: return { kind: 'unreadable', reason: 'older_version' }
   }
 }
 let drafts = state === 'empty' ? [] : [
