@@ -23,7 +23,9 @@ export function panelTargetMapOverlayIds(variant: PanelTargetMapOverlayVariant) 
     sourceId,
     layerIds: [
       `panel-target-${variant}-zones-fill`,
+      `panel-target-${variant}-zones-casing`,
       `panel-target-${variant}-zones-line`,
+      `panel-target-${variant}-plants-halo`,
       `panel-target-${variant}-plants`,
     ] as const,
   }

@@ -42,6 +42,7 @@ import {
   getSceneLayerStyle,
   getStackBadgeBackgroundColor,
   getStackBadgeTextColor,
+  MIN_PLANT_RING_RADIUS_PX,
   OVERLAY_CASING_EXTRA_PX,
   resolveZoneVisual,
   type CanvasInteractionStrokeVisual,
@@ -54,8 +55,6 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const ZONE_STROKE_PX = 2
 const MEASUREMENT_GUIDE_STROKE_PX = 1.5
-/** Plant rings never shrink below this on screen, so a ring reads at the whole-Design zoom. */
-const MIN_PLANT_RING_RADIUS_PX = 8
 const graphicsKeys = new WeakMap<Graphics, string>()
 
 type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'

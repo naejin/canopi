@@ -15,7 +15,7 @@ Read the [design system](../system.md) first. Runtime ownership, gestures and re
 
 - Measurements: light tag (95% surface, ink, 13/600, tabular). The live value under the cursor: dark tag. Zone names and text notes: ink that follows the map underneath, never the UI theme: cream text with a dark halo over satellite and the Dark basemap, dark text with a cream halo over the light basemap and paper; no pill. Lengths use one decimal below 100 m, none above, two below 1 m; areas in ha or m².
 - Every overlay stroke (drawing lines, dashed rings, measurement lines) has a dark casing underneath so it reads on bright or dark imagery. Handles are 10 px with a 44 px touch hit area.
-- Highlight rings (finder matches, a panel pointing at plants) are solid ochre, 2 px, over a 5 px halo, and never smaller than 8 px radius on screen, so they stay visible at the whole-Design zoom over basemap, satellite and paper.
+- Highlight rings (finder matches, a panel pointing at or selecting plants, including the map overlay a panel draws) are solid ochre, 2 px, over a 5 px halo, and never smaller than 8 px radius on screen, so they stay visible at the whole-Design zoom over basemap, satellite and paper. A panel never marks a plant with a filled disc or a colour of its own.
 - Labels (N cycles None, Codes, Names): mono 12 text with a contrasting halo (cream on dark backdrops, dark on light ones), placed right of the symbol, thinned so no label touches another label or another plant's symbol. A chip says how many are shown ("Codes shown for 70 of 282 plants in view").
 - The plant hover card has a caret to its plant and a ring on the plant; it also appears on keyboard focus and dismisses with Esc.
 

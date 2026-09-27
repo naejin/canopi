@@ -26,6 +26,9 @@ export type CanvasInteractionVisualState =
   | 'locked-design-object'
   | 'locked-layer'
 
+/** Plant rings never shrink below this on screen, so a ring reads at the whole-Design zoom. */
+export const MIN_PLANT_RING_RADIUS_PX = 8
+
 export interface CanvasInteractionStrokeVisual {
   color: string
   widthPx: number
