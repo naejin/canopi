@@ -42,6 +42,9 @@ export default defineConfig(({ mode }) => {
       // The WASM decoder packages resolve their .wasm files relative to their
       // own module URL; pre-bundling would move them away from those files.
       exclude: ['cog-tiler-wasm', 'whitebox-wasm'],
+      // Lazily imported by the PDF export; discovering them at runtime makes Vite
+      // re-optimize and reload the page mid-session.
+      include: ['pdfkit', 'fontkit'],
       esbuildOptions: { target: 'es2022' },
     },
     worker: {

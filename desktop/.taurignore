@@ -1,0 +1,5 @@
+# `cargo tauri dev` rebuilds and restarts the app when files under desktop/
+# change. The frontend is served and hot-reloaded by Vite, and Vite writes its
+# dependency cache under web/node_modules while the app runs (for example when
+# the PDF export first loads pdfkit), which restarted the app mid-session.
+web/
