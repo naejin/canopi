@@ -651,7 +651,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mappa del progetto",
-      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione."
+      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione. Le frecce spostano la selezione di 10 cm, o di 1 m con Maiusc. F6 passa all’area successiva: barra del titolo, strumenti, mappa, pannello."
     },
     "textNote": {
       "placeholder": "Scrivi la nota"
@@ -1544,7 +1544,13 @@
     "title": "Scorciatoie da tastiera",
     "toolsHeading": "{{menu}} (con la mappa attiva)",
     "escape": "Esc fa una cosa alla volta: chiude un menu o una finestra, annulla il disegno in corso, torna a Seleziona, svuota la selezione.",
-    "footnote": "I tasti degli strumenti funzionano con la mappa attiva."
+    "footnote": "I tasti degli strumenti funzionano con la mappa attiva.",
+    "workspaceHeading": "Mappa e area di lavoro",
+    "nextRegion": "Area successiva: barra del titolo, strumenti, mappa, pannello",
+    "previousRegion": "Area precedente",
+    "nudge": "Sposta la selezione di 10 cm",
+    "nudgeLarge": "Sposta la selezione di 1 m",
+    "arrowKeys": "Frecce"
   },
   "settings": {
     "title": "Impostazioni",

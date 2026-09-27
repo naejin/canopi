@@ -651,7 +651,7 @@
     "viewChip": "视图",
     "map": {
       "label": "设计地图",
-      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。"
+      "description": "按工具栏上显示的按键即可选择工具。Shift F10 打开所选对象的菜单。Esc 取消操作，然后返回选择工具，再清除选择。方向键将所选对象移动 10 厘米，按住 Shift 移动 1 米。F6 切换到下一个区域：标题栏、工具、地图、面板。"
     },
     "textNote": {
       "placeholder": "输入注释"
@@ -1544,7 +1544,13 @@
     "title": "键盘快捷键",
     "toolsHeading": "{{menu}}（地图获得焦点时）",
     "escape": "Esc 每次只做一件事：关闭菜单或对话框，取消正在绘制的内容，回到选择工具，清除选择。",
-    "footnote": "工具按键在地图获得焦点时生效。"
+    "footnote": "工具按键在地图获得焦点时生效。",
+    "workspaceHeading": "地图与工作区",
+    "nextRegion": "下一个区域：标题栏、工具、地图、面板",
+    "previousRegion": "上一个区域",
+    "nudge": "将所选对象移动 10 厘米",
+    "nudgeLarge": "将所选对象移动 1 米",
+    "arrowKeys": "方向键"
   },
   "settings": {
     "title": "设置",

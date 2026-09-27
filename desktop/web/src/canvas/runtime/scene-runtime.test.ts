@@ -2529,6 +2529,74 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('nudges the editable selection as one undoable edit per series, never moving locked objects', async () => {
+    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    await initRuntimeWithStubbedRenderer(runtime)
+    const file = makeFile()
+    file.plants = file.plants.map((plant) => plant.id === 'plant-2' ? { ...plant, locked: true } : plant)
+    runtime.documentSurface.loadDocument({ ...file, zones: [], annotations: [], groups: [] })
+    setInteractionViewport(runtime)
+    const position = (id: string) => runtime.querySurface.getSceneSnapshot().plants.find((plant) => plant.id === id)!.position
+    const start1 = { ...position('plant-1') }
+    const start2 = { ...position('plant-2') }
+    runtime.commandSurface.sceneEdits.selectAll()
+    expect(runtime.querySurface.getSelection().length).toBeGreaterThan(0)
+
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })).toBe(true)
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })).toBe(true)
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0, y: -1 })).toBe(true)
+    expect(position('plant-1').x).toBeCloseTo(start1.x + 0.2, 6)
+    expect(position('plant-1').y).toBeCloseTo(start1.y - 1, 6)
+    expect(position('plant-2')).toEqual(start2)
+    runtime.commandSurface.sceneEdits.endNudge()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(true)
+
+    runtime.commandSurface.history.undo()
+    expect(position('plant-1').x).toBeCloseTo(start1.x, 6)
+    expect(position('plant-1').y).toBeCloseTo(start1.y, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    // Aborting a series restores the objects and records nothing.
+    runtime.commandSurface.history.redo()
+    runtime.commandSurface.history.undo()
+    runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge({ abort: true })
+    expect(position('plant-1').x).toBeCloseTo(start1.x, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+
+    // Nothing editable selected: nothing moves.
+    runtime.commandSurface.sceneEdits.clearSelection()
+    expect(runtime.commandSurface.sceneEdits.nudgeSelected({ x: 1, y: 0 })).toBe(false)
+    runtime.destroy()
+  })
+
+  it('nudges from the arrow keys on the focused map through the runtime command', async () => {
+    const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
+    const { container } = await initRuntimeWithStubbedRenderer(runtime)
+    const events = createSceneInteractionEventHarness(container)
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    setInteractionViewport(runtime)
+    const position = () => runtime.querySurface.getSceneSnapshot().plants[0]!.position
+    const start = { ...position() }
+    runtime.commandSurface.sceneEdits.selectAll()
+    // Key routing listens on the window, so the map must be in the document.
+    document.body.append(container)
+    container.focus()
+
+    events.keyDown({ key: 'ArrowRight', target: container })
+    events.keyDown({ key: 'ArrowRight', shiftKey: true, target: container })
+    expect(position().x).toBeCloseTo(start.x + 1.1, 6)
+    // Another key ends the series: one edit to undo.
+    events.keyDown({ key: 'Shift', target: container })
+    events.keyDown({ key: 'a', target: container })
+    runtime.commandSurface.history.undo()
+    expect(position().x).toBeCloseTo(start.x, 6)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    events.dispose()
+    runtime.destroy()
+    container.remove()
+  })
+
   it('records Measurement Guide creation as one undoable scene edit', async () => {
     const runtime = new SceneCanvasRuntime()
     const { container } = await initRuntimeWithStubbedRenderer(runtime)

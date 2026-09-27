@@ -651,7 +651,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mapa del diseño",
-      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección."
+      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección. Las flechas mueven la selección 10 cm, o 1 m con Mayús. F6 pasa a la zona siguiente: barra de título, herramientas, mapa, panel."
     },
     "textNote": {
       "placeholder": "Escribe la nota"
@@ -1544,7 +1544,13 @@
     "title": "Atajos de teclado",
     "toolsHeading": "{{menu}} (con el mapa enfocado)",
     "escape": "Esc hace una cosa cada vez: cerrar un menú o diálogo, cancelar lo que dibujas, volver a Seleccionar, borrar la selección.",
-    "footnote": "Las teclas de herramientas funcionan con el mapa enfocado."
+    "footnote": "Las teclas de herramientas funcionan con el mapa enfocado.",
+    "workspaceHeading": "Mapa y espacio de trabajo",
+    "nextRegion": "Zona siguiente: barra de título, herramientas, mapa, panel",
+    "previousRegion": "Zona anterior",
+    "nudge": "Mover la selección 10 cm",
+    "nudgeLarge": "Mover la selección 1 m",
+    "arrowKeys": "Flechas"
   },
   "settings": {
     "title": "Ajustes",

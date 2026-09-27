@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useFocusRegion } from './useFocusRegion'
 import type { MenuDefinition } from '../../app/shell-commands/menus'
 import { t } from '../../i18n'
 import { ButtonTooltip } from './ButtonTooltip'
@@ -51,6 +52,7 @@ export function WorkspaceTitleBar({
   const titleBar = useRef<HTMLElement>(null)
   useMapOccluder(titleBar, 'top')
   useModalInertRegion(titleBar)
+  useFocusRegion(titleBar, 'title-bar')
   return (
     <header ref={titleBar} className={styles.titleBar} onMouseDown={onMouseDown} data-workspace-title-bar>
       <img

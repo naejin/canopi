@@ -651,7 +651,7 @@
     "viewChip": "View",
     "map": {
       "label": "Design map",
-      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection."
+      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm, or 1 m with Shift. F6 moves to the next area: title bar, tools, map, panel."
     },
     "textNote": {
       "placeholder": "Type the note"
@@ -1544,7 +1544,13 @@
     "title": "Keyboard shortcuts",
     "toolsHeading": "{{menu}} (while the map has focus)",
     "escape": "Esc does one thing at a time: close a menu or dialog, cancel what you are drawing, return to Select, clear the selection.",
-    "footnote": "Tool keys work while the map has focus."
+    "footnote": "Tool keys work while the map has focus.",
+    "workspaceHeading": "Map and workspace",
+    "nextRegion": "Next area: title bar, tools, map, panel",
+    "previousRegion": "Previous area",
+    "nudge": "Nudge the selection 10 cm",
+    "nudgeLarge": "Nudge the selection 1 m",
+    "arrowKeys": "Arrow keys"
   },
   "settings": {
     "title": "Settings",

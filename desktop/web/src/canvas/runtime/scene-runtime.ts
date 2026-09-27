@@ -209,6 +209,7 @@ export class SceneCanvasRuntime {
         getLocalizedCommonNames: () => this._presentation.getLocalizedCommonNames(),
         notifyTransientHistoryChange: () => this._notifyTransientHistoryChanged(),
         publishToolGuidance: setCanvasToolGuidance,
+        nudge: this._commandSurface.sceneEdits,
         setHoveredTarget: (target) => {
           this._setHoveredTarget(target)
         },

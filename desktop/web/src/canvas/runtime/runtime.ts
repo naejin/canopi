@@ -151,6 +151,14 @@ export interface CanvasSceneEditCommandSurface {
   unlockSelected(): void
   groupSelected(): void
   ungroupSelected(): void
+  /**
+   * Moves the editable selection by `delta` session-plane metres (the arrow
+   * keys on the map). Nudges until `endNudge()` are one undoable edit; locked
+   * objects never move. False when nothing editable moved.
+   */
+  nudgeSelected(delta: ScenePoint): boolean
+  /** Ends the nudge series: commits it as one edit, or restores it with `abort`. */
+  endNudge(options?: { readonly abort?: boolean }): void
 }
 
 export interface CanvasChromeCommandSurface {

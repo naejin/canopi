@@ -81,7 +81,7 @@ import {
   prepareInteractionHost,
   type InteractionHostController,
 } from './interaction/interaction-host'
-import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField } from './runtime'
+import type { CanvasDesignObjectSelectionModel, CanvasPlantRowSpacingField, CanvasSceneEditCommandSurface } from './runtime'
 import type {
   CanvasContextMenuCommands,
   CanvasRuntimeContextMenuAdapter,
@@ -164,7 +164,22 @@ export interface SceneInteractionSessionDeps {
   notifyTransientHistoryChange?: () => void
   /** Mirrors the active tool's gesture and stamp state for the tool card. */
   publishToolGuidance?: (guidance: CanvasToolGuidance) => void
+  /** The arrow keys' nudges, through the runtime's scene-edit commands. */
+  nudge?: Pick<CanvasSceneEditCommandSurface, 'nudgeSelected' | 'endNudge'>
 }
+
+/** Arrow-key nudge steps, in session-plane metres (y grows southward). */
+const NUDGE_STEP_M = 0.1
+const NUDGE_LARGE_STEP_M = 1
+/** A pause this long ends a nudge series, so its edit commits. */
+const NUDGE_SERIES_IDLE_MS = 800
+const NUDGE_DIRECTIONS: Readonly<Record<string, ScenePoint>> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+}
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'])
 
 export interface SceneInteractionSession {
   setTool(name: string): void
@@ -213,6 +228,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _pendingInteractionHostFocusFrame: number | null = null
   private _overviewMode = false
   private _keyboardContextMenuAt = Number.NEGATIVE_INFINITY
+  /** A nudge series is open in the runtime until a pause, another input or leaving the map. */
+  private _nudging = false
+  private _nudgeIdleTimer: ReturnType<typeof setTimeout> | null = null
   readonly plantRowSpacing: CanvasPlantRowSpacingField = {
     input: (text) => this._runSpacingField((field) => field.input(text)),
     commit: (text) => this._runSpacingField((field) => field.commit(text)),
@@ -502,6 +520,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   private readonly _onPointerDown = (event: PointerEvent): void => {
+    this._endNudge()
     if (event.button !== 0 && event.button !== 1) return
     if (this._pointerGesture && this._pointerGesture.pointerId !== event.pointerId) return
     if (this._retryPendingTransientCancellation(event)) return
@@ -1039,6 +1058,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _handleKeyDown(event: KeyboardEvent): void {
     if (this._retryPendingTransientCancellation(event)) return
+    if (this._nudging && !(event.key in NUDGE_DIRECTIONS) && !MODIFIER_KEYS.has(event.key)) {
+      // Esc cancels the series like any gesture in progress; any other key keeps it.
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        this._endNudge({ abort: true })
+        return
+      }
+      this._endNudge()
+    }
+    if (this._nudgeFromKeyboard(event)) return
     if (
       !this._pointerGesture
       && isKeyboardInteractiveEventTarget(event.target)
@@ -1088,7 +1117,46 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
+  /** Arrow keys on the focused map move the editable selection (Select tool only). */
+  private _nudgeFromKeyboard(event: KeyboardEvent): boolean {
+    const direction = NUDGE_DIRECTIONS[event.key]
+    if (!direction || !this._deps.nudge || event.ctrlKey || event.metaKey || event.altKey) return false
+    if (this._tool !== 'select' || this._pointerGesture || this._overviewMode) return false
+    const target = event.target
+    if (!(target instanceof Node) || !this._deps.container.contains(target) || isKeyboardInteractiveEventTarget(target)) return false
+    event.preventDefault()
+    const step = event.shiftKey ? NUDGE_LARGE_STEP_M : NUDGE_STEP_M
+    if (!this._deps.nudge.nudgeSelected({ x: direction.x * step, y: direction.y * step })) return true
+    this._nudging = true
+    if (this._nudgeIdleTimer !== null) clearTimeout(this._nudgeIdleTimer)
+    this._nudgeIdleTimer = setTimeout(() => {
+      this._nudgeIdleTimer = null
+      this._endNudge()
+    }, NUDGE_SERIES_IDLE_MS)
+    this._refreshSelectionDependentMeasurements()
+    return true
+  }
+
+  private _endNudge(options?: { readonly abort?: boolean }): void {
+    if (this._nudgeIdleTimer !== null) {
+      clearTimeout(this._nudgeIdleTimer)
+      this._nudgeIdleTimer = null
+    }
+    if (!this._nudging) return
+    this._nudging = false
+    if (options) this._deps.nudge?.endNudge(options)
+    else this._deps.nudge?.endNudge()
+    this._refreshSelectionDependentMeasurements()
+  }
+
+  private readonly _onFocusOut = (event: FocusEvent): void => {
+    const next = event.relatedTarget
+    if (next instanceof Node && this._deps.container.contains(next)) return
+    this._endNudge()
+  }
+
   private _cancelTransientInteraction(options: SceneInteractionCancellationOptions = {}): void {
+    this._endNudge()
     this._clearPointerGesture()
     if (options.releaseSpace) this._spaceHeld = false
     const activeAdapter = this._activeToolAdapter()
@@ -1460,6 +1528,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       container.addEventListener('dragover', this._onDragOver)
       container.addEventListener('dragleave', this._onDragLeave)
       container.addEventListener('drop', this._onDrop)
+      container.addEventListener('focusout', this._onFocusOut)
       this._attached = true
     } catch (error) {
       this._attached = true
@@ -1491,6 +1560,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       () => container.removeEventListener('dragover', this._onDragOver),
       () => container.removeEventListener('dragleave', this._onDragLeave),
       () => container.removeEventListener('drop', this._onDrop),
+      () => container.removeEventListener('focusout', this._onFocusOut),
     ], 'Scene Interaction listener removal failed')
   }
 

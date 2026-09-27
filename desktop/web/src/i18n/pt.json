@@ -651,7 +651,7 @@
     "viewChip": "Visualização",
     "map": {
       "label": "Mapa do design",
-      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção."
+      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção. As setas movem a seleção 10 cm, ou 1 m com Shift. F6 passa para a área seguinte: barra de título, ferramentas, mapa, painel."
     },
     "textNote": {
       "placeholder": "Escreva a nota"
@@ -1544,7 +1544,13 @@
     "title": "Atalhos de teclado",
     "toolsHeading": "{{menu}} (com o mapa em foco)",
     "escape": "Esc faz uma coisa de cada vez: fecha um menu ou diálogo, cancela o desenho, volta para Selecionar, limpa a seleção.",
-    "footnote": "As teclas de ferramentas funcionam com o mapa em foco."
+    "footnote": "As teclas de ferramentas funcionam com o mapa em foco.",
+    "workspaceHeading": "Mapa e área de trabalho",
+    "nextRegion": "Área seguinte: barra de título, ferramentas, mapa, painel",
+    "previousRegion": "Área anterior",
+    "nudge": "Mover a seleção 10 cm",
+    "nudgeLarge": "Mover a seleção 1 m",
+    "arrowKeys": "Setas"
   },
   "settings": {
     "title": "Configurações",

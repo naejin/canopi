@@ -11,6 +11,7 @@ import { ButtonTooltip } from '../shared/ButtonTooltip'
 import { railVisibleCount } from '../shared/rail-fit'
 import { ToolIcon, type ToolIconName } from './toolbar-icons'
 import { useRail } from '../shared/useMapChrome'
+import { useFocusRegion } from '../shared/useFocusRegion'
 import styles from './ToolRail.module.css'
 
 interface ToolRailProps {
@@ -30,6 +31,7 @@ interface ToolRailProps {
 export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) {
   const rail = useRef<HTMLDivElement>(null)
   useRail(rail, 'tool')
+  useFocusRegion(rail, 'tool-rail')
   const tools = projection.toolGroups.flatMap((group) => group.tools)
 
   // A name cut off in the fixed-width labelled rail (a long German or Russian

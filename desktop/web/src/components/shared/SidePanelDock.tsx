@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useFocusRegion } from './useFocusRegion'
 import { useRef } from 'preact/hooks'
 import { sidePanelWidth } from '../../app/shell/state'
 import { commitSidePanelWidth } from '../../app/shell/controller'
@@ -41,6 +42,7 @@ export function SidePanelDock({
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   useMapOccluder(panelRef)
+  useFocusRegion(panelRef, 'dock')
   const width = sidePanelWidth.value
   const baseWidth = width === null ? `${wide ? DEFAULT_WIDE_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH}px` : `${width}px`
   return (

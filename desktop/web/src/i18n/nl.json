@@ -651,7 +651,7 @@
     "viewChip": "Weergave",
     "map": {
       "label": "Ontwerpkaart",
-      "description": "Druk op de toets van een gereedschap om het te kiezen, zoals de gereedschapsbalk laat zien. Shift F10 opent het menu van de selectie. Esc annuleert, gaat dan terug naar Selecteren en wist daarna de selectie."
+      "description": "Druk op de toets van een gereedschap om het te kiezen, zoals de gereedschapsbalk laat zien. Shift F10 opent het menu van de selectie. Esc annuleert, gaat dan terug naar Selecteren en wist daarna de selectie. Pijltjestoetsen verplaatsen de selectie 10 cm, of 1 m met Shift. F6 gaat naar het volgende gebied: titelbalk, gereedschap, kaart, paneel."
     },
     "textNote": {
       "placeholder": "Typ de notitie"
@@ -1544,7 +1544,13 @@
     "title": "Sneltoetsen",
     "toolsHeading": "{{menu}} (als de kaart focus heeft)",
     "escape": "Esc doet één ding tegelijk: een menu of dialoog sluiten, tekenen annuleren, terug naar Selecteren, de selectie wissen.",
-    "footnote": "Gereedschapstoetsen werken als de kaart focus heeft."
+    "footnote": "Gereedschapstoetsen werken als de kaart focus heeft.",
+    "workspaceHeading": "Kaart en werkruimte",
+    "nextRegion": "Volgend gebied: titelbalk, gereedschap, kaart, paneel",
+    "previousRegion": "Vorig gebied",
+    "nudge": "Selectie 10 cm verschuiven",
+    "nudgeLarge": "Selectie 1 m verschuiven",
+    "arrowKeys": "Pijltjestoetsen"
   },
   "settings": {
     "title": "Instellingen",

@@ -651,7 +651,7 @@
     "viewChip": "Ansicht",
     "map": {
       "label": "Designkarte",
-      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf."
+      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl um 10 cm, mit Umschalt um 1 m. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
     },
     "textNote": {
       "placeholder": "Notiz eingeben"
@@ -1544,7 +1544,13 @@
     "title": "Tastenkürzel",
     "toolsHeading": "{{menu}} (wenn die Karte den Fokus hat)",
     "escape": "Esc tut eins nach dem anderen: Menü oder Dialog schließen, Zeichnen abbrechen, zu Auswählen zurück, Auswahl aufheben.",
-    "footnote": "Werkzeugtasten wirken, wenn die Karte den Fokus hat."
+    "footnote": "Werkzeugtasten wirken, wenn die Karte den Fokus hat.",
+    "workspaceHeading": "Karte und Arbeitsbereich",
+    "nextRegion": "Nächster Teil: Titelleiste, Werkzeuge, Karte, Bereich",
+    "previousRegion": "Vorheriger Teil",
+    "nudge": "Auswahl um 10 cm verschieben",
+    "nudgeLarge": "Auswahl um 1 m verschieben",
+    "arrowKeys": "Pfeiltasten"
   },
   "settings": {
     "title": "Einstellungen",

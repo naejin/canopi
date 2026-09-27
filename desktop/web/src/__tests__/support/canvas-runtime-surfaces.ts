@@ -72,6 +72,8 @@ export function createTestCanvasCommandSurface(
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      nudgeSelected: () => false,
+      endNudge: () => {},
     },
     chrome: {
       toggleGrid: () => {},

@@ -178,6 +178,7 @@ function createInteractionDeps(
     | 'translate'
     | 'contextMenu'
     | 'publishToolGuidance'
+    | 'nudge'
   >>
     & { onSceneEditCommit?: (type: string) => void } = {},
 ): SceneInteractionSessionDeps {
@@ -273,6 +274,7 @@ function createInteractionDeps(
     setHoveredTarget: overrides.setHoveredTarget ?? (() => {}),
     getLocalizedCommonNames: () => new Map(),
     publishToolGuidance: overrides.publishToolGuidance ?? setCanvasToolGuidance,
+    nudge: overrides.nudge ?? { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() },
   }
 }
 
@@ -10218,6 +10220,9 @@ describe('SceneInteractionSession', () => {
       const descriptionId = container.getAttribute('aria-describedby')
       expect(descriptionId).toBeTruthy()
       expect(document.getElementById(descriptionId!)?.textContent).toBe(t('canvas.map.description'))
+      // It names every key the map takes: tools, the menu, arrows, F6 and Esc.
+      expect(t('canvas.map.description')).toContain('Arrow keys move the selection 10 cm, or 1 m with Shift')
+      expect(t('canvas.map.description')).toContain('F6')
       session.dispose()
     })
 
@@ -10471,6 +10476,88 @@ describe('SceneInteractionSession', () => {
       session.dispose()
     })
   })
+  describe('arrow-key nudges', () => {
+    function nudgeSession(): { nudge: { nudgeSelected: ReturnType<typeof vi.fn>, endNudge: ReturnType<typeof vi.fn> }, session: SceneInteractionSession, deps: SceneInteractionSessionDeps } {
+      const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
+      const deps = createInteractionDeps(container, store, camera, { nudge })
+      const session = createTestSession(deps)
+      container.tabIndex = 0
+      container.focus()
+      return { nudge, session, deps }
+    }
+
+    it('nudges the selection 0.1 m per arrow, 1 m with Shift, north-up', () => {
+      const { nudge } = nudgeSession()
+      const right = events.keyDown({ key: 'ArrowRight', cancelable: true, target: container })
+      events.keyDown({ key: 'ArrowLeft', target: container })
+      events.keyDown({ key: 'ArrowUp', shiftKey: true, target: container })
+      events.keyDown({ key: 'ArrowDown', target: container })
+      expect(right.defaultPrevented).toBe(true)
+      expect(nudge.nudgeSelected.mock.calls.map(([delta]) => delta)).toEqual([
+        { x: 0.1, y: 0 }, { x: -0.1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 0.1 },
+      ])
+      expect(nudge.endNudge).not.toHaveBeenCalled()
+    })
+
+    it('ends the series on another key, a press, leaving the map, a pause or a tool change', () => {
+      vi.useFakeTimers()
+      try {
+        const { nudge, session } = nudgeSession()
+        events.keyDown({ key: 'ArrowRight', target: container })
+        events.keyDown({ key: 'z', ctrlKey: true, target: container })
+        expect(nudge.endNudge).toHaveBeenCalledTimes(1)
+        expect(nudge.endNudge).toHaveBeenLastCalledWith()
+
+        events.keyDown({ key: 'ArrowRight', target: container })
+        events.pointerDown({ x: 200, y: 200 }, { button: 0 })
+        expect(nudge.endNudge).toHaveBeenCalledTimes(2)
+        events.pointerUp({ x: 200, y: 200 }, { button: 0 })
+
+        events.keyDown({ key: 'ArrowRight', target: container })
+        vi.advanceTimersByTime(1000)
+        expect(nudge.endNudge).toHaveBeenCalledTimes(3)
+
+        events.keyDown({ key: 'ArrowRight', target: container })
+        container.dispatchEvent(new FocusEvent('focusout', { relatedTarget: document.body }))
+        expect(nudge.endNudge).toHaveBeenCalledTimes(4)
+
+        events.keyDown({ key: 'ArrowRight', target: container })
+        session.setTool('polygon')
+        expect(nudge.endNudge).toHaveBeenCalledTimes(5)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('cancels the series with Esc instead of clearing the selection', () => {
+      const { nudge, deps } = nudgeSession()
+      deps.setSelection([plantTarget('plant-1')])
+      events.keyDown({ key: 'ArrowRight', target: container })
+      events.keyDown({ key: 'Escape', cancelable: true, target: container })
+      expect(nudge.endNudge).toHaveBeenCalledWith({ abort: true })
+      expect(deps.clearSelection).not.toHaveBeenCalled()
+      // The next Esc continues the chain.
+      events.keyDown({ key: 'Escape', cancelable: true, target: container })
+      expect(deps.clearSelection).toHaveBeenCalled()
+    })
+
+    it('leaves the arrows alone off the map, under other tools and with Ctrl or Alt', () => {
+      const { nudge, session } = nudgeSession()
+      const field = document.createElement('input')
+      document.body.append(field)
+      try {
+        events.keyDown({ key: 'ArrowRight', target: field })
+        events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
+        events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
+        session.setTool('polygon')
+        events.keyDown({ key: 'ArrowRight', target: container })
+        expect(nudge.nudgeSelected).not.toHaveBeenCalled()
+      } finally {
+        field.remove()
+      }
+    })
+  })
+
   describe('tool guidance for the tool card', () => {
     function guidedSession(): { session: SceneInteractionSession, deps: SceneInteractionSessionDeps, latest: () => CanvasToolGuidance } {
       const published: CanvasToolGuidance[] = []

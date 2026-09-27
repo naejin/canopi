@@ -1,5 +1,6 @@
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
 import { installToolRailLearning } from "../app/tool-rail/learning";
+import { installFocusRegionKeys } from "../app/shell/focus-regions";
 import { installSettingsProjection } from "../app/settings/projection";
 import { initTheme } from "../utils/theme";
 import { browserDesignSessionController } from "../web/browser-design-session";
@@ -26,10 +27,12 @@ export function bootstrapPlatform(): void {
   const uninstallContinuousSave = browserDesignSessionController.installContinuousSave();
   const disposePlaceSearchSession = installPlaceSearchSession();
   const disposeToolRailLearning = installToolRailLearning();
+  const disposeFocusRegionKeys = installFocusRegionKeys();
 
   disposePlatformBootstrap = () => {
     if (disposed) return;
     disposed = true;
+    disposeFocusRegionKeys();
     disposeToolRailLearning();
     disposePlaceSearchSession();
     uninstallContinuousSave();

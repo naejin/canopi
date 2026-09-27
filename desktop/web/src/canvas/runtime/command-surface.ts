@@ -31,18 +31,27 @@ import {
   createSceneGeoFrame,
   hydrateScenePersistedStateInFrame,
   type SceneLayerEntity,
+  type ScenePoint,
   type SceneStateReader,
 } from './scene'
+import {
+  applySceneDragDeltaToDraft,
+  captureSceneDragState,
+  createSceneDragState,
+  type SceneDragState,
+} from './interaction/drag-ops'
 import { createSceneArrangementPlacement } from './scene-runtime/arrangement-placement'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../generated/canopi-design-format'
 import { DEFAULT_BUDGET_CURRENCY } from '../../generated/known-canopi-keys'
 import type { SceneRuntimeMutationController } from './scene-runtime/mutations'
-import type {
-  SceneCommandAdmission,
-  SceneEditCoordinator,
-  SceneHistoryCommands,
-  ScenePresentationMaintenance,
-  SettledSceneReader,
+import {
+  SceneEditBusyError,
+  type SceneCommandAdmission,
+  type SceneEditCoordinator,
+  type SceneEditTransaction,
+  type SceneHistoryCommands,
+  type ScenePresentationMaintenance,
+  type SettledSceneReader,
 } from './scene-runtime/transactions'
 
 type CommandInvalidationKind = 'scene' | 'viewport' | 'chrome'
@@ -136,6 +145,9 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   readonly layers: CanvasLayerCommandSurface
   readonly plantPresentation: CanvasPlantPresentationCommandSurface
 
+  /** The open keyboard nudge series: one Scene Edit until `endNudge()`. */
+  private nudge: { readonly edit: SceneEditTransaction; readonly state: SceneDragState; total: ScenePoint } | null = null
+
   constructor(private readonly options: SceneCanvasCommandSurfaceOptions) {
     const canUndo = computed(() => {
       void options.transientHistory.revision.value
@@ -202,6 +214,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       unlockSelected: () => this.runSpatialEdit(() => this.options.mutations.unlockSelected()),
       groupSelected: () => this.runSpatialEdit(() => this.options.mutations.groupSelected()),
       ungroupSelected: () => this.runSpatialEdit(() => this.options.mutations.ungroupSelected()),
+      nudgeSelected: (delta) => this.nudgeSelected(delta),
+      endNudge: (options) => this.endNudge(options),
     }
     this.chrome = {
       toggleGrid: () => this.options.settings.toggleGridVisible(),
@@ -230,6 +244,45 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
   private setTool(name: string): void {
     this.options.setInteractionTool(name)
     setCanvasTool(name)
+  }
+
+  private nudgeSelected(delta: ScenePoint): boolean {
+    if (!this.options.isSpatialEditingEnabled() || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return false
+    if (!this.nudge) {
+      const scene = this.options.sceneStore.persisted
+      const viewportScale = this.options.camera.viewport.scale
+      const selection = getDesignObjectSelectionModel(scene, this.options.sceneStore.session.selectedTargets, {
+        annotationViewportScale: viewportScale,
+        plantContext: this.options.presentation.createPlantPresentationContext(viewportScale),
+      })
+      if (selection.editableTargets.length === 0) return false
+      const state = createSceneDragState()
+      captureSceneDragState(state, scene, selection.editableTargets)
+      let edit: SceneEditTransaction
+      try {
+        edit = this.options.sceneEdits.begin('keyboard-nudge')
+      } catch (error) {
+        // Another edit owns the Scene (a drag in progress): the key does nothing.
+        if (error instanceof SceneEditBusyError) return false
+        throw error
+      }
+      this.nudge = { edit, state, total: { x: 0, y: 0 } }
+    }
+    const series = this.nudge
+    series.total = { x: series.total.x + delta.x, y: series.total.y + delta.y }
+    const total = series.total
+    series.edit.mutate((draft) => applySceneDragDeltaToDraft(draft, series.state, total))
+    this.options.invalidate('scene')
+    return true
+  }
+
+  private endNudge(options: { readonly abort?: boolean } = {}): void {
+    const series = this.nudge
+    if (!series) return
+    this.nudge = null
+    if (options.abort || (series.total.x === 0 && series.total.y === 0)) series.edit.abort()
+    else series.edit.commit({ invalidate: 'scene' })
+    this.options.invalidate('scene')
   }
 
   private saveSelectionAsObjectStamp(): void {

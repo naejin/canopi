@@ -651,7 +651,7 @@
     "viewChip": "Affichage",
     "map": {
       "label": "Carte du Design",
-      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection."
+      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection. Les flèches déplacent la sélection de 10 cm, ou de 1 m avec Maj. F6 passe à la zone suivante : barre de titre, outils, carte, panneau."
     },
     "textNote": {
       "placeholder": "Saisissez la note"
@@ -1544,7 +1544,13 @@
     "title": "Raccourcis clavier",
     "toolsHeading": "{{menu}} (quand la carte a le focus)",
     "escape": "Échap fait une chose à la fois : fermer un menu ou une boîte de dialogue, annuler le tracé en cours, revenir à Sélection, vider la sélection.",
-    "footnote": "Les touches d’outils fonctionnent quand la carte a le focus."
+    "footnote": "Les touches d’outils fonctionnent quand la carte a le focus.",
+    "workspaceHeading": "Carte et espace de travail",
+    "nextRegion": "Zone suivante : barre de titre, outils, carte, panneau",
+    "previousRegion": "Zone précédente",
+    "nudge": "Déplacer la sélection de 10 cm",
+    "nudgeLarge": "Déplacer la sélection de 1 m",
+    "arrowKeys": "Flèches"
   },
   "settings": {
     "title": "Réglages",

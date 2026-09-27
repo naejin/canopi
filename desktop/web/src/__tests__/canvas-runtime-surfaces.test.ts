@@ -122,6 +122,8 @@ function createCommandSurface() {
       unlockSelected: () => {},
       groupSelected: () => {},
       ungroupSelected: () => {},
+      nudgeSelected: () => false,
+      endNudge: () => {},
     },
     chrome: {
       toggleGrid: () => {},
