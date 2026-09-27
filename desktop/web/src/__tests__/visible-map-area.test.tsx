@@ -2,14 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mapAttributionFolded,
   measureBottomBandRoom,
-  measurePanelRailRoom,
+  measureRailRoom,
   measureVisibleMapFrame,
   panelRailRoom,
   refreshVisibleMapArea,
   registerMapArea,
   registerMapOccluder,
-  registerPanelRail,
-  registerUnderPanelRail,
+  registerRail,
+  registerUnderRail,
+  toolRailRoom,
   toolRailCrowdsMap,
   visibleMapFrame,
 } from '../app/shell/visible-map-area'
@@ -179,27 +180,27 @@ describe('visible map area', () => {
   it('measures the room the panel rail has above the chrome under its column', () => {
     // The inspection launcher sits in the rail's column, above the zoom group.
     const launcher = { left: 1228, top: 696, width: 40, height: 40 }
-    expect(measurePanelRailRoom(rect(PANEL_RAIL), [rect(ZOOM_GROUP), rect(launcher)])).toBe(696 - 8 - 72)
+    expect(measureRailRoom(rect(PANEL_RAIL), [rect(ZOOM_GROUP), rect(launcher)])).toBe(696 - 8 - 72)
     // A hidden launcher leaves the zoom group as the floor.
-    expect(measurePanelRailRoom(rect(PANEL_RAIL), [rect(ZOOM_GROUP), rect({ left: 0, top: 0, width: 0, height: 0 })]))
+    expect(measureRailRoom(rect(PANEL_RAIL), [rect(ZOOM_GROUP), rect({ left: 0, top: 0, width: 0, height: 0 })]))
       .toBe(744 - 8 - 72)
     // Chrome outside the rail's column, or nothing under it, sets no floor.
-    expect(measurePanelRailRoom(rect(PANEL_RAIL), [rect({ left: 12, top: 744, width: 280, height: 44 })])).toBeNull()
-    expect(measurePanelRailRoom(rect(PANEL_RAIL), [])).toBeNull()
-    expect(measurePanelRailRoom(null, [rect(ZOOM_GROUP)])).toBeNull()
+    expect(measureRailRoom(rect(PANEL_RAIL), [rect({ left: 12, top: 744, width: 280, height: 44 })])).toBeNull()
+    expect(measureRailRoom(rect(PANEL_RAIL), [])).toBeNull()
+    expect(measureRailRoom(null, [rect(ZOOM_GROUP)])).toBeNull()
     // A short window (the 1024 x 768 gallery workspace, 480 px of map) leaves less than the rail's 420 px.
     const shortRail = rect({ left: 960, top: 310, width: 52, height: 420 })
-    expect(measurePanelRailRoom(shortRail, [rect({ left: 692, top: 672, width: 320, height: 40 })])).toBe(672 - 8 - 310)
+    expect(measureRailRoom(shortRail, [rect({ left: 692, top: 672, width: 320, height: 40 })])).toBe(672 - 8 - 310)
   })
 
   it('publishes the panel rail room and follows the rail when a notice lowers it', () => {
     const area = element(WINDOW)
     const releaseArea = registerMapArea(area)
     const rail = element(PANEL_RAIL)
-    const releaseRail = registerPanelRail(rail)
+    const releaseRail = registerRail('panel', rail)
     try {
       expect(panelRailRoom.value).toBeNull()
-      const releaseZoom = registerUnderPanelRail(element(ZOOM_GROUP))
+      const releaseZoom = registerUnderRail('panel', element(ZOOM_GROUP))
       expect(panelRailRoom.value).toBe(744 - 8 - 72)
       // The rail is a right-edge occluder too.
       expect(visibleMapFrame.value.right).toBe(64)
@@ -215,6 +216,26 @@ describe('visible map area', () => {
       releaseArea()
     }
     expect(visibleMapFrame.value.right).toBe(0)
+  })
+
+  it('publishes the tool rail room above the view chip, apart from the panel rail room', () => {
+    const area = element(WINDOW)
+    const releaseArea = registerMapArea(area)
+    const releaseRail = registerRail('tool', element(TOOL_RAIL))
+    try {
+      expect(toolRailRoom.value).toBeNull()
+      const releaseChip = registerUnderRail('tool', element({ left: 12, top: 744, width: 280, height: 44 }))
+      expect(toolRailRoom.value).toBe(744 - 8 - 72)
+      expect(panelRailRoom.value).toBeNull()
+      // The rail is a left-edge occluder too.
+      expect(visibleMapFrame.value.left).toBe(236)
+      releaseChip()
+      expect(toolRailRoom.value).toBeNull()
+    } finally {
+      releaseRail()
+      releaseArea()
+    }
+    expect(visibleMapFrame.value.left).toBe(0)
   })
 
   it('lets the labelled tool rail give way when it would crowd the map', () => {

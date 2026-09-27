@@ -113,6 +113,7 @@
       "recenter": "Centrer sur le canevas"
     },
     "toolbar": "Outils",
+    "toolbarMore": "Autres outils",
     "tools": {
       "select": "Sélection",
       "hand": "Déplacer la vue",

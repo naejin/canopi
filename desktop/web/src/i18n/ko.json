@@ -113,6 +113,7 @@
       "recenter": "캔버스 보기에 맞춰 중앙 정렬"
     },
     "toolbar": "도구",
+    "toolbarMore": "도구 더 보기",
     "tools": {
       "select": "선택",
       "hand": "이동",

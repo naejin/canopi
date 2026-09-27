@@ -118,6 +118,17 @@
   white-space: nowrap;
 }
 
+/* More tools (a short window folds the last tools into its menu): hover while
+   its menu is open, and a soft accent while it holds the active tool. */
+.button[data-tool-rail-more][aria-expanded="true"] {
+  background: var(--color-control-hover);
+}
+
+.button[data-tool-rail-more][data-holds-active] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
 .button[aria-pressed="true"] .key {
   border-color: currentColor;
   background: transparent;
@@ -136,14 +147,6 @@
   }
 }
 
-/* Very short canvases: the rail scrolls rather than covering the view chip. */
-@container (max-height: 600px) {
-  .rail {
-    max-height: calc(100cqh - var(--chrome-rail-top) - var(--chrome-bottom));
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-}
 
 /* Narrow canvases: names stay as accessible names but the rail keeps to icons. */
 @container (max-width: 600px) {

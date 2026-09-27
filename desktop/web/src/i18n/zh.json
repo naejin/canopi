@@ -113,6 +113,7 @@
       "recenter": "居中到画布视图"
     },
     "toolbar": "工具",
+    "toolbarMore": "更多工具",
     "tools": {
       "select": "选择",
       "hand": "平移",

@@ -1,12 +1,16 @@
-import { useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import type {
   CanvasCommandProjection,
   CanvasProjectedCommand,
+  CanvasToolbarToolCommand,
 } from '../../app/canvas-commands'
+import { toolRailRoom, visibleMapFrame } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
+import { ActionMenu } from '../shared/ActionMenu'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
+import { railVisibleCount } from '../shared/rail-fit'
 import { ToolIcon, type ToolIconName } from './toolbar-icons'
-import { useMapOccluder } from '../shared/useMapChrome'
+import { useRail } from '../shared/useMapChrome'
 import styles from './ToolRail.module.css'
 
 interface ToolRailProps {
@@ -18,13 +22,61 @@ interface ToolRailProps {
 /**
  * The floating tool rail on the left: Select, Pan · Place plants, Plant a
  * row, Place a stamp · Zones · Text note, Measure · Undo, Redo. The active
- * tool is pressed; arrow keys move between buttons (roving tabindex).
+ * tool is pressed; arrow keys move between buttons (roving tabindex). When a
+ * short window leaves too little room above the view chip (`toolRailRoom`),
+ * the last tools fold, in order, into a More tools menu just before Undo and
+ * Redo, which always stay on the rail.
  */
-export function ToolRail({ projection, showNames }: ToolRailProps) {
+export function ToolRail({ projection, showNames: namesWanted }: ToolRailProps) {
   const rail = useRef<HTMLDivElement>(null)
-  useMapOccluder(rail, 'left')
+  useRail(rail, 'tool')
   const tools = projection.toolGroups.flatMap((group) => group.tools)
-  const focusTarget = tools.find((command) => command.active)?.commandId ?? tools[0]?.commandId
+
+  // A name cut off in the fixed-width labelled rail (a long German or Russian
+  // label) is no name: the rail keeps to icons with labelled tooltips until
+  // the labels or the map width change.
+  const labelsKey = `${visibleMapFrame.value.width}|${[...tools, ...projection.historyActions].map((command) => `${command.label} ${command.shortcut ?? ''}`).join('|')}`
+  const [cutKey, setCutKey] = useState<string | null>(null)
+  const showNames = namesWanted && cutKey !== labelsKey
+  useLayoutEffect(() => {
+    const element = rail.current
+    if (!showNames || !element) return
+    const cut = Array.from(element.querySelectorAll<HTMLElement>('[data-rail-label]'))
+      .some((label) => label.scrollWidth > label.clientWidth + 1)
+    if (cut) setCutKey(labelsKey)
+  })
+
+  const room = toolRailRoom.value
+  const layoutKey = `${room}|${showNames}|${projection.toolGroups.map((group) => group.tools.map((tool) => tool.tool).join(',')).join('|')}`
+  const [fit, setFit] = useState<{ readonly key: string; readonly count: number | null }>({ key: '', count: null })
+  // A new room, mode or tool list first lays every tool out to measure it.
+  const measuring = fit.key !== layoutKey
+  useLayoutEffect(() => {
+    const element = rail.current
+    if (!measuring || !element) return
+    const top = element.getBoundingClientRect()
+    const buttons = Array.from(element.querySelectorAll<HTMLElement>('[data-rail-tool]'), (button) => {
+      const box = button.getBoundingClientRect()
+      return { top: box.top - top.top, bottom: box.bottom - top.top }
+    })
+    setFit({ key: layoutKey, count: railVisibleCount(buttons, top.height, room) })
+  })
+  const shown = measuring ? null : fit.count
+  const folded = shown === null ? [] : tools.slice(shown)
+  let remaining = shown ?? Infinity
+  const railGroups = projection.toolGroups.map((group) => {
+    const kept = group.tools.slice(0, Math.max(0, remaining))
+    remaining -= kept.length
+    return { ...group, tools: kept }
+  }).filter((group) => group.tools.length > 0)
+
+  const railCommands: string[] = [
+    ...railGroups.flatMap((group) => group.tools.map((tool) => tool.commandId)),
+    ...(folded.length > 0 ? [MORE_ID] : []),
+    ...projection.historyActions.map((command) => command.commandId),
+  ]
+  const active = tools.find((command) => command.active)
+  const focusTarget = active && folded.includes(active) ? MORE_ID : active?.commandId ?? railCommands[0]
 
   function handleKeyDown(event: KeyboardEvent): void {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
@@ -47,6 +99,7 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
         type="button"
         className={styles.button}
         data-rail-item
+        data-rail-tool={pressed === undefined ? undefined : ''}
         data-command={command.commandId}
         aria-label={showNames ? undefined : command.shortcut ? `${command.label} (${command.shortcut})` : command.label}
         aria-pressed={pressed}
@@ -58,7 +111,7 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
         <ToolIcon name={icon} className={styles.icon} />
         {showNames ? (
           <>
-            <span className={styles.label}>{command.label}</span>
+            <span className={styles.label} data-rail-label>{command.label}</span>
             {command.shortcut && <kbd className={styles.key} aria-hidden="true">{command.shortcut}</kbd>}
           </>
         ) : (
@@ -67,6 +120,34 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
       </button>
     )
   }
+
+  const moreLabel = t('canvas.toolbarMore')
+  const more = folded.length > 0 && (
+    <ActionMenu
+      label={moreLabel}
+      placement="side"
+      openKey="ArrowRight"
+      tooltipSide="right"
+      tabIndex={focusTarget === MORE_ID ? 0 : -1}
+      triggerClassName={styles.button}
+      iconSize={20}
+      triggerLabel={showNames ? <span className={styles.label} data-rail-label>{moreLabel}</span> : undefined}
+      triggerData={{
+        'data-rail-item': '',
+        'data-tool-rail-more': '',
+        'data-holds-active': active && folded.includes(active) ? '' : undefined,
+      }}
+      items={folded.map((command: CanvasToolbarToolCommand) => ({
+        id: command.commandId,
+        label: command.label,
+        shortcut: command.shortcut,
+        keyShortcuts: command.ariaShortcut,
+        checked: command.active,
+        disabled: command.disabled,
+        run: () => command.action(),
+      }))}
+    />
+  )
 
   return (
     <div
@@ -78,13 +159,15 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
       data-tool-rail={showNames ? 'named' : 'icons'}
       onKeyDown={handleKeyDown}
     >
-      {projection.toolGroups.map((group, index) => (
+      {railGroups.map((group, index) => (
         <div key={group.id} className={styles.group} role="group" aria-label={group.heading}>
           {index > 0 && <div className={styles.rule} role="separator" />}
           {showNames && group.heading && <span className={styles.heading} aria-hidden="true">{group.heading}</span>}
           {group.tools.map((command) => renderCommand(command, command.tool, command.active))}
+          {index === railGroups.length - 1 && more}
         </div>
       ))}
+      {railGroups.length === 0 && more}
       <div className={styles.group}>
         <div className={styles.rule} role="separator" />
         {projection.historyActions.map((command) => renderCommand(command, command.id as ToolIconName))}
@@ -92,3 +175,6 @@ export function ToolRail({ projection, showNames }: ToolRailProps) {
     </div>
   )
 }
+
+/** The More tools button's place in the roving tab order. */
+const MORE_ID = 'tool-rail.more'

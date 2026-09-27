@@ -1,7 +1,8 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PanelRail, panelRailVisibleCount } from '../components/shared/PanelRail'
+import { PanelRail } from '../components/shared/PanelRail'
+import { railVisibleCount } from '../components/shared/rail-fit'
 import { panelRailRoom } from '../app/shell/visible-map-area'
 import { DesktopPanelRail } from '../components/panels/DesktopPanelRail'
 import { activePanel, sidePanel } from '../app/shell/state'
@@ -229,15 +230,15 @@ describe('Panel rail', () => {
     it('counts the panels that fit above the chrome with a More button after them', () => {
       const buttons = Array.from({ length: 9 }, (_, index) => ({ top: buttonTop(index) - RAIL_TOP, bottom: buttonTop(index) + 40 - RAIL_TOP }))
       const height = buttons[8]!.bottom + 5
-      expect(panelRailVisibleCount(buttons, height, null)).toBeNull()
-      expect(panelRailVisibleCount(buttons, height, height)).toBeNull()
+      expect(railVisibleCount(buttons, height, null)).toBeNull()
+      expect(railVisibleCount(buttons, height, height)).toBeNull()
       // Five panels and More end at 5 + 6 * 42 - 2 + 5 = 260; a sixth panel sits past the rule.
-      expect(panelRailVisibleCount(buttons, height, 260)).toBe(5)
-      expect(panelRailVisibleCount(buttons, height, 259)).toBe(4)
-      expect(panelRailVisibleCount(buttons, height, 314)).toBe(5)
-      expect(panelRailVisibleCount(buttons, height, 315)).toBe(6)
+      expect(railVisibleCount(buttons, height, 260)).toBe(5)
+      expect(railVisibleCount(buttons, height, 259)).toBe(4)
+      expect(railVisibleCount(buttons, height, 314)).toBe(5)
+      expect(railVisibleCount(buttons, height, 315)).toBe(6)
       // More stays even when nothing else fits.
-      expect(panelRailVisibleCount(buttons, height, 20)).toBe(0)
+      expect(railVisibleCount(buttons, height, 20)).toBe(0)
     })
 
     it('folds the panels that do not fit into a More menu, keeping their order', async () => {

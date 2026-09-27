@@ -4,8 +4,9 @@ import {
   refreshVisibleMapArea,
   registerMapArea,
   registerMapOccluder,
-  registerPanelRail,
-  registerUnderPanelRail,
+  registerRail,
+  registerUnderRail,
+  type ChromeRail,
   type MapOccluderSide,
 } from '../../app/shell/visible-map-area'
 
@@ -25,23 +26,23 @@ export function useMapOccluder(ref: RefObject<HTMLElement>, side?: MapOccluderSi
   }, [ref, side])
 }
 
-/** Registers the panel rail, which covers the right edge and folds panels into More when short. */
-export function usePanelRail(ref: RefObject<HTMLElement>): void {
+/** Registers a rail, which covers its edge and folds its last entries into More when short. */
+export function useRail(ref: RefObject<HTMLElement>, kind: ChromeRail): void {
   useLayoutEffect(() => {
     const element = ref.current
-    return element ? registerPanelRail(element) : undefined
-  }, [ref])
+    return element ? registerRail(kind, element) : undefined
+  }, [ref, kind])
 }
 
 /**
- * Registers chrome under the panel rail's column that the rail ends above
+ * Registers chrome under a rail's column that the rail ends above
  * (`mounted` follows an element rendered only some of the time).
  */
-export function useUnderPanelRail(ref: RefObject<HTMLElement>, mounted = true): void {
+export function useUnderRail(ref: RefObject<HTMLElement>, kind: ChromeRail, mounted = true): void {
   useLayoutEffect(() => {
     const element = mounted ? ref.current : null
-    return element ? registerUnderPanelRail(element) : undefined
-  }, [ref, mounted])
+    return element ? registerUnderRail(kind, element) : undefined
+  }, [ref, kind, mounted])
 }
 
 /**

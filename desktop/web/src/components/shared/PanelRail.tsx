@@ -4,8 +4,9 @@ import { PanelIcon, type PanelIconName } from './PanelIcon'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { panelRailRoom } from '../../app/shell/visible-map-area'
 import { t } from '../../i18n'
-import { usePanelRail } from './useMapChrome'
+import { useRail } from './useMapChrome'
 import { useModalInertRegion } from './useModalLayer'
+import { railVisibleCount } from './rail-fit'
 import styles from './PanelRail.module.css'
 
 /** One panel entry as the command projection hands it over. */
@@ -20,33 +21,6 @@ export interface PanelRailCommand {
   readonly disabled: boolean
   readonly active?: boolean
   action(): void
-}
-
-/** A panel button's vertical extent, from the rail's top edge. */
-export interface PanelRailButtonBox {
-  readonly top: number
-  readonly bottom: number
-}
-
-/**
- * Pure: how many panel buttons stay on the rail, with a More button after
- * them, so the rail ends within `room`; null when every panel fits. `buttons`
- * and `railHeight` are measured with every panel shown; a More button takes a
- * panel button's height and gap.
- */
-export function panelRailVisibleCount(
-  buttons: readonly PanelRailButtonBox[],
-  railHeight: number,
-  room: number | null,
-): number | null {
-  if (room === null || buttons.length === 0 || railHeight <= room) return null
-  const first = buttons[0]!
-  const height = first.bottom - first.top
-  const gap = buttons.length > 1 ? Math.max(0, buttons[1]!.top - first.bottom) : 0
-  const trailing = railHeight - buttons[buttons.length - 1]!.bottom
-  let count = 0
-  while (count < buttons.length && buttons[count]!.bottom + gap + height + trailing <= room) count += 1
-  return count
 }
 
 /**
@@ -64,7 +38,7 @@ export function PanelRail({ groups, label }: {
     .map((group) => group.filter((command) => command.panel))
     .filter((group) => group.length > 0)
   const rail = useRef<HTMLElement>(null)
-  usePanelRail(rail)
+  useRail(rail, 'panel')
   useModalInertRegion(rail)
 
   const room = panelRailRoom.value
@@ -80,7 +54,7 @@ export function PanelRail({ groups, label }: {
       const box = button.getBoundingClientRect()
       return { top: box.top - top.top, bottom: box.bottom - top.top }
     })
-    setFit({ key: layoutKey, count: panelRailVisibleCount(buttons, top.height, room) })
+    setFit({ key: layoutKey, count: railVisibleCount(buttons, top.height, room) })
   })
 
   const shown = measuring ? null : fit.count

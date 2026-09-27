@@ -9,7 +9,7 @@ import { currentCanvasDocumentSurface, currentCanvasQuerySurface } from '../../c
 import { t } from '../../i18n'
 import { ControlIcon } from '../shared/ControlIcon'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
-import { useUnderPanelRail } from '../shared/useMapChrome'
+import { useUnderRail } from '../shared/useMapChrome'
 import styles from './InspectionLens.module.css'
 
 export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElement> }) {
@@ -24,7 +24,7 @@ export function InspectionLens({ canvasRef }: { canvasRef: RefObject<HTMLDivElem
     wasOpen.current = open
   }, [open])
   // The launcher sits in the panel rail's column; the rail ends above it.
-  useUnderPanelRail(launcher, !!documents && !!queries)
+  useUnderRail(launcher, 'panel', !!documents && !!queries)
   if (!documents || !queries) return null
   return <>
     <button ref={launcher} type="button" className={styles.launcher} hidden={open} aria-expanded={open} aria-controls={id} data-inspection-launcher

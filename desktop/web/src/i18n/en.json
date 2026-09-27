@@ -113,6 +113,7 @@
       "recenter": "Centre on canvas view"
     },
     "toolbar": "Tools",
+    "toolbarMore": "More tools",
     "tools": {
       "select": "Select",
       "hand": "Pan",

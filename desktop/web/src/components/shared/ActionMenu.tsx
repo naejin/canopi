@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { createPortal } from 'preact/compat'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { ButtonTooltip } from './ButtonTooltip'
@@ -50,7 +51,10 @@ interface MenuAnchor {
 }
 
 /** A compact command menu, portalled so scrollable lists cannot clip actions. */
-export function ActionMenu({ label, items, placement = 'below', triggerClassName, iconSize = 18, triggerData }: {
+export function ActionMenu({
+  label, items, placement = 'below', triggerClassName, iconSize = 18, triggerData,
+  openKey = 'ArrowDown', tabIndex, tooltipSide = 'left', triggerLabel,
+}: {
   label: string
   items: readonly ActionMenuEntry[]
   /** Where the menu opens: below the trigger, or beside it (a rail's More button). */
@@ -60,6 +64,13 @@ export function ActionMenu({ label, items, placement = 'below', triggerClassName
   iconSize?: 18 | 20
   /** `data-*` attributes on the trigger. */
   triggerData?: Readonly<Record<`data-${string}`, string | undefined>>
+  /** The key that opens the menu from the trigger; a vertical toolbar keeps ArrowDown for moving. */
+  openKey?: 'ArrowDown' | 'ArrowRight'
+  /** For a trigger inside a roving-tabindex toolbar. */
+  tabIndex?: number
+  tooltipSide?: 'left' | 'right'
+  /** Visible text beside the icon, shown instead of the tooltip (a labelled rail). */
+  triggerLabel?: ComponentChildren
 }) {
   const [open, setOpen] = useState(false)
   const menuId = useId()
@@ -93,10 +104,10 @@ export function ActionMenu({ label, items, placement = 'below', triggerClassName
 
   return <>
     <button ref={trigger} type="button" className={triggerClassName ?? styles.trigger} aria-label={label} aria-haspopup="menu" aria-expanded={open}
-      {...triggerData}
+      {...triggerData} tabIndex={tabIndex}
       onClick={() => setOpen(!open)} onKeyDown={event => {
-        if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true) }
-      }}><ControlIcon name="more" size={iconSize} /><ButtonTooltip label={label} side="left" /></button>
+        if (event.key === openKey) { event.preventDefault(); setOpen(true) }
+      }}><ControlIcon name="more" size={iconSize} />{triggerLabel ?? <ButtonTooltip label={label} side={tooltipSide} />}</button>
     {open && trigger.current && (
       <MenuPopup menuId={menuId} label={label} entries={items} anchor={trigger.current} placement={placement} onClose={close} onBack={close} />
     )}

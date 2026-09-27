@@ -12,7 +12,7 @@ import {
   toolRailShowsNames,
   toolRailShowsNamesOnMap,
 } from '../app/tool-rail/learning'
-import { visibleMapFrame } from '../app/shell/visible-map-area'
+import { toolRailRoom, visibleMapFrame } from '../app/shell/visible-map-area'
 import { toolNamesVisible, usedCanvasTools } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
@@ -172,6 +172,27 @@ describe('ToolRail', () => {
     }
   })
 
+  it('keeps to icons with labelled tooltips when a name would be cut off in the labelled rail', async () => {
+    // A long label ("Wiederherstellen" in German) overflows its 224 px row.
+    const long = 'Redo'
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-rail-label') && this.textContent === long ? 180 : 60
+    })
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-rail-label') ? 120 : 0
+    })
+    try {
+      await mount()
+      expect(toolRailShowsNames.value).toBe(true)
+      const rail = container.querySelector('[role="toolbar"]')!
+      expect(rail.getAttribute('data-tool-rail')).toBe('icons')
+      expect(railButton('edit.redo').getAttribute('aria-label')).toBe('Redo (Ctrl Shift Z)')
+      expect(railButton('edit.redo').querySelector('[role="tooltip"]')?.textContent).toBe('RedoCtrl Shift Z')
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
   it('presses the active tool and groups tools as the Menus board does', async () => {
     activeTool.value = 'ellipse'
     await mount()
@@ -245,6 +266,91 @@ describe('ToolRail', () => {
     expect(container.querySelectorAll('button[data-rail-item]')).toHaveLength(
       RAIL_TOOL_IDS.length + 2,
     )
+  })
+
+  describe('in a short window', () => {
+    // The rail's measured layout: 4 px padding, 36 px buttons 2 px apart.
+    const RAIL_TOP = 72
+    const itemTop = (index: number) => RAIL_TOP + 4 + index * 38
+    const box = (top: number, height: number) =>
+      ({ left: 12, top, width: 52, height, x: 12, y: top, right: 64, bottom: top + height, toJSON: () => ({}) }) as DOMRect
+
+    beforeEach(() => {
+      usedCanvasTools.value = [...RAIL_TOOL_IDS]
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const rail = this.closest<HTMLElement>('[role="toolbar"]')
+        if (!rail) return box(0, 0)
+        const items = Array.from(rail.querySelectorAll('[data-rail-item]'))
+        if (this === rail) return box(RAIL_TOP, itemTop(items.length - 1) + 36 + 4 - RAIL_TOP)
+        const index = items.indexOf(this)
+        return index < 0 ? box(0, 0) : box(itemTop(index), 36)
+      })
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      toolRailRoom.value = null
+    })
+
+    const railItems = () => [...container.querySelectorAll<HTMLButtonElement>('[data-rail-item]')]
+      .map((button) => button.dataset.command ?? button.getAttribute('aria-label'))
+
+    it('folds the last tools into More before Undo and Redo, keeping tab order and the keys', async () => {
+      await mount()
+      expect(container.querySelector('[data-tool-rail-more]')).toBeNull()
+
+      // Four tools, More, Undo and Redo end at 4 + 7 × 38 − 2 + 4 = 272 px.
+      await act(async () => {
+        toolRailRoom.value = 300
+        await Promise.resolve()
+      })
+      expect(railItems()).toEqual([
+        'canvas.tool.select', 'canvas.tool.hand', 'canvas.tool.plantStamp', 'canvas.tool.plantSpacing',
+        'More tools', 'edit.undo', 'edit.redo',
+      ])
+      const more = container.querySelector<HTMLButtonElement>('[data-tool-rail-more]')!
+      expect(more.getAttribute('aria-haspopup')).toBe('menu')
+      // Still one tab stop, and the arrows walk through More to Undo without opening it.
+      expect(railItems().filter((_, index) => container.querySelectorAll<HTMLButtonElement>('[data-rail-item]')[index]!.tabIndex === 0))
+        .toEqual(['canvas.tool.select'])
+      railButton('canvas.tool.plantSpacing').focus()
+      await act(async () => {
+        railButton('canvas.tool.plantSpacing').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      })
+      expect(document.activeElement).toBe(more)
+      await act(async () => {
+        more.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      })
+      expect(document.activeElement).toBe(railButton('edit.undo'))
+      expect(document.querySelector('[role="menu"]')).toBeNull()
+
+      await act(async () => { more.click() })
+      const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]'))
+      expect(items.map((item) => item.textContent)).toEqual([
+        expect.stringContaining('Place a stamp'),
+        expect.stringContaining('Polygon zone'),
+        expect.stringContaining('Rectangle zone'),
+        expect.stringContaining('Ellipse zone'),
+        expect.stringContaining('Line zone'),
+        expect.stringContaining('Text note'),
+        expect.stringContaining('Measure'),
+      ])
+      expect(items[2]!.textContent).toContain('R')
+      expect(items[2]!.getAttribute('aria-keyshortcuts')).toBe('R')
+      await act(async () => { items[2]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      expect(setTool).toHaveBeenCalledWith('rectangle')
+      expect(activeTool.value).toBe('rectangle')
+      // More shows that it holds the active tool.
+      expect(container.querySelector('[data-tool-rail-more]')!.hasAttribute('data-holds-active')).toBe(true)
+
+      // A taller window gives the tools back.
+      await act(async () => {
+        toolRailRoom.value = 900
+        await Promise.resolve()
+      })
+      expect(container.querySelector('[data-tool-rail-more]')).toBeNull()
+      expect(railItems()).toHaveLength(RAIL_TOOL_IDS.length + 2)
+    })
   })
 })
 
