@@ -39,6 +39,7 @@ import type {
 import { t } from '../../../i18n'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { DockPanelHeader } from '../../shared/DockPanelHeader'
+import { Dropdown, type DropdownItem } from '../../shared/Dropdown'
 import { Notice } from '../../shared/Notice'
 import { SurfaceSearch } from '../../shared/SurfaceSearch'
 import { AnalyzeDialog } from '../analyze/AnalyzeDialog'
@@ -288,7 +289,6 @@ export function DataLibraryPanel() {
     <div className={styles.panel}>
       <DockPanelHeader
         title={t('canvas.lidar.library.title')}
-        count={items.length}
         actions={view.kind === 'list'
           ? <button type="button" className={styles.primary} disabled={busy} onClick={beginImport}>{t('canvas.lidar.library.import')}</button>
           : undefined}
@@ -300,14 +300,7 @@ export function DataLibraryPanel() {
         {view.kind === 'list' && <>
           <div className={styles.filters}>
             <SurfaceSearch value={query} onChange={(value) => { setQuery(value); setRelatedTo(null) }} label={t('canvas.lidar.library.searchLabel')} />
-            <label>
-              {t('canvas.lidar.library.typeLabel')}
-              <select value={type} aria-label={t('canvas.lidar.library.typeLabel')} onChange={(event) => { setType(event.currentTarget.value as LibraryTypeFilter); setRelatedTo(null) }}>
-                <option value="all">{t('canvas.lidar.library.typeAll')}</option>
-                <option value="sources">{t('canvas.lidar.library.typeSources')}</option>
-                {ANALYSIS_GROUPS.map((group) => <option key={group.key} value={group.key}>{t(group.labelKey)}</option>)}
-              </select>
-            </label>
+            <TypeFilter value={type} onChange={(next) => { setType(next); setRelatedTo(null) }} />
             {relatedTo !== null && (
               <button type="button" className={styles.link} onClick={() => setRelatedTo(null)}>
                 {t('canvas.lidar.library.showAll')}
@@ -456,6 +449,28 @@ function formatMetres(value: number): string {
   return `${value >= 10 ? value.toFixed(0) : value >= 1 ? value.toFixed(1) : value.toFixed(2)} m`
 }
 
+/** The library's type filter: everything, imported data, or one analysis group from the registry. */
+function TypeFilter({ value, onChange }: { value: LibraryTypeFilter; onChange(next: LibraryTypeFilter): void }) {
+  const items: DropdownItem<LibraryTypeFilter>[] = [
+    { value: 'all', label: t('canvas.lidar.library.typeAll') },
+    { value: 'sources', label: t('canvas.lidar.library.typeSources') },
+    ...ANALYSIS_GROUPS.map((group) => ({ value: group.key, label: t(group.labelKey) })),
+  ]
+  return (
+    <div className={styles.filterField}>
+      <span aria-hidden="true">{t('canvas.lidar.library.typeLabel')}</span>
+      <Dropdown
+        className={styles.filterDropdown}
+        ariaLabel={t('canvas.lidar.library.typeLabel')}
+        trigger={items.find((item) => item.value === value)?.label ?? ''}
+        items={items}
+        value={value}
+        onChange={onChange}
+      />
+    </div>
+  )
+}
+
 function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
   paths: readonly string[]
   busy: boolean
@@ -481,15 +496,16 @@ function ImportForm({ paths, busy, error, onCancel, onSubmit }: {
         {t('canvas.lidar.library.name')}
         <input required value={name} onInput={(event) => setName(event.currentTarget.value)} />
       </label>
-      <label>
-        {t('canvas.lidar.library.quantityLabel')}
-        <select required value={quantity} onChange={(event) => setQuantity(event.currentTarget.value as RasterQuantity)}>
-          <option value="" disabled>{t('canvas.lidar.library.chooseQuantity')}</option>
-          {IMPORTABLE_QUANTITIES.map((value) => (
-            <option key={value} value={value}>{t(RASTER_QUANTITIES[value].labelKey)}</option>
-          ))}
-        </select>
-      </label>
+      <div className={styles.field}>
+        <span aria-hidden="true">{t('canvas.lidar.library.quantityLabel')}</span>
+        <Dropdown<RasterQuantity | ''>
+          ariaLabel={t('canvas.lidar.library.quantityLabel')}
+          trigger={quantity ? t(RASTER_QUANTITIES[quantity].labelKey) : t('canvas.lidar.library.chooseQuantity')}
+          items={IMPORTABLE_QUANTITIES.map((value) => ({ value, label: t(RASTER_QUANTITIES[value].labelKey) }))}
+          value={quantity}
+          onChange={setQuantity}
+        />
+      </div>
       {quantity === 'OtherContinuous' && (
         <fieldset className={styles.unit}>
           <label>

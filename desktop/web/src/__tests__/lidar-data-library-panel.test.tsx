@@ -49,6 +49,7 @@ import { currentDesign } from '../app/document-session/store'
 import { libraryAnalyzeRequest, libraryFocusRequest } from '../app/lidar/library-navigation'
 import { sidePanel } from '../app/shell/state'
 import { locale } from '../app/settings/state'
+import { dropdownTrigger } from './support/dropdown-trigger'
 
 function layer(id: string, name: string, overrides: Partial<LibraryItemSummary> = {}): LibraryItemSummary {
   return sourceItem(id, name, { resolution_m: 0.5, value_range: [1, 2], ...overrides })
@@ -85,6 +86,16 @@ async function click(target: HTMLElement): Promise<void> {
   await act(async () => {
     target.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
+}
+
+async function chooseFrom(label: string, option: string): Promise<void> {
+  const trigger = dropdownTrigger(container, label)
+  if (!trigger) throw new Error(`no ${label} dropdown`)
+  await click(trigger)
+  const item = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+    .find((candidate) => candidate.textContent === option)
+  if (!item) throw new Error(`no ${option} option`)
+  await click(item)
 }
 
 function mount(): void {
@@ -126,11 +137,9 @@ describe('Data Library panel', () => {
     const submit = button('Import files (2)')
     expect(submit.disabled).toBe(true)
     expect(container.textContent).toContain('the first file in the list wins')
-    const select = container.querySelector('form select') as HTMLSelectElement
-    await act(async () => {
-      select.value = 'GroundElevation'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    expect(container.querySelector('select')).toBeNull()
+    expect(dropdownTrigger(container, 'What the values measure')?.textContent).toContain('Choose a measurement')
+    await chooseFrom('What the values measure', 'Ground elevation')
     expect(submit.disabled).toBe(false)
     await act(async () => {
       container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -146,6 +155,9 @@ describe('Data Library panel', () => {
     lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
     setDesign(design([{ kind: 'Source', id: 'b' }]))
     mount()
+
+    // The rows already show how many items there are; the header carries no bare count.
+    expect(container.querySelector('header')?.textContent).not.toMatch(/\d/)
 
     expect(button('Canopy is in this Design').disabled).toBe(true)
     await click(button('Add Ground to this Design'))
@@ -176,12 +188,13 @@ describe('Data Library panel', () => {
   it('filters by analysis group from the registry', async () => {
     lidarLibrary.value = library([layer('a', 'Ground')], [slope('s', 'a')])
     mount()
-    const select = container.querySelector('select') as HTMLSelectElement
-    expect(Array.from(select.options).map((option) => option.value)).toEqual(['all', 'sources', 'terrain'])
-    await act(async () => {
-      select.value = 'terrain'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    expect(container.querySelector('select')).toBeNull()
+    await click(dropdownTrigger(container, 'Type')!)
+    expect(Array.from(container.querySelectorAll('[role="option"]')).map((option) => option.textContent))
+      .toEqual(['All types', 'Imported data', 'Terrain'])
+    await click(dropdownTrigger(container, 'Type')!)
+    await chooseFrom('Type', 'Terrain')
+    expect(dropdownTrigger(container, 'Type')?.textContent).toContain('Terrain')
     expect(Array.from(container.querySelectorAll('li strong')).map((node) => node.textContent)).toEqual(['Ground · Slope'])
   })
 

@@ -22,13 +22,13 @@ Two surfaces manage data: the **Data Library** side panel (`DataLibraryPanel.tsx
 
 ### Library list and details
 
-- Header action **Import**; below it name search and a type filter (All, Sources, then one entry per registry group, e.g. Terrain). Search, filter, order and detail navigation are session view state, never Design data (`app/lidar/library-items.ts`). Items sort by name with identity as tie-breaker, and derived items nest under their first input. Unfinished or failed operations stay listed whatever the filter.
+- Header action **Import** (no item count beside the title; the rows show it); below it name search and a type filter, a shared `Dropdown` (All types, Imported data, then one entry per registry group, e.g. Terrain). Search, filter, order and detail navigation are session view state, never Design data (`app/lidar/library-items.ts`). Items sort by name with identity as tie-breaker, and derived items nest under their first input. Unfinished or failed operations stay listed whatever the filter.
 - Each row shows a lazy preview, name, quiet type and resolution or units, and **Add to Design** (or **Added** when referenced; hiding in Layers does not un-add). Previews share the raster worker pool; a missing preview never blocks search or metadata.
 - Details (same dock, Back restores search, scroll and focus) show a larger preview, extent, quantity and units, resolution, availability and source filenames. A derived item also shows its provenance (analysis, recipe version, parameters with units, inputs by name, tool version and GeoLibre revision, date) and a **Processing history** disclosure that pages `lidar_processing_history`. Rename and Delete are in the overflow menu. Names are not unique and never identify an item; an unnamed derived item shows "<input> · <analysis>".
 
 ### Import
 
-- The native picker opens first (`chooseImportFiles`); cancelling it creates nothing. The user names the item and declares what the samples mean: an importable quantity (ground elevation, surface elevation, above-ground height, other continuous) and units, or explicitly unknown units. Meaning is never guessed from a filename.
+- The native picker opens first (`chooseImportFiles`); cancelling it creates nothing. The user names the item and declares what the samples mean: an importable quantity chosen in a shared `Dropdown` (ground elevation, surface elevation, above-ground height, other continuous) and units, or explicitly unknown units. Meaning is never guessed from a filename.
 - One submitted selection of one or more compatible GeoTIFFs publishes **one fixed item**. The listed order is the item's source priority: where files overlap the first listed valid sample wins and NoData reveals the next. Importing more files later creates another item; a published item never gains, loses or reorders sources.
 - Any incompatible source or preparation failure publishes none of the batch; the error names the file and reason.
 - Import saves to the library only. It never attaches to a Design or moves the camera; **Add to Design** is the single attachment step.
