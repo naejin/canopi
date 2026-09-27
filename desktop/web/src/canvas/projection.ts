@@ -9,7 +9,8 @@
 const EARTH_RADIUS_METERS = 6371008.8
 const EARTH_CIRCUMFERENCE_METERS = 2 * Math.PI * EARTH_RADIUS_METERS
 const DEGREES_TO_RADIANS = Math.PI / 180
-const MAPLIBRE_WORLD_TILE_SIZE = 512
+/** MapLibre's world is 512 CSS pixels wide at zoom 0. */
+export const MAPLIBRE_WORLD_TILE_SIZE = 512
 export const LOCAL_MERCATOR_PROJECTION_ID = 'local-mercator' as const
 
 export interface MapMercatorCoordinate {

@@ -737,6 +737,7 @@ export type SavedView = {
 	highlighted: SavedViewHighlight,
 	title: string | null,
 	text?: RichTextBlock[],
+	extent?: SavedViewExtent | null,
 };
 
 export type SavedViewBackground = { kind: "basemap"; style: string } | { kind: "satellite" } | { kind: "none" };
@@ -746,6 +747,13 @@ export type SavedViewCamera = {
 	lat: number,
 	zoom: number,
 	bearing: number,
+};
+
+export type SavedViewExtent = {
+	west: number,
+	south: number,
+	east: number,
+	north: number,
 };
 
 export type SavedViewHighlight = {

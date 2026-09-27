@@ -7,7 +7,7 @@ import {
 import type { RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
 
 // Mirrors common_types::views::validate_views_and_stories. The generated schema
-// already bounds each camera; this checks ids, cross-references, link schemes
+// already bounds each camera and extent; this checks extent order, ids, cross-references, link schemes
 // and embedded images. Returns the first problem as "$.path: reason".
 export function viewsAndStoriesProblem(
   views: readonly SavedView[],
@@ -17,6 +17,10 @@ export function viewsAndStoriesProblem(
   for (const [index, view] of views.entries()) {
     if (viewIds.has(view.id)) return `$.views[${index}].id: duplicate saved view id ${JSON.stringify(view.id)}`
     viewIds.add(view.id)
+    const extent = view.extent
+    if (extent && !(extent.west < extent.east && extent.south < extent.north)) {
+      return `$.views[${index}].extent: expected WGS84 bounds on the Web Mercator map with west < east and south < north`
+    }
     const problem = richTextProblem(view.text ?? [], `$.views[${index}].text`)
     if (problem) return problem
   }

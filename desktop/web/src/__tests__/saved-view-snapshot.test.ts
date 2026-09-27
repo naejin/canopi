@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Signal } from '@preact/signals'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
-import type { SessionPlane } from '../canvas/session-plane'
+import { mapZoomToFitExtent, type SessionPlane } from '../canvas/session-plane'
 import type { ViewSnapshotCapture, ViewSnapshotRequest } from '../maplibre/view-snapshot-map'
 
 const snapshotOwner = vi.hoisted(() => ({
@@ -103,6 +103,18 @@ afterEach(async () => {
 })
 
 describe('saved view snapshot request', () => {
+  it('frames the ground recorded with the view, whatever the workspace size', () => {
+    const extent = { west: 12.9995, south: 22.999, east: 13.0005, north: 23.001 }
+    const request = describeSavedViewSnapshot({ ...VIEW, extent }, VIEW_SNAPSHOT_THUMBNAIL, {
+      queries: queries(),
+      mapLayers: createDefaultMapLayers(),
+      locale: 'en',
+      plantLabels: 'names',
+    })!
+
+    expect(request.camera.zoom).toBeCloseTo(mapZoomToFitExtent(extent, VIEW_SNAPSHOT_THUMBNAIL)!, 9)
+  })
+
   it('draws the view off-screen with its layers, focused species and a fitted zoom', () => {
     const surface = queries()
     const build = vi.spyOn(surface, 'captureViewScene')

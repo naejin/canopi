@@ -1,4 +1,5 @@
-import { geographicViewOf } from '../../canvas/session-plane'
+import { geographicExtentOf, geographicViewOf, mapZoomToFitExtent } from '../../canvas/session-plane'
+import { WORKSPACE_MAP_MAX_ZOOM, WORKSPACE_MAP_MIN_ZOOM } from '../../canvas/workspace-camera-policy'
 import {
   currentCanvasQuerySurface,
   getCurrentCanvasCommandSurface,
@@ -44,7 +45,8 @@ export function saveCurrentView({ name, title = '' }: SaveCurrentViewInput): Sav
   const design = currentDesign.value
   const trimmed = name.trim()
   if (!queries || !plane || !design || trimmed.length === 0) return null
-  const view = geographicViewOf(queries.viewport.value, plane)
+  const frame = queries.viewport.value
+  const view = geographicViewOf(frame, plane)
   if (!view) return null
 
   const saved = composeSavedView({
@@ -52,6 +54,7 @@ export function saveCurrentView({ name, title = '' }: SaveCurrentViewInput): Sav
     name: trimmed,
     title: title.trim() || null,
     view,
+    extent: geographicExtentOf(frame, plane),
     mapLayers: mapLayers.value,
     sceneLayers: queries.getSceneSnapshot().layers,
     siteData: design.lidar?.entries ?? [],
@@ -70,7 +73,8 @@ export interface GoToSavedViewOptions {
 
 /**
  * Goes to a saved view: session state only, never a Design edit. The camera
- * flies there (or jumps under reduced motion); objects never move. Background,
+ * flies there (or jumps under reduced motion) and frames the ground recorded
+ * with the view in the current window; objects never move. Background,
  * layer and highlight overrides belong to presenting a story, which applies
  * them on top of this and restores the user's state when it ends.
  */
@@ -79,11 +83,24 @@ export function goToSavedView(id: string, options: GoToSavedViewOptions = {}): b
   const commands = getCurrentCanvasCommandSurface()
   if (!view || !commands || !canShowSavedViews()) return false
   const reducedMotion = options.reducedMotion ?? prefersReducedMotion()
+  const screen = currentCanvasQuerySurface.peek()?.viewport.peek().screenSize
   return commands.viewport.showPlace(
     { lon: view.camera.lon, lat: view.camera.lat },
-    view.camera.zoom,
+    savedViewZoomFor(view, screen),
     { motion: reducedMotion ? 'jump' : 'fly' },
   )
+}
+
+/**
+ * The zoom that shows a view in a frame: its recorded ground fitted to the
+ * frame, or its saved zoom for a view without one, within the map's range.
+ */
+export function savedViewZoomFor(
+  view: Pick<SavedView, 'camera' | 'extent'>,
+  size: { readonly width: number; readonly height: number } | undefined,
+): number {
+  const fitted = view.extent && size ? mapZoomToFitExtent(view.extent, size) : null
+  return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, fitted ?? view.camera.zoom))
 }
 
 function prefersReducedMotion(): boolean {

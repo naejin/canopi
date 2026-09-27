@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import {
+  MAPLIBRE_WORLD_TILE_SIZE,
   geoToMercator,
   mercatorToGeo,
   mercatorUnitsPerMeterAtLat,
@@ -67,6 +68,58 @@ export function geographicViewOf(
   return [centre.lon, centre.lat, zoom].every(Number.isFinite)
     ? { lon: centre.lon, lat: centre.lat, zoom }
     : null
+}
+
+/** A north-up WGS84 box on one world: `west < east`, `south < north`. */
+export interface GeographicExtent {
+  readonly west: number
+  readonly south: number
+  readonly east: number
+  readonly north: number
+}
+
+// Web Mercator's latitude limit, as the file format bounds it.
+const MERCATOR_MAX_LATITUDE_DEG = 85.0511287798066
+
+/**
+ * The ground a plane viewport shows edge to edge, or null when the screen is
+ * empty or shows more than one world (across the antimeridian or the poles).
+ */
+export function geographicExtentOf(
+  frame: {
+    readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
+    readonly screenSize: { readonly width: number; readonly height: number }
+  },
+  plane: SessionPlane,
+): GeographicExtent | null {
+  const { viewport, screenSize } = frame
+  if (!(screenSize.width > 0 && screenSize.height > 0 && viewport.scale > 0)) return null
+  const northWest = plane.toGeo({ x: -viewport.x / viewport.scale, y: -viewport.y / viewport.scale })
+  const southEast = plane.toGeo({
+    x: (screenSize.width - viewport.x) / viewport.scale,
+    y: (screenSize.height - viewport.y) / viewport.scale,
+  })
+  const extent = { west: northWest.lon, south: southEast.lat, east: southEast.lon, north: northWest.lat }
+  const onOneWorld = Object.values(extent).every(Number.isFinite)
+    && extent.west >= -180 && extent.east <= 180
+    && extent.south >= -MERCATOR_MAX_LATITUDE_DEG && extent.north <= MERCATOR_MAX_LATITUDE_DEG
+    && extent.west < extent.east && extent.south < extent.north
+  return onOneWorld ? extent : null
+}
+
+/** The MapLibre zoom at which an extent just fits a frame of CSS pixels, or null for an empty frame. */
+export function mapZoomToFitExtent(
+  extent: GeographicExtent,
+  size: { readonly width: number; readonly height: number },
+): number | null {
+  if (!(size.width > 0 && size.height > 0)) return null
+  const northWest = geoToMercator(extent.west, extent.north)
+  const southEast = geoToMercator(extent.east, extent.south)
+  const width = (southEast.x - northWest.x) * MAPLIBRE_WORLD_TILE_SIZE
+  const height = (southEast.y - northWest.y) * MAPLIBRE_WORLD_TILE_SIZE
+  if (!(width > 0 && height > 0)) return null
+  const zoom = Math.log2(Math.min(size.width / width, size.height / height))
+  return Number.isFinite(zoom) ? zoom : null
 }
 
 export function createSessionPlane(origin: GeoPosition): SessionPlane {

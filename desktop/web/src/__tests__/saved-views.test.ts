@@ -27,7 +27,7 @@ import { createDefaultMapLayers, mapLayers } from '../app/map-layers/state'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { mapZoomToStageScale } from '../canvas/projection'
-import { createSessionPlane } from '../canvas/session-plane'
+import { createSessionPlane, mapZoomToFitExtent } from '../canvas/session-plane'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { CanopiFile, PlacedPlant, SavedView, Story } from '../types/design'
 import {
@@ -174,6 +174,19 @@ describe('saving the current view', () => {
     expect(designSessionStore.designDirty.value).toBe(true)
   })
 
+  it('records the ground the map shows, so the view frames the same area at any window size', () => {
+    replaceCurrentDesignState(design(), null, 'Orchard')
+    mountCanvas()
+
+    const saved = saveCurrentView({ name: 'Hedges' })!
+
+    // The test screen is 400 × 300 at zoom 18.
+    expect(saved.extent).toBeDefined()
+    expect(saved.extent!.west).toBeLessThan(TEST_GEO_ORIGIN.lon)
+    expect(saved.extent!.north).toBeGreaterThan(TEST_GEO_ORIGIN.lat)
+    expect(mapZoomToFitExtent(saved.extent!, { width: 400, height: 300 })).toBeCloseTo(18, 5)
+  })
+
   it('records the label choice with the view, and presents the view with it', () => {
     replaceCurrentDesignState(design(), null, 'Orchard')
     mountCanvas()
@@ -267,6 +280,19 @@ describe('going to a saved view', () => {
 
     expect(showPlace).toHaveBeenCalledTimes(1)
     expect(showPlace).toHaveBeenCalledWith({ lon: 13.0012, lat: 22.9991 }, 19.5, { motion: 'jump' })
+  })
+
+  it('fits the recorded ground into the current window', () => {
+    // Saved on a screen twice the size of the 400 × 300 test screen.
+    const extent = { west: 13.0002, south: 22.9985, east: 13.0022, north: 22.9997 }
+    replaceCurrentDesignState(design([{ ...BERRIES, extent }]), null, 'Orchard')
+    const { showPlace } = mountCanvas()
+
+    goToSavedView('berries', { reducedMotion: true })
+
+    const zoom = mapZoomToFitExtent(extent, { width: 400, height: 300 })!
+    expect(showPlace).toHaveBeenCalledWith({ lon: 13.0012, lat: 22.9991 }, zoom, { motion: 'jump' })
+    expect(zoom).not.toBeCloseTo(19.5, 1)
   })
 
   it('follows the platform reduced-motion preference by default', () => {

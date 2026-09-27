@@ -591,6 +591,16 @@ export const CANOPI_FILE_SCHEMA = {
         "camera": {
           "$ref": "#/$defs/SavedViewCamera"
         },
+        "extent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SavedViewExtent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "highlighted": {
           "$ref": "#/$defs/SavedViewHighlight"
         },
@@ -703,6 +713,41 @@ export const CANOPI_FILE_SCHEMA = {
         "lat",
         "zoom",
         "bearing"
+      ],
+      "type": "object"
+    },
+    "SavedViewExtent": {
+      "properties": {
+        "east": {
+          "format": "double",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "type": "number"
+        },
+        "north": {
+          "format": "double",
+          "maximum": 85.0511287798066,
+          "minimum": -85.0511287798066,
+          "type": "number"
+        },
+        "south": {
+          "format": "double",
+          "maximum": 85.0511287798066,
+          "minimum": -85.0511287798066,
+          "type": "number"
+        },
+        "west": {
+          "format": "double",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "west",
+        "south",
+        "east",
+        "north"
       ],
       "type": "object"
     },

@@ -1,5 +1,5 @@
 import type { SceneDesignObjectTarget } from '../../canvas/runtime/scene'
-import { roundGeoDegrees, type GeographicView } from '../../canvas/session-plane'
+import { roundGeoDegrees, type GeographicExtent, type GeographicView } from '../../canvas/session-plane'
 import { SAVED_VIEW_MAX_ZOOM } from '../../generated/canopi-design-format'
 import type { CanopiFile, SavedView, SavedViewBackground, SavedViewObject } from '../../types/design'
 import { mapBackgroundOf, type MapLayersState } from '../map-layers/state'
@@ -9,6 +9,8 @@ export interface SavedViewCaptureInput {
   readonly name: string
   readonly title: string | null
   readonly view: GeographicView
+  /** The ground the map shows; null when it leaves one world. */
+  readonly extent?: GeographicExtent | null
   readonly mapLayers: MapLayersState
   readonly sceneLayers: readonly { readonly name: string; readonly visible: boolean }[]
   readonly siteData: readonly { readonly id: string; readonly visible: boolean }[]
@@ -42,6 +44,14 @@ export function composeSavedView(input: SavedViewCaptureInput): SavedView {
     },
     title: input.title,
     text: [],
+    ...(input.extent ? {
+      extent: {
+        west: roundGeoDegrees(input.extent.west),
+        south: roundGeoDegrees(input.extent.south),
+        east: roundGeoDegrees(input.extent.east),
+        north: roundGeoDegrees(input.extent.north),
+      },
+    } : {}),
   }
 }
 

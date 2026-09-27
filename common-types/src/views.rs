@@ -25,6 +25,56 @@ pub struct SavedView {
     pub title: Option<String>,
     #[serde(default)]
     pub text: Vec<RichTextBlock>,
+    // The ground the map showed when the view was saved, so going to the view
+    // and its snapshots frame the same area at any window size. Absent for a
+    // view whose map crossed the antimeridian or showed more than one world.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "design-schema", schemars(default))]
+    pub extent: Option<SavedViewExtent>,
+}
+
+// A north-up WGS84 box: `west < east` (it never crosses the antimeridian) and
+// `south < north`.
+#[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct SavedViewExtent {
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -180.0, max = 180.0))
+    )]
+    pub west: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
+    )]
+    pub south: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -180.0, max = 180.0))
+    )]
+    pub east: f64,
+    #[cfg_attr(
+        feature = "design-schema",
+        schemars(range(min = -85.0511287798066, max = 85.0511287798066))
+    )]
+    pub north: f64,
+}
+
+impl SavedViewExtent {
+    pub fn is_valid(&self) -> bool {
+        let south_west = GeoPoint {
+            lon: self.west,
+            lat: self.south,
+        };
+        let north_east = GeoPoint {
+            lon: self.east,
+            lat: self.north,
+        };
+        south_west.is_valid()
+            && north_east.is_valid()
+            && self.west < self.east
+            && self.south < self.north
+    }
 }
 
 // Camera of a saved view. Canopi's map is north-up, so it writes `bearing` 0;
@@ -193,6 +243,7 @@ pub const STORY_IMAGES_MAX_TOTAL_BYTES: usize = 10 * STORY_IMAGE_MAX_BYTES;
 
 /// Check the saved views and stories of an admitted Design: ids are unique,
 /// every camera is a valid WGS84 position with an in-range zoom and bearing,
+/// every extent is an ordered box on the map,
 /// every story step names a saved view of the same Design, rich-text links use
 /// an allowed scheme, and images are `https:` links or embedded raster images
 /// within the per-image and per-Design caps.
@@ -208,6 +259,11 @@ pub fn validate_views_and_stories(views: &[SavedView], stories: &[Story]) -> Res
         if !view.camera.is_valid() {
             return Err(format!(
                 "$.views[{index}].camera: expected lon in [-180, 180], a Web Mercator latitude (±{WEB_MERCATOR_MAX_LATITUDE_DEG}), zoom in [0, {SAVED_VIEW_MAX_ZOOM}] and bearing in [0, 360]"
+            ));
+        }
+        if view.extent.is_some_and(|extent| !extent.is_valid()) {
+            return Err(format!(
+                "$.views[{index}].extent: expected WGS84 bounds on the Web Mercator map with west < east and south < north"
             ));
         }
         validate_rich_text(&view.text, &format!("$.views[{index}].text"))?;
@@ -405,6 +461,43 @@ mod tests {
                     .expect("view should parse");
             let error = validate_views_and_stories(&[view], &[]).expect_err("camera is invalid");
             assert!(error.starts_with("$.views[0].camera"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_view_saved_without_an_extent_loads_and_saves_without_one() {
+        let view: SavedView = serde_json::from_value(view_value(camera(2.0, 48.0, 17.0, 0.0)))
+            .expect("view should parse");
+        assert_eq!(view.extent, None);
+        let written = serde_json::to_value(&view).expect("serialize");
+        assert!(written.get("extent").is_none(), "{written}");
+    }
+
+    #[test]
+    fn view_extents_round_trip_and_must_be_ordered_boxes_on_the_map() {
+        let mut value = view_value(camera(2.0, 48.0, 17.0, 0.0));
+        value["extent"] = json!({ "west": 1.99, "south": 47.995, "east": 2.01, "north": 48.005 });
+        let view: SavedView = serde_json::from_value(value.clone()).expect("view should parse");
+        assert_eq!(serde_json::to_value(&view).expect("serialize"), value);
+        validate_views_and_stories(&[view], &[]).expect("an ordered extent is valid");
+
+        for (west, south, east, north) in [
+            (2.01, 47.995, 1.99, 48.005),
+            (1.99, 48.005, 2.01, 47.995),
+            (1.99, 47.995, 1.99, 48.005),
+            (-181.0, 47.995, 2.01, 48.005),
+            (1.99, 47.995, 2.01, 86.0),
+            (f64::NAN, 47.995, 2.01, 48.005),
+        ] {
+            let mut view = valid_view();
+            view.extent = Some(SavedViewExtent {
+                west,
+                south,
+                east,
+                north,
+            });
+            let error = validate_views_and_stories(&[view], &[]).expect_err("extent is invalid");
+            assert!(error.starts_with("$.views[0].extent: "), "{error}");
         }
     }
 

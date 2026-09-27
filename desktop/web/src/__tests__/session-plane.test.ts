@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { mapZoomToStageScale } from '../canvas/projection'
 import {
   createSessionPlane,
+  geographicExtentOf,
+  geographicViewOf,
+  mapZoomToFitExtent,
   roundGeoDegrees,
   SESSION_PLANE_REORIGIN_DISTANCE_METERS,
   sessionPlaneOriginForPoints,
@@ -81,5 +85,38 @@ describe('session plane', () => {
     const plane = createSessionPlane({ lon: 13, lat: 23 })
     expect(plane.needsReorigin({ x: 9_999, y: 0 })).toBe(false)
     expect(plane.needsReorigin({ x: 7_072, y: 7_072 })).toBe(true)
+  })
+})
+
+describe('geographic extent of a view', () => {
+  const origin = { lon: 2.2945, lat: 48.8584 }
+  const plane = createSessionPlane(origin)
+  function frame(zoom: number, width: number, height: number) {
+    const scale = mapZoomToStageScale(zoom, origin.lat)
+    return { viewport: { x: width / 2, y: height / 2, scale }, screenSize: { width, height } }
+  }
+
+  it('is the ground the screen shows around the view centre', () => {
+    const extent = geographicExtentOf(frame(18, 800, 600), plane)!
+    expect(extent.west).toBeLessThan(origin.lon)
+    expect(extent.east).toBeGreaterThan(origin.lon)
+    expect(extent.south).toBeLessThan(origin.lat)
+    expect(extent.north).toBeGreaterThan(origin.lat)
+    expect((extent.west + extent.east) / 2).toBeCloseTo(origin.lon, 9)
+    expect(geographicViewOf(frame(18, 800, 600), plane)!.zoom).toBeCloseTo(18, 9)
+  })
+
+  it('fits back into the same screen at the same zoom, and one zoom level closer on a screen twice as big', () => {
+    const extent = geographicExtentOf(frame(18, 800, 600), plane)!
+    expect(mapZoomToFitExtent(extent, { width: 800, height: 600 })).toBeCloseTo(18, 6)
+    expect(mapZoomToFitExtent(extent, { width: 1600, height: 1200 })).toBeCloseTo(19, 6)
+    // A wide screen is limited by its height.
+    expect(mapZoomToFitExtent(extent, { width: 1600, height: 600 })).toBeCloseTo(18, 6)
+    expect(mapZoomToFitExtent(extent, { width: 0, height: 600 })).toBeNull()
+  })
+
+  it('is none when the screen shows more than one world or none at all', () => {
+    expect(geographicExtentOf(frame(0.5, 1600, 900), plane)).toBeNull()
+    expect(geographicExtentOf(frame(18, 0, 0), plane)).toBeNull()
   })
 })

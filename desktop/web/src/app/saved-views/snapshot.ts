@@ -17,6 +17,7 @@ import { effectiveBackgroundOpacity, mapLayers, type MapLayersState } from '../m
 import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign } from '../document-session/store'
 import { currentPlantDisplay } from '../plant-display/state'
+import { savedViewZoomFor } from './actions'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 
 /** Default wait for tiles before a snapshot is read with a "some tiles missing" flag. */
@@ -49,8 +50,8 @@ export interface SavedViewSnapshotContext {
 /**
  * The off-screen capture request for a saved view of the open Design, or null
  * when no Design is open on a map. The camera is the view's centre, with the
- * zoom fitted so the image shows what the workspace showed at its current
- * size. Background, Design layers, the focused species and the labels come
+ * zoom fitted so the image shows the ground recorded with the view (for a view
+ * without one, what the workspace shows at its current size). Background, Design layers, the focused species and the labels come
  * from the view; opacities and locale from the user's current settings.
  */
 export function describeSavedViewSnapshot(
@@ -67,7 +68,7 @@ export function describeSavedViewSnapshot(
     camera: {
       lon: view.camera.lon,
       lat: view.camera.lat,
-      zoom: fitZoom(view.camera.zoom, options, screenSize),
+      zoom: view.extent ? savedViewZoomFor(view, options) : fitZoom(view.camera.zoom, options, screenSize),
     },
     width: options.width,
     height: options.height,
