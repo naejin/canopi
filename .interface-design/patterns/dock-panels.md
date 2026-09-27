@@ -21,13 +21,14 @@ Title with a muted "N plants · N species" subtitle, then a collapsible "Display
 
 ## Layers, data and analysis
 
-- One list: **Design** (Plants, Zones, Notes and measurements, with counts, eye and lock), **Site data** (library items added to this Design, results nested under their source with "from Terrain"), **Background** (radio: Satellite · Google, Map · OpenFreeMap, None).
-- "Add data" (the only entry) opens a menu: Terrain or height from files…, Design objects from GeoJSON…, items from your library ("In this Design" when added), Data library….
-- The active site item has a footer: legend with range, Opacity, Fit, Read values (pressed while active), Analyze… on sources, Remove from Design.
-- Import dialog: name (duplicate names refused with a suggestion), measure and unit, ordered files with Move up/down, a coverage check against the Design ("Covers your site"). Progress shows on its own row under Site data with Cancel import; the rest of Layers stays usable.
-- Analyze dialog is generated from the analysis registry (ADR 0011): options with one-line explanations, existing results marked "Already in Layers", parameters inline, a primary action naming the result ("Add contours").
-- Data library (dialog): search, type filter (a `Dropdown`), Import…; rows with preview, kind, resolution and "In this Design" or Add to Design; Delete everywhere confirms and names the Designs that use the item. Removing from a Design keeps the library item.
-- Web: no terrain import; Site data shows why ("needs Canopi Desktop, kept in this Design"); Add GeoJSON… sits on the Design section.
+- One list in three sections, front to back: **Design** (Annotations, Plants, Measurement guides, Zones, with counts, eye and lock), **Site data** (the Design's terrain and height items; results nest under their source with "from <source> · <units>"; then **Online elevation** with Contour lines and Hillshading captioned "from online elevation"), **Background** (Basemap, Satellite). No section counts.
+- "Add data" (the only entry, beside the Site data heading) opens a menu: Terrain or height from files…, From your library ▸ (items already here say "in this Design" and are disabled), Data library…. An empty Site data says "No site data yet" with Import files… and Open the Data library.
+- One row is active across Layers. The active site item's footer: name and type, out-of-date notice with Refresh, legend with range, Opacity, Fit to data (then Return to Design), Read values (pressed while active), Analyze… on sources, Details, Move forward and back (Alt ↑/↓ on the row), and Remove from Design with "Your library keeps the data."
+- Details replace the list in the dock (Back to Layers, board ResultDetails): out-of-date notice with Refresh, facts and provenance, Run again with changes…, Rename…, Open in the Data library, Processing history, and the note that Refresh replaces the result everywhere.
+- Import dialog (after the native picker): what Canopi accepts (single-band GeoTIFF: IGN MNT, MNS, MNH tiles), name (a name the library already uses is refused with a suggestion), what the values measure and unit, ordered files with Move up, Move down and Remove, and where the data goes ("added to this Design when it is ready" from Layers). Progress shows on its own row under Site data with Cancel import and "You can keep working."; the rest of Layers stays usable. The coverage check against the Design is not built yet.
+- Analyze dialog is generated from the analysis registry (ADR 0011): it names its source and where results go, lists options with one-line explanations, marks existing results "Already in Layers" (Show in Layers selects that row), and shows parameters inline.
+- Data library (dialog): search, type filter (a `Dropdown`), Import…; rows with preview, type and resolution or units, and "In this Design" or Add to Design; the footer counts items and has Done. Delete from library says what is lost and names the impact on this Design; removing from a Design keeps the library item.
+- Web: no terrain import; Site data says terrain and height data need Canopi Desktop, or how many layers the Design keeps for it; Background is Basemap and Satellite.
 
 ## Planning
 
