@@ -3,6 +3,7 @@ export {
   currentSavedViews,
   defaultSavedViewName,
   goToSavedView,
+  savedViewZoomFor,
   saveCurrentView,
   type GoToSavedViewOptions,
   type SaveCurrentViewInput,
@@ -29,6 +30,12 @@ export {
   type SaveViewDialogRequest,
 } from './dialogs'
 export { savedViewMenuActions } from './menu'
+export {
+  requestSavedViewThumbnail,
+  savedViewThumbnail,
+  useSavedViewThumbnail,
+  type SavedViewThumbnail,
+} from './thumbnails'
 export {
   captureSavedViewSnapshot,
   describeSavedViewSnapshot,

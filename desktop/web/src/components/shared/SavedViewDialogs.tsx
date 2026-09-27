@@ -20,6 +20,7 @@ import {
 } from '../../app/saved-views'
 import { t } from '../../i18n'
 import type { SavedView } from '../../types/design'
+import { SavedViewThumbnail } from './SavedViewThumbnail'
 import { Toast } from './Toast'
 import { WorkspaceDialog } from './WorkspaceDialog'
 import styles from './SavedViewDialogs.module.css'
@@ -206,6 +207,7 @@ function ManagedViewRow({ view }: { readonly view: SavedView }) {
 
   return (
     <li className={styles.row}>
+      <SavedViewThumbnail view={view} />
       <span className={styles.rowName}>
         {view.name}
         {view.title && <span className={styles.rowTitle}>{view.title}</span>}

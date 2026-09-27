@@ -1,9 +1,16 @@
-import { useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useSignal, useSignalEffect } from '@preact/signals'
-import { flattenMenuActions, type MenuAction, type MenuDefinition, type MenuEntry } from '../../app/shell-commands/menus'
+import {
+  flattenMenuActions,
+  type MenuAction,
+  type MenuDefinition,
+  type MenuEntry,
+  type MenuItemThumbnail,
+} from '../../app/shell-commands/menus'
 import { modalLayerOpen } from '../../app/shell/modal-layer'
 import { ButtonTooltip } from './ButtonTooltip'
 import { ControlIcon } from './ControlIcon'
+import { ThumbnailFrame } from './SavedViewThumbnail'
 import { focusMenuItem, placeSidePopupVertically } from '../../utils/floating-position'
 import styles from './MenuBar.module.css'
 
@@ -233,6 +240,7 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
             {entry.checked && <ControlIcon name="check" />}
           </span>
         )}
+        {entry.thumbnail && <MenuThumbnail thumbnail={entry.thumbnail} />}
         <span className={styles.itemLabel}>{entry.label}</span>
         {entry.shortcut && <span className={styles.itemShortcut} aria-hidden="true">{entry.shortcut}</span>}
       </button>
@@ -388,4 +396,13 @@ export function MenuBar({ menus: fullMenus, label, compactLabel, onMenuOpen }: M
       )
     }
   }
+}
+
+/** An item's picture: asks for it when the item is shown and follows it as it arrives. */
+function MenuThumbnail({ thumbnail }: { readonly thumbnail: MenuItemThumbnail }) {
+  useEffect(() => {
+    thumbnail.load()
+  }, [thumbnail])
+  const { url, loading } = thumbnail.source()
+  return <ThumbnailFrame url={url} loading={loading} size="menu" />
 }

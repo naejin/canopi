@@ -28,7 +28,15 @@ export interface MenuAction {
   /** Set on checkable items; they render as `menuitemcheckbox` or `menuitemradio`. */
   readonly checked?: boolean
   readonly check?: 'checkbox' | 'radio'
+  /** A small decorative picture before the label (a saved view's snapshot). */
+  readonly thumbnail?: MenuItemThumbnail
   action(): void
+}
+
+/** A picture drawn on demand: `load` runs when the item is shown, `source` reads the current image. */
+export interface MenuItemThumbnail {
+  source(): { readonly url: string | null; readonly loading: boolean }
+  load(): void
 }
 
 export interface MenuSubmenu {
