@@ -252,7 +252,8 @@ function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180
 }
 
-function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
+/** Axis-aligned bounds of plane points, with near-zero values snapped to 0. */
+export function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity

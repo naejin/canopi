@@ -24,6 +24,8 @@ import type {
 import {
   createSceneArrangementPlacement,
   type SceneArrangementTemplate,
+  translatePoint,
+  translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { getAnnotationTextColor, getLabelHalo, getPlantSymbolEdgeColor, getPlantSymbolEdgeWidth, resolveZoneVisual } from '../scene-visuals'
@@ -575,22 +577,3 @@ function stampDelta(source: SavedObjectStampPayload, anchorWorld: ScenePoint): S
   }
 }
 
-function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
-  return {
-    x: point.x + delta.x,
-    y: point.y + delta.y,
-  }
-}
-
-function translateZonePoints(
-  zone: Pick<SavedObjectStampPayload['zones'][number], 'zoneType' | 'points'>,
-  delta: ScenePoint,
-): ScenePoint[] {
-  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    return [
-      translatePoint(zone.points[0]!, delta),
-      { ...zone.points[1]! },
-    ]
-  }
-  return zone.points.map((point) => translatePoint(point, delta))
-}

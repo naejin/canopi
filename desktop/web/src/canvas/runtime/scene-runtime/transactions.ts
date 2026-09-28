@@ -719,15 +719,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
     this._drainDeferredBackfills()
   }
 
-  private _noteHistoryChange(command: SceneCommand): void {
-    if (command.diffs.some((diff) => diff !== 'selection')) {
-      this._contentRevision += 1
-      this._dropStaleDeferredBackfills()
-      return
-    }
-    this._drainDeferredBackfills()
-  }
-
   private _isTicketCurrent(ticket: PresentationTicketState): boolean {
     return ticket.generation === this._documentGeneration
       && ticket.contentRevision === this._contentRevision
@@ -865,7 +856,7 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
       direction,
       history: this._history,
       applyPatch: (patch) => this._applyPatch(patch, { preservePlantPresentation: true }),
-      noteHistoryChange: (command) => this._noteHistoryChange(command),
+      noteHistoryChange: (command) => this._noteCommitted(command),
       syncCanvasSignalsFromScene: this._syncCanvasSignalsFromScene,
       incrementSceneRevision: this._incrementSceneRevision,
       invalidate: this._invalidate,

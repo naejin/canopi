@@ -3,12 +3,12 @@ import { currentCanvasQuerySurface, getCurrentCanvasCommandSurface } from '../..
 import { geographicViewOf, type GeographicView } from '../../canvas/session-plane'
 import type { PlantLabelMode } from '../../canvas/runtime/plant-display'
 import type { PanelTarget, SavedView, Story, StoryStep } from '../../types/design'
-import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 import { savedViewPlantLabels } from '../design-edit/views'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { mapLayers, type MapLayersState } from '../map-layers/state'
 import { currentPlantDisplay } from '../plant-display/state'
 import { goToSavedView } from '../saved-views/current-view'
+import { isBasemapStyle } from '../saved-views/snapshot'
 import { focusRegion } from '../shell/focus-regions'
 import {
   setStoryPresentationHidesEditingAids,
@@ -298,9 +298,6 @@ function highlightTargets(view: SavedView): PanelTarget[] {
   return targets
 }
 
-function isBasemapStyle(style: string): style is MapLayersState['basemap']['style'] {
-  return (SETTINGS_BASEMAP_STYLES as readonly string[]).includes(style)
-}
 
 /** Hides the runtime's editing overlays on the map (styles/global.css). */
 function setPresentingAttribute(presenting: boolean): void {

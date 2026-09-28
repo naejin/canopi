@@ -229,13 +229,17 @@ function allocateUniqueId(reservedIds: Set<string>, createId: () => string): str
   throw new Error('Unable to allocate a unique Scene arrangement identity')
 }
 
-function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
+export function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
   return { x: point.x + delta.x, y: point.y + delta.y }
 }
 
-function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoint[] {
+/** Moves a zone's points; an ellipse keeps its radii (the second point) as they are. */
+export function translateZonePoints(
+  zone: Pick<SceneZoneEntity, 'zoneType' | 'points'>,
+  delta: ScenePoint,
+): ScenePoint[] {
   if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    return zone.points.map((point, index) => index === 0 ? translatePoint(point, delta) : { ...point })
+    return zone.points.map((point, index) => index === 1 ? { ...point } : translatePoint(point, delta))
   }
   return zone.points.map((point) => translatePoint(point, delta))
 }

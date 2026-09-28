@@ -51,6 +51,7 @@ import {
 import {
   applyRotationTransformToDraft,
   captureRotationTransformState,
+  centerOfBounds,
 } from './selection-rotation'
 import {
   applySpeciesSelection,
@@ -527,8 +528,8 @@ export class SceneRuntimeMutationController {
     if (Math.abs(turn) < ROTATION_EPSILON_DEG) return
     const selection = this._getSelectionModel()
     const state = captureRotationTransformState(this._sceneStore.persisted, selection)
+    if (!state || !selection.bounds) return
     const pivot = centerOfBounds(selection.bounds)
-    if (!state || !pivot) return
     this._sceneEdits.run('rotate-selected', (tx) => {
       tx.mutate((draft) => applyRotationTransformToDraft(draft, state, pivot, turn))
     })
@@ -895,14 +896,15 @@ export class SceneRuntimeMutationController {
       measurementGuides: payload.measurementGuides,
       groups: payload.groups,
     }
-    return centerOfBounds(getCombinedTargetBounds(
+    const bounds = getCombinedTargetBounds(
       clipboardScene,
       payload.sourceTargets,
       {
         ...this._getSelectionReadModelOptions(),
         revealedAnnotationId: getRevealedAnnotationId(payload.sourceTargets),
       },
-    ))
+    )
+    return bounds ? centerOfBounds(bounds) : null
   }
 }
 
@@ -913,15 +915,6 @@ function normalPasteOffset(step: number): ScenePoint {
   }
 }
 
-function centerOfBounds(
-  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null,
-): ScenePoint | null {
-  if (!bounds) return null
-  return {
-    x: bounds.minX + (bounds.maxX - bounds.minX) / 2,
-    y: bounds.minY + (bounds.maxY - bounds.minY) / 2,
-  }
-}
 
 function sceneLayerState(
   persisted: ScenePersistedState,

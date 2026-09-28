@@ -28,6 +28,7 @@ import type { SpeciesCacheEntry } from '../species-cache'
 import {
   getEllipticalZonePolygon,
   getRectangularZoneCorners,
+  pointsBounds,
 } from '../zone-geometry'
 
 export type TopLevelTarget = SceneDesignObjectTarget
@@ -482,16 +483,6 @@ function zoneBounds(zone: SceneZoneEntity): SimpleRect {
   return pointsBounds(zone.points)
 }
 
-function pointsBounds(points: readonly ScenePoint[]): SimpleRect {
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
-  return {
-    x: Math.min(...xs),
-    y: Math.min(...ys),
-    width: Math.max(...xs) - Math.min(...xs),
-    height: Math.max(...ys) - Math.min(...ys),
-  }
-}
 
 function hitAnnotation(annotation: SceneAnnotationEntity, point: ScenePoint, viewportScale: number, revealText = false, textAllowed = true): boolean {
   return isPointInAnnotationPresentation(annotation, point, viewportScale, revealText, textAllowed)

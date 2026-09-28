@@ -1,4 +1,5 @@
 import type { SceneBounds } from '../camera'
+import { pointsBounds } from '../zone-geometry'
 import type { CanvasDesignObjectSelectionModel } from '../runtime'
 import {
   resolveSceneObjectGroupMembers,
@@ -248,24 +249,6 @@ function rectPointsAroundCenter(center: ScenePoint, width: number, height: numbe
   ]
 }
 
-function pointsBounds(points: readonly ScenePoint[]): { x: number; y: number; width: number; height: number } {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const point of points) {
-    if (point.x < minX) minX = point.x
-    if (point.y < minY) minY = point.y
-    if (point.x > maxX) maxX = point.x
-    if (point.y > maxY) maxY = point.y
-  }
-  return {
-    x: minX,
-    y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
-  }
-}
 
 function cleanDegrees(value: number): number {
   return Math.abs(value) < 0.0000001 ? 0 : value

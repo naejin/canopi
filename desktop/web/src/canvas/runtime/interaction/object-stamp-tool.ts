@@ -19,6 +19,8 @@ import type { SpeciesCacheEntry } from '../species-cache'
 import {
   createSceneArrangementPlacement,
   type SceneArrangementTemplate,
+  translatePoint,
+  translateZonePoints,
 } from '../scene-runtime/arrangement-placement'
 import type { SceneEditCoordinator } from '../scene-runtime/transactions'
 import { hitTestTopLevel } from './hit-testing'
@@ -447,22 +449,6 @@ function emptySceneArrangementTemplate(
   }
 }
 
-function translatePoint(point: ScenePoint, delta: ScenePoint): ScenePoint {
-  return {
-    x: point.x + delta.x,
-    y: point.y + delta.y,
-  }
-}
-
-function translateZonePoints(zone: SceneZoneEntity, delta: ScenePoint): ScenePoint[] {
-  if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
-    return [
-      translatePoint(zone.points[0]!, delta),
-      { ...zone.points[1]! },
-    ]
-  }
-  return zone.points.map((point) => translatePoint(point, delta))
-}
 
 /** The stamp's objects moved by `delta`, as placement would add them. */
 function objectStampEntities(source: ObjectStampSource, delta: ScenePoint): StampEntities {

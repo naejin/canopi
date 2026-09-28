@@ -164,7 +164,8 @@ function fitZoom(
   return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, fitted))
 }
 
-function isBasemapStyle(style: string): style is BasemapStyle {
+/** Whether a saved view's basemap style name is one the settings know. */
+export function isBasemapStyle(style: string): style is BasemapStyle {
   return (SETTINGS_BASEMAP_STYLES as readonly string[]).includes(style)
 }
 
