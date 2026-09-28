@@ -167,7 +167,7 @@ export function DatePicker({
     }
   }
 
-  // Click-outside (pointerup, mirrors Dropdown.tsx)
+  // Click-outside (pointerup) and focus leaving for another control, mirrors Dropdown.tsx
   useSignalEffect(() => {
     if (!open.value) return
     const handleOutside = (e: Event) => {
@@ -177,10 +177,12 @@ export function DatePicker({
     }
     const dismissFloating = () => { if (floating) open.value = false }
     document.addEventListener('pointerup', handleOutside)
+    document.addEventListener('focusin', handleOutside)
     window.addEventListener('resize', dismissFloating)
     window.addEventListener('scroll', dismissFloating, true)
     return () => {
       document.removeEventListener('pointerup', handleOutside)
+      document.removeEventListener('focusin', handleOutside)
       window.removeEventListener('resize', dismissFloating)
       window.removeEventListener('scroll', dismissFloating, true)
     }

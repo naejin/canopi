@@ -69,8 +69,10 @@ export function Dropdown<T>({
     open.value = true
   }
 
-  // Close on click-outside (pointerup, not mousedown — avoids catching the opening click).
-  // Escape is handled at the dropdown root so containing panels do not also react.
+  // Close on click-outside (pointerup, not mousedown — avoids catching the opening click)
+  // and when focus leaves for another control (a floating menu is portalled, so a
+  // dialog's Tab trap cannot see it). Escape is handled at the dropdown root so
+  // containing panels do not also react.
   useSignalEffect(() => {
     if (!open.value) return
     const handleOutside = (e: Event) => {
@@ -86,10 +88,12 @@ export function Dropdown<T>({
       if (restoreFocus) triggerRef.current?.focus({ preventScroll: true })
     }
     document.addEventListener('pointerup', handleOutside)
+    document.addEventListener('focusin', handleOutside)
     window.addEventListener('resize', dismissFloating)
     window.addEventListener('scroll', dismissFloating, true)
     return () => {
       document.removeEventListener('pointerup', handleOutside)
+      document.removeEventListener('focusin', handleOutside)
       window.removeEventListener('resize', dismissFloating)
       window.removeEventListener('scroll', dismissFloating, true)
     }
@@ -174,6 +178,11 @@ export function Dropdown<T>({
             event.stopPropagation()
             option.click()
           }
+          return
+        }
+        if (event.key === 'Tab') {
+          // Close and let Tab continue from the trigger, not from a stale portal.
+          closeAndRestoreFocus()
           return
         }
         if (event.key !== 'Escape') return

@@ -114,6 +114,29 @@ describe('DatePicker', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull()
   })
 
+  it('closes when another control takes focus', async () => {
+    await act(async () => {
+      render(
+        <>
+          <DatePicker value="2025-06-10" onChange={() => {}} />
+          <button id="after" type="button">After</button>
+        </>,
+        container,
+      )
+    })
+    await act(async () => {
+      container.querySelector('button[role="combobox"]')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      )
+    })
+    expect(container.querySelector('[role="dialog"]')).toBeTruthy()
+
+    const after = container.querySelector<HTMLButtonElement>('#after')!
+    await act(async () => { after.focus() })
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(after)
+  })
+
   it('escape closes calendar and returns focus to trigger', async () => {
     await act(async () => {
       render(

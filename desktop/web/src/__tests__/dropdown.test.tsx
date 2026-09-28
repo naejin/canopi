@@ -136,7 +136,7 @@ describe('Dropdown keyboard interaction', () => {
     })
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
     await act(async () => { trigger.click() })
-    outside.focus()
+    await act(async () => { outside.focus() })
 
     await act(async () => {
       outside.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
@@ -145,6 +145,55 @@ describe('Dropdown keyboard interaction', () => {
     expect(document.querySelector('[role="listbox"][aria-label="Example"]')).toBeNull()
     expect(document.activeElement).toBe(outside)
     outside.remove()
+  })
+})
+
+describe('Dropdown focus leaving', () => {
+  let container: HTMLDivElement
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    render(null, container)
+    container.remove()
+  })
+
+  it('closes when Tab or another control takes focus, without stranding focus', async () => {
+    await act(async () => {
+      render(
+        <>
+          <Dropdown
+            trigger="One"
+            items={[{ value: 'one', label: 'One' }, { value: 'two', label: 'Two' }]}
+            value="one"
+            onChange={() => {}}
+            ariaLabel="Example"
+            floating
+          />
+          <button id="after" type="button">After</button>
+        </>,
+        container,
+      )
+    })
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+    trigger.focus()
+    await keyDown(trigger, 'ArrowDown')
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull()
+
+    // Tab closes the list and continues from the trigger.
+    await keyDown(document.activeElement!, 'Tab')
+    expect(document.querySelector('[role="listbox"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+
+    await keyDown(trigger, 'ArrowDown')
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull()
+    const after = container.querySelector<HTMLButtonElement>('#after')!
+    await act(async () => { after.focus() })
+    expect(document.querySelector('[role="listbox"]')).toBeNull()
+    expect(document.activeElement).toBe(after)
   })
 })
 
