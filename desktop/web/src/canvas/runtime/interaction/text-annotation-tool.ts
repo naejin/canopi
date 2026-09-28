@@ -19,6 +19,8 @@ export interface TextAnnotationToolContext {
 
 export interface TextAnnotationTool {
   readonly hasActiveEditor: () => boolean
+  /** Whether `target` is inside the open note field, whose clicks belong to the field. */
+  readonly containsTarget: (target: EventTarget | null) => boolean
   readonly pointerDown: (world: ScenePoint) => void
   readonly cancel: () => void
   readonly dispose: () => void
@@ -142,6 +144,7 @@ export function createTextAnnotationTool(context: TextAnnotationToolContext): Te
 
   return {
     hasActiveEditor: () => textarea !== null,
+    containsTarget: (target) => target instanceof Node && textarea !== null && textarea.contains(target),
     pointerDown,
     cancel,
     dispose: cancel,
@@ -152,6 +155,7 @@ export function createTextAnnotationToolAdapter(tool: TextAnnotationTool): Scene
   return {
     onDeactivate: tool.cancel,
     shouldSuppressSharedKeyboard: tool.hasActiveEditor,
+    shouldIgnorePointerEvent: tool.containsTarget,
     describeGuidance: () => ({ gesture: tool.hasActiveEditor() }),
     pointerDown({ event, rawWorld }) {
       event.preventDefault()

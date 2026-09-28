@@ -6635,6 +6635,28 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('keeps a Backspace the polygon draft consumed from reaching the app shortcuts', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    // App shortcuts (Delete/Backspace deletes the selection) listen in the bubble phase.
+    const appShortcuts = vi.fn()
+    window.addEventListener('keydown', appShortcuts)
+    try {
+      const event = events.keyDown({ key: 'Backspace', target: container })
+      expect(event.defaultPrevented).toBe(true)
+      expect(appShortcuts).not.toHaveBeenCalled()
+      const passthrough = events.keyDown({ key: 'a', target: container })
+      expect(passthrough.defaultPrevented).toBe(false)
+      expect(appShortcuts).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener('keydown', appShortcuts)
+    }
+    session.dispose()
+  })
+
   it('undoes and redoes polygonal zone draft vertices without dirtying the scene', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })
@@ -10518,6 +10540,23 @@ describe('SceneInteractionSession', () => {
       expect(tools).not.toContain('select')
       escapeOnMap()
       expect(tools.at(-1)).toBe('select')
+      session.dispose()
+    })
+
+    it('lets a click inside a new text note field move the caret instead of committing the note', () => {
+      const { session } = sessionWithToolLog()
+      session.setTool('text')
+      events.pointerDown({ x: 24, y: 32 }, { button: 0 })
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!
+      textarea.focus()
+      textarea.value = 'Mulch in November'
+
+      const event = events.pointerDown({ x: 30, y: 36 }, { button: 0, target: textarea })
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(container.querySelector('textarea')).toBe(textarea)
+      expect(document.activeElement).toBe(textarea)
+      expect(store.persisted.annotations).toHaveLength(0)
       session.dispose()
     })
 
