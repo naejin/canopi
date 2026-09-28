@@ -585,7 +585,10 @@
         "done": "Fine",
         "removeHint": "Rimuovere un elemento da un progetto lo lascia nella libreria. Eliminarlo qui lo rimuove da ogni progetto.",
         "deleteEverywhere": "Elimina ovunque",
-        "renameEllipsis": "Rinomina…"
+        "renameEllipsis": "Rinomina…",
+        "recovered": "Canopi ha ricostruito la Libreria dati dai file che conserva. Gli elementi contrassegnati come non riusciti possono essere preparati di nuovo con Riprova.",
+        "refusedNewer": "La Libreria dati è stata salvata da una versione più recente di Canopi. Installa l'ultima versione di Canopi per usarla; questa versione non la modificherà.",
+        "unavailable": "Impossibile aprire la Libreria dati. Importazioni e modifiche sono disattivate finché Canopi non viene riavviato."
       },
       "layers": {
         "addData": "Aggiungi dati",

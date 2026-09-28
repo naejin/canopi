@@ -585,7 +585,10 @@
         "done": "Concluído",
         "removeHint": "Remover um item de um design o mantém na biblioteca. Excluí-lo aqui o remove de todos os designs.",
         "deleteEverywhere": "Excluir de todos",
-        "renameEllipsis": "Renomear…"
+        "renameEllipsis": "Renomear…",
+        "recovered": "O Canopi reconstruiu sua Biblioteca de dados a partir dos arquivos que ele guarda. Os itens marcados como com falha podem ser preparados novamente com Tentar novamente.",
+        "refusedNewer": "A Biblioteca de dados foi salva por uma versão mais recente do Canopi. Instale o Canopi mais recente para usá-la; esta versão não a alterará.",
+        "unavailable": "Não foi possível abrir a Biblioteca de dados. Importações e alterações ficam desativadas até que o Canopi reinicie."
       },
       "layers": {
         "addData": "Adicionar dados",

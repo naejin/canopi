@@ -84,7 +84,10 @@ describe("settings platform bootstrap", () => {
       ready: Promise.resolve(),
       dispose: mocks.disposeSettings,
     });
-    mocks.invoke.mockReset().mockResolvedValue({ plant_db: "missing" });
+    mocks.invoke.mockReset().mockResolvedValue({
+      plant_db: "missing",
+      lidar_library: { kind: "recovered", items: 2, generated: 1 },
+    });
     mocks.registerCloseGuard.mockReset().mockReturnValue({
       dispose: mocks.disposeCloseGuard,
     });
@@ -218,6 +221,7 @@ describe("settings platform bootstrap", () => {
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith("get_health");
     expect(healthState.plantDbStatus.value).toBe("missing");
+    expect(healthState.lidarLibraryStatus.value).toEqual({ kind: "recovered", items: 2, generated: 1 });
 
     bootstrap.dispose();
 
@@ -260,22 +264,24 @@ describe("settings platform bootstrap", () => {
   });
 
   it("ignores health returned after its shell lifetime is disposed", async () => {
-    let resolveHealth!: (health: { plant_db: "missing" }) => void;
+    let resolveHealth!: (health: { plant_db: "missing"; lidar_library: { kind: "unavailable" } }) => void;
     mocks.invoke.mockReturnValue(new Promise((resolve) => {
       resolveHealth = resolve;
     }));
     const { bootstrapShell } = await import("../app/shell/bootstrap");
-    const { plantDbStatus } = await import("../app/health/state");
+    const { lidarLibraryStatus, plantDbStatus } = await import("../app/health/state");
     plantDbStatus.value = "available";
+    lidarLibraryStatus.value = { kind: "ready" };
     const bootstrap = bootstrapShell({
       load: vi.fn(),
       save: vi.fn().mockResolvedValue(undefined),
     });
 
     bootstrap.dispose();
-    resolveHealth({ plant_db: "missing" });
+    resolveHealth({ plant_db: "missing", lidar_library: { kind: "unavailable" } });
     await bootstrap.ready;
 
     expect(plantDbStatus.value).toBe("available");
+    expect(lidarLibraryStatus.value).toEqual({ kind: "ready" });
   });
 });

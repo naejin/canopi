@@ -1,34 +1,44 @@
 import { useRef } from 'preact/hooks'
-import { plantDbStatus } from '../../app/health/state'
+import { lidarLibraryStatus, plantDbStatus } from '../../app/health/state'
 import { t } from '../../i18n'
 import { Notice } from './Notice'
 import { useChromeRow } from './useMapChrome'
 import { useModalInertRegion } from './useModalLayer'
 import styles from './DegradedBanner.module.css'
 
+/**
+ * One line per subsystem that is unusable for the session: the plant catalog
+ * when its database is missing or damaged, the Data library when it is refused
+ * or could not be opened. A recovered library is not degraded and is explained
+ * in the Data library itself.
+ */
 export function DegradedBanner() {
-  const status = plantDbStatus.value
-  if (status === 'available') return null
+  const messages: string[] = []
+  const plantDb = plantDbStatus.value
+  if (plantDb === 'missing') messages.push(t('health.plantDbMissing'))
+  if (plantDb === 'corrupt') messages.push(t('health.plantDbCorrupt'))
+  const library = lidarLibraryStatus.value.kind
+  if (library === 'refused_newer') messages.push(t('canvas.lidar.library.refusedNewer'))
+  if (library === 'unavailable') messages.push(t('canvas.lidar.library.unavailable'))
+  if (messages.length === 0) return null
 
-  const message = status === 'missing'
-    ? t('health.plantDbMissing')
-    : t('health.plantDbCorrupt')
-
-  return <DegradedNotice message={message} />
+  return <DegradedNotice messages={messages} />
 }
 
 /** A row of its own below the title bar (`useChromeRow`). */
-function DegradedNotice({ message }: { readonly message: string }) {
+function DegradedNotice({ messages }: { readonly messages: readonly string[] }) {
   const ref = useRef<HTMLDivElement>(null)
   useChromeRow(ref)
   useModalInertRegion(ref)
 
   return (
     <div ref={ref} className={styles.banner}>
-      {/* Plant search is unavailable in both cases, so this is an error, announced as an alert. */}
-      <Notice tone="error" className={styles.notice}>
-        {message}
-      </Notice>
+      {/* Each subsystem is unavailable for the session, so every line is an error, announced as an alert. */}
+      {messages.map((message) => (
+        <Notice key={message} tone="error" className={styles.notice}>
+          {message}
+        </Notice>
+      ))}
     </div>
   )
 }

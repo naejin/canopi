@@ -22,12 +22,14 @@ import {
 } from '../../../app/lidar/library-items'
 import { installLidarLibraryObserver, lidarLibrary, lidarStatusMessage } from '../../../app/lidar/library-store'
 import { analyzeItem, beginDataImport, closeDataDialog } from '../../../app/lidar/library-navigation'
+import { lidarLibraryStatus } from '../../../app/health/state'
 import { locale } from '../../../app/settings/state'
 import { ANALYSIS_GROUPS } from '../../../generated/analysis-registry'
 import type { LibraryDeleteImpact } from '../../../generated/contracts'
 import { t } from '../../../i18n'
 import { ActionMenu } from '../../shared/ActionMenu'
 import { Dropdown, type DropdownItem } from '../../shared/Dropdown'
+import { Notice } from '../../shared/Notice'
 import { SurfaceSearch } from '../../shared/SurfaceSearch'
 import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
 import { ItemDetails } from './ItemDetails'
@@ -261,6 +263,7 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
       </>}
     >
       <div className={styles.library} ref={body}>
+        <LibraryOpenNotice />
         {(error || lidarStatusMessage.value) && view.kind === 'list' && (
           <p className={styles.error} role="alert">{error ?? lidarStatusMessage.value}</p>
         )}
@@ -370,6 +373,26 @@ export function DataLibraryDialog({ focusId }: { readonly focusId: string | null
       </div>
     </WorkspaceDialog>
   )
+}
+
+/**
+ * How the library opened this session, when that is not simply "ready": rebuilt
+ * from its originals (a warning; Retry prepares the failed items again), or
+ * refused and read-only (an error) because a newer Canopi wrote it or it could
+ * not be opened at all.
+ */
+function LibraryOpenNotice() {
+  const status = lidarLibraryStatus.value
+  switch (status.kind) {
+    case 'ready':
+      return null
+    case 'recovered':
+      return <Notice tone="warning">{t('canvas.lidar.library.recovered')}</Notice>
+    case 'refused_newer':
+      return <Notice tone="error">{t('canvas.lidar.library.refusedNewer')}</Notice>
+    case 'unavailable':
+      return <Notice tone="error">{t('canvas.lidar.library.unavailable')}</Notice>
+  }
 }
 
 /** The library's type filter: everything, imported data, or one analysis group from the registry. */

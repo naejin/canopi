@@ -585,7 +585,10 @@
         "done": "Klaar",
         "removeHint": "Een item uit één ontwerp verwijderen houdt het in de bibliotheek. Hier verwijderen haalt het uit elk ontwerp.",
         "deleteEverywhere": "Overal verwijderen",
-        "renameEllipsis": "Hernoemen…"
+        "renameEllipsis": "Hernoemen…",
+        "recovered": "Canopi heeft zijn Databibliotheek opnieuw opgebouwd uit de bestanden die het bewaart. Items die als mislukt zijn gemarkeerd, kun je opnieuw voorbereiden met Opnieuw proberen.",
+        "refusedNewer": "De Databibliotheek is opgeslagen door een nieuwere versie van Canopi. Installeer de nieuwste Canopi om hem te gebruiken; deze versie wijzigt hem niet.",
+        "unavailable": "De Databibliotheek kon niet worden geopend. Importeren en wijzigen zijn uitgeschakeld totdat Canopi opnieuw start."
       },
       "layers": {
         "addData": "Data toevoegen",

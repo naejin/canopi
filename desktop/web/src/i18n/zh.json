@@ -585,7 +585,10 @@
         "done": "完成",
         "removeHint": "从某个设计中移除项目后，它仍保留在数据资料库中。在此处删除会将其从所有设计中移除。",
         "deleteEverywhere": "全部删除",
-        "renameEllipsis": "重命名…"
+        "renameEllipsis": "重命名…",
+        "recovered": "Canopi 已根据其保留的文件重建了数据资料库。标记为失败的项目可以通过“重试”重新准备。",
+        "refusedNewer": "数据资料库由较新版本的 Canopi 保存。请安装最新版 Canopi 以使用它；此版本不会更改它。",
+        "unavailable": "无法打开数据资料库。在 Canopi 重新启动之前，导入和更改均已关闭。"
       },
       "layers": {
         "addData": "添加数据",

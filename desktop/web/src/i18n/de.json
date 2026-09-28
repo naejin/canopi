@@ -585,7 +585,10 @@
         "done": "Fertig",
         "removeHint": "Wenn Sie ein Element aus einem Design entfernen, bleibt es in der Bibliothek. Wenn Sie es hier löschen, wird es aus jedem Design entfernt.",
         "deleteEverywhere": "Überall löschen",
-        "renameEllipsis": "Umbenennen…"
+        "renameEllipsis": "Umbenennen…",
+        "recovered": "Canopi hat seine Datenbibliothek aus den Dateien wiederhergestellt, die es aufbewahrt. Als fehlgeschlagen markierte Elemente können mit „Erneut versuchen“ neu vorbereitet werden.",
+        "refusedNewer": "Die Datenbibliothek wurde von einer neueren Version von Canopi gespeichert. Installieren Sie das neueste Canopi, um sie zu verwenden; diese Version wird sie nicht ändern.",
+        "unavailable": "Die Datenbibliothek konnte nicht geöffnet werden. Importe und Änderungen sind bis zum Neustart von Canopi deaktiviert."
       },
       "layers": {
         "addData": "Daten hinzufügen",

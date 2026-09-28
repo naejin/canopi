@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { disposeShortcuts, initShortcuts } from "../../shortcuts/manager";
 import type { SubsystemHealth } from "../../types/health";
 import { initTheme } from "../../utils/theme";
-import { plantDbStatus } from "../health/state";
+import { lidarLibraryStatus, plantDbStatus } from "../health/state";
 import type { SettingsPlatformAdapter } from "../settings/platform-adapter";
 import { installSettingsProjection } from "../settings/projection";
 
@@ -24,6 +24,7 @@ export function bootstrapShell(settingsAdapter: SettingsPlatformAdapter): ShellB
     .then((health) => {
       if (disposed) return;
       plantDbStatus.value = health.plant_db;
+      lidarLibraryStatus.value = health.lidar_library;
     })
     .catch((error) => {
       if (!disposed) console.error("Failed to query health:", error);
