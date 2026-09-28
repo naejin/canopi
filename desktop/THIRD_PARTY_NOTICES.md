@@ -9,7 +9,7 @@ build pins.
 | --- | --- | --- | --- |
 | maplibre-gl-raster | 0.14.15 | https://github.com/opengeos/maplibre-gl-raster | MIT |
 | cog-tiler-wasm | 0.4.0 | https://github.com/opengeos/cog-tiler-wasm | MIT |
-| whitebox-wasm | 0.6.0 | https://github.com/opengeos/whitebox-wasm | MIT OR Apache-2.0 |
+| whitebox-wasm | 0.6.0 | https://github.com/opengeos/whitebox-wasm (npm module; the Rust crates from the same repository are pinned at 9c0ff4fdf3513f27b89c78e294610c3b418b3a4f, see below) | MIT OR Apache-2.0 |
 | @deck.gl/core | 9.4.0 | https://github.com/visgl/deck.gl | MIT |
 | @luma.gl/core | 9.4.1 | https://github.com/visgl/luma.gl | MIT |
 | geotiff | 3.0.5 | https://github.com/geotiffjs/geotiff.js | MIT |
