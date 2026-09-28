@@ -1508,7 +1508,8 @@
     "draft": "Bozza",
     "detailsSafe": "Il tuo lavoro è al sicuro in Canopi finché resta aperto. Riprova o salvalo altrove.",
     "saveAs": "Salva con nome…",
-    "resolve": "Risolvi…"
+    "resolve": "Risolvi…",
+    "savedUpgraded": "Salvato nel formato Canopi 2"
   },
   "saveProblem": {
     "flushFailedTitle": "Impossibile salvare le modifiche",
@@ -1721,7 +1722,16 @@
     "openCatalog": "Apri il catalogo delle piante",
     "drawZone": "Disegna una zona",
     "searchAgain": "Cerca di nuovo",
-    "noPlace": "Nessun luogo cercato"
+    "noPlace": "Nessun luogo cercato",
+    "pendingIntro": "{{name}} è stato creato prima che Canopi collocasse i progetti sulla mappa. Cerca il luogo a cui appartiene; gli oggetti saranno centrati lì.",
+    "pendingPlants": "Piante",
+    "pendingZones": "Zone",
+    "pendingOthers": "Note e guide",
+    "pendingExtent": "Estensione",
+    "pendingExtentValue": "{{width}} m × {{height}} m",
+    "pendingMapHint": "Oppure sposta la mappa sul sito e colloca il progetto al suo centro.",
+    "pendingSearchHint": "Non viene scritto nulla finché non scegli un luogo.",
+    "pendingPlaceHere": "Colloca al centro della mappa"
   },
   "shortcuts": {
     "title": "Scorciatoie da tastiera",

@@ -1508,7 +1508,8 @@
     "draft": "Brouillon",
     "detailsSafe": "Votre travail reste en sécurité dans Canopi tant qu’il est ouvert. Réessayez, ou enregistrez-le ailleurs.",
     "saveAs": "Enregistrer sous…",
-    "resolve": "Résoudre…"
+    "resolve": "Résoudre…",
+    "savedUpgraded": "Enregistré au format Canopi 2"
   },
   "saveProblem": {
     "flushFailedTitle": "Impossible d’enregistrer vos modifications",
@@ -1721,7 +1722,16 @@
     "openCatalog": "Ouvrir le catalogue des plantes",
     "drawZone": "Tracer une zone",
     "searchAgain": "Chercher à nouveau",
-    "noPlace": "Aucun lieu recherché"
+    "noPlace": "Aucun lieu recherché",
+    "pendingIntro": "{{name}} a été créé avant que Canopi ne place les Designs sur la carte. Cherchez le lieu où il se trouve ; les objets y seront centrés.",
+    "pendingPlants": "Plantes",
+    "pendingZones": "Zones",
+    "pendingOthers": "Notes et guides",
+    "pendingExtent": "Emprise",
+    "pendingExtentValue": "{{width}} m × {{height}} m",
+    "pendingMapHint": "Ou déplacez la carte jusqu’au site et placez le Design en son centre.",
+    "pendingSearchHint": "Rien n’est écrit tant que vous n’avez pas choisi un lieu.",
+    "pendingPlaceHere": "Placer au centre de la carte"
   },
   "shortcuts": {
     "title": "Raccourcis clavier",

@@ -5,6 +5,7 @@ import { DegradedBanner } from "./components/shared/DegradedBanner";
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { AboutCanopiDialog } from "./components/shared/AboutCanopiDialog";
 import { SaveProblemDialog } from "./components/shared/SaveProblemDialog";
+import { DesignSitePrompt } from "./components/canvas/DesignSitePrompt";
 import { ProblemReportDialog } from "./components/shared/ProblemReportDialog";
 import { SettingsDialog, type SettingsFoldersAdapter } from "./components/shared/SettingsDialog";
 import { KeyboardShortcutsDialog } from "./components/shared/KeyboardShortcutsDialog";
@@ -31,6 +32,7 @@ export function App() {
       <DesktopKeyboardShortcuts />
       <AboutCanopiDialog />
       <SaveProblemDialog />
+      <DesignSitePrompt />
       <ProblemReportDialog />
     </div>
   );

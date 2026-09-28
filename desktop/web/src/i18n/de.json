@@ -1508,7 +1508,8 @@
     "draft": "Skizze",
     "detailsSafe": "Solange Canopi geöffnet bleibt, ist Ihre Arbeit sicher. Versuchen Sie es erneut oder speichern Sie sie an einem anderen Ort.",
     "saveAs": "Speichern unter…",
-    "resolve": "Klären…"
+    "resolve": "Klären…",
+    "savedUpgraded": "Im Canopi-2-Format gespeichert"
   },
   "saveProblem": {
     "flushFailedTitle": "Änderungen konnten nicht gespeichert werden",
@@ -1721,7 +1722,16 @@
     "openCatalog": "Pflanzenkatalog öffnen",
     "drawZone": "Zone zeichnen",
     "searchAgain": "Erneut suchen",
-    "noPlace": "Kein Ort gesucht"
+    "noPlace": "Kein Ort gesucht",
+    "pendingIntro": "{{name}} entstand, bevor Canopi Designs auf der Karte verortete. Suchen Sie den Ort, an den es gehört; die Objekte werden dort zentriert.",
+    "pendingPlants": "Pflanzen",
+    "pendingZones": "Zonen",
+    "pendingOthers": "Notizen und Hilfslinien",
+    "pendingExtent": "Ausdehnung",
+    "pendingExtentValue": "{{width}} m × {{height}} m",
+    "pendingMapHint": "Oder verschieben Sie die Karte zum Standort und platzieren Sie das Design in ihrer Mitte.",
+    "pendingSearchHint": "Nichts wird geschrieben, bis Sie einen Ort wählen.",
+    "pendingPlaceHere": "In der Kartenmitte platzieren"
   },
   "shortcuts": {
     "title": "Tastenkürzel",

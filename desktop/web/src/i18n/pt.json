@@ -1508,7 +1508,8 @@
     "draft": "Rascunho",
     "detailsSafe": "Seu trabalho está seguro no Canopi enquanto ele estiver aberto. Tente novamente ou salve em outro lugar.",
     "saveAs": "Salvar como…",
-    "resolve": "Resolver…"
+    "resolve": "Resolver…",
+    "savedUpgraded": "Salvo no formato Canopi 2"
   },
   "saveProblem": {
     "flushFailedTitle": "Não foi possível salvar suas alterações",
@@ -1721,7 +1722,16 @@
     "openCatalog": "Abrir o catálogo de plantas",
     "drawZone": "Desenhar uma zona",
     "searchAgain": "Pesquisar de novo",
-    "noPlace": "Nenhum lugar pesquisado"
+    "noPlace": "Nenhum lugar pesquisado",
+    "pendingIntro": "{{name}} foi criado antes de o Canopi colocar os designs no mapa. Procure o lugar a que pertence; os objetos ficam centrados ali.",
+    "pendingPlants": "Plantas",
+    "pendingZones": "Zonas",
+    "pendingOthers": "Notas e guias",
+    "pendingExtent": "Extensão",
+    "pendingExtentValue": "{{width}} m × {{height}} m",
+    "pendingMapHint": "Ou mova o mapa até o local e coloque o design no centro dele.",
+    "pendingSearchHint": "Nada é gravado até você escolher um lugar.",
+    "pendingPlaceHere": "Colocar no centro do mapa"
   },
   "shortcuts": {
     "title": "Atalhos de teclado",
