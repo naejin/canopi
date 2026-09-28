@@ -95,8 +95,16 @@ class SceneCanvasDocumentRole implements CanvasDocumentSurface {
   }
 
   loadDocument(file: CanopiFile): void {
+    const previousDocumentState = this._documentState
     this._documentState = 'settling'
-    this.options.documents.loadDocument(file)
+    try {
+      this.options.documents.loadDocument(file)
+    } catch (error) {
+      // Refused before touching the Scene (an edit still owns it): the
+      // previous document is intact and stays saveable.
+      if (error instanceof CanvasAuthorityBusyError) this._documentState = previousDocumentState
+      throw error
+    }
     this._documentState = 'loaded'
     this.options.cameraNavigation.clearTemporaryFocus()
     this.options.inspection.reset()

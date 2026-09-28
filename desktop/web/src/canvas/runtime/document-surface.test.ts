@@ -214,6 +214,30 @@ describe('Scene Canvas document surface lifecycle', () => {
     expect(captureForPersistence).toHaveBeenCalledOnce()
   })
 
+  it('keeps the loaded document saveable when a later load is refused while an edit owns the Scene', () => {
+    const file = new SceneStore().toCanopiFile()
+    const captureForPersistence = vi.fn((_metadata, document) => ({
+      content: document,
+      isCurrent: () => true,
+      acknowledgeSaved: () => 'applied' as const,
+    }))
+    let busy = false
+    const surface = createTestDocumentSurface({
+      loadDocument: vi.fn(() => {
+        if (busy) throw new CanvasAuthorityBusyError('keyboard-nudge')
+      }),
+      replaceDocument: vi.fn(),
+      captureForPersistence,
+    })
+    surface.loadDocument(file)
+    busy = true
+
+    expect(() => surface.loadDocument(file)).toThrow(CanvasAuthorityBusyError)
+    expect(surface.hasLoadedDocument()).toBe(true)
+    expect(() => surface.captureForPersistence({ name: file.name }, file)).not.toThrow()
+    expect(captureForPersistence).toHaveBeenCalledOnce()
+  })
+
   it('keeps replacement persistence-busy across a late failure and retry', () => {
     const file = new SceneStore().toCanopiFile()
     const captureForPersistence = vi.fn((_metadata, document) => ({
