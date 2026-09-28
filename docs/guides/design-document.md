@@ -16,7 +16,8 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 
 ## Rules
 
-- Versions 5 (`MINIMUM_SUPPORTED_CANOPI_FILE_VERSION`) to 9 (`CURRENT_CANOPI_FILE_VERSION`) open; an older one is upgraded in memory (`migrated_from`) and rewritten only when an edit saves it. Below 5, missing or newer fails with `unsupported_version` before the active Design changes; a v5/v6 Design without a site is `DesignLoadOutcome::NeedsSite` until `place_design_at_site`. Failures are typed (`DesignLoadFailure`). (conformance corpus in `format.rs` and `canopi-design-conformance.test.ts`; `design-migrations.test.ts`)
+- Versions 5 (`MINIMUM_SUPPORTED_CANOPI_FILE_VERSION`) to 9 (`CURRENT_CANOPI_FILE_VERSION`) open; an older one is upgraded in memory (`migrated_from`), rewritten only when an edit saves it, and the save status then says "Saved as Canopi 2 format" once. Below 5, missing or newer fails with `unsupported_version` before the active Design changes; failures are typed (`DesignLoadFailure`). (conformance corpus in `format.rs` and `canopi-design-conformance.test.ts`; `design-migrations.test.ts`, `continuous-save-ui.test.tsx`)
+- A v5/v6 Design without a site is `DesignLoadOutcome::NeedsSite`: the Desktop shell's "Where is your site?" card (`app/document-session/design-site-prompt.ts`) answers with a searched place or the map centre, `place_design_at_site` finishes the ladder, and Cancel cancels the transition silently; nothing is written until an edit saves it. (`design-site-prompt.test.tsx`)
 - `DESIGN_FILE_FIELDS` names every root field and its owner; `known-canopi-keys.ts` and `composeDocumentForSave()` (`app/contracts/document.ts`) derive from it. (`bindings-gen` fails on divergence; `npm run check:types`)
 - `OBSOLETE_CANOPI_ROOT_KEYS` and a root `extra` key are refused as `invalid_document`; in memory unknown roots live under `CanopiFile.extra`, and the encoder spreads them first so known fields win. Zone, annotation and group ids are unique and non-empty; a plant or guide without an id gets `plant-<n>` / `measurement-guide-<n>`. (conformance corpus)
 - Files over `MAX_CANOPI_FILE_BYTES` (64 MiB) are refused before parsing; GeoJSON shares the limit. (`format.rs` tests)
@@ -39,7 +40,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 - Settings mutate through `mutateSettingsProjection()`; 60 fps paths commit at gesture end; await `flushSettingsProjection()` when durability gates a transition. (`settings-projection.test.ts`)
 - New Design defaults apply once at creation (`app/settings/new-design-defaults.ts`), never to an opened Design. (`new-design-view.test.ts`)
 - GeoJSON is a derived exchange format: `app/geojson/codec.ts` is pure; export reads settled lon/lat; import decodes the whole file before one undoable `importDesignObjects()` placement with fresh ids. (`geojson-*.test.ts`)
-- Stamp export writes a current-version `.canopi` of the visible objects; payload version 2, older payloads refused. (`saved-object-stamp-file.test.ts`)
+- Stamp export writes a current-version `.canopi` of the visible objects. A stamp payload is version 2; a version 1 payload is upgraded in memory when read (zone name becomes the id, a generated name becomes null) and written as 2; older or newer is refused. (`saved-object-stamp-file.test.ts`, `saved-object-stamp-source.test.ts`)
 
 ## Do not
 

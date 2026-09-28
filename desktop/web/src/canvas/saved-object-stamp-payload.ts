@@ -1,3 +1,4 @@
+import { isGeneratedZoneName } from '../app/contracts/design-migrations'
 import type {
   SceneObjectGroupMember,
   ScenePoint,
@@ -5,9 +6,12 @@ import type {
 
 /**
  * Payload format of a saved stamp. Version 2 separates a zone's display name
- * from its identity (`.canopi` v9); version 1 stamps are refused (ADR 0003).
+ * from its identity (`.canopi` v9). A version 1 payload is upgraded in memory
+ * when read (ADR 0013) and always written as version 2; anything older or
+ * newer is refused.
  */
 export const SAVED_OBJECT_STAMP_PAYLOAD_VERSION = 2
+const OLDEST_READABLE_STAMP_PAYLOAD_VERSION = 1
 
 export interface SavedObjectStampPayload {
   readonly version: typeof SAVED_OBJECT_STAMP_PAYLOAD_VERSION
@@ -64,9 +68,12 @@ export function parseSavedObjectStampPayload(raw: string): SavedObjectStampPaylo
   }
 }
 
-export function normalizeSavedObjectStampPayload(data: unknown): SavedObjectStampPayload | null {
-  if (!isRecord(data)) return null
-  if (data.version !== SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
+export function normalizeSavedObjectStampPayload(raw: unknown): SavedObjectStampPayload | null {
+  if (!isRecord(raw)) return null
+  if (typeof raw.version !== 'number' || raw.version < OLDEST_READABLE_STAMP_PAYLOAD_VERSION) return null
+  if (raw.version > SAVED_OBJECT_STAMP_PAYLOAD_VERSION) return null
+  const data = raw.version === 1 ? upgradeStampPayloadV1(raw) : raw
+  if (!data) return null
   const anchor = pointFromUnknown(data.anchor)
   if (!anchor) return null
 
@@ -84,6 +91,37 @@ export function normalizeSavedObjectStampPayload(data: unknown): SavedObjectStam
     annotations,
     groups,
   }
+}
+
+/**
+ * Version 1 → 2: a zone's name was its identity. The name becomes the id (as
+ * `.canopi` v8 → v9 does), a generated name becomes no name, and group
+ * members that named the zone's scene id follow it.
+ */
+function upgradeStampPayloadV1(data: Record<string, unknown>): Record<string, unknown> | null {
+  if (!Array.isArray(data.zones) || !Array.isArray(data.groups)) return null
+  const renamed = new Map<string, string>()
+  const zones: unknown[] = []
+  for (const zone of data.zones) {
+    if (!isRecord(zone)) return null
+    const name = stringFromUnknown(zone.name)
+    const oldId = stringFromUnknown(zone.id)
+    if (!name || !oldId) return null
+    renamed.set(oldId, name)
+    zones.push({ ...zone, id: name, name: isGeneratedZoneName(name) ? null : name })
+  }
+  const groups = data.groups.map((group) => {
+    if (!isRecord(group) || !Array.isArray(group.members)) return group
+    return {
+      ...group,
+      members: group.members.map((member) => (
+        isRecord(member) && member.kind === 'zone' && typeof member.id === 'string' && renamed.has(member.id)
+          ? { ...member, id: renamed.get(member.id) }
+          : member
+      )),
+    }
+  })
+  return { ...data, version: SAVED_OBJECT_STAMP_PAYLOAD_VERSION, zones, groups }
 }
 
 function plantFromUnknown(data: unknown): SavedObjectStampPlant | null {
