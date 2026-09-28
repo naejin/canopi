@@ -648,8 +648,7 @@ export function readSessionExpiryMs(expiry: unknown, nowMs: number): number {
   }
   // A value that is implausibly small cannot be epoch seconds; treat it as a
   // relative lifetime in seconds so a shortened response is still honoured.
-  const seconds = raw > 1_000_000_000 ? raw : raw
-  return seconds * 1000
+  return raw > 1_000_000_000 ? raw * 1000 : nowMs + raw * 1000
 }
 
 /** The attribution and zoom availability one viewport answer supplies. */

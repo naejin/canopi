@@ -3,6 +3,7 @@ import {
   SatelliteImageryProvider,
   PROVIDER_MAX_RETRIES,
   PROVIDER_REQUEST_TIMEOUT_MS,
+  readSessionExpiryMs,
   sanitizeProviderReason,
   type SatelliteHttp,
   type SatelliteHttpResponse,
@@ -273,6 +274,18 @@ describe('satellite provider session lifecycle', () => {
     expect(sanitizeProviderReason('   ', 'SECRET')).toBe('The provider request failed.')
     // With no configured secret there is nothing to redact and no crash.
     expect(sanitizeProviderReason('plain failure', null)).toBe('plain failure')
+  })
+
+  it('reads a session expiry as epoch seconds or as a relative lifetime, never as 1970', () => {
+    const now = 1_800_000_000_000
+    expect(readSessionExpiryMs('1800003600', now)).toBe(1_800_003_600_000)
+    expect(readSessionExpiryMs(1_800_003_600, now)).toBe(1_800_003_600_000)
+    // A shortened lifetime in seconds still lies ahead of now.
+    expect(readSessionExpiryMs('3600', now)).toBe(now + 3_600_000)
+    // Malformed values fall back to a conservative lifetime rather than an expired one.
+    for (const bad of ['', 'soon', -5, 0, null, undefined]) {
+      expect(readSessionExpiryMs(bad, now)).toBeGreaterThan(now)
+    }
   })
 
   it('settles within the documented request timeout', () => {
