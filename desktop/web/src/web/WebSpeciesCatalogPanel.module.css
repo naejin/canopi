@@ -108,8 +108,7 @@
 }
 
 .placeButton,
-.favoriteButton,
-.loadMoreButton {
+.favoriteButton {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -139,7 +138,6 @@
 }
 
 .empty,
-.error,
 .loading {
   padding: var(--space-3);
   color: var(--color-text-muted);
