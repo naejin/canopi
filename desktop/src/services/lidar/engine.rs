@@ -491,8 +491,12 @@ fn truncate_message(message: &str) -> String {
 }
 
 pub(super) fn which_on_path(name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    std::env::split_paths(&path_var)
+    which_in(&std::env::var_os("PATH")?, name)
+}
+
+/// The first `name` in the directories of a `PATH`-shaped value.
+pub(super) fn which_in(path_var: &std::ffi::OsStr, name: &str) -> Option<PathBuf> {
+    std::env::split_paths(path_var)
         .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file())
 }

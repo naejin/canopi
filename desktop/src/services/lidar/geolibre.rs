@@ -143,25 +143,143 @@ impl GeolibreEngine {
     }
 }
 
+/// Where the sidecar is looked for, in order: `CANOPI_GEOLIBRE_BIN`, beside
+/// the application executable (Tauri's `externalBin` puts it there on every
+/// platform), then `PATH`.
+pub(super) struct SidecarSearch {
+    pub explicit: Option<std::ffi::OsString>,
+    pub executable: Option<PathBuf>,
+    pub path_var: Option<std::ffi::OsString>,
+}
+
+impl SidecarSearch {
+    fn from_process() -> Self {
+        Self {
+            explicit: std::env::var_os("CANOPI_GEOLIBRE_BIN"),
+            executable: std::env::current_exe().ok(),
+            path_var: std::env::var_os("PATH"),
+        }
+    }
+
+    /// The sidecar's path beside the application executable: `geolibre` or
+    /// `geolibre.exe` in the executable's directory, whether or not it exists.
+    pub(super) fn beside_executable(&self) -> Option<PathBuf> {
+        self.executable
+            .as_deref()
+            .and_then(Path::parent)
+            .map(|dir| dir.join(EXECUTABLE))
+    }
+
+    pub(super) fn locate(&self) -> Result<PathBuf, String> {
+        if let Some(explicit) = &self.explicit {
+            return Ok(PathBuf::from(explicit));
+        }
+        if let Some(beside) = self
+            .beside_executable()
+            .filter(|candidate| candidate.is_file())
+        {
+            return Ok(beside);
+        }
+        self.path_var
+            .as_deref()
+            .and_then(|path_var| super::engine::which_in(path_var, EXECUTABLE))
+            .ok_or_else(|| {
+                "the GeoLibre engine is not installed; new analysis runs are unavailable"
+                    .to_string()
+            })
+    }
+}
+
 fn locate() -> Result<PathBuf, String> {
-    if let Some(explicit) = std::env::var_os("CANOPI_GEOLIBRE_BIN") {
-        return Ok(PathBuf::from(explicit));
-    }
-    if let Some(beside) = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join(EXECUTABLE)))
-        .filter(|candidate| candidate.is_file())
-    {
-        return Ok(beside);
-    }
-    super::engine::which_on_path(EXECUTABLE).ok_or_else(|| {
-        "the GeoLibre engine is not installed; new analysis runs are unavailable".to_string()
-    })
+    SidecarSearch::from_process().locate()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "canopi-geolibre-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The sidecar Tauri packages is `geolibre[.exe]` in the executable's own
+    /// directory on every platform.
+    #[test]
+    fn the_beside_executable_candidate_is_the_sidecar_name_in_the_exe_dir() {
+        let search = SidecarSearch {
+            explicit: None,
+            executable: Some(PathBuf::from("/opt/canopi/bin/canopi")),
+            path_var: None,
+        };
+        assert_eq!(
+            search.beside_executable(),
+            Some(PathBuf::from("/opt/canopi/bin").join(EXECUTABLE))
+        );
+        assert_eq!(
+            EXECUTABLE,
+            if cfg!(windows) {
+                "geolibre.exe"
+            } else {
+                "geolibre"
+            }
+        );
+        let search = SidecarSearch {
+            executable: None,
+            ..search
+        };
+        assert_eq!(search.beside_executable(), None);
+    }
+
+    /// `CANOPI_GEOLIBRE_BIN` wins even when it names nothing (so a wrong
+    /// override is reported, not silently replaced); otherwise the packaged
+    /// sidecar beside the executable beats an installation on `PATH`; `PATH`
+    /// is the last resort.
+    #[test]
+    fn lookup_order_is_env_then_beside_the_executable_then_path() {
+        let root = scratch("order");
+        let exe_dir = root.join("bin");
+        let path_dir = root.join("path");
+        std::fs::create_dir_all(&exe_dir).unwrap();
+        std::fs::create_dir_all(&path_dir).unwrap();
+        let beside = exe_dir.join(EXECUTABLE);
+        let on_path = path_dir.join(EXECUTABLE);
+        std::fs::write(&beside, b"").unwrap();
+        std::fs::write(&on_path, b"").unwrap();
+        let path_var = Some(std::env::join_paths([&path_dir]).unwrap());
+        let executable = Some(exe_dir.join("canopi"));
+
+        let explicit = root.join("explicit-geolibre");
+        let search = SidecarSearch {
+            explicit: Some(explicit.clone().into_os_string()),
+            executable: executable.clone(),
+            path_var: path_var.clone(),
+        };
+        assert_eq!(search.locate().unwrap(), explicit);
+
+        let search = SidecarSearch {
+            explicit: None,
+            executable: executable.clone(),
+            path_var: path_var.clone(),
+        };
+        assert_eq!(search.locate().unwrap(), beside);
+
+        std::fs::remove_file(&beside).unwrap();
+        assert_eq!(search.locate().unwrap(), on_path);
+
+        std::fs::remove_file(&on_path).unwrap();
+        let error = search.locate().expect_err("nothing installed");
+        assert!(error.contains("not installed"), "{error}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// The build script and the provenance name the same pinned revision.
     #[test]
