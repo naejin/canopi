@@ -57,8 +57,8 @@ pub struct RasterProbe {
 ///
 /// Production never needs whole-raster statistics (facts are read in bounded
 /// windows); the fixture and comparison lanes use them to prove outputs.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "read by the test lanes only"))]
 pub struct RasterStatistics {
     pub minimum: f64,
     pub maximum: f64,
@@ -97,8 +97,8 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
     /// georeferenced; a missing CRS leaves `crs_wkt` empty.
     fn probe(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterProbe, String>;
 
-    /// Exact statistics over band 1's valid samples.
-    #[cfg_attr(not(test), expect(dead_code, reason = "read by the test lanes only"))]
+    /// Exact statistics over band 1's valid samples (test lanes only).
+    #[cfg(test)]
     fn statistics(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterStatistics, String>;
 
     /// The WGS84 box `[west, south, east, north]` around the raster's corners.

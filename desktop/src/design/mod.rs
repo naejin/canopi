@@ -291,23 +291,13 @@ pub fn unix_to_iso8601(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use std::fs;
     use std::sync::mpsc;
     use std::time::Duration;
 
-    fn tmp(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(name)
-    }
-
-    fn unique_root(name: &str) -> PathBuf {
-        tmp(&format!(
-            "canopi_{name}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ))
+    fn unique_root(name: &str) -> TestScratch {
+        TestScratch::new(&format!("design-{name}"))
     }
 
     fn operation_sidecars(root: &Path, role: &str) -> Vec<PathBuf> {
@@ -328,7 +318,6 @@ mod tests {
     #[test]
     fn durable_write_round_trips_content_without_leaving_a_temporary() {
         let root = unique_root("durable_write");
-        fs::create_dir_all(&root).unwrap();
         let target = root.join("garden.canopi");
         fs::write(&target, "previous").unwrap();
 
@@ -337,14 +326,11 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "replacement");
         assert!(operation_sidecars(&root, "tmp").is_empty());
         assert!(operation_sidecars(&root, "old").is_empty());
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn failed_durable_write_keeps_the_target_and_removes_its_temporary() {
         let root = unique_root("durable_write_failure");
-        fs::create_dir_all(&root).unwrap();
         // A directory cannot be replaced by a file, so the replace step fails
         // after the temporary has been written.
         let target = root.join("garden.canopi");
@@ -361,28 +347,24 @@ mod tests {
             operation_sidecars(&root, "tmp").is_empty(),
             "a failed durable write must not leave its temporary behind"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn derived_file_write_is_durable_and_leaves_no_temporary() {
         let root = unique_root("derived_write");
-        fs::create_dir_all(&root).unwrap();
         let target = root.join("export.geojson");
 
         write_derived_file(&target, b"{}").unwrap();
 
         assert_eq!(fs::read_to_string(&target).unwrap(), "{}");
         assert!(operation_sidecars(&root, "export").is_empty());
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn test_atomic_replace_new_dest() {
-        let src = tmp("canopi_ar_src_new.txt");
-        let dest = tmp("canopi_ar_dest_new.txt");
+        let scratch = unique_root("atomic_replace_new");
+        let src = scratch.join("canopi_ar_src_new.txt");
+        let dest = scratch.join("canopi_ar_dest_new.txt");
         let _ = fs::remove_file(&src);
         let _ = fs::remove_file(&dest);
 
@@ -398,7 +380,6 @@ mod tests {
     #[test]
     fn test_atomic_replace_overwrites_existing() {
         let root = unique_root("atomic_replace_overwrite");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
 
@@ -411,8 +392,6 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "successful replacement must not leak an owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -420,8 +399,9 @@ mod tests {
         // The stable legacy .old name is outside this operation's ownership.
         // Its presence must neither block the save nor be claimed as rollback
         // state, regardless of whether the platform needs the fallback path.
-        let src = tmp("canopi_ar_src_stale.txt");
-        let dest = tmp("canopi_ar_dest_stale.txt");
+        let scratch = unique_root("atomic_replace_stale");
+        let src = scratch.join("canopi_ar_src_stale.txt");
+        let dest = scratch.join("canopi_ar_dest_stale.txt");
         let old = dest.with_extension("canopi.old");
 
         fs::write(&dest, "original").unwrap();
@@ -441,7 +421,6 @@ mod tests {
     #[test]
     fn atomic_replace_fallback_does_not_claim_legacy_rollback_sidecar() {
         let root = unique_root("atomic_owned_rollback");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
         let legacy_old = dest.with_extension("canopi.old");
@@ -472,14 +451,11 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "successful fallback must clean its owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn atomic_replace_rejects_directory_destination_without_moving_it() {
         let root = unique_root("atomic_directory_destination");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("replacement.tmp");
         let dest = root.join("garden.canopi");
         let marker = dest.join("marker.txt");
@@ -504,14 +480,11 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "rejecting a directory must not create an owned rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn test_atomic_replace_fails_if_src_missing() {
         let root = unique_root("atomic_missing_source");
-        fs::create_dir_all(&root).unwrap();
         let src = root.join("missing.tmp");
         let dest = root.join("garden.canopi");
         fs::write(&dest, "original").unwrap();
@@ -527,14 +500,11 @@ mod tests {
             operation_sidecars(&root, "old").is_empty(),
             "a successfully restored fallback must not leak its rollback sidecar"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn file_fingerprint_is_the_lowercase_sha256_of_its_bytes() {
         let root = unique_root("fingerprint_file");
-        fs::create_dir_all(&root).unwrap();
         let target = root.join("garden.canopi");
         fs::write(&target, b"abc").unwrap();
 
@@ -548,20 +518,12 @@ mod tests {
             fingerprint_file(&root.join("missing.canopi")).unwrap(),
             None
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
     fn same_resource_write_admission_serializes_operations() {
-        let resource = tmp(&format!(
-            "canopi_write_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
+        let scratch = unique_root("write_admission");
+        let resource = scratch.join("resource");
         let (first_entered_tx, first_entered_rx) = mpsc::channel();
         let (release_first_tx, release_first_rx) = mpsc::channel();
         let first_resource = resource.clone();
@@ -599,7 +561,6 @@ mod tests {
     #[test]
     fn different_resource_write_admissions_proceed_concurrently() {
         let root = unique_root("independent_write_admission");
-        fs::create_dir_all(&root).unwrap();
         let first_resource = root.join("first.canopi");
         let second_resource = root.join("second.canopi");
         let (first_entered_tx, first_entered_rx) = mpsc::channel();
@@ -622,7 +583,5 @@ mod tests {
         first.join().unwrap();
         second.join().unwrap();
         second_entered.expect("a different resource must not wait for the first admission");
-
-        let _ = fs::remove_dir_all(root);
     }
 }

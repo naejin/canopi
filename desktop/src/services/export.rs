@@ -82,32 +82,22 @@ pub fn read_geojson_file(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{MAX_GEOJSON_IMPORT_BYTES, MAX_TEXT_EXPORT_BYTES, export_file, read_geojson_file};
+    use crate::test_scratch::TestScratch;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
     struct TempTestDir {
-        root: PathBuf,
+        root: TestScratch,
     }
 
     impl TempTestDir {
         fn new(label: &str) -> Self {
-            let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root =
-                std::env::temp_dir().join(format!("canopi-export-service-{label}-{sequence}"));
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
+            Self {
+                root: TestScratch::new(&format!("export-service-{label}")),
+            }
         }
 
         fn file(&self, name: &str) -> PathBuf {
             self.root.join(name)
-        }
-    }
-
-    impl Drop for TempTestDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.root);
         }
     }
 

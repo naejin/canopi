@@ -908,17 +908,14 @@ mod tests {
     }
 
     struct Scratch {
-        dir: PathBuf,
+        dir: crate::test_scratch::TestScratch,
     }
 
     impl Scratch {
         fn new(label: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!(
-                "canopi-prepared-{label}-{}",
-                super::super::catalogue::new_id("t")
-            ));
-            std::fs::create_dir_all(&dir).expect("scratch dir");
-            Self { dir }
+            Self {
+                dir: crate::test_scratch::TestScratch::new(&format!("prepared-{label}")),
+            }
         }
 
         fn write(&self, name: &str, bytes: &[u8]) -> PathBuf {
@@ -929,12 +926,6 @@ mod tests {
 
         fn path(&self, name: &str) -> PathBuf {
             self.dir.join(name)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 

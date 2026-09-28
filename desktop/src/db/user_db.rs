@@ -419,6 +419,7 @@ fn saved_object_stamp_from_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
@@ -427,16 +428,8 @@ mod tests {
         conn
     }
 
-    fn temp_user_db_path(name: &str) -> std::path::PathBuf {
-        let unique = format!(
-            "canopi_user_db_{name}_{}_{}.db",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        );
-        std::env::temp_dir().join(unique)
+    fn temp_user_db_path(scratch: &TestScratch, name: &str) -> std::path::PathBuf {
+        scratch.join(format!("{name}.db"))
     }
 
     #[test]
@@ -616,7 +609,9 @@ mod tests {
 
     #[test]
     fn a_corrupt_database_is_set_aside_and_the_app_starts_fresh() {
-        let path = temp_user_db_path("corrupt");
+        let scratch =
+            TestScratch::new("user-db-a-corrupt-database-is-set-aside-and-the-app-starts-fresh");
+        let path = temp_user_db_path(&scratch, "corrupt");
         std::fs::write(&path, b"this is not a SQLite database, it is just text").unwrap();
 
         let user_db =
@@ -639,7 +634,10 @@ mod tests {
 
     #[test]
     fn a_database_with_foreign_key_violations_is_set_aside_as_corrupt() {
-        let path = temp_user_db_path("foreign_keys");
+        let scratch = TestScratch::new(
+            "user-db-a-database-with-foreign-key-violations-is-set-aside-as-corrupt",
+        );
+        let path = temp_user_db_path(&scratch, "foreign_keys");
         {
             let conn = Connection::open(&path).unwrap();
             initialize_connection(&conn).unwrap();
@@ -675,7 +673,8 @@ mod tests {
     /// A newer database is refused with a typed error and left exactly where it is.
     #[test]
     fn opening_a_newer_database_is_refused_and_kept() {
-        let path = temp_user_db_path("newer");
+        let scratch = TestScratch::new("user-db-opening-a-newer-database-is-refused-and-kept");
+        let path = temp_user_db_path(&scratch, "newer");
         Connection::open(&path)
             .unwrap()
             .pragma_update(None, "user_version", CURRENT_USER_DB_VERSION + 1)
@@ -709,7 +708,8 @@ mod tests {
 
     #[test]
     fn reopening_a_current_database_enables_foreign_keys() {
-        let path = temp_user_db_path("reopen_foreign_keys");
+        let scratch = TestScratch::new("user-db-reopening-a-current-database-enables-foreign-keys");
+        let path = temp_user_db_path(&scratch, "reopen_foreign_keys");
         drop(crate::db::UserDb::open(&path).unwrap());
 
         let user_db = crate::db::UserDb::open(&path).unwrap();

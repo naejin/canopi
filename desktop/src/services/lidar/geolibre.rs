@@ -60,10 +60,10 @@ impl GeolibreEngine {
     }
 
     #[cfg(test)]
-    pub fn at(path: PathBuf) -> Self {
+    pub fn at(path: PathBuf, log_dir: PathBuf) -> Self {
         Self {
             fixed: Some(path),
-            ..Self::in_dir(std::env::temp_dir())
+            ..Self::in_dir(log_dir)
         }
     }
 
@@ -198,17 +198,8 @@ fn locate() -> Result<PathBuf, String> {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-geolibre-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn scratch(name: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("geolibre-{name}"))
     }
 
     /// The sidecar Tauri packages is `geolibre[.exe]` in the executable's own
@@ -293,7 +284,11 @@ mod tests {
 
     #[test]
     fn a_missing_runner_is_a_named_unavailability_not_a_fallback() {
-        let engine = GeolibreEngine::at(std::env::temp_dir().join("no-such-geolibre-binary"));
+        let scratch = scratch("missing-runner");
+        let engine = GeolibreEngine::at(
+            scratch.join("no-such-geolibre-binary"),
+            scratch.path().to_path_buf(),
+        );
         let error = engine.discover().expect_err("missing binary");
         assert!(error.contains("not installed"), "{error}");
         let cancel = AtomicBool::new(false);

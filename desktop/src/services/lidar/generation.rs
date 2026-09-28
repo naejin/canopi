@@ -787,14 +787,8 @@ mod tests {
         AtomicBool::new(false)
     }
 
-    fn scratch(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-resolver-{label}-{}-{}",
-            std::process::id(),
-            crate::services::lidar::catalogue::new_id("t")
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        dir
+    fn scratch(label: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("resolver-{label}"))
     }
 
     fn lattice() -> RasterGrid {

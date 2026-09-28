@@ -245,6 +245,7 @@ pub(crate) fn require_plant_db(plant_db: &PlantDb) -> Result<PlantDbConnectionGu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
 
     fn connection_with_identity(schema_version: i32, fingerprint: &str) -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -261,15 +262,8 @@ mod tests {
         connection
     }
 
-    fn temp_database_path(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "canopi_set_aside_{label}_{}_{}.db",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ))
+    fn temp_database_path(scratch: &TestScratch, label: &str) -> PathBuf {
+        scratch.join(format!("set_aside_{label}.db"))
     }
 
     fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
@@ -280,7 +274,8 @@ mod tests {
 
     #[test]
     fn set_aside_moves_the_rollback_journal_with_the_database() {
-        let path = temp_database_path("journal");
+        let scratch = TestScratch::new("db-set-aside-moves-the-rollback-journal-with-the-database");
+        let path = temp_database_path(&scratch, "journal");
         std::fs::write(&path, b"damaged database").unwrap();
         std::fs::write(with_suffix(&path, "-journal"), b"rollback journal").unwrap();
 
@@ -310,7 +305,9 @@ mod tests {
 
     #[test]
     fn set_aside_never_overwrites_an_earlier_set_aside_or_its_journal() {
-        let path = temp_database_path("unique");
+        let scratch =
+            TestScratch::new("db-set-aside-never-overwrites-an-earlier-set-aside-or-its-journal");
+        let path = temp_database_path(&scratch, "unique");
         let base = format!("{}.corrupt-0", path.file_name().unwrap().to_string_lossy());
         std::fs::write(&path, b"first").unwrap();
         let first = set_aside_user_db(&path, &base).unwrap();

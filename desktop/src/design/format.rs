@@ -398,6 +398,7 @@ pub(crate) fn create_new_design(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use common_types::design::PanelTarget;
     use std::path::PathBuf;
 
@@ -414,14 +415,11 @@ mod tests {
         let error = encode_design(&design).unwrap_err();
         assert!(error.contains("MiB"), "{error}");
 
-        let dir =
-            std::env::temp_dir().join(format!("canopi-format-oversized-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("oversized");
         let path = dir.join("huge.canopi");
         assert!(save_to_file(&path, &design, None).is_err());
         assert!(export_to_file(&path, &design).is_err());
         assert!(!path.exists(), "nothing is written for a refused Design");
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// Admit a value the way a file is admitted, for tests that expect a Design.
@@ -577,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_save_and_load_round_trip() {
-        let dir = std::env::temp_dir();
+        let dir = unique_dir("round_trip");
         let path: PathBuf = dir.join("canopi_test_round_trip.canopi");
 
         let original = create_default();
@@ -598,15 +596,7 @@ mod tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_save_admission_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("save_admission");
         let path = dir.join("garden.canopi");
         let initial = create_default();
         std::fs::write(&path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
@@ -639,23 +629,13 @@ mod tests {
             .expect("save should succeed");
         writer.join().unwrap();
         assert_eq!(load_from_file(&path).unwrap().name, "Admitted replacement");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn concurrent_saves_leave_one_complete_design() {
         use std::sync::{Arc, Barrier};
 
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_concurrent_saves_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("concurrent_saves");
         let path = dir.join("garden.canopi");
         let mut initial = create_default();
         initial.name = "Initial".to_owned();
@@ -692,21 +672,11 @@ mod tests {
             owned_sidecars(&dir, "old").is_empty(),
             "concurrent saves must not leak owned rollback sidecars"
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn test_atomic_write_creates_tmp_then_final() {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_atomic_save_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("atomic_save");
         let path: PathBuf = dir.join("garden.canopi");
 
         let design = create_default();
@@ -721,21 +691,11 @@ mod tests {
             owned_sidecars(&dir, "old").is_empty(),
             "successful save must not leak an owned rollback sidecar"
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn save_does_not_claim_an_existing_legacy_temp_sidecar() {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_owned_save_temp_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = unique_dir("owned_save_temp");
         let path = dir.join("garden.canopi");
         let legacy_tmp = path.with_extension("canopi.tmp");
         std::fs::write(&legacy_tmp, "another operation owns this").unwrap();
@@ -747,15 +707,13 @@ mod tests {
             "another operation owns this"
         );
         assert!(load_from_file(&path).is_ok());
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn test_extra_fields_preserved_on_round_trip() {
         use serde_json::json;
 
-        let dir = std::env::temp_dir();
+        let dir = unique_dir("extra");
         let path: PathBuf = dir.join("canopi_test_extra.canopi");
 
         // Build a design with an unknown future field injected at JSON level.
@@ -780,7 +738,7 @@ mod tests {
     fn geolocated_objects_panel_sections_and_unknown_fields_round_trip() {
         use serde_json::json;
 
-        let dir = std::env::temp_dir();
+        let dir = unique_dir("geolocated_round_trip");
         let path: PathBuf = dir.join("canopi_test_geolocated_round_trip.canopi");
 
         let mut value = serde_json::to_value(create_default()).expect("default design serializes");
@@ -919,17 +877,8 @@ mod tests {
         assert_eq!(defaulted.budget_currency, DEFAULT_BUDGET_CURRENCY);
     }
 
-    fn unique_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi_format_{label}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn unique_dir(label: &str) -> TestScratch {
+        TestScratch::new(&format!("format-{label}"))
     }
 
     #[test]
@@ -1041,8 +990,6 @@ mod tests {
             failure.message
         );
         assert!(load_with_fingerprint(&path).is_err());
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// Migrate the user's own Designs and compare them with hand-converted
@@ -1148,8 +1095,6 @@ mod tests {
             load_from_file(&folder).unwrap_err().failure().kind,
             DesignLoadFailureKind::Unreadable
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn with_views_and_stories() -> CanopiFile {
@@ -1200,8 +1145,6 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(loaded.views[0].camera.lon, 2.294_481_234_5);
         assert_eq!(loaded.stories[0].steps[0].view_id, "view-1");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1230,8 +1173,6 @@ mod tests {
 
         assert!(matches!(error, DesignLoadError::TooLarge { .. }), "{error}");
         assert!(error.to_string().contains("64 MiB"), "{error}");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1244,8 +1185,6 @@ mod tests {
 
         assert_eq!(load_from_file(&path).unwrap().name, "Untitled");
         assert!(owned_sidecars(&dir, "export").is_empty());
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn named(name: &str) -> CanopiFile {
@@ -1280,8 +1219,6 @@ mod tests {
                 .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
         );
         assert_eq!(loaded.name, "Garden");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1299,8 +1236,6 @@ mod tests {
         assert_eq!(load_with_fingerprint(&path).unwrap().1, third);
         let entries = std::fs::read_dir(&dir).unwrap().count();
         assert_eq!(entries, 1, "a save leaves only the Design file, no backup");
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1324,8 +1259,6 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             "changed by another program"
         );
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1344,8 +1277,6 @@ mod tests {
             }
         );
         assert!(!path.exists());
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1361,8 +1292,6 @@ mod tests {
         let DecodedDesign { file: loaded, .. } = loaded;
         assert_eq!(loaded.name, "Keep mine");
         assert_eq!(loaded_fingerprint, fingerprint);
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1377,7 +1306,5 @@ mod tests {
         assert!(result.is_err(), "{result:?}");
         assert!(path.is_dir());
         assert!(owned_sidecars(&dir, "tmp").is_empty());
-
-        let _ = std::fs::remove_dir_all(dir);
     }
 }

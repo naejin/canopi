@@ -43,6 +43,7 @@ pub(crate) fn show_app_folder(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use std::cell::RefCell;
 
     struct RecordingRevealer(RefCell<Vec<PathBuf>>);
@@ -54,11 +55,10 @@ mod tests {
         }
     }
 
-    fn temp_app_data(name: &str) -> PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("canopi-app-folders-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        root
+    fn temp_app_data(name: &str) -> (TestScratch, PathBuf) {
+        let scratch = TestScratch::new(&format!("app-folders-{name}"));
+        let app_data = scratch.join("app-data");
+        (scratch, app_data)
     }
 
     #[test]
@@ -77,18 +77,17 @@ mod tests {
 
     #[test]
     fn showing_a_folder_creates_it_and_opens_exactly_that_folder() {
-        let app_data = temp_app_data("show");
+        let (_scratch, app_data) = temp_app_data("show");
         let revealer = RecordingRevealer(RefCell::new(Vec::new()));
         show_app_folder(&app_data, AppFolder::DataLibrary, &revealer).unwrap();
         let expected = app_folder_path(&app_data, AppFolder::DataLibrary);
         assert!(expected.is_dir());
         assert_eq!(*revealer.0.borrow(), vec![expected]);
-        let _ = std::fs::remove_dir_all(&app_data);
     }
 
     #[test]
     fn a_folder_that_cannot_be_created_is_reported_without_its_path() {
-        let app_data = temp_app_data("blocked");
+        let (_scratch, app_data) = temp_app_data("blocked");
         std::fs::create_dir_all(&app_data).unwrap();
         // A file where the folder should be makes creation fail.
         std::fs::write(app_folder_path(&app_data, AppFolder::Drafts), b"").unwrap();
@@ -96,6 +95,5 @@ mod tests {
         let error = show_app_folder(&app_data, AppFolder::Drafts, &revealer).unwrap_err();
         assert!(!error.contains(&*app_data.to_string_lossy()), "{error}");
         assert!(revealer.0.borrow().is_empty());
-        let _ = std::fs::remove_dir_all(&app_data);
     }
 }

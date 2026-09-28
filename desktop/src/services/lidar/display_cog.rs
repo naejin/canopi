@@ -837,7 +837,7 @@ mod library_tests {
     /// its source's own NoData rule; the numeric generation is untouched.
     #[test]
     fn published_sources_display_from_overviewed_derivatives_in_priority_order() {
-        let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-cog"));
+        let root = crate::test_scratch::TestScratch::new("canopi-display-cog");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).expect("library opens");
         let cancel = AtomicBool::new(false);
@@ -980,7 +980,7 @@ mod chunk_display_tests {
     /// spanning the empty space between them.
     #[test]
     fn distant_result_chunks_display_as_separate_parts_without_the_gap() {
-        let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-chunks"));
+        let root = crate::test_scratch::TestScratch::new("canopi-display-chunks");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
         seed_chunk_result(&library, "item-far", "dgen-far");
@@ -1048,7 +1048,7 @@ mod chunk_display_tests {
     /// space returns.
     #[test]
     fn a_failed_derivative_write_is_retryable_and_publishes_nothing_partial() {
-        let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-capacity"));
+        let root = crate::test_scratch::TestScratch::new("canopi-display-capacity");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
         seed_chunk_result(&library, "item-cap", "dgen-cap");

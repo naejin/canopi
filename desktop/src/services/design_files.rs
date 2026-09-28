@@ -305,6 +305,7 @@ mod tests {
         remove_recent_design, save_design, show_design_folder,
     };
     use crate::db::UserDb;
+    use crate::test_scratch::TestScratch;
     use common_types::design::{
         CanopiFile, DesignLoadFailure, DesignSaveOutcome, DesignSummary, LoadedDesign,
     };
@@ -324,17 +325,8 @@ mod tests {
         crate::design::format::create_new_design(name, "2026-07-02T00:00:00Z")
     }
 
-    fn temp_design_path(name: &str) -> PathBuf {
-        let unique = format!(
-            "canopi_design_service_{}_{}_{}.canopi",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        );
-        std::env::temp_dir().join(unique)
+    fn temp_design_path(scratch: &TestScratch, name: &str) -> PathBuf {
+        scratch.join(format!("{name}.canopi"))
     }
 
     fn design_summary(path: &str, name: &str) -> DesignSummary {
@@ -347,9 +339,11 @@ mod tests {
 
     #[test]
     fn save_and_load_design_round_trip_records_recent_file() {
+        let scratch =
+            TestScratch::new("design-files-save-and-load-design-round-trip-records-recent-file");
         let user_db = test_user_db();
         let design = test_design("Service Demo");
-        let path = temp_design_path("round_trip");
+        let path = temp_design_path(&scratch, "round_trip");
 
         let outcome = save_design(
             &user_db,
@@ -380,9 +374,12 @@ mod tests {
 
     #[test]
     fn save_and_load_design_do_not_record_design_notebook_entry() {
+        let scratch = TestScratch::new(
+            "design-files-save-and-load-design-do-not-record-design-notebook-entry",
+        );
         let user_db = test_user_db();
         let design = test_design("Notebook Demo");
-        let path = temp_design_path("notebook_round_trip");
+        let path = temp_design_path(&scratch, "notebook_round_trip");
 
         save_design(
             &user_db,
@@ -407,9 +404,12 @@ mod tests {
 
     #[test]
     fn export_design_file_round_trips_without_recording_recent_file() {
+        let scratch = TestScratch::new(
+            "design-files-export-design-file-round-trips-without-recording-recent-file",
+        );
         let user_db = test_user_db();
         let design = test_design("Stamp Export");
-        let path = temp_design_path("stamp_export");
+        let path = temp_design_path(&scratch, "stamp_export");
 
         let saved_path =
             export_design_file(path.to_string_lossy().into_owned(), design.clone()).unwrap();
@@ -425,9 +425,12 @@ mod tests {
 
     #[test]
     fn load_design_file_round_trips_without_recording_recent_file() {
+        let scratch = TestScratch::new(
+            "design-files-load-design-file-round-trips-without-recording-recent-file",
+        );
         let user_db = test_user_db();
         let design = test_design("Stamp Import");
-        let path = temp_design_path("stamp_import");
+        let path = temp_design_path(&scratch, "stamp_import");
 
         export_design_file(path.to_string_lossy().into_owned(), design).unwrap();
         let loaded = load_design_file(path.to_string_lossy().into_owned()).unwrap();
@@ -441,8 +444,9 @@ mod tests {
 
     #[test]
     fn load_missing_design_returns_error() {
+        let scratch = TestScratch::new("design-files-load-missing-design-returns-error");
         let user_db = test_user_db();
-        let path = temp_design_path("missing");
+        let path = temp_design_path(&scratch, "missing");
 
         let result = load_design(&user_db, path.to_string_lossy().into_owned());
 
@@ -489,9 +493,10 @@ mod tests {
 
     #[test]
     fn recent_designs_prune_missing_paths() {
+        let scratch = TestScratch::new("design-files-recent-designs-prune-missing-paths");
         let user_db = test_user_db();
-        let existing_path = temp_design_path("existing_recent");
-        let missing_path = temp_design_path("missing_recent");
+        let existing_path = temp_design_path(&scratch, "existing_recent");
+        let missing_path = temp_design_path(&scratch, "missing_recent");
 
         save_design(
             &user_db,
@@ -554,7 +559,10 @@ mod tests {
 
     #[test]
     fn availability_forgets_only_files_whose_folder_is_present() {
-        let folder = temp_design_path("availability_folder").with_extension("");
+        let scratch = TestScratch::new(
+            "design-files-availability-forgets-only-files-whose-folder-is-present",
+        );
+        let folder = temp_design_path(&scratch, "availability_folder").with_extension("");
         std::fs::create_dir_all(&folder).unwrap();
         let present = folder.join("present.canopi");
         std::fs::write(&present, "{}").unwrap();
@@ -583,8 +591,10 @@ mod tests {
 
     #[test]
     fn recent_designs_keep_entries_on_an_unavailable_drive() {
+        let scratch =
+            TestScratch::new("design-files-recent-designs-keep-entries-on-an-unavailable-drive");
         let user_db = test_user_db();
-        let unmounted = temp_design_path("unmounted_drive")
+        let unmounted = temp_design_path(&scratch, "unmounted_drive")
             .with_extension("")
             .join("garden.canopi");
         {
@@ -609,8 +619,10 @@ mod tests {
 
     #[test]
     fn saving_and_loading_do_not_log_design_names_or_paths() {
+        let scratch =
+            TestScratch::new("design-files-saving-and-loading-do-not-log-design-names-or-paths");
         let user_db = test_user_db();
-        let path = temp_design_path("private_log");
+        let path = temp_design_path(&scratch, "private_log");
         let (_, logs) = super::capture_logs(|| {
             let loaded = match save_design(
                 &user_db,
@@ -653,8 +665,11 @@ mod tests {
 
     #[test]
     fn a_conflicting_save_leaves_the_file_and_recent_designs_alone() {
+        let scratch = TestScratch::new(
+            "design-files-a-conflicting-save-leaves-the-file-and-recent-designs-alone",
+        );
         let user_db = test_user_db();
-        let path = temp_design_path("conflict");
+        let path = temp_design_path(&scratch, "conflict");
         let path_text = path.to_string_lossy().into_owned();
         std::fs::write(&path, "changed by another program").unwrap();
 
@@ -695,8 +710,11 @@ mod tests {
 
     #[test]
     fn show_in_folder_opens_the_folder_of_a_listed_design_only() {
+        let scratch = TestScratch::new(
+            "design-files-show-in-folder-opens-the-folder-of-a-listed-design-only",
+        );
         let user_db = test_user_db();
-        let path = temp_design_path("reveal");
+        let path = temp_design_path(&scratch, "reveal");
         save_design(
             &user_db,
             path.to_string_lossy().into_owned(),
@@ -712,7 +730,7 @@ mod tests {
         show_design_folder(&folder, &revealer).unwrap();
         assert_eq!(*revealer.0.borrow(), vec![folder]);
 
-        let unlisted = std::env::temp_dir().join("not-a-recent-design.canopi");
+        let unlisted = scratch.join("not-a-recent-design.canopi");
         let error = recent_design_folder(&user_db, &unlisted.to_string_lossy()).unwrap_err();
         assert!(!error.contains("not-a-recent-design"), "{error}");
         let _ = std::fs::remove_file(&path);
@@ -732,7 +750,8 @@ mod tests {
 
     #[test]
     fn a_design_folder_that_is_gone_is_reported_without_its_path() {
-        let gone = std::env::temp_dir().join("canopi-gone-folder-for-reveal");
+        let scratch = TestScratch::new("design-files-gone-folder");
+        let gone = scratch.join("canopi-gone-folder-for-reveal");
         let revealer = RecordingRevealer(std::cell::RefCell::new(Vec::new()));
         let error = show_design_folder(&gone, &revealer).unwrap_err();
         assert!(!error.contains("canopi-gone-folder"), "{error}");
@@ -741,8 +760,10 @@ mod tests {
 
     #[test]
     fn remove_from_list_forgets_the_design_and_keeps_the_file() {
+        let scratch =
+            TestScratch::new("design-files-remove-from-list-forgets-the-design-and-keeps-the-file");
         let user_db = test_user_db();
-        let path = temp_design_path("forget");
+        let path = temp_design_path(&scratch, "forget");
         let listed = path.to_string_lossy().into_owned();
         save_design(&user_db, listed.clone(), test_design("Forget"), None).unwrap();
         assert_eq!(get_recent_files(&user_db).unwrap().len(), 1);

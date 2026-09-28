@@ -470,7 +470,7 @@ mod tests {
     /// trusted.
     #[test]
     fn meta_round_trips_and_an_unknown_version_reads_as_absent() {
-        let root = std::env::temp_dir().join(catalogue::new_id("canopi-source-meta"));
+        let root = crate::test_scratch::TestScratch::new("canopi-source-meta");
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join(META_FILE);
         let meta = SourceMeta {

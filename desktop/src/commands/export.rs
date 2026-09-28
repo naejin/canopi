@@ -58,38 +58,27 @@ mod tests {
         NativeOperationClass, NativeOperationClassLimits, NativeOperationExecutor,
         NativeOperationLimits,
     };
-    use std::sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc,
-    };
+    use crate::test_scratch::TestScratch;
+    use std::sync::mpsc;
     use std::task::{Context, Poll, Waker};
     use std::time::Duration;
     use std::{future::Future, path::PathBuf};
 
-    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
 
     struct TempTestDir {
-        root: PathBuf,
+        root: TestScratch,
     }
 
     impl TempTestDir {
         fn new(label: &str) -> Self {
-            let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root =
-                std::env::temp_dir().join(format!("canopi-export-command-{label}-{sequence}"));
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
+            Self {
+                root: TestScratch::new(&format!("export-command-{label}")),
+            }
         }
 
         fn file(&self, name: &str) -> PathBuf {
             self.root.join(name)
-        }
-    }
-
-    impl Drop for TempTestDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.root);
         }
     }
 

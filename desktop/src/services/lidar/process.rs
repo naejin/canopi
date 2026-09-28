@@ -332,8 +332,9 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .expect("sleep spawns");
-        let out = std::env::temp_dir().join("canopi-engine-timeout-out.log");
-        let err = std::env::temp_dir().join("canopi-engine-timeout-err.log");
+        let scratch = crate::test_scratch::TestScratch::new("engine-timeout");
+        let out = scratch.join("canopi-engine-timeout-out.log");
+        let err = scratch.join("canopi-engine-timeout-err.log");
         let started = Instant::now();
         let result = wait_cancellable(
             &mut child,
@@ -359,13 +360,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn engine_output_is_captured_under_the_log_dir_and_removed() {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-engine-logs-{}-{}",
-            std::process::id(),
-            NEXT_LOG.load(Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_scratch::TestScratch::new("engine-logs");
         let list = |dir: &Path| {
             run_managed(
                 Path::new("/bin/sh"),
@@ -414,8 +409,9 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .expect("sleep spawns");
-        let out = std::env::temp_dir().join("canopi-engine-cancel-out.log");
-        let err = std::env::temp_dir().join("canopi-engine-cancel-err.log");
+        let scratch = crate::test_scratch::TestScratch::new("engine-cancel");
+        let out = scratch.join("canopi-engine-cancel-out.log");
+        let err = scratch.join("canopi-engine-cancel-err.log");
         let started = Instant::now();
         cancel.store(true, Ordering::Relaxed);
         let result = wait_cancellable(&mut child, Some(&cancel), None, [&out, &err]);

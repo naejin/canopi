@@ -117,6 +117,7 @@ fn create_unique_report_folder(root: &Path, folder_name: &str) -> Result<PathBuf
 
 #[cfg(test)]
 mod tests {
+    use crate::test_scratch::TestScratch;
     use common_types::health::{LidarLibraryStatus, PlantDbStatus, SubsystemHealth};
     use common_types::settings::Settings;
     use common_types::support::{
@@ -125,29 +126,16 @@ mod tests {
     use std::cell::RefCell;
     use std::path::Path;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
     struct TempProblemReportDir {
-        root: PathBuf,
+        root: TestScratch,
     }
 
     impl TempProblemReportDir {
         fn new(label: &str) -> Self {
-            let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!(
-                "canopi-problem-report-{label}-{}-{sequence}",
-                std::process::id(),
-            ));
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
-        }
-    }
-
-    impl Drop for TempProblemReportDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.root);
+            Self {
+                root: TestScratch::new(&format!("problem-report-{label}")),
+            }
         }
     }
 

@@ -1451,7 +1451,8 @@ mod tests {
                 .contains("at most")
         );
 
-        let path = std::env::temp_dir().join(new_id("canopi-oversized-source"));
+        let scratch = crate::test_scratch::TestScratch::new("canopi-oversized-source");
+        let path = scratch.join("oversized-source");
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(admission::MAX_SOURCE_FILE_BYTES + 1).unwrap();
         let error = validate_source_selection(std::slice::from_ref(&path)).unwrap_err();
@@ -1461,7 +1462,7 @@ mod tests {
 
     #[test]
     fn managed_original_is_streamed_and_existing_content_is_verified() {
-        let root = std::env::temp_dir().join(new_id("canopi-managed-source-test"));
+        let root = crate::test_scratch::TestScratch::new("canopi-managed-source-test");
         let paths = LidarPaths::open(&root).unwrap();
         let job_dir = paths.job_dir("job");
         std::fs::create_dir_all(&job_dir).unwrap();
@@ -1592,7 +1593,7 @@ mod tests {
     fn staged_source_assets_match_the_authored_values() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-staging-oracle"));
+        let root = crate::test_scratch::TestScratch::new("canopi-staging-oracle");
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = library
             .create_layer(
@@ -1741,7 +1742,7 @@ mod tests {
     #[test]
     fn staging_without_a_measurable_scratch_directory_fails_by_name() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
-        let root = std::env::temp_dir().join(new_id("canopi-absent-scratch"));
+        let root = crate::test_scratch::TestScratch::new("canopi-absent-scratch");
         let missing = root.join("absent-scratch");
         let error = stage_source_samples(
             &engine,
@@ -1768,7 +1769,7 @@ mod tests {
     fn staged_output_write_failure_removes_partial_assets() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let dir = std::env::temp_dir().join(new_id("canopi-write-failure"));
+        let dir = crate::test_scratch::TestScratch::new("canopi-write-failure");
         std::fs::create_dir_all(&dir).unwrap();
         let (width, height) = (40u32, 30u32);
         let source = write_staging_fixture(&engine, &dir, "failure", width, height, -9999.0);
@@ -1835,7 +1836,7 @@ mod tests {
         use crate::services::lidar::paths::capacity_probe;
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let dir = std::env::temp_dir().join(new_id("canopi-combined-budget"));
+        let dir = crate::test_scratch::TestScratch::new("canopi-combined-budget");
         std::fs::create_dir_all(&dir).unwrap();
         let grid = RasterGrid {
             width: 1024,
@@ -1890,7 +1891,7 @@ mod tests {
         use crate::services::lidar::paths::capacity_probe;
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let dir = std::env::temp_dir().join(new_id("canopi-combined-boundary"));
+        let dir = crate::test_scratch::TestScratch::new("canopi-combined-boundary");
         std::fs::create_dir_all(&dir).unwrap();
         let paths = LidarPaths::open(&dir).expect("library paths");
         let job_dir = paths.job_dir("boundary-job");
@@ -2016,7 +2017,7 @@ mod tests {
     /// samples and excludes the sentinel.
     #[test]
     fn source_range_excludes_declared_nodata_and_keeps_zero_and_negative() {
-        let root = std::env::temp_dir().join(new_id("canopi-range-nodata"));
+        let root = crate::test_scratch::TestScratch::new("canopi-range-nodata");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -2218,7 +2219,7 @@ mod tests {
     fn a_first_batch_refuses_sources_that_disagree_on_the_horizontal_crs() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-first-batch-crs"));
+        let root = crate::test_scratch::TestScratch::new("canopi-first-batch-crs");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2266,7 +2267,7 @@ mod tests {
     fn an_all_nodata_source_is_refused_by_name() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-zero-valid"));
+        let root = crate::test_scratch::TestScratch::new("canopi-zero-valid");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2309,7 +2310,7 @@ mod tests {
     fn published_statistics_match_the_reopened_composition() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-published-statistics"));
+        let root = crate::test_scratch::TestScratch::new("canopi-published-statistics");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2369,7 +2370,7 @@ mod tests {
     fn source_region_facts_cover_later_blocks() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-region-facts"));
+        let root = crate::test_scratch::TestScratch::new("canopi-region-facts");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2412,7 +2413,7 @@ mod tests {
     fn a_window_resolves_only_the_occurrences_that_can_reach_it() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-bounded-members"));
+        let root = crate::test_scratch::TestScratch::new("canopi-bounded-members");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2485,7 +2486,7 @@ mod tests {
     /// displayed, and the gap must never be walked.
     #[test]
     fn sparse_gap_import_stores_only_occupied_chunks() {
-        let root = std::env::temp_dir().join(new_id("canopi-gap-run"));
+        let root = crate::test_scratch::TestScratch::new("canopi-gap-run");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -2629,7 +2630,7 @@ mod tests {
     /// as one batch and stored as occupied chunks only.
     #[test]
     fn sparse_twenty_four_tile_batch_stays_chunk_sized() {
-        let root = std::env::temp_dir().join(new_id("canopi-24-tile"));
+        let root = crate::test_scratch::TestScratch::new("canopi-24-tile");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -2763,7 +2764,7 @@ mod tests {
     /// and two 4x4 sources propose 32.
     #[test]
     fn admission_admits_a_separated_pair_by_its_own_cells() {
-        let root = std::env::temp_dir().join(new_id("canopi-admit-over"));
+        let root = crate::test_scratch::TestScratch::new("canopi-admit-over");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -2808,7 +2809,7 @@ mod tests {
     /// policy rather than a hard-coded ceiling of its own.
     #[test]
     fn admission_refuses_a_pair_over_the_processing_budget() {
-        let root = std::env::temp_dir().join(new_id("canopi-admit-budget"));
+        let root = crate::test_scratch::TestScratch::new("canopi-admit-budget");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -2873,7 +2874,7 @@ mod tests {
     /// hidden hard-coded ceiling survives beside the policy.
     #[test]
     fn the_copy_and_hash_paths_are_governed_by_the_same_policy() {
-        let root = std::env::temp_dir().join(new_id("canopi-copy-policy"));
+        let root = crate::test_scratch::TestScratch::new("canopi-copy-policy");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
@@ -3029,7 +3030,7 @@ mod tests {
         use crate::services::lidar::prepared_raster::observability;
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-retained-payload"));
+        let root = crate::test_scratch::TestScratch::new("canopi-retained-payload");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -3208,7 +3209,7 @@ mod tests {
     fn a_failed_apply_leaves_a_reused_asset_and_the_head_intact() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-reused-asset"));
+        let root = crate::test_scratch::TestScratch::new("canopi-reused-asset");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -3359,7 +3360,7 @@ mod tests {
         ] {
             let engine = crate::services::lidar::rust_engine::RustRasterEngine;
             let cancel = AtomicBool::new(false);
-            let root = std::env::temp_dir().join(new_id("canopi-publication-crash"));
+            let root = crate::test_scratch::TestScratch::new("canopi-publication-crash");
             let _ = std::fs::remove_dir_all(&root);
             std::fs::create_dir_all(&root).unwrap();
             let library = LidarLibrary::open(&root).expect("library opens");

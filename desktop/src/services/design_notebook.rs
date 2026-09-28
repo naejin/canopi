@@ -170,6 +170,7 @@ fn prune_missing_design_notebook_entries(user_db: &UserDb, paths: &[String]) {
 #[cfg(test)]
 mod tests {
     use crate::db::UserDb;
+    use crate::test_scratch::TestScratch;
     use rusqlite::Connection;
     use std::path::PathBuf;
 
@@ -182,24 +183,16 @@ mod tests {
         UserDb::open(path).unwrap()
     }
 
-    fn temp_design_path(name: &str) -> PathBuf {
-        let unique = format!(
-            "canopi_notebook_service_{}_{}_{}.canopi",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        );
-        std::env::temp_dir().join(unique)
+    fn temp_design_path(scratch: &TestScratch, name: &str) -> PathBuf {
+        scratch.join(format!("{name}.canopi"))
     }
 
     #[test]
     fn notebook_listing_prunes_missing_paths() {
+        let scratch = TestScratch::new("design-notebook-notebook-listing-prunes-missing-paths");
         let user_db = test_user_db();
-        let existing_path = temp_design_path("existing");
-        let missing_path = temp_design_path("missing");
+        let existing_path = temp_design_path(&scratch, "existing");
+        let missing_path = temp_design_path(&scratch, "missing");
         std::fs::write(&existing_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -239,8 +232,10 @@ mod tests {
 
     #[test]
     fn notebook_keeps_entries_whose_drive_is_unavailable() {
+        let scratch =
+            TestScratch::new("design-notebook-notebook-keeps-entries-whose-drive-is-unavailable");
         let user_db = test_user_db();
-        let unmounted = temp_design_path("unmounted_drive")
+        let unmounted = temp_design_path(&scratch, "unmounted_drive")
             .with_extension("")
             .join("garden.canopi");
         {
@@ -269,8 +264,10 @@ mod tests {
 
     #[test]
     fn notebook_snapshot_includes_sections_and_membership() {
+        let scratch =
+            TestScratch::new("design-notebook-notebook-snapshot-includes-sections-and-membership");
         let user_db = test_user_db();
-        let design_path = temp_design_path("sectioned");
+        let design_path = temp_design_path(&scratch, "sectioned");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -302,8 +299,11 @@ mod tests {
 
     #[test]
     fn deleting_section_keeps_design_references_unsectioned() {
+        let scratch = TestScratch::new(
+            "design-notebook-deleting-section-keeps-design-references-unsectioned",
+        );
         let user_db = test_user_db();
-        let design_path = temp_design_path("deleted_section");
+        let design_path = temp_design_path(&scratch, "deleted_section");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -335,8 +335,10 @@ mod tests {
 
     #[test]
     fn removing_design_reference_preserves_design_file() {
+        let scratch =
+            TestScratch::new("design-notebook-removing-design-reference-preserves-design-file");
         let user_db = test_user_db();
-        let design_path = temp_design_path("remove_reference");
+        let design_path = temp_design_path(&scratch, "remove_reference");
         std::fs::write(&design_path, "{}").unwrap();
         {
             let conn = user_db.acquire();
@@ -363,9 +365,10 @@ mod tests {
 
     #[test]
     fn manual_order_survives_user_db_reopen() {
-        let db_path = temp_design_path("ordered_user_db").with_extension("db");
-        let first_design_path = temp_design_path("ordered_first");
-        let second_design_path = temp_design_path("ordered_second");
+        let scratch = TestScratch::new("design-notebook-manual-order-survives-user-db-reopen");
+        let db_path = temp_design_path(&scratch, "ordered_user_db").with_extension("db");
+        let first_design_path = temp_design_path(&scratch, "ordered_first");
+        let second_design_path = temp_design_path(&scratch, "ordered_second");
         std::fs::write(&first_design_path, "{}").unwrap();
         std::fs::write(&second_design_path, "{}").unwrap();
 

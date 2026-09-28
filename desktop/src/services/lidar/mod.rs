@@ -1625,7 +1625,7 @@ mod fixed_library_tests;
 mod tests {
     #[test]
     fn the_library_size_counts_files_in_every_folder() {
-        let root = std::env::temp_dir().join(super::new_id("canopi-library-size"));
+        let root = crate::test_scratch::TestScratch::new("canopi-library-size");
         std::fs::create_dir_all(root.join("sources").join("abc")).unwrap();
         std::fs::write(root.join("lidar-library.sqlite"), vec![0u8; 100]).unwrap();
         std::fs::write(
@@ -1649,7 +1649,7 @@ mod tests {
     /// main thread behind the very work it is trying to stop.
     #[test]
     fn signalling_a_cancel_never_waits_for_the_catalogue_lock() {
-        let root = std::env::temp_dir().join(super::new_id("canopi-cancel-signal"));
+        let root = crate::test_scratch::TestScratch::new("canopi-cancel-signal");
         let library = LidarLibrary::open(&root).unwrap();
         library.attach_executor(crate::native_operation::NativeOperationExecutor::production());
         let flag = library.register_cancel("job-held");
@@ -1759,7 +1759,7 @@ mod tests {
 
     #[test]
     fn deleting_a_derived_item_removes_its_complete_row_graph() {
-        let root = std::env::temp_dir().join(new_id("lidar-delete-analysis-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-delete-analysis-test");
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
@@ -1806,7 +1806,7 @@ mod tests {
     /// deadline so a regression fails instead of hanging the suite.
     #[test]
     fn a_public_collection_read_does_not_re_acquire_the_catalogue_lock() {
-        let root = std::env::temp_dir().join(new_id("canopi-collection-lock"));
+        let root = crate::test_scratch::TestScratch::new("canopi-collection-lock");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).expect("library opens");
         let layer_id = library
@@ -1848,7 +1848,7 @@ mod tests {
 
     #[test]
     fn deleting_a_source_removes_all_referencing_rows_with_foreign_keys_enabled() {
-        let root = std::env::temp_dir().join(new_id("lidar-delete-layer-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-delete-layer-test");
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
@@ -1971,7 +1971,7 @@ mod tests {
 
     #[test]
     fn heavy_raster_lease_is_exclusive_and_released_on_every_path() {
-        let root = std::env::temp_dir().join(new_id("lidar-heavy-lease-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-heavy-lease-test");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
@@ -2032,7 +2032,7 @@ mod tests {
     fn one_step_import_publishes_without_review_and_refuses_an_invalid_batch() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-one-step-import"));
+        let root = crate::test_scratch::TestScratch::new("canopi-one-step-import");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -2160,7 +2160,7 @@ mod tests {
     /// another surface's entry that happens to carry the same id.
     #[test]
     fn inspection_reads_share_the_display_admission_and_are_scoped() {
-        let root = std::env::temp_dir().join(new_id("lidar-sample-admission-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-sample-admission-test");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
 
@@ -2205,7 +2205,7 @@ mod tests {
 
     #[test]
     fn display_reads_are_bounded_in_order_and_cancellable() {
-        let root = std::env::temp_dir().join(new_id("lidar-display-admission-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-display-admission-test");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
 
@@ -2259,7 +2259,7 @@ mod tests {
     /// by a timer.
     #[test]
     fn a_waiting_read_wakes_on_release_and_on_cancel() {
-        let root = std::env::temp_dir().join(new_id("lidar-display-wakeup-test"));
+        let root = crate::test_scratch::TestScratch::new("lidar-display-wakeup-test");
         std::fs::create_dir_all(&root).unwrap();
         let library = LidarLibrary::open(&root).unwrap();
         let first = library.admit_sample_request("held-1").unwrap();
@@ -2303,7 +2303,7 @@ mod tests {
     /// Startup removes analysis scratch that no running job owns.
     #[test]
     fn startup_sweeps_settled_analysis_scratch_and_keeps_a_running_jobs() {
-        let root = std::env::temp_dir().join(new_id("lidar-analysis-scratch-sweep"));
+        let root = crate::test_scratch::TestScratch::new("lidar-analysis-scratch-sweep");
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
@@ -2357,7 +2357,7 @@ mod tests {
     /// referenced one, and leaves the store alone while any job is in flight.
     #[test]
     fn startup_sweeps_unreferenced_assets_and_keeps_referenced_ones() {
-        let root = std::env::temp_dir().join(new_id("lidar-asset-sweep"));
+        let root = crate::test_scratch::TestScratch::new("lidar-asset-sweep");
         let library = LidarLibrary::open(&root).unwrap();
         let layer_id = library
             .create_layer(
@@ -2434,7 +2434,7 @@ mod tests {
     /// the ones an earlier process left; this process's are never touched.
     #[test]
     fn startup_sweeps_engine_logs_left_by_an_earlier_process() {
-        let root = std::env::temp_dir().join(new_id("lidar-engine-log-sweep"));
+        let root = crate::test_scratch::TestScratch::new("lidar-engine-log-sweep");
         let library = LidarLibrary::open(&root).unwrap();
         let logs = library.inner.paths.engine_log_dir();
         assert!(logs.starts_with(library.inner.paths.root()));
@@ -2528,7 +2528,7 @@ mod tests {
     /// its result unpublished. A second open finds a current catalogue.
     #[test]
     fn an_older_catalogue_is_set_aside_and_rebuilt_from_the_originals() {
-        let root = std::env::temp_dir().join(new_id("lidar-older-library"));
+        let root = crate::test_scratch::TestScratch::new("lidar-older-library");
         let lidar = paths::library_root(&root);
         std::fs::create_dir_all(&lidar).unwrap();
         write_original(
@@ -2667,7 +2667,7 @@ mod tests {
     /// A catalogue that is not a database at all takes the same road.
     #[test]
     fn a_corrupt_catalogue_is_set_aside_and_rebuilt() {
-        let root = std::env::temp_dir().join(new_id("lidar-corrupt-library"));
+        let root = crate::test_scratch::TestScratch::new("lidar-corrupt-library");
         let lidar = paths::library_root(&root);
         write_original(
             &lidar,
@@ -2710,7 +2710,7 @@ mod tests {
     /// with the default quantity, so it can be prepared or deleted by the user.
     #[test]
     fn an_original_without_meta_is_listed_under_a_generated_name() {
-        let root = std::env::temp_dir().join(new_id("lidar-orphan-original"));
+        let root = crate::test_scratch::TestScratch::new("lidar-orphan-original");
         let lidar = paths::library_root(&root);
         write_original(&lidar, "0123456789abcdef", None);
         write_catalogue_with_version(&lidar.join(paths::CATALOGUE_FILE), "20");
@@ -2747,7 +2747,7 @@ mod tests {
     /// Member order is the item's source priority and survives the rebuild.
     #[test]
     fn a_rebuilt_item_keeps_its_member_order() {
-        let root = std::env::temp_dir().join(new_id("lidar-member-order"));
+        let root = crate::test_scratch::TestScratch::new("lidar-member-order");
         let lidar = paths::library_root(&root);
         let mut meta_b = single_item_meta(
             "sha-b",
@@ -2782,7 +2782,7 @@ mod tests {
     /// an empty, read-only library that names the refusal.
     #[test]
     fn a_newer_catalogue_is_refused_without_touching_files() {
-        let root = std::env::temp_dir().join(new_id("lidar-newer-library"));
+        let root = crate::test_scratch::TestScratch::new("lidar-newer-library");
         let lidar = paths::library_root(&root);
         write_original(
             &lidar,
@@ -2846,7 +2846,7 @@ mod tests {
     /// in the same order.
     #[test]
     fn the_meta_a_library_writes_rebuilds_its_own_items() {
-        let root = std::env::temp_dir().join(new_id("lidar-meta-roundtrip"));
+        let root = crate::test_scratch::TestScratch::new("lidar-meta-roundtrip");
         let lidar = paths::library_root(&root);
         let library = LidarLibrary::open(&root).unwrap();
         for sha256 in ["sha-x", "sha-y"] {
@@ -2919,7 +2919,7 @@ mod tests {
     fn a_rebuilt_item_is_prepared_again_from_its_managed_originals() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
-        let root = std::env::temp_dir().join(new_id("canopi-rebuild-retry"));
+        let root = crate::test_scratch::TestScratch::new("canopi-rebuild-retry");
         std::fs::create_dir_all(&root).unwrap();
         let plane = |name: &str, value: f32, origin_x: f64| -> PathBuf {
             let raw = root.join(format!("{name}.raw"));

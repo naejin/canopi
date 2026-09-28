@@ -351,34 +351,25 @@ mod tests {
         IMAGE_USER_AGENT, ImageCache, ImageCacheError, is_raster_image, redirect_target,
         species_media_url,
     };
+    use crate::test_scratch::TestScratch;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant};
 
     const INAT_URL: &str =
         "https://inaturalist-open-data.s3.amazonaws.com/photos/300618260/medium.jpeg";
 
     struct TestDir {
-        path: PathBuf,
+        path: TestScratch,
     }
 
     impl TestDir {
         fn new() -> Self {
-            let unique = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time should move forward")
-                .as_nanos();
-            let path = std::env::temp_dir().join(format!("canopi-image-cache-test-{unique}"));
-            fs::create_dir_all(&path).expect("create temp dir");
-            Self { path }
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
+            Self {
+                path: TestScratch::new("image-cache"),
+            }
         }
     }
 

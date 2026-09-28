@@ -272,15 +272,8 @@ mod tests {
         db::UserDb, design::drafts::DesignDrafts, native_operation::NativeOperationExecutor,
     };
 
-    fn scratch_root(label: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
-            "canopi_design_commands_{label}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ))
+    fn scratch_root(label: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("design-commands-{label}"))
     }
 
     fn mock_app(root: &std::path::Path) -> tauri::App<tauri::test::MockRuntime> {
@@ -301,7 +294,6 @@ mod tests {
     #[test]
     fn save_and_load_commands_carry_fingerprints_and_refuse_outside_changes() {
         let root = scratch_root("save_load");
-        std::fs::create_dir_all(&root).unwrap();
         let app = mock_app(&root);
         let path = root.join("garden.canopi").to_string_lossy().into_owned();
         let save = |name: &str, expected: Option<String>| {
@@ -341,14 +333,11 @@ mod tests {
                 .unwrap();
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].name, "Second");
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
     fn recent_design_previews_read_listed_designs_only() {
         let root = scratch_root("previews");
-        std::fs::create_dir_all(&root).unwrap();
         let app = mock_app(&root);
         let listed = root.join("orchard.canopi").to_string_lossy().into_owned();
         tauri::async_runtime::block_on(super::save_design(
@@ -385,8 +374,6 @@ mod tests {
                 sketch: None,
             }
         );
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[derive(Clone, Default)]
@@ -402,7 +389,6 @@ mod tests {
     #[test]
     fn recent_design_commands_show_its_folder_and_remove_it_from_the_list() {
         let root = scratch_root("recent_actions");
-        std::fs::create_dir_all(&root).unwrap();
         let app = mock_app(&root);
         let path = root.join("orchard.canopi").to_string_lossy().into_owned();
         tauri::async_runtime::block_on(super::save_design(
@@ -422,7 +408,7 @@ mod tests {
             revealer.clone(),
         ))
         .unwrap();
-        assert_eq!(*revealer.0.lock().unwrap(), vec![root.clone()]);
+        assert_eq!(*revealer.0.lock().unwrap(), vec![root.path().to_path_buf()]);
 
         // An unlisted path is refused before anything is opened.
         let unlisted = root.join("elsewhere.canopi").to_string_lossy().into_owned();
@@ -446,8 +432,6 @@ mod tests {
                 .unwrap();
         assert!(recent.is_empty());
         assert!(std::path::Path::new(&path).is_file());
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -497,8 +481,6 @@ mod tests {
                 .is_empty()
         );
         assert!(root.join("drafts").is_dir(), "drafts live under app data");
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

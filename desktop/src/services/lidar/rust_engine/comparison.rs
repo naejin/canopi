@@ -717,7 +717,10 @@ fn ign_fixture() -> Option<PathBuf> {
 #[test]
 #[ignore = "cross-checks the Rust engine against GDAL (gdalinfo, gdal_translate, gdaltransform on PATH or CANOPI_LIDAR_GDAL_BIN); skipped cleanly without GDAL"]
 fn the_rust_engine_matches_gdal_on_the_same_inputs() {
-    let gdal = GdalEngine::new();
+    let dir = crate::test_scratch::TestScratch::new("engine-comparison");
+    let gdal_logs = dir.join("gdal-logs");
+    std::fs::create_dir_all(&gdal_logs).expect("GDAL log dir");
+    let gdal = GdalEngine::in_dir(gdal_logs);
     let gdal_version = match gdal.version() {
         Ok(version) => version,
         Err(reason) => {
@@ -726,9 +729,6 @@ fn the_rust_engine_matches_gdal_on_the_same_inputs() {
         }
     };
     let rust = RustRasterEngine;
-    let dir = std::env::temp_dir().join(format!("canopi-engine-comparison-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("scratch dir");
     let mut report = Report { lines: Vec::new() };
     report.note(format!(
         "comparing {} with {gdal_version}",

@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn low_capacity_refuses_windowed_admission_before_output() {
-        let root = std::env::temp_dir().join(new_id("canopi-windowed-admission"));
+        let root = crate::test_scratch::TestScratch::new("canopi-windowed-admission");
         std::fs::create_dir_all(&root).unwrap();
         {
             let _guard = crate::services::lidar::paths::capacity_probe::override_available(

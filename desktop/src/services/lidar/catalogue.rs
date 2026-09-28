@@ -1577,7 +1577,7 @@ mod tests {
 
     #[test]
     fn import_progress_is_monotonic_and_stops_with_the_job() {
-        let dir = std::env::temp_dir().join(new_id("canopi-import-progress-test"));
+        let dir = crate::test_scratch::TestScratch::new("canopi-import-progress-test");
         std::fs::create_dir_all(&dir).unwrap();
         let connection = open(&dir.join("catalogue.sqlite")).unwrap();
         connection
@@ -1622,7 +1622,7 @@ mod tests {
 
     #[test]
     fn a_fresh_catalogue_records_the_current_version() {
-        let root = std::env::temp_dir().join(new_id("canopi-catalogue-fresh"));
+        let root = crate::test_scratch::TestScratch::new("canopi-catalogue-fresh");
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("lidar-library.sqlite");
         assert_eq!(stored_version(&path).unwrap(), None);
@@ -1637,7 +1637,7 @@ mod tests {
     #[test]
     fn any_other_catalogue_version_is_refused_before_writes() {
         for version in ["20", "99"] {
-            let root = std::env::temp_dir().join(new_id("canopi-catalogue-other"));
+            let root = crate::test_scratch::TestScratch::new("canopi-catalogue-other");
             std::fs::create_dir_all(&root).unwrap();
             let path = root.join("lidar-library.sqlite");
             {
@@ -1662,7 +1662,7 @@ mod tests {
 
     #[test]
     fn unpublished_chunk_rows_are_invisible_until_the_generation_publishes() {
-        let root = std::env::temp_dir().join(new_id("canopi-chunks"));
+        let root = crate::test_scratch::TestScratch::new("canopi-chunks");
         std::fs::create_dir_all(&root).unwrap();
         let connection = open(&root.join("lidar-library.sqlite")).unwrap();
         connection
@@ -1709,7 +1709,7 @@ mod tests {
 
     #[test]
     fn chunk_pages_order_by_position_and_filter_spatially_in_sql() {
-        let root = std::env::temp_dir().join(new_id("canopi-chunk-pages"));
+        let root = crate::test_scratch::TestScratch::new("canopi-chunk-pages");
         std::fs::create_dir_all(&root).unwrap();
         let connection = open(&root.join("catalogue.sqlite")).unwrap();
         connection

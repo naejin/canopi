@@ -63,17 +63,6 @@ impl GdalEngine {
         }
     }
 
-    /// An oracle outside any library, capturing output in a per-process
-    /// scratch directory.
-    pub fn new() -> Self {
-        let log_dir = std::env::temp_dir().join(format!(
-            "canopi-lidar-engine-test-logs-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&log_dir).expect("test engine log directory");
-        Self::in_dir(log_dir)
-    }
-
     /// Detect the tool set once per process; a detection failure is cached and
     /// names the missing tool.
     pub fn discover(&self) -> Result<DiscoveredTools, String> {

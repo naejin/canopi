@@ -146,6 +146,7 @@ mod tests {
         get_favorite_names, get_recently_viewed_names, get_saved_object_stamps, get_setting,
         schema_version,
     };
+    use crate::test_scratch::TestScratch;
     use std::path::{Path, PathBuf};
 
     /// The `CREATE` statements a supported historical version wrote, as its
@@ -243,15 +244,8 @@ mod tests {
         conn
     }
 
-    fn temp_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "canopi_user_db_migration_{name}_{}_{}.db",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ))
+    fn temp_path(scratch: &TestScratch, name: &str) -> PathBuf {
+        scratch.join(format!("{name}.db"))
     }
 
     fn write_fixture(path: &Path, version: i32) {
@@ -333,9 +327,12 @@ mod tests {
 
     #[test]
     fn every_supported_older_version_upgrades_to_the_current_schema_and_keeps_its_rows() {
+        let scratch = TestScratch::new(
+            "user-db-migrations-every-supported-older-version-upgrades-to-the-current-schema-and-keeps-its-rows",
+        );
         let expected_tables = fresh_schema_columns();
         for version in OLDEST_SUPPORTED_USER_DB_VERSION..CURRENT_USER_DB_VERSION {
-            let path = temp_path(&format!("v{version}"));
+            let path = temp_path(&scratch, &format!("v{version}"));
             write_fixture(&path, version);
 
             let user_db = UserDb::open(&path)
@@ -398,7 +395,10 @@ mod tests {
 
     #[test]
     fn a_failing_step_rolls_back_and_leaves_the_file_byte_identical() {
-        let path = temp_path("failing_step");
+        let scratch = TestScratch::new(
+            "user-db-migrations-a-failing-step-rolls-back-and-leaves-the-file-byte-identical",
+        );
+        let path = temp_path(&scratch, "failing_step");
         {
             let conn = fixture_connection(&path);
             conn.execute_batch(&historical_schema(8)).unwrap();
@@ -442,7 +442,10 @@ mod tests {
 
     #[test]
     fn a_failing_integrity_check_after_the_ladder_rolls_back() {
-        let path = temp_path("failing_integrity");
+        let scratch = TestScratch::new(
+            "user-db-migrations-a-failing-integrity-check-after-the-ladder-rolls-back",
+        );
+        let path = temp_path(&scratch, "failing_integrity");
         {
             let conn = fixture_connection(&path);
             conn.execute_batch(&historical_schema(8)).unwrap();
@@ -482,8 +485,11 @@ mod tests {
 
     #[test]
     fn versions_below_the_oldest_supported_are_refused_untouched() {
+        let scratch = TestScratch::new(
+            "user-db-migrations-versions-below-the-oldest-supported-are-refused-untouched",
+        );
         for version in [1, 7] {
-            let path = temp_path(&format!("too_old_{version}"));
+            let path = temp_path(&scratch, &format!("too_old_{version}"));
             write_pre_floor_fixture(&path, version);
             let before = std::fs::read(&path).unwrap();
 

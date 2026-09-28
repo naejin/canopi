@@ -89,8 +89,7 @@ mod tests {
 
     #[test]
     fn a_written_raster_reports_its_wgs84_extent_without_a_sidecar() {
-        let root = std::env::temp_dir().join(format!("canopi-coverage-{}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = crate::test_scratch::TestScratch::new("coverage");
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let raster = root.join("tile.tif");
         let grid = super::super::grid::RasterGrid {

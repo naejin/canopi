@@ -1,8 +1,9 @@
 //! Registry, definitions, runs, publication, refresh and freshness.
 //!
 //! The first half needs no engine: catalogue rows stand in for raster data.
-//! The ignored half runs the pinned GeoLibre CLI and GDAL on generated
-//! analytic surfaces (the `lidar-native` lane).
+//! The second half writes analytic surfaces with the Rust raster engine; its
+//! ignored tests then run the pinned GeoLibre CLI on them (the `lidar-native`
+//! lane). Nothing here launches GDAL.
 
 use super::test_support::{record, run_slope, seed_published_slope, slope_request};
 use super::*;
@@ -16,10 +17,8 @@ use common_types::lidar::{
 };
 use std::path::PathBuf;
 
-fn scratch_root(label: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(new_id(&format!("canopi-analyses-{label}")));
-    std::fs::create_dir_all(&root).expect("scratch root");
-    root
+fn scratch_root(label: &str) -> crate::test_scratch::TestScratch {
+    crate::test_scratch::TestScratch::new(&format!("analyses-{label}"))
 }
 
 fn count(library: &LidarLibrary, sql: &str) -> i64 {
@@ -988,7 +987,7 @@ fn processing_history_pages_newest_first() {
 }
 
 // ---------------------------------------------------------------------------
-// The lidar-native lane: GDAL and the pinned GeoLibre CLI
+// The lidar-native lane: Rust-engine fixtures and the pinned GeoLibre CLI
 // ---------------------------------------------------------------------------
 
 /// Publish one source into `layer_id` through the real stage and apply path.
@@ -1414,7 +1413,7 @@ fn cancelling_a_geolibre_run_kills_its_child_and_publishes_nothing() {
 }
 
 #[test]
-fn the_run_rechecks_the_grid_with_gdal() {
+fn the_run_rechecks_the_grid_with_the_rust_engine() {
     let root = scratch_root("grid-check");
     let library = LidarLibrary::open(&root).unwrap();
     let values = vec![1.0f32; 48];

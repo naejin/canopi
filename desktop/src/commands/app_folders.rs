@@ -94,9 +94,8 @@ mod tests {
 
     #[test]
     fn show_app_folder_opens_the_folder_through_the_local_executor() {
-        let app_data =
-            std::env::temp_dir().join(format!("canopi-app-folders-command-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&app_data);
+        let scratch = crate::test_scratch::TestScratch::new("app-folders-command");
+        let app_data = scratch.join("app-data");
         let revealer = RecordingRevealer::default();
         tauri::async_runtime::block_on(show_app_folder_with_executor(
             &NativeOperationExecutor::production(),
@@ -112,6 +111,5 @@ mod tests {
                 AppFolder::Drafts
             )]
         );
-        let _ = std::fs::remove_dir_all(&app_data);
     }
 }

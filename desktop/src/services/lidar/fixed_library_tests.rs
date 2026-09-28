@@ -9,10 +9,8 @@ use common_types::library::{LibraryItemRole, LibraryItemSummary, RasterQuantity}
 use common_types::lidar::{LidarDisplayRequest, LidarDisplayState, LidarResultState};
 use std::path::Path;
 
-fn scratch(label: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(catalogue::new_id(&format!("canopi-fixed-{label}")));
-    std::fs::create_dir_all(&root).unwrap();
-    root
+fn scratch(label: &str) -> crate::test_scratch::TestScratch {
+    crate::test_scratch::TestScratch::new(&format!("fixed-{label}"))
 }
 
 fn seed_result(connection: &Connection, layer_id: &str, item_id: &str, source_generation: &str) {

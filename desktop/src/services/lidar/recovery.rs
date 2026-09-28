@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn inspection_names_each_catalogue_state() {
-        let root = std::env::temp_dir().join(new_id("canopi-inspect"));
+        let root = crate::test_scratch::TestScratch::new("canopi-inspect");
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("c.sqlite");
         assert_eq!(inspect(&path), CatalogueState::Missing);

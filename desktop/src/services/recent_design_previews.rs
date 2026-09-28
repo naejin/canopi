@@ -147,20 +147,11 @@ fn io_reason(error: &std::io::Error) -> RecentDesignUnreadableReason {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use common_types::design::{CURRENT_CANOPI_FILE_VERSION, CanopiFile};
-    use std::path::PathBuf;
 
-    fn scratch(label: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "canopi_recent_previews_{label}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        root
+    fn scratch(label: &str) -> TestScratch {
+        TestScratch::new(&format!("recent-previews-{label}"))
     }
 
     fn with_plants(count: usize) -> CanopiFile {
@@ -206,8 +197,6 @@ mod tests {
         // A different size is a different file: it is read again.
         write(&path, &with_plants(5));
         assert_eq!(plant_count(&previews.previews(&listed)[0].preview), Some(5));
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -243,7 +232,7 @@ mod tests {
             &unversioned,
             &newer,
             &moved,
-            &root,
+            &root.path().to_path_buf(),
         ]
         .map(|path| path.to_string_lossy().into_owned());
 
@@ -268,8 +257,6 @@ mod tests {
             .map(unreadable)
         );
         assert!(!logs.contains(&*root.to_string_lossy()), "{logs}");
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -321,8 +308,6 @@ mod tests {
                 ..
             }
         ));
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -335,8 +320,6 @@ mod tests {
 
         let result = previews.previews(&[path.to_string_lossy().into_owned()]);
         assert_eq!(result[0].preview, RecentDesignPreview::TooLarge);
-
-        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -353,7 +336,5 @@ mod tests {
 
         previews.previews(&paths);
         assert!(previews.cached_len() <= PREVIEW_CACHE_LIMIT);
-
-        let _ = std::fs::remove_dir_all(root);
     }
 }

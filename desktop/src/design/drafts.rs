@@ -169,17 +169,11 @@ pub(crate) fn remove_retired_autosave_store(app_data_dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_scratch::TestScratch;
     use std::fs;
 
-    fn unique_dir(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "canopi_drafts_{label}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-        ))
+    fn unique_dir(label: &str) -> TestScratch {
+        TestScratch::new(&format!("drafts-{label}"))
     }
 
     fn design(name: &str) -> CanopiFile {
@@ -220,8 +214,6 @@ mod tests {
             drafts.load("draft-1").unwrap().name,
             "Orchard sketch, later"
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -262,8 +254,6 @@ mod tests {
                 .save(&"a".repeat(MAX_DRAFT_ID_LEN), &design("Longest"))
                 .is_ok()
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -298,8 +288,6 @@ mod tests {
                 ("older", "Older", "2023-11-14T22:13:20Z"),
             ]
         );
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -336,8 +324,6 @@ mod tests {
         );
         assert!(!logs.contains("Secret Orchard"), "{logs}");
         assert!(!logs.contains(&*root.to_string_lossy()), "{logs}");
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -363,8 +349,6 @@ mod tests {
         let huge = drafts.load("huge").unwrap_err();
         assert!(huge.contains("64 MiB"), "{huge}");
         assert!(drafts.load("absent").is_err());
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -384,8 +368,6 @@ mod tests {
             .map(|draft| draft.id)
             .collect::<Vec<_>>();
         assert_eq!(ids, ["kept"]);
-
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -413,7 +395,5 @@ mod tests {
         let ((), logs) =
             crate::services::design_files::capture_logs(|| remove_retired_autosave_store(&root));
         assert!(!logs.contains("autosave store"), "{logs}");
-
-        let _ = fs::remove_dir_all(root);
     }
 }

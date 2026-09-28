@@ -113,6 +113,7 @@ fn report_output_root(app: &AppHandle) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::create_problem_report_with_executor;
+    use crate::test_scratch::TestScratch;
     use crate::{
         native_operation::{
             NativeOperationClass, NativeOperationClassLimits, NativeOperationExecutor,
@@ -124,37 +125,19 @@ mod tests {
         health::{LidarLibraryStatus, PlantDbStatus, SubsystemHealth},
         support::{ProblemReportRequest, ProblemReportSensitiveAttachments},
     };
-    use std::{
-        path::PathBuf,
-        sync::{
-            atomic::{AtomicU64, Ordering},
-            mpsc,
-        },
-        time::Duration,
-    };
+    use std::{sync::mpsc, time::Duration};
 
-    static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     const WAIT_TIMEOUT: Duration = Duration::from_secs(2);
 
     struct TempReportRoot {
-        root: PathBuf,
+        root: TestScratch,
     }
 
     impl TempReportRoot {
         fn new() -> Self {
-            let sequence = TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!(
-                "canopi-problem-report-command-{}-{sequence}",
-                std::process::id(),
-            ));
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
-        }
-    }
-
-    impl Drop for TempReportRoot {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.root);
+            Self {
+                root: TestScratch::new("problem-report-command"),
+            }
         }
     }
 

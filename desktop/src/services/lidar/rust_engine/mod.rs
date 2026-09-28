@@ -21,9 +21,10 @@ mod source;
 mod swiss;
 mod tiff;
 
+#[cfg(test)]
+use super::engine::RasterStatistics;
 use super::engine::{
-    RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics, bounds_of,
-    check_cancel, grid_corners,
+    RasterEngine, RasterGeoref, RasterInput, RasterProbe, bounds_of, check_cancel, grid_corners,
 };
 use super::grid::RasterGrid;
 use super::import::validate_working_grid;
@@ -160,6 +161,7 @@ impl RasterEngine for RustRasterEngine {
         source::probe(raster)
     }
 
+    #[cfg(test)]
     fn statistics(&self, raster: &Path, cancel: &AtomicBool) -> Result<RasterStatistics, String> {
         let loaded = source::load(raster, "raster statistics", cancel)?;
         check_cancel(cancel)?;
@@ -328,17 +330,10 @@ impl RasterEngine for RustRasterEngine {
 mod tests {
     use super::super::prepared_raster::{PreparedRaster, RasterWindow};
     use super::*;
-    use std::path::PathBuf;
     use std::sync::atomic::Ordering;
 
-    fn scratch(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-rust-engine-{label}-{}-{}",
-            std::process::id(),
-            super::super::catalogue::new_id("t")
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        dir
+    fn scratch(label: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("rust-engine-{label}"))
     }
 
     fn cancel() -> AtomicBool {

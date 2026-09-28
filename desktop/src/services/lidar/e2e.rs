@@ -170,9 +170,7 @@ fn e2e_import_publish_slope_restart_reuse() {
         Ok(path) => path,
         Err(reason) => panic!("{reason}"),
     };
-    let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir_all(&work).unwrap();
+    let work = crate::test_scratch::TestScratch::new("lidar-e2e");
     let cancel = AtomicBool::new(false);
 
     // Open the library (slice 1: catalogue + assets under app data root).
@@ -385,9 +383,7 @@ fn e2e_sparse_generation_lifecycle() {
         Ok(path) => path,
         Err(reason) => panic!("{reason}"),
     };
-    let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-sparse-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir_all(&work).unwrap();
+    let work = crate::test_scratch::TestScratch::new("lidar-e2e-sparse");
     let cancel = AtomicBool::new(false);
 
     // Sample the combined working set from an idle baseline for the whole run.
@@ -575,9 +571,7 @@ fn e2e_mnh_batch_import_apply_display_restart() {
             digest
         );
     }
-    let work = std::env::temp_dir().join(format!("canopi-lidar-e2e-mnh-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir_all(&work).unwrap();
+    let work = crate::test_scratch::TestScratch::new("lidar-e2e-mnh");
     let cancel = AtomicBool::new(false);
     // Twelve files and 48,000,000 processing cells are both inside the
     // production policy, so this authorized run needs no admission override:

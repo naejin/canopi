@@ -8,6 +8,8 @@ mod logging;
 mod native_command_policy;
 mod native_operation;
 mod services;
+#[cfg(test)]
+mod test_scratch;
 
 use common_types::health::SubsystemHealth;
 use rusqlite::{Connection, OpenFlags};

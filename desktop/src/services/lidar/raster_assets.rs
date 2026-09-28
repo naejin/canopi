@@ -210,14 +210,8 @@ mod tests {
     use super::*;
     use crate::services::lidar::prepared_raster::RasterWindow;
 
-    fn scratch_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "canopi-assets-{label}-{}-{}",
-            std::process::id(),
-            super::super::catalogue::new_id("t")
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        dir
+    fn scratch_dir(label: &str) -> crate::test_scratch::TestScratch {
+        crate::test_scratch::TestScratch::new(&format!("assets-{label}"))
     }
 
     fn library_paths(root: &Path) -> LidarPaths {
