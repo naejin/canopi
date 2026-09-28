@@ -103,6 +103,21 @@ mod tests {
     }
 
     #[test]
+    fn get_species_batch_refuses_oversized_batches_before_any_lookup() {
+        let conn = Connection::open_in_memory().unwrap();
+        // No `species` table: any lookup would fail loudly, so a clean
+        // batch-size error proves nothing was queried.
+        crate::db::plant_catalog_connection::stamp_expected_prepared_identity(&conn);
+        let plant_db = PlantDb::available(conn);
+        // One over the 500-name cap the other batch projections share.
+        let names: Vec<String> = (0..501).map(|index| format!("Species {index}")).collect();
+
+        let error = get_species_batch(&plant_db, names, "en".to_owned()).unwrap_err();
+
+        assert!(error.contains("maximum of 500"), "{error}");
+    }
+
+    #[test]
     fn get_species_batch_propagates_detail_failures_for_present_species() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(

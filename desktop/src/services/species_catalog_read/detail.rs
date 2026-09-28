@@ -78,11 +78,20 @@ pub(super) fn read_detail_projection(
     get_detail(conn, canonical_name, locale)
 }
 
+/// Names one detail batch resolves at most; each costs a full detail
+/// projection on the single Catalog lane.
+pub(crate) const MAX_DETAIL_BATCH_NAMES: usize = 500;
+
 pub(super) fn read_detail_projections(
     conn: &Connection,
     canonical_names: &[String],
     locale: &str,
 ) -> Result<Vec<SpeciesDetail>, String> {
+    if canonical_names.len() > MAX_DETAIL_BATCH_NAMES {
+        return Err(format!(
+            "Batch size exceeds maximum of {MAX_DETAIL_BATCH_NAMES} names"
+        ));
+    }
     let mut results = Vec::with_capacity(canonical_names.len());
     for name in canonical_names {
         if resolve_species_id(conn, name)?.is_none() {
