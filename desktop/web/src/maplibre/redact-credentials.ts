@@ -5,8 +5,8 @@
  * diagnostics, Designs or exports.
  */
 
-// Credential query parameters such as the Google Maps `key=`.
-const CREDENTIAL_QUERY_VALUE = /(^|[?&;\s])(key|api-key|api_key|apikey)=[^\s&#"')\]},;<>]+/gi
+// Credential query parameters: the Google Maps `key=` and the Map Tiles `session=` token.
+const CREDENTIAL_QUERY_VALUE = /(^|[?&;\s])(key|api-key|api_key|apikey|session)=[^\s&#"')\]},;<>]+/gi
 
 export function redactCredentials(text: string): string {
   return text.replace(CREDENTIAL_QUERY_VALUE, '$1$2=<redacted>')
