@@ -1831,6 +1831,14 @@ const WEB_EDITION_ALIAS_TARGETS: Readonly<Record<string, string>> = {
 
 type SourceGraph = ReturnType<typeof discoverTypeScriptSourceGraph>
 
+let sourceGraphCache: SourceGraph | null = null
+
+/** The repository's source graph, parsed once per run: every policy below reads the same tree. */
+function discoveredSourceGraph(): SourceGraph {
+  sourceGraphCache ??= discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+  return sourceGraphCache
+}
+
 function runtimeGraph(graph: SourceGraph): SourceGraph {
   return graph.map((source) => ({
     ...source,
@@ -2002,7 +2010,7 @@ describe('declarative frontend architecture policies', () => {
 
   it('keeps the browser workspace graph free of Desktop runtime dependencies', () => {
     // Type-only Scene query contracts do not enter either edition's runtime bundle.
-    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+    const graph = discoveredSourceGraph()
       .map((source) => ({ ...source, imports: source.imports.filter((edge) => !edge.typeOnly) }))
     expect(collectArchitecturePolicyViolations(graph, [
       {
@@ -2024,7 +2032,7 @@ describe('declarative frontend architecture policies', () => {
   }, 20_000)
 
   it('keeps shared modules and the Web entry graph free of Desktop runtime dependencies', () => {
-    const graph = runtimeGraph(discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src'))
+    const graph = runtimeGraph(discoveredSourceGraph())
     expect(collectArchitecturePolicyViolations(graph, SHARED_RUNTIME_GRAPH_POLICIES)).toEqual([])
     expect(collectArchitecturePolicyViolations(
       resolveWebEditionAliases(graph),
@@ -2033,7 +2041,7 @@ describe('declarative frontend architecture policies', () => {
   }, 20_000)
 
   it('resolves every edition alias to the Web target Vite uses', () => {
-    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+    const graph = discoveredSourceGraph()
     const paths = new Set(graph.map(({ path }) => path))
     const aliases = new Set(graph.flatMap(({ imports }) =>
       imports.map(({ target }) => target).filter((target) => target.startsWith('#'))))
@@ -2093,7 +2101,7 @@ describe('declarative frontend architecture policies', () => {
   })
 
   it('keeps every discovered TypeScript source within its owned dependency seams', () => {
-    const graph = discoverTypeScriptSourceGraph(new URL('../', import.meta.url), 'src')
+    const graph = discoveredSourceGraph()
     const paths = graph.map(({ path }) => path)
 
     expect(paths).toEqual([...paths].sort((left, right) => left.localeCompare(right)))

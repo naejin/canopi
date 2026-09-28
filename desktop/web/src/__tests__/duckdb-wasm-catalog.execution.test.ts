@@ -7,7 +7,7 @@ import {
   VoidLogger,
   type DuckDBBundles,
 } from '@duckdb/duckdb-wasm/blocking'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { createEmptySpeciesFilter } from '../app/plant-browser'
 import { createDuckDbReducedSpeciesCatalogReader } from '../web/duckdb-wasm-catalog'
 import { validWebCatalogManifest } from './fixtures/web-catalog-manifest'
@@ -220,21 +220,40 @@ describe('DuckDB-WASM Species Catalog executable SQL', () => {
   })
 })
 
+/**
+ * One real DuckDB-WASM instance for the whole file: instantiating the module
+ * is the slow part (seconds under load), and every test reads only inline
+ * fixtures, so a fresh connection per reader keeps them independent.
+ */
+let sharedBindings: Promise<Awaited<ReturnType<typeof createDuckDB>>> | null = null
+
+function instantiateDuckDb() {
+  sharedBindings ??= (async () => {
+    const require = createRequire(import.meta.url)
+    const bundles: DuckDBBundles = {
+      mvp: {
+        mainModule: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm'),
+        mainWorker: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js'),
+      },
+      eh: {
+        mainModule: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-eh.wasm'),
+        mainWorker: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js'),
+      },
+    }
+    const bindings = await createDuckDB(bundles, new VoidLogger(), NODE_RUNTIME)
+    await bindings.instantiate(() => {})
+    bindings.open({})
+    return bindings
+  })()
+  return sharedBindings
+}
+
+afterAll(async () => {
+  if (sharedBindings) (await sharedBindings).reset()
+})
+
 async function createExecutableDuckDb() {
-  const require = createRequire(import.meta.url)
-  const bundles: DuckDBBundles = {
-    mvp: {
-      mainModule: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm'),
-      mainWorker: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js'),
-    },
-    eh: {
-      mainModule: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-eh.wasm'),
-      mainWorker: require.resolve('@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js'),
-    },
-  }
-  const bindings = await createDuckDB(bundles, new VoidLogger(), NODE_RUNTIME)
-  await bindings.instantiate(() => {})
-  bindings.open({})
+  const bindings = await instantiateDuckDb()
   const connection = bindings.connect()
 
   return {
@@ -243,7 +262,7 @@ async function createExecutableDuckDb() {
       close: () => connection.close(),
     }),
     registerFileURL: () => {},
-    terminate: () => bindings.reset(),
+    terminate: () => connection.close(),
   }
 }
 

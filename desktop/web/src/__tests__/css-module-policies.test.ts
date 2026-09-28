@@ -12,6 +12,14 @@ import {
   type CssDeclarationPolicy,
 } from './support/architecture/policy-harness'
 
+let cssModuleFactsCache: ReturnType<typeof discoverCssModuleFacts> | null = null
+
+/** Every CSS Module's declarations, parsed once per run for all the policies below. */
+function cssModuleFacts(): ReturnType<typeof discoverCssModuleFacts> {
+  cssModuleFactsCache ??= discoverCssModuleFacts('src')
+  return cssModuleFactsCache
+}
+
 const CSS_WIDE_VALUES = new Set(['inherit', 'initial', 'revert', 'revert-layer', 'unset'])
 const CSS_NUMBER_SOURCE = String.raw`[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?`
 const CSS_LENGTH_UNITS = [
@@ -179,7 +187,7 @@ describe('CSS module policy facts', () => {
   })
 
   it('discovers every CSS Module recursively in stable path order', () => {
-    const files = discoverCssModuleFacts('src')
+    const files = cssModuleFacts()
     const paths = files.map(({ path }) => path)
 
     expect(paths).toEqual([...paths].sort())
@@ -317,7 +325,7 @@ describe('CSS module policy facts', () => {
   })
 
   it('keeps every CSS Module on the shared design-token policies', () => {
-    const files = discoverCssModuleFacts('src')
+    const files = cssModuleFacts()
 
     expect(collectCssPolicyViolations(files, CSS_MODULE_POLICIES)).toEqual([])
   })
@@ -542,7 +550,7 @@ function dangleselectorLists(css: string): string[] {
 
 describe('CSS module structural integrity', () => {
   it('keeps every selector list attached to a declaration block', () => {
-    const violations = discoverCssModuleFacts('src')
+    const violations = cssModuleFacts()
       .flatMap(({ path }) => {
         const filePath = path.replace(/^src\//, 'src/')
         const css = readFileSync(resolve(filePath), 'utf8')
