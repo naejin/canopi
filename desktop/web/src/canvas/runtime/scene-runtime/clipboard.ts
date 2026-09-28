@@ -4,8 +4,10 @@ import type {
   SceneObjectGroupEntity,
   ScenePersistedState,
   ScenePlantEntity,
+  ScenePoint,
   SceneZoneEntity,
 } from '../scene'
+import type { SessionPlane } from '../../session-plane'
 import type { SceneSelectionTarget } from './selection'
 import type { SceneArrangementTemplate } from './arrangement-placement'
 import {
@@ -14,6 +16,8 @@ import {
 } from '../scene'
 
 export interface SceneClipboardPayload {
+  /** The session plane the metre positions below are expressed in. */
+  plane: SessionPlane
   plants: ScenePlantEntity[]
   zones: SceneZoneEntity[]
   annotations: SceneAnnotationEntity[]
@@ -25,6 +29,7 @@ export interface SceneClipboardPayload {
 export function createClipboardPayload(
   persisted: ScenePersistedState,
   selected: readonly SceneSelectionTarget[],
+  plane: SessionPlane,
 ): SceneClipboardPayload | null {
   if (selected.length === 0) return null
 
@@ -62,6 +67,7 @@ export function createClipboardPayload(
   }
 
   return {
+    plane,
     plants: persisted.plants.filter((plant) => plantIds.has(plant.id)).map(clonePlantEntity),
     zones: persisted.zones.filter((zone) => zoneIds.has(zone.id)).map(cloneZoneEntity),
     annotations: persisted.annotations.filter((annotation) => annotationIds.has(annotation.id)).map(cloneAnnotationEntity),
@@ -70,6 +76,45 @@ export function createClipboardPayload(
       .map(cloneMeasurementGuideEntity),
     groups: persisted.groups.filter((group) => groupIds.has(group.id)).map(cloneGroupEntity),
     sourceTargets: selected.map(cloneSelectionTarget),
+  }
+}
+
+/**
+ * Copied objects keep their geographic position: a paste after a re-origin or
+ * in another Design first moves the payload into the current plane through
+ * lon/lat. Copies are new objects, so the geo ledger is not involved.
+ */
+export function reprojectClipboardPayload(
+  payload: SceneClipboardPayload,
+  plane: SessionPlane,
+): SceneClipboardPayload {
+  if (payload.plane === plane) return payload
+  const point = (p: ScenePoint): ScenePoint => plane.toPlane(payload.plane.toGeo(p))
+  const ellipse = (center: ScenePoint, radii: ScenePoint): [ScenePoint, ScenePoint] => {
+    const min = point({ x: center.x - radii.x, y: center.y - radii.y })
+    const max = point({ x: center.x + radii.x, y: center.y + radii.y })
+    return [
+      { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2 },
+      { x: (max.x - min.x) / 2, y: (max.y - min.y) / 2 },
+    ]
+  }
+  return {
+    ...payload,
+    plane,
+    plants: payload.plants.map((plant) => ({ ...plant, position: point(plant.position) })),
+    zones: payload.zones.map((zone) => {
+      if (zone.zoneType === 'ellipse' && zone.points.length >= 2) {
+        const [center, radii] = ellipse(zone.points[0]!, zone.points[1]!)
+        return { ...zone, points: [center, radii, ...zone.points.slice(2).map(point)] }
+      }
+      return { ...zone, points: zone.points.map(point) }
+    }),
+    annotations: payload.annotations.map((annotation) => ({ ...annotation, position: point(annotation.position) })),
+    measurementGuides: payload.measurementGuides.map((guide) => ({
+      ...guide,
+      start: point(guide.start),
+      end: point(guide.end),
+    })),
   }
 }
 

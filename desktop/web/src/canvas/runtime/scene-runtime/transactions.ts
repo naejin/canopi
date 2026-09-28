@@ -391,15 +391,12 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
   }
 
   /**
-   * Rebuilds the session plane at `origin` while settled. The scene, every
-   * undo command and caller-held metre state (`remapExternal`) move through
-   * one reprojector, so stored lon/lat is unchanged and nothing is dirtied or
-   * recorded. Returns the plane-to-plane transform, or null when not settled.
+   * Rebuilds the session plane at `origin` while settled. The scene and every
+   * undo command move through one reprojector, so stored lon/lat is unchanged
+   * and nothing is dirtied or recorded. Returns the plane-to-plane transform,
+   * or null when not settled.
    */
-  reoriginSessionPlane(
-    origin: GeoPosition,
-    remapExternal: (reproject: <T extends Partial<ScenePersistedState>>(state: T) => T) => void,
-  ): SessionPlaneTransform | null {
+  reoriginSessionPlane(origin: GeoPosition): SessionPlaneTransform | null {
     if (
       this._persistenceDisposed
       || this._active
@@ -417,7 +414,6 @@ export class SceneRuntimeEditCoordinator implements SceneRuntimeAuthority {
         before: reprojectPatch(command.before),
         after: reprojectPatch(command.after),
       }))
-      remapExternal((state) => reprojector.persisted(state))
       this._sceneStore.commitReorigin(reprojector)
       this._incrementSceneRevision()
       this._invalidate('scene')

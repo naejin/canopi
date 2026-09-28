@@ -259,7 +259,6 @@ export function createSceneRuntimeConstruction(
     sceneState: sceneStore,
     authority: sceneEdits,
     commandAdmission: sceneEdits,
-    clipboard: mutations,
     cameraNavigation,
   })
   disposeEffects.push(effect(() => reorigin.observe(camera.snapshot.value)))

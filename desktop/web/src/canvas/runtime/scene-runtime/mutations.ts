@@ -34,6 +34,7 @@ import {
 import {
   createClipboardArrangementTemplate,
   createClipboardPayload,
+  reprojectClipboardPayload,
   type SceneClipboardPayload,
 } from './clipboard'
 import {
@@ -269,39 +270,29 @@ export class SceneRuntimeMutationController {
     )
   }
 
-  // Keeps copied objects at their geographic position across a re-origin.
-  remapClipboard(reproject: (state: Partial<ScenePersistedState>) => Partial<ScenePersistedState>): void {
-    const clipboard = this._clipboard
-    if (!clipboard) return
-    const remapped = reproject({
-      plants: clipboard.plants,
-      zones: clipboard.zones,
-      annotations: clipboard.annotations,
-      measurementGuides: clipboard.measurementGuides,
-    })
-    this._clipboard = {
-      ...clipboard,
-      plants: remapped.plants ?? clipboard.plants,
-      zones: remapped.zones ?? clipboard.zones,
-      annotations: remapped.annotations ?? clipboard.annotations,
-      measurementGuides: remapped.measurementGuides ?? clipboard.measurementGuides,
-    }
-  }
-
   private _copyWhenSettled(): void {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
-    this._clipboard = createClipboardPayload(persisted, selected)
+    this._clipboard = createClipboardPayload(persisted, selected, this._sceneStore.sessionPlane)
     this._normalPasteCount = 0
   }
 
+  // The clipboard in the current session plane; copies made before a
+  // re-origin or in another Design keep their lon/lat.
+  private _currentClipboard(): SceneClipboardPayload | null {
+    if (!this._clipboard) return null
+    this._clipboard = reprojectClipboardPayload(this._clipboard, this._sceneStore.sessionPlane)
+    return this._clipboard
+  }
+
   private _pasteWhenSettled(): void {
-    if (!this._clipboard) return
+    const clipboard = this._currentClipboard()
+    if (!clipboard) return
 
     const offset = normalPasteOffset(this._normalPasteCount + 1)
     this._arrangementPlacement.place({
-      template: createClipboardArrangementTemplate(this._clipboard),
+      template: createClipboardArrangementTemplate(clipboard),
       translateBy: offset,
       historyType: 'paste',
       onCommitted: () => {
@@ -311,8 +302,9 @@ export class SceneRuntimeMutationController {
   }
 
   private _pasteAtWhenSettled(point: ScenePoint): void {
-    if (!this._clipboard) return
-    const sourceCenter = this._getClipboardSourceCenter(this._clipboard)
+    const clipboard = this._currentClipboard()
+    if (!clipboard) return
+    const sourceCenter = this._getClipboardSourceCenter(clipboard)
     if (!sourceCenter) return
 
     const offset = {
@@ -320,7 +312,7 @@ export class SceneRuntimeMutationController {
       y: point.y - sourceCenter.y,
     }
     this._arrangementPlacement.place({
-      template: createClipboardArrangementTemplate(this._clipboard),
+      template: createClipboardArrangementTemplate(clipboard),
       translateBy: offset,
       historyType: 'paste',
     })
@@ -334,7 +326,7 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const selectionOptions = this._getSelectionReadModelOptions()
     const selected = this._getSelectionModel(selectionOptions).editableTargets
-    const payload = createClipboardPayload(persisted, selected)
+    const payload = createClipboardPayload(persisted, selected, this._sceneStore.sessionPlane)
     if (!payload) return
 
     this._arrangementPlacement.place({

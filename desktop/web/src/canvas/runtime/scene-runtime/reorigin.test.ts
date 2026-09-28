@@ -252,6 +252,37 @@ describe('session plane re-origin', () => {
     }
   })
 
+  it('pastes a selection copied in another Design at the same lon/lat plus the paste offset', async () => {
+    const { runtime } = createRuntime()
+    try {
+      runtime.commandSurface.sceneEdits.selectAll()
+      runtime.commandSurface.sceneEdits.copy()
+      const previous = sessionPlane(runtime)
+      const copiedPlant = runtime.querySurface.getSceneSnapshot().plants[0]!
+      const expectedPaste = previous.toGeo({ x: copiedPlant.position.x + 1, y: copiedPlant.position.y })
+
+      // The next Design sits 50 km east, so its session plane has a different origin.
+      const farOrigin = previous.toGeo({ x: 50_000, y: 0 })
+      const other = makeFile()
+      other.name = 'Elsewhere'
+      other.plants = other.plants.map((plant) => ({ ...plant, position: geoAt(0, 0, farOrigin) }))
+      other.zones = []
+      other.annotations = []
+      other.measurement_guides = []
+      other.extra = {}
+      runtime.documentSurface.loadDocument(other)
+      expect(sessionPlane(runtime)).not.toBe(previous)
+
+      runtime.commandSurface.sceneEdits.paste()
+      const plants = savedScene(runtime, other).plants
+      expect(plants).toHaveLength(4)
+      expect(plants[2]!.canonical_name).toBe(copiedPlant.canonicalName)
+      expect(plants[2]!.position).toEqual(geoNear(expectedPaste))
+    } finally {
+      runtime.destroy()
+    }
+  })
+
   it('waits for an active Scene Edit to settle before re-origining', async () => {
     const { runtime } = createRuntime()
     try {

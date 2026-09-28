@@ -2,13 +2,11 @@ import { viewportCenterWorld } from '../../projection'
 import type { CameraViewportSnapshot, WorkspaceCameraNavigation } from '../camera'
 import type { SceneStateReader } from '../scene'
 import type { SceneCommandAdmission, SceneRuntimeEditCoordinator } from './transactions'
-import type { SceneRuntimeMutationController } from './mutations'
 
 interface SceneRuntimeReoriginOptions {
   readonly sceneState: Pick<SceneStateReader, 'sessionPlane'>
   readonly authority: Pick<SceneRuntimeEditCoordinator, 'reoriginSessionPlane'>
   readonly commandAdmission: SceneCommandAdmission
-  readonly clipboard: Pick<SceneRuntimeMutationController, 'remapClipboard'>
   readonly cameraNavigation: Pick<WorkspaceCameraNavigation, 'reprojectViewport'>
 }
 
@@ -16,7 +14,7 @@ interface SceneRuntimeReoriginOptions {
  * Decides when to rebuild the session plane: once a settled site-scale view
  * centre is more than 10 km from the plane origin. The Settled Scene Authority
  * performs the plane change; this owner only supplies the view centre and
- * keeps its caller-held metre state (clipboard, viewport) in the new plane.
+ * keeps the viewport in the new plane. The clipboard remaps itself on paste.
  */
 export class SceneRuntimeReoriginController {
   private scheduled = false
@@ -44,10 +42,7 @@ export class SceneRuntimeReoriginController {
   private reoriginAt(centre: { readonly x: number; readonly y: number }): void {
     const plane = this.options.sceneState.sessionPlane
     if (!plane.needsReorigin(centre)) return
-    const transform = this.options.authority.reoriginSessionPlane(
-      plane.toGeo(centre),
-      (reproject) => this.options.clipboard.remapClipboard(reproject),
-    )
+    const transform = this.options.authority.reoriginSessionPlane(plane.toGeo(centre))
     if (transform) this.options.cameraNavigation.reprojectViewport(transform)
   }
 }
