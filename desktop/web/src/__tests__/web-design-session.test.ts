@@ -229,24 +229,24 @@ describe('browser Design Session lifecycle', () => {
     {
       label: 'a Design older than the migration ladder',
       content: () => ({ ...makeCanopiFile(), version: 4 }),
-      message: '$.version: unsupported Canopi Design version 4; this build opens versions 5 to 9',
+      message: '$.version: unsupported Canopi Design version 4; this build opens versions 7 to 9',
       kind: 'unsupported_version',
     },
     {
       label: 'a Design newer than this build',
       content: () => ({ ...makeCanopiFile(), version: 10 }),
-      message: '$.version: unsupported Canopi Design version 10; this build opens versions 5 to 9',
+      message: '$.version: unsupported Canopi Design version 10; this build opens versions 7 to 9',
       kind: 'unsupported_version',
     },
     {
-      label: 'a Canopi 1.2 Design without a site',
+      label: 'a Canopi 1.2 Design (v6, local metres under a spatial frame)',
       content: () => ({
         ...makeCanopiFile(),
-        version: 5,
-        location: null,
+        version: 6,
+        spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'confirmed' },
         plants: [{ ...plantAt({ lon: 0, lat: 0 }), position: { x: 10, y: 20 } }],
       }),
-      message: '$.version: Canopi Design version 5 predates geolocation and has no site',
+      message: '$.version: unsupported Canopi Design version 6; this build opens versions 7 to 9',
       kind: 'unsupported_version',
     },
     {

@@ -15,17 +15,19 @@ args = parser.parse_args()
 assert urlparse(args.url).hostname == '127.0.0.1'
 args.output.mkdir(parents=True, exist_ok=False)
 
-# An authored, portable Design: deliberately enough full botanical names to need
-# continuation pages. The app parses/imports it through its normal document seam.
+# An authored, portable Design in the oldest supported format (v7, geolocated):
+# deliberately enough full botanical names to need continuation pages. The app
+# parses/imports it through its normal document seam and migration ladder.
 def design():
-    return {'version': 5, 'name': 'Web PDF verification', 'description': None, 'location': None, 'north_bearing_deg': 0,
+    return {'version': 7, 'name': 'Web PDF verification', 'description': None,
             'plant_species_colors': {}, 'plant_species_symbols': {},
             'layers': [{'name': name, 'visible': True, 'locked': False, 'opacity': 1} for name in ['plants', 'zones', 'annotations', 'measurement-guides']],
             'plants': [{'id': str(i), 'canonical_name': f'Species {i:03}', 'common_name': None,
-                        'position': {'x': i % 10, 'y': i // 10}, 'color': '#4f722f', 'symbol': 'tree', 'pinned_name': False,
+                        'position': {'lon': 2.3522 + (i % 10) * 0.00002, 'lat': 48.8566 - (i // 10) * 0.00002},
+                        'color': '#4f722f', 'symbol': 'tree', 'pinned_name': False,
                         'rotation': None, 'scale': None, 'notes': None, 'planted_date': None, 'quantity': 1} for i in range(90)],
             'zones': [], 'annotations': [], 'measurement_guides': [], 'groups': [], 'consortiums': [], 'timeline': [], 'budget': [],
-            'budget_currency': 'EUR', 'created_at': '2026-09-09T00:00:00Z', 'updated_at': '2026-09-09T00:00:00Z', 'extra': {}}
+            'budget_currency': 'EUR', 'created_at': '2026-09-09T00:00:00Z', 'updated_at': '2026-09-09T00:00:00Z'}
 
 
 async def main():

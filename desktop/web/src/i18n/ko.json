@@ -1722,16 +1722,7 @@
     "openCatalog": "식물 카탈로그 열기",
     "drawZone": "구역 그리기",
     "searchAgain": "다시 검색",
-    "noPlace": "검색한 장소 없음",
-    "pendingIntro": "{{name}}은(는) Canopi가 디자인을 지도에 배치하기 전에 만들어졌습니다. 해당 장소를 검색하면 개체가 그곳을 중심으로 배치됩니다.",
-    "pendingPlants": "식물",
-    "pendingZones": "구역",
-    "pendingOthers": "메모와 안내선",
-    "pendingExtent": "범위",
-    "pendingExtentValue": "{{width}} m × {{height}} m",
-    "pendingMapHint": "또는 지도를 부지로 옮긴 뒤 지도 중심에 디자인을 배치하세요.",
-    "pendingSearchHint": "장소를 선택하기 전에는 아무것도 기록되지 않습니다.",
-    "pendingPlaceHere": "지도 중심에 배치"
+    "noPlace": "검색한 장소 없음"
   },
   "shortcuts": {
     "title": "키보드 단축키",

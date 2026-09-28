@@ -1722,16 +1722,7 @@
     "openCatalog": "Abrir el catálogo de plantas",
     "drawZone": "Dibujar una zona",
     "searchAgain": "Buscar de nuevo",
-    "noPlace": "Ningún lugar buscado",
-    "pendingIntro": "{{name}} se creó antes de que Canopi situara los diseños en el mapa. Busca el lugar al que pertenece; los objetos se centrarán allí.",
-    "pendingPlants": "Plantas",
-    "pendingZones": "Zonas",
-    "pendingOthers": "Notas y guías",
-    "pendingExtent": "Extensión",
-    "pendingExtentValue": "{{width}} m × {{height}} m",
-    "pendingMapHint": "O mueve el mapa hasta el sitio y coloca el diseño en su centro.",
-    "pendingSearchHint": "No se escribe nada hasta que elijas un lugar.",
-    "pendingPlaceHere": "Colocar en el centro del mapa"
+    "noPlace": "Ningún lugar buscado"
   },
   "shortcuts": {
     "title": "Atajos de teclado",

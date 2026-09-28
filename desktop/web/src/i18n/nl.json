@@ -1722,16 +1722,7 @@
     "openCatalog": "Plantencatalogus openen",
     "drawZone": "Een zone tekenen",
     "searchAgain": "Opnieuw zoeken",
-    "noPlace": "Geen plaats gezocht",
-    "pendingIntro": "{{name}} is gemaakt voordat Canopi ontwerpen op de kaart plaatste. Zoek de plek waar het hoort; de objecten worden daar gecentreerd.",
-    "pendingPlants": "Planten",
-    "pendingZones": "Zones",
-    "pendingOthers": "Notities en hulplijnen",
-    "pendingExtent": "Omvang",
-    "pendingExtentValue": "{{width}} m × {{height}} m",
-    "pendingMapHint": "Of verschuif de kaart naar de locatie en plaats het ontwerp in het midden.",
-    "pendingSearchHint": "Er wordt niets weggeschreven tot je een plek kiest.",
-    "pendingPlaceHere": "In het midden van de kaart plaatsen"
+    "noPlace": "Geen plaats gezocht"
   },
   "shortcuts": {
     "title": "Sneltoetsen",

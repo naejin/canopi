@@ -1722,16 +1722,7 @@
     "openCatalog": "植物カタログを開く",
     "drawZone": "ゾーンを描く",
     "searchAgain": "もう一度検索",
-    "noPlace": "場所は未検索",
-    "pendingIntro": "{{name}} は Canopi がデザインを地図上に配置するようになる前に作成されました。該当する場所を検索すると、オブジェクトはそこを中心に配置されます。",
-    "pendingPlants": "植物",
-    "pendingZones": "ゾーン",
-    "pendingOthers": "メモとガイド",
-    "pendingExtent": "範囲",
-    "pendingExtentValue": "{{width}} m × {{height}} m",
-    "pendingMapHint": "または地図を敷地まで動かし、その中心にデザインを配置します。",
-    "pendingSearchHint": "場所を選ぶまで何も書き込まれません。",
-    "pendingPlaceHere": "地図の中心に配置"
+    "noPlace": "場所は未検索"
   },
   "shortcuts": {
     "title": "キーボードショートカット",

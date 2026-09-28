@@ -3,65 +3,36 @@ import {
   MISSING_CANOPI_FILE_VERSION,
   OBSOLETE_CANOPI_ROOT_KEYS,
 } from '../../generated/canopi-design-format'
-import type { CanopiFile, PendingDesignSite } from '../../types/design'
+import type { CanopiFile } from '../../types/design'
 import { viewsAndStoriesProblem } from './views-admission'
 import { normalizeLoadedDocument } from './document'
 import { decodeCanopiFileSchema } from './canopi-design-schema-decoder'
-import {
-  asCanopiDesignIngestionError,
-  CanopiDesignIngestionError,
-  CanopiDesignNeedsSiteError,
-} from './canopi-design-errors'
-import { migrateToCurrent, placeAtSite, type JsonObject } from './design-migrations'
+import { asCanopiDesignIngestionError, CanopiDesignIngestionError } from './canopi-design-errors'
+import { migrateToCurrent, type JsonObject } from './design-migrations'
 import { designIdentitiesAndRangesProblem } from './design-admission'
 
-export { CanopiDesignIngestionError, CanopiDesignNeedsSiteError }
+export { CanopiDesignIngestionError }
 
-/** What admitting a Design's JSON produced (the Web mirror of `DesignLoadOutcome`). */
-export type CanopiDesignDecodeOutcome =
-  | {
-    readonly kind: 'design'
-    readonly file: CanopiFile
-    /** The file's format version when it was older and upgraded in memory. */
-    readonly migratedFrom: number | null
-  }
-  | { readonly kind: 'needs_site'; readonly pending: PendingDesignSite }
+/** What admitting a Design's JSON produced (the Web mirror of `LoadedDesign`'s payload). */
+export interface CanopiDesignDecodeOutcome {
+  readonly file: CanopiFile
+  /** The file's format version when it was older and upgraded in memory. */
+  readonly migratedFrom: number | null
+}
 
-/**
- * Admit a Design that must open now: an older format is upgraded in memory;
- * a pre-geolocation Design without a site throws `CanopiDesignNeedsSiteError`
- * (callers that can ask use `decodeCanopiDesignOutcome`).
- */
+/** Admit a Design; an older supported format is upgraded in memory. */
 export function decodeCanopiDesign(value: unknown): CanopiFile {
-  const outcome = decodeCanopiDesignOutcome(value)
-  if (outcome.kind === 'needs_site') throw new CanopiDesignNeedsSiteError(outcome.pending)
-  return outcome.file
+  return decodeCanopiDesignOutcome(value).file
 }
 
 export function decodeCanopiDesignOutcome(value: unknown): CanopiDesignDecodeOutcome {
   try {
     const version = admitDesignVersion(value)
     const migrated = migrateToCurrent(value, version)
-    if (migrated.kind === 'needs_site') return migrated
     return {
-      kind: 'design',
       file: admitCurrentDesignValue(migrated.value),
       migratedFrom: migrated.migratedFrom,
     }
-  } catch (error) {
-    throw asCanopiDesignIngestionError(error)
-  }
-}
-
-/** Finish opening a pending Design at the site the user chose. */
-export function placeCanopiDesignAtSite(
-  pending: PendingDesignSite,
-  site: { readonly lon: number; readonly lat: number },
-): CanopiFile {
-  try {
-    const placed = placeAtSite(pending, site)
-    if (placed.kind !== 'current') throw new CanopiDesignNeedsSiteError(placed.pending)
-    return admitCurrentDesignValue(placed.value)
   } catch (error) {
     throw asCanopiDesignIngestionError(error)
   }

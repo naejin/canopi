@@ -2,8 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { disposeShortcuts, initShortcuts } from "../../shortcuts/manager";
 import type { SubsystemHealth } from "../../types/health";
 import { initTheme } from "../../utils/theme";
-import { requestDesignSite } from "../document-session/design-site-prompt";
-import { registerDesignSiteResolver } from "../document-session/site-placement";
 import { plantDbStatus } from "../health/state";
 import type { SettingsPlatformAdapter } from "../settings/platform-adapter";
 import { installSettingsProjection } from "../settings/projection";
@@ -20,8 +18,6 @@ export interface ShellBootstrap {
 export function bootstrapShell(settingsAdapter: SettingsPlatformAdapter): ShellBootstrap {
   const disposeTheme = initTheme();
   initShortcuts();
-  // A pre-geolocation Design asks "Where is your site?" through the card in `DesignSitePrompt`.
-  registerDesignSiteResolver(requestDesignSite);
   let disposed = false;
 
   const healthReady = invoke<SubsystemHealth>("get_health")
@@ -44,7 +40,6 @@ export function bootstrapShell(settingsAdapter: SettingsPlatformAdapter): ShellB
     dispose() {
       if (disposed) return;
       disposed = true;
-      registerDesignSiteResolver(null);
       settingsInstallation.dispose();
       disposeShortcuts();
       disposeTheme();

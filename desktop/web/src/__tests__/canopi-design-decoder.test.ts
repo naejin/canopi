@@ -37,7 +37,7 @@ describe('Canopi Design decoder', () => {
   it.each([
     { version: undefined, displayed: 1 },
     { version: 1, displayed: 1 },
-    { version: 4, displayed: 4 },
+    { version: 6, displayed: 6 },
     { version: 10, displayed: 10 },
   ])('rejects a version below the ladder, missing, or future version $displayed', ({ version, displayed }) => {
     const input = currentDesign()
@@ -45,7 +45,7 @@ describe('Canopi Design decoder', () => {
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; this build opens versions 5 to 9`,
+      `$.version: unsupported Canopi Design version ${displayed}; this build opens versions 7 to 9`,
     )
     expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
   })
@@ -58,19 +58,21 @@ describe('Canopi Design decoder', () => {
 
     const outcome = decodeCanopiDesignOutcome(input)
 
-    expect(outcome.kind).toBe('design')
-    if (outcome.kind !== 'design') return
     expect(outcome.migratedFrom).toBe(8)
     expect(outcome.file.version).toBe(9)
     expect(outcome.file.zones[0]).toMatchObject({ id: 'Bed', name: 'Bed' })
-    expect(decodeCanopiDesignOutcome(currentDesign())).toMatchObject({ kind: 'design', migratedFrom: null })
+    expect(decodeCanopiDesignOutcome(currentDesign())).toMatchObject({ migratedFrom: null })
   })
 
-  it('refuses a v6 Design that claims the current shape without its frame', () => {
-    expect(() => decodeCanopiDesign(currentDesign({ version: 6 }))).toThrow(
-      '$.spatial_frame: expected the v6 spatial frame object',
+  it('refuses a Canopi 1.2 Design (v6 with a spatial frame) as an older version, never as damaged', () => {
+    const canopi12 = currentDesign({
+      version: 6,
+      spatial_frame: { anchor_longitude_deg: 13, anchor_latitude_deg: 23, north_bearing_deg: 0, placement_status: 'confirmed' },
+    })
+    expect(() => decodeCanopiDesign(canopi12)).toThrow(
+      '$.version: unsupported Canopi Design version 6; this build opens versions 7 to 9',
     )
-    expectKind(() => decodeCanopiDesign(currentDesign({ version: 6 })), 'invalid_document')
+    expectKind(() => decodeCanopiDesign(canopi12), 'unsupported_version')
   })
 
   it.each([0, 1.5, Number.NaN])('rejects invalid version %s', (version) => {

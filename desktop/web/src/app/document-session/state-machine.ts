@@ -5,7 +5,7 @@ import {
 } from "../../canvas/runtime/runtime";
 import { getCurrentCanvasDocumentSurface } from "../../canvas/session";
 import * as designIpc from "../../ipc/design";
-import type { CanopiFile } from "../../types/design";
+import type { CanopiFile, LoadedDesign } from "../../types/design";
 import {
   designSessionStore,
   type PersistenceCapableDesignSessionStore,
@@ -35,7 +35,6 @@ import {
   type ResolvedDesignReplacement,
 } from "./replacement";
 import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
-import { DesignSitePlacementCancelledError, resolveDesignLoadOutcome } from "./site-placement";
 import { describeDesignLoadError } from "../contracts/canopi-design-errors";
 import {
   createDesignSessionWorkflowRunner,
@@ -140,7 +139,6 @@ export interface DesignSessionStateMachineDeps {
   readonly prepareDraftWrite: typeof designIpc.prepareDraftWrite;
   readonly deleteDesignDraft: typeof designIpc.deleteDesignDraft;
   readonly loadDesign: typeof designIpc.loadDesign;
-  readonly placeDesignAtSite: typeof designIpc.placeDesignAtSite;
   readonly createDraftId: () => string;
   readonly showMessage: typeof message;
   readonly requestSaveDecision: typeof requestSaveProblemDecision;
@@ -173,8 +171,6 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
   prepareDraftWrite: (id) => designIpc.prepareDraftWrite(id),
   deleteDesignDraft: (id) => designIpc.deleteDesignDraft(id),
   loadDesign: (path) => designIpc.loadDesign(path),
-  placeDesignAtSite: (path, pending, site, fingerprint) =>
-    designIpc.placeDesignAtSite(path, pending, site, fingerprint),
   createDraftId: () => globalThis.crypto.randomUUID(),
   showMessage: (text, options) => message(text, options),
   requestSaveDecision: requestSaveProblemDecision,
@@ -339,11 +335,9 @@ export class DesignSessionStateMachine {
     }
   }
 
-  /** Open the Design at `path`, placing a pre-geolocation Design when asked to. */
+  /** Open the Design at `path`; an older supported format arrives upgraded in memory. */
   loadDesignFromPath(path: string): Promise<DocumentTransitionLoadResult> {
-    return this.deps.loadDesign(path).then((outcome) =>
-      resolveDesignLoadOutcome(outcome, path, (pending, site, fingerprint) =>
-        this.deps.placeDesignAtSite(path, pending, site, fingerprint)));
+    return this.deps.loadDesign(path).then((design) => loadResultOf(design, path));
   }
 
   /** Ask how to resolve a file that changed outside Canopi, then act on it. */
@@ -1008,8 +1002,18 @@ export function nameFromPath(path: string): string {
   return base.replace(/\.canopi$/i, "") || "Untitled";
 }
 
+/** The document a transition applies for a Design the native side loaded from `path`. */
+export function loadResultOf(design: LoadedDesign, path: string): DocumentTransitionLoadResult {
+  return {
+    file: design.file,
+    path,
+    name: design.file.name,
+    fingerprint: design.fingerprint,
+    migratedFrom: design.migrated_from ?? null,
+  };
+}
+
 export function isCancelled(error: unknown): boolean {
-  if (error instanceof DesignSitePlacementCancelledError) return true;
   return typeof error === "string"
     ? error.includes("Dialog cancelled") || error.includes("cancelled")
     : error instanceof Error

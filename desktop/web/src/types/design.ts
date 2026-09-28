@@ -22,7 +22,6 @@ export type DesignDraftSummary = Contracts.DesignDraftSummary
 export type DesignSaveOutcome = Contracts.DesignSaveOutcome
 export type DesignLoadFailure = Contracts.DesignLoadFailure
 export type DesignLoadFailureKind = Contracts.DesignLoadFailureKind
-export type PendingDesignSite = Contracts.PendingDesignSite
 export type Consortium = Contracts.Consortium
 export type SavedView = Contracts.SavedView
 export type SavedViewCamera = Contracts.SavedViewCamera
@@ -65,8 +64,3 @@ export interface LoadedDesign {
   /** The file's format version when it was older and upgraded in memory (ADR 0013). */
   migrated_from: number | null
 }
-
-/** What opening a Design file produced; `needs_site` waits for "Where is your site?". */
-export type DesignLoadOutcome =
-  | { kind: 'loaded'; design: LoadedDesign }
-  | { kind: 'needs_site'; pending: PendingDesignSite; fingerprint: string }

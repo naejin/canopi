@@ -4,7 +4,6 @@ import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
   decodeCanopiDesignOutcome,
-  placeCanopiDesignAtSite,
 } from '../app/contracts/design-ingestion'
 import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
 import {
@@ -20,8 +19,6 @@ interface ConformanceCase {
   readonly input: unknown
   readonly accepted?: string
   readonly error_kind?: string
-  /** A pre-geolocation Design is placed here before it is compared. */
-  readonly site?: { readonly lon: number; readonly lat: number }
 }
 
 interface ConformanceCorpus {
@@ -54,23 +51,14 @@ describe('shared Canopi Design conformance corpus', () => {
     })
   })
 
-  it.each(corpus.cases)('$id', ({ accepted, error_kind: errorKind, input, site }) => {
+  it.each(corpus.cases)('$id', ({ accepted, error_kind: errorKind, input }) => {
     if (accepted) {
       const expected = corpus.accepted_documents[accepted]
       const inputVersion = (input as { version?: number }).version
-      const outcome = decodeCanopiDesignOutcome(input)
-      let decoded
-      if (site) {
-        if (outcome.kind !== 'needs_site') expect.fail('expected a Design that needs a site')
-        expect(outcome.pending.from_version).toBe(inputVersion)
-        decoded = placeCanopiDesignAtSite(outcome.pending, site)
-      } else {
-        if (outcome.kind !== 'design') expect.fail('the Design needs a site but the case names none')
-        expect(outcome.migratedFrom).toBe(
-          inputVersion === undefined || inputVersion === CURRENT_CANOPI_FILE_VERSION ? null : inputVersion,
-        )
-        decoded = outcome.file
-      }
+      const { file: decoded, migratedFrom } = decodeCanopiDesignOutcome(input)
+      expect(migratedFrom).toBe(
+        inputVersion === undefined || inputVersion === CURRENT_CANOPI_FILE_VERSION ? null : inputVersion,
+      )
       expect(decoded).toEqual(expected)
       expect(decodeCanopiDesign(encodeCanopiDesign(decoded))).toEqual(expected)
       return

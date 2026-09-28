@@ -1722,16 +1722,7 @@
     "openCatalog": "打开植物目录",
     "drawZone": "绘制区域",
     "searchAgain": "重新搜索",
-    "noPlace": "未搜索地点",
-    "pendingIntro": "{{name}} 创建于 Canopi 将设计放置到地图上之前。搜索它所在的地点，对象将以该点为中心。",
-    "pendingPlants": "植物",
-    "pendingZones": "区域",
-    "pendingOthers": "注释与参考线",
-    "pendingExtent": "范围",
-    "pendingExtentValue": "{{width}} m × {{height}} m",
-    "pendingMapHint": "或将地图移到场地，再把设计放在地图中心。",
-    "pendingSearchHint": "在选择地点之前不会写入任何内容。",
-    "pendingPlaceHere": "放置在地图中心"
+    "noPlace": "未搜索地点"
   },
   "shortcuts": {
     "title": "键盘快捷键",

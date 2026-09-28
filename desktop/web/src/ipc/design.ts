@@ -3,14 +3,11 @@ import { save, open } from '@tauri-apps/plugin-dialog'
 import type {
   CanopiFile,
   DesignDraftSummary,
-  DesignLoadOutcome,
   DesignNotebookSection,
   DesignNotebookSnapshot,
   DesignSaveOutcome,
   DesignSummary,
-  GeoPoint,
   LoadedDesign,
-  PendingDesignSite,
   RecentDesignSummary,
 } from '../types/design'
 import { designPath } from '../app/document-session/store'
@@ -77,9 +74,9 @@ export function prepareDraftWrite(id: string): PreparedDesignWriteDestination {
 
 /**
  * Show a native Open dialog, then load the chosen design.
- * Returns the load outcome with its path. Throws "Dialog cancelled" if user dismisses.
+ * Returns the loaded Design with its path. Throws "Dialog cancelled" if user dismisses.
  */
-export async function openDesignDialog(): Promise<{ outcome: DesignLoadOutcome; path: string }> {
+export async function openDesignDialog(): Promise<{ design: LoadedDesign; path: string }> {
   const currentPath = designPath.peek()
   const defaultDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/') + 1) : undefined
   const selected = await open({
@@ -90,8 +87,8 @@ export async function openDesignDialog(): Promise<{ outcome: DesignLoadOutcome; 
   if (!selected) throw new Error('Dialog cancelled')
   // open() returns string | string[] | null depending on `multiple`
   const filePath = typeof selected === 'string' ? selected : (selected as string[])[0]!
-  const outcome = await loadDesign(filePath)
-  return { outcome, path: filePath }
+  const design = await loadDesign(filePath)
+  return { design, path: filePath }
 }
 
 // ---------------------------------------------------------------------------
@@ -112,21 +109,12 @@ async function saveDesign(
 }
 
 /**
- * Load a design from a known path (e.g. recent files) with its fingerprint.
+ * Load a design from a known path (e.g. recent files) with its fingerprint;
+ * an older supported format arrives upgraded in memory (`migrated_from`).
  * Rejects with a `DesignLoadFailure` (`app/contracts/canopi-design-errors.ts`).
  */
-export async function loadDesign(path: string): Promise<DesignLoadOutcome> {
+export async function loadDesign(path: string): Promise<LoadedDesign> {
   return invoke('load_design', { path })
-}
-
-/** Finish opening a pre-geolocation Design at the site the user chose. */
-export async function placeDesignAtSite(
-  path: string,
-  pending: PendingDesignSite,
-  site: GeoPoint,
-  fingerprint: string,
-): Promise<LoadedDesign> {
-  return invoke('place_design_at_site', { path, pending, site, fingerprint })
 }
 
 async function saveDesignDraft(id: string, content: CanopiFile): Promise<void> {
