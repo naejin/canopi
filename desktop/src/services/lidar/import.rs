@@ -1257,9 +1257,12 @@ fn publish_applied_snapshot(
         Ok(())
     })();
     match publish {
-        Ok(()) => connection
-            .execute_batch("COMMIT")
-            .map_err(|e| e.to_string()),
+        Ok(()) => connection.execute_batch("COMMIT").map_err(|e| {
+            // A COMMIT refused under contention leaves the transaction open on
+            // the library's only connection; end it so later work can begin.
+            let _ = connection.execute_batch("ROLLBACK");
+            e.to_string()
+        }),
         Err(error) => {
             let _ = connection.execute_batch("ROLLBACK");
             Err(error)
