@@ -17,14 +17,14 @@
 
 ---
 
-Canopi combines a Species Catalog with a design canvas that is the map itself: every Design is geolocated and drawn over a basemap, satellite imagery, LiDAR and terrain. The desktop app runs on Linux, macOS and Windows. The Web Edition shares the canvas, planning panels and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, the LiDAR Data Library, the Design Notebook and native file management.
+Canopi combines a Plant catalog with a design canvas that is the map itself: every Design is geolocated and drawn over a basemap, satellite imagery, LiDAR and terrain. The desktop app runs on Linux, macOS and Windows. The Web Edition shares the canvas, planning panels, stories, PDF export and `.canopi` format with a reduced catalog and browser-local drafts; desktop adds the full catalog, the Data library with terrain analyses, the Design notebook and native file management.
 
 ## Features
 
-- **Species Catalog**: ecological, morphological and agronomic data with search, filters, detail cards and favourites in 11 languages.
-- **Map canvas**: Zones, Annotations, Plants, Object Groups, Measurement Guides, undo/redo, rulers and grid on a MapLibre map with OpenFreeMap basemaps, satellite imagery, contours, hillshade and place search.
-- **Planning**: Timeline, Budget (per-species pricing, CSV export) and Consortium planning across Strata and Succession Phases.
-- **Files**: `.canopi` Designs (WGS84 positions), GeoJSON import/export and Canvas PDF field sheets.
+- **Plant catalog**: ecological, morphological and agronomic data with search, filters, detail cards and favourites in 11 languages.
+- **Map canvas**: plants, zones, text notes, groups, measurements, stamps, undo/redo, rulers and grid on a MapLibre map with OpenFreeMap basemaps, satellite imagery, contours, hillshade and place search.
+- **Planning**: Calendar, Budget (per-species pricing, CSV export), Consortium planning across strata and succession phases, saved views and stories.
+- **Files**: `.canopi` Designs (WGS84 positions), continuous save, GeoJSON import/export and a planting-plan PDF with field sheets.
 - **Field-notebook look**: parchment, ink and ochre; light and dark themes.
 
 ## Tech stack
@@ -45,7 +45,7 @@ python3 scripts/prepare-db.py   # plant DB from the pinned canopi-data export
 cargo tauri dev
 ```
 
-Database preparation needs the exact pinned source export; see the [species catalog guide](docs/guides/species-catalog.md). Web Edition, UI gallery, ports and fixtures are in the [editions guide](docs/guides/editions.md); build, check and release commands are in the [native and release guide](docs/guides/native-and-release.md).
+Database preparation needs the exact pinned source export; see the [species catalog guide](docs/guides/species-catalog.md). Web Edition, UI gallery, ports and fixtures are in the [editions guide](docs/guides/editions.md); build, check and release commands are in the [native and release guide](docs/guides/native-and-release.md). The MCP automation bridge is off by default and only compiled in when asked for: `cargo tauri dev -f mcp-bridge` (debug builds only, unauthenticated localhost WebSocket, see the [native and release guide](docs/guides/native-and-release.md#tauri-config-gotchas)).
 
 ```bash
 cd desktop/web && npm run dev:web   # Web Edition, http://localhost:1421/app/
