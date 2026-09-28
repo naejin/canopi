@@ -4,6 +4,7 @@ import {
   STORY_IMAGES_MAX_TOTAL_BYTES,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
+import { embeddedImageBytes } from '../contracts/views-admission'
 
 // Story images are embedded in the Design as base64 `data:` URIs (decision D1):
 // PNG, JPEG, WebP or GIF, at most 1 MiB each and 10 MiB per Design, the same
@@ -54,7 +55,7 @@ export function designEmbeddedImageBytes(design: Pick<CanopiFile, 'stories'> | n
   let bytes = 0
   for (const story of design?.stories ?? []) {
     for (const step of story.steps) {
-      for (const image of step.images ?? []) bytes += embeddedBytes(image.src)
+      for (const image of step.images ?? []) bytes += embeddedImageBytes(image.src)
     }
   }
   return bytes
@@ -84,7 +85,7 @@ export async function readStoryImageFile(
   try {
     const src = await readAsDataUrl(image)
     const prefix = `data:${image.type};base64,`
-    if (!src.startsWith(prefix) || embeddedBytes(src) !== image.size) return { ok: false, problem: 'unreadable', bytes }
+    if (!src.startsWith(prefix) || embeddedImageBytes(src) !== image.size) return { ok: false, problem: 'unreadable', bytes }
     return image === file ? { ok: true, src, bytes } : { ok: true, src, bytes: image.size, resizedFrom: bytes }
   } catch {
     return { ok: false, problem: 'unreadable', bytes }
@@ -169,14 +170,6 @@ function readAsDataUrl(file: Blob): Promise<string> {
   })
 }
 
-/** Decoded bytes of a base64 data URI; 0 for a link. */
-function embeddedBytes(src: string): number {
-  const marker = src.indexOf(';base64,')
-  if (!src.startsWith('data:') || marker === -1) return 0
-  const payload = src.slice(marker + ';base64,'.length)
-  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
-  return Math.floor(payload.length / 4) * 3 - padding
-}
 
 /** An image size for people: "1.4 MB" in the interface language. */
 export function formatImageBytes(bytes: number, locale: string): string {

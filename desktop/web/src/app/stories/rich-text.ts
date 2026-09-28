@@ -1,4 +1,4 @@
-import { RICH_TEXT_LINK_SCHEMES } from '../../generated/canopi-design-format'
+import { isAllowedRichTextLink } from '../contracts/views-admission'
 import type { RichTextBlock, RichTextSpan } from '../../types/design'
 
 // Portable rich text (`RichTextBlock`) for story steps: paragraphs and bullet
@@ -24,11 +24,7 @@ const SKIPPED_ELEMENTS = new Set([
   'INPUT', 'BUTTON', 'SELECT', 'TEXTAREA',
 ])
 
-/** Whether a viewer may open this link: `https:`, `http:` or `mailto:`, in any case. */
-export function isAllowedRichTextLink(link: string): boolean {
-  const lower = link.slice(0, 7).toLowerCase()
-  return RICH_TEXT_LINK_SCHEMES.some((scheme) => lower.startsWith(scheme))
-}
+export { isAllowedRichTextLink }
 
 /**
  * What a typed link becomes: an allowed link as is, an e-mail address as

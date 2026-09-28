@@ -55,8 +55,8 @@ export function viewsAndStoriesProblem(
   return null
 }
 
-/** Whether a viewer may open this rich-text link (https:, http: or mailto:). */
-function isAllowedRichTextLink(link: string): boolean {
+/** Whether a viewer may open this rich-text link (https:, http: or mailto:), in any case. */
+export function isAllowedRichTextLink(link: string): boolean {
   const lower = link.slice(0, 7).toLowerCase()
   return RICH_TEXT_LINK_SCHEMES.some((scheme) => lower.startsWith(scheme))
 }
@@ -85,6 +85,15 @@ function spansProblem(spans: readonly RichTextSpan[], path: string): string | nu
 
 const BASE64_BODY = /^[A-Za-z0-9+/]*$/
 
+/** Decoded bytes of a base64 `data:` URI; 0 for a link or anything else. */
+export function embeddedImageBytes(src: string): number {
+  const marker = src.indexOf(';base64,')
+  if (!src.startsWith('data:') || marker === -1) return 0
+  const payload = src.slice(marker + ';base64,'.length)
+  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+  return Math.floor(payload.length / 4) * 3 - padding
+}
+
 /** Decoded bytes an image source embeds (0 for an https: link), or why it is refused. */
 function storyImageEmbeddedBytes(src: string): number | string {
   if (src.slice(0, 6).toLowerCase() === 'https:') return 0
@@ -99,5 +108,5 @@ function storyImageEmbeddedBytes(src: string): number | string {
   if (payload.length % 4 !== 0 || !BASE64_BODY.test(payload.slice(0, payload.length - padding))) {
     return 'an embedded image must be valid base64 data'
   }
-  return (payload.length / 4) * 3 - padding
+  return embeddedImageBytes(src)
 }
