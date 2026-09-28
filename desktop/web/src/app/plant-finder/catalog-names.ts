@@ -21,7 +21,7 @@ const ENGLISH = 'en'
 export function useCatalogNamesInEveryLanguage(
   canonicalNames: readonly string[],
 ): (canonicalName: string) => readonly string[] {
-  const key = [...canonicalNames].sort().join('\n')
+  const key = [...new Set(canonicalNames)].sort().join('\n')
   useEffect(() => {
     if (key) void loadCatalogNames(key.split('\n'))
   }, [key])

@@ -1,8 +1,4 @@
-import { resolvePdfCommonNames } from '../plant-browser/live.browser'
 import type { PdfDelivery } from './workflow'
-export const resolvePdfNames = resolvePdfCommonNames
-// The Web catalog projection carries no habit, so its keys print ungrouped.
-export const resolvePdfHabits = async (_names: readonly string[]): Promise<Record<string, string>> => ({})
 export function createPdfDelivery(): PdfDelivery {
   const pending = new Map<string, ReturnType<typeof setTimeout>>()
   const release = (url: string) => { const timer = pending.get(url); if (timer) clearTimeout(timer); pending.delete(url); URL.revokeObjectURL(url) }

@@ -1,7 +1,8 @@
 import { effect } from '@preact/signals'
-import { createPdfDelivery, resolvePdfHabits, resolvePdfNames } from '#canvas-pdf-platform'
+import { createPdfDelivery } from '#canvas-pdf-platform'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { designSessionStore } from '../document-session/store'
+import { speciesCatalogWorkbench } from '../plant-browser'
 import { locale } from '../settings/state'
 import { t } from '../../i18n'
 import { PLANT_SYMBOL_IDS } from '../../generated/known-canopi-keys'
@@ -25,8 +26,9 @@ export const canvasPdf = createPdfWorkflow({
         && query.revision.scene.value === revision && locale.value === language && designSessionStore.designName.value === name
         && query.getSettledPlacedPlants() !== null }
   },
-  resolveNames: resolvePdfNames,
-  resolveHabits: resolvePdfHabits,
+  // The catalog's batch projections: the same names and habits every plant list shows, in both editions.
+  resolveNames: (names, language) => speciesCatalogWorkbench.resolveCommonNames(names, language),
+  resolveHabits: (names) => speciesCatalogWorkbench.resolveHabits(names),
   prepare: async (input, signal, progress) => (await import('./job')).preparePdfJob(input, signal, progress),
   delivery: createPdfDelivery(),
   labels: () => ({ notes: t('pdf.notes'), observations: t('pdf.observations'), keyAndNotes: t('pdf.keyAndNotes'), overview: t('pdf.overview'), plants: t('pdf.plants'), actualSize: t('pdf.actualSize'),

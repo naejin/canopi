@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from 'vitest'
-vi.mock('../app/plant-browser/live.browser', () => ({ resolvePdfCommonNames: vi.fn() }))
 import { createPdfDelivery } from '../app/canvas-pdf/platform.browser'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 it('dispatches a browser download in the initiating gesture and releases every temporary URL', async () => {

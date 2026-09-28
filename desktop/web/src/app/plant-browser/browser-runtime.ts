@@ -22,7 +22,6 @@ interface BrowserSpeciesCatalogRuntimeOptions {
 }
 
 export interface BrowserSpeciesCatalogRuntime {
-  resolveCommonNames(names: readonly string[], locale: string): Promise<Record<string, string>>
   readonly workbench: SpeciesCatalogWorkbench
   dispose(): Promise<void>
 }
@@ -64,7 +63,6 @@ export function createBrowserSpeciesCatalogRuntime({
 
   return {
     workbench,
-    resolveCommonNames,
     dispose(): Promise<void> {
       if (disposePromise) return disposePromise
       disposePromise = (async () => {
