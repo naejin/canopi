@@ -175,20 +175,12 @@ export type DesignLoadFailureKind =
 "missing" |
 // The file exists but could not be read (permissions, a folder, an I/O error).
 "unreadable" | "too_large" | "invalid_json" |
-// Older than the oldest format this build migrates (Canopi before 1.2).
+// Older than the oldest format this build migrates (Canopi 1.2 and earlier).
 "older_version" |
 // Newer than this build.
 "newer_version" | "invalid_document" |
 // The native side failed before it reached the file (an executor error).
 "internal";
-
-// What opening a Design file produced.
-export type DesignLoadOutcome = { kind: "loaded"; design: LoadedDesign } |
-/**
- *  The file is a pre-geolocation Design without a site: ask "Where is
- *  your site?" and finish with `place_design_at_site`.
- */
-{ kind: "needs_site"; pending: PendingDesignSite; fingerprint: string };
 
 export type DesignNotebookEntry = {
 	path: string,
@@ -661,28 +653,6 @@ export type PanelTarget = { kind: "placed_plant"; plant_id: string } | { kind: "
  *  degrees). Executors convert to tool units; users never see cells.
  */
 export type ParamValue = { Number: number } | { Integer: number } | { Boolean: boolean } | { Choice: string };
-
-/**
- *  A Design from before geolocation (format v5 or v6) that has no site of
- *  its own. It opens once the user says where the site is
- *  (`place_design_at_site`); until then nothing is written.
- */
-export type PendingDesignSite = {
-	from_version: number,
-	name: string,
-	plant_count: number,
-	zone_count: number,
-	// Plants, zones, annotations and measurement guides.
-	object_count: number,
-	// Ground the objects span, in metres, east-west then north-south.
-	width_m: number,
-	height_m: number,
-	/**
-	 *  The Design in its pre-geolocation form, opaque to the frontend; only
-	 *  the migration module reads it back.
-	 */
-	document_json: string,
-};
 
 export type PlacedPlant = {
 	id?: string,

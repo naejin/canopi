@@ -941,40 +941,6 @@ pub struct LoadedDesign {
     pub migrated_from: Option<u32>,
 }
 
-/// A Design from before geolocation (format v5 or v6) that has no site of
-/// its own. It opens once the user says where the site is
-/// (`place_design_at_site`); until then nothing is written.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub struct PendingDesignSite {
-    pub from_version: u32,
-    pub name: String,
-    pub plant_count: u32,
-    pub zone_count: u32,
-    /// Plants, zones, annotations and measurement guides.
-    pub object_count: u32,
-    /// Ground the objects span, in metres, east-west then north-south.
-    pub width_m: f64,
-    pub height_m: f64,
-    /// The Design in its pre-geolocation form, opaque to the frontend; only
-    /// the migration module reads it back.
-    pub document_json: String,
-}
-
-/// What opening a Design file produced.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum DesignLoadOutcome {
-    Loaded {
-        design: Box<LoadedDesign>,
-    },
-    /// The file is a pre-geolocation Design without a site: ask "Where is
-    /// your site?" and finish with `place_design_at_site`.
-    NeedsSite {
-        pending: PendingDesignSite,
-        fingerprint: String,
-    },
-}
-
 /// Why a Design file could not be opened. `kind` is what the interface maps
 /// to a message; `message` is for logs and Problem Reports and never names a
 /// path.
@@ -993,7 +959,7 @@ pub enum DesignLoadFailureKind {
     Unreadable,
     TooLarge,
     InvalidJson,
-    /// Older than the oldest format this build migrates (Canopi before 1.2).
+    /// Older than the oldest format this build migrates (Canopi 1.2 and earlier).
     OlderVersion,
     /// Newer than this build.
     NewerVersion,

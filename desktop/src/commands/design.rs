@@ -1,7 +1,6 @@
 use common_types::design::{
-    CanopiFile, DesignDraftSummary, DesignLoadFailure, DesignLoadFailureKind, DesignLoadOutcome,
-    DesignSaveOutcome, DesignSummary, GeoPoint, LoadedDesign, PendingDesignSite,
-    RecentDesignSummary,
+    CanopiFile, DesignDraftSummary, DesignLoadFailure, DesignLoadFailureKind, DesignSaveOutcome,
+    DesignSummary, LoadedDesign, RecentDesignSummary,
 };
 use tauri::State;
 
@@ -59,42 +58,12 @@ pub async fn load_design(
     executor: State<'_, NativeOperationExecutor>,
     user_db: State<'_, UserDb>,
     path: String,
-) -> Result<DesignLoadOutcome, DesignLoadFailure> {
+) -> Result<LoadedDesign, DesignLoadFailure> {
     let user_db = user_db.inner().clone();
     executor
         .run(NativeOperationClass::Local, "design load", move || {
             Ok(crate::services::design_files::load_design(&user_db, path))
         })
-        .await
-        .unwrap_or_else(|message| Err(internal_load_failure(message)))
-}
-
-/// Finish opening a pre-geolocation Design (`DesignLoadOutcome::NeedsSite`)
-/// at the site the user chose; nothing is written until the first save.
-#[tauri::command]
-pub async fn place_design_at_site(
-    executor: State<'_, NativeOperationExecutor>,
-    user_db: State<'_, UserDb>,
-    path: String,
-    pending: PendingDesignSite,
-    site: GeoPoint,
-    fingerprint: String,
-) -> Result<LoadedDesign, DesignLoadFailure> {
-    let user_db = user_db.inner().clone();
-    executor
-        .run(
-            NativeOperationClass::Local,
-            "design site placement",
-            move || {
-                Ok(crate::services::design_files::place_design_at_site(
-                    &user_db,
-                    path,
-                    pending,
-                    site,
-                    fingerprint,
-                ))
-            },
-        )
         .await
         .unwrap_or_else(|message| Err(internal_load_failure(message)))
 }
@@ -296,7 +265,7 @@ pub async fn delete_design_draft(
 
 #[cfg(test)]
 mod tests {
-    use common_types::design::{DesignLoadOutcome, DesignSaveOutcome};
+    use common_types::design::DesignSaveOutcome;
     use tauri::Manager;
 
     use crate::{
@@ -349,12 +318,12 @@ mod tests {
         let DesignSaveOutcome::Saved { fingerprint, .. } = save("First", None) else {
             panic!("an unconditional save is written");
         };
-        let DesignLoadOutcome::Loaded { design: loaded } = tauri::async_runtime::block_on(
-            super::load_design(app.state(), app.state(), path.clone()),
-        )
-        .unwrap() else {
-            panic!("a current Design is placed");
-        };
+        let loaded = tauri::async_runtime::block_on(super::load_design(
+            app.state(),
+            app.state(),
+            path.clone(),
+        ))
+        .unwrap();
         assert_eq!(loaded.fingerprint, fingerprint);
         assert_eq!(loaded.file.name, "First");
         assert!(matches!(

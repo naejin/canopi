@@ -2,7 +2,7 @@
   "contract_version": 1,
   "facts": {
     "current_version": 9,
-    "minimum_supported_version": 5,
+    "minimum_supported_version": 7,
     "missing_version": 1,
     "future_version_policy": "reject",
     "error_kinds": [
@@ -309,570 +309,6 @@
       "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
     },
-    "migrated-from-v5": {
-      "annotations": [
-        {
-          "annotation_type": "text",
-          "font_size": 14.0,
-          "id": "note-1",
-          "locked": false,
-          "position": {
-            "lat": 48.856555034,
-            "lon": 2.352268343
-          },
-          "rotation": 90.0,
-          "text": "Well"
-        }
-      ],
-      "budget": [
-        {
-          "category": "plants",
-          "currency": "EUR",
-          "description": "Apples",
-          "quantity": 2.0,
-          "target": {
-            "kind": "zone",
-            "zone_id": "Orchard"
-          },
-          "unit_cost": 12.0
-        }
-      ],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "description": "Kept through the ladder",
-      "extra": {
-        "future_top_level": {
-          "enabled": true
-        },
-        "guides": [
-          {
-            "axis": "h",
-            "id": "ruler-h",
-            "lat": 48.856240271
-          },
-          {
-            "axis": "v",
-            "id": "ruler-v",
-            "lon": 2.351789942
-          }
-        ]
-      },
-      "groups": [
-        {
-          "id": "group-1",
-          "locked": false,
-          "members": [
-            {
-              "id": "plant-1",
-              "kind": "plant"
-            },
-            {
-              "id": "Orchard",
-              "kind": "zone"
-            }
-          ],
-          "name": null
-        }
-      ],
-      "layers": [
-        {
-          "locked": false,
-          "name": "plants",
-          "opacity": 1.0,
-          "visible": true
-        }
-      ],
-      "measurement_guides": [
-        {
-          "end": {
-            "lat": 48.8566,
-            "lon": 2.352336686
-          },
-          "id": "guide-1",
-          "locked": false,
-          "start": {
-            "lat": 48.8566,
-            "lon": 2.3522
-          }
-        }
-      ],
-      "name": "Canopi 1.2 garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {
-        "Malus domestica": "#70814B"
-      },
-      "plant_species_symbols": {
-        "Malus domestica": "canopy"
-      },
-      "plants": [
-        {
-          "canonical_name": "Malus domestica",
-          "color": null,
-          "common_name": "Apple",
-          "id": "plant-1",
-          "locked": false,
-          "notes": null,
-          "pinned_name": false,
-          "planted_date": null,
-          "position": {
-            "lat": 48.857049658,
-            "lon": 2.353566861
-          },
-          "quantity": 2,
-          "rotation": 45.0,
-          "scale": 1.5,
-          "symbol": null
-        }
-      ],
-      "stories": [],
-      "timeline": [
-        {
-          "action_type": "plant",
-          "completed": false,
-          "depends_on": null,
-          "description": "Plant the orchard",
-          "end_date": null,
-          "id": "action-1",
-          "order": 0,
-          "recurrence": null,
-          "start_date": null,
-          "targets": [
-            {
-              "kind": "zone",
-              "zone_id": "Orchard"
-            },
-            {
-              "kind": "placed_plant",
-              "plant_id": "plant-1"
-            }
-          ]
-        }
-      ],
-      "updated_at": "2026-07-15T00:00:00.000Z",
-      "version": 9,
-      "views": [],
-      "zones": [
-        {
-          "fill_color": "#AABBCC",
-          "id": "Orchard",
-          "locked": false,
-          "name": "Orchard",
-          "notes": null,
-          "points": [
-            {
-              "lat": 48.8566,
-              "lon": 2.3522
-            },
-            {
-              "lat": 48.856510068,
-              "lon": 2.352473372
-            }
-          ],
-          "rotation": 30.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-          "locked": false,
-          "name": null,
-          "notes": null,
-          "points": [
-            {
-              "lat": 48.8566,
-              "lon": 2.352063314
-            },
-            {
-              "lat": 48.856510068,
-              "lon": 2.352063314
-            },
-            {
-              "lat": 48.856510068,
-              "lon": 2.351926628
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "polygon"
-        }
-      ]
-    },
-    "migrated-from-v6": {
-      "annotations": [
-        {
-          "annotation_type": "text",
-          "font_size": 14.0,
-          "id": "note-1",
-          "locked": false,
-          "position": {
-            "lat": 45.500044966,
-            "lon": -73.499935846
-          },
-          "rotation": 0.0,
-          "text": "Well"
-        }
-      ],
-      "budget": [
-        {
-          "category": "plants",
-          "currency": "EUR",
-          "description": "Apples",
-          "quantity": 2.0,
-          "target": {
-            "kind": "zone",
-            "zone_id": "Orchard"
-          },
-          "unit_cost": 12.0
-        }
-      ],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "description": "Kept through the ladder",
-      "extra": {
-        "future_top_level": {
-          "enabled": true
-        },
-        "guides": [
-          {
-            "axis": "h",
-            "id": "ruler-h",
-            "lat": 45.5
-          },
-          {
-            "axis": "v",
-            "id": "ruler-v",
-            "lon": -73.5
-          }
-        ]
-      },
-      "groups": [
-        {
-          "id": "group-1",
-          "locked": false,
-          "members": [
-            {
-              "id": "plant-1",
-              "kind": "plant"
-            },
-            {
-              "id": "Orchard",
-              "kind": "zone"
-            }
-          ],
-          "name": null
-        }
-      ],
-      "layers": [
-        {
-          "locked": false,
-          "name": "plants",
-          "opacity": 1.0,
-          "visible": true
-        }
-      ],
-      "measurement_guides": [
-        {
-          "end": {
-            "lat": 45.500089932,
-            "lon": -73.5
-          },
-          "id": "guide-1",
-          "locked": false,
-          "start": {
-            "lat": 45.5,
-            "lon": -73.5
-          }
-        }
-      ],
-      "name": "Canopi 1.2 garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {
-        "Malus domestica": "#70814B"
-      },
-      "plant_species_symbols": {
-        "Malus domestica": "canopy"
-      },
-      "plants": [
-        {
-          "canonical_name": "Malus domestica",
-          "color": null,
-          "common_name": "Apple",
-          "id": "plant-1",
-          "locked": false,
-          "notes": null,
-          "pinned_name": false,
-          "planted_date": null,
-          "position": {
-            "lat": 45.500899313,
-            "lon": -73.500641538
-          },
-          "quantity": 2,
-          "rotation": 315.0,
-          "scale": 1.5,
-          "symbol": null
-        }
-      ],
-      "stories": [],
-      "timeline": [
-        {
-          "action_type": "plant",
-          "completed": false,
-          "depends_on": null,
-          "description": "Plant the orchard",
-          "end_date": null,
-          "id": "action-1",
-          "order": 0,
-          "recurrence": null,
-          "start_date": null,
-          "targets": [
-            {
-              "kind": "zone",
-              "zone_id": "Orchard"
-            },
-            {
-              "kind": "placed_plant",
-              "plant_id": "plant-1"
-            }
-          ]
-        }
-      ],
-      "updated_at": "2026-07-15T00:00:00.000Z",
-      "version": 9,
-      "views": [],
-      "zones": [
-        {
-          "fill_color": "#AABBCC",
-          "id": "Orchard",
-          "locked": false,
-          "name": "Orchard",
-          "notes": null,
-          "points": [
-            {
-              "lat": 45.500134898,
-              "lon": -73.500064154
-            },
-            {
-              "lat": 45.500044966,
-              "lon": -73.499807538
-            }
-          ],
-          "rotation": 300.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-          "locked": false,
-          "name": null,
-          "notes": null,
-          "points": [
-            {
-              "lat": 45.499910068,
-              "lon": -73.5
-            },
-            {
-              "lat": 45.499910068,
-              "lon": -73.499871692
-            },
-            {
-              "lat": 45.499820136,
-              "lon": -73.499871692
-            }
-          ],
-          "rotation": 270.0,
-          "zone_type": "polygon"
-        }
-      ]
-    },
-    "migrated-from-v6-placed": {
-      "annotations": [
-        {
-          "annotation_type": "text",
-          "font_size": 14.0,
-          "id": "note-1",
-          "locked": false,
-          "position": {
-            "lat": 45.499775169,
-            "lon": -73.500449077
-          },
-          "rotation": 90.0,
-          "text": "Well"
-        }
-      ],
-      "budget": [
-        {
-          "category": "plants",
-          "currency": "EUR",
-          "description": "Apples",
-          "quantity": 2.0,
-          "target": {
-            "kind": "zone",
-            "zone_id": "Orchard"
-          },
-          "unit_cost": 12.0
-        }
-      ],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "description": "Kept through the ladder",
-      "extra": {
-        "future_top_level": {
-          "enabled": true
-        },
-        "guides": [
-          {
-            "axis": "h",
-            "id": "ruler-h",
-            "lat": 45.499460405
-          },
-          {
-            "axis": "v",
-            "id": "ruler-v",
-            "lon": -73.500898154
-          }
-        ]
-      },
-      "groups": [
-        {
-          "id": "group-1",
-          "locked": false,
-          "members": [
-            {
-              "id": "plant-1",
-              "kind": "plant"
-            },
-            {
-              "id": "Orchard",
-              "kind": "zone"
-            }
-          ],
-          "name": null
-        }
-      ],
-      "layers": [
-        {
-          "locked": false,
-          "name": "plants",
-          "opacity": 1.0,
-          "visible": true
-        }
-      ],
-      "measurement_guides": [
-        {
-          "end": {
-            "lat": 45.499820136,
-            "lon": -73.500384923
-          },
-          "id": "guide-1",
-          "locked": false,
-          "start": {
-            "lat": 45.499820136,
-            "lon": -73.500513231
-          }
-        }
-      ],
-      "name": "Canopi 1.2 garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {
-        "Malus domestica": "#70814B"
-      },
-      "plant_species_symbols": {
-        "Malus domestica": "canopy"
-      },
-      "plants": [
-        {
-          "canonical_name": "Malus domestica",
-          "color": null,
-          "common_name": "Apple",
-          "id": "plant-1",
-          "locked": false,
-          "notes": null,
-          "pinned_name": false,
-          "planted_date": null,
-          "position": {
-            "lat": 45.500269795,
-            "lon": -73.499230154
-          },
-          "quantity": 2,
-          "rotation": 45.0,
-          "scale": 1.5,
-          "symbol": null
-        }
-      ],
-      "stories": [],
-      "timeline": [
-        {
-          "action_type": "plant",
-          "completed": false,
-          "depends_on": null,
-          "description": "Plant the orchard",
-          "end_date": null,
-          "id": "action-1",
-          "order": 0,
-          "recurrence": null,
-          "start_date": null,
-          "targets": [
-            {
-              "kind": "zone",
-              "zone_id": "Orchard"
-            },
-            {
-              "kind": "placed_plant",
-              "plant_id": "plant-1"
-            }
-          ]
-        }
-      ],
-      "updated_at": "2026-07-15T00:00:00.000Z",
-      "version": 9,
-      "views": [],
-      "zones": [
-        {
-          "fill_color": "#AABBCC",
-          "id": "Orchard",
-          "locked": false,
-          "name": "Orchard",
-          "notes": null,
-          "points": [
-            {
-              "lat": 45.499820136,
-              "lon": -73.500513231
-            },
-            {
-              "lat": 45.499730203,
-              "lon": -73.500256615
-            }
-          ],
-          "rotation": 30.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-          "locked": false,
-          "name": null,
-          "notes": null,
-          "points": [
-            {
-              "lat": 45.499820136,
-              "lon": -73.500641538
-            },
-            {
-              "lat": 45.499730203,
-              "lon": -73.500641538
-            },
-            {
-              "lat": 45.499730203,
-              "lon": -73.500769846
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "polygon"
-        }
-      ]
-    },
     "migrated-from-v7": {
       "annotations": [],
       "budget": [],
@@ -1105,194 +541,6 @@
           ],
           "rotation": 0.0,
           "zone_type": "ellipse"
-        }
-      ]
-    },
-    "migrated-from-v5-placed": {
-      "annotations": [
-        {
-          "annotation_type": "text",
-          "font_size": 14.0,
-          "id": "note-1",
-          "locked": false,
-          "position": {
-            "lat": 48.856375169,
-            "lon": 2.351721599
-          },
-          "rotation": 90.0,
-          "text": "Well"
-        }
-      ],
-      "budget": [
-        {
-          "category": "plants",
-          "currency": "EUR",
-          "description": "Apples",
-          "quantity": 2.0,
-          "target": {
-            "kind": "zone",
-            "zone_id": "Orchard"
-          },
-          "unit_cost": 12.0
-        }
-      ],
-      "budget_currency": "EUR",
-      "consortiums": [],
-      "created_at": "2026-07-15T00:00:00.000Z",
-      "description": "Kept through the ladder",
-      "extra": {
-        "future_top_level": {
-          "enabled": true
-        },
-        "guides": [
-          {
-            "axis": "h",
-            "id": "ruler-h",
-            "lat": 48.856060405
-          },
-          {
-            "axis": "v",
-            "id": "ruler-v",
-            "lon": 2.351243197
-          }
-        ]
-      },
-      "groups": [
-        {
-          "id": "group-1",
-          "locked": false,
-          "members": [
-            {
-              "id": "plant-1",
-              "kind": "plant"
-            },
-            {
-              "id": "Orchard",
-              "kind": "zone"
-            }
-          ],
-          "name": null
-        }
-      ],
-      "layers": [
-        {
-          "locked": false,
-          "name": "plants",
-          "opacity": 1.0,
-          "visible": true
-        }
-      ],
-      "measurement_guides": [
-        {
-          "end": {
-            "lat": 48.856420136,
-            "lon": 2.351789942
-          },
-          "id": "guide-1",
-          "locked": false,
-          "start": {
-            "lat": 48.856420136,
-            "lon": 2.351653256
-          }
-        }
-      ],
-      "name": "Canopi 1.2 garden",
-      "plant_species_codes": {},
-      "plant_species_colors": {
-        "Malus domestica": "#70814B"
-      },
-      "plant_species_symbols": {
-        "Malus domestica": "canopy"
-      },
-      "plants": [
-        {
-          "canonical_name": "Malus domestica",
-          "color": null,
-          "common_name": "Apple",
-          "id": "plant-1",
-          "locked": false,
-          "notes": null,
-          "pinned_name": false,
-          "planted_date": null,
-          "position": {
-            "lat": 48.856869795,
-            "lon": 2.353020116
-          },
-          "quantity": 2,
-          "rotation": 45.0,
-          "scale": 1.5,
-          "symbol": null
-        }
-      ],
-      "stories": [],
-      "timeline": [
-        {
-          "action_type": "plant",
-          "completed": false,
-          "depends_on": null,
-          "description": "Plant the orchard",
-          "end_date": null,
-          "id": "action-1",
-          "order": 0,
-          "recurrence": null,
-          "start_date": null,
-          "targets": [
-            {
-              "kind": "zone",
-              "zone_id": "Orchard"
-            },
-            {
-              "kind": "placed_plant",
-              "plant_id": "plant-1"
-            }
-          ]
-        }
-      ],
-      "updated_at": "2026-07-15T00:00:00.000Z",
-      "version": 9,
-      "views": [],
-      "zones": [
-        {
-          "fill_color": "#AABBCC",
-          "id": "Orchard",
-          "locked": false,
-          "name": "Orchard",
-          "notes": null,
-          "points": [
-            {
-              "lat": 48.856420136,
-              "lon": 2.351653256
-            },
-            {
-              "lat": 48.856330203,
-              "lon": 2.351926628
-            }
-          ],
-          "rotation": 30.0,
-          "zone_type": "rect"
-        },
-        {
-          "fill_color": null,
-          "id": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-          "locked": false,
-          "name": null,
-          "notes": null,
-          "points": [
-            {
-              "lat": 48.856420136,
-              "lon": 2.35151657
-            },
-            {
-              "lat": 48.856330203,
-              "lon": 2.35151657
-            },
-            {
-              "lat": 48.856330203,
-              "lon": 2.351379884
-            }
-          ],
-          "rotation": 0.0,
-          "zone_type": "polygon"
         }
       ]
     },
@@ -1700,748 +948,6 @@
       "accepted": "generated-ids"
     },
     {
-      "id": "migrate-v5-with-location",
-      "input": {
-        "version": 5,
-        "location": {
-          "lat": 48.8566,
-          "lon": 2.3522,
-          "altitude_m": 35.0
-        },
-        "north_bearing_deg": 0.0,
-        "name": "Canopi 1.2 garden",
-        "description": "Kept through the ladder",
-        "plant_species_colors": {
-          "Malus domestica": "#70814B"
-        },
-        "plant_species_symbols": {
-          "Malus domestica": "canopy"
-        },
-        "layers": [
-          {
-            "name": "base",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "contours",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "plants",
-            "visible": true,
-            "locked": false,
-            "opacity": 1.0
-          }
-        ],
-        "plants": [
-          {
-            "id": "plant-1",
-            "canonical_name": "Malus domestica",
-            "common_name": "Apple",
-            "position": {
-              "x": 100.0,
-              "y": -50.0
-            },
-            "rotation": 45.0,
-            "scale": 1.5,
-            "quantity": 2
-          }
-        ],
-        "zones": [
-          {
-            "name": "Orchard",
-            "zone_type": "rect",
-            "points": [
-              {
-                "x": 0.0,
-                "y": 0.0
-              },
-              {
-                "x": 20.0,
-                "y": 10.0
-              }
-            ],
-            "rotation": 30.0,
-            "fill_color": "#AABBCC"
-          },
-          {
-            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-            "zone_type": "polygon",
-            "points": [
-              {
-                "x": -10.0,
-                "y": 0.0
-              },
-              {
-                "x": -10.0,
-                "y": 10.0
-              },
-              {
-                "x": -20.0,
-                "y": 10.0
-              }
-            ]
-          }
-        ],
-        "annotations": [
-          {
-            "id": "note-1",
-            "annotation_type": "text",
-            "position": {
-              "x": 5.0,
-              "y": 5.0
-            },
-            "text": "Well",
-            "font_size": 14.0,
-            "rotation": 90.0
-          }
-        ],
-        "measurement_guides": [
-          {
-            "id": "guide-1",
-            "start": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "end": {
-              "x": 10.0,
-              "y": 0.0
-            }
-          }
-        ],
-        "guides": [
-          {
-            "id": "ruler-h",
-            "axis": "h",
-            "position": 40.0
-          },
-          {
-            "id": "ruler-v",
-            "axis": "v",
-            "position": -30.0
-          }
-        ],
-        "groups": [
-          {
-            "id": "group-1",
-            "name": null,
-            "members": [
-              {
-                "kind": "plant",
-                "id": "plant-1"
-              },
-              {
-                "kind": "zone",
-                "id": "Orchard"
-              }
-            ]
-          }
-        ],
-        "timeline": [
-          {
-            "id": "action-1",
-            "action_type": "plant",
-            "description": "Plant the orchard",
-            "targets": [
-              {
-                "kind": "zone",
-                "zone_name": "Orchard"
-              },
-              {
-                "kind": "placed_plant",
-                "plant_id": "plant-1"
-              }
-            ],
-            "completed": false,
-            "order": 0
-          }
-        ],
-        "budget": [
-          {
-            "target": {
-              "kind": "zone",
-              "zone_name": "Orchard"
-            },
-            "category": "plants",
-            "description": "Apples",
-            "quantity": 2.0,
-            "unit_cost": 12.0,
-            "currency": "EUR"
-          }
-        ],
-        "budget_currency": "EUR",
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
-        "future_top_level": {
-          "enabled": true
-        }
-      },
-      "accepted": "migrated-from-v5"
-    },
-    {
-      "id": "migrate-v5-without-location-placed-at-site",
-      "input": {
-        "version": 5,
-        "location": null,
-        "north_bearing_deg": null,
-        "name": "Canopi 1.2 garden",
-        "description": "Kept through the ladder",
-        "plant_species_colors": {
-          "Malus domestica": "#70814B"
-        },
-        "plant_species_symbols": {
-          "Malus domestica": "canopy"
-        },
-        "layers": [
-          {
-            "name": "base",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "contours",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "plants",
-            "visible": true,
-            "locked": false,
-            "opacity": 1.0
-          }
-        ],
-        "plants": [
-          {
-            "id": "plant-1",
-            "canonical_name": "Malus domestica",
-            "common_name": "Apple",
-            "position": {
-              "x": 100.0,
-              "y": -50.0
-            },
-            "rotation": 45.0,
-            "scale": 1.5,
-            "quantity": 2
-          }
-        ],
-        "zones": [
-          {
-            "name": "Orchard",
-            "zone_type": "rect",
-            "points": [
-              {
-                "x": 0.0,
-                "y": 0.0
-              },
-              {
-                "x": 20.0,
-                "y": 10.0
-              }
-            ],
-            "rotation": 30.0,
-            "fill_color": "#AABBCC"
-          },
-          {
-            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-            "zone_type": "polygon",
-            "points": [
-              {
-                "x": -10.0,
-                "y": 0.0
-              },
-              {
-                "x": -10.0,
-                "y": 10.0
-              },
-              {
-                "x": -20.0,
-                "y": 10.0
-              }
-            ]
-          }
-        ],
-        "annotations": [
-          {
-            "id": "note-1",
-            "annotation_type": "text",
-            "position": {
-              "x": 5.0,
-              "y": 5.0
-            },
-            "text": "Well",
-            "font_size": 14.0,
-            "rotation": 90.0
-          }
-        ],
-        "measurement_guides": [
-          {
-            "id": "guide-1",
-            "start": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "end": {
-              "x": 10.0,
-              "y": 0.0
-            }
-          }
-        ],
-        "guides": [
-          {
-            "id": "ruler-h",
-            "axis": "h",
-            "position": 40.0
-          },
-          {
-            "id": "ruler-v",
-            "axis": "v",
-            "position": -30.0
-          }
-        ],
-        "groups": [
-          {
-            "id": "group-1",
-            "name": null,
-            "members": [
-              {
-                "kind": "plant",
-                "id": "plant-1"
-              },
-              {
-                "kind": "zone",
-                "id": "Orchard"
-              }
-            ]
-          }
-        ],
-        "timeline": [
-          {
-            "id": "action-1",
-            "action_type": "plant",
-            "description": "Plant the orchard",
-            "targets": [
-              {
-                "kind": "zone",
-                "zone_name": "Orchard"
-              },
-              {
-                "kind": "placed_plant",
-                "plant_id": "plant-1"
-              }
-            ],
-            "completed": false,
-            "order": 0
-          }
-        ],
-        "budget": [
-          {
-            "target": {
-              "kind": "zone",
-              "zone_name": "Orchard"
-            },
-            "category": "plants",
-            "description": "Apples",
-            "quantity": 2.0,
-            "unit_cost": 12.0,
-            "currency": "EUR"
-          }
-        ],
-        "budget_currency": "EUR",
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
-        "future_top_level": {
-          "enabled": true
-        }
-      },
-      "site": {
-        "lon": 2.3522,
-        "lat": 48.8566
-      },
-      "accepted": "migrated-from-v5-placed"
-    },
-    {
-      "id": "migrate-v6-confirmed-frame-with-bearing",
-      "input": {
-        "version": 6,
-        "spatial_frame": {
-          "anchor_longitude_deg": -73.5,
-          "anchor_latitude_deg": 45.5,
-          "north_bearing_deg": 90.0,
-          "placement_status": "confirmed",
-          "location_metadata": {
-            "altitude_m": null
-          }
-        },
-        "name": "Canopi 1.2 garden",
-        "description": "Kept through the ladder",
-        "plant_species_colors": {
-          "Malus domestica": "#70814B"
-        },
-        "plant_species_symbols": {
-          "Malus domestica": "canopy"
-        },
-        "layers": [
-          {
-            "name": "base",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "contours",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "plants",
-            "visible": true,
-            "locked": false,
-            "opacity": 1.0
-          }
-        ],
-        "plants": [
-          {
-            "id": "plant-1",
-            "canonical_name": "Malus domestica",
-            "common_name": "Apple",
-            "position": {
-              "x": 100.0,
-              "y": -50.0
-            },
-            "rotation": 45.0,
-            "scale": 1.5,
-            "quantity": 2
-          }
-        ],
-        "zones": [
-          {
-            "name": "Orchard",
-            "zone_type": "rect",
-            "points": [
-              {
-                "x": 0.0,
-                "y": 0.0
-              },
-              {
-                "x": 20.0,
-                "y": 10.0
-              }
-            ],
-            "rotation": 30.0,
-            "fill_color": "#AABBCC"
-          },
-          {
-            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-            "zone_type": "polygon",
-            "points": [
-              {
-                "x": -10.0,
-                "y": 0.0
-              },
-              {
-                "x": -10.0,
-                "y": 10.0
-              },
-              {
-                "x": -20.0,
-                "y": 10.0
-              }
-            ]
-          }
-        ],
-        "annotations": [
-          {
-            "id": "note-1",
-            "annotation_type": "text",
-            "position": {
-              "x": 5.0,
-              "y": 5.0
-            },
-            "text": "Well",
-            "font_size": 14.0,
-            "rotation": 90.0
-          }
-        ],
-        "measurement_guides": [
-          {
-            "id": "guide-1",
-            "start": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "end": {
-              "x": 10.0,
-              "y": 0.0
-            }
-          }
-        ],
-        "guides": [
-          {
-            "id": "ruler-h",
-            "axis": "h",
-            "position": 40.0
-          },
-          {
-            "id": "ruler-v",
-            "axis": "v",
-            "position": -30.0
-          }
-        ],
-        "groups": [
-          {
-            "id": "group-1",
-            "name": null,
-            "members": [
-              {
-                "kind": "plant",
-                "id": "plant-1"
-              },
-              {
-                "kind": "zone",
-                "id": "Orchard"
-              }
-            ]
-          }
-        ],
-        "timeline": [
-          {
-            "id": "action-1",
-            "action_type": "plant",
-            "description": "Plant the orchard",
-            "targets": [
-              {
-                "kind": "zone",
-                "zone_name": "Orchard"
-              },
-              {
-                "kind": "placed_plant",
-                "plant_id": "plant-1"
-              }
-            ],
-            "completed": false,
-            "order": 0
-          }
-        ],
-        "budget": [
-          {
-            "target": {
-              "kind": "zone",
-              "zone_name": "Orchard"
-            },
-            "category": "plants",
-            "description": "Apples",
-            "quantity": 2.0,
-            "unit_cost": 12.0,
-            "currency": "EUR"
-          }
-        ],
-        "budget_currency": "EUR",
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
-        "future_top_level": {
-          "enabled": true
-        }
-      },
-      "accepted": "migrated-from-v6"
-    },
-    {
-      "id": "migrate-v6-provisional-frame-placed-at-site",
-      "input": {
-        "version": 6,
-        "spatial_frame": {
-          "anchor_longitude_deg": 13.0,
-          "anchor_latitude_deg": 23.0,
-          "north_bearing_deg": 0.0,
-          "placement_status": "provisional",
-          "location_metadata": {
-            "altitude_m": null
-          }
-        },
-        "name": "Canopi 1.2 garden",
-        "description": "Kept through the ladder",
-        "plant_species_colors": {
-          "Malus domestica": "#70814B"
-        },
-        "plant_species_symbols": {
-          "Malus domestica": "canopy"
-        },
-        "layers": [
-          {
-            "name": "base",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "contours",
-            "visible": false,
-            "locked": false,
-            "opacity": 1.0
-          },
-          {
-            "name": "plants",
-            "visible": true,
-            "locked": false,
-            "opacity": 1.0
-          }
-        ],
-        "plants": [
-          {
-            "id": "plant-1",
-            "canonical_name": "Malus domestica",
-            "common_name": "Apple",
-            "position": {
-              "x": 100.0,
-              "y": -50.0
-            },
-            "rotation": 45.0,
-            "scale": 1.5,
-            "quantity": 2
-          }
-        ],
-        "zones": [
-          {
-            "name": "Orchard",
-            "zone_type": "rect",
-            "points": [
-              {
-                "x": 0.0,
-                "y": 0.0
-              },
-              {
-                "x": 20.0,
-                "y": 10.0
-              }
-            ],
-            "rotation": 30.0,
-            "fill_color": "#AABBCC"
-          },
-          {
-            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
-            "zone_type": "polygon",
-            "points": [
-              {
-                "x": -10.0,
-                "y": 0.0
-              },
-              {
-                "x": -10.0,
-                "y": 10.0
-              },
-              {
-                "x": -20.0,
-                "y": 10.0
-              }
-            ]
-          }
-        ],
-        "annotations": [
-          {
-            "id": "note-1",
-            "annotation_type": "text",
-            "position": {
-              "x": 5.0,
-              "y": 5.0
-            },
-            "text": "Well",
-            "font_size": 14.0,
-            "rotation": 90.0
-          }
-        ],
-        "measurement_guides": [
-          {
-            "id": "guide-1",
-            "start": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "end": {
-              "x": 10.0,
-              "y": 0.0
-            }
-          }
-        ],
-        "guides": [
-          {
-            "id": "ruler-h",
-            "axis": "h",
-            "position": 40.0
-          },
-          {
-            "id": "ruler-v",
-            "axis": "v",
-            "position": -30.0
-          }
-        ],
-        "groups": [
-          {
-            "id": "group-1",
-            "name": null,
-            "members": [
-              {
-                "kind": "plant",
-                "id": "plant-1"
-              },
-              {
-                "kind": "zone",
-                "id": "Orchard"
-              }
-            ]
-          }
-        ],
-        "timeline": [
-          {
-            "id": "action-1",
-            "action_type": "plant",
-            "description": "Plant the orchard",
-            "targets": [
-              {
-                "kind": "zone",
-                "zone_name": "Orchard"
-              },
-              {
-                "kind": "placed_plant",
-                "plant_id": "plant-1"
-              }
-            ],
-            "completed": false,
-            "order": 0
-          }
-        ],
-        "budget": [
-          {
-            "target": {
-              "kind": "zone",
-              "zone_name": "Orchard"
-            },
-            "category": "plants",
-            "description": "Apples",
-            "quantity": 2.0,
-            "unit_cost": 12.0,
-            "currency": "EUR"
-          }
-        ],
-        "budget_currency": "EUR",
-        "created_at": "2026-07-15T00:00:00.000Z",
-        "updated_at": "2026-07-15T00:00:00.000Z",
-        "future_top_level": {
-          "enabled": true
-        }
-      },
-      "site": {
-        "lon": -73.5,
-        "lat": 45.5
-      },
-      "accepted": "migrated-from-v6-placed"
-    },
-    {
       "id": "migrate-v7",
       "input": {
         "version": 7,
@@ -2644,6 +1150,192 @@
       "id": "reject-version-below-the-ladder",
       "input": {
         "version": 4
+      },
+      "error_kind": "unsupported_version"
+    },
+    {
+      "id": "reject-canopi-1-2-design-as-older-version",
+      "input": {
+        "version": 6,
+        "spatial_frame": {
+          "anchor_longitude_deg": -73.5,
+          "anchor_latitude_deg": 45.5,
+          "north_bearing_deg": 90.0,
+          "placement_status": "confirmed",
+          "location_metadata": {
+            "altitude_m": null
+          }
+        },
+        "name": "Canopi 1.2 garden",
+        "description": "Kept through the ladder",
+        "plant_species_colors": {
+          "Malus domestica": "#70814B"
+        },
+        "plant_species_symbols": {
+          "Malus domestica": "canopy"
+        },
+        "layers": [
+          {
+            "name": "base",
+            "visible": false,
+            "locked": false,
+            "opacity": 1.0
+          },
+          {
+            "name": "contours",
+            "visible": false,
+            "locked": false,
+            "opacity": 1.0
+          },
+          {
+            "name": "plants",
+            "visible": true,
+            "locked": false,
+            "opacity": 1.0
+          }
+        ],
+        "plants": [
+          {
+            "id": "plant-1",
+            "canonical_name": "Malus domestica",
+            "common_name": "Apple",
+            "position": {
+              "x": 100.0,
+              "y": -50.0
+            },
+            "rotation": 45.0,
+            "scale": 1.5,
+            "quantity": 2
+          }
+        ],
+        "zones": [
+          {
+            "name": "Orchard",
+            "zone_type": "rect",
+            "points": [
+              {
+                "x": 0.0,
+                "y": 0.0
+              },
+              {
+                "x": 20.0,
+                "y": 10.0
+              }
+            ],
+            "rotation": 30.0,
+            "fill_color": "#AABBCC"
+          },
+          {
+            "name": "zone-12df7cef-c856-47a2-a4d0-63a5bfcff9d4 copy",
+            "zone_type": "polygon",
+            "points": [
+              {
+                "x": -10.0,
+                "y": 0.0
+              },
+              {
+                "x": -10.0,
+                "y": 10.0
+              },
+              {
+                "x": -20.0,
+                "y": 10.0
+              }
+            ]
+          }
+        ],
+        "annotations": [
+          {
+            "id": "note-1",
+            "annotation_type": "text",
+            "position": {
+              "x": 5.0,
+              "y": 5.0
+            },
+            "text": "Well",
+            "font_size": 14.0,
+            "rotation": 90.0
+          }
+        ],
+        "measurement_guides": [
+          {
+            "id": "guide-1",
+            "start": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "end": {
+              "x": 10.0,
+              "y": 0.0
+            }
+          }
+        ],
+        "guides": [
+          {
+            "id": "ruler-h",
+            "axis": "h",
+            "position": 40.0
+          },
+          {
+            "id": "ruler-v",
+            "axis": "v",
+            "position": -30.0
+          }
+        ],
+        "groups": [
+          {
+            "id": "group-1",
+            "name": null,
+            "members": [
+              {
+                "kind": "plant",
+                "id": "plant-1"
+              },
+              {
+                "kind": "zone",
+                "id": "Orchard"
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          {
+            "id": "action-1",
+            "action_type": "plant",
+            "description": "Plant the orchard",
+            "targets": [
+              {
+                "kind": "zone",
+                "zone_name": "Orchard"
+              },
+              {
+                "kind": "placed_plant",
+                "plant_id": "plant-1"
+              }
+            ],
+            "completed": false,
+            "order": 0
+          }
+        ],
+        "budget": [
+          {
+            "target": {
+              "kind": "zone",
+              "zone_name": "Orchard"
+            },
+            "category": "plants",
+            "description": "Apples",
+            "quantity": 2.0,
+            "unit_cost": 12.0,
+            "currency": "EUR"
+          }
+        ],
+        "budget_currency": "EUR",
+        "created_at": "2026-07-15T00:00:00.000Z",
+        "updated_at": "2026-07-15T00:00:00.000Z",
+        "future_top_level": {
+          "enabled": true
+        }
       },
       "error_kind": "unsupported_version"
     },

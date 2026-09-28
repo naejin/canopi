@@ -92,7 +92,6 @@ pub fn run() {
             commands::design::new_design,
             commands::design::save_design,
             commands::design::load_design,
-            commands::design::place_design_at_site,
             commands::design::get_recent_files,
             commands::design::get_recent_design_previews,
             commands::design::remove_recent_design,
@@ -258,7 +257,7 @@ fn startup_refusal_message(error: &db::UserDbInitError) -> Option<String> {
                 .to_string(),
         ),
         db::UserDbInitError::UnsupportedSchemaVersion { .. } => Some(
-            "Your Canopi data was saved by a pre-release version of Canopi that this \
+            "Your Canopi data was saved by a version of Canopi older than 1.0 that this \
              version cannot upgrade. Move the user.db file out of the Canopi data folder \
              to start fresh; this version will not change it."
                 .to_string(),
@@ -297,8 +296,8 @@ mod tests {
         let message = super::startup_refusal_message(&newer).expect("newer data is refused");
         assert!(message.contains("newer version of Canopi"));
         let too_old = super::db::UserDbInitError::UnsupportedSchemaVersion {
-            found: 1,
-            oldest_supported: 2,
+            found: 7,
+            oldest_supported: 8,
         };
         assert!(super::startup_refusal_message(&too_old).is_some());
         let failed_upgrade = super::db::UserDbInitError::Migration {

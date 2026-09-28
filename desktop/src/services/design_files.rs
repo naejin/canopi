@@ -1,8 +1,6 @@
 use common_types::design::{
-    CanopiFile, DesignLoadFailure, DesignLoadFailureKind, DesignLoadOutcome, DesignSaveOutcome,
-    DesignSummary, GeoPoint, LoadedDesign, PendingDesignSite,
+    CanopiFile, DesignLoadFailure, DesignSaveOutcome, DesignSummary, LoadedDesign,
 };
-use common_types::migrations::PendingSitePlacement;
 use std::path::{Path, PathBuf};
 
 use crate::db::UserDb;
@@ -57,88 +55,30 @@ pub fn export_design_file(path: String, content: CanopiFile) -> Result<String, S
 }
 
 /// Open a Design file. An older format is upgraded in memory and marked
-/// (`migrated_from`); a pre-geolocation Design without a site comes back as
-/// `NeedsSite` for the frontend to place, and is not yet a Recent Design.
-pub fn load_design(user_db: &UserDb, path: String) -> Result<DesignLoadOutcome, DesignLoadFailure> {
+/// (`migrated_from`); the file is not rewritten until an edit saves it.
+pub fn load_design(user_db: &UserDb, path: String) -> Result<LoadedDesign, DesignLoadFailure> {
     let dest = std::path::PathBuf::from(&path);
     let (decoded, fingerprint) = format::load_with_fingerprint(&dest).map_err(|error| {
         tracing::info!(kind = ?error.failure().kind, "Design could not be opened");
         error.failure()
     })?;
-    match decoded {
-        format::DecodedDesign::Design {
-            file,
-            migrated_from,
-        } => {
-            try_record_recent(user_db, &path, &file.name);
-            if let Some(version) = migrated_from {
-                tracing::info!(
-                    from_version = version,
-                    "Design loaded and upgraded in memory"
-                );
-            } else {
-                tracing::info!("Design loaded");
-            }
-            Ok(DesignLoadOutcome::Loaded {
-                design: Box::new(LoadedDesign {
-                    file: *file,
-                    fingerprint,
-                    migrated_from,
-                }),
-            })
-        }
-        format::DecodedDesign::NeedsSite(pending) => {
-            tracing::info!(
-                from_version = pending.from_version,
-                "Design predates geolocation; waiting for its site"
-            );
-            let summary = pending.summary();
-            Ok(DesignLoadOutcome::NeedsSite {
-                pending: PendingDesignSite {
-                    from_version: pending.from_version,
-                    name: summary.name,
-                    plant_count: summary.plant_count,
-                    zone_count: summary.zone_count,
-                    object_count: summary.object_count,
-                    width_m: summary.width_m,
-                    height_m: summary.height_m,
-                    document_json: pending.document_json(),
-                },
-                fingerprint,
-            })
-        }
-    }
-}
-
-/// Finish opening a pending Design at the site the user chose. `fingerprint`
-/// is the one `load_design` read, so the first save still checks the file.
-pub fn place_design_at_site(
-    user_db: &UserDb,
-    path: String,
-    pending: PendingDesignSite,
-    site: GeoPoint,
-    fingerprint: String,
-) -> Result<LoadedDesign, DesignLoadFailure> {
-    let placement =
-        PendingSitePlacement::from_document_json(pending.from_version, &pending.document_json)
-            .map_err(|error| DesignLoadFailure {
-                kind: DesignLoadFailureKind::InvalidDocument,
-                message: error.to_string(),
-            })?;
-    let file =
-        format::place_pending_at_site(placement, site).map_err(|error| DesignLoadFailure {
-            kind: DesignLoadFailureKind::InvalidDocument,
-            message: error.to_string(),
-        })?;
+    let format::DecodedDesign {
+        file,
+        migrated_from,
+    } = decoded;
     try_record_recent(user_db, &path, &file.name);
-    tracing::info!(
-        from_version = pending.from_version,
-        "Design placed at its site and upgraded in memory"
-    );
+    if let Some(version) = migrated_from {
+        tracing::info!(
+            from_version = version,
+            "Design loaded and upgraded in memory"
+        );
+    } else {
+        tracing::info!("Design loaded");
+    }
     Ok(LoadedDesign {
         file,
         fingerprint,
-        migrated_from: Some(pending.from_version),
+        migrated_from,
     })
 }
 
@@ -366,17 +306,13 @@ mod tests {
     };
     use crate::db::UserDb;
     use common_types::design::{
-        CanopiFile, DesignLoadFailure, DesignLoadOutcome, DesignSaveOutcome, DesignSummary,
-        LoadedDesign,
+        CanopiFile, DesignLoadFailure, DesignSaveOutcome, DesignSummary, LoadedDesign,
     };
     use rusqlite::Connection;
     use std::path::PathBuf;
 
-    fn loaded_design(outcome: Result<DesignLoadOutcome, DesignLoadFailure>) -> LoadedDesign {
-        match outcome.expect("the Design loads") {
-            DesignLoadOutcome::Loaded { design } => *design,
-            DesignLoadOutcome::NeedsSite { .. } => panic!("a current Design is placed"),
-        }
+    fn loaded_design(outcome: Result<LoadedDesign, DesignLoadFailure>) -> LoadedDesign {
+        outcome.expect("the Design loads")
     }
 
     fn test_user_db() -> UserDb {

@@ -1,12 +1,11 @@
 use common_types::design::{
     CURRENT_CANOPI_FILE_VERSION, CanopiDesignIngestionErrorKind, CanopiFile,
-    DEFAULT_BUDGET_CURRENCY, DesignLoadFailure, DesignLoadFailureKind, GeoPoint, Layer,
+    DEFAULT_BUDGET_CURRENCY, DesignLoadFailure, DesignLoadFailureKind, Layer,
     MISSING_CANOPI_FILE_VERSION, OBSOLETE_CANOPI_ROOT_KEYS, admit_design_identities_and_ranges,
     validate_design_geometry,
 };
 use common_types::migrations::{
-    MINIMUM_SUPPORTED_CANOPI_FILE_VERSION, Migrated, MigrationError, PendingSitePlacement,
-    migrate_to_current, place_at_site,
+    MINIMUM_SUPPORTED_CANOPI_FILE_VERSION, Migrated, MigrationError, migrate_to_current,
 };
 use common_types::views::validate_views_and_stories;
 use std::fmt;
@@ -81,23 +80,10 @@ pub(crate) const MAX_CANOPI_FILE_BYTES: u64 = 64 * 1024 * 1024;
 /// the caller knows the path, and they reach logs and Problem Reports.
 #[derive(Debug)]
 pub(crate) enum DesignLoadError {
-    Read {
-        source: std::io::Error,
-    },
-    TooLarge {
-        limit: u64,
-    },
-    InvalidJson {
-        source: serde_json::Error,
-    },
-    Ingestion {
-        source: CanopiDesignIngestionError,
-    },
-    /// A pre-geolocation Design without a site, where the caller cannot ask
-    /// for one (Drafts, previews, stamp imports).
-    NeedsSite {
-        from_version: u32,
-    },
+    Read { source: std::io::Error },
+    TooLarge { limit: u64 },
+    InvalidJson { source: serde_json::Error },
+    Ingestion { source: CanopiDesignIngestionError },
 }
 
 impl DesignLoadError {
@@ -114,7 +100,6 @@ impl DesignLoadError {
                 Some(_) => DesignLoadFailureKind::NewerVersion,
                 None => DesignLoadFailureKind::InvalidDocument,
             },
-            Self::NeedsSite { .. } => DesignLoadFailureKind::OlderVersion,
         };
         DesignLoadFailure {
             kind,
@@ -138,10 +123,6 @@ impl fmt::Display for DesignLoadError {
             Self::Ingestion { source } => {
                 write!(formatter, "Failed to parse the Design: {source}")
             }
-            Self::NeedsSite { from_version } => write!(
-                formatter,
-                "The Design (format v{from_version}) predates geolocation and has no site; open it from Start to place it"
-            ),
         }
     }
 }
@@ -213,35 +194,25 @@ pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
         .map_err(|e| format!("Failed to export {}: {e}", path.display()))
 }
 
-/// What admitting a Design file's JSON produced.
+/// What admitting a Design file's JSON produced: a current-format Design,
+/// upgraded in memory from `migrated_from` when that is `Some` (ADR 0013).
 #[derive(Debug)]
-pub(crate) enum DecodedDesign {
-    /// A current-format Design, upgraded in memory from `migrated_from` when
-    /// that is `Some` (ADR 0013).
-    Design {
-        file: Box<CanopiFile>,
-        migrated_from: Option<u32>,
-    },
-    /// A pre-geolocation Design with no site; see [`place_pending_at_site`].
-    NeedsSite(PendingSitePlacement),
+pub(crate) struct DecodedDesign {
+    pub(crate) file: CanopiFile,
+    pub(crate) migrated_from: Option<u32>,
 }
 
-/// Load a `CanopiFile` from disk, for callers that cannot ask for a site.
+/// Load a `CanopiFile` from disk.
 ///
 /// Refuses files over [`MAX_CANOPI_FILE_BYTES`], parses JSON to a value for
 /// strict version admission, runs the migration ladder, then deserializes
 /// `CanopiFile`. Unknown root fields are preserved in `CanopiFile::extra`.
 pub(crate) fn load_from_file(path: &Path) -> Result<CanopiFile, DesignLoadError> {
-    match load_with_fingerprint(path)?.0 {
-        DecodedDesign::Design { file, .. } => Ok(*file),
-        DecodedDesign::NeedsSite(pending) => Err(DesignLoadError::NeedsSite {
-            from_version: pending.from_version,
-        }),
-    }
+    Ok(load_with_fingerprint(path)?.0.file)
 }
 
-/// [`load_from_file`] plus the [`super::fingerprint`] of the exact bytes read,
-/// with a pending Design returned for the caller to place.
+/// [`load_from_file`] plus the [`super::fingerprint`] of the exact bytes read
+/// and the version the file was upgraded from.
 pub(crate) fn load_with_fingerprint(
     path: &Path,
 ) -> Result<(DecodedDesign, String), DesignLoadError> {
@@ -257,21 +228,6 @@ pub(crate) fn load_with_fingerprint(
 pub(crate) fn load_within(path: &Path, limit: u64) -> Result<DecodedDesign, DesignLoadError> {
     let content = read_bounded(path, limit.min(MAX_CANOPI_FILE_BYTES))?;
     decode_design_bytes(&content)
-}
-
-/// Finish opening a pending Design at `site`: the rest of the ladder runs and
-/// the result passes current-format admission like any other file.
-pub(crate) fn place_pending_at_site(
-    pending: PendingSitePlacement,
-    site: GeoPoint,
-) -> Result<CanopiFile, CanopiDesignIngestionError> {
-    match place_at_site(pending, site)? {
-        Migrated::Current { value, .. } => admit_current_design_value(value),
-        Migrated::NeedsSite(_) => Err(CanopiDesignIngestionError::new(
-            CanopiDesignIngestionErrorKind::InvalidDocument,
-            "$: the placed Design still has no site",
-        )),
-    }
 }
 
 fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, DesignLoadError> {
@@ -312,16 +268,14 @@ fn decode_design_value(
     let Ok(version) = u32::try_from(version) else {
         return Err(CanopiDesignIngestionError::unsupported_version(version));
     };
-    match migrate_to_current(value, version)? {
-        Migrated::Current {
-            value,
-            migrated_from,
-        } => Ok(DecodedDesign::Design {
-            file: Box::new(admit_current_design_value(value)?),
-            migrated_from,
-        }),
-        Migrated::NeedsSite(pending) => Ok(DecodedDesign::NeedsSite(pending)),
-    }
+    let Migrated {
+        value,
+        migrated_from,
+    } = migrate_to_current(value, version)?;
+    Ok(DecodedDesign {
+        file: admit_current_design_value(value)?,
+        migrated_from,
+    })
 }
 
 #[expect(
@@ -472,12 +426,7 @@ mod tests {
 
     /// Admit a value the way a file is admitted, for tests that expect a Design.
     fn decode_current(value: serde_json::Value) -> Result<CanopiFile, CanopiDesignIngestionError> {
-        match decode_design_value(value)? {
-            DecodedDesign::Design { file, .. } => Ok(*file),
-            DecodedDesign::NeedsSite(pending) => {
-                panic!("expected a placed Design, got {pending:?}")
-            }
-        }
+        Ok(decode_design_value(value)?.file)
     }
 
     #[test]
@@ -511,43 +460,16 @@ mod tests {
             let input_version = input["version"].as_u64().map(|version| version as u32);
             if let Some(expected_name) = case.get("accepted").and_then(|value| value.as_str()) {
                 let expected = corpus["accepted_documents"][expected_name].clone();
-                let decoded = decode_design_value(input)
+                let DecodedDesign {
+                    file,
+                    migrated_from,
+                } = decode_design_value(input)
                     .unwrap_or_else(|error| panic!("{id}: ingestion failed: {error}"));
-                let file = match (decoded, case.get("site")) {
-                    (
-                        DecodedDesign::Design {
-                            file,
-                            migrated_from,
-                        },
-                        None,
-                    ) => {
-                        assert_eq!(
-                            migrated_from,
-                            input_version.filter(|version| *version != CURRENT_CANOPI_FILE_VERSION),
-                            "{id}: migrated_from",
-                        );
-                        *file
-                    }
-                    (DecodedDesign::NeedsSite(pending), Some(site)) => {
-                        assert_eq!(
-                            Some(pending.from_version),
-                            input_version,
-                            "{id}: from_version"
-                        );
-                        let site = GeoPoint {
-                            lon: site["lon"].as_f64().expect("site lon"),
-                            lat: site["lat"].as_f64().expect("site lat"),
-                        };
-                        place_pending_at_site(pending, site)
-                            .unwrap_or_else(|error| panic!("{id}: placing failed: {error}"))
-                    }
-                    (DecodedDesign::Design { .. }, Some(_)) => {
-                        panic!("{id}: expected a Design that needs a site")
-                    }
-                    (DecodedDesign::NeedsSite(_), None) => {
-                        panic!("{id}: the Design needs a site but the case names none")
-                    }
-                };
+                assert_eq!(
+                    migrated_from,
+                    input_version.filter(|version| *version != CURRENT_CANOPI_FILE_VERSION),
+                    "{id}: migrated_from",
+                );
                 assert_eq!(conformance_document_value(&file), expected, "{id}");
                 let wire = serde_json::to_value(file)
                     .expect("accepted Canopi Design should serialize for round trip");
@@ -1059,13 +981,10 @@ mod tests {
             "points": [{ "lon": 13.0, "lat": 23.0 }, { "lon": 13.0001, "lat": 22.9999 }]
         }]);
 
-        let DecodedDesign::Design {
+        let DecodedDesign {
             file,
             migrated_from,
-        } = decode_design_value(value).expect("a v8 Design migrates")
-        else {
-            panic!("a v8 Design is placed already");
-        };
+        } = decode_design_value(value).expect("a v8 Design migrates");
 
         assert_eq!(migrated_from, Some(CURRENT_CANOPI_FILE_VERSION - 1));
         assert_eq!(file.version, CURRENT_CANOPI_FILE_VERSION);
@@ -1073,14 +992,23 @@ mod tests {
         assert_eq!(file.zones[0].name.as_deref(), Some("North bed"));
     }
 
+    /// A Canopi 1.2 file (format v6, local metres under a `spatial_frame`) is
+    /// below the floor: it is refused as an older version, never as damaged,
+    /// and nothing about it is read past its version.
     #[test]
-    fn a_design_without_a_site_loads_as_pending_and_places_at_the_chosen_site() {
-        let dir = unique_dir("needs_site");
-        let path = dir.join("canopi-1.canopi");
+    fn a_canopi_1_2_design_is_refused_as_an_older_version() {
+        let dir = unique_dir("older_version");
+        let path = dir.join("canopi-1.2.canopi");
         std::fs::write(
             &path,
             serde_json::to_string_pretty(&serde_json::json!({
-                "version": 5,
+                "version": 6,
+                "spatial_frame": {
+                    "anchor_longitude_deg": 2.3522,
+                    "anchor_latitude_deg": 48.8566,
+                    "north_bearing_deg": 0.0,
+                    "placement_status": "confirmed"
+                },
                 "name": "Canopi 1.2 garden",
                 "plant_species_colors": {},
                 "layers": [],
@@ -1097,36 +1025,22 @@ mod tests {
         )
         .unwrap();
 
-        let (decoded, fingerprint) = load_with_fingerprint(&path).expect("a v5 Design is admitted");
-        let DecodedDesign::NeedsSite(pending) = decoded else {
-            panic!("a v5 Design without a location needs a site");
-        };
-        assert_eq!(pending.from_version, 5);
-        assert_eq!(fingerprint.len(), 64);
-        let error =
-            load_from_file(&path).expect_err("callers that cannot ask for a site get an error");
+        let error = load_from_file(&path).expect_err("a v6 Design is below the floor");
+        let failure = error.failure();
+        assert_eq!(failure.kind, DesignLoadFailureKind::OlderVersion);
         assert!(
-            matches!(error, DesignLoadError::NeedsSite { from_version: 5 }),
-            "{error}"
+            failure
+                .message
+                .contains("unsupported Canopi Design version 6"),
+            "{}",
+            failure.message
         );
-        assert_eq!(error.failure().kind, DesignLoadFailureKind::OlderVersion);
-
-        let placed = place_pending_at_site(
-            pending,
-            GeoPoint {
-                lon: 2.3522,
-                lat: 48.8566,
-            },
-        )
-        .expect("placing finishes the migration");
-        assert_eq!(placed.version, CURRENT_CANOPI_FILE_VERSION);
-        assert_eq!(
-            placed.plants[0].position,
-            GeoPoint {
-                lon: 2.3522,
-                lat: 48.8566
-            }
+        assert!(
+            !failure.message.contains("canopi-1.2"),
+            "no paths: {}",
+            failure.message
         );
+        assert!(load_with_fingerprint(&path).is_err());
 
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -1156,16 +1070,11 @@ mod tests {
             if !reference.exists() {
                 continue;
             }
-            let migrated = match load_with_fingerprint(&path).unwrap().0 {
-                DecodedDesign::Design {
-                    file,
-                    migrated_from,
-                } => {
-                    assert!(migrated_from.is_some(), "{stem}: expected an older format");
-                    *file
-                }
-                DecodedDesign::NeedsSite(_) => panic!("{stem}: v7+ Designs are placed"),
-            };
+            let DecodedDesign {
+                file: migrated,
+                migrated_from,
+            } = load_with_fingerprint(&path).unwrap().0;
+            assert!(migrated_from.is_some(), "{stem}: expected an older format");
             let expected = load_from_file(&reference).unwrap();
             let strip = |file: &CanopiFile| {
                 let mut value = serde_json::to_value(file).unwrap();
@@ -1359,9 +1268,7 @@ mod tests {
 
         let saved = saved_fingerprint(save_to_file(&path, &named("Garden"), None).unwrap());
         let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
-        let DecodedDesign::Design { file: loaded, .. } = loaded else {
-            panic!("a current Design is placed");
-        };
+        let DecodedDesign { file: loaded, .. } = loaded;
 
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(saved, crate::design::fingerprint(&bytes));
@@ -1451,9 +1358,7 @@ mod tests {
             saved_fingerprint(save_to_file(&path, &named("Keep mine"), None).unwrap());
 
         let (loaded, loaded_fingerprint) = load_with_fingerprint(&path).unwrap();
-        let DecodedDesign::Design { file: loaded, .. } = loaded else {
-            panic!("a current Design is placed");
-        };
+        let DecodedDesign { file: loaded, .. } = loaded;
         assert_eq!(loaded.name, "Keep mine");
         assert_eq!(loaded_fingerprint, fingerprint);
 

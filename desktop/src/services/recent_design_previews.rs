@@ -105,23 +105,7 @@ fn read_preview(path: &Path, len: u64) -> (RecentDesignPreview, bool) {
         return (RecentDesignPreview::TooLarge, true);
     }
     match format::load_within(path, RECENT_PREVIEW_MAX_BYTES) {
-        Ok(DecodedDesign::Design { file, .. }) => (crate::design::preview::preview_of(&file), true),
-        // A pre-geolocation Design has counts but no ground until it is placed.
-        Ok(DecodedDesign::NeedsSite(pending)) => {
-            let summary = pending.summary();
-            (
-                RecentDesignPreview::Read {
-                    plant_count: summary.plant_count,
-                    zone_count: summary.zone_count,
-                    bounds: None,
-                    sketch: None,
-                },
-                true,
-            )
-        }
-        Err(DesignLoadError::NeedsSite { .. }) => {
-            unreachable!("load_within returns a pending Design instead of this error")
-        }
+        Ok(DecodedDesign { file, .. }) => (crate::design::preview::preview_of(&file), true),
         Err(DesignLoadError::TooLarge { .. }) => (RecentDesignPreview::TooLarge, true),
         Err(DesignLoadError::Read { source, .. }) => {
             tracing::warn!("A Recent Design could not be read for its preview");
@@ -289,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn older_formats_preview_through_the_ladder_and_a_pending_design_has_no_ground() {
+    fn older_formats_preview_through_the_ladder() {
         let root = scratch("migrated");
         let v8 = root.join("v8.canopi");
         let mut value = serde_json::to_value(with_plants(2)).unwrap();
@@ -300,20 +284,23 @@ mod tests {
             "points": [{ "lon": 0.1, "lat": 47.0 }, { "lon": 0.1001, "lat": 46.9999 }]
         }]);
         std::fs::write(&v8, serde_json::to_string(&value).unwrap()).unwrap();
-        let v5 = root.join("v5.canopi");
-        std::fs::write(
-            &v5,
-            r#"{"version": 5, "name": "Canopi 1.2", "plant_species_colors": {}, "layers": [],
-                "plants": [{"id": "p", "canonical_name": "Malus domestica", "position": {"x": 1.0, "y": 2.0}}],
-                "zones": [{"name": "Z", "zone_type": "rect", "points": [{"x": 0.0, "y": 0.0}, {"x": 4.0, "y": 3.0}]}],
-                "created_at": "2026-07-15T00:00:00.000Z", "updated_at": "2026-07-15T00:00:00.000Z"}"#,
-        )
-        .unwrap();
+        // The oldest supported format: no views or stories, zones named only.
+        let v7 = root.join("v7.canopi");
+        let mut value = serde_json::to_value(with_plants(1)).unwrap();
+        value["version"] = serde_json::json!(7);
+        value.as_object_mut().unwrap().remove("views");
+        value.as_object_mut().unwrap().remove("stories");
+        value["zones"] = serde_json::json!([{
+            "name": "Z",
+            "zone_type": "rect",
+            "points": [{ "lon": 0.1, "lat": 47.0 }, { "lon": 0.1001, "lat": 46.9999 }]
+        }]);
+        std::fs::write(&v7, serde_json::to_string(&value).unwrap()).unwrap();
         let previews = RecentDesignPreviews::default();
 
         let result = previews.previews(&[
             v8.to_string_lossy().into_owned(),
-            v5.to_string_lossy().into_owned(),
+            v7.to_string_lossy().into_owned(),
         ]);
 
         assert_eq!(plant_count(&result[0].preview), Some(2));
@@ -325,15 +312,15 @@ mod tests {
                 ..
             }
         ));
-        assert_eq!(
-            result[1].preview,
+        assert_eq!(plant_count(&result[1].preview), Some(1));
+        assert!(matches!(
+            &result[1].preview,
             RecentDesignPreview::Read {
-                plant_count: 1,
                 zone_count: 1,
-                bounds: None,
-                sketch: None
+                bounds: Some(_),
+                ..
             }
-        );
+        ));
 
         let _ = std::fs::remove_dir_all(root);
     }

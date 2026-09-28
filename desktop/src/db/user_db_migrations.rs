@@ -7,31 +7,26 @@
 //! fails the transaction rolls back and the file is left exactly as it was;
 //! the caller reports the typed error and never sets the database aside.
 //!
-//! History of the schema (`PRAGMA user_version`), recovered from git:
+//! Supported schema history (`PRAGMA user_version`):
 //!
 //! | version | shipped in | change |
 //! |---|---|---|
-//! | 1 | never (pre-release) | `settings`, `recent_files`, `favorites` |
-//! | 2 | Canopi 0.1.0 | `recently_viewed` and its pruning trigger |
-//! | 3 | Canopi 0.8.0 | `saved_object_stamps` |
-//! | 4 | dev builds | `design_notebook_entries` |
-//! | 5 | dev builds | `design_notebook_sections`, `design_notebook_section_memberships` |
-//! | 6 | dev builds | `design_notebook_entries.pinned` (removed again at 8) |
-//! | 7 | dev builds | `sort_order` on sections and entries, backfilled |
-//! | 8 | Canopi 1.0.0 to 1.2.0 | `pinned` dropped |
+//! | 8 | Canopi 1.0.0 to 1.2.0 | `settings`, `recent_files`, `favorites`, `recently_viewed`, `saved_object_stamps`, the Design Notebook tables with `sort_order` |
 //! | 9 | Canopi v2 | same tables; orphan memberships removed so foreign keys verify |
 //!
-//! The ladder starts at 2, the first schema a tagged release wrote. Version 1
-//! only ever existed in pre-release development builds and is refused.
+//! The ladder starts at 8, the schema of the Canopi 1.x releases (user
+//! decision of 2026-09-28: support back to Canopi 1.x, refuse older with a
+//! message). Schemas 1 to 7 were written by the 0.x releases and development
+//! builds and are refused untouched.
 
 use rusqlite::{Connection, Transaction};
 use std::fmt;
 
 use super::user_db::{CURRENT_USER_DB_VERSION, UserDbInitError, verify_integrity};
 
-/// The oldest `user_version` this build upgrades (Canopi 0.1.0). Anything
+/// The oldest `user_version` this build upgrades (Canopi 1.0.0). Anything
 /// older is refused with [`UserDbInitError::UnsupportedSchemaVersion`].
-pub(crate) const OLDEST_SUPPORTED_USER_DB_VERSION: i32 = 2;
+pub(crate) const OLDEST_SUPPORTED_USER_DB_VERSION: i32 = 8;
 
 /// Why an upgrade stopped. The transaction has been rolled back.
 #[derive(Debug)]
@@ -77,15 +72,8 @@ type Step = fn(&Transaction<'_>) -> rusqlite::Result<()>;
 /// `STEPS[i]` upgrades from `OLDEST_SUPPORTED_USER_DB_VERSION + i` to the next
 /// version. The length is checked against the version span at compile time so
 /// a bumped `CURRENT_USER_DB_VERSION` cannot ship without its step.
-const STEPS: [Step; (CURRENT_USER_DB_VERSION - OLDEST_SUPPORTED_USER_DB_VERSION) as usize] = [
-    step_2_to_3_saved_object_stamps,
-    step_3_to_4_design_notebook_entries,
-    step_4_to_5_design_notebook_sections,
-    step_5_to_6_pinned_entries,
-    step_6_to_7_notebook_order,
-    step_7_to_8_drop_pinned,
-    step_8_to_9_remove_orphan_memberships,
-];
+const STEPS: [Step; (CURRENT_USER_DB_VERSION - OLDEST_SUPPORTED_USER_DB_VERSION) as usize] =
+    [step_8_to_9_remove_orphan_memberships];
 
 /// Upgrade a database at schema `from` to [`CURRENT_USER_DB_VERSION`] in one
 /// transaction. `from` must be older than the current version; the caller
@@ -131,113 +119,6 @@ fn run_in_transaction(conn: &Connection, from: i32) -> Result<(), UserDbMigratio
         .map_err(UserDbMigrationFailure::Transaction)
 }
 
-fn step_2_to_3_saved_object_stamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "CREATE TABLE saved_object_stamps (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            payload_json TEXT NOT NULL,
-            sort_order INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );",
-    )
-}
-
-fn step_3_to_4_design_notebook_entries(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "CREATE TABLE design_notebook_entries (
-            path TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            plant_count INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            last_opened TEXT NOT NULL
-        );",
-    )
-}
-
-fn step_4_to_5_design_notebook_sections(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "CREATE TABLE design_notebook_sections (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-        CREATE TABLE design_notebook_section_memberships (
-            path TEXT PRIMARY KEY,
-            section_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(path) REFERENCES design_notebook_entries(path) ON DELETE CASCADE,
-            FOREIGN KEY(section_id) REFERENCES design_notebook_sections(id) ON DELETE CASCADE
-        );",
-    )
-}
-
-/// Version 6 added `design_notebook_entries.pinned`, which version 8 removed
-/// again. A database climbing through this step never gets the column; the
-/// slot exists so the version numbers of real v6 and v7 databases stay
-/// meaningful and step 7 to 8 handles both shapes.
-fn step_5_to_6_pinned_entries(_tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    Ok(())
-}
-
-/// Sections are ordered by creation, entries by most recently opened first,
-/// exactly as Canopi 1.0.0 ordered them when it introduced manual ordering.
-fn step_6_to_7_notebook_order(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "ALTER TABLE design_notebook_sections
-         ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
-
-         UPDATE design_notebook_sections
-         SET sort_order = (
-             SELECT COUNT(*)
-             FROM design_notebook_sections AS earlier
-             WHERE earlier.created_at < design_notebook_sections.created_at
-                OR (
-                     earlier.created_at = design_notebook_sections.created_at
-                     AND earlier.id < design_notebook_sections.id
-                )
-         );
-
-         ALTER TABLE design_notebook_entries
-         ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
-
-         UPDATE design_notebook_entries
-         SET sort_order = (
-             SELECT COUNT(*)
-             FROM design_notebook_entries AS earlier
-             WHERE earlier.last_opened > design_notebook_entries.last_opened
-                OR (
-                     earlier.last_opened = design_notebook_entries.last_opened
-                     AND earlier.created_at > design_notebook_entries.created_at
-                )
-                OR (
-                     earlier.last_opened = design_notebook_entries.last_opened
-                     AND earlier.created_at = design_notebook_entries.created_at
-                     AND earlier.path < design_notebook_entries.path
-                )
-         );",
-    )
-}
-
-/// Drops the short-lived `pinned` column when the database really has it (a
-/// v6 or v7 database); one that climbed from v5 or below never got it.
-fn step_7_to_8_drop_pinned(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    let has_pinned = tx
-        .prepare("PRAGMA table_info(design_notebook_entries)")?
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<rusqlite::Result<Vec<_>>>()?
-        .iter()
-        .any(|column| column == "pinned");
-    if has_pinned {
-        tx.execute_batch("ALTER TABLE design_notebook_entries DROP COLUMN pinned;")?;
-    }
-    Ok(())
-}
-
 /// Version 9 changed no table. Databases written before foreign keys were
 /// enforced may hold memberships whose entry or section is gone; they would
 /// fail the foreign-key check every current database must pass, so they go.
@@ -267,144 +148,91 @@ mod tests {
     };
     use std::path::{Path, PathBuf};
 
-    /// The `CREATE` statements each historical version wrote, as its own
-    /// release ran them (recovered from `desktop/migrations/*.sql`).
+    /// The `CREATE` statements a supported historical version wrote, as its
+    /// own release ran them (recovered from `desktop/migrations/*.sql`).
     fn historical_schema(version: i32) -> String {
-        assert!((1..CURRENT_USER_DB_VERSION).contains(&version));
-        let mut sql = String::from(
+        assert!((OLDEST_SUPPORTED_USER_DB_VERSION..CURRENT_USER_DB_VERSION).contains(&version));
+        format!(
             "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
              CREATE TABLE recent_files (
                  path TEXT PRIMARY KEY, name TEXT NOT NULL, last_opened TEXT NOT NULL
              );
-             CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);",
-        );
-        if version >= 2 {
-            sql.push_str(
-                "CREATE TABLE recently_viewed (
-                     canonical_name TEXT PRIMARY KEY,
-                     viewed_at TEXT NOT NULL DEFAULT (datetime('now'))
+             CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+             CREATE TABLE recently_viewed (
+                 canonical_name TEXT PRIMARY KEY,
+                 viewed_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE TRIGGER limit_recently_viewed
+             AFTER INSERT ON recently_viewed
+             BEGIN
+                 DELETE FROM recently_viewed WHERE canonical_name NOT IN (
+                     SELECT canonical_name FROM recently_viewed
+                     ORDER BY viewed_at DESC LIMIT 50
                  );
-                 CREATE TRIGGER limit_recently_viewed
-                 AFTER INSERT ON recently_viewed
-                 BEGIN
-                     DELETE FROM recently_viewed WHERE canonical_name NOT IN (
-                         SELECT canonical_name FROM recently_viewed
-                         ORDER BY viewed_at DESC LIMIT 50
-                     );
-                 END;",
-            );
-        }
-        if version >= 3 {
-            sql.push_str(
-                "CREATE TABLE saved_object_stamps (
-                     id TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     payload_json TEXT NOT NULL,
-                     sort_order INTEGER NOT NULL,
-                     created_at TEXT NOT NULL,
-                     updated_at TEXT NOT NULL
-                 );",
-            );
-        }
-        if version >= 4 {
-            sql.push_str(
-                "CREATE TABLE design_notebook_entries (
-                     path TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     updated_at TEXT NOT NULL,
-                     plant_count INTEGER NOT NULL DEFAULT 0,
-                     created_at TEXT NOT NULL,
-                     last_opened TEXT NOT NULL
-                 );",
-            );
-        }
-        if version >= 5 {
-            sql.push_str(
-                "CREATE TABLE design_notebook_sections (
-                     id TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     created_at TEXT NOT NULL,
-                     updated_at TEXT NOT NULL
-                 );
-                 CREATE TABLE design_notebook_section_memberships (
-                     path TEXT PRIMARY KEY,
-                     section_id TEXT NOT NULL,
-                     created_at TEXT NOT NULL,
-                     updated_at TEXT NOT NULL,
-                     FOREIGN KEY(path) REFERENCES design_notebook_entries(path)
-                         ON DELETE CASCADE,
-                     FOREIGN KEY(section_id) REFERENCES design_notebook_sections(id)
-                         ON DELETE CASCADE
-                 );",
-            );
-        }
-        if (6..8).contains(&version) {
-            sql.push_str(
-                "ALTER TABLE design_notebook_entries
-                 ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;",
-            );
-        }
-        if version >= 7 {
-            sql.push_str(
-                "ALTER TABLE design_notebook_sections
-                 ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
-                 ALTER TABLE design_notebook_entries
-                 ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;",
-            );
-        }
-        sql.push_str(&format!("PRAGMA user_version = {version};"));
-        sql
+             END;
+             CREATE TABLE saved_object_stamps (
+                 id TEXT PRIMARY KEY,
+                 name TEXT NOT NULL,
+                 payload_json TEXT NOT NULL,
+                 sort_order INTEGER NOT NULL,
+                 created_at TEXT NOT NULL,
+                 updated_at TEXT NOT NULL
+             );
+             CREATE TABLE design_notebook_entries (
+                 path TEXT PRIMARY KEY,
+                 name TEXT NOT NULL,
+                 updated_at TEXT NOT NULL,
+                 plant_count INTEGER NOT NULL DEFAULT 0,
+                 created_at TEXT NOT NULL,
+                 last_opened TEXT NOT NULL
+             );
+             CREATE TABLE design_notebook_sections (
+                 id TEXT PRIMARY KEY,
+                 name TEXT NOT NULL,
+                 created_at TEXT NOT NULL,
+                 updated_at TEXT NOT NULL
+             );
+             CREATE TABLE design_notebook_section_memberships (
+                 path TEXT PRIMARY KEY,
+                 section_id TEXT NOT NULL,
+                 created_at TEXT NOT NULL,
+                 updated_at TEXT NOT NULL,
+                 FOREIGN KEY(path) REFERENCES design_notebook_entries(path)
+                     ON DELETE CASCADE,
+                 FOREIGN KEY(section_id) REFERENCES design_notebook_sections(id)
+                     ON DELETE CASCADE
+             );
+             ALTER TABLE design_notebook_sections
+             ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+             ALTER TABLE design_notebook_entries
+             ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+             PRAGMA user_version = {version};"
+        )
     }
 
-    /// Rows a user of that version could have written. Foreign keys are off
-    /// while writing, as they were in every release before Canopi 1.0.1, so
-    /// the v5+ fixtures also carry one orphan membership.
-    fn sample_rows(version: i32) -> String {
-        let mut sql = String::from(
-            "INSERT INTO settings VALUES ('locale', 'fr');
-             INSERT INTO recent_files VALUES ('/designs/verger.canopi', 'Verger', '2026-05-01T10:00:00Z');
-             INSERT INTO favorites VALUES ('Malus domestica', '2026-05-01T10:00:00Z');
-             INSERT INTO favorites VALUES ('Pyrus communis', '2026-05-02T10:00:00Z');",
-        );
-        if version >= 2 {
-            sql.push_str(
-                "INSERT INTO recently_viewed VALUES ('Alnus glutinosa', '2026-05-03T10:00:00Z');",
-            );
-        }
-        if version >= 3 {
-            sql.push_str(
-                "INSERT INTO saved_object_stamps VALUES
-                    ('stamp-a', 'Apple guild', '{\"plants\":[]}', 0, '2026-06-01', '2026-06-01');",
-            );
-        }
-        if version >= 4 {
-            let pinned = if (6..8).contains(&version) { ", 1" } else { "" };
-            let order = if version >= 7 { ", 0" } else { "" };
-            sql.push_str(&format!(
-                "INSERT INTO design_notebook_entries
-                    (path, name, updated_at, plant_count, created_at, last_opened{pinned_col}{order_col})
-                 VALUES
-                    ('/designs/verger.canopi', 'Verger', '2026-06-02', 12, '2026-06-01', '2026-06-03'{pinned}{order}),
-                    ('/designs/haie.canopi', 'Haie', '2026-06-02', 3, '2026-06-01', '2026-06-02'{pinned}{order});",
-                pinned_col = if pinned.is_empty() { "" } else { ", pinned" },
-                order_col = if order.is_empty() { "" } else { ", sort_order" },
-            ));
-        }
-        if version >= 5 {
-            let order = if version >= 7 { ", 0" } else { "" };
-            sql.push_str(&format!(
-                "INSERT INTO design_notebook_sections
-                    (id, name, created_at, updated_at{order_col})
-                 VALUES
-                    ('section-b', 'Later', '2026-06-02', '2026-06-02'{order}),
-                    ('section-a', 'Earlier', '2026-06-01', '2026-06-01'{order});
-                 INSERT INTO design_notebook_section_memberships VALUES
-                    ('/designs/verger.canopi', 'section-a', '2026-06-01', '2026-06-01'),
-                    ('/designs/gone.canopi', 'section-a', '2026-06-01', '2026-06-01');",
-                order_col = if order.is_empty() { "" } else { ", sort_order" },
-            ));
-        }
-        sql
+    /// Rows a Canopi 1.x user could have written. Foreign keys were off in
+    /// every release before Canopi 1.0.1, so the fixture also carries one
+    /// orphan membership.
+    fn sample_rows() -> &'static str {
+        "INSERT INTO settings VALUES ('locale', 'fr');
+         INSERT INTO recent_files VALUES ('/designs/verger.canopi', 'Verger', '2026-05-01T10:00:00Z');
+         INSERT INTO favorites VALUES ('Malus domestica', '2026-05-01T10:00:00Z');
+         INSERT INTO favorites VALUES ('Pyrus communis', '2026-05-02T10:00:00Z');
+         INSERT INTO recently_viewed VALUES ('Alnus glutinosa', '2026-05-03T10:00:00Z');
+         INSERT INTO saved_object_stamps VALUES
+            ('stamp-a', 'Apple guild', '{\"plants\":[]}', 0, '2026-06-01', '2026-06-01');
+         INSERT INTO design_notebook_entries
+            (path, name, updated_at, plant_count, created_at, last_opened, sort_order)
+         VALUES
+            ('/designs/verger.canopi', 'Verger', '2026-06-02', 12, '2026-06-01', '2026-06-03', 0),
+            ('/designs/haie.canopi', 'Haie', '2026-06-02', 3, '2026-06-01', '2026-06-02', 1);
+         INSERT INTO design_notebook_sections (id, name, created_at, updated_at, sort_order)
+         VALUES
+            ('section-b', 'Later', '2026-06-02', '2026-06-02', 1),
+            ('section-a', 'Earlier', '2026-06-01', '2026-06-01', 0);
+         INSERT INTO design_notebook_section_memberships VALUES
+            ('/designs/verger.canopi', 'section-a', '2026-06-01', '2026-06-01'),
+            ('/designs/gone.canopi', 'section-a', '2026-06-01', '2026-06-01');"
     }
 
     /// The bundled SQLite enforces foreign keys by default; the fixtures turn
@@ -429,7 +257,23 @@ mod tests {
     fn write_fixture(path: &Path, version: i32) {
         let conn = fixture_connection(path);
         conn.execute_batch(&historical_schema(version)).unwrap();
-        conn.execute_batch(&sample_rows(version)).unwrap();
+        conn.execute_batch(sample_rows()).unwrap();
+    }
+
+    /// A database from before Canopi 1.0: the three original tables only.
+    fn write_pre_floor_fixture(path: &Path, version: i32) {
+        assert!(version < OLDEST_SUPPORTED_USER_DB_VERSION);
+        let conn = fixture_connection(path);
+        conn.execute_batch(&format!(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE recent_files (
+                 path TEXT PRIMARY KEY, name TEXT NOT NULL, last_opened TEXT NOT NULL
+             );
+             CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+             INSERT INTO settings VALUES ('locale', 'fr');
+             PRAGMA user_version = {version};"
+        ))
+        .unwrap();
     }
 
     fn sibling_files(path: &Path) -> Vec<PathBuf> {
@@ -514,48 +358,36 @@ mod tests {
             let recent = crate::db::recent_files::get_recent_files(&conn, 20).unwrap();
             assert_eq!(recent.len(), 1, "schema {version}");
             assert_eq!(recent[0].name, "Verger");
-            if version >= 3 {
-                let stamps = get_saved_object_stamps(&conn).unwrap();
-                assert_eq!(stamps.len(), 1);
-                assert_eq!(stamps[0].name, "Apple guild");
-            }
-            if version >= 4 {
-                let entries =
-                    crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn)
-                        .unwrap();
-                let mut names: Vec<_> = entries.iter().map(|entry| entry.name.as_str()).collect();
-                names.sort();
-                assert_eq!(names, ["Haie", "Verger"], "schema {version}");
-                if version < 7 {
-                    // Backfilled order: most recently opened first.
-                    let verger = entries.iter().find(|entry| entry.name == "Verger").unwrap();
-                    let haie = entries.iter().find(|entry| entry.name == "Haie").unwrap();
-                    assert_eq!((verger.sort_order, haie.sort_order), (0, 1));
-                }
-            }
-            if version >= 5 {
-                let sections = crate::db::design_notebook::get_notebook_sections(&conn).unwrap();
-                assert_eq!(
-                    sections
-                        .iter()
-                        .map(|section| section.id.as_str())
-                        .collect::<Vec<_>>(),
-                    ["section-a", "section-b"],
-                    "schema {version}: sections keep creation order"
-                );
-                let memberships: Vec<(String, String)> = conn
-                    .prepare("SELECT path, section_id FROM design_notebook_section_memberships")
-                    .unwrap()
-                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-                    .unwrap()
-                    .collect::<Result<_, _>>()
+            let stamps = get_saved_object_stamps(&conn).unwrap();
+            assert_eq!(stamps.len(), 1);
+            assert_eq!(stamps[0].name, "Apple guild");
+            let entries =
+                crate::db::design_notebook::get_design_notebook_entries_with_sections(&conn)
                     .unwrap();
-                assert_eq!(
-                    memberships,
-                    [("/designs/verger.canopi".to_owned(), "section-a".to_owned())],
-                    "schema {version}: the orphan membership is gone, the real one kept"
-                );
-            }
+            let mut names: Vec<_> = entries.iter().map(|entry| entry.name.as_str()).collect();
+            names.sort();
+            assert_eq!(names, ["Haie", "Verger"], "schema {version}");
+            let sections = crate::db::design_notebook::get_notebook_sections(&conn).unwrap();
+            assert_eq!(
+                sections
+                    .iter()
+                    .map(|section| section.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["section-a", "section-b"],
+                "schema {version}: sections keep their order"
+            );
+            let memberships: Vec<(String, String)> = conn
+                .prepare("SELECT path, section_id FROM design_notebook_section_memberships")
+                .unwrap()
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            assert_eq!(
+                memberships,
+                [("/designs/verger.canopi".to_owned(), "section-a".to_owned())],
+                "schema {version}: the orphan membership is gone, the real one kept"
+            );
 
             drop(conn);
             drop(user_db);
@@ -569,10 +401,10 @@ mod tests {
         let path = temp_path("failing_step");
         {
             let conn = fixture_connection(&path);
-            conn.execute_batch(&historical_schema(3)).unwrap();
-            conn.execute_batch(&sample_rows(3)).unwrap();
-            // A stray table with the name step 3 -> 4 creates makes that step fail.
-            conn.execute_batch("CREATE TABLE design_notebook_entries (stray TEXT);")
+            conn.execute_batch(&historical_schema(8)).unwrap();
+            conn.execute_batch(sample_rows()).unwrap();
+            // Without the memberships table, step 8 -> 9 has nothing to delete from.
+            conn.execute_batch("DROP TABLE design_notebook_section_memberships;")
                 .unwrap();
         }
         let before = std::fs::read(&path).unwrap();
@@ -585,9 +417,9 @@ mod tests {
             matches!(
                 error,
                 UserDbInitError::Migration {
-                    from: 3,
+                    from: 8,
                     to: CURRENT_USER_DB_VERSION,
-                    source: UserDbMigrationFailure::Step { version: 3, .. },
+                    source: UserDbMigrationFailure::Step { version: 8, .. },
                 }
             ),
             "{error:?}"
@@ -602,7 +434,7 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), before, "file unchanged");
         assert!(sibling_files(&path).is_empty(), "nothing set aside");
         let kept = Connection::open(&path).unwrap();
-        assert_eq!(schema_version(&kept).unwrap(), 3);
+        assert_eq!(schema_version(&kept).unwrap(), 8);
         assert_eq!(get_saved_object_stamps(&kept).unwrap().len(), 1);
         drop(kept);
         std::fs::remove_file(&path).unwrap();
@@ -650,21 +482,34 @@ mod tests {
 
     #[test]
     fn versions_below_the_oldest_supported_are_refused_untouched() {
-        let path = temp_path("too_old");
-        write_fixture(&path, 1);
-        let before = std::fs::read(&path).unwrap();
+        for version in [1, 7] {
+            let path = temp_path(&format!("too_old_{version}"));
+            write_pre_floor_fixture(&path, version);
+            let before = std::fs::read(&path).unwrap();
 
-        let error = UserDb::open(&path).err().expect("schema 1 is refused");
-        assert!(matches!(
-            error,
-            UserDbInitError::UnsupportedSchemaVersion {
-                found: 1,
-                oldest_supported: OLDEST_SUPPORTED_USER_DB_VERSION
-            }
-        ));
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-        assert!(sibling_files(&path).is_empty());
-        std::fs::remove_file(&path).unwrap();
+            let error = UserDb::open(&path)
+                .err()
+                .unwrap_or_else(|| panic!("schema {version} is refused"));
+            assert!(
+                matches!(
+                    error,
+                    UserDbInitError::UnsupportedSchemaVersion {
+                        found,
+                        oldest_supported: OLDEST_SUPPORTED_USER_DB_VERSION
+                    } if found == version
+                ),
+                "{error:?}"
+            );
+            assert!(
+                !error
+                    .to_string()
+                    .contains(&path.to_string_lossy().to_string()),
+                "no paths in the message"
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            assert!(sibling_files(&path).is_empty());
+            std::fs::remove_file(&path).unwrap();
+        }
     }
 
     #[test]
@@ -682,16 +527,16 @@ mod tests {
     #[test]
     fn migration_errors_name_no_paths_and_expose_their_source() {
         let error = UserDbInitError::Migration {
-            from: 4,
+            from: 8,
             to: CURRENT_USER_DB_VERSION,
             source: UserDbMigrationFailure::Step {
-                version: 6,
+                version: 8,
                 source: rusqlite::Error::InvalidQuery,
             },
         };
         let message = error.to_string();
-        assert!(message.contains("schema 4"), "{message}");
-        assert!(message.contains("schema 6 to 7"), "{message}");
+        assert!(message.contains("schema 8"), "{message}");
+        assert!(message.contains("schema 8 to 9"), "{message}");
         assert!(std::error::Error::source(&error).is_some());
         assert!(!error.sets_aside_as_corrupt(), "never set aside");
     }
