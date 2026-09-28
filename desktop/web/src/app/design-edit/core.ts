@@ -11,6 +11,16 @@ export function editCurrentDesign(
   return designEditAuthorityCapability(designSessionStore).editCommitted(updater)
 }
 
+/** The open Design as committed, for a command that decides before it edits. */
+export function readCurrentDesign(): CanopiFile | null {
+  return designSessionStore.currentDesign.peek()
+}
+
+/** The open Design session's identity; session-only Design Edit state keys on it and goes with it. */
+export function currentDesignSessionKey(): object {
+  return designSessionStore.sessionIdentity.peek()
+}
+
 export function reconcileCurrentDesign(
   updater: (design: CanopiFile) => CanopiFile,
 ): CanopiFile | null {
