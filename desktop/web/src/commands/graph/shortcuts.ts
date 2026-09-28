@@ -6,7 +6,7 @@ import { matchShellCommandShortcut } from '../../app/shell-commands'
 import { singleKeyShortcuts } from '../../app/settings/state'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
 import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
-import { COMMAND_PALETTE_SHORTCUT_KEY } from '../../shortcuts/definitions'
+import { matchesShortcut } from '../../app/shell-commands/shortcut-text'
 import {
   DESKTOP_SHELL_COMMAND_CATALOG,
   runCatalogCommand,
@@ -18,10 +18,12 @@ interface AppCommandShortcutMatch {
   readonly preventDefault: boolean
 }
 
+const COMMAND_PALETTE_SHORTCUT = DESKTOP_SHELL_COMMAND_CATALOG
+  .find((command) => command.id === 'help.commandPalette')?.shortcut
+
+/** The palette's own key: the only shortcut that reaches the open palette, to close it. */
 export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
-  return (event.ctrlKey || event.metaKey)
-    && event.shiftKey
-    && event.key.toUpperCase() === COMMAND_PALETTE_SHORTCUT_KEY
+  return COMMAND_PALETTE_SHORTCUT !== undefined && matchesShortcut(COMMAND_PALETTE_SHORTCUT, event)
 }
 
 export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {

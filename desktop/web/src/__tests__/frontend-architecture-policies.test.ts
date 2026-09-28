@@ -263,7 +263,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/canvas-settings/signals.ts',
       'src/app/settings/state.ts',
       'src/i18n/index.ts',
-      'src/shortcuts/definitions.ts',
       'src/canvas/session.ts',
       'src/canvas/runtime/interaction/pointer-utils.ts',
       'src/app/shell/state.ts',
@@ -1342,7 +1341,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Desktop shortcut adapter does not revive shell command switches or aliases',
-    from: ['src/commands/graph/shortcuts.ts', 'src/shortcuts/definitions.ts'],
+    from: ['src/commands/graph/shortcuts.ts'],
     names: [
       'panelCommandId',
       'fileShortcutCommand',
@@ -1362,12 +1361,6 @@ const SYMBOL_OWNERSHIP_POLICIES = [
     name: 'Production Web catalog does not carry the in-memory test reader',
     from: ['src/web/**'],
     names: ['createInMemoryReducedSpeciesCatalogReader'],
-  },
-  {
-    kind: 'forbid-source-symbols',
-    name: 'Shortcut definitions do not re-export Canvas command shortcuts',
-    from: ['src/shortcuts/definitions.ts'],
-    names: ['EDIT_SHORTCUTS', 'TOOL_SHORTCUTS', 'VIEW_SHORTCUTS', 'canvasToolKeys'],
   },
   {
     kind: 'forbid-source-symbols',

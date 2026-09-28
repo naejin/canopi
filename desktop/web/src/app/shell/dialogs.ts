@@ -29,3 +29,14 @@ export function openGettingStartedDialog(): void {
 export function closeGettingStartedDialog(): void {
   gettingStartedDialogOpen.value = false
 }
+
+/** The command palette (Help › Command palette, Ctrl Shift P); Desktop only. */
+export const commandPaletteOpen = signal(false)
+
+export function openCommandPalette(): void {
+  commandPaletteOpen.value = true
+}
+
+export function closeCommandPalette(): void {
+  commandPaletteOpen.value = false
+}

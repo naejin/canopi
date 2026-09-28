@@ -28,6 +28,7 @@ import {
   saveAsCurrentDesign,
   saveCurrentDesign,
 } from '../../app/document-session/actions'
+import { openCommandPalette } from '../../app/shell/dialogs'
 import { activePanel, navigateTo, sidePanel, type Panel } from '../../app/shell/state'
 import {
   diagnosticMessageFromError,
@@ -78,6 +79,7 @@ type DesktopShellCapabilityId =
   | 'showMap'
   | 'showNoBackground'
   | 'toggleTheme'
+  | 'showCommandPalette'
   | 'showShortcuts'
   | 'gettingStarted'
   | 'reportProblem'
@@ -222,6 +224,7 @@ export const DESKTOP_SHELL_COMMAND_CATALOG = composeShellCommandCatalog({
   },
   navigateStories: designPanel('stories'),
   reportProblem: { execute: openProblemReportDialog },
+  showCommandPalette: { execute: openCommandPalette },
 })
 
 function shellAppCommandDefinition(

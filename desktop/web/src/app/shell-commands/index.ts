@@ -43,6 +43,7 @@ export type ShellCommandIdByCapability = {
   readonly showMap: 'view.backgroundMap'
   readonly showNoBackground: 'view.backgroundNone'
   readonly toggleTheme: 'view.toggleTheme'
+  readonly showCommandPalette: 'help.commandPalette'
   readonly showShortcuts: 'help.shortcuts'
   readonly gettingStarted: 'help.gettingStarted'
   readonly reportProblem: 'help.reportProblem'
@@ -211,6 +212,8 @@ const SHELL_COMMAND_DESCRIPTORS: readonly ShellCommandDescriptor[] = [
   { capabilityId: 'showMap', id: 'view.backgroundMap', family: 'settings', labelKey: 'menu.view.backgroundMap', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
   { capabilityId: 'showNoBackground', id: 'view.backgroundNone', family: 'settings', labelKey: 'menu.view.backgroundNone', palette: true, check: 'radio', menu: { id: 'view', section: 1, submenu: 'background' } },
   { capabilityId: 'toggleTheme', id: 'view.toggleTheme', family: 'settings', labelKey: 'menu.view.darkTheme', palette: true, check: 'checkbox', menu: { id: 'view', section: 1 } },
+  // Not listed in the palette it opens; its shortcut is discoverable in Help and the F1 list.
+  { capabilityId: 'showCommandPalette', id: 'help.commandPalette', family: 'help', labelKey: 'menu.help.commandPalette', shortcut: 'Ctrl+Shift+P', palette: false, menu: { id: 'help', section: 0 } },
   { capabilityId: 'showShortcuts', id: 'help.shortcuts', family: 'help', labelKey: 'menu.help.shortcuts', shortcut: 'F1', palette: true, menu: { id: 'help', section: 0 } },
   { capabilityId: 'gettingStarted', id: 'help.gettingStarted', family: 'help', labelKey: 'menu.help.gettingStarted', palette: true, menu: { id: 'help', section: 0 } },
   { capabilityId: 'reportProblem', id: 'help.reportProblem', family: 'help', labelKey: 'menu.help.reportProblem', palette: true, menu: { id: 'help', section: 1 } },

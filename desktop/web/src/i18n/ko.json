@@ -1079,6 +1079,7 @@
     "file.export": "내보내기",
     "view.backgroundNone": "없음",
     "help.shortcuts": "키보드 단축키",
+    "help.commandPalette": "명령 팔레트…",
     "view.backgroundSatellite": "위성",
     "edit.bringToFront": "맨 앞으로 가져오기",
     "edit.lock": "잠금",

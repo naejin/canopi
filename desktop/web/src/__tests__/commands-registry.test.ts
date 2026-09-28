@@ -736,7 +736,7 @@ describe('command registry canvas tool switching', () => {
       'canvas.tool.polygon', 'canvas.tool.rectangle', 'canvas.tool.ellipse', 'canvas.tool.line',
       'canvas.tool.text', 'canvas.tool.measurementGuide',
     ])
-    expect(byMenu.help).toEqual(['help.shortcuts', 'help.gettingStarted', 'help.reportProblem', 'help.aboutCanopi'])
+    expect(byMenu.help).toEqual(['help.commandPalette', 'help.shortcuts', 'help.gettingStarted', 'help.reportProblem', 'help.aboutCanopi'])
 
     // Every palette command with a shortcut shows the same shortcut in its menu
     // item, or on the submenu it acts on (N on View › Labels).
@@ -754,6 +754,9 @@ describe('command registry canvas tool switching', () => {
     expect(menuShortcut.get('view.fitToDesign')).toBe('Shift F')
     expect(menuShortcut.get('view.searchPlace')).toBe('Ctrl K')
     expect(menuShortcut.get('help.shortcuts')).toBe('F1')
+    // The palette is a Help command like F1, so its key is discoverable there and in the F1 list.
+    expect(menuShortcut.get('help.commandPalette')).toBe('Ctrl Shift P')
+    expect(paletteCommands().some((command) => command.id === 'help.commandPalette')).toBe(false)
     expect(menuShortcut.get('file.exportCanvasPdf')).toBe('Ctrl P')
     expect(menuShortcut.get('edit.findPlants')).toBe('Ctrl F')
     expect(menuShortcut.get('view.cycleLabels')).toBe('N')

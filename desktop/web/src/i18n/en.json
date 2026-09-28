@@ -1200,6 +1200,7 @@
     "file.export": "Export",
     "view.backgroundNone": "None",
     "help.shortcuts": "Keyboard shortcuts",
+    "help.commandPalette": "Command palette…",
     "view.backgroundSatellite": "Satellite",
     "edit.bringToFront": "Bring to front",
     "edit.lock": "Lock",

@@ -1,1 +1,0 @@
-export const COMMAND_PALETTE_SHORTCUT_KEY = 'P'

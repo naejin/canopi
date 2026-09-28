@@ -1079,6 +1079,7 @@
     "file.export": "导出",
     "view.backgroundNone": "无",
     "help.shortcuts": "键盘快捷键",
+    "help.commandPalette": "命令面板…",
     "view.backgroundSatellite": "卫星",
     "edit.bringToFront": "置于顶层",
     "edit.lock": "锁定",

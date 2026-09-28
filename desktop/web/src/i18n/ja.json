@@ -1079,6 +1079,7 @@
     "file.export": "エクスポート",
     "view.backgroundNone": "なし",
     "help.shortcuts": "キーボードショートカット",
+    "help.commandPalette": "コマンドパレット…",
     "view.backgroundSatellite": "衛星",
     "edit.bringToFront": "最前面へ移動",
     "edit.lock": "ロック",
