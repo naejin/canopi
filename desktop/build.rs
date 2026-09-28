@@ -7,9 +7,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CANOPI_SKIP_BUNDLED_DB");
     println!("cargo:rerun-if-changed=capabilities");
     println!("cargo:rerun-if-changed=capabilities-dev");
+    println!("cargo:rerun-if-changed=binaries");
 
     let release = std::env::var("PROFILE").as_deref() == Ok("release");
-    let mut patch = serde_json::Map::new();
+    let mut bundle = serde_json::Map::new();
 
     if std::env::var("CANOPI_SKIP_BUNDLED_DB").as_deref() == Ok("1") {
         // Allow CI lint/test jobs to compile the desktop crate without a locally
@@ -21,10 +22,30 @@ fn main() {
                 "cargo:warning=CANOPI_SKIP_BUNDLED_DB=1 in a release build: the plant DB is not bundled"
             );
         }
-        patch.insert(
-            "bundle".into(),
-            serde_json::json!({ "resources": ["THIRD_PARTY_NOTICES.md"] }),
+        bundle.insert(
+            "resources".into(),
+            serde_json::json!(["THIRD_PARTY_NOTICES.md"]),
         );
+    }
+
+    // The GeoLibre CLI sidecar (`bundle.externalBin` in tauri.conf.json) is
+    // built by `scripts/build-geolibre-cli.sh` into `binaries/geolibre-<target
+    // triple>[.exe]`. tauri-build fails when a listed sidecar is missing, so
+    // the rule is: the sidecar is bundled exactly when its file exists. Lint,
+    // test and dev builds without it keep working; a release build without it
+    // warns and packages an app whose analyses report the engine as missing.
+    if !sidecar_present() {
+        if release {
+            println!(
+                "cargo:warning=desktop/binaries has no GeoLibre CLI for this target: the sidecar is not bundled (run scripts/build-geolibre-cli.sh)"
+            );
+        }
+        bundle.insert("externalBin".into(), serde_json::Value::Null);
+    }
+
+    let mut patch = serde_json::Map::new();
+    if !bundle.is_empty() {
+        patch.insert("bundle".into(), serde_json::Value::Object(bundle));
     }
 
     // The MCP bridge drives the dev webview through `window.__TAURI__` and its
@@ -45,14 +66,15 @@ fn main() {
     };
 
     if !patch.is_empty() {
-        // Merge over any configuration the Tauri CLI passed in, then hand the
-        // result to both tauri-build (this process) and `generate_context!`
-        // (the crate's rustc invocations).
+        // Compose over any configuration patch the Tauri CLI passed in, then
+        // hand the result to both tauri-build (this process) and
+        // `generate_context!` (the crate's rustc invocations), which apply it
+        // to tauri.conf.json as a JSON merge patch.
         let mut config = std::env::var("TAURI_CONFIG")
             .ok()
             .and_then(|inline| serde_json::from_str::<serde_json::Value>(&inline).ok())
             .unwrap_or_else(|| serde_json::json!({}));
-        merge(&mut config, serde_json::Value::Object(patch));
+        compose(&mut config, serde_json::Value::Object(patch));
         let config = config.to_string();
         println!("cargo:rustc-env=TAURI_CONFIG={config}");
         unsafe {
@@ -66,8 +88,27 @@ fn main() {
     .expect("tauri build configuration");
 }
 
-/// JSON merge patch (RFC 7386) as tauri-build applies `TAURI_CONFIG`.
-fn merge(target: &mut serde_json::Value, patch: serde_json::Value) {
+/// Whether `binaries/geolibre-<target triple>[.exe]`, the sidecar name Tauri
+/// expects for the target being compiled, exists.
+fn sidecar_present() -> bool {
+    let triple = std::env::var("TARGET").expect("cargo sets TARGET");
+    let extension = if triple.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    std::path::Path::new(&manifest_dir)
+        .join("binaries")
+        .join(format!("geolibre-{triple}{extension}"))
+        .is_file()
+}
+
+/// Compose two JSON merge patches (RFC 7386): the result, applied to a
+/// document, equals applying `target` then `patch`. A `null` in `patch` is
+/// kept, not dropped, because it is the instruction to remove that key from
+/// the final document.
+fn compose(target: &mut serde_json::Value, patch: serde_json::Value) {
     match patch {
         serde_json::Value::Object(patch) => {
             if !target.is_object() {
@@ -75,10 +116,10 @@ fn merge(target: &mut serde_json::Value, patch: serde_json::Value) {
             }
             let target = target.as_object_mut().expect("object");
             for (key, value) in patch {
-                if value.is_null() {
-                    target.remove(&key);
+                if value.is_object() {
+                    compose(target.entry(key).or_insert(serde_json::Value::Null), value);
                 } else {
-                    merge(target.entry(key).or_insert(serde_json::Value::Null), value);
+                    target.insert(key, value);
                 }
             }
         }

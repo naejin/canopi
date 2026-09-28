@@ -62,6 +62,9 @@
       "resources/canopi-core.db",
       "THIRD_PARTY_NOTICES.md"
     ],
+    "externalBin": [
+      "binaries/geolibre"
+    ],
     "shortDescription": "Agroecological garden design tool",
     "longDescription": "Canopi is an agroecological design application for planning and managing gardens, food forests, and permaculture systems.",
     "linux": {
