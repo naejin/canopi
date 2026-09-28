@@ -3217,7 +3217,7 @@ describe('SceneInteractionSession', () => {
 
     events.keyDown({ key: 'Escape' })
     expect(setTool).toHaveBeenCalledWith('select')
-    expect(toolCard()).toBeNull()
+    expect(toolCard()?.dataset.toolCard).toBe('select')
     session.dispose()
   })
 
@@ -3251,7 +3251,7 @@ describe('SceneInteractionSession', () => {
 
     session.setTool('select')
 
-    expect(toolCard()).toBeNull()
+    expect(toolCard()?.dataset.toolCard).toBe('select')
     expect(container.querySelector('[data-plant-spacing-source]')).toBeNull()
     expect(container.querySelector('[data-plant-spacing-guide]')).toBeNull()
     expect(container.querySelectorAll('[data-plant-spacing-ghost]')).toHaveLength(0)

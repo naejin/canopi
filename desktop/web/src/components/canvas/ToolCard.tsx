@@ -17,6 +17,7 @@ import {
   currentCanvasToolGuidance,
 } from '../../canvas/session'
 import type { CanvasPlantRowGuidance, CanvasToolGuidance } from '../../canvas/session-state'
+import { scrollWheel } from '../../app/settings/state'
 import { t } from '../../i18n'
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import { PlantSymbolGlyph } from './PlantSymbolGlyph'
@@ -34,8 +35,8 @@ export interface StampChooserProps {
 /**
  * The tool card, top left beside the tool rail: the tool's name, the live
  * instruction (naming the chosen species or stamp) and quiet key hints that
- * end with what Esc does now. It hides for Select and Pan, in overview and
- * while "Where is your site?" shows. The text is one polite live region that
+ * end with what Esc does now. Select shows its name and one quiet line of
+ * modifiers. It hides for Pan, in overview and while "Where is your site?" shows. The text is one polite live region that
  * stays mounted, so choosing a tool is announced. Place plants carries the
  * species chooser while no species is chosen, or after Change species; Place a
  * stamp opens its saved stamps with Change stamp; Plant a row carries its
@@ -62,6 +63,7 @@ export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
         guidance,
         speciesName: species?.name ?? null,
         savedStamp,
+        scrollWheel: scrollWheel.value,
         translate: t,
       })
   const choosing = content?.tool === 'plant-stamp' && (source === null || changingSpecies)
@@ -117,9 +119,11 @@ export function ToolCard({ canvasRef, stampChooser: StampChooser }: {
                   : content.subject}
               </b>
             )}
-            <span className={content.subject ? `${styles.instruction} ${styles.afterSubject}` : styles.instruction}>
-              {content.instruction}
-            </span>
+            {content.instruction && (
+              <span className={content.subject ? `${styles.instruction} ${styles.afterSubject}` : styles.instruction}>
+                {content.instruction}
+              </span>
+            )}
             {guidance.plantRow?.phase === 'row' && <SpacingField row={guidance.plantRow} />}
             {content.rowCount && (
               // Moves with every pointer move, so it is not announced.

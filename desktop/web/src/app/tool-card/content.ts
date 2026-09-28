@@ -15,6 +15,8 @@ export interface ToolCardInput {
   /** Place plants: the chosen species' shown name, or null while the card offers its chooser. */
   readonly speciesName: string | null
   readonly savedStamp: SavedStampSummary | null
+  /** Settings › Canvas › Scroll wheel: Select's line says whether the wheel or a pinch zooms. */
+  readonly scrollWheel: 'zoom' | 'pan'
   readonly translate: Translate
 }
 
@@ -27,6 +29,7 @@ export interface ToolCardContent {
   readonly tool: string
   readonly title: string
   readonly subject: string | null
+  /** Empty for Select, whose card is its name and one line of hints. */
   readonly instruction: string
   readonly hints: string
   /**
@@ -38,10 +41,11 @@ export interface ToolCardContent {
   readonly rowCount: { readonly text: string; readonly density: 'normal' | 'dense' | 'blocked' } | null
 }
 
-/** Tools without a card: Select and Pan need no guidance. */
-const NO_CARD = new Set(['select', 'hand'])
+/** Tools without a card: Pan needs no guidance. */
+const NO_CARD = new Set(['hand'])
 
 const TITLE_KEYS: Readonly<Record<string, string>> = {
+  select: 'canvas.tools.select',
   'plant-stamp': 'canvas.tools.plantStamp',
   'plant-spacing': 'canvas.tools.plantSpacing',
   'object-stamp': 'canvas.tools.objectStamp',
@@ -82,6 +86,9 @@ export function toolCardContent(input: ToolCardInput): ToolCardContent | null {
   const angle = guidance.stampRotationDeg ?? 0
 
   switch (tool) {
+    case 'select':
+      // No Esc meaning: under Select, Esc only clears the selection.
+      return card(null, '', translate(input.scrollWheel === 'pan' ? 'canvas.toolCard.selectHintPan' : 'canvas.toolCard.selectHint'))
     case 'plant-stamp':
       return input.speciesName
         ? card(input.speciesName, translate('canvas.toolCard.placeOne'))

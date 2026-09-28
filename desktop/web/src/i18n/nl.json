@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc om te stoppen met plaatsen",
       "escCancel": "Esc om te annuleren",
       "escSelect": "Esc om terug te gaan naar Selecteren",
+      "selectHint": "Sleep om te selecteren · Shift-klik voegt toe · Spatie + slepen of H verschuift de kaart · wiel zoomt",
+      "selectHintPan": "Sleep om te selecteren · Shift-klik voegt toe · Spatie + slepen of H verschuift de kaart · knijpen zoomt",
       "stampPick": "Klik op een plant, zone, notitie of groep om die te kopiëren",
       "stampPlace": "klik om te plaatsen",
       "stampZone": "Zone",

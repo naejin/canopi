@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { locale } from '../app/settings/state'
+import { locale, scrollWheel } from '../app/settings/state'
 import { t } from '../i18n'
 import { activePanel, sidePanel } from '../app/shell/state'
 import { ToolCard } from '../components/canvas/ToolCard'
@@ -68,6 +68,7 @@ describe('Tool card', () => {
 
   beforeEach(async () => {
     locale.value = 'en'
+    scrollWheel.value = 'zoom'
     container = document.createElement('div')
     document.body.append(container)
     setCanvasRuntimeSurfaces({
@@ -102,13 +103,24 @@ describe('Tool card', () => {
   const live = () => container.querySelector<HTMLElement>('[role="status"]')!
   const lines = () => [...live().children].map((line) => line.textContent)
 
-  it('shows no card for Select and Pan, but keeps its live region mounted', async () => {
+  it('shows no card for Pan, but keeps its live region mounted', async () => {
+    await choose('hand')
     expect(card()).toBeNull()
     expect(live().getAttribute('aria-live')).toBe('polite')
     expect(live().textContent).toBe('')
+  })
 
-    await choose('hand')
-    expect(card()).toBeNull()
+  it('gives Select one quiet line naming the modifiers, following the scroll wheel setting', async () => {
+    expect(card()!.dataset.toolCard).toBe('select')
+    expect(card()!.getAttribute('aria-label')).toBe('Select')
+    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Space + drag or H pans · wheel zooms'])
+    expect(live().querySelector('b')).toBeNull()
+
+    await act(() => { scrollWheel.value = 'pan' })
+    expect(lines()).toEqual(['Select', 'Drag to select · Shift-click adds · Space + drag or H pans · pinch zooms'])
+
+    await act(() => { locale.value = 'fr' })
+    expect(lines()).toEqual(['Sélection', 'Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · pincement zoome'])
   })
 
   it('names the species for Place plants, offers Change species and says Esc stops placing', async () => {

@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc per smettere di posizionare",
       "escCancel": "Esc per annullare",
       "escSelect": "Esc per tornare a Seleziona",
+      "selectHint": "Trascina per selezionare · Maiusc-clic aggiunge · Spazio + trascinare o H sposta la mappa · la rotellina ingrandisce",
+      "selectHintPan": "Trascina per selezionare · Maiusc-clic aggiunge · Spazio + trascinare o H sposta la mappa · il pizzico ingrandisce",
       "stampPick": "Fai clic su una pianta, zona, nota o gruppo per copiarlo",
       "stampPlace": "fai clic per posizionare",
       "stampZone": "Zona",

@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc para dejar de colocar",
       "escCancel": "Esc para cancelar",
       "escSelect": "Esc para volver a Seleccionar",
+      "selectHint": "Arrastra para seleccionar · Mayús-clic añade · Espacio + arrastrar o H desplaza el mapa · la rueda hace zoom",
+      "selectHintPan": "Arrastra para seleccionar · Mayús-clic añade · Espacio + arrastrar o H desplaza el mapa · pellizcar hace zoom",
       "stampPick": "Haz clic en una planta, zona, nota o grupo para copiarlo",
       "stampPlace": "haz clic para colocar",
       "stampZone": "Zona",

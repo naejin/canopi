@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc beendet das Setzen",
       "escCancel": "Esc bricht ab",
       "escSelect": "Esc kehrt zu Auswählen zurück",
+      "selectHint": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Leertaste + Ziehen oder H verschiebt die Karte · Rad zoomt",
+      "selectHintPan": "Ziehen wählt aus · Umschalt-Klick fügt hinzu · Leertaste + Ziehen oder H verschiebt die Karte · Zusammenziehen zoomt",
       "stampPick": "Klicken Sie auf eine Pflanze, Zone, Notiz oder Gruppe, um sie zu kopieren",
       "stampPlace": "klicken zum Setzen",
       "stampZone": "Zone",

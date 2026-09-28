@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc to stop placing",
       "escCancel": "Esc to cancel",
       "escSelect": "Esc to go back to Select",
+      "selectHint": "Drag to select · Shift-click adds · Space + drag or H pans · wheel zooms",
+      "selectHintPan": "Drag to select · Shift-click adds · Space + drag or H pans · pinch zooms",
       "stampPick": "Click a plant, zone, note or group to copy it",
       "stampPlace": "click to place",
       "stampZone": "Zone",

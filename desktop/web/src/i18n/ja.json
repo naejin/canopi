@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc で配置を終了",
       "escCancel": "Esc で取り消し",
       "escSelect": "Esc で選択ツールに戻る",
+      "selectHint": "ドラッグで選択 · Shift-クリックで追加 · Space + ドラッグまたは H でパン · ホイールでズーム",
+      "selectHintPan": "ドラッグで選択 · Shift-クリックで追加 · Space + ドラッグまたは H でパン · ピンチでズーム",
       "stampPick": "コピーする植物、ゾーン、メモ、グループをクリック",
       "stampPlace": "クリックして配置",
       "stampZone": "ゾーン",

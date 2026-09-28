@@ -32,7 +32,7 @@ A small modal (Edit › Rotate…, the right-click menu, Ctrl Alt R) titled "Rot
 
 ## Tools
 
-- Tool cards (320 px): the species glyph in its map colour or the stamp icon before the tool name; the subject on its own line (bold) and the instruction under it; key hints ending with the Esc meaning ("Esc to stop placing", "Esc to cancel" during a gesture, otherwise "Esc to go back to Select").
+- Tool cards (320 px): the species glyph in its map colour or the stamp icon before the tool name; the subject on its own line (bold) and the instruction under it; key hints ending with the Esc meaning ("Esc to stop placing", "Esc to cancel" during a gesture, otherwise "Esc to go back to Select"). Select: one quiet line (drag, Shift-click, Space or H pan, wheel or pinch zoom).
 - Place plants arms without a species: the card carries a compact chooser (the plant finder with Stratum and Form, over the species in this Design, then Favorites, then recent picks, and "Open the full catalog"). A click with no species places nothing and focuses the chooser.
 - Place plants previews under the pointer: the symbol at 85% opacity, a dashed ring for the catalog's maximum mature width (none when the catalog has none) and a dashed line to the nearest plant within 320 px.
 - Plant a row: click a placed plant, drag along the row; the Interval field (focused once picked; Enter keeps it, Esc drops the plant) and the live count (ochre when dense, red with "Increase interval or shorten the line" above the limit); Shift keeps 45°.

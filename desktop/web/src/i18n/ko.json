@@ -767,6 +767,8 @@
       "escStopPlacing": "Esc로 배치 중지",
       "escCancel": "Esc로 취소",
       "escSelect": "Esc로 선택 도구로 돌아가기",
+      "selectHint": "드래그로 선택 · Shift-클릭으로 추가 · Space + 드래그 또는 H로 이동 · 휠로 확대/축소",
+      "selectHintPan": "드래그로 선택 · Shift-클릭으로 추가 · Space + 드래그 또는 H로 이동 · 핀치로 확대/축소",
       "stampPick": "복사할 식물, 구역, 메모 또는 그룹을 클릭하세요",
       "stampPlace": "클릭해 배치",
       "stampZone": "구역",

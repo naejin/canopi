@@ -767,6 +767,8 @@
       "escStopPlacing": "Échap pour arrêter de placer",
       "escCancel": "Échap pour annuler",
       "escSelect": "Échap pour revenir à Sélection",
+      "selectHint": "Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · molette zoome",
+      "selectHintPan": "Glisser pour sélectionner · Maj-clic ajoute · Espace + glisser ou H déplace la carte · pincement zoome",
       "stampPick": "Cliquez sur une plante, une zone, une note ou un groupe pour le copier",
       "stampPlace": "cliquez pour placer",
       "stampZone": "Zone",
