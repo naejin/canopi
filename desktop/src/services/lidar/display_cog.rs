@@ -37,8 +37,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Versioned display profile; part of every derivative key.
 pub(super) const DISPLAY_PROFILE: &str = "display-cog-deflate256-v1";
-/// Largest side of a composed part, in 1024-cell chunks.
-const PART_CHUNKS: i64 = 8;
+/// Largest side of a composed part, in 1024-cell chunks: a part is composed
+/// in memory and converted whole, so 4×4 chunks keep it inside the engine's
+/// capacity limit (`import::MAX_RAW_EXTRACTION_CELLS`).
+const PART_CHUNKS: i64 = 4;
 /// Invalid cells in a composed part: -2^127, exactly representable in Float32
 /// and Float64 and written with a round-trip decimal, so every reader that
 /// compares samples with the tag in either precision sees the same value. No
@@ -733,7 +735,7 @@ mod tests {
         // Two adjacent chunks and one 200 chunks away.
         let parts = grouped_parts("gen-1", &reader, vec![(0, 0), (1, 0), (200, 3)]);
         let keys: Vec<&str> = parts.iter().map(|part| part.key.as_str()).collect();
-        assert_eq!(keys, ["gen-1-0_0", "gen-1-25_0"]);
+        assert_eq!(keys, ["gen-1-0_0", "gen-1-50_0"]);
         let PartSource::Windows { chunks, .. } = &parts[1].source else {
             panic!("composed part")
         };

@@ -17,6 +17,7 @@ mod display_cog;
 #[cfg(test)]
 mod e2e;
 pub mod engine;
+#[cfg(test)]
 mod gdal_engine;
 mod generation;
 mod geolibre;
@@ -31,6 +32,7 @@ pub mod presentation;
 mod process;
 mod raster_assets;
 pub(crate) mod recovery;
+pub(crate) mod rust_engine;
 pub(crate) mod source_meta;
 
 use catalogue::{new_id, now_iso};
@@ -334,7 +336,7 @@ impl LidarLibrary {
                 catalogue: Mutex::new(catalogue),
                 status,
                 display_cache: Mutex::new(display_cache),
-                engine: Box::new(gdal_engine::GdalEngine::in_dir(engine_logs.clone())),
+                engine: Box::new(rust_engine::RustRasterEngine),
                 geolibre: geolibre::GeolibreEngine::in_dir(engine_logs),
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),

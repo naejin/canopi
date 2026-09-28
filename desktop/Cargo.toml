@@ -34,9 +34,13 @@ sha2 = "0.10"
 ureq = "3"
 sys-locale = "0.3"
 tauri-plugin-mcp-bridge = { version = "=0.13.0", optional = true }
-# Native tiled GeoTIFF/COG reader selected by GeoLibre (ADR 0002). Reached only
-# through the private bounded reader in `services/lidar/prepared_raster.rs`.
+# The pure-Rust raster engine (ADR 0014): GeoTIFF/COG primitives selected by
+# GeoLibre (ADR 0002), map projections and the other raster formats. Reached
+# only through `services/lidar/rust_engine/` and the bounded reader in
+# `services/lidar/prepared_raster.rs`.
 wbgeotiff = { git = "https://github.com/opengeos/whitebox-wasm", rev = "9c0ff4fdf3513f27b89c78e294610c3b418b3a4f" }
+wbprojection = "0.3.3"
+wbraster = "0.2.1"
 
 [dev-dependencies]
 # Managed command state without a window/event loop in native boundary tests.
