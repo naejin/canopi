@@ -14,6 +14,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(600);
+/// `gdalinfo` reads headers only and finishes in seconds on any local file. A
+/// file on an unreachable share must not hold one of the two Local slots for
+/// the full conversion deadline; Import coverage runs up to 24 of these.
+const INFO_PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 /// GDAL's block cache for every engine process.
 ///
@@ -213,12 +217,13 @@ impl GdalEngine {
         cancel: Option<&AtomicBool>,
     ) -> Result<RunOutput, String> {
         let tools = self.discover()?;
+        let timeout = process_timeout(&program);
         let path = match program {
             GdalProgram::Info => tools.gdalinfo,
             GdalProgram::Translate => tools.gdal_translate,
             GdalProgram::Transform => tools.gdaltransform,
         };
-        self.run_once(&path, args, None, cancel, Some(DEFAULT_PROCESS_TIMEOUT))
+        self.run_once(&path, args, None, cancel, Some(timeout))
     }
 
     /// Run the controlled source-conversion call with no elapsed-time ceiling.
@@ -492,9 +497,27 @@ pub(super) fn which_on_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// The elapsed-time ceiling for one bounded tool run.
+fn process_timeout(program: &GdalProgram) -> Duration {
+    match program {
+        GdalProgram::Info => INFO_PROCESS_TIMEOUT,
+        GdalProgram::Translate | GdalProgram::Transform => DEFAULT_PROCESS_TIMEOUT,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_reads_have_a_short_deadline_and_conversions_keep_the_long_one() {
+        assert_eq!(process_timeout(&GdalProgram::Info), Duration::from_secs(60));
+        assert_eq!(
+            process_timeout(&GdalProgram::Translate),
+            DEFAULT_PROCESS_TIMEOUT
+        );
+        assert!(INFO_PROCESS_TIMEOUT < DEFAULT_PROCESS_TIMEOUT);
+    }
 
     /// A stalled bounded child is killed and reaped when its finite deadline
     /// expires, without waiting for the full production timeout.
