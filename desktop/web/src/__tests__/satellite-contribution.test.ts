@@ -243,7 +243,9 @@ describe('satellite contribution reconciliation', () => {
   })
 
   it('ignores a visibility change when there is no contribution', () => {
-    const { target } = recordingTarget()
-    expect(() => setSatelliteContributionVisibility(target, false)).not.toThrow()
+    const { target, order } = recordingTarget()
+    setSatelliteContributionVisibility(target, false)
+    setSatelliteContributionVisibility(target, true)
+    expect(order).toEqual([])
   })
 })

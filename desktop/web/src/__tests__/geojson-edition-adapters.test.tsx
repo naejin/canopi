@@ -133,7 +133,7 @@ describe('Desktop App Command Graph GeoJSON commands', () => {
     ])
   })
 
-  it('runs import through the native picker of the shared workflow', async () => {
+  it('opens the native picker of the shared workflow and imports nothing when it is cancelled', async () => {
     designSessionFixture.file = emptyDesign()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
     tauri.open.mockResolvedValue(null)

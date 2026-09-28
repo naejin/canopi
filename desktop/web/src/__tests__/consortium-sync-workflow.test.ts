@@ -153,10 +153,18 @@ describe('consortium-sync-workflow', () => {
     expect(currentDesign.value).toBe(snapshotAfterFirst)
   })
 
-  it('disposes cleanly without errors', () => {
+  it('stops deriving consortiums once disposed, and a second dispose is harmless', () => {
+    const session = mockSession([makePlant('Quercus robur')])
+    session.setSettled(false)
+    designSessionFixture.file = makeDesign()
+    mountQuerySurface(session)
+
     workflowRunner.install()
-    expect(() => workflowRunner.dispose()).not.toThrow()
-    // Double dispose is safe
-    expect(() => workflowRunner.dispose()).not.toThrow()
+    workflowRunner.dispose()
+    workflowRunner.dispose()
+
+    session.setSettled(true)
+    session.bumpSceneRevision()
+    expect(currentDesign.value!.consortiums).toEqual([])
   })
 })

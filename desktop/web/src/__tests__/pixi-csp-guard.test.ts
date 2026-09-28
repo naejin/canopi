@@ -18,13 +18,16 @@ function sourceFiles(directory: string): string[] {
 
 describe('Pixi under the production CSP', () => {
   it('loads the unsafe-eval shim before Pixi in every module that imports Pixi', () => {
-    const offenders = sourceFiles(SRC).filter((path) => {
-      const text = readFileSync(path, 'utf8')
-      const pixi = text.search(/from 'pixi\.js'/)
-      if (pixi < 0) return false
-      const shim = text.indexOf("import 'pixi.js/unsafe-eval'")
+    const importers = sourceFiles(SRC)
+      .map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
+      .filter(({ text }) => /from ['"]pixi\.js['"]/.test(text))
+    // The scan must have found the renderer modules, or the guard checks nothing.
+    expect(importers.map(({ path }) => path)).toContain('canvas/runtime/renderers/pixi-scene.ts')
+    const offenders = importers.filter(({ text }) => {
+      const pixi = text.search(/from ['"]pixi\.js['"]/)
+      const shim = text.search(/import ['"]pixi\.js\/unsafe-eval['"]/)
       return shim < 0 || shim > pixi
-    }).map((path) => relative(SRC, path))
+    }).map(({ path }) => path)
     expect(offenders).toEqual([])
   })
 })

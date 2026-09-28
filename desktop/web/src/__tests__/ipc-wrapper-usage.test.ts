@@ -23,17 +23,24 @@ function productionSources(dir: string): string[] {
 
 describe('IPC wrappers', () => {
   it('are each imported by production code outside their own module', () => {
-    const sources = productionSources(SRC).map((path) => ({ path, text: readFileSync(path, 'utf8') }))
+    // Identifiers per source, tokenised once, so the check stays linear in the tree size.
+    const sources = productionSources(SRC).map((path) => ({
+      path,
+      identifiers: new Set(readFileSync(path, 'utf8').match(/[A-Za-z_$][\w$]*/g) ?? []),
+    }))
+    const wrappers: string[] = []
     const unused: string[] = []
     for (const file of readdirSync(IPC).filter((name) => name.endsWith('.ts'))) {
       const modulePath = join(IPC, file)
       const text = readFileSync(modulePath, 'utf8')
-      for (const [, name] of text.matchAll(/^export (?:async )?function (\w+)/gm)) {
-        const used = sources.some((source) => source.path !== modulePath
-          && new RegExp(`\\b${name}\\b`).test(source.text))
+      for (const [, name] of text.matchAll(/^export (?:const|(?:async )?function) (\w+)/gm)) {
+        wrappers.push(name)
+        const used = sources.some((source) => source.path !== modulePath && source.identifiers.has(name))
         if (!used) unused.push(`${relative(SRC, modulePath)}: ${name}`)
       }
     }
+    // The wrapper modules must have been found, or the check proves nothing.
+    expect(wrappers.length).toBeGreaterThan(10)
     expect(unused).toEqual([])
   })
 })

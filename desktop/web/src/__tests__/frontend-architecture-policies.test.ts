@@ -2110,14 +2110,18 @@ describe('map error logging', () => {
     const { readdirSync } = await import('node:fs')
     const roots = ['../maplibre', '../app/canvas-map-surface']
     const offenders: string[] = []
+    let scanned = 0
     for (const root of roots) {
       const dir = new URL(`${root}/`, import.meta.url)
       for (const name of readdirSync(dir)) {
         if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name) || name === 'redact-credentials.ts') continue
+        scanned += 1
         const source = readFileSync(new URL(name, dir), 'utf8')
         if (/\bconsole\.(error|warn|log|info|debug)\b/.test(source)) offenders.push(`${root}/${name}`)
       }
     }
+    // The map modules must have been found, or the check proves nothing.
+    expect(scanned).toBeGreaterThan(10)
     expect(offenders).toEqual([])
   })
 })

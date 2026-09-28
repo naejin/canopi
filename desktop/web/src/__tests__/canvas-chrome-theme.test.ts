@@ -80,8 +80,10 @@ describe('canvas chrome fonts', () => {
   })
 
   it('keeps the Inter font out of every canvas and map drawing module', () => {
-    const offenders = ['src/canvas', 'src/maplibre']
-      .flatMap(listSourceFiles)
+    const files = ['src/canvas', 'src/maplibre'].flatMap(listSourceFiles)
+    // The scan must have found the drawing modules, or the check proves nothing.
+    expect(files.length).toBeGreaterThan(20)
+    const offenders = files
       .filter((path) => /(^|[^A-Za-z])Inter(?![A-Za-z])/.test(readFileSync(path, 'utf8')))
       .map((path) => relative('src', path))
     expect(offenders).toEqual([])
