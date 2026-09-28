@@ -26,6 +26,10 @@ export const VIEW_SNAPSHOT_SCENE_LAYER_ID = 'canopi-snapshot-scene'
 export const VIEW_SNAPSHOT_IDLE_RELEASE_MS = 30_000
 /** Largest snapshot side in device pixels: MapLibre's default canvas limit. */
 export const VIEW_SNAPSHOT_MAX_DEVICE_PIXELS = 4096
+/** How long the map may take to load, the scene layer to initialize or dispose; past it the capture fails and the map goes. */
+export const VIEW_SNAPSHOT_SETUP_TIMEOUT_MS = 15_000
+/** How long the encoder may take; a `toBlob` that never calls back must not hold the queue. */
+export const VIEW_SNAPSHOT_ENCODE_TIMEOUT_MS = 10_000
 
 export interface ViewSnapshotCamera {
   readonly lon: number
@@ -119,6 +123,8 @@ export interface ViewSnapshotMapOptions {
   readonly readFrame?: (canvas: HTMLCanvasElement) => ViewSnapshotFrame
   readonly document?: Document
   readonly idleReleaseMs?: number
+  readonly setupTimeoutMs?: number
+  readonly encodeTimeoutMs?: number
   /**
    * Keep the WebGL drawing buffer between frames. Only for measuring: the
    * capture reads inside the frame's task, so it does not need it.
@@ -176,6 +182,8 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
   const createSceneLayer = options.createSceneLayer ?? createSharedMapSceneLayer
   const readFrame = options.readFrame ?? readCanvasFrame
   const idleReleaseMs = options.idleReleaseMs ?? VIEW_SNAPSHOT_IDLE_RELEASE_MS
+  const setupTimeoutMs = options.setupTimeoutMs ?? VIEW_SNAPSHOT_SETUP_TIMEOUT_MS
+  const encodeTimeoutMs = options.encodeTimeoutMs ?? VIEW_SNAPSHOT_ENCODE_TIMEOUT_MS
   const now = options.now ?? (() => performance.now())
   let instance: SnapshotInstance | null = null
   /** A map still loading; dispose aborts it so its load wait cannot hang. */
@@ -199,14 +207,17 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     releaseTimer = setTimeout(() => {
       releaseTimer = null
       if (pending > 0) return
-      void releaseInstance()
+      // The release joins the capture queue: a capture arriving now, and
+      // dispose(), wait for the teardown instead of racing a new map with it.
+      const release = queue.then(() => (pending > 0 ? undefined : releaseInstance()))
+      queue = release.catch(() => undefined)
     }, idleReleaseMs)
   }
 
   async function releaseInstance(): Promise<void> {
     const current = instance
     instance = null
-    if (current) await teardownInstance(current)
+    if (current) await teardownInstance(current, setupTimeoutMs)
   }
 
   async function createInstance(request: ViewSnapshotRequest, pixelRatio: number): Promise<SnapshotInstance> {
@@ -285,7 +296,11 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     }
     creating = created
     try {
-      await waitForEvent(map, 'load', created.teardown.signal, request.signal)
+      await bounded(
+        waitForEvent(map, 'load', created.teardown.signal, request.signal),
+        setupTimeoutMs,
+        'The snapshot map did not load in time.',
+      )
       created.background = mountBackground({
         map: map as unknown as MapBackgroundMap,
         maplibre,
@@ -300,12 +315,12 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
         onFailure: (error) => { created.broken = error },
       })
       created.sceneLayer = sceneLayer
-      await sceneLayer.initialize(map, context)
+      await bounded(sceneLayer.initialize(map, context), setupTimeoutMs, 'The snapshot scene did not initialize in time.')
       if (created.broken) throw created.broken
       map.addLayer(sceneLayer.layer as unknown as Record<string, unknown>)
       if (!map.getLayer(VIEW_SNAPSHOT_SCENE_LAYER_ID)) throw new Error('The snapshot map did not attach its scene layer.')
     } catch (error) {
-      await teardownInstance(created)
+      await teardownInstance(created, setupTimeoutMs)
       throw error
     } finally {
       creating = null
@@ -323,7 +338,7 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       const setupStartedAt = now()
       const created = await createInstance(request, pixelRatio)
       if (disposed) {
-        await teardownInstance(created)
+        await teardownInstance(created, setupTimeoutMs)
         throw new Error('The view snapshot map is disposed.')
       }
       instance = created
@@ -367,7 +382,11 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
     const attribution = readAttribution(current.container)
     const missingTiles = settled.timedOut || current.tileErrors > 0 || !background.isApplied()
     const encodeStartedAt = now()
-    const blob = await settled.frame.encode(request.type ?? 'image/png', request.quality)
+    const blob = await bounded(
+      settled.frame.encode(request.type ?? 'image/png', request.quality),
+      encodeTimeoutMs,
+      'The snapshot frame did not encode in time.',
+    )
     const encodeMs = now() - encodeStartedAt
     captures += 1
     return {
@@ -477,18 +496,21 @@ export function createViewSnapshotMap(options: ViewSnapshotMapOptions = {}): Vie
       instance = null
       if (current) {
         current.teardown.abort()
-        await teardownInstance(current)
+        await teardownInstance(current, setupTimeoutMs)
       }
       await queue
     },
   }
 }
 
-async function teardownInstance(instance: SnapshotInstance): Promise<void> {
+async function teardownInstance(instance: SnapshotInstance, timeoutMs: number): Promise<void> {
   if (!instance.teardown.signal.aborted) instance.teardown.abort()
   const errors: unknown[] = []
   try {
-    await instance.sceneLayer?.dispose({ mapWillBeRemoved: true })
+    // A scene layer whose initialization hung never finishes disposing; the map goes anyway.
+    if (instance.sceneLayer) {
+      await bounded(instance.sceneLayer.dispose({ mapWillBeRemoved: true }), timeoutMs, 'The snapshot scene did not dispose in time.')
+    }
   } catch (error) {
     errors.push(error)
   }
@@ -527,6 +549,15 @@ function validateRequest(request: ViewSnapshotRequest): string | null {
 
 function clampZoom(zoom: number): number {
   return Math.min(WORKSPACE_MAP_MAX_ZOOM, Math.max(WORKSPACE_MAP_MIN_ZOOM, zoom))
+}
+
+/** `work`, or a rejection with `message` after `timeoutMs`; the timer never outlives the work. */
+function bounded<T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+  return Promise.race([work, expired]).finally(() => clearTimeout(timer))
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

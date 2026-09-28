@@ -339,6 +339,81 @@ describe('view snapshot map', () => {
     await owner.dispose()
   })
 
+  it('waits for a release in progress before the next capture or dispose, instead of racing a new map with it', async () => {
+    vi.useFakeTimers()
+    let finishDisposal!: () => void
+    const disposal = new Promise<void>((resolve) => { finishDisposal = resolve })
+    const owner = createOwner({
+      idleReleaseMs: 1_000,
+      createSceneLayer: (options) => Object.assign(createFakeLayer(options), { dispose: vi.fn(async () => { await disposal }) }),
+    })
+    await owner.capture(request())
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(owner.diagnostics.live).toBe(false)
+    expect(FakeMap.instances[0]!.removed).toBe(false)
+
+    const next = owner.capture(request())
+    let disposed = false
+    const disposing = owner.dispose().then(() => { disposed = true })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(FakeMap.instances).toHaveLength(1)
+    expect(disposed).toBe(false)
+
+    finishDisposal()
+    await vi.advanceTimersByTimeAsync(10)
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    await expect(next).rejects.toThrow('disposed')
+    await disposing
+    expect(FakeMap.instances).toHaveLength(1)
+  })
+
+  it('fails a capture whose map never loads once the setup bound passes, and removes that map', async () => {
+    vi.useFakeTimers()
+    FakeMap.autoLoad = false
+    const owner = createOwner({ setupTimeoutMs: 1_000 })
+    const pending = owner.capture(request())
+    await vi.advanceTimersByTimeAsync(999)
+    expect(FakeMap.instances[0]!.removed).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(pending).rejects.toThrow('did not load in time')
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(FakeMap.instances[0]!.options.container.isConnected).toBe(false)
+    expect(owner.diagnostics.live).toBe(false)
+    await owner.dispose()
+  })
+
+  it('fails a capture whose scene layer never initializes, and removes the map even when that layer never disposes', async () => {
+    vi.useFakeTimers()
+    const owner = createOwner({
+      setupTimeoutMs: 1_000,
+      createSceneLayer: (options) => Object.assign(createFakeLayer(options), {
+        initialize: vi.fn(() => new Promise<void>(() => {})),
+        dispose: vi.fn(() => new Promise<void>(() => {})),
+      }),
+    })
+    const pending = owner.capture(request())
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(pending).rejects.toThrow('did not initialize in time')
+    expect(FakeMap.instances[0]!.removed).toBe(true)
+    expect(owner.diagnostics.live).toBe(false)
+    await owner.dispose()
+  })
+
+  it('fails a capture whose encoder never answers once the encode bound passes, and keeps the map', async () => {
+    vi.useFakeTimers()
+    const owner = createOwner({
+      encodeTimeoutMs: 1_000,
+      readFrame: (canvas) => ({ width: canvas.width, height: canvas.height, encode: () => new Promise<Blob>(() => {}) }),
+    })
+    const pending = owner.capture(request())
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(pending).rejects.toThrow('did not encode in time')
+    expect(owner.diagnostics.live).toBe(true)
+    expect(FakeMap.instances[0]!.removed).toBe(false)
+    await owner.dispose()
+  })
+
   it('fails a capture on context loss and starts the next one on a new map', async () => {
     FakeMap.autoIdle = false
     const owner = createOwner()
