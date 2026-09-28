@@ -491,6 +491,7 @@ export function createBrowserDesignSessionController({
         name: store.designName.value || design.name || "Untitled",
         saveStatus: continuousSave.status.value,
         saveFailureReason: continuousSave.failureReason.value,
+        upgradedFormatWritten: continuousSave.upgradedFormatWritten.value,
       };
     },
     newDesign,

@@ -19,6 +19,11 @@ interface SaveStatusLabelProps {
   readonly draftAction: SaveStatusAction & { readonly style: 'button' | 'link' }
   /** Keeps the work somewhere else when writing failed. */
   readonly saveElsewhere: SaveStatusAction
+  /**
+   * The session opened an older-format file and has now written it in the
+   * current format (ADR 0013); the first Saved after that says so, once.
+   */
+  readonly upgradedFormatWritten?: boolean
   onRetry(): void
   onResolveConflict?(): void
 }
@@ -33,13 +38,17 @@ export function SaveStatusLabel({
   draftLabel,
   draftAction,
   saveElsewhere,
+  upgradedFormatWritten = false,
   onRetry,
   onResolveConflict,
 }: SaveStatusLabelProps) {
+  const upgradeNotice = useUpgradeNotice(status, upgradedFormatWritten)
   return (
     <span className={styles.status} data-save-status={status}>
       {status === 'saved' && (
-        <span className={styles.text} role="status"><ControlIcon name="check" />{t('saveStatus.saved')}</span>
+        <span className={styles.text} role="status">
+          <ControlIcon name="check" />{t(upgradeNotice ? 'saveStatus.savedUpgraded' : 'saveStatus.saved')}
+        </span>
       )}
       {status === 'saving' && (
         <span className={styles.text} role="status">
@@ -76,6 +85,27 @@ export function SaveStatusLabel({
       )}
     </span>
   )
+}
+
+/**
+ * "Saved as Canopi 2 format" for the first Saved after the upgrade write; the
+ * next save cycle (or a new session) returns to the plain Saved.
+ */
+function useUpgradeNotice(status: DesignSaveStatus, upgradedFormatWritten: boolean): boolean {
+  const shown = useRef(false)
+  const consumed = useRef(false)
+  if (!upgradedFormatWritten) {
+    shown.current = false
+    consumed.current = false
+    return false
+  }
+  if (status !== 'saved') {
+    if (shown.current) consumed.current = true
+    return false
+  }
+  if (consumed.current) return false
+  shown.current = true
+  return true
 }
 
 function SaveFailureDetails({ reason, onRetry, saveElsewhere }: {

@@ -102,6 +102,7 @@ export function BrowserAppShell({
             <SaveStatusLabel
               status={designIdentity.saveStatus}
               failureReason={designIdentity.saveFailureReason}
+              upgradedFormatWritten={designIdentity.upgradedFormatWritten}
               draftLabel={t("webShell.savedInBrowser")}
               draftAction={{ ...downloadAction, style: "link" }}
               saveElsewhere={downloadAction}
