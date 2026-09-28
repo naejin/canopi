@@ -562,6 +562,53 @@ describe('createPixiScenePresentation', () => {
     renderer.dispose()
   })
 
+  it('parses short and eight-digit hex zone fills like the CSS ghosts do', async () => {
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ fill: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = mountPresentation(document.createElement('div'))
+    const zone = (id: string, fillColor: string, x: number) => ({
+      kind: 'zone' as const, id, name: id, zoneType: 'rect' as const, locked: false, rotationDeg: 0,
+      points: [{ x, y: 0 }, { x: x + 10, y: 0 }, { x: x + 10, y: 10 }, { x, y: 10 }], fillColor, notes: null,
+    })
+    renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
+      zones: [zone('short', '#0a0', 0), zone('long-alpha', '#00aa0080', 20)],
+      layers: [{ kind: 'layer', name: 'zones', visible: true, locked: false, opacity: 1 }],
+    } }))
+    const fills = pixi.__pixiMockState.graphics.flatMap((graphics) => graphics.fill.mock.calls.map(([fill]) => fill))
+    expect(fills[0]).toMatchObject({ color: 0x00aa00 })
+    expect(fills[1]).toMatchObject({ color: 0x00aa00 })
+    expect(fills[1].alpha / fills[0].alpha).toBeCloseTo(128 / 255)
+    renderer.dispose()
+  })
+
+  it('releases the previous Design\'s objects on a Design switch even while their layers are hidden', async () => {
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphics: Array<{ destroy: ReturnType<typeof vi.fn> }>; texts: Array<{ destroy: ReturnType<typeof vi.fn> }> }
+    }
+    const renderer = mountPresentation(document.createElement('div'))
+    const visible = (name: string, visible: boolean) => ({ kind: 'layer' as const, name, visible, locked: false, opacity: 1 })
+    renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
+      plants: [createPlant({ id: 'old-plant' })],
+      zones: [{ kind: 'zone', id: 'old-zone', name: 'old', zoneType: 'rect', locked: false, rotationDeg: 0,
+        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }], fillColor: null, notes: null }],
+      annotations: [{ kind: 'annotation', id: 'old-note', annotationType: 'text', locked: false, position: { x: 5, y: 5 }, text: 'Gate', fontSize: 14, rotationDeg: null }],
+      measurementGuides: [{ kind: 'measurement-guide', id: 'old-guide', locked: false, start: { x: 0, y: 0 }, end: { x: 10, y: 10 } }],
+      layers: ['plants', 'zones', 'annotations', 'measurement-guides'].map((name) => visible(name, true)),
+    } }))
+    const before = { graphics: [...pixi.__pixiMockState.graphics], texts: [...pixi.__pixiMockState.texts] }
+    expect(before.graphics.length + before.texts.length).toBeGreaterThan(3)
+
+    // The next Design has none of these objects and keeps every layer hidden.
+    renderer.renderScene(createTestSceneRendererSnapshot({ scene: {
+      layers: ['plants', 'zones', 'annotations', 'measurement-guides'].map((name) => visible(name, false)),
+    } }))
+
+    for (const graphics of before.graphics) expect(graphics.destroy).toHaveBeenCalled()
+    for (const text of before.texts) expect(text.destroy).toHaveBeenCalled()
+    renderer.dispose()
+  })
+
   it('draws plant symbol glyphs at readable zoom and collapses them to dots at low zoom', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: {
@@ -678,6 +725,7 @@ describe('createPixiScenePresentation', () => {
         texts: Array<{
           text: string
           rotation: number
+          style: unknown
           position: { set: ReturnType<typeof vi.fn> }
         }>
       }
@@ -720,6 +768,11 @@ describe('createPixiScenePresentation', () => {
     expect(labelPositionCall?.[0]).toBeCloseTo(expectedLabelPoint.x)
     expect(labelPositionCall?.[1]).toBeCloseTo(expectedLabelPoint.y)
     expect(label?.rotation).toBeCloseTo(-Math.PI / 4)
+
+    // Selecting the guide changes its stroke, never the label's ink, which follows the map backdrop.
+    const backdropInk = (label?.style as { options: { fill: number } }).options.fill
+    renderer.renderScene({ ...snapshot, selectedMeasurementGuideIds: new Set(['guide-1']) })
+    expect((label?.style as { options: { fill: number } }).options.fill).toBe(backdropInk)
 
     vi.clearAllMocks()
     renderer.renderScene({
@@ -807,6 +860,7 @@ describe('createPixiScenePresentation', () => {
         texts: Array<{
           text: string
           rotation: number
+          style: unknown
           position: { set: ReturnType<typeof vi.fn> }
         }>
       }

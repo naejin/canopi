@@ -353,7 +353,14 @@ function syncMeasurementGuides(
   worldLayer.alpha = layer.opacity
   labelLayer.visible = layer.visible
   labelLayer.alpha = layer.opacity
-  if (!layer.visible) return
+  if (!layer.visible) {
+    if (reconcileRemoved) {
+      const keep = new Set(snapshot.scene.measurementGuides.map((guide) => guide.id))
+      destroyEntriesNotIn(graphicsById, keep)
+      destroyEntriesNotIn(labelById, keep)
+    }
+    return
+  }
 
   const nextIds = new Set<string>()
   for (const guide of snapshot.scene.measurementGuides) {
@@ -383,16 +390,11 @@ function syncMeasurementGuides(
       labelLayer.addChild(text)
     }
     text.text = presentation.text
-    const interactionState = resolveInteractionState(
-      snapshot.selectedMeasurementGuideIds.has(guide.id),
-      false,
-      hoverStateForTarget(snapshot, 'measurement-guide', guide.id),
-    )
-    const interactionVisual = interactionState ? getCanvasInteractionStrokeVisual(interactionState) : null
     setTextStyle(text, {
       fontFamily: CANVAS_CHROME_FONT_FAMILY,
       fontSize: MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX,
-      fill: toPixiColor(interactionVisual?.color ?? getAnnotationTextColor(), 0),
+      // Map text follows the backdrop; the guide's own stroke carries the interaction state.
+      fill: toPixiColor(getAnnotationTextColor(), 0),
       stroke: labelHaloStroke(MEASUREMENT_GUIDE_LABEL_FONT_SIZE_PX),
     })
     text.position.set(presentation.labelScreenPoint.x, presentation.labelScreenPoint.y)
@@ -545,7 +547,10 @@ function syncZones(
   const layer = getSceneLayerStyle(snapshot.scene, 'zones')
   world.visible = layer.visible
   world.alpha = layer.opacity
-  if (!layer.visible) return
+  if (!layer.visible) {
+    if (reconcileRemoved) destroyEntriesNotIn(zoneGraphicsById, new Set(snapshot.scene.zones.map((zone) => zone.id)))
+    return
+  }
 
   const nextZoneIds = new Set<string>()
   for (const zone of snapshot.scene.zones) {
@@ -742,7 +747,16 @@ function syncPlants(
   layers.setLayerOpacity(layer.opacity)
   overlay.visible = layer.visible
   overlay.alpha = layer.opacity
-  if (!layer.visible) return
+  if (!layer.visible) {
+    if (reconcileRemoved) {
+      const keep = new Set(snapshot.scene.plants.map((plant) => plant.id))
+      destroyEntriesNotIn(plantGraphicsById, keep, destroySharedPlantGraphics)
+      destroyEntriesNotIn(plantRingGraphicsById, keep)
+      destroyEntriesNotIn(plantBadgeGraphicsById, keep)
+      destroyEntriesNotIn(plantBadgeTextById, keep)
+    }
+    return
+  }
 
   // Keep display order stable even when a previously unseen Plant enters the view.
   const nextIds = new Set<string>()
@@ -885,6 +899,20 @@ function syncPlants(
 }
 
 /** Pixi does not detach a destroyed Graphics from an externally owned context. */
+/** Destroys every entry `keep` does not name; a Design switch behind a hidden layer must not retain the old objects. */
+function destroyEntriesNotIn<T extends { removeFromParent(): void; destroy(): void }>(
+  byId: Map<string, T>,
+  keep: ReadonlySet<string>,
+  destroy: (entry: T) => void = (entry) => entry.destroy(),
+): void {
+  for (const [id, entry] of byId) {
+    if (keep.has(id)) continue
+    entry.removeFromParent()
+    destroy(entry)
+    byId.delete(id)
+  }
+}
+
 function destroySharedPlantGraphics(graphics: Graphics): void {
   // Rebinding uses Pixi's public context setter to detach both listeners from
   // the shared cache entry. The temporary context is then destroyed with the
@@ -999,7 +1027,14 @@ function syncAnnotations(
   textLayer.alpha = layer.opacity
   highlightLayer.visible = layer.visible
   highlightLayer.alpha = layer.opacity
-  if (!layer.visible) return
+  if (!layer.visible) {
+    if (reconcileRemoved) {
+      const keep = new Set(snapshot.scene.annotations.map((annotation) => annotation.id))
+      destroyEntriesNotIn(annotationTextById, keep)
+      destroyEntriesNotIn(annotationHighlightById, keep)
+    }
+    return
+  }
 
   const nextIds = new Set<string>()
   for (const annotation of snapshot.scene.annotations) {
@@ -1199,7 +1234,8 @@ function syncPinnedPlantNameLabels(
 
 function cssColorAlpha(color: string): number {
   const channels = color.match(/^rgba\(([^)]+)\)$/i)?.[1]?.split(',')
-  return channels?.length === 4 ? Number.parseFloat(channels[3]!) : 1
+  if (channels?.length === 4) return Number.parseFloat(channels[3]!)
+  return parseHexColor(color)?.alpha ?? 1
 }
 
 function toPixiColor(color: string | null | undefined, fallback: string | number): number {
@@ -1221,9 +1257,20 @@ function toPixiColor(color: string | null | undefined, fallback: string | number
     }
   }
 
-  const normalized = color.replace('#', '')
-  const parsed = Number.parseInt(normalized, 16)
-  return Number.isFinite(parsed) ? parsed : value
+  const hex = parseHexColor(color)
+  return hex ? hex.rgb : value
+}
+
+// `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA`; anything else (named colours,
+// hsl()) is not a colour this renderer knows and keeps the fallback.
+function parseHexColor(color: string): { rgb: number; alpha: number } | null {
+  const match = color.trim().match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
+  if (!match) return null
+  let digits = match[1]!
+  if (digits.length <= 4) digits = [...digits].map((digit) => digit + digit).join('')
+  const rgb = Number.parseInt(digits.slice(0, 6), 16)
+  const alpha = digits.length === 8 ? Number.parseInt(digits.slice(6), 16) / 255 : 1
+  return { rgb, alpha }
 }
 
 /**
