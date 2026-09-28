@@ -741,7 +741,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mapa del diseño",
-      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección. Las flechas mueven la selección 10 cm, o 1 m con Mayús. F6 pasa a la zona siguiente: barra de título, herramientas, mapa, panel."
+      "description": "Pulsa la tecla de una herramienta para elegirla, como muestra la barra de herramientas. Mayús F10 abre el menú de la selección. Esc cancela, luego vuelve a Seleccionar y luego borra la selección. Las flechas mueven la selección 10 cm, o 1 m con Mayús; sin nada seleccionado desplazan el mapa, más lejos con Mayús. F6 pasa a la zona siguiente: barra de título, herramientas, mapa, panel."
     },
     "textNote": {
       "placeholder": "Escribe la nota"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Zona anterior",
     "nudge": "Mover la selección 10 cm",
     "nudgeLarge": "Mover la selección 1 m",
+    "pan": "Desplazar el mapa cuando no hay nada seleccionado",
+    "panLarge": "Desplazar el mapa más lejos cuando no hay nada seleccionado",
     "rotateStamp": "Girar 15° el sello que colocas",
     "arrowKeys": "Flechas",
     "singleKeysOn": "Los atajos de una tecla se pueden desactivar en Ajustes › Teclado.",

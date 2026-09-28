@@ -741,7 +741,7 @@
     "viewChip": "Visualização",
     "map": {
       "label": "Mapa do design",
-      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção. As setas movem a seleção 10 cm, ou 1 m com Shift. F6 passa para a área seguinte: barra de título, ferramentas, mapa, painel."
+      "description": "Pressione a tecla de uma ferramenta para escolhê-la, como mostra a barra de ferramentas. Shift F10 abre o menu da seleção. Esc cancela, depois volta a Selecionar e depois limpa a seleção. As setas movem a seleção 10 cm, ou 1 m com Shift; sem nada selecionado deslocam o mapa, mais longe com Shift. F6 passa para a área seguinte: barra de título, ferramentas, mapa, painel."
     },
     "textNote": {
       "placeholder": "Escreva a nota"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Área anterior",
     "nudge": "Mover a seleção 10 cm",
     "nudgeLarge": "Mover a seleção 1 m",
+    "pan": "Deslocar o mapa quando nada está selecionado",
+    "panLarge": "Deslocar o mapa mais longe quando nada está selecionado",
     "rotateStamp": "Girar 15° o carimbo que está posicionando",
     "arrowKeys": "Setas",
     "singleKeysOn": "Os atalhos de uma tecla podem ser desativados em Configurações › Teclado.",

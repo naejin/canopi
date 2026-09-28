@@ -741,7 +741,7 @@
     "viewChip": "Vista",
     "map": {
       "label": "Mappa del progetto",
-      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione. Le frecce spostano la selezione di 10 cm, o di 1 m con Maiusc. F6 passa all’area successiva: barra del titolo, strumenti, mappa, pannello."
+      "description": "Premi il tasto di uno strumento per sceglierlo, come mostra la barra degli strumenti. Maiusc F10 apre il menu della selezione. Esc annulla, poi torna a Seleziona, poi svuota la selezione. Le frecce spostano la selezione di 10 cm, o di 1 m con Maiusc; senza selezione spostano la mappa, più lontano con Maiusc. F6 passa all’area successiva: barra del titolo, strumenti, mappa, pannello."
     },
     "textNote": {
       "placeholder": "Scrivi la nota"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Area precedente",
     "nudge": "Sposta la selezione di 10 cm",
     "nudgeLarge": "Sposta la selezione di 1 m",
+    "pan": "Spostare la mappa quando non è selezionato nulla",
+    "panLarge": "Spostare la mappa più lontano quando non è selezionato nulla",
     "rotateStamp": "Ruota di 15° il timbro che stai posizionando",
     "arrowKeys": "Frecce",
     "singleKeysOn": "Le scorciatoie a un tasto si possono disattivare in Impostazioni › Tastiera.",

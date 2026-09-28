@@ -741,7 +741,7 @@
     "viewChip": "View",
     "map": {
       "label": "Design map",
-      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm, or 1 m with Shift. F6 moves to the next area: title bar, tools, map, panel."
+      "description": "Press a tool's key to choose it, as the tool rail shows. Shift F10 opens the menu for the selection. Esc cancels, then returns to Select, then clears the selection. Arrow keys move the selection 10 cm, or 1 m with Shift; with nothing selected they pan the map, farther with Shift. F6 moves to the next area: title bar, tools, map, panel."
     },
     "textNote": {
       "placeholder": "Type the note"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Previous area",
     "nudge": "Nudge the selection 10 cm",
     "nudgeLarge": "Nudge the selection 1 m",
+    "pan": "Pan the map when nothing is selected",
+    "panLarge": "Pan the map farther when nothing is selected",
     "rotateStamp": "Turn the stamp you are placing by 15°",
     "arrowKeys": "Arrow keys",
     "singleKeysOn": "Single-key shortcuts can be turned off in Settings › Keyboard.",

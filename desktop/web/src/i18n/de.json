@@ -741,7 +741,7 @@
     "viewChip": "Ansicht",
     "map": {
       "label": "Designkarte",
-      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl um 10 cm, mit Umschalt um 1 m. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
+      "description": "Drücken Sie die Taste eines Werkzeugs, um es zu wählen, wie die Werkzeugleiste zeigt. Umschalt F10 öffnet das Menü der Auswahl. Esc bricht ab, kehrt dann zu Auswählen zurück und hebt dann die Auswahl auf. Die Pfeiltasten verschieben die Auswahl um 10 cm, mit Umschalt um 1 m; ohne Auswahl verschieben sie die Karte, mit Umschalt weiter. F6 wechselt zum nächsten Teil: Titelleiste, Werkzeuge, Karte, Bereich."
     },
     "textNote": {
       "placeholder": "Notiz eingeben"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Vorheriger Teil",
     "nudge": "Auswahl um 10 cm verschieben",
     "nudgeLarge": "Auswahl um 1 m verschieben",
+    "pan": "Karte verschieben, wenn nichts ausgewählt ist",
+    "panLarge": "Karte weiter verschieben, wenn nichts ausgewählt ist",
     "rotateStamp": "Den zu setzenden Stempel um 15° drehen",
     "arrowKeys": "Pfeiltasten",
     "singleKeysOn": "Kurzbefehle mit einer Taste lassen sich unter Einstellungen › Tastatur ausschalten.",

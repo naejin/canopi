@@ -741,7 +741,7 @@
     "viewChip": "Affichage",
     "map": {
       "label": "Carte du Design",
-      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection. Les flèches déplacent la sélection de 10 cm, ou de 1 m avec Maj. F6 passe à la zone suivante : barre de titre, outils, carte, panneau."
+      "description": "Appuyez sur la touche d’un outil pour le choisir, comme l’indique la barre d’outils. Maj F10 ouvre le menu de la sélection. Échap annule, puis revient à Sélection, puis vide la sélection. Les flèches déplacent la sélection de 10 cm, ou de 1 m avec Maj ; sans sélection, elles déplacent la carte, plus loin avec Maj. F6 passe à la zone suivante : barre de titre, outils, carte, panneau."
     },
     "textNote": {
       "placeholder": "Saisissez la note"
@@ -1740,6 +1740,8 @@
     "previousRegion": "Zone précédente",
     "nudge": "Déplacer la sélection de 10 cm",
     "nudgeLarge": "Déplacer la sélection de 1 m",
+    "pan": "Déplacer la carte quand rien n'est sélectionné",
+    "panLarge": "Déplacer la carte plus loin quand rien n'est sélectionné",
     "rotateStamp": "Faire pivoter de 15° le tampon en cours de placement",
     "arrowKeys": "Flèches",
     "singleKeysOn": "Les raccourcis à une touche peuvent être désactivés dans Réglages › Clavier.",
