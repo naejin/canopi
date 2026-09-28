@@ -57,7 +57,7 @@ describe('frontend problem-report diagnostics', () => {
     const [entry] = recentFrontendDiagnostics()
 
     expect(entry!.message).not.toContain('SECRET')
-    expect(entry!.message).toContain('?key=<redacted>&session=abc')
+    expect(entry!.message).toContain('?key=<redacted>&session=<redacted>')
     expect(entry!.message).toContain('api-key=<redacted>')
   })
 })
