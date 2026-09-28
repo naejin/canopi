@@ -61,7 +61,8 @@ export function readPlantDisplayOptions(design: Pick<CanopiFile, 'extra'> | null
     colorBy: PLANT_COLOR_MODES.includes(colorBy as PlantColorMode)
       ? colorBy as PlantColorMode
       : DEFAULT_PLANT_DISPLAY_OPTIONS.colorBy,
-    oneColor: normalizeHexColor(stored.one_color as string | null) ?? DEFAULT_PLANT_DISPLAY_OPTIONS.oneColor,
+    oneColor: (typeof stored.one_color === 'string' ? normalizeHexColor(stored.one_color) : null)
+      ?? DEFAULT_PLANT_DISPLAY_OPTIONS.oneColor,
     symbolScale: typeof stored.symbol_scale === 'number'
       ? clampPlantSymbolScale(stored.symbol_scale)
       : DEFAULT_PLANT_DISPLAY_OPTIONS.symbolScale,
