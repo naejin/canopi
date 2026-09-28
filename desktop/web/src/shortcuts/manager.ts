@@ -2,8 +2,6 @@ import { commandPaletteOpen, handleAppCommandKeyDown } from '../commands/registr
 import { isFindPlantsShortcut, runFindPlantsShortcut } from '../app/plant-finder/focus'
 import { runStoryUndoShortcut } from '../app/stories/actions'
 
-export { commandPaletteOpen } from '../commands/registry'
-
 // Module-level reference so HMR can remove the old handler before re-adding.
 let _keydownHandler: ((e: KeyboardEvent) => void) | null = null
 
