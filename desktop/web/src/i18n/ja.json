@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "日なた",
     "sunTolerance_semi_shade": "半日陰",
     "sunTolerance_full_shade": "日陰",
-    "andMore": "+{{count, number}} 件",
     "searchLabel": "植物カタログを検索",
     "details": "{{name}}の詳細",
     "addFavoriteNamed": "{{name}}をお気に入りに追加",
@@ -1129,7 +1128,6 @@
     "nitrogen": "窒素固定",
     "lifecycle": "ライフサイクル",
     "moreFilters": "その他のフィルター",
-    "clearAll": "すべてクリア",
     "activeFilters": "適用中のフィルター",
     "searchFields": "フィールド検索…",
     "done": "完了",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "GeoJSON をインポート…",
-    "export": "GeoJSON をエクスポート",
     "importTitle": "GeoJSON のインポート",
     "exportTitle": "GeoJSON のエクスポート",
     "importSummary": "植物 {{plants}} 件、ゾーン {{zones}} 件、注釈 {{annotations}} 件、計測ガイド {{guides}} 件をインポートしました。",

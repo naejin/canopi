@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "양지",
     "sunTolerance_semi_shade": "반음지",
     "sunTolerance_full_shade": "음지",
-    "andMore": "+{{count, number}}개 더",
     "searchLabel": "식물 카탈로그 검색",
     "details": "{{name}} 상세 정보",
     "addFavoriteNamed": "{{name}}을(를) 즐겨찾기에 추가",
@@ -1129,7 +1128,6 @@
     "nitrogen": "질소고정",
     "lifecycle": "생활주기",
     "moreFilters": "추가 필터",
-    "clearAll": "모두 지우기",
     "activeFilters": "활성 필터",
     "searchFields": "필드 검색…",
     "done": "완료",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "GeoJSON 가져오기…",
-    "export": "GeoJSON 내보내기",
     "importTitle": "GeoJSON 가져오기",
     "exportTitle": "GeoJSON 내보내기",
     "importSummary": "식물 {{plants}}개, 구역 {{zones}}개, 주석 {{annotations}}개, 측정 가이드 {{guides}}개를 가져왔습니다.",

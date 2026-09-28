@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "Volle zon",
     "sunTolerance_semi_shade": "Halfschaduw",
     "sunTolerance_full_shade": "Volle schaduw",
-    "andMore": "+{{count, number}} meer",
     "searchLabel": "Plantencatalogus doorzoeken",
     "details": "Details van {{name}}",
     "addFavoriteNamed": "{{name}} toevoegen aan favorieten",
@@ -1129,7 +1128,6 @@
     "nitrogen": "N₂-fixeerder",
     "lifecycle": "Levenscyclus",
     "moreFilters": "Meer filters",
-    "clearAll": "Alles wissen",
     "activeFilters": "Actieve filters",
     "searchFields": "Velden zoeken…",
     "done": "Klaar",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "GeoJSON importeren…",
-    "export": "GeoJSON exporteren",
     "importTitle": "GeoJSON-import",
     "exportTitle": "GeoJSON-export",
     "importSummary": "{{plants}} planten, {{zones}} zones, {{annotations}} notities en {{guides}} meethulplijnen geïmporteerd.",

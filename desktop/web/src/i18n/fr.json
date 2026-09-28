@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "Plein soleil",
     "sunTolerance_semi_shade": "Mi-ombre",
     "sunTolerance_full_shade": "Ombre complète",
-    "andMore": "+{{count, number}} de plus",
     "searchLabel": "Rechercher dans le catalogue des plantes",
     "details": "Détails de {{name}}",
     "addFavoriteNamed": "Ajouter {{name}} aux favoris",
@@ -1129,7 +1128,6 @@
     "nitrogen": "Fixateur N₂",
     "lifecycle": "Cycle de vie",
     "moreFilters": "Plus de filtres",
-    "clearAll": "Tout effacer",
     "activeFilters": "Filtres actifs",
     "searchFields": "Rechercher des champs…",
     "done": "Terminé",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "Importer du GeoJSON…",
-    "export": "Exporter en GeoJSON",
     "importTitle": "Import GeoJSON",
     "exportTitle": "Export GeoJSON",
     "importSummary": "{{plants}} plantes, {{zones}} zones, {{annotations}} annotations et {{guides}} guides de mesure importés.",

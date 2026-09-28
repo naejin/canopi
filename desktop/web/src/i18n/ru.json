@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "Полное солнце",
     "sunTolerance_semi_shade": "Полутень",
     "sunTolerance_full_shade": "Полная тень",
-    "andMore": "+{{count, number}} ещё",
     "searchLabel": "Поиск в каталоге растений",
     "details": "Подробнее: {{name}}",
     "addFavoriteNamed": "Добавить {{name}} в избранное",
@@ -1129,7 +1128,6 @@
     "nitrogen": "Фиксатор N₂",
     "lifecycle": "Жизненный цикл",
     "moreFilters": "Больше фильтров",
-    "clearAll": "Очистить все",
     "activeFilters": "Активные фильтры",
     "searchFields": "Поиск полей…",
     "done": "Готово",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "Импорт GeoJSON…",
-    "export": "Экспорт GeoJSON",
     "importTitle": "Импорт GeoJSON",
     "exportTitle": "Экспорт GeoJSON",
     "importSummary": "Импортировано: растения — {{plants}}, зоны — {{zones}}, заметки — {{annotations}}, измерительные линии — {{guides}}.",

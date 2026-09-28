@@ -69,7 +69,6 @@
     "sunTolerance_full_sun": "全日照",
     "sunTolerance_semi_shade": "半阴",
     "sunTolerance_full_shade": "全阴",
-    "andMore": "+{{count, number}} 个更多",
     "searchLabel": "搜索植物目录",
     "details": "{{name}}的详情",
     "addFavoriteNamed": "将{{name}}加入收藏",
@@ -1129,7 +1128,6 @@
     "nitrogen": "固氮",
     "lifecycle": "生命周期",
     "moreFilters": "更多筛选",
-    "clearAll": "全部清除",
     "activeFilters": "活动筛选",
     "searchFields": "搜索字段…",
     "done": "完成",
@@ -1479,7 +1477,6 @@
   },
   "geojson": {
     "import": "导入 GeoJSON…",
-    "export": "导出 GeoJSON",
     "importTitle": "GeoJSON 导入",
     "exportTitle": "GeoJSON 导出",
     "importSummary": "已导入 {{plants}} 株植物、{{zones}} 个区域、{{annotations}} 条注释和 {{guides}} 条测量参考线。",
