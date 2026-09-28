@@ -20,12 +20,12 @@ Optional checks: with the server running, `node check.js [Board ...]` screenshot
 | --- | --- |
 | `ds.py` | Tokens (light and dark), CSS, icons and component functions. Every board is built from these, so a fix here lands everywhere. |
 | `common.py` | Shared board pieces: the reference orchard, map backgrounds, chrome, tags, selection box, status chips. |
-| `boards_a.py`, `boards_b.py` | The boards, registered with `@board(name, w, h, title, group, ...)`. |
+| `boards_a.py`, `boards_b.py` | The boards, registered with `board(name, w, h, title, group, ...)` as a decorator or a call. |
 | `build.py` | Renders `out/<Board>.html`, `out/index.html`, `out/boards.json`; `ROWS` orders the index. |
 | `runtime.js` | Renders the page template: `{{ expr }}`, `<sc-if>`, `<sc-for>`, event handlers; `DCLogic` with `setState()` for interactive boards. |
 | `assets.py`, `overlay.py` | Generate every background at build time: a flat field, map paper, slope and wetness tints, synthetic streams and crowns, and the orchard's plants drawn with the symbol set. |
 | `orchard.json` | The reference Design: 117 species and 2,201 plant positions in board pixels (compact; `assets.orchard()` expands it). |
-| `symbols.py`, `defs-v3.svg.part` | The 29 plant symbols as SVG `<symbol>`s; `python3 symbols.py` regenerates the `.part`. The app's copies are the recipes in `desktop/web/src/canvas/runtime/plant-symbol-recipes.ts`. |
+| `symbols.py`, `defs-v3.svg.part` | The 29 plant symbols (the app adds four abstract marks) as SVG `<symbol>`s; `python3 symbols.py` regenerates the `.part`. The app's copies are the recipes in `desktop/web/src/canvas/runtime/plant-symbol-recipes.ts`. |
 | `labels_close.json` | Plant positions and codes for the NamesOnMap label-thinning board. |
 | `serve.py`, `check.js` | Local server and headless audit. |
 
@@ -33,7 +33,7 @@ Satellite tiles and the LiDAR rasters the boards were first drawn over are not i
 
 ## Add or change a board
 
-1. Write or edit the board function in `boards_a.py` or `boards_b.py` using `ds.py` components (`topbar`, `toolrail`, `panel`, `btn`, `finder`, `layer_row`, ...), real elements and ARIA semantics. Copy is US English from the app's `en` locale, numbers follow it (`2,201`, `€6,482.30`).
+1. Write or edit the board function in `boards_a.py` or `boards_b.py` using `ds.py` components (`topbar`, `toolrail`, `panel`, `btn`, `finder`, ...), real elements and ARIA semantics. Copy is US English from the app's `en` locale, numbers follow it (`2,201`, `€6,482.30`).
 2. Add a component or token to `ds.py` only when no existing one fits; then it is available to every board.
 3. Put the board in `ROWS` in `build.py` so the index shows it; render, open it, and run `check.js` on it.
 4. Update the pattern file that lists the board (`../patterns/*.md`), and the rule it changes, in the same change. A board is design only once the pattern says so.

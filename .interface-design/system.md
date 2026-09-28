@@ -61,7 +61,7 @@ Read this file, then the one pattern file for the surface you touch:
 
 ## Reuse before adding a pattern
 
-Shared building blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `DockPanelHeader`, `SurfaceSearch`, `SpeciesIdentity`, `ActionMenu`, `Dropdown`, `DatePicker`, `ButtonTooltip`, `SegmentedControl`, `Switch`, `Notice`, `Toast`, `EmptyState`, `ControlIcon`, `usePointerResize`, `usePointerReorder`, `PlantFinder`). They own presentation or an interaction lifecycle; callers keep domain actions.
+Shared blocks live in `desktop/web/src/components/shared/` (`SurfaceHeader`, `DockPanelHeader`, `SurfaceSearch`, `SpeciesIdentity`, `ActionMenu`, `Dropdown`, `DatePicker`, `ButtonTooltip`, `SegmentedControl`, `Switch`, `Notice`, `Toast`, `EmptyState`, `ControlIcon`, `usePointerResize`, `usePointerReorder`, `PlantFinder`). They own presentation or an interaction lifecycle; callers keep domain actions.
 
 ## Working method
 
@@ -71,4 +71,4 @@ Shared building blocks live in `desktop/web/src/components/shared/` (`SurfaceHea
 
 ## Executable reference
 
-Boards: `python3 .interface-design/boards/build.py`, then `serve.py`. Gallery: `cd desktop/web && npm run dev:ui`, `http://127.0.0.1:1422/`; `?surface=workspace` mounts the Desktop workspace (add `edition=web` for Web); direct surfaces take `state=empty|mixed|long|located|dense|overview|max-zoom|lidar-progress`, `theme=dark` or `locale=fr`. `npm run check:ui` type-checks the gallery.
+Boards: `python3 .interface-design/boards/build.py`, then `serve.py`. Gallery: `cd desktop/web && npm run dev:ui`, `http://127.0.0.1:1422/`; `?surface=workspace` mounts the Desktop workspace (add `edition=web` for Web); direct surfaces take `state=empty|mixed|long|located|dense|planting|zone|overview|max-zoom|lidar-progress`, `theme=dark` or `locale=fr`. `npm run check:ui` type-checks the gallery.

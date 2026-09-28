@@ -9,7 +9,7 @@ The words every locale uses for Canopi's core terms. A term keeps one translatio
 - English is sentence case; capitalise the first word, proper nouns and Canopi's product terms only. Design is always capitalised as the product term. A sentence that names a panel keeps its name as written ("Open in the Data library"). Enforced by `i18n-copy.test.ts`.
 - Placeholders fit their field in every locale: 34 units in a dock search field, 26 in the title-bar place field, CJK and Hangul characters counting 2. Enforced by `i18n-copy.test.ts`.
 - Buttons that open a picker or dialog end with one ellipsis character ("Import stamps…"); import and export buttons name what they move (advice).
-- Species names come from the catalog as they are. A species with no name in the interface language shows its English name with the localized mark (`speciesName.englishMark`) and an accessible explanation (advice; the rendering is in `SpeciesCommonName`).
+- Species names come from the catalog as they are. A species with no name in the interface language shows its English name with the localized mark (`speciesName.englishMark`) and an accessible explanation (advice; the rendering is in `components/shared/SpeciesIdentity.tsx`).
 - One form of address per locale, never mixed: fr *vous*, de *Sie*, ru *вы*, es *tú*, it *tu*, nl *je*, pt (Brazilian) *você* (advice).
 - The tables below are the authority when a locale disagrees with itself. Only the French stamp term (*tampon*, never *planche*) has a test (`i18n-completeness.test.ts`); the rest is reviewed by hand, so check new keys against the table (advice).
 
