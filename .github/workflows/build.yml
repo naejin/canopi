@@ -158,21 +158,11 @@ jobs:
           sudo apt-get install -y gdal-bin
           gdalinfo --version
 
-      - name: Cache the pinned GeoLibre CLI
-        id: geolibre-cache
-        uses: actions/cache@v4
-        with:
-          path: desktop/binaries
-          key: geolibre-cli-${{ runner.os }}-${{ hashFiles('scripts/build-geolibre-cli.sh') }}
-
-      - name: Build the pinned GeoLibre CLI
-        if: steps.geolibre-cache.outputs.cache-hit != 'true'
-        run: scripts/build-geolibre-cli.sh
+      - uses: ./.github/actions/build-geolibre-cli
 
       - name: LiDAR native lanes
         run: |
           export CANOPI_GEOLIBRE_BIN="$PWD/desktop/binaries/geolibre-$(rustc -vV | sed -n 's/^host: //p')"
-          "$CANOPI_GEOLIBRE_BIN" version
           cargo test -p canopi-desktop --lib --locked services::lidar -- --ignored --test-threads=1 --skip e2e_
 
   build:
@@ -251,8 +241,16 @@ jobs:
           --profile prepared
           desktop/resources/canopi-core.db
 
+      # The sidecar must exist before `tauri build`: build.rs bundles it only
+      # when desktop/binaries holds it for the target (the runner's host).
+      - uses: ./.github/actions/build-geolibre-cli
+
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
+
+      - name: Packaged sidecar runs from the installed layout
+        shell: bash
+        run: scripts/smoke-bundled-sidecar.sh ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

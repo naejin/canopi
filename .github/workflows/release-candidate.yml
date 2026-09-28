@@ -278,8 +278,16 @@ jobs:
           fi
           echo "Bundled DB checksum matches preflight: $actual_db_sha256"
 
+      # The sidecar must exist before `tauri build`: build.rs bundles it only
+      # when desktop/binaries holds it for the target (the runner's host).
+      - uses: ./.github/actions/build-geolibre-cli
+
       - name: Build Tauri app
         run: npx --prefix desktop/web @tauri-apps/cli build --target ${{ matrix.target }} ${{ matrix.bundle_args }} -- --locked
+
+      - name: Packaged sidecar runs from the installed layout
+        shell: bash
+        run: scripts/smoke-bundled-sidecar.sh ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
