@@ -40,7 +40,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 ## Environment and commands
 
 - GDAL: `CANOPI_LIDAR_GDAL_BIN`, then `PATH` (`gdalinfo`, `gdal_translate`, `gdaltransform`; CI uses 3.8.4). Not bundled in release.
-- GeoLibre CLI: `CANOPI_GEOLIBRE_BIN`, beside the executable, then `PATH`; pinned by `GEOLIBRE_REVISION` in `geolibre.rs`; build with `scripts/build-geolibre-cli.sh`. Not bundled in release.
+- GeoLibre CLI: `CANOPI_GEOLIBRE_BIN`, beside the executable, then `PATH` (`geolibre.rs` tests); pinned by `GEOLIBRE_REVISION` in `geolibre.rs`, built by `scripts/build-geolibre-cli.sh` and bundled as a Tauri sidecar beside the executable ([native and release](native-and-release.md)).
 - Engine lane (CI job `lidar-native`): `CANOPI_GEOLIBRE_BIN=<path> CANOPI_SKIP_BUNDLED_DB=1 cargo test -p canopi-desktop --lib services::lidar -- --ignored --test-threads=1 --skip e2e_`.
 - Fixture lanes (local; no fixtures is not a pass): `CANOPI_LIDAR_E2E_FIXTURE=<IGN MNT GeoTIFF>`, `CANOPI_LIDAR_MNH_DIR=<IGN MNH tiles>`, then `cargo test -p canopi-desktop --lib -- --ignored --test-threads=1 --nocapture` for the `e2e_*` tests in `e2e.rs`.
 - Raster diagnostics: `localStorage['canopi.rasterDiagnostics']='1'`.
@@ -74,4 +74,3 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 ## Open decisions
 
 - canopi-fxil.20: bundle the GDAL CLI tools with release builds.
-- canopi-8shm.9: bundle the pinned GeoLibre CLI as a Tauri sidecar.

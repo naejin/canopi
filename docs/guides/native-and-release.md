@@ -22,7 +22,8 @@ Rules for the Rust/Tauri backend (execution policy, files, network, redaction, t
 - Redaction: `problem_report/redactions.rs` (mirrored by `app/problem-report/diagnostics.ts` and `maplibre/redact-credentials.ts`) replaces known folders and absolute paths, and `key=`, `api-key=`, `api_key=`, `apikey=` values, with `<redacted>` (`redactions::tests`, `problem-report-diagnostics.test.ts`, `frontend-architecture-policies.test.ts`). Executor labels are static; logs never carry paths, URLs, Design content or error payloads (advice).
 - Problem reports are Desktop-only, local-first, never uploaded; the bundle excludes Design contents, screenshots, raw paths, the Google key and personal libraries unless the off-by-default consent attaches the current Design (`services/problem_report` tests). Folder reveal admits only report, Drafts, Data library and Recent Designs folders (`folder_reveal` tests).
 - MCP bridge: `tauri-plugin-mcp-bridge` (=0.13.0) behind the opt-in `mcp-bridge` feature, for agent-driven `cargo tauri dev -f mcp-bridge` only. Only a debug build with the feature registers it (on `127.0.0.1`) and merges `withGlobalTauri: true` and the `mcp-bridge-dev` capability (`desktop/capabilities-dev/`); release builds never expose either (`global_tauri_api_and_bridge_capability_exist_only_for_the_debug_bridge`, `lib.rs`). Its WebSocket has no authentication or Origin check.
-- `desktop/THIRD_PARTY_NOTICES.md` names the raster dependency versions, the GeoLibre CLI and `whitebox-wasm` revisions, `wbspatialstats` (AGPL-3.0-or-later) and the Corresponding Source offer (`third-party-notices.test.ts`).
+- `desktop/THIRD_PARTY_NOTICES.md` names the raster dependency versions, the GeoLibre CLI and `whitebox-wasm` revisions, `wbspatialstats` (AGPL-3.0-or-later) and the Corresponding Source offer (`third-party-notices.test.ts`); `scripts/promote-release.sh` repeats the offer in every release body (`test_promote_release.py`).
+- The GeoLibre CLI is a Tauri sidecar (`bundle.externalBin` in `desktop/tauri.conf.json`): `scripts/build-geolibre-cli.sh` writes `desktop/binaries/geolibre-<triple>[.exe]` and `build.rs` bundles it exactly when that file exists, so lint, test and dev builds need no binary and a release build without it only warns. CI builds it before `tauri build` (`.github/actions/build-geolibre-cli`) and `scripts/smoke-bundled-sidecar.sh` runs the packaged `geolibre version` from each unpacked deb, AppImage, `.app` and NSIS installer.
 - Toolchain: `rust-toolchain.toml` pins the compiler and every `dtolnay/rust-toolchain` step matches it; CI builds `--locked`; `cargo cov` fails under the floors in `.cargo/config.toml`, raised and never lowered.
 
 ### Native operation executor
@@ -70,7 +71,7 @@ cd desktop/web && npm audit --omit=dev && npm audit     # before a release
 5. Promote: `scripts/promote-release.sh --run-id <run-id> --tag v<version> --title "Canopi <version>" [--artifact-dir <root>]` admits only a matching successful candidate, verifies every checksum and creates a draft with `docs/release-notes/v<version>.md` as its body, plus the six stable copies from `STABLE_PACKAGES` (`scripts/release_candidate_artifacts.py`, used by the website's download buttons) and `RELEASE-SHA256SUMS.txt` (`scripts/test_promote_release.py`).
 6. Publish: `gh release edit v<version> --draft=false --latest`. Never mark DB-only or prereleases as latest; never replace a published release.
 
-The release body must offer the Corresponding Source of the AGPL components it ships: Canopi's tagged source plus the `geolibre-rust` and `whitebox-wasm` revisions in `desktop/THIRD_PARTY_NOTICES.md` (advice; the notices file carries the offer, the release notes do not yet).
+The release body offers the Corresponding Source of the AGPL components it ships: Canopi's tagged source archive plus the `geolibre-rust` and `whitebox-wasm` revisions in `desktop/THIRD_PARTY_NOTICES.md` (`promote-release.sh`, `test_promote_release.py`); the user-facing release notes carry the same offer in their own words.
 
 ## Where to look
 
@@ -81,3 +82,4 @@ The release body must offer the Corresponding Source of the AGPL components it s
 | Problem reports | `desktop/src/services/problem_report/`, `services/folder_reveal.rs`, `app/problem-report/` | module tests, `problem-report-*.test.ts(x)` |
 | Tauri config and bridge | `desktop/tauri.conf.json`, `capabilities*/`, `build.rs`, `lib.rs` | `lib.rs` bridge test |
 | Release tooling | `scripts/promote-release.sh`, `release_candidate_artifacts.py`, `publish-db-release.sh`, `.github/workflows/` | `scripts/test_promote_release.py` |
+| Sidecar packaging | `desktop/build.rs`, `scripts/build-geolibre-cli.sh`, `smoke-bundled-sidecar.sh`, `.github/actions/build-geolibre-cli/` | `geolibre.rs` tests, CI smoke step |
