@@ -340,6 +340,7 @@ export class SceneRuntimeMutationController {
     const persisted = this._sceneStore.persisted
     const zone = persisted.zones.find((candidate) => candidate.id === zoneId)
     if (!zone || zone.locked || !isSceneLayerEditable(sceneLayerState(persisted).zones)) return false
+    if (getEffectivelyLockedGroupMemberKeys(persisted).has(sceneTargetKey({ kind: 'zone', id: zoneId }))) return false
     const nextName = zoneDisplayName({ name })
     if (zoneDisplayName(zone) === nextName) return false
     this._sceneEdits.run('rename-zone', (tx) => {

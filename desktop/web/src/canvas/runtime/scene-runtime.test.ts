@@ -886,6 +886,17 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('does not rename a zone inside a locked group', () => {
+    const file = makeFile()
+    file.groups = [{ id: 'group-1', name: null, locked: true, members: [{ kind: 'zone', id: 'zone-1' }] }]
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(file)
+    expect(runtime.commandSurface.sceneEdits.renameZone('zone-1', 'North bed')).toBe(false)
+    expect(runtime.querySurface.getSceneSnapshot().zones[0]!.name).toBeNull()
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    runtime.destroy()
+  })
+
   it('does not rename a locked zone or a zone on a locked layer', () => {
     const file = makeFile()
     for (const locked of [
