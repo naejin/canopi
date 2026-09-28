@@ -595,6 +595,7 @@ export class DesignSessionStateMachine {
           retainedReplacementRetry
             ? () => transitionIsCurrent() && designBaselineIsCurrent()
             : replacementIsCurrent,
+          request.source === "close" ? "close" : "replace",
         );
         if (decision === "cancel") {
           publishCompletionIfOwned(this.steadyStateFor(session));
@@ -842,6 +843,7 @@ export class DesignSessionStateMachine {
 
   private async flushBeforeReplacement(
     replacementIsCurrent: () => boolean,
+    purpose: "replace" | "close",
   ): Promise<ReplacementDecision> {
     if (!this.deps.store.hasCurrentDesign()) return "proceed";
     for (;;) {
@@ -849,7 +851,7 @@ export class DesignSessionStateMachine {
       if (!replacementIsCurrent()) return "cancel";
       const choice = await this.deps.requestSaveDecision({
         kind: "flush-failed",
-        purpose: "replace",
+        purpose,
         conflict: this.continuousSave.conflict.peek() !== null,
       });
       if (!replacementIsCurrent()) return "cancel";

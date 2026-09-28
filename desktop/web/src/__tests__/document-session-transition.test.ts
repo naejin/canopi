@@ -510,6 +510,124 @@ describe("continuous save homes", () => {
   });
 });
 
+describe("document session sequences", () => {
+  it("closes after a write in flight lands and writes nothing more for the closed Design", async () => {
+    const session = makeSession();
+    await machine.startAttachedDesignSession(session);
+    markDesignSessionDirtyForTest(store);
+    const pending = deferred<void>();
+    mocks.saveDesign.mockReturnValueOnce(pending.promise);
+
+    const saving = machine.saveCurrentDesign({ session });
+    await flushMicrotasks();
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(1);
+    expect(machine.getState()).toMatchObject({ status: "saving", operation: "save" });
+
+    const closing = machine.closeDesign({ session });
+    await flushMicrotasks();
+    // Close waits for the write; the Design is still open meanwhile.
+    expect(store.hasCurrentDesign()).toBe(true);
+
+    pending.resolve();
+    await expect(saving).resolves.toBe(true);
+    await expect(closing).resolves.toMatchObject({ status: "applied" });
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(1);
+    expect(mocks.requestSaveDecision).not.toHaveBeenCalled();
+    expect(store.hasCurrentDesign()).toBe(false);
+    expect(machine.continuousSave.sessionToken()).toBeNull();
+    expect(machine.getState()).toMatchObject({ attached: true, operation: null });
+  });
+
+  it("asks once with the Close wording when the write before Close fails, and closes after Retry succeeds", async () => {
+    const session = makeSession();
+    await machine.startAttachedDesignSession(session);
+    markDesignSessionDirtyForTest(store);
+    mocks.saveDesign.mockRejectedValueOnce(new Error("disk full"));
+    mocks.requestSaveDecision.mockResolvedValueOnce("retry");
+
+    await expect(machine.closeDesign({ session })).resolves.toMatchObject({ status: "applied" });
+
+    expect(mocks.requestSaveDecision).toHaveBeenCalledTimes(1);
+    expect(mocks.requestSaveDecision).toHaveBeenCalledWith({
+      kind: "flush-failed",
+      purpose: "close",
+      conflict: false,
+    });
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(2);
+    expect(store.hasCurrentDesign()).toBe(false);
+    expect(machine.continuousSave.status.peek()).toBe("saved");
+    expect(machine.getState()).toMatchObject({ attached: true, operation: null });
+  });
+
+  it("keeps the Design open, dirty and retryable when the write before Close fails and the user cancels", async () => {
+    const session = makeSession();
+    await machine.startAttachedDesignSession(session);
+    markDesignSessionDirtyForTest(store);
+    mocks.saveDesign.mockRejectedValueOnce(new Error("disk full"));
+    mocks.requestSaveDecision.mockResolvedValueOnce("cancel");
+
+    await expect(machine.closeDesign({ session })).resolves.toMatchObject({ status: "cancelled" });
+
+    expect(store.hasCurrentDesign()).toBe(true);
+    expect(store.isDesignDirty()).toBe(true);
+    expect(machine.continuousSave.status.peek()).toBe("error");
+    expect(machine.continuousSave.failureReason.peek()).toBe("disk full");
+    expect(machine.getState()).toMatchObject({ status: "attached-ready", operation: null });
+
+    // Save (Retry) writes and clears the failure.
+    await expect(machine.saveCurrentDesign({ session })).resolves.toBe(true);
+    expect(machine.continuousSave.status.peek()).toBe("saved");
+    expect(store.isDesignDirty()).toBe(false);
+  });
+
+  it("cancels Close when an edit lands while its write is in flight, keeping the edit", async () => {
+    const session = makeSession();
+    await machine.startAttachedDesignSession(session);
+    markDesignSessionDirtyForTest(store);
+    const pending = deferred<void>();
+    mocks.saveDesign.mockReturnValueOnce(pending.promise);
+
+    const closing = machine.closeDesign({ session });
+    await flushMicrotasks();
+    expect(mocks.saveDesign).toHaveBeenCalledTimes(1);
+    editDesignSessionForTest(store, (design) => ({ ...design, description: "Edited during the close write" }));
+    pending.resolve();
+
+    await expect(closing).resolves.toMatchObject({ status: "cancelled" });
+    expect(store.hasCurrentDesign()).toBe(true);
+    expect(store.readCurrentDesign()?.description).toBe("Edited during the close write");
+    expect(store.isDesignDirty()).toBe(true);
+    expect(machine.continuousSave.sessionToken()).not.toBeNull();
+    expect(machine.getState()).toMatchObject({ status: "attached-ready", operation: null });
+  });
+
+  it("keeps the Draft home and writes the Draft again after Save As is cancelled during a Draft write", async () => {
+    resetMachine({ path: null });
+    const session = makeSession();
+    await machine.startAttachedDesignSession(session);
+    markDesignSessionDirtyForTest(store);
+    const pending = deferred<void>();
+    mocks.saveDesignDraft.mockReturnValueOnce(pending.promise);
+    mocks.selectDesignSavePath.mockRejectedValueOnce("Dialog cancelled");
+
+    const flushing = machine.continuousSave.flush();
+    await flushMicrotasks();
+    expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(1);
+    // Save As supersedes the Draft write's settlement, then the user cancels the dialog.
+    await expect(machine.saveAsCurrentDesign({ session })).resolves.toBeNull();
+    pending.resolve();
+    await flushing;
+
+    expect(machine.continuousSave.readHome()).toEqual({ kind: "draft", id: "draft-current" });
+    expect(machine.getState()).toMatchObject({ status: "attached-ready", operation: null });
+    // The superseded write did not acknowledge the baseline; the next flush writes the Draft again.
+    await expect(machine.continuousSave.flush()).resolves.toBe(true);
+    expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(2);
+    expect(store.isDesignDirty()).toBe(false);
+    expect(machine.continuousSave.status.peek()).toBe("draft");
+  });
+});
+
 describe("document session transition", () => {
   it("writes a dirty Design, then applies an open-path replacement through the full post-load sequence", async () => {
     const session = makeSession();

@@ -260,9 +260,10 @@ describe('Desktop Close Design', () => {
 
     await expect(machine.closeDesign()).resolves.toMatchObject({ status: 'cancelled' })
 
+    // The dialog offers "Close without saving", not "Discard changes".
     expect(mocks.requestSaveDecision).toHaveBeenCalledWith({
       kind: 'flush-failed',
-      purpose: 'replace',
+      purpose: 'close',
       conflict: false,
     })
     expect(store.readCurrentDesign()?.description).toBe('unwritable')
