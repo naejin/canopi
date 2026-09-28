@@ -369,7 +369,7 @@ describe('Web Edition Species Catalog panel', () => {
     expect(row.draggable).toBe(true)
 
     await act(async () => {
-      dispatchDragStart(row, dataTransfer)
+      await dispatchDragStart(row, dataTransfer)
     })
 
     expect(dataTransfer.effectAllowed).toBe('copy')
@@ -434,13 +434,13 @@ describe('Web Edition Species Catalog panel', () => {
 
     const favoriteTransfer = fakeDataTransfer()
     await act(async () => {
-      dispatchDragStart(rows[0]!, favoriteTransfer)
+      await dispatchDragStart(rows[0]!, favoriteTransfer)
     })
     expect(readPlantStampDragData(favoriteTransfer)?.canonical_name).toBe('Prunus persica')
 
     const recentTransfer = fakeDataTransfer()
     await act(async () => {
-      dispatchDragStart(rows[1]!, recentTransfer)
+      await dispatchDragStart(rows[1]!, recentTransfer)
     })
     expect(readPlantStampDragData(recentTransfer)?.canonical_name).toBe('Melissa officinalis')
   })
@@ -766,10 +766,16 @@ function makeSpeciesListItem(
   }
 }
 
-function dispatchDragStart(element: HTMLElement, dataTransfer: FakeDataTransfer): void {
+async function dispatchDragStart(element: HTMLElement, dataTransfer: FakeDataTransfer): Promise<void> {
   const event = new Event('dragstart', { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
   element.dispatchEvent(event)
+  // The drag image is a body-level preview that the row removes on the next frame.
+  await vi.waitFor(() => expect(dragPreviews()).toHaveLength(0))
+}
+
+function dragPreviews(): Element[] {
+  return [...document.body.children].filter((element) => (element as HTMLElement).style.top === '-1000px')
 }
 
 interface FakeDataTransfer {

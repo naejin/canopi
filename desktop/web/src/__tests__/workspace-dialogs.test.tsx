@@ -197,7 +197,7 @@ describe('Workspace shell capabilities', () => {
     theme.value = 'light'
   })
 
-  it('switches the map background, theme, dialogs and rename through app state only', () => {
+  it('switches the map background, theme, dialogs and rename through app state only', async () => {
     const capabilities = createWorkspaceShellCapabilities()
 
     capabilities.showSatellite.execute()
@@ -226,6 +226,8 @@ describe('Workspace shell capabilities', () => {
     sidePanel.value = null
     capabilities.findPlants.execute()
     expect(sidePanel.value).toBe('plant-db')
+    // Find plants focuses the catalog's finder on the next frame; let that frame run here.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     sidePanel.value = null
   })
 })
