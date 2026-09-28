@@ -8,16 +8,15 @@ use rusqlite::{Connection, OptionalExtension};
 
 /// The only catalogue shape this binary reads (Canopi v2).
 ///
-/// There is no migration ladder: v2 does not read v1 libraries. The library
-/// owner deletes an older library before opening (see
-/// [`stored_version`]), and a newer catalogue is refused so an older binary
-/// never writes rows it does not understand.
+/// There is no migration ladder: an older or corrupt catalogue is set aside
+/// and rebuilt from the originals (`recovery.rs`, ADR 0013), and a newer one
+/// is refused so an older binary never writes rows it does not understand.
 pub const CATALOGUE_VERSION: i32 = 21;
 
 /// Open (or create) the catalogue at `path`.
 ///
-/// Fails when the file carries any other schema version: a caller that wants
-/// a fresh library must remove the old one first.
+/// Fails when the file carries any other schema version; `recovery::open_catalogue`
+/// is the caller that turns that into a rebuild or a refusal.
 pub fn open(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
         .map_err(|e| format!("Failed to open LiDAR catalogue {}: {e}", path.display()))?;
@@ -37,6 +36,32 @@ pub fn open(path: &std::path::Path) -> Result<Connection, String> {
         }
     }
     Ok(connection)
+}
+
+/// A fresh, empty catalogue that lives only in this process: what a library
+/// that cannot own its catalogue file runs on.
+pub fn open_in_memory() -> Result<Connection, String> {
+    let connection = Connection::open_in_memory()
+        .map_err(|e| format!("Failed to open an in-memory LiDAR catalogue: {e}"))?;
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .map_err(|e| format!("Failed to enable foreign keys: {e}"))?;
+    create_schema(&connection)?;
+    Ok(connection)
+}
+
+/// SQLite's bounded integrity check of an existing catalogue file.
+pub fn quick_check(path: &std::path::Path) -> Result<(), String> {
+    let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("Failed to open LiDAR catalogue {}: {e}", path.display()))?;
+    let verdict: String = connection
+        .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
+        .map_err(|e| format!("LiDAR catalogue integrity check failed: {e}"))?;
+    if verdict == "ok" {
+        Ok(())
+    } else {
+        Err(format!("LiDAR catalogue integrity check failed: {verdict}"))
+    }
 }
 
 /// Schema version recorded in an existing catalogue file, or `None` when the
@@ -78,7 +103,7 @@ fn schema_version(connection: &Connection) -> Result<Option<i32>, String> {
         .transpose()
 }
 
-fn create_schema(connection: &Connection) -> Result<(), String> {
+pub(crate) fn create_schema(connection: &Connection) -> Result<(), String> {
     let transaction = connection
         .unchecked_transaction()
         .map_err(|e| format!("Failed to start LiDAR catalogue creation: {e}"))?;

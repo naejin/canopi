@@ -84,6 +84,17 @@ impl LidarPaths {
         self.source_dir(sha256).join("original")
     }
 
+    /// The derived record beside an original that a catalogue rebuild reads
+    /// (`source_meta.rs`).
+    pub fn source_meta(&self, sha256: &str) -> PathBuf {
+        self.source_dir(sha256).join(super::source_meta::META_FILE)
+    }
+
+    /// Catalogues an older or corrupt library left behind, kept byte for byte.
+    pub fn set_aside_dir(&self) -> PathBuf {
+        self.root.join(super::recovery::SET_ASIDE_DIR)
+    }
+
     /// Holds only per-job analysis scratch directories.
     pub fn prepared_dir(&self) -> PathBuf {
         self.root.join("prepared")

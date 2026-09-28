@@ -30,6 +30,8 @@ pub mod presentation;
 pub mod probe;
 mod raster_assets;
 mod raster_info;
+pub(crate) mod recovery;
+pub(crate) mod source_meta;
 
 use catalogue::{new_id, now_iso};
 use common_types::library::{
@@ -58,6 +60,9 @@ pub struct LidarLibrary {
 pub(crate) struct LidarLibraryInner {
     pub(crate) paths: LidarPaths,
     catalogue: Mutex<Connection>,
+    /// How the catalogue opened; anything but `Ready` is a diagnostic, and a
+    /// refused library takes no mutation.
+    status: recovery::LibraryOpenStatus,
     display_cache: Mutex<Connection>,
     pub(crate) engine: GdalEngine,
     /// The pinned GeoLibre CLI sidecar every registered analysis runs on.
@@ -285,16 +290,49 @@ impl Drop for HeavyJobLease {
 }
 
 impl LidarLibrary {
+    /// Open the library under the app data directory.
+    ///
+    /// A bad catalogue never stops the app: an older or corrupt one is set
+    /// aside and rebuilt from the originals, a newer one is refused and the
+    /// library runs empty in memory (`recovery.rs`). Only the managed
+    /// directories failing to exist is an error.
     pub fn open(app_data_dir: &std::path::Path) -> Result<Self, String> {
-        discard_unsupported_library(&paths::library_root(app_data_dir))?;
         let paths = LidarPaths::open(app_data_dir)?;
-        let catalogue = catalogue::open(&paths.catalogue_path())?;
+        let recovery::OpenedCatalogue {
+            connection: catalogue,
+            status,
+        } = recovery::open_catalogue(&paths)?;
+        match &status {
+            recovery::LibraryOpenStatus::Ready => {}
+            recovery::LibraryOpenStatus::Recovered {
+                reason,
+                set_aside,
+                items,
+                generated,
+            } => tracing::warn!(
+                ?reason,
+                set_aside = %set_aside.display(),
+                items,
+                generated,
+                "LiDAR catalogue set aside and rebuilt from the originals"
+            ),
+            recovery::LibraryOpenStatus::RefusedNewer { found, supported } => tracing::warn!(
+                found,
+                supported,
+                "LiDAR catalogue written by a newer Canopi; the library is empty and read-only"
+            ),
+            recovery::LibraryOpenStatus::Unavailable { reason } => tracing::error!(
+                %reason,
+                "LiDAR catalogue could not be opened or rebuilt; the library is empty and read-only"
+            ),
+        }
         let display_cache = open_display_cache(&paths.display_cache_path())?;
         let engine_logs = paths.engine_log_dir();
         let library = Self {
             inner: Arc::new(LidarLibraryInner {
                 paths,
                 catalogue: Mutex::new(catalogue),
+                status,
                 display_cache: Mutex::new(display_cache),
                 engine: GdalEngine::in_dir(engine_logs.clone()),
                 geolibre: geolibre::GeolibreEngine::in_dir(engine_logs),
@@ -306,6 +344,11 @@ impl LidarLibrary {
                 display_preparation: Mutex::new(display_cog::DisplayPreparation::default()),
             }),
         };
+        // A library that does not own its catalogue file sweeps nothing: the
+        // files belong to the catalogue that was refused.
+        if library.inner.status.refusal().is_some() {
+            return Ok(library);
+        }
         // Recovery: interrupted jobs fail explicitly; published results and
         // immutable originals are unaffected.
         {
@@ -313,7 +356,33 @@ impl LidarLibrary {
             analyses::recover_interrupted_jobs(&connection)?;
         }
         library.prune_transient_artifacts()?;
+        library.refresh_source_meta();
         Ok(library)
+    }
+
+    /// How the catalogue opened at startup.
+    pub fn open_status(&self) -> &recovery::LibraryOpenStatus {
+        &self.inner.status
+    }
+
+    /// Refuse a mutation while the library does not own its catalogue file.
+    fn ensure_writable(&self) -> Result<(), String> {
+        match self.inner.status.refusal() {
+            Some(reason) => Err(reason),
+            None => Ok(()),
+        }
+    }
+
+    /// Rewrite every original's `meta.json` from the catalogue, best effort:
+    /// the catalogue stays the authority and a failed write is only logged.
+    /// Never called while a catalogue guard is held.
+    fn refresh_source_meta(&self) {
+        let result = self
+            .catalogue()
+            .and_then(|connection| source_meta::refresh(&connection, &self.inner.paths));
+        if let Err(error) = result {
+            tracing::warn!(%error, "failed to refresh LiDAR source meta files");
+        }
     }
 
     /// Attach the managed Native Operation Executor so queued calculations run
@@ -538,6 +607,7 @@ impl LidarLibrary {
         unit_label: Option<&str>,
         unit_unknown: bool,
     ) -> Result<String, String> {
+        self.ensure_writable()?;
         let name = name.trim();
         if name.is_empty() {
             return Err("Layer name must not be empty".to_string());
@@ -558,6 +628,7 @@ impl LidarLibrary {
     /// Rename one library item. The name is library metadata: values, inputs
     /// and identity are unchanged, and nothing becomes out of date.
     pub fn rename_item(&self, item_id: &str, name: &str) -> Result<(), String> {
+        self.ensure_writable()?;
         let name = name.trim();
         if name.is_empty() {
             return Err("Name must not be empty".to_string());
@@ -575,6 +646,8 @@ impl LidarLibrary {
         if changed == 0 {
             return Err(format!("Item {item_id} does not exist"));
         }
+        drop(connection);
+        self.refresh_source_meta();
         Ok(())
     }
 
@@ -597,6 +670,7 @@ impl LidarLibrary {
     /// there is no cascade. A derived item takes its generations with it, and
     /// its definition, runs and history go with the definition's last item.
     pub fn delete_item(&self, item_id: &str) -> Result<(), String> {
+        self.ensure_writable()?;
         let job_ids = {
             let connection = self.catalogue()?;
             refuse_dependents(&connection, item_id)?;
@@ -635,7 +709,10 @@ impl LidarLibrary {
         } else {
             delete_derived_rows(&transaction, item_id)?;
         }
-        transaction.commit().map_err(|e| e.to_string())
+        transaction.commit().map_err(|e| e.to_string())?;
+        drop(connection);
+        self.refresh_source_meta();
+        Ok(())
     }
 
     /// One bounded page of a definition's runs, newest first.
@@ -997,6 +1074,7 @@ impl LidarLibrary {
         unit_unknown: bool,
         paths: &[PathBuf],
     ) -> Result<(String, String), String> {
+        self.ensure_writable()?;
         if paths.is_empty() {
             return Err("no files were selected for import".to_string());
         }
@@ -1039,6 +1117,7 @@ impl LidarLibrary {
         &self,
         layer_id: &str,
     ) -> Result<(String, String, Vec<PathBuf>), String> {
+        self.ensure_writable()?;
         let connection = self.catalogue()?;
         catalogue::get_layer(&connection, layer_id)?
             .ok_or_else(|| format!("Layer {layer_id} does not exist"))?;
@@ -1083,6 +1162,7 @@ impl LidarLibrary {
     /// Only that operation's own metadata and scratch go; a published item is
     /// deleted through the library deletion guard instead.
     pub fn dismiss_import(&self, layer_id: &str) -> Result<(), String> {
+        self.ensure_writable()?;
         let job_ids: Vec<String> = {
             let connection = self.catalogue()?;
             if catalogue::head_generation(&connection, layer_id)?.is_some() {
@@ -1317,6 +1397,10 @@ impl LidarLibrary {
                          WHERE id = ?1",
                         [job_id],
                     );
+                    drop(connection);
+                    // The published item is now what the originals' meta
+                    // must describe.
+                    self.refresh_source_meta();
                 }
                 Err(error) => {
                     let (state, message) = if error == "cancelled" {
@@ -1423,11 +1507,13 @@ impl LidarLibrary {
     /// The request is validated against the registry and the inputs' stored
     /// facts; a missing GeoLibre engine refuses creation by name.
     pub fn create_analysis(&self, request: &AnalysisRequest) -> Result<AnalysisReceipt, String> {
+        self.ensure_writable()?;
         let engine = self.inner.geolibre.discover();
         let receipt = {
             let connection = self.catalogue()?;
             analyses::record_definition(&connection, request, Some(&engine))?
         };
+        self.refresh_source_meta();
         self.start_analysis(&receipt.job_id);
         Ok(receipt)
     }
@@ -1436,6 +1522,7 @@ impl LidarLibrary {
     /// Retry before a first result, Refresh after one. A refresh updates the
     /// definition's items in place; the earlier run stays in its history.
     pub fn rerun_analysis(&self, definition_id: &str) -> Result<AnalysisReceipt, String> {
+        self.ensure_writable()?;
         let engine = self.inner.geolibre.discover();
         let receipt = {
             let connection = self.catalogue()?;
@@ -2362,63 +2449,587 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// An older catalogue (here v20, before typed items and provenance) is not
-    /// migrated: opening deletes the library (catalogue, originals, assets and
-    /// derivatives) and starts an empty one.
+    // -- Catalogue recovery (ADR 0013) -------------------------------------
+
+    fn write_original(
+        lidar: &std::path::Path,
+        sha256: &str,
+        meta: Option<&source_meta::SourceMeta>,
+    ) {
+        let dir = lidar.join("sources").join(sha256);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("original"), format!("bytes of {sha256}")).unwrap();
+        if let Some(meta) = meta {
+            source_meta::write(&dir.join(source_meta::META_FILE), meta).unwrap();
+        }
+    }
+
+    fn single_item_meta(
+        sha256: &str,
+        item_id: &str,
+        name: &str,
+        quantity: &str,
+        units: &str,
+    ) -> source_meta::SourceMeta {
+        source_meta::SourceMeta {
+            version: source_meta::META_VERSION,
+            sha256: sha256.to_string(),
+            original_filename: format!("{name}.tif"),
+            size_bytes: 3,
+            imported_at: "10".to_string(),
+            items: vec![source_meta::ItemMeta {
+                id: item_id.to_string(),
+                name: name.to_string(),
+                quantity: quantity.to_string(),
+                units: units.to_string(),
+                created_at: item_id.to_string(),
+                members: vec![sha256.to_string()],
+                analyses: Vec::new(),
+            }],
+        }
+    }
+
+    fn write_catalogue_with_version(path: &std::path::Path, version: &str) {
+        let connection = Connection::open(path).unwrap();
+        connection
+            .execute_batch(&format!(
+                "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '{version}');
+                 CREATE TABLE lidar_source_layers (id TEXT PRIMARY KEY);"
+            ))
+            .unwrap();
+    }
+
+    fn set_aside_files(lidar: &std::path::Path) -> Vec<PathBuf> {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(lidar.join(recovery::SET_ASIDE_DIR))
+            .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
+            .unwrap_or_default();
+        files.sort();
+        files
+    }
+
+    fn saved_selection(library: &LidarLibrary, layer_id: &str) -> Vec<PathBuf> {
+        let request: String = library
+            .catalogue()
+            .unwrap()
+            .query_row(
+                "SELECT request_json FROM lidar_import_jobs WHERE layer_id = ?1",
+                [layer_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        parse_import_request(&request).unwrap()
+    }
+
+    /// An older catalogue is set aside byte for byte and rebuilt from the
+    /// originals' meta: both items come back named, typed and retryable over
+    /// their managed originals; the analysis defined over one comes back with
+    /// its result unpublished. A second open finds a current catalogue.
     #[test]
-    fn an_older_library_is_deleted_and_a_fresh_one_opens() {
+    fn an_older_catalogue_is_set_aside_and_rebuilt_from_the_originals() {
         let root = std::env::temp_dir().join(new_id("lidar-older-library"));
         let lidar = paths::library_root(&root);
-        std::fs::create_dir_all(lidar.join("sources/abc")).unwrap();
-        std::fs::write(lidar.join("sources/abc/original"), b"older original").unwrap();
-        {
-            let older = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
-            older
-                .execute_batch(
-                    "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                 INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '20');
-                 CREATE TABLE lidar_source_layers (id TEXT PRIMARY KEY);",
-                )
-                .unwrap();
+        std::fs::create_dir_all(&lidar).unwrap();
+        write_original(
+            &lidar,
+            "sha-1",
+            Some(&single_item_meta(
+                "sha-1",
+                "lyr-1",
+                "Orchard",
+                RasterQuantity::GroundElevation.key(),
+                "m",
+            )),
+        );
+        let mut second = single_item_meta(
+            "sha-2",
+            "lyr-2",
+            "Canopy",
+            RasterQuantity::OtherContinuous.key(),
+            "index",
+        );
+        second.items[0].analyses.push(source_meta::AnalysisMeta {
+            definition_id: "adef-1".into(),
+            analysis_id: "terrain.slope".into(),
+            parameters: serde_json::json!([{"key":"unit","value":{"Choice":"degrees"}}]),
+            outputs: serde_json::json!(["slope"]),
+            created_at: "11".into(),
+            inputs: vec![source_meta::AnalysisInputMeta {
+                input_key: "dem".into(),
+                item_id: "lyr-2".into(),
+            }],
+            items: vec![source_meta::DerivedItemMeta {
+                id: "item-slope".into(),
+                output_key: "slope".into(),
+                quantity: "slope".into(),
+                units: "°".into(),
+                name: Some("Steepness".into()),
+                created_at: "11".into(),
+            }],
+        });
+        write_original(&lidar, "sha-2", Some(&second));
+        let catalogue_path = lidar.join(paths::CATALOGUE_FILE);
+        write_catalogue_with_version(&catalogue_path, "20");
+        let older_bytes = std::fs::read(&catalogue_path).unwrap();
+
+        let library = LidarLibrary::open(&root).unwrap();
+        match library.open_status() {
+            recovery::LibraryOpenStatus::Recovered {
+                reason,
+                items,
+                generated,
+                ..
+            } => {
+                assert_eq!(*reason, recovery::RecoveryReason::OlderVersion(20));
+                assert_eq!((*items, *generated), (2, 0));
+            }
+            other => panic!("expected a recovered library, got {other:?}"),
         }
+        let set_aside = set_aside_files(&lidar);
+        assert_eq!(set_aside.len(), 1, "{set_aside:?}");
+        assert!(set_aside[0].extension().is_some_and(|ext| ext == "sqlite"));
+        assert_eq!(
+            std::fs::read(&set_aside[0]).unwrap(),
+            older_bytes,
+            "set aside byte for byte"
+        );
+        assert_eq!(
+            catalogue::stored_version(&catalogue_path).unwrap(),
+            Some(catalogue::CATALOGUE_VERSION)
+        );
+        for sha256 in ["sha-1", "sha-2"] {
+            assert_eq!(
+                std::fs::read(lidar.join("sources").join(sha256).join("original")).unwrap(),
+                format!("bytes of {sha256}").into_bytes(),
+                "originals are never touched"
+            );
+        }
+
+        let snapshot = library.library_snapshot().unwrap();
+        let names: Vec<(String, common_types::library::LibraryItemRole)> = snapshot
+            .items
+            .iter()
+            .map(|item| (item.name.clone().unwrap_or_default(), item.role))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                (
+                    "Orchard".to_string(),
+                    common_types::library::LibraryItemRole::Source
+                ),
+                (
+                    "Canopy".to_string(),
+                    common_types::library::LibraryItemRole::Source
+                ),
+                (
+                    "Steepness".to_string(),
+                    common_types::library::LibraryItemRole::Derived
+                ),
+            ]
+        );
+        let canopy = &snapshot.items[1];
+        assert_eq!(canopy.id, "lyr-2");
+        assert_eq!(canopy.units, "index");
+        assert_eq!(canopy.state, common_types::lidar::LidarResultState::Failed);
+        let job = canopy.import_job.as_ref().expect("a retryable import");
+        assert_eq!(job.state, LidarImportJobState::Failed);
+        assert_eq!(
+            job.message.as_deref(),
+            Some(recovery::RECOVERED_IMPORT_MESSAGE)
+        );
+        assert_eq!(
+            saved_selection(&library, "lyr-2"),
+            vec![library.inner.paths.source_original("sha-2")]
+        );
+        let slope = &snapshot.items[2];
+        assert_eq!(slope.state, common_types::lidar::LidarResultState::Failed);
+        assert_eq!(slope.units, "°");
+        assert_eq!(
+            library.delete_impact("lyr-2").unwrap().dependent_item_ids,
+            vec!["item-slope"]
+        );
+
+        drop(library);
+        let reopened = LidarLibrary::open(&root).unwrap();
+        assert_eq!(*reopened.open_status(), recovery::LibraryOpenStatus::Ready);
+        assert_eq!(reopened.library_snapshot().unwrap().items.len(), 3);
+        assert_eq!(
+            set_aside_files(&lidar).len(),
+            1,
+            "a current catalogue is not set aside"
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A catalogue that is not a database at all takes the same road.
+    #[test]
+    fn a_corrupt_catalogue_is_set_aside_and_rebuilt() {
+        let root = std::env::temp_dir().join(new_id("lidar-corrupt-library"));
+        let lidar = paths::library_root(&root);
+        write_original(
+            &lidar,
+            "sha-9",
+            Some(&single_item_meta(
+                "sha-9",
+                "lyr-9",
+                "Ridge",
+                RasterQuantity::GroundElevation.key(),
+                "m",
+            )),
+        );
+        let garbage = b"definitely not sqlite".to_vec();
+        std::fs::write(lidar.join(paths::CATALOGUE_FILE), &garbage).unwrap();
 
         let library = LidarLibrary::open(&root).unwrap();
         assert!(
-            !lidar.join("sources/abc").exists(),
-            "older originals are deleted"
+            matches!(
+                library.open_status(),
+                recovery::LibraryOpenStatus::Recovered {
+                    reason: recovery::RecoveryReason::Corrupt(_),
+                    items: 1,
+                    ..
+                }
+            ),
+            "{:?}",
+            library.open_status()
         );
-        assert!(library.library_snapshot().unwrap().items.is_empty());
+        let set_aside = set_aside_files(&lidar);
+        assert_eq!(std::fs::read(&set_aside[0]).unwrap(), garbage);
         assert_eq!(
-            catalogue::stored_version(&library.inner.paths.catalogue_path()).unwrap(),
-            Some(catalogue::CATALOGUE_VERSION)
+            library.library_snapshot().unwrap().items[0].name.as_deref(),
+            Some("Ridge")
         );
         drop(library);
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// A newer catalogue belongs to a newer Canopi: it is refused, never deleted.
+    /// An original nothing describes is still listed, under a generated name
+    /// with the default quantity, so it can be prepared or deleted by the user.
     #[test]
-    fn a_newer_library_is_refused_and_kept() {
+    fn an_original_without_meta_is_listed_under_a_generated_name() {
+        let root = std::env::temp_dir().join(new_id("lidar-orphan-original"));
+        let lidar = paths::library_root(&root);
+        write_original(&lidar, "0123456789abcdef", None);
+        write_catalogue_with_version(&lidar.join(paths::CATALOGUE_FILE), "20");
+
+        let library = LidarLibrary::open(&root).unwrap();
+        assert!(matches!(
+            library.open_status(),
+            recovery::LibraryOpenStatus::Recovered {
+                items: 0,
+                generated: 1,
+                ..
+            }
+        ));
+        let snapshot = library.library_snapshot().unwrap();
+        assert_eq!(snapshot.items.len(), 1);
+        let item = &snapshot.items[0];
+        assert_eq!(item.name.as_deref(), Some("Recovered raster 01234567"));
+        assert_eq!(
+            item.item_type,
+            common_types::library::LibraryItemType::Raster {
+                quantity: RasterQuantity::GroundElevation
+            }
+        );
+        assert_eq!(item.units, "m");
+        assert_eq!(
+            saved_selection(&library, &item.id),
+            vec![library.inner.paths.source_original("0123456789abcdef")]
+        );
+        assert!(lidar.join("sources/0123456789abcdef/original").is_file());
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Member order is the item's source priority and survives the rebuild.
+    #[test]
+    fn a_rebuilt_item_keeps_its_member_order() {
+        let root = std::env::temp_dir().join(new_id("lidar-member-order"));
+        let lidar = paths::library_root(&root);
+        let mut meta_b = single_item_meta(
+            "sha-b",
+            "lyr-ab",
+            "Pair",
+            RasterQuantity::GroundElevation.key(),
+            "m",
+        );
+        meta_b.items[0].members = vec!["sha-b".into(), "sha-a".into()];
+        let mut meta_a = meta_b.clone();
+        meta_a.sha256 = "sha-a".into();
+        write_original(&lidar, "sha-a", Some(&meta_a));
+        write_original(&lidar, "sha-b", Some(&meta_b));
+        write_catalogue_with_version(&lidar.join(paths::CATALOGUE_FILE), "20");
+
+        let library = LidarLibrary::open(&root).unwrap();
+        assert_eq!(library.library_snapshot().unwrap().items.len(), 1);
+        let paths = &library.inner.paths;
+        assert_eq!(
+            saved_selection(&library, "lyr-ab"),
+            vec![
+                paths.source_original("sha-b"),
+                paths.source_original("sha-a")
+            ]
+        );
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A newer catalogue belongs to a newer Canopi: it is refused and nothing
+    /// under the library is moved, written or swept. The app still starts with
+    /// an empty, read-only library that names the refusal.
+    #[test]
+    fn a_newer_catalogue_is_refused_without_touching_files() {
         let root = std::env::temp_dir().join(new_id("lidar-newer-library"));
         let lidar = paths::library_root(&root);
-        std::fs::create_dir_all(&lidar).unwrap();
-        {
-            let newer = Connection::open(lidar.join("lidar-library.sqlite")).unwrap();
-            newer
-                .execute_batch(
-                    "CREATE TABLE lidar_catalogue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                     INSERT INTO lidar_catalogue_meta VALUES ('schema_version', '99');",
-                )
-                .unwrap();
-        }
-        let error = LidarLibrary::open(&root)
-            .err()
-            .expect("newer library refused");
-        assert!(error.contains("is not supported"), "{error}");
-        assert_eq!(
-            catalogue::stored_version(&lidar.join("lidar-library.sqlite")).unwrap(),
-            Some(99)
+        write_original(
+            &lidar,
+            "sha-n",
+            Some(&single_item_meta(
+                "sha-n",
+                "lyr-n",
+                "Future",
+                RasterQuantity::GroundElevation.key(),
+                "m",
+            )),
         );
+        std::fs::create_dir_all(lidar.join("assets/unreferenced")).unwrap();
+        std::fs::write(lidar.join("assets/unreferenced/cog.tif"), b"kept").unwrap();
+        let catalogue_path = lidar.join(paths::CATALOGUE_FILE);
+        write_catalogue_with_version(&catalogue_path, "99");
+        let newer_bytes = std::fs::read(&catalogue_path).unwrap();
+
+        let library = LidarLibrary::open(&root).expect("the app starts");
+        assert_eq!(
+            *library.open_status(),
+            recovery::LibraryOpenStatus::RefusedNewer {
+                found: 99,
+                supported: catalogue::CATALOGUE_VERSION
+            }
+        );
+        assert!(library.library_snapshot().unwrap().items.is_empty());
+        let refused = library
+            .record_import_item(
+                "Later",
+                RasterQuantity::GroundElevation,
+                None,
+                false,
+                &[root.join("a.tif")],
+            )
+            .unwrap_err();
+        assert!(refused.contains("newer version of Canopi"), "{refused}");
+        assert!(
+            library
+                .rename_item("lyr-n", "x")
+                .unwrap_err()
+                .contains("newer version")
+        );
+        assert_eq!(
+            std::fs::read(&catalogue_path).unwrap(),
+            newer_bytes,
+            "left byte for byte"
+        );
+        assert!(!lidar.join(recovery::SET_ASIDE_DIR).exists());
+        assert!(
+            lidar.join("assets/unreferenced/cog.tif").is_file(),
+            "nothing is swept"
+        );
+        assert!(lidar.join("sources/sha-n/original").is_file());
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The meta the library writes after publication is what a rebuild reads:
+    /// a published item with a result, set aside, comes back as the same items
+    /// in the same order.
+    #[test]
+    fn the_meta_a_library_writes_rebuilds_its_own_items() {
+        let root = std::env::temp_dir().join(new_id("lidar-meta-roundtrip"));
+        let lidar = paths::library_root(&root);
+        let library = LidarLibrary::open(&root).unwrap();
+        for sha256 in ["sha-x", "sha-y"] {
+            write_original(&lidar, sha256, None);
+        }
+        {
+            let connection = library.catalogue().unwrap();
+            source_meta::test_support::seed_published_item(
+                &connection,
+                "lyr-xy",
+                "Valley",
+                RasterQuantity::GroundElevation.key(),
+                "m",
+                &[("sha-y", "y.tif"), ("sha-x", "x.tif")],
+            );
+            seed_analysis(&connection, "lyr-xy", "item-v");
+        }
+        library.rename_item("item-v", "Valley slope").unwrap();
+        let meta =
+            source_meta::read(&library.inner.paths.source_meta("sha-x")).expect("meta written");
+        assert_eq!(meta.original_filename, "x.tif");
+        assert_eq!(meta.items[0].members, vec!["sha-y", "sha-x"]);
+        assert_eq!(
+            meta.items[0].analyses[0].items[0].name.as_deref(),
+            Some("Valley slope")
+        );
+        drop(library);
+
+        // The same files under a catalogue from another Canopi.
+        std::fs::remove_file(lidar.join(paths::CATALOGUE_FILE)).unwrap();
+        write_catalogue_with_version(&lidar.join(paths::CATALOGUE_FILE), "1");
+        let rebuilt = LidarLibrary::open(&root).unwrap();
+        assert!(matches!(
+            rebuilt.open_status(),
+            recovery::LibraryOpenStatus::Recovered {
+                items: 1,
+                generated: 0,
+                ..
+            }
+        ));
+        let snapshot = rebuilt.library_snapshot().unwrap();
+        let listed: Vec<(String, Option<String>)> = snapshot
+            .items
+            .iter()
+            .map(|item| (item.id.clone(), item.name.clone()))
+            .collect();
+        assert_eq!(
+            listed,
+            vec![
+                ("lyr-xy".to_string(), Some("Valley".to_string())),
+                ("item-v".to_string(), Some("Valley slope".to_string())),
+            ]
+        );
+        let paths = &rebuilt.inner.paths;
+        assert_eq!(
+            saved_selection(&rebuilt, "lyr-xy"),
+            vec![
+                paths.source_original("sha-y"),
+                paths.source_original("sha-x")
+            ]
+        );
+        drop(rebuilt);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// GDAL lane: a real import writes the meta a rebuild needs, and Retry on
+    /// the rebuilt item prepares it again from the managed originals alone,
+    /// under the same item id, with the same members in the same order.
+    #[test]
+    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+    fn a_rebuilt_item_is_prepared_again_from_its_managed_originals() {
+        let engine = engine::GdalEngine::new();
+        let cancel = AtomicBool::new(false);
+        let root = std::env::temp_dir().join(new_id("canopi-rebuild-retry"));
+        std::fs::create_dir_all(&root).unwrap();
+        let plane = |name: &str, value: f32, origin_x: f64| -> PathBuf {
+            let raw = root.join(format!("{name}.raw"));
+            import::write_f32_raw(&raw, &[value; 16]).expect("raw plane");
+            let tif = root.join(format!("{name}.tif"));
+            let grid = grid::RasterGrid {
+                width: 4,
+                height: 4,
+                geotransform: [origin_x, 1.0, 0.0, 4.0, 0.0, -1.0],
+            };
+            import::raw_to_tif(&engine, &cancel, &raw, &tif, &grid, "EPSG:3857", -9999.0)
+                .expect("plane converts");
+            tif
+        };
+        let west = plane("west", 5.0, 0.0);
+        let east = plane("east", 9.0, 3.0);
+        let lidar = paths::library_root(&root);
+
+        let library = LidarLibrary::open(&root).unwrap();
+        let (layer_id, job_id) = library
+            .record_import_item(
+                "Two planes",
+                RasterQuantity::GroundElevation,
+                None,
+                false,
+                &[east.clone(), west.clone()],
+            )
+            .unwrap();
+        import::stage_and_publish(&library, &job_id, &layer_id, &[east, west], &cancel)
+            .expect("the batch publishes");
+        library.finish_import_sources(&job_id, Ok(()));
+        let members: Vec<String> = {
+            let connection = library.catalogue().unwrap();
+            let head = catalogue::head_generation(&connection, &layer_id)
+                .unwrap()
+                .expect("published");
+            catalogue::collection_members(&connection, &head.id)
+                .unwrap()
+                .iter()
+                .map(|member| {
+                    connection
+                        .query_row(
+                            "SELECT source_sha256 FROM lidar_interpretations WHERE id = ?1",
+                            [&member.interpretation_id],
+                            |row| row.get(0),
+                        )
+                        .unwrap()
+                })
+                .collect()
+        };
+        assert_eq!(members.len(), 2);
+        for sha256 in &members {
+            let meta = source_meta::read(&library.inner.paths.source_meta(sha256))
+                .expect("meta written after publication");
+            assert_eq!(meta.items[0].id, layer_id);
+            assert_eq!(meta.items[0].name, "Two planes");
+            assert_eq!(meta.items[0].members, members);
+        }
+        assert_eq!(
+            source_meta::read(&library.inner.paths.source_meta(&members[0]))
+                .unwrap()
+                .original_filename,
+            "east.tif"
+        );
+        drop(library);
+
+        std::fs::remove_file(lidar.join(paths::CATALOGUE_FILE)).unwrap();
+        write_catalogue_with_version(&lidar.join(paths::CATALOGUE_FILE), "1");
+        let rebuilt = LidarLibrary::open(&root).unwrap();
+        assert!(matches!(
+            rebuilt.open_status(),
+            recovery::LibraryOpenStatus::Recovered {
+                items: 1,
+                generated: 0,
+                ..
+            }
+        ));
+        let listed = &rebuilt.library_snapshot().unwrap().items[0];
+        assert_eq!(listed.id, layer_id);
+        assert_eq!(listed.state, common_types::lidar::LidarResultState::Failed);
+
+        // Retry, as the command does it, minus the spawned wrapper.
+        let (retry_layer, retry_job, selection) = rebuilt.record_import_retry(&layer_id).unwrap();
+        assert_eq!(retry_layer, layer_id);
+        assert!(
+            selection
+                .iter()
+                .all(|path| path.starts_with(lidar.join("sources")))
+        );
+        import::stage_and_publish(&rebuilt, &retry_job, &layer_id, &selection, &cancel)
+            .expect("the managed originals publish again");
+        rebuilt.finish_import_sources(&retry_job, Ok(()));
+        let snapshot = rebuilt.library_snapshot().unwrap();
+        assert_eq!(snapshot.items.len(), 1);
+        assert_eq!(
+            snapshot.items[0].state,
+            common_types::lidar::LidarResultState::Ready
+        );
+        let collection = rebuilt.layer_collection(&layer_id, None).unwrap();
+        let again: Vec<String> = collection
+            .sources
+            .iter()
+            .map(|member| member.filename.clone())
+            .collect();
+        assert_eq!(
+            again,
+            vec!["east.tif", "west.tif"],
+            "order and filenames survive"
+        );
+        drop(rebuilt);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
@@ -2430,31 +3041,6 @@ impl std::ops::Deref for CatalogueGuard<'_> {
 
     fn deref(&self) -> &Connection {
         &self.0
-    }
-}
-
-/// Delete a library written by an older Canopi.
-///
-/// There is no migration path (ADR 0003): an older catalogue means the whole
-/// managed library directory is removed before a fresh one is created. A newer
-/// catalogue is left in place for `catalogue::open` to refuse.
-fn discard_unsupported_library(root: &std::path::Path) -> Result<(), String> {
-    let catalogue_path = root.join(paths::CATALOGUE_FILE);
-    match catalogue::stored_version(&catalogue_path)? {
-        Some(version) if version < catalogue::CATALOGUE_VERSION => {
-            std::fs::remove_dir_all(root).map_err(|e| {
-                format!(
-                    "Failed to remove the unsupported LiDAR library {} (schema v{version}): {e}",
-                    root.display()
-                )
-            })?;
-            tracing::warn!(
-                "removed LiDAR library {} written by an older Canopi (schema v{version})",
-                root.display()
-            );
-            Ok(())
-        }
-        _ => Ok(()),
     }
 }
 
@@ -2507,7 +3093,7 @@ pub(crate) fn import_job_summary(
 }
 
 /// The saved selection of one import, in priority order.
-fn import_request_json(paths: &[PathBuf]) -> Result<String, String> {
+pub(crate) fn import_request_json(paths: &[PathBuf]) -> Result<String, String> {
     let paths: Vec<String> = paths
         .iter()
         .map(|path| {

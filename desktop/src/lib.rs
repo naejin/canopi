@@ -175,12 +175,14 @@ pub fn run() {
 
             tracing::info!("User DB initialized");
 
-            // LiDAR library (dedicated catalogue, managed raster assets)
+            // LiDAR library (dedicated catalogue, managed raster assets). A bad
+            // catalogue never stops startup: the library opens recovered or
+            // refused and its status says which (`services::lidar::recovery`).
             let lidar_library = services::lidar::LidarLibrary::open(&data_dir)
                 .map_err(|e| format!("Failed to initialize LiDAR library: {e}"))?;
             lidar_library.attach_executor(native_executor);
+            tracing::info!(status = ?lidar_library.open_status(), "LiDAR library initialized");
             app.manage(lidar_library);
-            tracing::info!("LiDAR library initialized");
 
             // Image cache (disk-backed, in app data dir)
             let image_cache = match image_cache::ImageCache::new(&data_dir) {
