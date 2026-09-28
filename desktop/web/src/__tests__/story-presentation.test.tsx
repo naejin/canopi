@@ -278,8 +278,7 @@ describe('presenting a story', () => {
     try {
       presentStory('tour', 0, { reducedMotion: true })
       leaveStoryPresentation()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(document.activeElement).toBe(map)
+      await vi.waitFor(() => expect(document.activeElement).toBe(map))
     } finally {
       release()
     }

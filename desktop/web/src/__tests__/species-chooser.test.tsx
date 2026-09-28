@@ -177,21 +177,23 @@ describe('Place plants species chooser', () => {
       favorites.view!.value = { items: [favorite('Sambucus nigra', null, 3)], loading: false, revision: 2 }
       recentPlantStampSources.value = [{ canonical_name: 'Allium ursinum', common_name: null, stratum: null, width_max_m: null }]
     })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    for (const [canonical, english] of [['Sambucus nigra', 'Elder'], ['Allium ursinum', 'Wild garlic']] as const) {
-      const option = options().find((candidate) => candidate.dataset.speciesOption === canonical)!
-      expect(option.querySelector('[lang="en"]')?.textContent).toBe(english)
-      expect(option.textContent).toContain('(angl.)')
-    }
+    // The English names arrive from an asynchronous catalog lookup.
+    await vi.waitFor(() => {
+      for (const [canonical, english] of [['Sambucus nigra', 'Elder'], ['Allium ursinum', 'Wild garlic']] as const) {
+        const option = options().find((candidate) => candidate.dataset.speciesOption === canonical)!
+        expect(option.querySelector('[lang="en"]')?.textContent).toBe(english)
+        expect(option.textContent).toContain('(angl.)')
+      }
+    })
   })
 
   it('narrows the chooser by Stratum and Form, with counts', async () => {
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     const trigger = (label: string) => [...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')]
       .find((button) => button.textContent?.startsWith(label))!
     await act(() => trigger('Form').click())
-    expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent))
-      .toEqual(['All forms', 'Tree · 1', 'Shrub · 2'])
+    // The counts arrive from an asynchronous catalog lookup.
+    await vi.waitFor(() => expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent))
+      .toEqual(['All forms', 'Tree · 1', 'Shrub · 2']))
     await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((option) => option.textContent === 'Shrub · 2')!.click())
     expect(options().map((option) => option.dataset.speciesOption)).toEqual(['Ficus carica', 'Rubus idaeus'])
 

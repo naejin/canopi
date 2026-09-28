@@ -135,10 +135,10 @@ describe('Title bar menu: Open recent', () => {
 
     await act(async () => {
       openRecent.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }))
-      await new Promise((resolve) => requestAnimationFrame(resolve))
     })
 
-    expect(document.activeElement?.textContent).toContain('Forest Edge')
+    // The submenu moves focus to its first item on the next frame.
+    await vi.waitFor(() => expect(document.activeElement?.textContent).toContain('Forest Edge'))
 
     const forest = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
       .find((button) => button.textContent?.includes('Forest Edge'))

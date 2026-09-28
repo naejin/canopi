@@ -87,12 +87,16 @@ function mountMap(): void {
   setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ commands, queries }))
 }
 
-/** Lets asynchronous work (reading a file) finish and render, until `done`. */
+/**
+ * Polls until `done` (asynchronous work such as jsdom's FileReader finishing and rendering).
+ * The 2.5 MB image below takes jsdom a few seconds to base64-encode under load.
+ */
 async function until(done: () => boolean): Promise<void> {
-  for (let tries = 0; tries < 250 && !done(); tries += 1) {
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-  }
-  expect(done()).toBe(true)
+  await vi.waitFor(async () => {
+    // act() holds Preact's renders until it returns; an empty one flushes what arrived.
+    await act(async () => {})
+    expect(done()).toBe(true)
+  }, { timeout: 10_000, interval: 10 })
 }
 
 async function renderPanel(): Promise<void> {
@@ -247,9 +251,9 @@ describe('Stories panel', () => {
     await act(async () => {
       container.querySelector('[data-story-presenter]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
     })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(storyPresentationActive.value).toBe(false)
-    expect(document.activeElement).toBe(button('Present'))
+    // Focus returns to Present once the presenter has unmounted and the panel re-rendered.
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('Present')))
   })
 
   it('reorders steps by dragging the handle', async () => {
@@ -544,7 +548,8 @@ describe('step editor', () => {
       vi.unstubAllGlobals()
       vi.restoreAllMocks()
     }
-  })
+  // jsdom base64-encodes the 2.5 MB file on the main thread; slow under a loaded runner.
+  }, 15_000)
 
   it('embeds a chosen image once it has a description, and refuses images of another type or that cannot be made small enough', async () => {
     const editor = await openStep('s1')

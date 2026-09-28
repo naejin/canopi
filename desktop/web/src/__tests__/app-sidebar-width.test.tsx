@@ -79,11 +79,9 @@ describe('App sidebar width', () => {
     await act(async () => {
       render(<App />, container)
     })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
 
-    expect(container.querySelector('[data-testid="design-notebook-panel"]')).not.toBeNull()
+    // The notebook panel mounts after its lazy workbench resolves.
+    await vi.waitFor(() => expect(container.querySelector('[data-testid="design-notebook-panel"]')).not.toBeNull())
     expect(container.querySelector('[data-testid="canvas-panel"]')).not.toBeNull()
   })
 

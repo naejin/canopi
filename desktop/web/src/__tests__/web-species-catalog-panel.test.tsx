@@ -263,9 +263,9 @@ describe('Web Edition Species Catalog panel', () => {
       render(<WebSpeciesCatalogPanel mode="favorites" />, container)
       await Promise.resolve()
     })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     const row = container.querySelector<HTMLElement>('[data-testid="web-species-row"]')!
-    expect(row.querySelector('[lang="en"]')?.textContent).toBe('Peach')
+    // The English name arrives from the asynchronous resolveCommonNames call.
+    await vi.waitFor(() => expect(row.querySelector('[lang="en"]')?.textContent).toBe('Peach'))
     expect(row.textContent).toContain('(angl.)')
     expect(row.querySelector('[lang="la"]')?.textContent).toBe('Prunus persica')
     expect(row.querySelector('[data-testid="web-species-place"]')?.getAttribute('aria-label')).toBe('Placer Peach')
