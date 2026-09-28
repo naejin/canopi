@@ -301,7 +301,8 @@ fn truncate_message(message: &str) -> String {
     }
 }
 
-/// The first regular file named `name` on `PATH`.
+/// The first regular file named `name` on `PATH` (the comparison lane's GDAL half).
+#[cfg(test)]
 pub(super) fn which_on_path(name: &str) -> Option<PathBuf> {
     which_in(&std::env::var_os("PATH")?, name)
 }
