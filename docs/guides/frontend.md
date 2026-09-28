@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Boundaries of the Preact frontend in `desktop/web/src/`: the action layer, commands and shortcuts, the modal layer, the workspace frame, the plant finder, localization and tests. Related: [design system](../../.interface-design/system.md), [editions](editions.md), [design document](design-document.md), [map workspace](map-workspace.md).
+Boundaries of the Preact frontend in `desktop/web/src/`. Related: [design system](../../.interface-design/system.md), [editions](editions.md), [design document](design-document.md), [map workspace](map-workspace.md).
 
 ## Authorities and boundaries
 
 - Stack and directory map: [AGENTS.md](../../AGENTS.md). `generated/` is bindings output and never hand-edited.
 - Import direction: components → actions/controllers/workbenches → Design Edit or state. Canvas edits go through runtime commands on `currentCanvasSession` (`canvas/session.ts`); non-canvas Design edits through `app/design-edit/`; panels read canvas entities through read-only runtime queries. A view never mirrors an authority's state to restyle it.
 - Commands: `commands/registry.ts` is the one public seam over `commands/graph/`. `app/shell-commands/index.ts` owns neutral ids, label keys and shortcut matching; `app/shell-commands/menus.ts` (`composeWorkspaceMenus`) is the one menu model for the menubar, the compact Menu button, the palette and the F1 dialog; `app/workspace-commands/` holds the capabilities and canvas intents both editions share.
-- Shortcuts: `shortcuts/manager.ts` (Desktop) and `web/canvas-shortcuts.ts` (Web) route keys in one order: the plant finder's Ctrl F (`app/plant-finder/focus.ts`), a Stories Undo toast (`app/stories/actions.ts`), then the command graph; each stands down while the modal layer is held. Esc belongs to the map's Esc chain and is shown as a `keyHint` only. `app/shell-commands/shortcut-text.ts` localizes canonical strings (`Ctrl+Shift+Z`) and derives `aria-keyshortcuts`.
+- Shortcuts: `shortcuts/manager.ts` (Desktop) and `web/canvas-shortcuts.ts` (Web) route keys in one order: the plant finder's Ctrl F (`app/plant-finder/focus.ts`), a Stories Undo toast (`app/stories/actions.ts`), then the command graph; each stands down while the modal layer is held or the key is `defaultPrevented`. Esc belongs to the map's Esc chain and is shown as a `keyHint` only. `app/shell-commands/shortcut-text.ts` localizes canonical strings (`Ctrl+Shift+Z`) and derives `aria-keyshortcuts`.
 - Modal layer: `app/shell/modal-layer.ts` is the one owner. A dialog (the command palette included) holds it through `useModalLayer()`; chrome registered with `useModalInertRegion` becomes `inert`; menus and key routing stand down. `app/shell/focus-regions.ts` owns F6 / Shift F6 between title bar, tool rail, map and open panel.
 - Visible map area: chrome registers through `components/shared/useMapChrome.ts`; `app/shell/visible-map-area.ts` derives the frame the camera fits into, the `--map-inset-*` properties, each rail's room and whether credits fold. Both rails fold through `components/shared/rail-fit.ts`.
 - Workspace frame: `components/workspace/WorkspaceComposition.tsx` owns primary/side routing, the dock, the phone sheet and the shared dialogs, and validates registered surfaces against the shell projection, so command capabilities decide which panels exist.
@@ -21,6 +21,7 @@ Boundaries of the Preact frontend in `desktop/web/src/`: the action layer, comma
 FAP = `__tests__/frontend-architecture-policies.test.ts`, policies named as quoted.
 
 - `components/**` never imports `ipc/**` or `@tauri-apps/**`; `app/**` never imports `components/**` (FAP "Components reach native capabilities through app actions", "App modules do not import components").
+- `ipc/**` imports nothing from `app/**` but the types of a port it implements; gates and encoders stay app-side (FAP "IPC transports import nothing from app"; `ipc/design.ts` excepted until canopi-m4v0).
 - `app/*/controller.ts` modules are leaves; cross-concern orchestration lives in workflow modules with `installX()` / `disposeX()` (FAP "App controllers stay leaves").
 - Command consumers read the registry and its projections, never `commands/graph/**` or canvas state (FAP "Command consumers do not bypass the registry", "Command consumers do not bypass their projections", "Tool Rail renders its projection without reading Canvas state", "Menu Bar renders the shared workspace menu model").
 - The right-click menu runs only its request's scene-edit commands (FAP "The right-click menu runs only its request’s scene edits"; `canvas-context-menu-entries.test.ts`).
@@ -35,7 +36,7 @@ FAP = `__tests__/frontend-architecture-policies.test.ts`, policies named as quot
 - `t()` observes `locale`; components read `locale.value` only to pick localized data or format dates. A species without a name in the interface language shows its English name with the localized mark through `SpeciesIdentity` (`components/shared/SpeciesIdentity.tsx`) (advice).
 - CSS Modules use the spacing, type, radius and transition tokens or an exact exception with a reason (`css-module-policies.test.ts`). Colour tokens instead of raw `rgba()`, and weights 400/600 only (advice).
 - Signals: `useSignalEffect` in components, never `signal.value` in a `useEffect` dependency array; `.peek()` for non-dependencies; `batch()` for multi-signal writes; no per-frame unconditional signal writes (advice). Pointer gestures go through `usePointerResize` / `usePointerReorder` (FAP "Panel resize surfaces delegate pointer lifecycle ownership").
-- Tests: write the failing behavioural test first at the command or interaction boundary with real focus, keyboard and pointer events. Suites live in `__tests__/` as `*.test.ts(x)`; colocated tests under `src/` also run. An unhandled error fails the run (`dangerouslyIgnoreUnhandledErrors: false`). `npm run test:coverage` enforces the floors in `vite.config.ts`; raise them, never lower them.
+- Tests: write the failing behavioural test first at the command or interaction boundary with real focus, keyboard and pointer events. Suites live in `__tests__/` as `*.test.ts(x)`; colocated tests under `src/` also run. An unhandled error fails the run. `npm run test:coverage` enforces the floors in `vite.config.ts`.
 
 ## Do not
 
@@ -44,10 +45,8 @@ FAP = `__tests__/frontend-architecture-policies.test.ts`, policies named as quot
 - Do not route Esc to a command; the map's Esc chain owns it.
 - Do not mount a dialog inside an inert region, or use `window.prompt()`, `confirm()` or `alert()` (WebView blocks them).
 - Do not use a native `<select>` or `<input type="date">`; use `Dropdown` and `DatePicker`, never wrapped in a native `label`.
-- Do not use `title` on icon-only buttons; use `ButtonTooltip` and an `aria-label`.
-- Do not load fonts from a CDN; interface fonts come from `@fontsource` through `styles/fonts.css`.
-- Do not mock `i18n` without a reason; partial mocks spread `importOriginal`.
-- Do not retire a locale key in one file; remove it from all 11 together.
+- Do not use `title` on icon-only buttons (`ButtonTooltip` and an `aria-label`), or load fonts from a CDN (`@fontsource` through `styles/fonts.css`).
+- Do not mock `i18n` without a reason (partial mocks spread `importOriginal`), or retire a locale key in fewer than all 11 files.
 - Do not parse optional numeric input with `parseFloat(v) || 0`; use `Number.isFinite(x) && x >= 0`.
 
 ## Where to look

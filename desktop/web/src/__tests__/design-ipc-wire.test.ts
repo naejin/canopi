@@ -9,7 +9,7 @@ import {
   prepareDesignWrite,
   prepareDraftWrite,
 } from '../ipc/design'
-import { exportSavedObjectStampCanopiFile } from '../ipc/saved-object-stamps'
+import { exportSavedObjectStampFile } from '../app/saved-object-stamps/workbench'
 import type { CanopiFile } from '../types/design'
 
 const invoke = vi.hoisted(() => vi.fn(async (
@@ -132,7 +132,7 @@ describe('native Design IPC wire format', () => {
       },
     })
 
-    await exportSavedObjectStampCanopiFile(content, 'tree.canopi')
+    await exportSavedObjectStampFile(content, 'tree.canopi')
 
     expect(invoke).toHaveBeenCalledWith('export_saved_object_stamp_canopi_file', {
       path: '/stamps/tree.canopi',

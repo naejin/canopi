@@ -27,6 +27,7 @@ import {
   renameSavedObjectStamp as renameSavedObjectStampIpc,
   reorderSavedObjectStamps as reorderSavedObjectStampsIpc,
 } from '../../ipc/saved-object-stamps'
+import { encodeCanopiDesign } from '../contracts/canopi-design-wire'
 import type { CanopiFile } from '../../types/design'
 import type { SavedObjectStamp } from '../../types/saved-object-stamps'
 import type {
@@ -41,6 +42,11 @@ import {
   savedObjectStampPayloadFromCanopiFile,
 } from './file'
 import { createMutationQueue } from '../mutation-queue'
+
+/** Writes a stamp as a `.canopi` file in canonical wire form; the transport takes encoded JSON. */
+export function exportSavedObjectStampFile(file: CanopiFile, defaultName: string): Promise<string> {
+  return exportSavedObjectStampCanopiFile(encodeCanopiDesign(file), defaultName)
+}
 
 export interface SavedObjectStampLibraryView {
   readonly items: readonly SavedObjectStamp[]
@@ -91,7 +97,7 @@ export function createSavedObjectStampWorkbench({
   renameSavedObjectStamp = renameSavedObjectStampIpc,
   deleteSavedObjectStamp = deleteSavedObjectStampIpc,
   reorderSavedObjectStamps = reorderSavedObjectStampsIpc,
-  exportSavedObjectStamp = exportSavedObjectStampCanopiFile,
+  exportSavedObjectStamp = exportSavedObjectStampFile,
   importSavedObjectStampFile = importSavedObjectStampCanopiFile,
   getCanvasQuerySurface = () => currentCanvasQuerySurface.value,
   beginPlacement = beginSavedObjectStampPlacement,

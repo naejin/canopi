@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Boundaries of the plant catalog: the storage contract, the Desktop SQLite plant DB, search and browse orders, translations, the Web Parquet/DuckDB-WASM artifact and the Desktop user DB. Storage decision: [ADR 0006](../adr/0006-species-catalog-storage.md). Workbench rules: [frontend](frontend.md#rules). DB publication: [native and release](native-and-release.md#bundled-plant-db).
+Boundaries of the plant catalog: storage contract, Desktop SQLite plant DB, search and browse, translations, Web Parquet/DuckDB-WASM artifact, Desktop user DB. Storage decision: [ADR 0006](../adr/0006-species-catalog-storage.md). Workbench rules: [frontend](frontend.md#rules). DB publication: [native and release](native-and-release.md#bundled-plant-db).
 
 ## Authorities and boundaries
 
 - `scripts/schema-contract.json` is the single authored source for the schema versions, the normalization pin, the source-export SHA-256 (`prepared_artifact.source_export_sha256`), Species columns, generated tables and FTS shapes, indexes, translation gap fills and the reduced Web projection. `scripts/species_catalog_contract.py` compiles it, cross-validates `plant-filter-fields.json` and writes `desktop/src/db/schema_contract_generated.rs`.
-- `common-types/species-search-normalization.json` is the cross-runtime search normalization authority (with `species-search-unicode-15.json` for its Unicode facts). Python, Rust and TypeScript each implement it and pass the same corpus.
+- `common-types/species-search-normalization.json` is the cross-runtime search normalization authority (Unicode facts: `species-search-unicode-15.json`). Python, Rust and TypeScript each implement it and pass the same corpus.
 - `common-types/web-species-catalog-artifact.json` is the Web artifact authority: row schema, locale set, Parquet layout, supported filters, excluded detail fields and the 25 MiB asset limit. `scripts/generate-web-catalog.py` derives rows; `desktop/web/src/generated/web-catalog-artifact.mjs` admits manifests.
 - `common-types/plant-filter-fields.json` owns filterable fields; `npm run gen:types` generates the Rust and TypeScript filter catalogs. Web gets a filter only when the artifact contract adds it.
-- Shared UI consumes the Species Catalog Workbench (`app/plant-browser/workbench.ts`, IPC-free); `#species-catalog-live` selects `live.desktop.ts` (SQLite over IPC) or `live.browser.ts` (DuckDB-WASM). Other plant lists and the PDF key use its batch projections `resolveCommonNames(names, locale)` and `resolveHabits(names)`, batched to 500 names per native call in `live.desktop.ts`.
+- Shared UI consumes the Species Catalog Workbench (`app/plant-browser/workbench.ts`, IPC-free); `#species-catalog-live` selects `live.desktop.ts` (SQLite over IPC) or `live.browser.ts` (DuckDB-WASM). Other plant lists and the PDF key use its batch projections `resolveCommonNames(names, locale)` and `resolveHabits(names)`, batched to 500 names per native call in `live.desktop.ts`, which also gates on plant-DB health: with the DB missing or corrupt nothing crosses IPC (`species-catalog-live-desktop.test.ts`).
 - Rust seams: `desktop/src/db/plant_catalog_connection.rs` admits the prepared identity; readers get only the sealed `PlantDbConnectionGuard` (`db/mod.rs`); `db/query_builder/` builds SQL; `services/species_catalog_read/` owns caller projections. Other services call these, never `plant_db` helpers.
 - The Desktop user DB (`desktop/src/db/user_db.rs`, `user_db_schema.sql`) is separate from the plant DB: settings, favorites, recently viewed, Recent Designs, Design Notebook, Saved Object Stamps. Its work runs in the executor's `UserData` class, catalog reads in `Catalog`; never hold both DB locks at once.
 
@@ -26,20 +26,18 @@ Boundaries of the plant catalog: the storage contract, the Desktop SQLite plant 
 - Recommended puts rated species first (edibility, other uses, medicinal), then unrated species with a Common Name in the interface language, then the rest, each in scientific-name order (`RECOMMENDED_PHASES`, `db/query_builder/pagination.rs`). Web offers Recommended (named first) and Name only.
 - SQL uses `SqlBuilder` placeholders, never formatted strings; count and list share one planner path (advice).
 - Desktop search runs in the executor's `Catalog` class with generation checks and interrupt-based supersession; `supersede_species_search` is a reviewed synchronous command (`native_command_policy.rs`). Only the search that owns the connection is interruptible.
-- Translations: `translated_values` has one column per language and `translate_value()` maps a locale through an allowlist; contract gap fills must match DB values exactly, including case. Common Name lookup: selected-language `best_common_names`, then `species_common_names`, then `species.common_name` for English only; `display_order` is the rank (advice; `common_names.rs` has no unit tests).
+- Translations: `translated_values` has one column per language and `translate_value()` maps a locale through an allowlist; contract gap fills must match DB values exactly, including case. Common Name lookup: selected-language `best_common_names`, then `species_common_names`, then `species.common_name` for English only; `display_order` is the rank (advice).
 - Web: `web/duckdb-wasm-catalog.ts` loads DuckDB through `selectBundle(getJsDelivrBundles())`, never a bundled `duckdb-*.wasm`; a failed open rolls back and is retryable; failures surface as workbench error state with Retry, never an empty catalog (`duckdb-wasm-catalog.test.ts`, `web-species-catalog-runtime.test.ts`). Startup and packaging reject a stale manifest (`web-catalog-artifact-contract.test.ts`, `web-edition-packaging.test.ts`).
 - Web detail shows only the hero image, names, climate zone, habit and life cycle; a new filter never adds detail sections (`web-species-catalog-panel.test.tsx`).
 - User DB: one schema, no migrations. `UserDb::open` sets aside an older DB as `<file>.v<version>-set-aside`, a damaged one as `<file>.corrupt-<unix-seconds>` (with its journal companions), refuses a newer one with `NewerSchemaVersion` and starts empty (`db/mod.rs` and `user_db.rs` tests).
-- Images: Desktop caches through `desktop/src/image_cache.rs` (500 MB cap, single-flight); Web loads one hero image's metadata only (`image_cache.rs` tests).
+- Images: Desktop caches through `desktop/src/image_cache.rs` (500 MB cap, single-flight); Web loads one hero image's metadata (`image_cache.rs` tests).
 
 ## Do not
 
-- Do not hand-edit `schema_contract_generated.rs`, generated filter catalogs or Parquet shards.
-- Do not add a parallel locale list; locale columns derive from the supporting-table shape.
-- Do not hard-code filter rows, chips or Web filters in components.
-- Do not revive Site Adaptation (hardiness compatibility, replacement suggestions); it is retired.
-- Do not commit `public/canopi-catalog/` or `desktop/resources/canopi-core.db`, and do not regenerate the DB while the Tauri app runs.
-- Do not suggest changing catalog data; data questions go to the user (see Open decisions).
+- Do not hand-edit `schema_contract_generated.rs`, generated filter catalogs or Parquet shards, or add a parallel locale list (locale columns derive from the supporting-table shape).
+- Do not hard-code filter rows, chips or Web filters.
+- Do not revive Site Adaptation (hardiness compatibility, replacement suggestions).
+- Do not commit `public/canopi-catalog/` or `desktop/resources/canopi-core.db`, regenerate the DB while the Tauri app runs, or suggest changing catalog data (data questions go to the user; see Open decisions).
 
 ## Commands
 
@@ -72,7 +70,7 @@ Schema change (exports at `~/projects/canopi-data/data/exports/`): `schema-contr
 
 ## Open decisions
 
-Parked with the user; do not act without a decision:
+Parked with the user; do not act on these:
 
 - canopi-h90p.10: synonyms are not in the prepared DB (`synonym_lookup` is dropped), so the plant finder cannot match them.
 - canopi-h90p.45: implausible heights in the catalog data.
