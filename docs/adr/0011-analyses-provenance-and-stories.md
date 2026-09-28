@@ -8,7 +8,12 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
 
 ## Decision
 
-- **Analysis registry.** An analysis is an entry in an authored JSON contract (`common-types/analysis-registry.json`, generated into Rust and TypeScript): id, recipe version, input item types, parameters (typed, with defaults and units in metres, m² and degrees), output item types and a lane. Executors stay handwritten in Rust. Lanes: the pinned GeoLibre CLI sidecar, windowed (slope, hillshade) or global (contours, hydrology, bounded by an extent cap), and the in-process `native` lane for vegetation analysis ([ADR 0012](0012-vegetation-analysis.md)). The Analyze dialog is generated from the registry for the selected source; slope, hillshade and contours are entries. Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
+- **Analysis registry.**
+  - An analysis is an entry in an authored JSON contract (`common-types/analysis-registry.json`, generated into Rust and TypeScript): id, recipe version, input item types, parameters (typed, with defaults and units in metres, m² and degrees), output item types and a lane.
+  - Executors stay handwritten in Rust.
+  - Lanes: the pinned GeoLibre CLI sidecar, windowed (slope, hillshade) or global (contours, hydrology, bounded by an extent cap), and the in-process `native` lane for vegetation analysis ([ADR 0012](0012-vegetation-analysis.md)).
+  - The Analyze dialog is generated from the registry for the selected source; slope, hillshade and contours are entries.
+  - Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
 - **Typed library items.** Library and site-data items carry a kind: raster (elevation, height, slope, flow…), point cloud, or vector result (streams, watersheds, detected trees, crowns). Layers, legends and value readouts dispatch on kind; nothing assumes an elevation raster.
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
 - **Saved views.** A Design can hold named views: camera (lon, lat, zoom, bearing), the ground it frames (so a view looks the same at any window size), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else.
