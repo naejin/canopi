@@ -7,7 +7,7 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 2. **Every design object is geolocated.** Files store WGS84 longitude/latitude; metres exist only in the runtime's session plane ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 3. **Reuse GeoLibre before writing code.** Generic GIS pieces are copied with attribution or depended on as light packages; Canopi never forks the GeoLibre app or imports its React code ([ADR 0002](adr/0002-geolibre-module-reuse.md)).
-4. **No backward compatibility.** No migrations, legacy readers, compatibility shims or old-format fixtures; old data is refused, set aside or deleted ([ADR 0003](adr/0003-no-backward-compatibility.md)).
+4. **Stored data migrates forward, in one module per store.** Designs from v5 (Canopi 1.2) upgrade in memory through `common-types/src/migrations.rs`; nothing outside the migration modules reads an older format, and dead compatibility code is still deleted ([ADR 0013](adr/0013-stored-data-migrations.md)). The user DB, LiDAR library and Web storage still refuse older data until their migrations ship.
 5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies go in the change that makes them dead.
 
 ## Stack
@@ -82,7 +82,9 @@ Every `#[tauri::command]` is registered once and is executor-backed async or one
 
 ## Persistence of app data
 
-[ADR 0003](adr/0003-no-backward-compatibility.md) applies to every store:
+[ADR 0013](adr/0013-stored-data-migrations.md) decides every store; until each migration ships, the store keeps ADR 0003's refusal:
+
+- Designs: formats v5 to current open; a v5/v6 Design without a site waits for "Where is your site?" (`DesignLoadOutcome::NeedsSite`); older or newer files are refused with a typed `DesignLoadFailure`.
 
 - Desktop user DB: one schema, no migrations. An older database is renamed `<file>.v<N>-set-aside`, a damaged one `<file>.corrupt-<unix-seconds>`, and an empty one is created; a newer database is refused with a typed error.
 - LiDAR library: catalogue v21. A library written by an older Canopi is deleted on first open; a newer one is refused.
