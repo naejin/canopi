@@ -220,9 +220,10 @@ fn atomic_replace_fallback(
     }
 
     // Fallback: direct rename failed (common on Windows with file locks).
+    // The destination is a Design path (user content): log the kind only.
     tracing::warn!(
-        "atomic_replace: direct rename failed for {}, entering fallback: {first_err}",
-        dest.display()
+        "atomic_replace: direct rename failed ({:?}), entering fallback",
+        first_err.kind()
     );
     let old = operation_sidecar_path(dest, "old");
     std::fs::rename(dest, &old).map_err(|e| {
@@ -238,8 +239,8 @@ fn atomic_replace_fallback(
                 // This sidecar still owns the only copy of the predecessor, so
                 // preserving it is safer than treating cleanup as destructive.
                 tracing::warn!(
-                    "atomic_replace: could not remove rollback sidecar {}: {e}",
-                    old.display()
+                    "atomic_replace: could not remove the rollback sidecar ({:?})",
+                    e.kind()
                 );
             }
             Ok(())
@@ -448,17 +449,24 @@ mod tests {
         fs::write(&dest, "original").unwrap();
         fs::write(&legacy_old, "another operation owns this").unwrap();
 
-        atomic_replace_fallback(
-            &src,
-            &dest,
-            std::io::Error::other("forced fallback for test"),
-        )
-        .unwrap();
+        let ((), logs) = crate::services::design_files::capture_logs(|| {
+            atomic_replace_fallback(
+                &src,
+                &dest,
+                std::io::Error::other("forced fallback for test"),
+            )
+            .unwrap()
+        });
 
         assert_eq!(fs::read_to_string(&dest).unwrap(), "replacement");
         assert_eq!(
             fs::read_to_string(&legacy_old).unwrap(),
             "another operation owns this"
+        );
+        assert!(logs.contains("entering fallback"), "{logs}");
+        assert!(
+            !logs.contains(&*root.to_string_lossy()),
+            "the Design path is user content and stays out of the log: {logs}"
         );
         assert!(
             operation_sidecars(&root, "old").is_empty(),
