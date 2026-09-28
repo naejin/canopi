@@ -95,9 +95,19 @@ impl fmt::Display for DesignLoadError {
 
 impl std::error::Error for DesignLoadError {}
 
-/// Encode a Design as `.canopi` wire bytes: the one encoder for saves and drafts.
+/// Encode a Design as `.canopi` wire bytes: the one encoder for saves, drafts
+/// and exports. Refuses an encoding over [`MAX_CANOPI_FILE_BYTES`], so nothing
+/// is ever written that this build would then refuse to open.
 pub(crate) fn encode_design(content: &CanopiFile) -> Result<Vec<u8>, String> {
-    serde_json::to_vec_pretty(content).map_err(|e| format!("Failed to serialize design: {e}"))
+    let bytes = serde_json::to_vec_pretty(content)
+        .map_err(|e| format!("Failed to serialize design: {e}"))?;
+    if bytes.len() as u64 > MAX_CANOPI_FILE_BYTES {
+        return Err(format!(
+            "The Design is larger than the {} MiB a Design file may hold; remove some story images or objects before saving",
+            MAX_CANOPI_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes)
 }
 
 /// Result of [`save_to_file`].
@@ -145,9 +155,8 @@ pub(crate) fn save_to_file(
 /// An export is derived output, not a Design save: it has no fingerprint check
 /// and is not recorded as a Recent Design.
 pub fn export_to_file(path: &Path, content: &CanopiFile) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(content)
-        .map_err(|e| format!("Failed to serialize design: {e}"))?;
-    super::write_derived_file(path, json.as_bytes())
+    let bytes = encode_design(content)?;
+    super::write_derived_file(path, &bytes)
         .map_err(|e| format!("Failed to export {}: {e}", path.display()))
 }
 
@@ -356,6 +365,25 @@ mod tests {
 
     fn create_default() -> CanopiFile {
         create_new_design("Untitled", "2026-07-02T00:00:00Z")
+    }
+
+    #[test]
+    fn a_design_that_would_not_reopen_is_refused_before_it_is_written() {
+        let mut design = create_default();
+        // One description just past the file limit: the encoder must refuse
+        // it rather than write a file this build then refuses to load.
+        design.description = Some("x".repeat(MAX_CANOPI_FILE_BYTES as usize + 1));
+        let error = encode_design(&design).unwrap_err();
+        assert!(error.contains("MiB"), "{error}");
+
+        let dir =
+            std::env::temp_dir().join(format!("canopi-format-oversized-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("huge.canopi");
+        assert!(save_to_file(&path, &design, None).is_err());
+        assert!(export_to_file(&path, &design).is_err());
+        assert!(!path.exists(), "nothing is written for a refused Design");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
