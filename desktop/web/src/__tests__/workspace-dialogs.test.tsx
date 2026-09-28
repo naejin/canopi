@@ -94,6 +94,25 @@ describe('Settings dialog', () => {
     await act(async () => { overlay.dispatchEvent(new Event('pointerup', { bubbles: true })) })
     expect(settingsDialogOpen.value).toBe(false)
   })
+
+  it('stays open when a press inside the dialog is released on the backdrop', async () => {
+    await act(async () => { render(<SettingsDialog />, container) })
+    await act(async () => { openSettingsDialog() })
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"]')!
+    const overlay = dialog.parentElement!
+    // A drag that starts in a field (selecting its text) and ends on the backdrop.
+    await act(async () => {
+      dialog.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      overlay.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    })
+    expect(settingsDialogOpen.value).toBe(true)
+    // A press that starts and ends on the backdrop closes.
+    await act(async () => {
+      overlay.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      overlay.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    })
+    expect(settingsDialogOpen.value).toBe(false)
+  })
 })
 
 describe('Keyboard shortcuts dialog', () => {

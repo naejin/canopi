@@ -5,6 +5,7 @@ import { t } from '../../i18n'
 import styles from './ProblemReportDialog.module.css'
 import { ControlIcon } from './ControlIcon'
 import { useModalLayer } from './useModalLayer'
+import { useScrimPress } from './useScrimPress'
 
 export function ProblemReportDialog() {
   if (!problemReportDialogOpen.value) return null
@@ -14,6 +15,7 @@ export function ProblemReportDialog() {
 function ProblemReportDialogContent() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   useModalLayer()
+  const scrim = useScrimPress(closeDialog)
   const description = problemReportSubmission.description.value
   const includeCurrentDesign = problemReportSubmission.includeCurrentDesign.value
   const submitting = problemReportSubmission.submitting.value
@@ -52,12 +54,7 @@ function ProblemReportDialogContent() {
   }
 
   return (
-    <div
-      className={styles.overlay}
-      onPointerUp={(event) => {
-        if (event.target === event.currentTarget) closeDialog()
-      }}
-    >
+    <div className={styles.overlay} {...scrim}>
       <section
         className={styles.dialog}
         role="dialog"

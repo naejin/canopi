@@ -7,6 +7,7 @@ import {
 } from '../../app/about/metadata'
 import { t } from '../../i18n'
 import { useModalLayer } from './useModalLayer'
+import { useScrimPress } from './useScrimPress'
 import styles from './AboutCanopiDialog.module.css'
 
 export function AboutCanopiDialog() {
@@ -17,6 +18,7 @@ export function AboutCanopiDialog() {
 function AboutCanopiDialogContent() {
   const closeRef = useRef<HTMLButtonElement>(null)
   useModalLayer()
+  const scrim = useScrimPress(closeAboutCanopiDialog)
   useEffect(() => {
     closeRef.current?.focus()
   }, [])
@@ -29,12 +31,7 @@ function AboutCanopiDialogContent() {
   }
 
   return (
-    <div
-      className={styles.overlay}
-      onPointerUp={(event) => {
-        if (event.target === event.currentTarget) closeAboutCanopiDialog()
-      }}
-    >
+    <div className={styles.overlay} {...scrim}>
       <section
         className={styles.dialog}
         role="dialog"

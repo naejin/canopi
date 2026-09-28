@@ -62,6 +62,23 @@ describe('AboutCanopiDialog', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull()
   })
 
+  it('stays open when a press inside the dialog is released on the backdrop', async () => {
+    aboutCanopiDialogOpen.value = true
+    await act(async () => { render(<AboutCanopiDialog />, container) })
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"]')!
+    const overlay = dialog.parentElement!
+    await act(async () => {
+      dialog.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      overlay.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    })
+    expect(aboutCanopiDialogOpen.value).toBe(true)
+    await act(async () => {
+      overlay.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      overlay.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    })
+    expect(aboutCanopiDialogOpen.value).toBe(false)
+  })
+
   it('uses the Tauri app version as About metadata', () => {
     expect(CANOPI_VERSION).toBe(readTauriConfigVersion())
   })

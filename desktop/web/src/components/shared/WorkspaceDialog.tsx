@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { ControlIcon } from './ControlIcon'
 import { useModalLayer } from './useModalLayer'
+import { useScrimPress } from './useScrimPress'
 import styles from './WorkspaceDialog.module.css'
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -23,6 +24,7 @@ export function WorkspaceDialog({ title, onClose, children, footer, wide = false
   const titleId = useId()
 
   useModalLayer()
+  const scrim = useScrimPress(onClose)
   useEffect(() => {
     const initial = dialog.current?.querySelector<HTMLElement>('[data-dialog-initial-focus]')
       ?? dialog.current?.querySelector<HTMLElement>(FOCUSABLE)
@@ -30,10 +32,7 @@ export function WorkspaceDialog({ title, onClose, children, footer, wide = false
   }, [])
 
   return (
-    <div
-      className={styles.overlay}
-      onPointerUp={(event) => { if (event.target === event.currentTarget) onClose() }}
-    >
+    <div className={styles.overlay} {...scrim}>
       <section
         ref={dialog}
         className={`${styles.dialog} ${wide ? styles.wide : ''}`}
