@@ -61,7 +61,7 @@ pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::
 }
 
 #[cfg(unix)]
-fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+pub(crate) fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -81,7 +81,7 @@ fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+pub(crate) fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
     // Windows commits the rename with the file's metadata; there is no
     // directory handle to flush.
     Ok(())

@@ -919,6 +919,7 @@ fn promote_source_cogs(
                     destination.display()
                 )
             })?;
+            super::raster_assets::sync_published_asset(&destination)?;
         }
         // The destination must match the declared identity before any catalogue
         // row references it: a readable layout is not proof that a reused file

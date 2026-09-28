@@ -172,6 +172,17 @@ pub(super) fn write_job_source_cog(
     validated
 }
 
+/// Flush a file just renamed into the asset store, and its directory, to
+/// stable storage. A catalogue row is written durably right after; without
+/// this a crash could leave that row pointing at a truncated asset, which the
+/// sweep never removes because it is referenced.
+pub(super) fn sync_published_asset(path: &Path) -> Result<(), String> {
+    std::fs::File::open(path)
+        .and_then(|file| file.sync_all())
+        .and_then(|()| crate::design::sync_parent_directory(path))
+        .map_err(|e| format!("Failed to sync a published raster asset: {e}"))
+}
+
 /// Validate, digest and admit one staged COG into the content-addressed store.
 ///
 /// Validation happens before the asset can be referenced: opening the staged
@@ -201,6 +212,7 @@ pub(super) fn admit_staged_cog(
             .map_err(|e| format!("Failed to create asset directory: {e}"))?;
             std::fs::rename(staged, &target)
                 .map_err(|e| format!("Failed to publish raster asset: {e}"))?;
+            sync_published_asset(&target)?;
         }
         Ok(CogAsset {
             sha256,
