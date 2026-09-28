@@ -1,11 +1,11 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { useBudgetItemWorkbench } from '../../app/budget/workbench'
 import type { BudgetSort } from '../../app/planning-view/state'
-import { navigateTo, sidePanel } from '../../app/shell/state'
+import { navigateTo } from '../../app/shell/state'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { formatCount } from '../../utils/format-count'
-import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { DockPanelHeader, closeDockPanel } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
@@ -60,8 +60,7 @@ export function BudgetPanel() {
         if (event.key !== 'Escape' || event.defaultPrevented || workbench.editingCanonical !== null) return
         event.preventDefault()
         event.stopPropagation()
-        sidePanel.value = null
-        document.querySelector<HTMLButtonElement>('button[data-panel="budget"]')?.focus()
+        closeDockPanel()
       }}
     >
       <DockPanelHeader title={t('canvas.budget.title')} />

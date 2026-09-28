@@ -16,11 +16,10 @@ import {
 } from '../../app/timeline/civil-date'
 import { ACTION_TYPES, missingZoneLabel, type CalendarDayProjection, type CalendarPlanningAction, type CalendarTargetLabel } from '../../app/planning-projection'
 import type { CalendarCompletionFilter, CalendarDisplay } from '../../app/planning-view/state'
-import { sidePanel } from '../../app/shell/state'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { formatCount } from '../../utils/format-count'
-import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { DockPanelHeader, closeDockPanel } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { SurfaceSearch } from '../shared/SurfaceSearch'
 import { DatePicker } from '../shared/DatePicker'
@@ -89,8 +88,7 @@ export function CalendarPanel() {
   function closePanel(): void {
     workbench.cancelEditor()
     workbench.setExpanded(false)
-    sidePanel.value = null
-    document.querySelector<HTMLButtonElement>('button[data-panel="calendar"]')?.focus()
+    closeDockPanel()
   }
 
   function handleEscape(event: JSX.TargetedKeyboardEvent<HTMLElement>): void {

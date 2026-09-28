@@ -10,12 +10,12 @@ import {
 } from '../../app/consortium/time-model'
 import type { ConsortiumListFilter } from '../../app/planning-view/state'
 import type { ConsortiumPlanningRow } from '../../app/planning-projection'
-import { navigateTo, sidePanel } from '../../app/shell/state'
+import { navigateTo } from '../../app/shell/state'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { formatCount } from '../../utils/format-count'
 import { ControlIcon } from '../shared/ControlIcon'
-import { DockPanelHeader } from '../shared/DockPanelHeader'
+import { DockPanelHeader, closeDockPanel } from '../shared/DockPanelHeader'
 import { Dropdown, type DropdownItem } from '../shared/Dropdown'
 import { EmptyState } from '../shared/EmptyState'
 import { PanelIcon } from '../shared/PanelIcon'
@@ -75,8 +75,7 @@ export function ConsortiumPanel() {
           cancelEditorAndRestoreFocus()
           return
         }
-        sidePanel.value = null
-        document.querySelector<HTMLButtonElement>('button[data-panel="consortium"]')?.focus()
+        closeDockPanel()
       }}
     >
       <DockPanelHeader title={t('canvas.consortium.title')} />
