@@ -11,11 +11,10 @@ const LIDAR_PRESENTATION_SCHEMA_VERSION = 1
  * id (Canopi 1.x wrote none).
  */
 export function designIdentitiesAndRangesProblem(file: CanopiFile): string | null {
-  const plantIds = new Set<string>()
+  const plantIds = explicitIds('plants', file.plants.map((plant) => plant.id))
+  if (typeof plantIds === 'string') return plantIds
   for (const [index, plant] of file.plants.entries()) {
-    if (plant.id === '') plant.id = generatedId('plant', index, plantIds)
-    if (plantIds.has(plant.id)) return `$.plants[${index}].id: duplicate id ${JSON.stringify(plant.id)}`
-    plantIds.add(plant.id)
+    if (!plant.id) plant.id = generatedId('plant', index, plantIds)
     if (plant.scale != null && !(Number.isFinite(plant.scale) && plant.scale > 0)) {
       return `$.plants[${index}].scale: expected a finite number above 0`
     }
@@ -23,11 +22,11 @@ export function designIdentitiesAndRangesProblem(file: CanopiFile): string | nul
       return `$.plants[${index}].rotation: expected a finite number`
     }
   }
-  const guideIds = new Set<string>()
-  for (const [index, guide] of (file.measurement_guides ?? []).entries()) {
+  const guides = file.measurement_guides ?? []
+  const guideIds = explicitIds('measurement_guides', guides.map((guide) => guide.id))
+  if (typeof guideIds === 'string') return guideIds
+  for (const [index, guide] of guides.entries()) {
     if (!guide.id) guide.id = generatedId('measurement-guide', index, guideIds)
-    if (guideIds.has(guide.id)) return `$.measurement_guides[${index}].id: duplicate id ${JSON.stringify(guide.id)}`
-    guideIds.add(guide.id)
   }
   return uniqueIdsProblem('zones', file.zones.map((zone) => zone.id))
     ?? uniqueIdsProblem('annotations', file.annotations.map((annotation) => annotation.id))
@@ -72,10 +71,29 @@ function lidarProblem(file: CanopiFile): string | null {
   return null
 }
 
-function generatedId(prefix: string, index: number, taken: ReadonlySet<string>): string {
+/**
+ * Every explicit (non-empty) id of a list that may repair missing ids, or the
+ * problem naming a duplicate among them. Collected before any id is
+ * generated, so a generated id never takes an explicit id that comes later.
+ */
+function explicitIds(key: string, ids: readonly (string | undefined)[]): Set<string> | string {
+  const seen = new Set<string>()
+  for (const [index, id] of ids.entries()) {
+    if (!id) continue
+    if (seen.has(id)) return `$.${key}[${index}].id: duplicate id ${JSON.stringify(id)}`
+    seen.add(id)
+  }
+  return seen
+}
+
+/** The first free `${prefix}-${n}` from `index + 1`, recorded as taken. */
+function generatedId(prefix: string, index: number, taken: Set<string>): string {
   for (let n = index + 1; ; n += 1) {
     const candidate = `${prefix}-${n}`
-    if (!taken.has(candidate)) return candidate
+    if (!taken.has(candidate)) {
+      taken.add(candidate)
+      return candidate
+    }
   }
 }
 

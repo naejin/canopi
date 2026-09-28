@@ -634,6 +634,109 @@
       "created_at": "2026-09-25T00:00:00.000Z",
       "updated_at": "2026-09-25T00:00:00.000Z",
       "extra": {}
+    },
+    "generated-ids-before-explicit-ids": {
+      "version": 9,
+      "name": "Conformance Garden",
+      "description": null,
+      "plant_species_colors": {},
+      "plant_species_symbols": {},
+      "plant_species_codes": {},
+      "layers": [],
+      "plants": [
+        {
+          "id": "plant-1",
+          "locked": false,
+          "canonical_name": "Malus domestica",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-3",
+          "locked": false,
+          "canonical_name": "Prunus avium",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        },
+        {
+          "id": "plant-2",
+          "locked": false,
+          "canonical_name": "Pyrus communis",
+          "common_name": null,
+          "color": null,
+          "symbol": null,
+          "pinned_name": false,
+          "position": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "rotation": null,
+          "scale": null,
+          "notes": null,
+          "planted_date": null,
+          "quantity": null
+        }
+      ],
+      "zones": [],
+      "annotations": [],
+      "measurement_guides": [
+        {
+          "id": "measurement-guide-2",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.001,
+            "lat": 23.0
+          }
+        },
+        {
+          "id": "measurement-guide-1",
+          "locked": false,
+          "start": {
+            "lon": 13.0,
+            "lat": 23.0
+          },
+          "end": {
+            "lon": 13.002,
+            "lat": 23.0
+          }
+        }
+      ],
+      "consortiums": [],
+      "groups": [],
+      "timeline": [],
+      "budget": [],
+      "budget_currency": "EUR",
+      "views": [],
+      "stories": [],
+      "created_at": "2026-09-25T00:00:00.000Z",
+      "updated_at": "2026-09-25T00:00:00.000Z",
+      "extra": {}
     }
   },
   "cases": [
@@ -946,6 +1049,67 @@
         ]
       },
       "accepted": "generated-ids"
+    },
+    {
+      "id": "accept-generated-ids-avoid-later-explicit-ids",
+      "input": {
+        "version": 9,
+        "name": "Conformance Garden",
+        "plant_species_colors": {},
+        "layers": [],
+        "plants": [
+          {
+            "canonical_name": "Malus domestica",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "",
+            "canonical_name": "Prunus avium",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "plant-2",
+            "canonical_name": "Pyrus communis",
+            "position": {
+              "lon": 13.0,
+              "lat": 23.0
+            }
+          }
+        ],
+        "zones": [],
+        "created_at": "2026-09-25T00:00:00.000Z",
+        "updated_at": "2026-09-25T00:00:00.000Z",
+        "measurement_guides": [
+          {
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.001,
+              "lat": 23.0
+            }
+          },
+          {
+            "id": "measurement-guide-1",
+            "start": {
+              "lon": 13.0,
+              "lat": 23.0
+            },
+            "end": {
+              "lon": 13.002,
+              "lat": 23.0
+            }
+          }
+        ]
+      },
+      "accepted": "generated-ids-before-explicit-ids"
     },
     {
       "id": "migrate-v7",

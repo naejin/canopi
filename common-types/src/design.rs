@@ -459,17 +459,15 @@ pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
 /// ladder. Zones, annotations and groups need unique, non-empty ids because
 /// targets, groups and saved views refer to them. A plant or measurement
 /// guide without an id (Canopi 1.x wrote none) is repaired with a generated
-/// one; a duplicate id is refused. Opacities, scales and font sizes must be
+/// one that no other entry uses, wherever it appears; a duplicate explicit id
+/// is refused. Opacities, scales and font sizes must be
 /// finite and in range, and the LiDAR section must be the schema this build
 /// writes.
 pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), String> {
-    let mut plant_ids = std::collections::HashSet::new();
+    let mut plant_ids = explicit_ids("plants", file.plants.iter().map(|plant| plant.id.as_str()))?;
     for (index, plant) in file.plants.iter_mut().enumerate() {
         if plant.id.is_empty() {
-            plant.id = generated_id("plant", index, &plant_ids);
-        }
-        if !plant_ids.insert(plant.id.clone()) {
-            return Err(format!("$.plants[{index}].id: duplicate id {:?}", plant.id));
+            plant.id = generated_id("plant", index, &mut plant_ids);
         }
         if plant
             .scale
@@ -485,16 +483,15 @@ pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), S
             ));
         }
     }
-    let mut guide_ids = std::collections::HashSet::new();
+    let mut guide_ids = explicit_ids(
+        "measurement_guides",
+        file.measurement_guides
+            .iter()
+            .map(|guide| guide.id.as_str()),
+    )?;
     for (index, guide) in file.measurement_guides.iter_mut().enumerate() {
         if guide.id.is_empty() {
-            guide.id = generated_id("measurement-guide", index, &guide_ids);
-        }
-        if !guide_ids.insert(guide.id.clone()) {
-            return Err(format!(
-                "$.measurement_guides[{index}].id: duplicate id {:?}",
-                guide.id
-            ));
+            guide.id = generated_id("measurement-guide", index, &mut guide_ids);
         }
     }
     check_unique_ids("zones", file.zones.iter().map(|zone| zone.id.as_str()))?;
@@ -545,11 +542,32 @@ pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), S
     Ok(())
 }
 
-fn generated_id(prefix: &str, index: usize, taken: &std::collections::HashSet<String>) -> String {
+/// Every explicit (non-empty) id of a list that may repair missing ids,
+/// refusing a duplicate among them. Collected before any id is generated, so
+/// a generated id never takes an explicit id that appears later in the list.
+fn explicit_ids<'a>(
+    key: &str,
+    ids: impl Iterator<Item = &'a str>,
+) -> Result<std::collections::HashSet<String>, String> {
+    let mut seen = std::collections::HashSet::new();
+    for (index, id) in ids.enumerate() {
+        if !id.is_empty() && !seen.insert(id.to_owned()) {
+            return Err(format!("$.{key}[{index}].id: duplicate id {id:?}"));
+        }
+    }
+    Ok(seen)
+}
+
+/// The first free `{prefix}-{n}` from `index + 1`, recorded as taken.
+fn generated_id(
+    prefix: &str,
+    index: usize,
+    taken: &mut std::collections::HashSet<String>,
+) -> String {
     let mut n = index + 1;
     loop {
         let candidate = format!("{prefix}-{n}");
-        if !taken.contains(&candidate) {
+        if taken.insert(candidate.clone()) {
             return candidate;
         }
         n += 1;
@@ -1200,6 +1218,36 @@ mod tests {
         assert_eq!(
             duplicate.unwrap_err(),
             "$.plants[1].id: duplicate id \"plant-1\""
+        );
+    }
+
+    #[test]
+    fn generated_ids_avoid_explicit_ids_that_come_later() {
+        let file = admitted(design_with(json!({
+            "plants": [
+                { "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "canonical_name": "Prunus avium", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-2", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } }
+            ],
+            "measurement_guides": [
+                { "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.001, "lat": 23.0 } },
+                { "id": "measurement-guide-1", "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.002, "lat": 23.0 } }
+            ]
+        })))
+        .expect("a generated id never takes an explicit id");
+        assert_eq!(
+            file.plants
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>(),
+            ["plant-1", "plant-3", "plant-2"]
+        );
+        assert_eq!(
+            file.measurement_guides
+                .iter()
+                .map(|g| g.id.as_str())
+                .collect::<Vec<_>>(),
+            ["measurement-guide-2", "measurement-guide-1"]
         );
     }
 
