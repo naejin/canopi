@@ -486,3 +486,9 @@ function compareNotebookEntries(left: DesignNotebookEntry, right: DesignNotebook
     || right.updated_at.localeCompare(left.updated_at)
     || left.path.localeCompare(right.path)
 }
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    designNotebookWorkbench.dispose()
+  })
+}

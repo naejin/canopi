@@ -426,6 +426,11 @@ export class RasterWorkerPool {
     if (this.clients === 0) this.stop()
   }
 
+  /** Stops every lane; only the HMR owner of the module singleton calls it. */
+  stopForHotReload(): void {
+    this.stop()
+  }
+
   private stop(): void {
     recordRaster({ kind: 'lanes-stop', detail: `${this.lanes.reduce((sum, lane) => sum + lane.pending.size, 0)} in flight` })
     for (const lane of this.lanes) {
@@ -458,4 +463,11 @@ export function rasterWorkerPool(): RasterWorkerPool {
       new Worker(new URL('./worker.ts', import.meta.url), { type: 'module', name: 'canopi-raster-display' }) as unknown as RasterWorkerLike,
   })
   return workspacePool
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    workspacePool?.stopForHotReload()
+    workspacePool = null
+  })
 }
