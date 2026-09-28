@@ -670,43 +670,4 @@ describe('provider lifecycle regressions after 26eca68a', () => {
     expect(sources.size).toBe(0)
   })
 
-  it('E4: one owned attribution control; identical credit preserves identity', async () => {
-    const { mountSatelliteLifecycle } = await import('../maplibre/satellite-bind')
-    const sources = new Map<string, Record<string, unknown>>()
-    const layers = new Map<string, Record<string, unknown>>()
-    const map = {
-      getSource: (id: string) => sources.get(id) ?? null,
-      getLayer: (id: string) => layers.get(id) ?? null,
-      removeLayer: (id: string) => void layers.delete(id),
-      removeSource: (id: string) => void sources.delete(id),
-      addSource: (id: string, source: Record<string, unknown>) => void sources.set(id, source),
-      addLayer: (layer: Record<string, unknown>) => void layers.set(String(layer.id), layer),
-      setLayoutProperty: () => {},
-      addControl: vi.fn(),
-      removeControl: vi.fn(),
-    }
-    const controls = {
-      create: vi.fn(() => ({})),
-      add: vi.fn(),
-      remove: vi.fn(),
-    }
-    const mount = mountSatelliteLifecycle({
-      map,
-      tileAuth: null,
-      readViewport: () => ({ west: -10, south: -10, east: 10, north: 10, zoom: 2 }),
-      readVisible: () => true,
-      attributionControls: controls,
-    })
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    const first = controls.create.mock.results[0]?.value
-    // Identical credit must not recreate the control.
-    mount.update({ west: -10, south: -10, east: 10, north: 10, zoom: 2 })
-    await Promise.resolve()
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    expect(controls.remove).not.toHaveBeenCalled()
-    // Withdrawal clears only basemap credit and never adds an empty control.
-    mount.dispose()
-    expect(controls.create).toHaveBeenCalledTimes(1)
-    expect(controls.remove).toHaveBeenCalledWith(first)
-  })
 })

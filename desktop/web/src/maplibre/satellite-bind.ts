@@ -73,21 +73,6 @@ export interface SatelliteBindingDeps {
    * then, so it is not applied twice for one published state.
    */
   readonly afterApply?: () => void
-  /**
-   * Production map-owned attribution control seam.
-   *
-   * Copyright-only updates replace this owned control rather than removing the
-   * tile source. Required for a live map: a required behavior must not silently
-   * disappear behind an optional method.
-   */
-  readonly attributionControls?: {
-    create(options: {
-      compact?: boolean
-      customAttribution?: string | string[]
-    }): unknown
-    add(control: unknown): void
-    remove(control: unknown): void
-  }
 }
 
 /** Effective basemap visibility: user visibility AND provider renderability. */
@@ -104,8 +89,6 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
   const visible = deps.visible ?? (() => true)
   let disposed = false
   let pending: SatelliteState | null = null
-  let ownedAttribution: unknown = null
-  let ownedCredit: string | null = null
   let cancelReadyWait: (() => void) | null = null
 
   const target: SatelliteReconcileTarget = {
@@ -125,24 +108,6 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
   if (map.replaceSatelliteAttribution) {
     target.replaceSatelliteAttribution = (attribution: string) =>
       map.replaceSatelliteAttribution?.(attribution)
-  } else if (deps.attributionControls) {
-    const controls = deps.attributionControls
-    target.replaceSatelliteAttribution = (attribution: string) => {
-      // Keep an existing control when its credit is unchanged.
-      if (ownedAttribution && ownedCredit === attribution) return
-      if (ownedAttribution) {
-        controls.remove(ownedAttribution)
-        ownedAttribution = null
-      }
-      ownedCredit = attribution
-      // Never create an extra empty control on withdrawal.
-      if (attribution === '') return
-      ownedAttribution = controls.create({
-        compact: true,
-        customAttribution: attribution,
-      })
-      controls.add(ownedAttribution)
-    }
   }
 
   const apply = (state: SatelliteState): void => {
@@ -195,59 +160,9 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
     cancelReadyWait?.()
     cancelReadyWait = null
     unsubscribe()
-    if (ownedAttribution) {
-      deps.attributionControls?.remove(ownedAttribution)
-      ownedAttribution = null
-    }
     // The credential belongs to the surface that installed it: a removed map
     // must not leave a live session token in a shared transport.
     tileAuth?.clear()
-  }
-}
-
-/**
- * Map-owned attribution control seam for production MapLibre maps.
- *
- * Reuses the public add/remove-control APIs. Replacing the owned control is
- * how a copyright-only change updates attribution without removing the tile
- * source or disturbing other sources' credits.
- */
-export function createAttributionControls(
-  maplibre: unknown,
-  map: {
-    addControl?(control: unknown, position?: string): unknown
-    removeControl?(control: unknown): unknown
-  },
-): SatelliteBindingDeps['attributionControls'] {
-  // Safe lookup: a partial maplibre stub or test mock may throw on a missing
-  // export rather than returning undefined.
-  let AttributionControl:
-    | (new (options?: {
-        compact?: boolean
-        customAttribution?: string | string[]
-      }) => unknown)
-    | undefined
-  try {
-    AttributionControl = (maplibre as {
-      AttributionControl?: new (options?: {
-        compact?: boolean
-        customAttribution?: string | string[]
-      }) => unknown
-    } | null | undefined)?.AttributionControl
-  } catch {
-    AttributionControl = undefined
-  }
-  if (!AttributionControl || !map.addControl || !map.removeControl) return undefined
-  const addControl = map.addControl.bind(map)
-  const removeControl = map.removeControl.bind(map)
-  return {
-    create: (options) => new AttributionControl(options),
-    add: (control) => {
-      addControl(control, 'bottom-right')
-    },
-    remove: (control) => {
-      removeControl(control)
-    },
   }
 }
 
@@ -365,8 +280,8 @@ export function mapStyleReadiness(
  *
  * Creates the provider and its observers/binding, initializes from current
  * configuration immediately, applies later configuration and viewport changes,
- * and cleans up subscriptions, pending callbacks, requests, credentials and
- * owned controls. Where request transformation must exist before map
+ * and cleans up subscriptions, pending callbacks, requests and credentials.
+ * Where request transformation must exist before map
  * construction, the map host creates that credential capability and supplies
  * it; this mount never installs a second transform or recreates the map.
  */
@@ -378,12 +293,6 @@ export interface SatelliteMountOptions {
   readonly styleReady?: MapStyleReadiness
   readonly beforeLayerId?: () => string | null
   readonly afterApply?: () => void
-  readonly attributionControls?: SatelliteBindingDeps['attributionControls']
-  readonly maplibre?: unknown
-  readonly mapControls?: {
-    addControl?(control: unknown, position?: string): unknown
-    removeControl?(control: unknown): unknown
-  }
   /**
    * Lifetime-owned event registration from the map host. The mount registers
    * `moveend` once and unregisters on disposal. Host camera/UI listeners stay
@@ -405,11 +314,6 @@ export interface SatelliteMountHandle {
 export function mountSatelliteLifecycle(options: SatelliteMountOptions): SatelliteMountHandle {
   const tileAuth = options.tileAuth ?? null
   const provider = createSatelliteImagery(tileAuth)
-  const attributionControls =
-    options.attributionControls ??
-    (options.maplibre && options.mapControls
-      ? createAttributionControls(options.maplibre, options.mapControls)
-      : undefined)
   // Delegate explicitly: a live MapLibre map keeps its methods on the class
   // prototype, so spreading it would drop them.
   const map = options.map
@@ -433,7 +337,6 @@ export function mountSatelliteLifecycle(options: SatelliteMountOptions): Satelli
     ...(options.styleReady ? { styleReady: options.styleReady } : {}),
     ...(options.beforeLayerId ? { beforeLayerId: options.beforeLayerId } : {}),
     ...(options.afterApply ? { afterApply: options.afterApply } : {}),
-    ...(attributionControls ? { attributionControls } : {}),
     ...(options.readVisible ? { visible: options.readVisible } : {}),
   })
   // Initialize from current configuration immediately: no movement, settings
