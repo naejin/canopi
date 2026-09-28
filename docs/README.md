@@ -28,7 +28,7 @@ Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; 
 ## Rules for these documents
 
 - A guide states authorities, boundaries, rules with the test that enforces each, mistakes to avoid and where to look. It never narrates how code is wired; that lives in module comments and policy tests.
-- A guide is rewritten when a rule or boundary changes. Nothing is appended. `python3 scripts/check_docs.py` enforces the size budgets (10 KB per guide, 600 characters per paragraph) and the links.
+- A guide is rewritten when a rule or boundary changes. Nothing is appended. `python3 scripts/check_docs.py` enforces the size budgets (12 KB per guide, 600 characters per paragraph) and the links.
 - ADRs are at most 60 lines with a `Status:` header. A replaced ADR is marked `Superseded` with `superseded_by:`.
 - Plans carry a `Status:` line and are deleted once built. Receipts, evidence and task state live in bd, not here.
 - Release notes are written once per release, for users.

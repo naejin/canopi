@@ -50,6 +50,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 - Infer a canvas replacement from `currentDesign` changing.
 - Read `updated_at` into a replacement guard; it is generated.
 - Add a root field without `DESIGN_FILE_FIELDS`, the conformance corpus and regenerated bindings.
+- Describe Design Edit as undoable; it is not wired into history.
 
 ## Where to look
 

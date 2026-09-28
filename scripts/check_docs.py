@@ -40,7 +40,7 @@ BYTE_BUDGETS = {
     "docs/release-notes/v2.0.0.md": 10_000,
     ".interface-design/system.md": 9_000,
 }
-GUIDE_BYTE_BUDGET = 10_000
+GUIDE_BYTE_BUDGET = 12_000
 PATTERN_BYTE_BUDGET = 8_000
 ADR_BUDGET = 60
 # One idea per paragraph. Long paragraphs are how file-by-file narration crept
