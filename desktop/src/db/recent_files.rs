@@ -1,7 +1,13 @@
 use common_types::design::DesignSummary;
 use rusqlite::Connection;
 
-/// Record or update a recent file entry (upsert by path).
+/// Rows the table keeps. Recent Designs shows 20; the rest are headroom for
+/// Designs that are temporarily unavailable (an unplugged drive) and hidden.
+/// Without a cap every path ever opened stays, and each listing checks them all.
+pub const RECENT_FILES_KEPT: u32 = 100;
+
+/// Record or update a recent file entry (upsert by path), then drop the
+/// entries beyond [`RECENT_FILES_KEPT`], oldest first.
 pub fn record_recent_file(
     conn: &Connection,
     path: &str,
@@ -14,6 +20,15 @@ pub fn record_recent_file(
              name = excluded.name,
              last_opened = excluded.last_opened",
         rusqlite::params![path, name],
+    )?;
+    conn.execute(
+        "DELETE FROM recent_files
+         WHERE path NOT IN (
+             SELECT path FROM recent_files
+             ORDER BY last_opened DESC, rowid DESC
+             LIMIT ?1
+         )",
+        rusqlite::params![RECENT_FILES_KEPT],
     )?;
     Ok(())
 }
@@ -138,6 +153,20 @@ mod tests {
         record_recent_file(&conn, "/home/user/garden.canopi", "Garden").unwrap();
         assert!(is_recent_file(&conn, "/home/user/garden.canopi").unwrap());
         assert!(!is_recent_file(&conn, "/home/user/other.canopi").unwrap());
+    }
+
+    #[test]
+    fn the_table_keeps_the_newest_entries_only() {
+        let conn = test_db();
+        for i in 0..RECENT_FILES_KEPT + 5 {
+            record_recent_file(&conn, &format!("/home/user/garden{i}.canopi"), "Garden").unwrap();
+        }
+
+        let files = get_recent_files(&conn, u32::MAX).unwrap();
+        assert_eq!(files.len(), RECENT_FILES_KEPT as usize);
+        let latest = format!("/home/user/garden{}.canopi", RECENT_FILES_KEPT + 4);
+        assert!(is_recent_file(&conn, &latest).unwrap());
+        assert!(!is_recent_file(&conn, "/home/user/garden0.canopi").unwrap());
     }
 
     #[test]

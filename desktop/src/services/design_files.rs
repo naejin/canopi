@@ -71,7 +71,7 @@ pub fn load_design_file(path: String) -> Result<CanopiFile, String> {
 pub fn get_recent_files(user_db: &UserDb) -> Result<Vec<DesignSummary>, String> {
     let recent = {
         let conn = user_db.acquire();
-        crate::db::recent_files::get_recent_files(&conn, u32::MAX)
+        crate::db::recent_files::get_recent_files(&conn, crate::db::recent_files::RECENT_FILES_KEPT)
             .map_err(|e| format!("Failed to get recent files: {e}"))?
     };
 
@@ -98,20 +98,23 @@ pub fn remove_recent_design(user_db: &UserDb, path: &str) -> Result<(), String> 
 }
 
 /// The paths, among `paths`, that are on the Recent Designs list: previews
-/// read only listed files, at most one list's worth, each once.
+/// read only listed files, at most one list's worth, each once. The list is
+/// read once; the caller's input never drives a query per entry.
 pub fn listed_recent_paths(user_db: &UserDb, paths: Vec<String>) -> Result<Vec<String>, String> {
-    let conn = user_db.acquire();
+    let on_list: std::collections::HashSet<String> = {
+        let conn = user_db.acquire();
+        crate::db::recent_files::get_recent_files(&conn, crate::db::recent_files::RECENT_FILES_KEPT)
+            .map_err(|error| format!("Failed to read Recent Designs: {error}"))?
+            .into_iter()
+            .map(|file| file.path)
+            .collect()
+    };
     let mut listed: Vec<String> = Vec::new();
     for path in paths {
         if listed.len() == RECENT_DESIGNS_LIMIT {
             break;
         }
-        if listed.contains(&path) {
-            continue;
-        }
-        let on_list = crate::db::recent_files::is_recent_file(&conn, &path)
-            .map_err(|error| format!("Failed to read Recent Designs: {error}"))?;
-        if on_list {
+        if on_list.contains(&path) && !listed.contains(&path) {
             listed.push(path);
         }
     }
@@ -416,6 +419,44 @@ mod tests {
         let result = load_design(&user_db, path.to_string_lossy().into_owned());
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn preview_admission_keeps_listed_paths_in_call_order_once_and_bounded() {
+        let user_db = test_user_db();
+        {
+            let conn = user_db.acquire();
+            for i in 0..30 {
+                crate::db::recent_files::record_recent_file(
+                    &conn,
+                    &format!("/designs/listed-{i}.canopi"),
+                    "Listed",
+                )
+                .unwrap();
+            }
+        }
+        // Far more input than the list holds, mostly unlisted, with repeats.
+        let mut asked: Vec<String> = (0..10_000)
+            .map(|i| format!("/elsewhere/{i}.canopi"))
+            .collect();
+        asked.push("/designs/listed-7.canopi".to_owned());
+        asked.push("/designs/listed-3.canopi".to_owned());
+        asked.push("/designs/listed-7.canopi".to_owned());
+        asked.extend((0..30).map(|i| format!("/designs/listed-{i}.canopi")));
+
+        let listed = super::listed_recent_paths(&user_db, asked).unwrap();
+
+        assert_eq!(listed.len(), 20);
+        assert_eq!(listed[0], "/designs/listed-7.canopi");
+        assert_eq!(listed[1], "/designs/listed-3.canopi");
+        assert_eq!(listed[2], "/designs/listed-0.canopi");
+        assert_eq!(
+            listed
+                .iter()
+                .filter(|path| path.ends_with("listed-7.canopi"))
+                .count(),
+            1
+        );
     }
 
     #[test]
