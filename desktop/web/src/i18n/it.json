@@ -16,7 +16,7 @@
       "calendar": "Calendario",
       "budget": "Budget",
       "consortium": "Consorzio",
-      "stories": "Storie"
+      "stories": "Racconti"
     }
   },
   "webShell": {
@@ -1720,7 +1720,7 @@
     "stepZone": "Disegna il contorno del tuo terreno con una zona.",
     "stepCatalog": "Trova le specie nel catalogo delle piante, poi collocale o trascinane una sulla mappa.",
     "stepSave": "Tutto viene conservato mentre lavori. Fai clic sul nome in alto per rinominare il progetto e su Salva con nome… per tenerlo in un file.",
-    "openCatalog": "Apri il catalogo",
+    "openCatalog": "Apri il catalogo delle piante",
     "drawZone": "Disegna una zona",
     "searchAgain": "Cerca di nuovo",
     "noPlace": "Nessun luogo cercato"

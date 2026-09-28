@@ -16,7 +16,7 @@
       "calendar": "Calendario",
       "budget": "Presupuesto",
       "consortium": "Consorcio",
-      "stories": "Historias"
+      "stories": "Relatos"
     }
   },
   "webShell": {
@@ -1720,7 +1720,7 @@
     "stepZone": "Dibuja el contorno de tu terreno con una zona.",
     "stepCatalog": "Busca especies en el Catálogo de plantas y colócalas o arrastra una al mapa.",
     "stepSave": "Todo se guarda mientras trabajas. Haz clic en el nombre de arriba para renombrar el diseño y en Guardar como… para conservarlo como archivo.",
-    "openCatalog": "Abrir el catálogo",
+    "openCatalog": "Abrir el catálogo de plantas",
     "drawZone": "Dibujar una zona",
     "searchAgain": "Buscar de nuevo",
     "noPlace": "Ningún lugar buscado"

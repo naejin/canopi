@@ -15,7 +15,7 @@
       "favorites": "收藏",
       "calendar": "日历",
       "budget": "预算",
-      "consortium": "组合",
+      "consortium": "联合体",
       "stories": "故事"
     }
   },
@@ -1460,7 +1460,7 @@
     "softenBackground": "淡化背景",
     "softenBackgroundHint": "淡化植物下方的地图或卫星图。保存在此设备上。",
     "stratumLegend": "层次颜色",
-    "noStratumYet": "尚未分层",
+    "noStratumYet": "尚无层次",
     "stratumHint": "颜色跟随“联合体”中每个物种的层次。色块会为整个层次换色；物种颜色保持不变。",
     "stratumColorOf": "颜色：{{stratum}}",
     "resetStratumColors": "重置层次颜色",
@@ -1778,7 +1778,7 @@
     "filesLoading": "正在查找文件夹…",
     "filesUnavailable": "Canopi 找不到它的文件夹。请重启 Canopi 再试。",
     "draftsHint": "从未保存为文件的设计。",
-    "dataLibrary": "数据库",
+    "dataLibrary": "数据资料库",
     "dataLibraryHint": "你导入的地形和高度数据。",
     "showInFolder": "在文件夹中显示",
     "showFolderFailed": "无法打开该文件夹。",
