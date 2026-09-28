@@ -1,6 +1,6 @@
 # ADR 0011 implementation plan: analysis registry, typed items with provenance, hydrology
 
-Status: in progress (2026-09-28). Registry, typed items and provenance shipped (canopi-h90p.9.1); contours, hillshade, aspect and hydrology remain (canopi-h90p.9.2–.9.4, canopi-5ys2.1).
+Status: in progress (2026-09-28). Registry, typed items and provenance shipped in v2.0.0 (canopi-h90p.9.1; `terrain.slope` is the only entry, run through the bundled GeoLibre sidecar); hillshade, contours, aspect and hydrology remain (canopi-h90p.9.2–.9.4, canopi-5ys2.1). Slope runs on the pure-Rust raster engine for reads and writes (ADR 0014), not GDAL.
 
 Research date 2026-09-26. Sources:
 - Canopi worktree `.rq-scratch/wt-v2`, branch `feature/geolibre-adoption`.
@@ -111,7 +111,7 @@ Beads:
 - `GEOLIBRE_REVISION = aac2b743…`.
 - Discovery, cached: `CANOPI_GEOLIBRE_BIN`, then beside the executable, then `PATH`.
 - `version` feeds `GeolibreTool::provenance()`, which returns `"geolibre-cli 1.5.3 (geolibre-rust aac2b743978…)"`.
-- `slope(input, output, percent, cancel)` runs `slope --input= --output= --units= --z_factor=1` with `RAYON_NUM_THREADS=2`, through `GdalEngine::run_managed`.
+- `slope(input, output, percent, cancel)` runs `slope --input= --output= --units= --z_factor=1` with `RAYON_NUM_THREADS=2`, through `GeolibreEngine` (`services/lidar/geolibre.rs`).
 - A test pins the build script's revision.
 
 **`services/lidar/engine.rs`** (609 lines)

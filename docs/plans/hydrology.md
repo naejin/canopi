@@ -1,6 +1,6 @@
 # Hydrology in Canopi: implementation plan
 
-Status: agreed (2026-09-26); not started. The registry it needs shipped (canopi-h90p.9.1). Technical detail: `analysis-registry-and-hydrology.md` in this folder.
+Status: agreed (2026-09-26); not started as of 2026-09-28 (canopi-5ys2.1.1 and .1.2 open). The registry it needs shipped in v2.0.0 (canopi-h90p.9.1); the global lane (canopi-h90p.9.3) has not. Technical detail: `analysis-registry-and-hydrology.md` in this folder.
 Beads: canopi-h90p.9.1 registry (prerequisite, parked), .9.3 contours + global lane, canopi-5ys2.1.1 water flow, .1.2 catchments.
 Mockups: design canvas boards AnalyzeWater, WaterFlow, ResultDetails.
 

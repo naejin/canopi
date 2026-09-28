@@ -1,6 +1,6 @@
 # Plan: adapt the Computree ONF plugin (ct_pluginonf) to Canopi
 
-Status: agreed (2026-09-26); not started; decisions in §8, ADR 0012. Beads under canopi-5ys2.2.
+Status: agreed (2026-09-26); not started as of 2026-09-28 (no `vegetation/` crate or `native` lane exists); decisions in §8, ADR 0012. Beads under canopi-5ys2.2.
 
 Research date 2026-09-26. Research and planning only: no Canopi file was edited.
 
