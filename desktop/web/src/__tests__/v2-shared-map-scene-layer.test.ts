@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSharedMapSceneLayer, type SharedMapSceneMap, type SharedPixiRenderer } from '../maplibre/shared-scene-layer'
+import { Ticker, type WebGLOptions } from 'pixi.js'
+import {
+  createSharedMapSceneLayer,
+  sharedPixiRendererInitOptions,
+  type SharedMapSceneMap,
+  type SharedPixiRenderer,
+} from '../maplibre/shared-scene-layer'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function createCanvas(): HTMLCanvasElement {
@@ -36,6 +42,42 @@ function createRenderer(init = vi.fn(async () => {})): SharedPixiRenderer {
 }
 
 describe('createSharedMapSceneLayer', () => {
+  // ADR 0004: MapLibre owns the canvas's events and the only frame loop. The
+  // options are Pixi's real ones (the type check below), so nothing hides
+  // behind a cast, and what init installs anyway is detached right after.
+  it('initializes Pixi for MapLibre\'s context and loop: no extension imports, events, clears or GC, then detaches Pixi from the canvas and stops its ticker', async () => {
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const gl = {} as WebGL2RenderingContext
+    const options: Partial<WebGLOptions> = sharedPixiRendererInitOptions({ canvas, context: gl, width: 200, height: 100, resolution: 2 })
+    expect(options).toEqual({
+      canvas, context: gl, width: 200, height: 100, resolution: 2,
+      autoDensity: false, antialias: true, backgroundAlpha: 0, clearBeforeRender: false, premultipliedAlpha: true,
+      skipExtensionImports: true,
+      eventMode: 'none',
+      eventFeatures: { move: false, globalMove: false, click: false, wheel: false },
+      textureGCActive: false,
+      renderableGCActive: false,
+    })
+
+    const setTargetElement = vi.fn()
+    const renderer: SharedPixiRenderer = { ...createRenderer(), events: { setTargetElement } }
+    const adapter = createSharedMapSceneLayer({
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => renderer,
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => ({ dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn() }),
+    })
+    Ticker.system.start()
+    expect(Ticker.system.started).toBe(true)
+
+    await adapter.initialize(map, gl)
+
+    expect(renderer.init).toHaveBeenCalledWith(expect.objectContaining({ canvas, context: gl, skipExtensionImports: true, eventMode: 'none' }))
+    expect(setTargetElement).toHaveBeenCalledWith(null)
+    expect(Ticker.system.started).toBe(false)
+    await adapter.dispose({ mapWillBeRemoved: true })
+  })
+
   it('draws only in MapLibre render after an explicit initialization and repaint request', async () => {
     const canvas = createCanvas()
     const map = createMap(canvas)

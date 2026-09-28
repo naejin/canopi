@@ -1,7 +1,7 @@
 // Production CSP rejects Pixi's generated functions; its shim avoids eval.
 import { logMapError } from './redact-credentials'
 import 'pixi.js/unsafe-eval'
-import { Container, Text, WebGLRenderer } from 'pixi.js'
+import { Container, Text, Ticker, WebGLRenderer, type WebGLOptions } from 'pixi.js'
 import type { CustomLayerInterface, CustomRenderMethodInput } from 'maplibre-gl'
 import { createPixiScenePresentation, type PixiScenePresentation } from '../canvas/runtime/renderers/pixi-scene'
 import type { SceneRendererSnapshot } from '../canvas/runtime/renderers/scene-types'
@@ -16,24 +16,60 @@ export interface SharedMapSceneMap extends SharedMapProjector {
   triggerRepaint(): void
 }
 
+/** Pixi's real renderer options, so the layer's choices are checked against them. */
+export type SharedPixiRendererInitOptions = Partial<WebGLOptions>
+
 export interface SharedPixiRenderer {
-  init(options: {
-    readonly canvas: HTMLCanvasElement
-    readonly context: WebGL2RenderingContext
-    readonly width: number
-    readonly height: number
-    readonly resolution: number
-    readonly autoDensity: false
-    readonly antialias: true
-    readonly backgroundAlpha: 0
-    readonly clearBeforeRender: false
-    readonly premultipliedAlpha: true
-  }): Promise<void>
+  init(options: SharedPixiRendererInitOptions): Promise<void>
   render(options: { readonly container: Container; readonly clear: false }): void
   resize(width: number, height: number, resolution: number): void
   resetState(): void
   destroy(options: { readonly removeView: false }): void
   readonly context: { readonly extensions: { loseContext?: { loseContext(): void } } }
+  /** Pixi's event system, which `init` installs on the canvas; the layer detaches it. */
+  readonly events?: { setTargetElement(element: HTMLElement | null): void }
+}
+
+export interface SharedPixiRendererView {
+  readonly canvas: HTMLCanvasElement
+  readonly context: WebGL2RenderingContext
+  readonly width: number
+  readonly height: number
+  readonly resolution: number
+}
+
+/**
+ * Pixi draws inside MapLibre's context and frame loop (ADR 0004): it imports
+ * no extensions, clears nothing, collects no GPU resources on a schedule of
+ * its own, and its containers take no events. Pixi still installs its
+ * EventSystem on the canvas and its scheduler on `Ticker.system` during
+ * `init`; `detachPixiFromHost` undoes both right after.
+ */
+export function sharedPixiRendererInitOptions(view: SharedPixiRendererView): SharedPixiRendererInitOptions {
+  return {
+    ...view,
+    autoDensity: false,
+    antialias: true,
+    backgroundAlpha: 0,
+    clearBeforeRender: false,
+    premultipliedAlpha: true,
+    skipExtensionImports: true,
+    eventMode: 'none',
+    eventFeatures: { move: false, globalMove: false, click: false, wheel: false },
+    textureGCActive: false,
+    renderableGCActive: false,
+  }
+}
+
+/**
+ * MapLibre owns the canvas's pointer events (touch-action, preventDefault,
+ * document listeners) and the only frame loop. Pixi's canvas listeners go,
+ * and `Ticker.system`, which Pixi's scheduler started, stops; nothing of
+ * ours listens on it.
+ */
+export function detachPixiFromHost(renderer: SharedPixiRenderer): void {
+  renderer.events?.setTargetElement(null)
+  Ticker.system.stop()
 }
 
 export interface SharedMapSceneDiagnostics {
@@ -248,21 +284,17 @@ export function createSharedMapSceneLayer(options: SharedMapSceneLayerOptions): 
       }
       phase = 'initializing'
       initializeCount += 1
-      const nextRenderer = (options.createRenderer ?? (() => new WebGLRenderer() as unknown as SharedPixiRenderer))()
+      const nextRenderer = (options.createRenderer ?? (() => new WebGLRenderer()))()
       renderer = nextRenderer
       const initialBackingSize = { width: canvas.width, height: canvas.height }
-      initializePromise = nextRenderer.init({
+      initializePromise = nextRenderer.init(sharedPixiRendererInitOptions({
         canvas,
         context: gl,
         width: size.width,
         height: size.height,
         resolution: size.resolution,
-        autoDensity: false,
-        antialias: true,
-        backgroundAlpha: 0,
-        clearBeforeRender: false,
-        premultipliedAlpha: true,
-      }).then(() => {
+      })).then(() => {
+        detachPixiFromHost(nextRenderer)
         if (canvas?.width !== initialBackingSize.width || canvas.height !== initialBackingSize.height) {
           throw new Error('Pixi initialization changed MapLibre canvas backing dimensions.')
         }
