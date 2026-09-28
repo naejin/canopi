@@ -32,7 +32,8 @@ export function InspectionStatus() {
   useEffect(() => {
     if (!target) return
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
+      // The map's Esc chain runs first (window capture); one Esc does one thing.
+      if (event.key === 'Escape' && !event.defaultPrevented) {
         event.preventDefault()
         endInspection()
       }

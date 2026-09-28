@@ -6641,16 +6641,18 @@ describe('SceneInteractionSession', () => {
     session.setTool('polygon')
     events.pointerDown({ x: 10, y: 10 }, { button: 0 })
     events.pointerDown({ x: 60, y: 10 }, { button: 0 })
-    // App shortcuts (Delete/Backspace deletes the selection) listen in the bubble phase.
-    const appShortcuts = vi.fn()
+    // App shortcuts (Delete/Backspace deletes the selection) listen in the bubble
+    // phase and stand down for a defaultPrevented key; the event still reaches them.
+    const appShortcuts = vi.fn((event: KeyboardEvent) => event.defaultPrevented)
     window.addEventListener('keydown', appShortcuts)
     try {
       const event = events.keyDown({ key: 'Backspace', target: container })
       expect(event.defaultPrevented).toBe(true)
-      expect(appShortcuts).not.toHaveBeenCalled()
+      expect(appShortcuts).toHaveLastReturnedWith(true)
       const passthrough = events.keyDown({ key: 'a', target: container })
       expect(passthrough.defaultPrevented).toBe(false)
-      expect(appShortcuts).toHaveBeenCalledTimes(1)
+      expect(appShortcuts).toHaveLastReturnedWith(false)
+      expect(appShortcuts).toHaveBeenCalledTimes(2)
     } finally {
       window.removeEventListener('keydown', appShortcuts)
     }

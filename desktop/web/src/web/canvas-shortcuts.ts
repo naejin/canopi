@@ -37,6 +37,8 @@ export function installWebCanvasShortcuts(
   activeInstallation?.dispose()
 
   const handler = (event: KeyboardEvent): void => {
+    // A key an earlier listener consumed (the active tool, a menu) is no shortcut.
+    if (event.defaultPrevented) return
     // Modal dialogs: no shortcut may change the Design under them.
     if (saveProblem.peek() !== null || savedViewDialogOpen.peek() || modalLayerOpen.peek()) return
     // Ctrl F belongs to the open panel's plant finder, even while a field has focus.

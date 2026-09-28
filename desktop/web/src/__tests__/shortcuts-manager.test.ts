@@ -54,6 +54,20 @@ describe('shortcut manager canvas tool switching', () => {
     expect(activeTool.value).toBe('rectangle')
   })
 
+  // A key the active tool consumed (Backspace in a polygon draft) is not also
+  // an app shortcut: the dispatcher honours defaultPrevented like any listener.
+  it('ignores a key an earlier listener already consumed', () => {
+    const setTool = vi.fn()
+    mountCanvasCommandSurface({ tools: { setTool } })
+    const event = new KeyboardEvent('keydown', { key: 'r', cancelable: true })
+    event.preventDefault()
+
+    window.dispatchEvent(event)
+
+    expect(setTool).not.toHaveBeenCalled()
+    expect(activeTool.value).toBe('select')
+  })
+
   it('routes the ellipse tool shortcut through the live canvas session', () => {
     const setTool = vi.fn()
     mountCanvasCommandSurface({ tools: { setTool } })

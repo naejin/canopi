@@ -25,6 +25,8 @@ export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
 }
 
 export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
+  // A key an earlier listener consumed (the active tool, a menu) is no shortcut.
+  if (event.defaultPrevented) return false
   const match = matchAppCommandShortcut(event)
   if (!match) return false
   if (match.preventDefault) event.preventDefault()

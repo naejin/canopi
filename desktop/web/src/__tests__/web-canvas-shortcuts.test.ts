@@ -32,6 +32,17 @@ describe('Web Canvas shortcuts', () => {
     vi.restoreAllMocks()
   })
 
+  it('ignores a key an earlier listener already consumed', () => {
+    installWebCanvasShortcuts()
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
+    const event = shortcutEvent({ key: 'r' })
+    event.preventDefault()
+
+    window.dispatchEvent(event)
+
+    expect(activeTool.value).toBe('select')
+  })
+
   it('focuses the place field on Ctrl+K only while a Design canvas is live', () => {
     installWebCanvasShortcuts()
     const before = placeSearchFocusRequest.value
