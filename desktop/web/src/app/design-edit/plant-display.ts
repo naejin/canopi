@@ -13,6 +13,7 @@ import {
 } from '../../canvas/runtime/plant-display'
 import { normalizeHexColor } from '../../canvas/plant-colors'
 import { editCurrentDesign } from './core'
+import { DESIGN_EDIT_EXTRA_KEYS, readExtra, reportExtraRepair, withExtra } from './extra-keys'
 
 /**
  * Display on the map, as a Design stores it in `extra.plant_display`: how
@@ -20,7 +21,7 @@ import { editCurrentDesign } from './core'
  * Design Edit data (continuous save, never undoable) and never changes a
  * stored plant colour. The key is absent while every option is the default.
  */
-export const PLANT_DISPLAY_EXTRA_KEY = 'plant_display'
+export const PLANT_DISPLAY_EXTRA_KEY = DESIGN_EDIT_EXTRA_KEYS.plantDisplay
 
 export interface PlantDisplayOptions {
   readonly colorBy: PlantColorMode
@@ -51,18 +52,25 @@ export const DEFAULT_PLANT_DISPLAY_OPTIONS: PlantDisplayOptions = Object.freeze(
   stratumColors: DEFAULT_PLANT_DISPLAY.stratumColors,
 })
 
-/** The Design's display options; unknown or invalid stored values fall back to defaults. */
+/** The Design's display options; unknown or invalid stored values fall back to defaults, reported as a repair. */
 export function readPlantDisplayOptions(design: Pick<CanopiFile, 'extra'> | null): PlantDisplayOptions {
-  const raw = design?.extra?.[PLANT_DISPLAY_EXTRA_KEY]
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return DEFAULT_PLANT_DISPLAY_OPTIONS
-  const stored = raw as Partial<Record<keyof StoredPlantDisplay, unknown>>
+  const stored = readExtra(design, PLANT_DISPLAY_EXTRA_KEY) as Partial<Record<keyof StoredPlantDisplay, unknown>> | null
+  if (!stored) return DEFAULT_PLANT_DISPLAY_OPTIONS
   const colorBy = stored.color_by === 'one_color' ? 'one-color' : stored.color_by
+  const oneColor = typeof stored.one_color === 'string' ? normalizeHexColor(stored.one_color) : null
+  const repaired = [
+    PLANT_COLOR_MODES.includes(colorBy as PlantColorMode) ? null : 'color_by',
+    oneColor ? null : 'one_color',
+    typeof stored.symbol_scale === 'number' ? null : 'symbol_scale',
+    typeof stored.outline === 'boolean' ? null : 'outline',
+    PLANT_LABEL_MODES.includes(stored.labels as PlantLabelMode) ? null : 'labels',
+  ].filter((field): field is string => field !== null)
+  if (repaired.length > 0) reportExtraRepair(design, PLANT_DISPLAY_EXTRA_KEY, `${repaired.join(', ')} defaulted`)
   return Object.freeze({
     colorBy: PLANT_COLOR_MODES.includes(colorBy as PlantColorMode)
       ? colorBy as PlantColorMode
       : DEFAULT_PLANT_DISPLAY_OPTIONS.colorBy,
-    oneColor: (typeof stored.one_color === 'string' ? normalizeHexColor(stored.one_color) : null)
-      ?? DEFAULT_PLANT_DISPLAY_OPTIONS.oneColor,
+    oneColor: oneColor ?? DEFAULT_PLANT_DISPLAY_OPTIONS.oneColor,
     symbolScale: typeof stored.symbol_scale === 'number'
       ? clampPlantSymbolScale(stored.symbol_scale)
       : DEFAULT_PLANT_DISPLAY_OPTIONS.symbolScale,
@@ -104,10 +112,7 @@ export function withPlantDisplayOptions<T extends Pick<CanopiFile, 'extra'>>(
     extra: { [PLANT_DISPLAY_EXTRA_KEY]: storedFrom({ ...current, ...change }) },
   })
   if (sameOptions(current, next)) return design
-  const extra: Record<string, unknown> = { ...design.extra }
-  if (sameOptions(next, DEFAULT_PLANT_DISPLAY_OPTIONS)) delete extra[PLANT_DISPLAY_EXTRA_KEY]
-  else extra[PLANT_DISPLAY_EXTRA_KEY] = storedFrom(next)
-  return { ...design, extra }
+  return withExtra(design, PLANT_DISPLAY_EXTRA_KEY, sameOptions(next, DEFAULT_PLANT_DISPLAY_OPTIONS) ? null : { ...storedFrom(next) })
 }
 
 /** Changes some display options of the current Design; a change to nothing leaves it untouched. */

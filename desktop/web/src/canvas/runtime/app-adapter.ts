@@ -12,6 +12,7 @@ import type {
   CanvasRuntimeDocumentMetadata,
   CanvasSceneEditCommandSurface,
 } from './runtime'
+import { SCENE_OWNED_EXTRA_KEYS } from './scene-extra-keys'
 
 export interface CanvasRuntimeLayerProjectionSource {
   readonly name: string
@@ -263,6 +264,11 @@ function composeDetachedCanvasDocument({
   }
 }
 
+/**
+ * Scene-owned `extra` keys come from the scene, every other key from the
+ * document. The app composer (app/contracts/document.ts) applies the same
+ * rule with the format's owner table; this is the detached runtime's.
+ */
 function composeDetachedDocumentExtra(
   documentExtra: CanopiFile['extra'],
   canvasExtra: CanopiFile['extra'],
@@ -270,10 +276,12 @@ function composeDetachedDocumentExtra(
   const nextExtra = normalizeDetachedExtra(documentExtra)
   const sceneExtra = normalizeDetachedExtra(canvasExtra)
 
-  if (Object.prototype.hasOwnProperty.call(sceneExtra, 'guides')) {
-    nextExtra.guides = sceneExtra.guides
-  } else {
-    delete nextExtra.guides
+  for (const key of SCENE_OWNED_EXTRA_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(sceneExtra, key)) {
+      nextExtra[key] = sceneExtra[key]
+    } else {
+      delete nextExtra[key]
+    }
   }
 
   return nextExtra

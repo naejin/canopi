@@ -39,6 +39,7 @@ import {
   normalizeSceneDesignObjectTargets,
 } from './design-object-targets'
 import { cloneSceneObjectGroupMembers } from './group-members'
+import { SCENE_GUIDES_EXTRA_KEY } from '../scene-extra-keys'
 
 export interface SceneSerializeOptions {
   now?: Date
@@ -80,7 +81,7 @@ export function hydrateScenePersistedStateInFrame(file: CanopiFile, geo: SceneGe
     annotations: (file.annotations ?? []).map((annotation) => hydrateAnnotationEntity(annotation, geo)),
     measurementGuides: (file.measurement_guides ?? []).map((guide, index) => hydrateMeasurementGuideEntity(guide, index, geo)),
     groups: (file.groups ?? []).map(hydrateGroupEntity),
-    guides: hydrateGuides(file.extra?.guides, geo),
+    guides: hydrateGuides(file.extra?.[SCENE_GUIDES_EXTRA_KEY], geo),
   }
 }
 
@@ -110,7 +111,7 @@ export function serializeScenePersistedState(
     budget_currency: DEFAULT_BUDGET_CURRENCY,
     created_at: now.toISOString(),
     updated_at: now.toISOString(),
-    extra: state.guides.length > 0 ? { guides: state.guides.map((guide) => serializeGuide(guide, geo)) } : {},
+    extra: state.guides.length > 0 ? { [SCENE_GUIDES_EXTRA_KEY]: state.guides.map((guide) => serializeGuide(guide, geo)) } : {},
   }
 }
 
