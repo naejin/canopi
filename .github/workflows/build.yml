@@ -2,9 +2,11 @@ name: Build & Test
 
 on:
   push:
-    branches: [main]
+    # All Canopi v2 work lands on feature/geolibre-adoption (AGENTS.md), so the
+    # gates run there as well as on main.
+    branches: [main, feature/geolibre-adoption]
   pull_request:
-    branches: [main]
+    branches: [main, feature/geolibre-adoption]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
