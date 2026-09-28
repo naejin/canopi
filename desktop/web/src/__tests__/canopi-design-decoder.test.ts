@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CanopiDesignIngestionError,
   decodeCanopiDesign,
+  decodeCanopiDesignOutcome,
 } from '../app/contracts/design-ingestion'
 import {
   STORY_IMAGE_MAX_BYTES,
@@ -36,19 +37,40 @@ describe('Canopi Design decoder', () => {
   it.each([
     { version: undefined, displayed: 1 },
     { version: 1, displayed: 1 },
-    { version: 6, displayed: 6 },
-    { version: 7, displayed: 7 },
-    { version: 8, displayed: 8 },
+    { version: 4, displayed: 4 },
     { version: 10, displayed: 10 },
-  ])('rejects unsupported old, missing, or future version $displayed', ({ version, displayed }) => {
+  ])('rejects a version below the ladder, missing, or future version $displayed', ({ version, displayed }) => {
     const input = currentDesign()
     if (version === undefined) delete input.version
     else input.version = version
 
     expect(() => decodeCanopiDesign(input)).toThrow(
-      `$.version: unsupported Canopi Design version ${displayed}; current version is 9`,
+      `$.version: unsupported Canopi Design version ${displayed}; this build opens versions 5 to 9`,
     )
     expectKind(() => decodeCanopiDesign(input), 'unsupported_version')
+  })
+
+  it('upgrades a v8 Design in memory and reports the version it came from', () => {
+    const input = currentDesign({
+      version: 8,
+      zones: [{ name: 'Bed', zone_type: 'rect', points: [{ lon: 13, lat: 23 }, { lon: 13.0001, lat: 22.9999 }] }],
+    })
+
+    const outcome = decodeCanopiDesignOutcome(input)
+
+    expect(outcome.kind).toBe('design')
+    if (outcome.kind !== 'design') return
+    expect(outcome.migratedFrom).toBe(8)
+    expect(outcome.file.version).toBe(9)
+    expect(outcome.file.zones[0]).toMatchObject({ id: 'Bed', name: 'Bed' })
+    expect(decodeCanopiDesignOutcome(currentDesign())).toMatchObject({ kind: 'design', migratedFrom: null })
+  })
+
+  it('refuses a v6 Design that claims the current shape without its frame', () => {
+    expect(() => decodeCanopiDesign(currentDesign({ version: 6 }))).toThrow(
+      '$.spatial_frame: expected the v6 spatial frame object',
+    )
+    expectKind(() => decodeCanopiDesign(currentDesign({ version: 6 })), 'invalid_document')
   })
 
   it.each([0, 1.5, Number.NaN])('rejects invalid version %s', (version) => {

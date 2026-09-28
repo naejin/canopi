@@ -13,11 +13,10 @@ use std::{
 };
 
 use common_types::design::{
-    CURRENT_CANOPI_FILE_VERSION, RecentDesignPreview, RecentDesignSummary,
-    RecentDesignUnreadableReason,
+    RecentDesignPreview, RecentDesignSummary, RecentDesignUnreadableReason,
 };
 
-use crate::design::format::{self, DesignLoadError};
+use crate::design::format::{self, DecodedDesign, DesignLoadError};
 
 /// Files larger than this are not read for a preview; the row shows the name only.
 pub(crate) const RECENT_PREVIEW_MAX_BYTES: u64 = 16 * 1024 * 1024;
@@ -106,7 +105,23 @@ fn read_preview(path: &Path, len: u64) -> (RecentDesignPreview, bool) {
         return (RecentDesignPreview::TooLarge, true);
     }
     match format::load_within(path, RECENT_PREVIEW_MAX_BYTES) {
-        Ok(file) => (crate::design::preview::preview_of(&file), true),
+        Ok(DecodedDesign::Design { file, .. }) => (crate::design::preview::preview_of(&file), true),
+        // A pre-geolocation Design has counts but no ground until it is placed.
+        Ok(DecodedDesign::NeedsSite(pending)) => {
+            let summary = pending.summary();
+            (
+                RecentDesignPreview::Read {
+                    plant_count: summary.plant_count,
+                    zone_count: summary.zone_count,
+                    bounds: None,
+                    sketch: None,
+                },
+                true,
+            )
+        }
+        Err(DesignLoadError::NeedsSite { .. }) => {
+            unreachable!("load_within returns a pending Design instead of this error")
+        }
         Err(DesignLoadError::TooLarge { .. }) => (RecentDesignPreview::TooLarge, true),
         Err(DesignLoadError::Read { source, .. }) => {
             tracing::warn!("A Recent Design could not be read for its preview");
@@ -118,7 +133,7 @@ fn read_preview(path: &Path, len: u64) -> (RecentDesignPreview, bool) {
         }
         Err(DesignLoadError::Ingestion { source, .. }) => {
             let reason = match source.found_unsupported_version() {
-                Some(version) if version < u64::from(CURRENT_CANOPI_FILE_VERSION) => {
+                Some(_) if source.is_older_than_supported() => {
                     RecentDesignUnreadableReason::OlderVersion
                 }
                 Some(_) => RecentDesignUnreadableReason::NewerVersion,
@@ -148,7 +163,7 @@ fn io_reason(error: &std::io::Error) -> RecentDesignUnreadableReason {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_types::design::CanopiFile;
+    use common_types::design::{CURRENT_CANOPI_FILE_VERSION, CanopiFile};
     use std::path::PathBuf;
 
     fn scratch(label: &str) -> PathBuf {
@@ -223,7 +238,7 @@ mod tests {
         )
         .unwrap();
         let old = root.join("old.canopi");
-        std::fs::write(&old, r#"{"version": 8, "name": "Old"}"#).unwrap();
+        std::fs::write(&old, r#"{"version": 4, "name": "Canopi 1.1"}"#).unwrap();
         let unversioned = root.join("unversioned.canopi");
         std::fs::write(&unversioned, r#"{"name": "Canopi 1"}"#).unwrap();
         let newer = root.join("newer.canopi");
@@ -269,6 +284,56 @@ mod tests {
             .map(unreadable)
         );
         assert!(!logs.contains(&*root.to_string_lossy()), "{logs}");
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn older_formats_preview_through_the_ladder_and_a_pending_design_has_no_ground() {
+        let root = scratch("migrated");
+        let v8 = root.join("v8.canopi");
+        let mut value = serde_json::to_value(with_plants(2)).unwrap();
+        value["version"] = serde_json::json!(8);
+        value["zones"] = serde_json::json!([{
+            "name": "North bed",
+            "zone_type": "rect",
+            "points": [{ "lon": 0.1, "lat": 47.0 }, { "lon": 0.1001, "lat": 46.9999 }]
+        }]);
+        std::fs::write(&v8, serde_json::to_string(&value).unwrap()).unwrap();
+        let v5 = root.join("v5.canopi");
+        std::fs::write(
+            &v5,
+            r#"{"version": 5, "name": "Canopi 1.2", "plant_species_colors": {}, "layers": [],
+                "plants": [{"id": "p", "canonical_name": "Malus domestica", "position": {"x": 1.0, "y": 2.0}}],
+                "zones": [{"name": "Z", "zone_type": "rect", "points": [{"x": 0.0, "y": 0.0}, {"x": 4.0, "y": 3.0}]}],
+                "created_at": "2026-07-15T00:00:00.000Z", "updated_at": "2026-07-15T00:00:00.000Z"}"#,
+        )
+        .unwrap();
+        let previews = RecentDesignPreviews::default();
+
+        let result = previews.previews(&[
+            v8.to_string_lossy().into_owned(),
+            v5.to_string_lossy().into_owned(),
+        ]);
+
+        assert_eq!(plant_count(&result[0].preview), Some(2));
+        assert!(matches!(
+            &result[0].preview,
+            RecentDesignPreview::Read {
+                zone_count: 1,
+                bounds: Some(_),
+                ..
+            }
+        ));
+        assert_eq!(
+            result[1].preview,
+            RecentDesignPreview::Read {
+                plant_count: 1,
+                zone_count: 1,
+                bounds: None,
+                sketch: None
+            }
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }

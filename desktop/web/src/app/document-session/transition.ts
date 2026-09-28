@@ -1,5 +1,6 @@
 import type { CanvasDocumentSurface } from "../../canvas/runtime/runtime";
 import * as designIpc from "../../ipc/design";
+import { resolveDesignLoadOutcome } from "./site-placement";
 import {
   applyNewDesignBackground,
   withNewDesignDisplay,
@@ -88,8 +89,9 @@ export function openDesignSessionFromDialog(): Promise<DocumentTransitionResult>
     source: "open-dialog",
     dirtyGuard: "flush",
     load: async () => {
-      const { file, path, fingerprint } = await designIpc.openDesignDialog();
-      return { file, path, name: file.name, fingerprint };
+      const { outcome, path } = await designIpc.openDesignDialog();
+      return resolveDesignLoadOutcome(outcome, path, (pending, site, fingerprint) =>
+        designIpc.placeDesignAtSite(path, pending, site, fingerprint));
     },
   });
 }
@@ -102,10 +104,7 @@ export function openDesignSessionFromPath(
     source: "open-path",
     dirtyGuard: "flush",
     session: options.session,
-    load: async () => {
-      const { file, fingerprint } = await designIpc.loadDesign(path);
-      return { file, path, name: file.name, fingerprint };
-    },
+    load: () => designSessionStateMachine.loadDesignFromPath(path),
     isCancelled: options.isCancelled,
     deferWhenDetachedAndEmpty: () => {
       setPendingDesignPath(path);

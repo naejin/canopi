@@ -455,6 +455,120 @@ pub fn validate_design_geometry(file: &CanopiFile) -> Result<(), String> {
     Ok(())
 }
 
+/// Identities and ranges of an admitted Design, checked after the migration
+/// ladder. Zones, annotations and groups need unique, non-empty ids because
+/// targets, groups and saved views refer to them. A plant or measurement
+/// guide without an id (Canopi 1.x wrote none) is repaired with a generated
+/// one; a duplicate id is refused. Opacities, scales and font sizes must be
+/// finite and in range, and the LiDAR section must be the schema this build
+/// writes.
+pub fn admit_design_identities_and_ranges(file: &mut CanopiFile) -> Result<(), String> {
+    let mut plant_ids = std::collections::HashSet::new();
+    for (index, plant) in file.plants.iter_mut().enumerate() {
+        if plant.id.is_empty() {
+            plant.id = generated_id("plant", index, &plant_ids);
+        }
+        if !plant_ids.insert(plant.id.clone()) {
+            return Err(format!("$.plants[{index}].id: duplicate id {:?}", plant.id));
+        }
+        if plant
+            .scale
+            .is_some_and(|scale| !(scale.is_finite() && scale > 0.0))
+        {
+            return Err(format!(
+                "$.plants[{index}].scale: expected a finite number above 0"
+            ));
+        }
+        if plant.rotation.is_some_and(|rotation| !rotation.is_finite()) {
+            return Err(format!(
+                "$.plants[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    let mut guide_ids = std::collections::HashSet::new();
+    for (index, guide) in file.measurement_guides.iter_mut().enumerate() {
+        if guide.id.is_empty() {
+            guide.id = generated_id("measurement-guide", index, &guide_ids);
+        }
+        if !guide_ids.insert(guide.id.clone()) {
+            return Err(format!(
+                "$.measurement_guides[{index}].id: duplicate id {:?}",
+                guide.id
+            ));
+        }
+    }
+    check_unique_ids("zones", file.zones.iter().map(|zone| zone.id.as_str()))?;
+    check_unique_ids(
+        "annotations",
+        file.annotations
+            .iter()
+            .map(|annotation| annotation.id.as_str()),
+    )?;
+    check_unique_ids("groups", file.groups.iter().map(|group| group.id.as_str()))?;
+    for (index, annotation) in file.annotations.iter().enumerate() {
+        if !(annotation.font_size.is_finite() && annotation.font_size > 0.0) {
+            return Err(format!(
+                "$.annotations[{index}].font_size: expected a finite number above 0"
+            ));
+        }
+        if annotation
+            .rotation
+            .is_some_and(|rotation| !rotation.is_finite())
+        {
+            return Err(format!(
+                "$.annotations[{index}].rotation: expected a finite number"
+            ));
+        }
+    }
+    for (index, layer) in file.layers.iter().enumerate() {
+        if !(layer.opacity.is_finite() && (0.0..=1.0).contains(&layer.opacity)) {
+            return Err(format!(
+                "$.layers[{index}].opacity: expected a number in [0, 1]"
+            ));
+        }
+    }
+    if let Some(lidar) = &file.lidar {
+        if lidar.schema_version != crate::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION {
+            return Err(format!(
+                "$.lidar.schema_version: expected {}",
+                crate::lidar::LIDAR_PRESENTATION_SCHEMA_VERSION
+            ));
+        }
+        for (index, entry) in lidar.entries.iter().enumerate() {
+            if !(entry.opacity.is_finite() && (0.0..=1.0).contains(&entry.opacity)) {
+                return Err(format!(
+                    "$.lidar.entries[{index}].opacity: expected a number in [0, 1]"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn generated_id(prefix: &str, index: usize, taken: &std::collections::HashSet<String>) -> String {
+    let mut n = index + 1;
+    loop {
+        let candidate = format!("{prefix}-{n}");
+        if !taken.contains(&candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+fn check_unique_ids<'a>(key: &str, ids: impl Iterator<Item = &'a str>) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    for (index, id) in ids.enumerate() {
+        if id.is_empty() {
+            return Err(format!("$.{key}[{index}].id: expected a non-empty id"));
+        }
+        if !seen.insert(id) {
+            return Err(format!("$.{key}[{index}].id: duplicate id {id:?}"));
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(feature = "design-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Zone {
@@ -820,6 +934,72 @@ pub struct DesignNotebookSnapshot {
 pub struct LoadedDesign {
     pub file: CanopiFile,
     pub fingerprint: String,
+    /// The file's format version when it was older than the current one and
+    /// was upgraded in memory (ADR 0013); the next save writes the current
+    /// format. `None` for a current-format file.
+    #[serde(default)]
+    pub migrated_from: Option<u32>,
+}
+
+/// A Design from before geolocation (format v5 or v6) that has no site of
+/// its own. It opens once the user says where the site is
+/// (`place_design_at_site`); until then nothing is written.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct PendingDesignSite {
+    pub from_version: u32,
+    pub name: String,
+    pub plant_count: u32,
+    pub zone_count: u32,
+    /// Plants, zones, annotations and measurement guides.
+    pub object_count: u32,
+    /// Ground the objects span, in metres, east-west then north-south.
+    pub width_m: f64,
+    pub height_m: f64,
+    /// The Design in its pre-geolocation form, opaque to the frontend; only
+    /// the migration module reads it back.
+    pub document_json: String,
+}
+
+/// What opening a Design file produced.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DesignLoadOutcome {
+    Loaded {
+        design: Box<LoadedDesign>,
+    },
+    /// The file is a pre-geolocation Design without a site: ask "Where is
+    /// your site?" and finish with `place_design_at_site`.
+    NeedsSite {
+        pending: PendingDesignSite,
+        fingerprint: String,
+    },
+}
+
+/// Why a Design file could not be opened. `kind` is what the interface maps
+/// to a message; `message` is for logs and Problem Reports and never names a
+/// path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DesignLoadFailure {
+    pub kind: DesignLoadFailureKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DesignLoadFailureKind {
+    /// Nothing is at the path.
+    Missing,
+    /// The file exists but could not be read (permissions, a folder, an I/O error).
+    Unreadable,
+    TooLarge,
+    InvalidJson,
+    /// Older than the oldest format this build migrates (Canopi before 1.2).
+    OlderVersion,
+    /// Newer than this build.
+    NewerVersion,
+    InvalidDocument,
+    /// The native side failed before it reached the file (an executor error).
+    Internal,
 }
 
 /// The result of writing a Design to its file.
@@ -998,6 +1178,138 @@ mod tests {
         assert_eq!(value["zones"][0]["rotation"], json!(0.0));
         assert_eq!(value["annotations"][0]["locked"], json!(false));
         assert_eq!(value["groups"][0]["locked"], json!(false));
+    }
+
+    fn admitted(value: serde_json::Value) -> Result<CanopiFile, String> {
+        let mut file: CanopiFile = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        admit_design_identities_and_ranges(&mut file)?;
+        Ok(file)
+    }
+
+    fn design_with(overrides: serde_json::Value) -> serde_json::Value {
+        let mut value = json!({
+            "version": 9,
+            "name": "Admission",
+            "plant_species_colors": {},
+            "layers": [],
+            "plants": [],
+            "zones": [],
+            "created_at": "2026-09-28T00:00:00.000Z",
+            "updated_at": "2026-09-28T00:00:00.000Z"
+        });
+        for (key, override_value) in overrides.as_object().expect("object overrides") {
+            value[key] = override_value.clone();
+        }
+        value
+    }
+
+    #[test]
+    fn plants_and_guides_without_ids_are_repaired_and_duplicates_refused() {
+        let file = admitted(design_with(json!({
+            "plants": [
+                { "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-2", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "canonical_name": "Prunus avium", "position": { "lon": 13.0, "lat": 23.0 } }
+            ],
+            "measurement_guides": [
+                { "start": { "lon": 13.0, "lat": 23.0 }, "end": { "lon": 13.001, "lat": 23.0 } }
+            ]
+        })))
+        .expect("missing ids are generated");
+        assert_eq!(
+            file.plants
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>(),
+            ["plant-1", "plant-2", "plant-3"]
+        );
+        assert_eq!(file.measurement_guides[0].id, "measurement-guide-1");
+
+        let duplicate = admitted(design_with(json!({
+            "plants": [
+                { "id": "plant-1", "canonical_name": "Malus domestica", "position": { "lon": 13.0, "lat": 23.0 } },
+                { "id": "plant-1", "canonical_name": "Pyrus communis", "position": { "lon": 13.0, "lat": 23.0 } }
+            ]
+        })));
+        assert_eq!(
+            duplicate.unwrap_err(),
+            "$.plants[1].id: duplicate id \"plant-1\""
+        );
+    }
+
+    #[test]
+    fn zones_annotations_and_groups_need_unique_non_empty_ids() {
+        let zone = |id: &str| json!({ "id": id, "zone_type": "rect", "points": [] });
+        assert_eq!(
+            admitted(design_with(json!({ "zones": [zone("bed"), zone("bed")] }))).unwrap_err(),
+            "$.zones[1].id: duplicate id \"bed\""
+        );
+        assert_eq!(
+            admitted(design_with(json!({ "zones": [zone("")] }))).unwrap_err(),
+            "$.zones[0].id: expected a non-empty id"
+        );
+        let note = |id: &str| {
+            json!({
+                "id": id, "annotation_type": "text", "position": { "lon": 13.0, "lat": 23.0 },
+                "text": "Note", "font_size": 14.0
+            })
+        };
+        assert_eq!(
+            admitted(design_with(
+                json!({ "annotations": [note("n"), note("n")] })
+            ))
+            .unwrap_err(),
+            "$.annotations[1].id: duplicate id \"n\""
+        );
+        let group = |id: &str| json!({ "id": id, "name": null, "members": [] });
+        assert_eq!(
+            admitted(design_with(json!({ "groups": [group("g"), group("g")] }))).unwrap_err(),
+            "$.groups[1].id: duplicate id \"g\""
+        );
+    }
+
+    #[test]
+    fn ranges_are_checked_after_deserialization() {
+        let plant = |scale: serde_json::Value| {
+            json!({
+                "id": "plant-1", "canonical_name": "Malus domestica",
+                "position": { "lon": 13.0, "lat": 23.0 }, "scale": scale
+            })
+        };
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(0.0))] }))).is_err());
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(-1.0))] }))).is_err());
+        assert!(admitted(design_with(json!({ "plants": [plant(json!(0.2))] }))).is_ok());
+        assert!(
+            admitted(design_with(
+                json!({ "plants": [plant(serde_json::Value::Null)] })
+            ))
+            .is_ok()
+        );
+        assert!(admitted(design_with(json!({
+            "annotations": [{ "id": "n", "annotation_type": "text", "position": { "lon": 13.0, "lat": 23.0 }, "text": "x", "font_size": 0.0 }]
+        }))).is_err());
+        assert!(
+            admitted(design_with(json!({
+                "layers": [{ "name": "plants", "visible": true, "locked": false, "opacity": 1.5 }]
+            })))
+            .is_err()
+        );
+        assert!(
+            admitted(design_with(json!({
+                "lidar": { "schema_version": 2, "entries": [] }
+            })))
+            .is_err()
+        );
+        assert!(admitted(design_with(json!({
+            "lidar": { "schema_version": 1, "entries": [
+                { "kind": "Source", "id": "dem", "visible": true, "opacity": 1.2, "order": 0, "style": null }
+            ] }
+        }))).is_err());
+        assert!(admitted(design_with(json!({
+            "lidar": { "schema_version": 1, "entries": [
+                { "kind": "Derived", "id": "slope", "visible": true, "opacity": 0.4, "order": 0, "style": null }
+            ] }
+        }))).is_ok());
     }
 
     fn zone_file(zone: serde_json::Value) -> Result<CanopiFile, serde_json::Error> {

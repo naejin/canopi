@@ -4,6 +4,7 @@ pub mod health;
 pub mod library;
 pub mod lidar;
 pub mod location;
+pub mod migrations;
 pub mod saved_object_stamps;
 pub mod settings;
 pub mod species;

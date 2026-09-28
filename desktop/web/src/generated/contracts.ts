@@ -160,6 +160,36 @@ export type DesignGroundBounds = {
 	north: number,
 };
 
+/**
+ *  Why a Design file could not be opened. `kind` is what the interface maps
+ *  to a message; `message` is for logs and Problem Reports and never names a
+ *  path.
+ */
+export type DesignLoadFailure = {
+	kind: DesignLoadFailureKind,
+	message: string,
+};
+
+export type DesignLoadFailureKind =
+// Nothing is at the path.
+"missing" |
+// The file exists but could not be read (permissions, a folder, an I/O error).
+"unreadable" | "too_large" | "invalid_json" |
+// Older than the oldest format this build migrates (Canopi before 1.2).
+"older_version" |
+// Newer than this build.
+"newer_version" | "invalid_document" |
+// The native side failed before it reached the file (an executor error).
+"internal";
+
+// What opening a Design file produced.
+export type DesignLoadOutcome = { kind: "loaded"; design: LoadedDesign } |
+/**
+ *  The file is a pre-geolocation Design without a site: ask "Where is
+ *  your site?" and finish with `place_design_at_site`.
+ */
+{ kind: "needs_site"; pending: PendingDesignSite; fingerprint: string };
+
 export type DesignNotebookEntry = {
 	path: string,
 	name: string,
@@ -592,6 +622,12 @@ export type LidarSampleUnavailableReason =
 export type LoadedDesign = {
 	file: CanopiFile,
 	fingerprint: string,
+	/**
+	 *  The file's format version when it was older than the current one and
+	 *  was upgraded in memory (ADR 0013); the next save writes the current
+	 *  format. `None` for a current-format file.
+	 */
+	migrated_from?: number | null,
 };
 
 export type Locale = "en" | "fr" | "es" | "pt" | "it" | "zh" | "de" | "ja" | "ko" | "nl" | "ru";
@@ -625,6 +661,28 @@ export type PanelTarget = { kind: "placed_plant"; plant_id: string } | { kind: "
  *  degrees). Executors convert to tool units; users never see cells.
  */
 export type ParamValue = { Number: number } | { Integer: number } | { Boolean: boolean } | { Choice: string };
+
+/**
+ *  A Design from before geolocation (format v5 or v6) that has no site of
+ *  its own. It opens once the user says where the site is
+ *  (`place_design_at_site`); until then nothing is written.
+ */
+export type PendingDesignSite = {
+	from_version: number,
+	name: string,
+	plant_count: number,
+	zone_count: number,
+	// Plants, zones, annotations and measurement guides.
+	object_count: number,
+	// Ground the objects span, in metres, east-west then north-south.
+	width_m: number,
+	height_m: number,
+	/**
+	 *  The Design in its pre-geolocation form, opaque to the frontend; only
+	 *  the migration module reads it back.
+	 */
+	document_json: string,
+};
 
 export type PlacedPlant = {
 	id?: string,

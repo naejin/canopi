@@ -340,8 +340,12 @@ describe("continuous save conflicts", () => {
     await conflictOnNextWrite();
     mocks.requestSaveDecision.mockResolvedValueOnce("use-file");
     mocks.loadDesign.mockResolvedValueOnce({
-      file: { ...makeFile("From Disk"), description: "external" },
-      fingerprint: "fp-disk",
+      kind: "loaded",
+      design: {
+        file: { ...makeFile("From Disk"), description: "external" },
+        fingerprint: "fp-disk",
+        migrated_from: null,
+      },
     });
 
     await expect(machine.resolveSaveConflict()).resolves.toMatchObject({ status: "applied" });
@@ -2453,7 +2457,10 @@ describe("document session transition", () => {
     const session = makeSession();
     const results: Array<{ status: string; documentLoaded: boolean }> = [];
     store.setPendingDesignPath("/designs/queued.canopi");
-    mocks.loadDesign.mockResolvedValue({ file: makeFile("Queued"), fingerprint: "fp-queued" });
+    mocks.loadDesign.mockResolvedValue({
+      kind: "loaded",
+      design: { file: makeFile("Queued"), fingerprint: "fp-queued", migrated_from: null },
+    });
 
     const cancel = machine.consumeQueuedDocumentLoad(session, {
       onResult: (result) => results.push({ status: result.status, documentLoaded: result.documentLoaded }),

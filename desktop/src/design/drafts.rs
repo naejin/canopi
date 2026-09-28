@@ -347,7 +347,8 @@ mod tests {
         let dir = drafts.dir.clone();
         fs::create_dir_all(&dir).unwrap();
         let mut old_version = serde_json::to_value(design("Old")).unwrap();
-        old_version["version"] = serde_json::json!(6);
+        old_version["version"] =
+            serde_json::json!(common_types::migrations::MINIMUM_SUPPORTED_CANOPI_FILE_VERSION - 1);
         fs::write(
             dir.join("old.canopi"),
             serde_json::to_vec(&old_version).unwrap(),

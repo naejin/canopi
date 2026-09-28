@@ -109,7 +109,7 @@ function makeFile(name: string): CanopiFile {
 }
 
 function loaded(file: CanopiFile, fingerprint = 'fp-loaded') {
-  return { file, fingerprint }
+  return { kind: 'loaded' as const, design: { file, fingerprint, migrated_from: null } }
 }
 
 function makeEngine() {
@@ -387,9 +387,8 @@ describe('document replacement actions', () => {
   it('opens from the file dialog while the canvas session is detached', async () => {
     mocks.canvasSession = null
     mocks.openDesignDialog.mockResolvedValue({
-      file: makeFile('Dialog Pick'),
+      outcome: loaded(makeFile('Dialog Pick'), 'fp-dialog'),
       path: '/designs/dialog.canopi',
-      fingerprint: 'fp-dialog',
     })
 
     await openDesign()

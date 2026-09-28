@@ -92,6 +92,7 @@ pub fn run() {
             commands::design::new_design,
             commands::design::save_design,
             commands::design::load_design,
+            commands::design::place_design_at_site,
             commands::design::get_recent_files,
             commands::design::get_recent_design_previews,
             commands::design::remove_recent_design,

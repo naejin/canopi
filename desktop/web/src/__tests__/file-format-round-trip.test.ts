@@ -166,10 +166,13 @@ describe('file format round-trip', () => {
     expect(save(first)).toBe(first)
   })
 
-  it('refuses a Design of the previous format version', () => {
+  it('refuses a Design older than the migration ladder and upgrades one inside it', () => {
     const { extra: _extra, ...wire } = conformance.accepted_documents['views-and-stories']
-    expect(() => decodeCanopiDesign({ ...wire, version: 8 })).toThrow(
-      '$.version: unsupported Canopi Design version 8; current version is 9',
+    expect(() => decodeCanopiDesign({ ...wire, version: 4 })).toThrow(
+      '$.version: unsupported Canopi Design version 4; this build opens versions 5 to 9',
     )
+    const previous = { ...wire, version: 8 } as Record<string, unknown>
+    previous.zones = (wire.zones as { id: string; name: string | null }[]).map(({ id, ...zone }) => ({ ...zone, name: id }))
+    expect(decodeCanopiDesign(previous)).toEqual(conformance.accepted_documents['views-and-stories'])
   })
 })

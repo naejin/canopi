@@ -227,15 +227,26 @@ describe('browser Design Session lifecycle', () => {
 
   it.each([
     {
-      label: 'a v7 Design',
-      content: () => ({ ...makeCanopiFile(), version: 7 }),
-      message: '$.version: unsupported Canopi Design version 7; current version is 9',
+      label: 'a Design older than the migration ladder',
+      content: () => ({ ...makeCanopiFile(), version: 4 }),
+      message: '$.version: unsupported Canopi Design version 4; this build opens versions 5 to 9',
       kind: 'unsupported_version',
     },
     {
-      label: 'a v8 Design',
-      content: () => ({ ...makeCanopiFile(), version: 8 }),
-      message: '$.version: unsupported Canopi Design version 8; current version is 9',
+      label: 'a Design newer than this build',
+      content: () => ({ ...makeCanopiFile(), version: 10 }),
+      message: '$.version: unsupported Canopi Design version 10; this build opens versions 5 to 9',
+      kind: 'unsupported_version',
+    },
+    {
+      label: 'a Canopi 1.2 Design without a site',
+      content: () => ({
+        ...makeCanopiFile(),
+        version: 5,
+        location: null,
+        plants: [{ ...plantAt({ lon: 0, lat: 0 }), position: { x: 10, y: 20 } }],
+      }),
+      message: '$.version: Canopi Design version 5 predates geolocation and has no site',
       kind: 'unsupported_version',
     },
     {
@@ -306,6 +317,35 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readDesignName()).toBe('Geolocated Garden')
     expect(store.readCurrentDesign()?.plants[0]?.position).toEqual({ lon: 2.3522, lat: 48.8566 })
     expect(store.readCurrentDesign()).not.toHaveProperty('spatial_frame')
+  })
+
+  it('opens an older-format Design through the migration ladder into a current-format Draft', async () => {
+    const openedFile = {
+      ...makeCanopiFile({ name: 'Preview Garden', plants: [plantAt({ lon: 2.3522, lat: 48.8566 })] }),
+      version: 7,
+      zones: [{ name: 'Hedge', zone_type: 'line', points: [{ lon: 2.3522, lat: 48.8566 }, { lon: 2.3523, lat: 48.8566 }] }],
+    } as Record<string, unknown>
+    delete openedFile.views
+    delete openedFile.stories
+    const store = createMemoryDesignSessionStore()
+    const controller = createBrowserDesignSessionController({
+      store,
+      fileAdapter: testFileAdapter({
+        openCanopiFile: vi.fn(async () => ({
+          fileName: 'preview.canopi',
+          text: JSON.stringify(openedFile),
+        })),
+      }),
+      now: () => NOW,
+    })
+
+    await controller.openCanopi()
+
+    const current = store.readCurrentDesign()
+    expect(current?.version).toBe(9)
+    expect(current?.zones[0]).toMatchObject({ id: 'Hedge', name: 'Hedge' })
+    expect(current?.views).toEqual([])
+    expect(current?.stories).toEqual([])
   })
 
   it('does not let an older pending Open overwrite a later New Design', async () => {

@@ -18,6 +18,7 @@ fn validate_canopi_design_conformance_value(
     }
     let expected_facts = serde_json::json!({
         "current_version": common_types::design::CURRENT_CANOPI_FILE_VERSION,
+        "minimum_supported_version": common_types::migrations::MINIMUM_SUPPORTED_CANOPI_FILE_VERSION,
         "missing_version": common_types::design::MISSING_CANOPI_FILE_VERSION,
         "future_version_policy": common_types::design::FUTURE_CANOPI_FILE_VERSION_POLICY,
         "error_kinds": common_types::design::CanopiDesignIngestionErrorKind::ALL
@@ -73,6 +74,23 @@ fn validate_canopi_design_conformance_value(
         }
         let accepted = case.get("accepted").and_then(serde_json::Value::as_str);
         let error_kind = case.get("error_kind").and_then(serde_json::Value::as_str);
+        if let Some(site) = case.get("site") {
+            // A pre-geolocation Design placed at this site before comparison.
+            let placed = site
+                .get("lon")
+                .and_then(serde_json::Value::as_f64)
+                .is_some()
+                && site
+                    .get("lat")
+                    .and_then(serde_json::Value::as_f64)
+                    .is_some();
+            if !placed || accepted.is_none() {
+                return Err(format!(
+                    "Canopi Design conformance case {id} with a site must name lon, lat and an accepted document",
+                )
+                .into());
+            }
+        }
         match (accepted, error_kind) {
             (Some(document), None) if accepted_documents.contains_key(document) => {}
             (Some(document), None) => {
@@ -144,6 +162,11 @@ pub(crate) fn render_canopi_design_format() -> Result<String, Box<dyn std::error
         file,
         "export const CURRENT_CANOPI_FILE_VERSION = {}\n",
         common_types::design::CURRENT_CANOPI_FILE_VERSION,
+    )?;
+    writeln!(
+        file,
+        "export const MINIMUM_SUPPORTED_CANOPI_FILE_VERSION = {}",
+        common_types::migrations::MINIMUM_SUPPORTED_CANOPI_FILE_VERSION,
     )?;
     writeln!(
         file,

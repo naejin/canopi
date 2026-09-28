@@ -35,6 +35,8 @@ import {
   type ResolvedDesignReplacement,
 } from "./replacement";
 import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
+import { DesignSitePlacementCancelledError, resolveDesignLoadOutcome } from "./site-placement";
+import { describeDesignLoadError } from "../contracts/canopi-design-errors";
 import {
   createDesignSessionWorkflowRunner,
   type DesignSessionWorkflowRunner,
@@ -66,6 +68,8 @@ export interface DocumentTransitionLoadResult {
   fingerprint?: string | null;
   /** The home does not hold this content yet. */
   writePending?: boolean;
+  /** The file's older format version, upgraded in memory (ADR 0013). */
+  migratedFrom?: number | null;
 }
 
 export interface DocumentLoadTransitionRequest {
@@ -136,6 +140,7 @@ export interface DesignSessionStateMachineDeps {
   readonly prepareDraftWrite: typeof designIpc.prepareDraftWrite;
   readonly deleteDesignDraft: typeof designIpc.deleteDesignDraft;
   readonly loadDesign: typeof designIpc.loadDesign;
+  readonly placeDesignAtSite: typeof designIpc.placeDesignAtSite;
   readonly createDraftId: () => string;
   readonly showMessage: typeof message;
   readonly requestSaveDecision: typeof requestSaveProblemDecision;
@@ -168,6 +173,8 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
   prepareDraftWrite: (id) => designIpc.prepareDraftWrite(id),
   deleteDesignDraft: (id) => designIpc.deleteDesignDraft(id),
   loadDesign: (path) => designIpc.loadDesign(path),
+  placeDesignAtSite: (path, pending, site, fingerprint) =>
+    designIpc.placeDesignAtSite(path, pending, site, fingerprint),
   createDraftId: () => globalThis.crypto.randomUUID(),
   showMessage: (text, options) => message(text, options),
   requestSaveDecision: requestSaveProblemDecision,
@@ -332,6 +339,13 @@ export class DesignSessionStateMachine {
     }
   }
 
+  /** Open the Design at `path`, placing a pre-geolocation Design when asked to. */
+  loadDesignFromPath(path: string): Promise<DocumentTransitionLoadResult> {
+    return this.deps.loadDesign(path).then((outcome) =>
+      resolveDesignLoadOutcome(outcome, path, (pending, site, fingerprint) =>
+        this.deps.placeDesignAtSite(path, pending, site, fingerprint)));
+  }
+
   /** Ask how to resolve a file that changed outside Canopi, then act on it. */
   async resolveSaveConflict(
     options: SaveCurrentDesignOptions = {},
@@ -359,15 +373,7 @@ export class DesignSessionStateMachine {
       source: "open-path",
       dirtyGuard: "skip",
       session: options.session,
-      load: async () => {
-        const loaded = await this.deps.loadDesign(path);
-        return {
-          file: loaded.file,
-          path,
-          name: loaded.file.name,
-          fingerprint: loaded.fingerprint,
-        };
-      },
+      load: () => this.loadDesignFromPath(path),
     });
   }
 
@@ -624,6 +630,7 @@ export class DesignSessionStateMachine {
             draftId: loaded.path ? null : loaded.draftId ?? null,
             fingerprint: loaded.path ? loaded.fingerprint ?? null : null,
             writePending: loaded.writePending ?? false,
+            migratedFrom: loaded.migratedFrom ?? null,
           };
           replacementInput = {
             file: loaded.file,
@@ -719,15 +726,7 @@ export class DesignSessionStateMachine {
       options,
       source: "queued-path",
       label: nameFromPath(queuedPath),
-      load: async () => {
-        const loaded = await this.deps.loadDesign(queuedPath);
-        return {
-          file: loaded.file,
-          path: queuedPath,
-          name: loaded.file.name,
-          fingerprint: loaded.fingerprint,
-        };
-      },
+      load: () => this.loadDesignFromPath(queuedPath),
       isStillPending: () => this.deps.store.readPendingDesignPath() === queuedPath,
       clearPending: () => {
         if (this.deps.store.readPendingDesignPath() === queuedPath) {
@@ -1010,6 +1009,7 @@ export function nameFromPath(path: string): string {
 }
 
 export function isCancelled(error: unknown): boolean {
+  if (error instanceof DesignSitePlacementCancelledError) return true;
   return typeof error === "string"
     ? error.includes("Dialog cancelled") || error.includes("cancelled")
     : error instanceof Error
@@ -1018,5 +1018,5 @@ export function isCancelled(error: unknown): boolean {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return describeDesignLoadError(error);
 }

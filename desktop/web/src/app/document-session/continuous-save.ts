@@ -36,6 +36,12 @@ export interface DesignSessionHomeInput {
   readonly fingerprint: string | null
   /** The home does not hold this content yet (template, imported file, revert). */
   readonly writePending: boolean
+  /**
+   * The file's format version when it was older and upgraded in memory
+   * (ADR 0013). The file is not rewritten for that alone: the first write the
+   * user's edits cause saves it in the current format.
+   */
+  readonly migratedFrom?: number | null
 }
 
 /** Thrown by a file writer when the file changed outside Canopi. */
@@ -69,6 +75,10 @@ export interface ContinuousSave {
   readonly failureReason: ReadonlySignal<string | null>
   readonly conflict: ReadonlySignal<ContinuousSaveConflict | null>
   readonly revertAvailable: ReadonlySignal<boolean>
+  /** The opened file's older format version, until the session ends; null for a current-format file. */
+  readonly migratedFrom: ReadonlySignal<number | null>
+  /** True once a session opened from an older format has been written home in the current format. */
+  readonly upgradedFormatWritten: ReadonlySignal<boolean>
   /** Bind a new home to the store's current session (call from replacement finalization). */
   beginSession(input: DesignSessionHomeInput): void
   /** Forget the closed session's home: nothing more is written for it (call from close finalization). */
@@ -96,6 +106,7 @@ interface SessionHomeRecord {
   draftId: string | null
   readonly fingerprints: Map<string, string | null>
   readonly snapshot: CanopiFile | null
+  readonly migratedFrom: number | null
 }
 
 export function createContinuousSave({
@@ -112,6 +123,8 @@ export function createContinuousSave({
   const conflict = signal<ContinuousSaveConflict | null>(null)
   // The session whose write is in flight; another session's write never shows as its "Saving…".
   const writingSession = signal<object | null>(null)
+  // The session whose older-format file has been rewritten in the current format.
+  const upgradedSession = signal<object | null>(null)
   let timer: ReturnType<typeof setTimeout> | null = null
   let active: Promise<boolean> | null = null
   let queued: Promise<boolean> | null = null
@@ -146,6 +159,12 @@ export function createContinuousSave({
   const revertAvailable = computed(() =>
     currentRecord() !== null && (changed.value || store.designDirty.value)
   )
+
+  const migratedFrom = computed(() => currentRecord()?.migratedFrom ?? null)
+  const upgradedFormatWritten = computed(() => {
+    const current = currentRecord()
+    return current !== null && current.migratedFrom !== null && upgradedSession.value === current.identity
+  })
 
   function peekRecord(): SessionHomeRecord | null {
     const current = record.peek()
@@ -236,6 +255,7 @@ export function createContinuousSave({
       if (pendingAtStart) writePending.value = false
       failed.value = false
       failureReason.value = null
+      if (session.migratedFrom !== null) upgradedSession.value = session.identity
     })
     if (pending.peek()) {
       schedule()
@@ -271,8 +291,10 @@ export function createContinuousSave({
     failureReason: computed(() => status.value === 'error' ? failureReason.value : null),
     conflict,
     revertAvailable,
+    migratedFrom,
+    upgradedFormatWritten,
 
-    beginSession({ draftId, fingerprint, writePending: pendingWrite }) {
+    beginSession({ draftId, fingerprint, writePending: pendingWrite, migratedFrom: fromVersion = null }) {
       const path = store.readDesignPath()
       const fingerprints = new Map<string, string | null>()
       if (path) fingerprints.set(path, fingerprint)
@@ -284,6 +306,7 @@ export function createContinuousSave({
           draftId,
           fingerprints,
           snapshot: current ? cloneDocument(current) : null,
+          migratedFrom: fromVersion,
         }
         writePending.value = pendingWrite
         changed.value = false
