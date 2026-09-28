@@ -13,6 +13,8 @@
 //! honoured between strips, tiles and levels.
 
 mod cog;
+#[cfg(test)]
+mod comparison;
 mod crs;
 mod laea;
 mod source;
