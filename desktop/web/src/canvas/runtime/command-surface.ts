@@ -279,7 +279,12 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
       this.nudge = { edit, state, total: { x: 0, y: 0 } }
     }
     const series = this.nudge
-    series.total = { x: series.total.x + delta.x, y: series.total.y + delta.y }
+    // Sum in whole micrometres: equal and opposite steps must cancel exactly,
+    // or a series that returns home would still record an edit.
+    series.total = {
+      x: roundToMicrometre(series.total.x + delta.x),
+      y: roundToMicrometre(series.total.y + delta.y),
+    }
     const total = series.total
     series.edit.mutate((draft) => applySceneDragDeltaToDraft(draft, series.state, total))
     this.options.invalidate('scene')
@@ -493,4 +498,8 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     if (result.changed || plantNamesPublished) this.options.invalidate('scene')
     return result.changed || plantNamesPublished || backfillResult === 'applied'
   }
+}
+
+function roundToMicrometre(metres: number): number {
+  return Math.round(metres * 1e6) / 1e6 || 0
 }

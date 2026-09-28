@@ -2644,6 +2644,30 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('records nothing for a nudge series that returns to where it started', async () => {
+    const cleanState = createCleanStateAdapterProbe()
+    const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
+    await initRuntimeWithStubbedRenderer(runtime)
+    const file = fileWithOnlyPlants('plant-1')
+    runtime.documentSurface.loadDocument(file)
+    runtime.documentSurface.captureForPersistence({ name: file.name }, file).acknowledgeSaved()
+    setInteractionViewport(runtime)
+    const position = () => runtime.querySurface.getSceneSnapshot().plants[0]!.position
+    const start = { ...position() }
+    runtime.commandSurface.sceneEdits.selectAll()
+    cleanState.setCanvasClean.mockClear()
+
+    // 3 × 0.1 m right then 3 × 0.1 m left sums to 2.8e-17 in floating point, not 0.
+    for (let step = 0; step < 3; step += 1) runtime.commandSurface.sceneEdits.nudgeSelected({ x: 0.1, y: 0 })
+    for (let step = 0; step < 3; step += 1) runtime.commandSurface.sceneEdits.nudgeSelected({ x: -0.1, y: 0 })
+    runtime.commandSurface.sceneEdits.endNudge()
+
+    expect(position()).toEqual(start)
+    expect(runtime.commandSurface.history.canUndo.value).toBe(false)
+    expect(cleanState.setCanvasClean.mock.calls.some(([clean]) => clean === false)).toBe(false)
+    runtime.destroy()
+  })
+
   it('nudges from the arrow keys on the focused map through the runtime command', async () => {
     const runtime = new SceneCanvasRuntime({ appAdapter: createCleanStateAdapterProbe().adapter })
     const { container } = await initRuntimeWithStubbedRenderer(runtime)
