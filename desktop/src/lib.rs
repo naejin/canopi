@@ -255,6 +255,18 @@ fn startup_refusal_message(error: &db::UserDbInitError) -> Option<String> {
              Install the latest Canopi to open it; this version will not change it."
                 .to_string(),
         ),
+        db::UserDbInitError::UnsupportedSchemaVersion { .. } => Some(
+            "Your Canopi data was saved by a pre-release version of Canopi that this \
+             version cannot upgrade. Move the user.db file out of the Canopi data folder \
+             to start fresh; this version will not change it."
+                .to_string(),
+        ),
+        db::UserDbInitError::Migration { .. } => Some(
+            "Your Canopi data could not be upgraded to this version of Canopi. \
+             The data was left unchanged; report this problem or open it with your \
+             previous version of Canopi."
+                .to_string(),
+        ),
         _ => None,
     }
 }
@@ -275,18 +287,32 @@ fn refuse_startup(app: &tauri::App, message: String) {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn only_a_newer_user_database_is_refused_with_a_message() {
+    fn refused_user_databases_get_a_message_and_internal_errors_do_not() {
         let newer = super::db::UserDbInitError::NewerSchemaVersion {
             found: 99,
             supported: 9,
         };
         let message = super::startup_refusal_message(&newer).expect("newer data is refused");
         assert!(message.contains("newer version of Canopi"));
-        let older = super::db::UserDbInitError::OlderSchemaVersion {
-            found: 8,
-            supported: 9,
+        let too_old = super::db::UserDbInitError::UnsupportedSchemaVersion {
+            found: 1,
+            oldest_supported: 2,
         };
-        assert!(super::startup_refusal_message(&older).is_none());
+        assert!(super::startup_refusal_message(&too_old).is_some());
+        let failed_upgrade = super::db::UserDbInitError::Migration {
+            from: 8,
+            to: 9,
+            source: super::db::user_db_migrations::UserDbMigrationFailure::Transaction(
+                rusqlite::Error::InvalidQuery,
+            ),
+        };
+        assert!(
+            super::startup_refusal_message(&failed_upgrade)
+                .expect("a failed upgrade is refused")
+                .contains("left unchanged")
+        );
+        let internal = super::db::UserDbInitError::ForeignKeysDisabled;
+        assert!(super::startup_refusal_message(&internal).is_none());
     }
 
     #[test]

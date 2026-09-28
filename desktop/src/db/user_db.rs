@@ -1,11 +1,12 @@
 use rusqlite::Connection;
 use std::fmt;
 
-/// The only user database shape this build reads (Canopi v2).
+use super::user_db_migrations::{self, UserDbMigrationFailure};
+
+/// The user database shape this build writes (Canopi v2).
 ///
-/// There is no migration ladder: a database written by an older Canopi is set
-/// aside by [`crate::db::UserDb::open`] and a fresh one is created, and a newer
-/// one is refused.
+/// An older database is upgraded in place by the migration ladder in
+/// `user_db_migrations` (ADR 0013); a newer one is refused untouched.
 pub(crate) const CURRENT_USER_DB_VERSION: i32 = 9;
 
 const SCHEMA: &str = include_str!("user_db_schema.sql");
@@ -14,10 +15,11 @@ const SCHEMA: &str = include_str!("user_db_schema.sql");
 pub enum UserDbInitError {
     Open(rusqlite::Error),
     ReadSchemaVersion(rusqlite::Error),
-    /// Written by an older Canopi. [`crate::db::UserDb::open`] sets it aside.
-    OlderSchemaVersion {
+    /// Written by a Canopi older than the migration ladder reaches. It is
+    /// refused and left untouched.
+    UnsupportedSchemaVersion {
         found: i32,
-        supported: i32,
+        oldest_supported: i32,
     },
     /// Written by a newer Canopi. It is refused and left untouched; the user
     /// must run that newer Canopi (or move the file) to continue.
@@ -25,8 +27,14 @@ pub enum UserDbInitError {
         found: i32,
         supported: i32,
     },
+    /// The upgrade from `from` to `to` failed and rolled back; the file is
+    /// exactly as it was and is never set aside.
+    Migration {
+        from: i32,
+        to: i32,
+        source: UserDbMigrationFailure,
+    },
     SetAside {
-        reason: UserDbSetAsideReason,
         source: std::io::Error,
     },
     ConfigureForeignKeys(rusqlite::Error),
@@ -41,44 +49,24 @@ pub enum UserDbInitError {
     },
 }
 
-/// Why an existing user database file is renamed aside instead of opened.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UserDbSetAsideReason {
-    /// Written by an older Canopi; there is no migration.
-    Older { found: i32 },
-    /// Not a SQLite database, damaged, or failing its integrity checks.
-    Corrupt,
-}
-
-impl fmt::Display for UserDbSetAsideReason {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Older { found } => {
-                write!(formatter, "written by an older Canopi (schema {found})")
-            }
-            Self::Corrupt => write!(formatter, "unreadable or damaged"),
-        }
-    }
-}
-
 impl UserDbInitError {
-    /// The set-aside this error calls for, if the file should be kept aside
-    /// and replaced by an empty database. A newer database is never set aside.
-    pub(crate) fn set_aside_reason(&self) -> Option<UserDbSetAsideReason> {
+    /// Whether the file should be kept aside as corrupt and replaced by an
+    /// empty database: it is not a SQLite database, is damaged, or a current
+    /// database fails its integrity checks. Older and newer databases and
+    /// failed upgrades are never set aside.
+    pub(crate) fn sets_aside_as_corrupt(&self) -> bool {
         match self {
-            Self::OlderSchemaVersion { found, .. } => {
-                Some(UserDbSetAsideReason::Older { found: *found })
-            }
-            Self::ForeignKeyViolation { .. } => Some(UserDbSetAsideReason::Corrupt),
+            Self::ForeignKeyViolation { .. } => true,
             Self::ReadSchemaVersion(error)
             | Self::ConfigureForeignKeys(error)
             | Self::CreateSchema(error)
-            | Self::VerifyIntegrity(error)
-                if is_corrupt_database_error(error) =>
-            {
-                Some(UserDbSetAsideReason::Corrupt)
-            }
-            _ => None,
+            | Self::VerifyIntegrity(error) => is_corrupt_database_error(error),
+            Self::Open(_)
+            | Self::UnsupportedSchemaVersion { .. }
+            | Self::NewerSchemaVersion { .. }
+            | Self::Migration { .. }
+            | Self::SetAside { .. }
+            | Self::ForeignKeysDisabled => false,
         }
     }
 }
@@ -102,17 +90,24 @@ impl fmt::Display for UserDbInitError {
                 formatter,
                 "failed to read user database schema version: {error}"
             ),
-            Self::OlderSchemaVersion { found, supported } => write!(
+            Self::UnsupportedSchemaVersion {
+                found,
+                oldest_supported,
+            } => write!(
                 formatter,
-                "user database schema version {found} is from an older Canopi (expected {supported})"
+                "user database schema version {found} is older than this Canopi can upgrade (oldest supported {oldest_supported})"
             ),
             Self::NewerSchemaVersion { found, supported } => write!(
                 formatter,
                 "user database schema version {found} was written by a newer Canopi (this version reads {supported}); open it with that newer Canopi"
             ),
-            Self::SetAside { reason, source } => write!(
+            Self::Migration { from, to, source } => write!(
                 formatter,
-                "failed to set aside the user database ({reason}): {source}"
+                "failed to upgrade the user database from schema {from} to {to}; it was left unchanged: {source}"
+            ),
+            Self::SetAside { source } => write!(
+                formatter,
+                "failed to set aside the damaged user database: {source}"
             ),
             Self::ConfigureForeignKeys(error) => write!(
                 formatter,
@@ -152,8 +147,9 @@ impl std::error::Error for UserDbInitError {
             | Self::ConfigureForeignKeys(error)
             | Self::CreateSchema(error)
             | Self::VerifyIntegrity(error) => Some(error),
-            Self::SetAside { source, .. } => Some(source),
-            Self::OlderSchemaVersion { .. }
+            Self::Migration { source, .. } => Some(source),
+            Self::SetAside { source } => Some(source),
+            Self::UnsupportedSchemaVersion { .. }
             | Self::NewerSchemaVersion { .. }
             | Self::ForeignKeysDisabled
             | Self::ForeignKeyViolation { .. } => None,
@@ -177,10 +173,9 @@ pub(super) fn schema_version(conn: &Connection) -> Result<i32, UserDbInitError> 
         .map_err(UserDbInitError::ReadSchemaVersion)
 }
 
-/// Create the schema in an empty database, or accept a current one.
-///
-/// Any other version is refused: an older database must be set aside by the
-/// caller that owns its file, never upgraded in place.
+/// Create the schema in an empty database, accept a current one, or upgrade
+/// an older one in place through the migration ladder. A newer database is
+/// refused. Every path ends in the same integrity check.
 pub(super) fn initialize_connection(conn: &Connection) -> Result<(), UserDbInitError> {
     let version = schema_version(conn)?;
     conn.pragma_update(None, "foreign_keys", true)
@@ -194,12 +189,7 @@ pub(super) fn initialize_connection(conn: &Connection) -> Result<(), UserDbInitE
                 supported: CURRENT_USER_DB_VERSION,
             });
         }
-        found => {
-            return Err(UserDbInitError::OlderSchemaVersion {
-                found,
-                supported: CURRENT_USER_DB_VERSION,
-            });
-        }
+        found => user_db_migrations::upgrade(conn, found)?,
     }
     verify_integrity(conn)
 }
@@ -214,7 +204,9 @@ fn create_schema(conn: &Connection) -> Result<(), UserDbInitError> {
     create().map_err(UserDbInitError::CreateSchema)
 }
 
-fn verify_integrity(conn: &Connection) -> Result<(), UserDbInitError> {
+/// Foreign keys are enforced and no row violates them. Runs on every open and,
+/// inside the upgrade transaction, before a migrated database is committed.
+pub(super) fn verify_integrity(conn: &Connection) -> Result<(), UserDbInitError> {
     let foreign_keys_enabled: i32 = conn
         .pragma_query_value(None, "foreign_keys", |row| row.get(0))
         .map_err(UserDbInitError::VerifyIntegrity)?;
@@ -588,62 +580,16 @@ mod tests {
     }
 
     #[test]
-    fn initialization_rejects_any_other_schema_version() {
-        for found in [8, 10] {
-            let conn = Connection::open_in_memory().unwrap();
-            conn.pragma_update(None, "user_version", found).unwrap();
-
-            let error = match crate::db::UserDb::initialize(conn) {
-                Ok(_) => panic!("user database schema {found} should be rejected"),
-                Err(error) => error,
-            };
-
-            assert!(match error {
-                UserDbInitError::OlderSchemaVersion {
-                    found: f,
-                    supported,
-                }
-                | UserDbInitError::NewerSchemaVersion {
-                    found: f,
-                    supported,
-                } => f == found && supported == CURRENT_USER_DB_VERSION,
-                _ => false,
-            });
-        }
-    }
-
-    /// A database from an older Canopi is renamed aside, untouched, and the
-    /// app starts with an empty current database.
-    #[test]
-    fn opening_an_older_database_sets_it_aside_and_starts_fresh() {
-        let path = temp_user_db_path("older");
-        {
-            let old = Connection::open(&path).unwrap();
-            old.execute_batch(
-                "CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
-                 INSERT INTO favorites VALUES ('Malus domestica', '0');
-                 PRAGMA user_version = 8;",
-            )
+    fn initialization_refuses_a_newer_schema_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "user_version", CURRENT_USER_DB_VERSION + 1)
             .unwrap();
-        }
 
-        let user_db = crate::db::UserDb::open(&path).unwrap();
-        {
-            let conn = user_db.acquire();
-            assert_eq!(schema_version(&conn).unwrap(), CURRENT_USER_DB_VERSION);
-            assert!(get_favorite_names(&conn).unwrap().is_empty());
-        }
-        drop(user_db);
-
-        let aside = path.with_file_name(format!(
-            "{}.v8-set-aside",
-            path.file_name().unwrap().to_string_lossy()
+        assert!(matches!(
+            crate::db::UserDb::initialize(conn),
+            Err(UserDbInitError::NewerSchemaVersion { found, supported })
+                if found == CURRENT_USER_DB_VERSION + 1 && supported == CURRENT_USER_DB_VERSION
         ));
-        let kept = Connection::open(&aside).unwrap();
-        assert_eq!(get_favorite_names(&kept).unwrap(), ["Malus domestica"]);
-        drop(kept);
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_file(aside).unwrap();
     }
 
     fn files_starting_with(path: &std::path::Path, suffix: &str) -> Vec<std::path::PathBuf> {
@@ -666,37 +612,6 @@ mod tests {
         for file in files_starting_with(path, "") {
             let _ = std::fs::remove_file(file);
         }
-    }
-
-    fn write_older_database(path: &std::path::Path, favorite: &str) {
-        let old = Connection::open(path).unwrap();
-        old.execute_batch(&format!(
-            "CREATE TABLE favorites (canonical_name TEXT PRIMARY KEY, added_at TEXT NOT NULL);
-             INSERT INTO favorites VALUES ('{favorite}', '0');
-             PRAGMA user_version = 8;"
-        ))
-        .unwrap();
-    }
-
-    #[test]
-    fn a_second_older_database_does_not_overwrite_the_first_set_aside() {
-        let path = temp_user_db_path("older_twice");
-        write_older_database(&path, "Malus domestica");
-        drop(crate::db::UserDb::open(&path).unwrap());
-        std::fs::remove_file(&path).unwrap();
-        write_older_database(&path, "Pyrus communis");
-        drop(crate::db::UserDb::open(&path).unwrap());
-
-        let aside = files_starting_with(&path, ".v8-set-aside");
-        assert_eq!(aside.len(), 2, "{aside:?}");
-        let mut kept = aside
-            .iter()
-            .flat_map(|file| get_favorite_names(&Connection::open(file).unwrap()).unwrap())
-            .collect::<Vec<_>>();
-        kept.sort();
-        assert_eq!(kept, ["Malus domestica", "Pyrus communis"]);
-
-        remove_all_starting_with(&path);
     }
 
     #[test]

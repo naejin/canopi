@@ -9,6 +9,7 @@ pub(crate) mod species_search_normalization;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod user_db;
+pub(crate) mod user_db_migrations;
 
 use common_types::health::PlantDbStatus;
 use rusqlite::{Connection, InterruptHandle};
@@ -16,7 +17,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-pub use user_db::{UserDbInitError, UserDbSetAsideReason};
+pub use user_db::UserDbInitError;
 
 /// Plant database availability boundary.
 ///
@@ -90,26 +91,26 @@ pub struct UserDb(Arc<Mutex<Connection>>);
 impl UserDb {
     /// Open the user database at `path`.
     ///
-    /// Canopi v2 does not upgrade or repair user databases. One written by an
-    /// older Canopi is renamed to `<file>.v<version>-set-aside`, and one that
-    /// is not a SQLite database, is damaged or fails its integrity checks is
-    /// renamed to `<file>.corrupt-<unix-seconds>`; an empty current database
-    /// is then created in its place. Set-aside names never overwrite an earlier
-    /// set-aside file. A newer database is refused as-is with
-    /// [`UserDbInitError::NewerSchemaVersion`].
+    /// A database from an older Canopi is upgraded in place (ADR 0013); a
+    /// failed upgrade rolls back, leaves the file untouched and is reported.
+    /// A newer database is refused as-is with
+    /// [`UserDbInitError::NewerSchemaVersion`]. Only a file that is not a
+    /// SQLite database, is damaged or fails its integrity checks is renamed to
+    /// `<file>.corrupt-<unix-seconds>` (never overwriting an earlier one) and
+    /// replaced by an empty current database.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, UserDbInitError> {
         let path = path.as_ref();
         let error = match Self::initialize(Connection::open(path).map_err(UserDbInitError::Open)?) {
             Ok(user_db) => return Ok(user_db),
             Err(error) => error,
         };
-        let Some(reason) = error.set_aside_reason() else {
+        if !error.sets_aside_as_corrupt() {
             return Err(error);
-        };
-        let aside = set_aside_user_db(path, reason)
-            .map_err(|source| UserDbInitError::SetAside { reason, source })?;
+        }
+        let aside = set_aside_user_db(path, &corrupt_set_aside_name(path))
+            .map_err(|source| UserDbInitError::SetAside { source })?;
         tracing::warn!(
-            "Set aside the user database ({reason}: {error}) as {}; starting with an empty one",
+            "Set aside the damaged user database ({error}) as {}; starting with an empty one",
             aside
                 .file_name()
                 .map(|name| name.to_string_lossy())
@@ -133,23 +134,22 @@ impl UserDb {
 /// another tool switched the file to WAL.
 const USER_DB_COMPANION_SUFFIXES: [&str; 3] = ["-journal", "-wal", "-shm"];
 
-/// Rename the database at `path` and its companion files to a fresh set-aside
-/// name. Either everything moves or, on failure, what moved is moved back.
-fn set_aside_user_db(path: &Path, reason: UserDbSetAsideReason) -> std::io::Result<PathBuf> {
+fn corrupt_set_aside_name(path: &Path) -> String {
     let file_name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "user.db".to_owned());
-    let base = match reason {
-        UserDbSetAsideReason::Older { found } => format!("{file_name}.v{found}-set-aside"),
-        UserDbSetAsideReason::Corrupt => {
-            let seconds = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            format!("{file_name}.corrupt-{seconds}")
-        }
-    };
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    format!("{file_name}.corrupt-{seconds}")
+}
+
+/// Rename the database at `path` and its companion files to `base`, or to
+/// `base-<n>` when that name is taken. Either everything moves or, on failure,
+/// what moved is moved back.
+fn set_aside_user_db(path: &Path, base: &str) -> std::io::Result<PathBuf> {
     let companion = |target: &Path, suffix: &str| {
         let mut name = target.as_os_str().to_owned();
         name.push(suffix);
@@ -157,7 +157,7 @@ fn set_aside_user_db(path: &Path, reason: UserDbSetAsideReason) -> std::io::Resu
     };
     let aside = (1u32..=10_000)
         .map(|attempt| match attempt {
-            1 => path.with_file_name(&base),
+            1 => path.with_file_name(base),
             n => path.with_file_name(format!("{base}-{n}")),
         })
         .find(|candidate| {
@@ -284,7 +284,7 @@ mod tests {
         std::fs::write(&path, b"damaged database").unwrap();
         std::fs::write(with_suffix(&path, "-journal"), b"rollback journal").unwrap();
 
-        let aside = set_aside_user_db(&path, UserDbSetAsideReason::Corrupt).unwrap();
+        let aside = set_aside_user_db(&path, &corrupt_set_aside_name(&path)).unwrap();
 
         assert!(!path.exists());
         assert!(
@@ -311,9 +311,9 @@ mod tests {
     #[test]
     fn set_aside_never_overwrites_an_earlier_set_aside_or_its_journal() {
         let path = temp_database_path("unique");
-        let reason = UserDbSetAsideReason::Older { found: 8 };
+        let base = format!("{}.corrupt-0", path.file_name().unwrap().to_string_lossy());
         std::fs::write(&path, b"first").unwrap();
-        let first = set_aside_user_db(&path, reason).unwrap();
+        let first = set_aside_user_db(&path, &base).unwrap();
         // An orphan journal of an earlier set-aside name also blocks that name.
         std::fs::write(
             with_suffix(
@@ -327,11 +327,11 @@ mod tests {
         )
         .unwrap();
         std::fs::write(&path, b"second").unwrap();
-        let second = set_aside_user_db(&path, reason).unwrap();
+        let second = set_aside_user_db(&path, &base).unwrap();
 
         assert_ne!(first, second);
         assert!(
-            second.to_string_lossy().ends_with("-set-aside-3"),
+            second.to_string_lossy().ends_with(".corrupt-0-3"),
             "{second:?}"
         );
         assert_eq!(std::fs::read(&first).unwrap(), b"first");
