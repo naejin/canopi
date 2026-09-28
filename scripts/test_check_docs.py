@@ -20,7 +20,7 @@ class DocumentationChecks(unittest.TestCase):
     def test_docs_outside_the_v2_layout_are_refused(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ("docs/README.md", "docs/guides/frontend.md", "docs/adr/0001-x.md", "docs/release-notes/v2.0.0.md", "docs/design/plan.md", "docs/evidence.md"):
+            for name in ("docs/README.md", "docs/guides/frontend.md", "docs/adr/0001-x.md", "docs/release-notes/v2.0.0.md", "docs/plans/hydrology.md", "docs/review-checklist.md", "docs/design/plan.md", "docs/evidence.md"):
                 (root / name).parent.mkdir(parents=True, exist_ok=True)
                 (root / name).write_text("# Doc\n", encoding="utf-8")
             errors = check_placement(root)
@@ -31,12 +31,30 @@ class DocumentationChecks(unittest.TestCase):
     def test_line_budgets(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            page = root / "docs/workflow.md"
+            page.parent.mkdir(parents=True)
+            page.write_text("# Workflow\n" + "line\n" * 100, encoding="utf-8")
+            self.assertIn("docs/workflow.md: 101 lines exceeds its 100-line budget", check_document(page, root))
+            page.write_text("# Workflow\n", encoding="utf-8")
+            self.assertEqual(check_document(page, root), [])
+
+    def test_byte_and_paragraph_budgets(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
             guide = root / "docs/guides/editions.md"
             guide.parent.mkdir(parents=True)
-            guide.write_text("# Editions\n" + "line\n" * 150, encoding="utf-8")
-            self.assertIn("docs/guides/editions.md: 151 lines exceeds its 150-line budget", check_document(guide, root))
-            guide.write_text("# Editions\n", encoding="utf-8")
-            self.assertEqual(check_document(guide, root), [])
+            guide.write_text("# Editions\n" + ("short line\n" * 1000), encoding="utf-8")
+            self.assertTrue(any("exceeds its 10000-byte budget" in e for e in check_document(guide, root)))
+            guide.write_text("# Editions\n" + "x" * 601 + "\n| " + "y" * 700 + " |\n", encoding="utf-8")
+            errors = check_document(guide, root)
+            self.assertEqual(len(errors), 1)
+            self.assertIn("paragraph of 601 characters exceeds 600", errors[0])
+            plan = root / "docs/plans/hydrology.md"
+            plan.parent.mkdir(parents=True)
+            plan.write_text("# Plan\n" + "z" * 900 + "\n", encoding="utf-8")
+            self.assertEqual(check_document(plan, root), ["docs/plans/hydrology.md: a plan needs a `Status:` line (proposed, agreed, in progress)"])
+            plan.write_text("# Plan\n\nStatus: agreed\n" + "z" * 900 + "\n", encoding="utf-8")
+            self.assertEqual(check_document(plan, root), [])
 
     def test_superseded_adr_requires_existing_replacement(self):
         with TemporaryDirectory() as directory:

@@ -1,4 +1,4 @@
-"""Offline checks for repository Markdown links, ADR status, docs placement and line budgets.
+"""Offline checks for repository Markdown links, ADR status, docs placement and size budgets.
 
 Checks inline links/images, reference definitions, and Markdown heading fragments.
 Fenced code, inline code, and external URLs are excluded. This is intentionally
@@ -17,25 +17,36 @@ LINK = re.compile(r"\[[^\]\n]*\]\((<[^>\n]+>|[^\s)]+)(?:\s+\"[^\"]*\")?\)")
 REFERENCE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(<[^>]+>|\S+)", re.MULTILINE)
 # The v2 documentation layout: anything else under docs/ is evidence or history
 # that belongs in bd or nowhere.
-DOCS_FILES = {"README.md", "architecture.md", "workflow.md", "v2-plan.md"}
-DOCS_DIRECTORIES = {"adr", "guides", "release-notes"}
+DOCS_FILES = {"README.md", "architecture.md", "workflow.md", "review-checklist.md"}
+DOCS_DIRECTORIES = {"adr", "guides", "plans", "release-notes"}
 LINE_BUDGETS = {
     "AGENTS.md": 120,
     "README.md": 80,
     "CONTEXT.md": 250,
-    "docs/README.md": 40,
-    "docs/architecture.md": 200,
-    "docs/workflow.md": 150,
-    "docs/guides/map-workspace.md": 350,
-    "docs/guides/design-document.md": 250,
-    "docs/guides/data-library.md": 250,
-    "docs/guides/frontend.md": 250,
-    "docs/guides/editions.md": 150,
-    "docs/guides/species-catalog.md": 200,
-    "docs/guides/pdf-export.md": 200,
-    "docs/guides/native-and-release.md": 250,
+    "docs/README.md": 60,
+    "docs/architecture.md": 160,
+    "docs/workflow.md": 100,
+    "docs/review-checklist.md": 200,
 }
+# A guide states rules and boundaries; wiring lives in code comments and policy
+# tests. Budgets in bytes stop the guides from growing by accretion again.
+BYTE_BUDGETS = {
+    "AGENTS.md": 9_000,
+    "CONTEXT.md": 14_000,
+    "docs/README.md": 4_000,
+    "docs/architecture.md": 12_000,
+    "docs/workflow.md": 8_000,
+    "docs/review-checklist.md": 12_000,
+    "docs/release-notes/v2.0.0.md": 10_000,
+    ".interface-design/system.md": 9_000,
+}
+GUIDE_BYTE_BUDGET = 10_000
+PATTERN_BYTE_BUDGET = 8_000
 ADR_BUDGET = 60
+# One idea per paragraph. Long paragraphs are how file-by-file narration crept
+# into the guides; tables and reference definitions are exempt.
+PARAGRAPH_BUDGET = 600
+PARAGRAPH_EXEMPT = ("docs/plans/", "docs/release-notes/")
 
 
 def prose(text):
@@ -94,6 +105,20 @@ def check_document(file, root):
     lines = len(text.splitlines())
     if budget is not None and lines > budget:
         errors.append(f"{relative}: {lines} lines exceeds its {budget}-line budget")
+    byte_budget = BYTE_BUDGETS.get(relative)
+    if byte_budget is None and relative.startswith("docs/guides/"):
+        byte_budget = GUIDE_BYTE_BUDGET
+    if byte_budget is None and relative.startswith(".interface-design/patterns/"):
+        byte_budget = PATTERN_BYTE_BUDGET
+    size = len(text.encode("utf-8"))
+    if byte_budget is not None and size > byte_budget:
+        errors.append(f"{relative}: {size} bytes exceeds its {byte_budget}-byte budget")
+    if not relative.startswith(PARAGRAPH_EXEMPT):
+        for number, line in enumerate(prose(text).splitlines(), start=1):
+            if len(line) > PARAGRAPH_BUDGET and not line.lstrip().startswith("|") and not REFERENCE.match(line):
+                errors.append(f"{relative}:{number}: paragraph of {len(line)} characters exceeds {PARAGRAPH_BUDGET}")
+    if relative.startswith("docs/plans/") and not re.search(r"^Status:\s*\S", text, re.MULTILINE):
+        errors.append(f"{relative}: a plan needs a `Status:` line (proposed, agreed, in progress)")
     if relative.startswith("docs/adr/"):
         status = re.search(r"^(?:status|Status):\s*(\w+)", text, re.MULTILINE)
         if not status or status[1].lower() not in ADR_STATES:
