@@ -57,6 +57,23 @@ describe('Species Catalog view demand', () => {
     stop(); s.workbench.dispose()
   })
 
+  it('refreshes the recently-viewed projection once a selection is recorded', async () => {
+    const locale = signal('en')
+    const recorded: string[] = []
+    const getRecentlyViewed = vi.fn(async () => recorded.map((name) => makeSpeciesListItem(name)))
+    const workbench = createSpeciesCatalogWorkbench({
+      favoritesIncludeRecentlyViewed: true, locale, getRecentlyViewed,
+      onSpeciesSelected: (name) => { recorded.unshift(name) },
+    })
+    const stop = workbench.mount('favorites')
+    await vi.waitFor(() => expect(getRecentlyViewed).toHaveBeenCalledOnce())
+    expect(workbench.sidebar.value.recentlyViewed).toEqual([])
+
+    workbench.selectSpecies('Malus domestica')
+    await vi.waitFor(() => expect(workbench.sidebar.value.recentlyViewed.map((item) => item.canonical_name)).toEqual(['Malus domestica']))
+    stop(); workbench.dispose()
+  })
+
   it('shares a favorites refresh across active Catalog and Favorites views and refreshes after a toggle', async () => {
     const s = setup()
     const catalog = s.workbench.mount('catalog')

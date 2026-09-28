@@ -690,9 +690,12 @@ export function createSpeciesCatalogWorkbench({
       selectedCanonicalName.value = canonicalName
       if (alreadySelected || !viewsActive.peek()) void loadSpeciesDetail(canonicalName)
       try {
-        void Promise.resolve(onSpeciesSelected?.(canonicalName)).catch(() => {
-          // Non-fatal: selection should still open even if recents persistence fails.
-        })
+        void Promise.resolve(onSpeciesSelected?.(canonicalName))
+          // The recorded view is what "Recently viewed" lists, so it reloads once the record lands.
+          .then(() => { if (recentActive.peek()) void loadSidebarLists(false) })
+          .catch(() => {
+            // Non-fatal: selection should still open even if recents persistence fails.
+          })
       } catch {
         // Non-fatal: selection should still open even if recents persistence fails.
       }
