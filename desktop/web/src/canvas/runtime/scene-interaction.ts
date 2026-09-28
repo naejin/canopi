@@ -1093,7 +1093,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       return
     }
     if (this._openContextMenuFromKeyboard(event)) return
-    if (this._activeToolAdapter()?.keyDown?.(event) ?? false) return
+    if (this._activeToolAdapter()?.keyDown?.(event) ?? false) {
+      // A key the tool consumed is not also an app shortcut: Backspace in a
+      // polygon draft removes a vertex and must not delete the selection.
+      event.stopPropagation()
+      return
+    }
     if (event.key === 'Escape' && this._pointerGesture) {
       event.preventDefault()
       this._cancelInterruptedInteraction()
