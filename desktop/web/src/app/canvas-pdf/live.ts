@@ -27,7 +27,7 @@ export const canvasPdf = createPdfWorkflow({
         && query.getSettledPlacedPlants() !== null }
   },
   // The catalog's batch projections: the same names and habits every plant list shows, in both editions.
-  resolveNames: (names, language) => speciesCatalogWorkbench.resolveCommonNames(names, language),
+  resolveDisplayNames: (names, language) => speciesCatalogWorkbench.resolveDisplayNames(names, language),
   resolveHabits: (names) => speciesCatalogWorkbench.resolveHabits(names),
   prepare: async (input, signal, progress) => (await import('./job')).preparePdfJob(input, signal, progress),
   delivery: createPdfDelivery(),

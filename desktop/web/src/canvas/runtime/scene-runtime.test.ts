@@ -2,11 +2,25 @@ import type { SceneRendererSnapshot } from './renderers/scene-types'
 import { effect } from '@preact/signals'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../ipc/species', () => ({
+vi.mock('../../ipc/species', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../ipc/species')>(),
   getSpeciesBatch: vi.fn(async () => []),
   getFlowerColorBatch: vi.fn(async () => []),
   getCommonNames: vi.fn(async () => ({})),
 }))
+// The Desktop adapter reads labels from the live workbench, whose cache would
+// outlive a test; answer straight from the mocked lookup instead.
+vi.mock('../../app/plant-browser', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../app/plant-browser')>()
+  const { getCommonNames: lookup } = await import('../../ipc/species')
+  return {
+    ...original,
+    speciesCatalogWorkbench: {
+      ...original.speciesCatalogWorkbench,
+      resolveDisplayNames: async (names: readonly string[], locale: string) => ({ names: await lookup([...names], locale), englishFallbacks: [] }),
+    },
+  }
+})
 import {
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'

@@ -114,7 +114,10 @@ vi.mock('@tanstack/virtual-core', () => ({
 }))
 
 vi.mock('../app/plant-browser', async () => ({
-  speciesCatalogWorkbench: mockWorkbench,
+  speciesCatalogWorkbench: Object.assign(mockWorkbench, {
+    resolveDisplayNames: (await vi.importActual<typeof import('../app/plant-browser/workbench')>('../app/plant-browser/workbench'))
+      .composeSpeciesDisplayNames((names, locale) => mockWorkbench.resolveCommonNames(names, locale)),
+  }),
   plantFilterCatalog: (await vi.importActual<typeof import('../app/plant-browser/plant-filter-model')>('../app/plant-browser/plant-filter-model')).plantFilterCatalog,
 }))
 

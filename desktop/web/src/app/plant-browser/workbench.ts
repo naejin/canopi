@@ -38,6 +38,45 @@ type SpeciesDetailAdapter = (canonicalName: string, locale: string) => Promise<S
 type CommonNamesAdapter = (canonicalNames: readonly string[], locale: string) => Promise<Readonly<Record<string, string>>>
 type HabitsAdapter = (canonicalNames: readonly string[]) => Promise<Readonly<Record<string, string>>>
 
+const ENGLISH = 'en'
+const NO_DISPLAY_NAMES: SpeciesDisplayNames = { names: {}, englishFallbacks: [] }
+
+/** What every plant list, label and export shows for a species in one language. */
+export interface SpeciesDisplayNames {
+  /** Common Name in the requested language, or the English one for the species in `englishFallbacks`. */
+  readonly names: Readonly<Record<string, string>>
+  /** Species shown with their English name, marked "(en)", because the language has none; empty in English. */
+  readonly englishFallbacks: readonly string[]
+}
+
+export type SpeciesDisplayNameResolver = (canonicalNames: readonly string[], locale: string) => Promise<SpeciesDisplayNames>
+
+/**
+ * The one "(en)" projection over a Common Names lookup: the language's names,
+ * then English for the rest. A failed language lookup fails the projection; a
+ * failed English lookup only leaves those species without a fallback.
+ */
+export function composeSpeciesDisplayNames(resolveCommonNames: CommonNamesAdapter): SpeciesDisplayNameResolver {
+  return async (canonicalNames, requestedLocale) => {
+    const unique = [...new Set(canonicalNames)].filter(Boolean)
+    if (unique.length === 0) return NO_DISPLAY_NAMES
+    const names: Record<string, string> = { ...await resolveCommonNames(unique, requestedLocale) }
+    const englishFallbacks: string[] = []
+    if (requestedLocale.split('-')[0] !== ENGLISH) {
+      const missing = unique.filter((name) => !names[name]?.trim())
+      const english = missing.length > 0 ? await resolveCommonNames(missing, ENGLISH).catch((): Readonly<Record<string, string>> => ({})) : {}
+      for (const name of missing) {
+        const value = english[name]?.trim()
+        if (value) {
+          names[name] = value
+          englishFallbacks.push(name)
+        }
+      }
+    }
+    return { names, englishFallbacks }
+  }
+}
+
 export interface SpeciesCatalogFilterStripView {
   readonly options: FilterOptions | null
   readonly filters: SpeciesFilter
@@ -124,8 +163,14 @@ export interface SpeciesCatalogWorkbench {
   isFavorite(canonicalName: string): boolean
   isSearchLoading(status: PlantSearchStatus): boolean
   isActiveSearchText(text: string): boolean
-  /** Best Common Name per species in one catalog language; species without one are absent. */
+  /**
+   * Best Common Name per species in one catalog language; species without one are
+   * absent. Cached per species and language for the workbench's lifetime; a
+   * failed lookup is retried next time.
+   */
   resolveCommonNames(canonicalNames: readonly string[], locale: string): Promise<Readonly<Record<string, string>>>
+  /** The names a list, label or export shows: `resolveCommonNames` with the English fallback, over the same cache. */
+  resolveDisplayNames: SpeciesDisplayNameResolver
   /** Catalog habit (`Tree`, `Shrub`, `Herbaceous`, `Climber`) per species; species without one are absent. */
   resolveHabits(canonicalNames: readonly string[]): Promise<Readonly<Record<string, string>>>
   /**
@@ -514,10 +559,43 @@ export function createSpeciesCatalogWorkbench({
     }
   }
 
+  // One name cache for every plant list, label and export: a species and language
+  // resolve once per workbench, and concurrent callers share the lookup in flight.
+  const commonNameCache = new Map<string, Map<string, string | null>>()
+  const commonNamesInFlight = new Map<string, Promise<void>>()
+  const inFlightKey = (requestedLocale: string, canonicalName: string) => `${requestedLocale}\u0000${canonicalName}`
+
+  async function resolveCommonNamesCached(
+    canonicalNames: readonly string[],
+    requestedLocale: string,
+  ): Promise<Record<string, string>> {
+    let cache = commonNameCache.get(requestedLocale)
+    if (!cache) commonNameCache.set(requestedLocale, cache = new Map())
+    const unique = [...new Set(canonicalNames)].filter(Boolean)
+    const missing = unique.filter((name) => !cache.has(name) && !commonNamesInFlight.has(inFlightKey(requestedLocale, name)))
+    if (missing.length > 0) {
+      const lookup = resolveCommonNamesAdapter(missing, requestedLocale)
+        .then((resolved) => {
+          for (const name of missing) cache.set(name, resolved[name]?.trim() || null)
+        })
+        .finally(() => {
+          for (const name of missing) commonNamesInFlight.delete(inFlightKey(requestedLocale, name))
+        })
+      for (const name of missing) commonNamesInFlight.set(inFlightKey(requestedLocale, name), lookup)
+    }
+    await Promise.all(unique.map((name) => commonNamesInFlight.get(inFlightKey(requestedLocale, name))))
+    const names: Record<string, string> = {}
+    for (const name of unique) {
+      const value = cache.get(name)
+      if (value) names[name] = value
+    }
+    return names
+  }
+
   async function resolveEnglishName(canonicalName: string): Promise<string | null> {
     try {
-      const names = await resolveCommonNamesAdapter([canonicalName], 'en')
-      return names[canonicalName]?.trim() || null
+      const names = await resolveCommonNamesCached([canonicalName], ENGLISH)
+      return names[canonicalName] ?? null
     } catch {
       // Without an English name the title falls back to the scientific name.
       return null
@@ -538,7 +616,7 @@ export function createSpeciesCatalogWorkbench({
     try {
       const nextDetail = await getSpeciesDetailAdapter(canonicalName, requestedLocale)
       if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
-      const englishName = nextDetail && !nextDetail.common_name?.trim() && requestedLocale.split('-')[0] !== 'en'
+      const englishName = nextDetail && !nextDetail.common_name?.trim() && requestedLocale.split('-')[0] !== ENGLISH
         ? await resolveEnglishName(canonicalName)
         : null
       if (disposed || generation !== detailGeneration || selectedCanonicalName.value !== canonicalName) return
@@ -615,6 +693,7 @@ export function createSpeciesCatalogWorkbench({
     dispose() {
       if (disposed) return
       disposed = true
+      commonNameCache.clear()
       disposeViewEffects.forEach(dispose => dispose())
       stopPlantDbController()
       plantSearchSession.dispose()
@@ -725,8 +804,13 @@ export function createSpeciesCatalogWorkbench({
 
     resolveCommonNames(canonicalNames, requestedLocale) {
       if (disposed || canonicalNames.length === 0) return Promise.resolve({})
-      return resolveCommonNamesAdapter(canonicalNames, requestedLocale)
+      return resolveCommonNamesCached(canonicalNames, requestedLocale)
     },
+
+    resolveDisplayNames: composeSpeciesDisplayNames((canonicalNames, requestedLocale) => {
+      if (disposed) return Promise.resolve({})
+      return resolveCommonNamesCached(canonicalNames, requestedLocale)
+    }),
 
     resolveHabits(canonicalNames) {
       if (disposed || canonicalNames.length === 0) return Promise.resolve({})

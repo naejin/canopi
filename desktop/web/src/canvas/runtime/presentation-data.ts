@@ -1,5 +1,17 @@
 export type SpeciesCacheEntry = Record<string, unknown>
 
+/** What the app's catalog shows for species in one language; the runtime never resolves names itself. */
+export interface CanvasSpeciesDisplayNames {
+  /** Common Name in `locale`, or the English one for the species in `englishFallbacks`. */
+  readonly names: Readonly<Record<string, string>>
+  readonly englishFallbacks: readonly string[]
+}
+
+export type CanvasSpeciesDisplayNameResolver = (
+  canonicalNames: readonly string[],
+  locale: string,
+) => Promise<CanvasSpeciesDisplayNames>
+
 export interface CanvasPlantLabelSource {
   /** Names in `locale`; null when the catalog has none in that language. */
   getLocaleSnapshot(locale: string): ReadonlyMap<string, string | null>

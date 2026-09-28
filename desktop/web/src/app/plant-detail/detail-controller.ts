@@ -1,5 +1,6 @@
 import { signal, type Signal } from '@preact/signals'
-import { getCommonNames, getLocaleCommonNames, getSpeciesDetail, getSpeciesHabits } from '../../ipc/species'
+import { getLocaleCommonNames, getSpeciesDetail, getSpeciesHabits } from '../../ipc/species'
+import { speciesCatalogWorkbench, type SpeciesDisplayNameResolver } from '../plant-browser'
 import type { CommonNameEntry, SpeciesDetail } from '../../types/species'
 
 export type PlantDetailLoadState = 'loading' | 'loaded' | 'error'
@@ -21,7 +22,8 @@ export interface PlantDetailController {
 interface CreatePlantDetailControllerOptions {
   loadDetail?: typeof getSpeciesDetail
   loadLocaleCommonNames?: typeof getLocaleCommonNames
-  loadCommonNames?: typeof getCommonNames
+  /** The catalog's display-name projection; the title's "(en)" fallback comes from it. */
+  resolveDisplayNames?: SpeciesDisplayNameResolver
   loadHabits?: typeof getSpeciesHabits
 }
 
@@ -30,7 +32,8 @@ export function createPlantDetailController(
 ): PlantDetailController {
   const loadDetail = options.loadDetail ?? getSpeciesDetail
   const loadLocaleCommonNames = options.loadLocaleCommonNames ?? getLocaleCommonNames
-  const loadCommonNames = options.loadCommonNames ?? getCommonNames
+  const resolveDisplayNames = options.resolveDisplayNames
+    ?? ((names, locale) => speciesCatalogWorkbench.resolveDisplayNames(names, locale))
   const loadHabits = options.loadHabits ?? getSpeciesHabits
 
   const detail = signal<SpeciesDetail | null>(null)
@@ -64,9 +67,9 @@ export function createPlantDetailController(
         if (!isCurrent()) return
         // Resolved before publishing so the title does not change under the reader.
         if (!nextDetail.common_name?.trim() && requestLocale.split('-')[0] !== 'en') {
-          const english = await loadCommonNames([canonicalName], 'en').catch(() => ({} as Record<string, string>))
+          const display = await resolveDisplayNames([canonicalName], requestLocale).catch(() => null)
           if (!isCurrent()) return
-          englishName.value = english[canonicalName]?.trim() || null
+          englishName.value = display?.englishFallbacks.includes(canonicalName) ? display.names[canonicalName] ?? null : null
         }
         detail.value = nextDetail
         loadState.value = 'loaded'

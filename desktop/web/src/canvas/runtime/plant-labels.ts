@@ -1,11 +1,20 @@
-import { getCommonNames } from '../../ipc/species'
-import type { CanvasPlantLabelSource } from './presentation-data'
+import type {
+  CanvasPlantLabelSource,
+  CanvasSpeciesDisplayNameResolver,
+  CanvasSpeciesDisplayNames,
+} from './presentation-data'
 
-const ENGLISH = 'en'
-
+/**
+ * Per-locale label snapshots for the renderer, filled from the app's one
+ * species display-name projection (Desktop: the Species Catalog Workbench,
+ * which batches and caches). A failed lookup leaves the names unresolved so
+ * the next refresh retries.
+ */
 export class CanvasPlantLabelResolver implements CanvasPlantLabelSource {
   private readonly _byLocale = new Map<string, Map<string, string | null>>()
   private readonly _englishFallbacks = new Map<string, Map<string, string>>()
+
+  constructor(private readonly _resolveDisplayNames: CanvasSpeciesDisplayNameResolver) {}
 
   getLocaleSnapshot(locale: string): ReadonlyMap<string, string | null> {
     return this._byLocale.get(locale) ?? new Map()
@@ -28,31 +37,26 @@ export class CanvasPlantLabelResolver implements CanvasPlantLabelSource {
       return false
     }
 
-    let localizedNames: Record<string, string>
+    let resolved: CanvasSpeciesDisplayNames
     try {
-      localizedNames = await getCommonNames(missingNames, locale)
+      resolved = await this._resolveDisplayNames(missingNames, locale)
     } catch {
       return false
     }
 
+    const fallbackNames = new Set(resolved.englishFallbacks)
+    const fallbacks = this._englishFallbacks.get(locale) ?? new Map<string, string>()
     for (const canonicalName of missingNames) {
-      cache.set(canonicalName, localizedNames[canonicalName] ?? null)
+      const name = resolved.names[canonicalName] ?? null
+      if (name && fallbackNames.has(canonicalName)) {
+        cache.set(canonicalName, null)
+        fallbacks.set(canonicalName, name)
+      } else {
+        cache.set(canonicalName, name)
+      }
     }
     this._byLocale.set(locale, cache)
-    if (locale !== ENGLISH) await this._resolveEnglishFallbacks(missingNames.filter((name) => !cache.get(name)), locale)
-    return true
-  }
-
-  /** Bounded to the names just found missing; the English names stay cached under `en`. */
-  private async _resolveEnglishFallbacks(canonicalNames: string[], locale: string): Promise<void> {
-    if (canonicalNames.length === 0) return
-    await this.ensureEntries(canonicalNames, ENGLISH)
-    const english = this.getLocaleSnapshot(ENGLISH)
-    const fallbacks = this._englishFallbacks.get(locale) ?? new Map<string, string>()
-    for (const canonicalName of canonicalNames) {
-      const name = english.get(canonicalName)
-      if (name) fallbacks.set(canonicalName, name)
-    }
     this._englishFallbacks.set(locale, fallbacks)
+    return true
   }
 }

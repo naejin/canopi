@@ -11,7 +11,9 @@ import { locale } from '../settings/state'
  * language load leaves the other names searchable.
  */
 const namesByLocaleAndSpecies = new Map<string, string | null>()
+const englishFallbackByLocaleAndSpecies = new Map<string, string | null>()
 const pending = new Set<string>()
+const fallbackPending = new Set<string>()
 const revision = signal(0)
 
 const EMPTY: readonly string[] = []
@@ -40,29 +42,52 @@ export function useCatalogNamesInEveryLanguage(
 /**
  * The English catalog name of each listed species that has no name in the interface
  * language, for lists that show it marked "(en)" (`SpeciesIdentity`'s `englishFallback`).
- * Only those species load, through the same cache; the map is empty in English.
+ * Read from the catalog's one display-name projection (`resolveDisplayNames`, cached
+ * in the workbench); this module only keeps a synchronous snapshot for rendering.
  */
 export function useEnglishFallbackNames(
   species: readonly { readonly canonicalName: string; readonly commonName?: string | null }[],
 ): ReadonlyMap<string, string> {
-  const english = locale.value.split('-')[0] === ENGLISH
+  const currentLocale = locale.value
+  const english = currentLocale.split('-')[0] === ENGLISH
   const key = english
     ? ''
     : [...new Set(species.filter((entry) => !entry.commonName?.trim()).map((entry) => entry.canonicalName))].sort().join('\n')
   useEffect(() => {
-    if (key) void loadCatalogNames(key.split('\n'), [ENGLISH])
-  }, [key])
+    if (key) void loadEnglishFallbacks(key.split('\n'), currentLocale)
+  }, [key, currentLocale])
   const currentRevision = revision.value
   return useMemo(() => {
     void currentRevision
     if (!key) return NO_ENGLISH_NAMES
     const names = new Map<string, string>()
     for (const canonicalName of key.split('\n')) {
-      const name = namesByLocaleAndSpecies.get(cacheKey(ENGLISH, canonicalName))?.trim()
+      const name = englishFallbackByLocaleAndSpecies.get(cacheKey(currentLocale, canonicalName))
       if (name) names.set(canonicalName, name)
     }
     return names.size > 0 ? names : NO_ENGLISH_NAMES
-  }, [key, currentRevision])
+  }, [key, currentLocale, currentRevision])
+}
+
+async function loadEnglishFallbacks(canonicalNames: readonly string[], requestedLocale: string): Promise<void> {
+  const missing = canonicalNames.filter((name) => {
+    const entry = cacheKey(requestedLocale, name)
+    return !englishFallbackByLocaleAndSpecies.has(entry) && !fallbackPending.has(entry)
+  })
+  if (missing.length === 0) return
+  for (const name of missing) fallbackPending.add(cacheKey(requestedLocale, name))
+  try {
+    const display = await speciesCatalogWorkbench.resolveDisplayNames(missing, requestedLocale)
+    const fallbacks = new Set(display.englishFallbacks)
+    for (const name of missing) {
+      englishFallbackByLocaleAndSpecies.set(cacheKey(requestedLocale, name), fallbacks.has(name) ? display.names[name] ?? null : null)
+    }
+    revision.value += 1
+  } catch {
+    // Without the catalog the list shows scientific names; the next mount retries.
+  } finally {
+    for (const name of missing) fallbackPending.delete(cacheKey(requestedLocale, name))
+  }
 }
 
 export async function loadCatalogNames(
@@ -95,6 +120,8 @@ function cacheKey(locale: string, canonicalName: string): string {
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     namesByLocaleAndSpecies.clear()
+    englishFallbackByLocaleAndSpecies.clear()
     pending.clear()
+    fallbackPending.clear()
   })
 }

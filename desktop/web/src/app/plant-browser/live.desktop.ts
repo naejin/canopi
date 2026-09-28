@@ -33,8 +33,9 @@ const liveSpeciesCatalogWorkbench = createSpeciesCatalogWorkbench({
   getFavorites,
   getRecentlyViewed,
   toggleFavorite,
+  // Names reject rather than answer empty, so the workbench caches no "no name" for a missing DB.
   resolveCommonNames: (canonicalNames, locale) =>
-    whenPlantDbAvailable(empty({}), () => inBatches(canonicalNames, (batch) => getCommonNames(batch, locale))),
+    whenPlantDbAvailable(unavailable, () => inBatches(canonicalNames, (batch) => getCommonNames(batch, locale))),
   resolveHabits: (canonicalNames) => whenPlantDbAvailable(empty({}), () => inBatches(canonicalNames, getSpeciesHabits)),
 })
 

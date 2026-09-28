@@ -151,9 +151,9 @@ describe('Plant catalog browser', () => {
   it('shows the English name marked "(en)" for a species with no name in the interface language', async () => {
     respond = () => ({ items: [{ ...apple(), common_name: null, is_name_fallback: true }], next_cursor: null, total_estimate: 1 })
     await act(async () => { locale.value = 'fr'; await flush() })
-    await act(async () => { await flush() })
     const row = container.querySelector('[data-testid="catalog-species-row"]')!
-    expect(row.querySelector('strong [lang="en"]')?.textContent).toBe('Apple')
+    // The English name follows the catalog's projection: the language's lookup, then English.
+    await vi.waitFor(() => expect(row.querySelector('strong [lang="en"]')?.textContent).toBe('Apple'))
     expect(row.querySelector('strong')?.textContent).toContain('(angl.)')
     expect(row.querySelector('em[lang="la"]')?.textContent).toBe('Malus domestica')
     expect(row.querySelector('button[aria-label="Placer Apple"]')).not.toBeNull()

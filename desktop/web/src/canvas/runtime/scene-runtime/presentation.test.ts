@@ -87,7 +87,7 @@ function createController() {
     onPlantNamesChanged: () => {
       state.namesChanged += 1
     },
-    plantLabels: new CanvasPlantLabelResolver(),
+    plantLabels: new CanvasPlantLabelResolver(async (names, locale) => ({ names: await getCommonNames([...names], locale), englishFallbacks: [] })),
     speciesCache: new CanvasSpeciesCache(),
   })
   return { controller, sceneStore, state }

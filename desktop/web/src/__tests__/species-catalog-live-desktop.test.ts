@@ -46,7 +46,8 @@ describe('Desktop species catalog workbench', () => {
     try {
       getCommonNames.mockClear()
       getSpeciesHabits.mockClear()
-      await expect(speciesCatalogWorkbench.resolveCommonNames(['Malus domestica'], 'fr')).resolves.toEqual({})
+      await expect(speciesCatalogWorkbench.resolveCommonNames(['Malus domestica'], 'fr'))
+        .rejects.toThrow('Plant database unavailable: bundled plant database is corrupt')
       await expect(speciesCatalogWorkbench.resolveHabits(['Malus domestica'])).resolves.toEqual({})
       await expect(speciesCatalogWorkbench.searchCloseMatches('apple', 5))
         .rejects.toThrow('Plant database unavailable: bundled plant database is corrupt')

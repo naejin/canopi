@@ -1,3 +1,4 @@
+import { composeSpeciesDisplayNames } from '../app/plant-browser/workbench'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { buildPdfPlan } from '../app/canvas-pdf/layout'
@@ -78,9 +79,10 @@ describe('Canvas PDF name and habit resolution', () => {
   it('fills missing chosen-language names with English, marks them, and maps catalog habits', async () => {
     const input = garden({ commonNames: {} })
     const prepare = vi.fn(async (_preparation: PdfPreparation): Promise<PreparedPdf> => ({ bytes: new Uint8Array([1]), plan: { pages: [], outlines: {}, blocked: null } }))
-    const resolveNames = vi.fn(async (names: readonly string[], locale: string): Promise<Record<string, string>> =>
-      locale === 'fr' ? { 'Malus domestica': 'Pommier' } : Object.fromEntries(names.filter(name => name !== 'Unknown species').map(name => [name, `${name} (English)`])))
-    const workflow = createPdfWorkflow({ capture: () => ({ identity: input, isCurrent: () => true, input }), prepare, resolveNames,
+    // The catalog's projection: the chosen language's names, English marked for the rest.
+    const resolveDisplayNames = vi.fn(composeSpeciesDisplayNames(async (names, locale) =>
+      locale === 'fr' ? { 'Malus domestica': 'Pommier' } : Object.fromEntries(names.filter(name => name !== 'Unknown species').map(name => [name, `${name} (English)`]))))
+    const workflow = createPdfWorkflow({ capture: () => ({ identity: input, isCurrent: () => true, input }), prepare, resolveDisplayNames,
       resolveHabits: async () => ({ 'Malus domestica': 'Tree', 'Ribes nigrum': 'Shrub', 'Mentha spicata': 'Woody' }),
       delivery: { save: vi.fn(), dispose: vi.fn() }, labels: () => labels, namePrintArea: number => `Area ${number}`, fontBaseUrl: () => '' })
     try {
@@ -93,7 +95,7 @@ describe('Canvas PDF name and habit resolution', () => {
       expect(printed.commonNames).toEqual({ 'Malus domestica': 'Pommier', 'Ribes nigrum': 'Ribes nigrum (English)', 'Mentha spicata': 'Mentha spicata (English)' })
       expect(printed.englishFallbacks).toEqual(['Ribes nigrum', 'Mentha spicata'])
       expect(printed.habits).toEqual({ 'Malus domestica': 'tree', 'Ribes nigrum': 'shrub' })
-      expect(resolveNames).toHaveBeenCalledWith(['Ribes nigrum', 'Mentha spicata', 'Unknown species'], 'en')
+      expect(resolveDisplayNames).toHaveBeenCalledWith(['Malus domestica', 'Ribes nigrum', 'Mentha spicata', 'Unknown species'], 'fr')
     } finally { workflow.dispose() }
   })
 })

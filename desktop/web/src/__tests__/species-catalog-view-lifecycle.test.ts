@@ -120,6 +120,45 @@ describe('Species Catalog lookups for plant lists', () => {
     expect(await workbench.searchCloseMatches('pommier', 4)).toEqual([])
   })
 
+  it('projects display names once per species and language: locale names, English marked for the rest', async () => {
+    const locale = signal('fr')
+    const catalog: Record<string, Record<string, string>> = {
+      fr: { 'Malus domestica': 'Pommier' },
+      en: { 'Malus domestica': 'Apple', 'Ficus carica': 'Fig' },
+    }
+    const resolveCommonNames = vi.fn(async (names: readonly string[], language: string) => (
+      Object.fromEntries(names.flatMap((name) => catalog[language]?.[name] ? [[name, catalog[language]![name]!]] : []))
+    ))
+    const workbench = createSpeciesCatalogWorkbench({ locale, resolveCommonNames })
+
+    const [first, second] = await Promise.all([
+      workbench.resolveDisplayNames(['Malus domestica', 'Ficus carica', 'Rubus idaeus'], 'fr'),
+      workbench.resolveDisplayNames(['Ficus carica'], 'fr'),
+    ])
+    expect(first).toEqual({ names: { 'Malus domestica': 'Pommier', 'Ficus carica': 'Fig' }, englishFallbacks: ['Ficus carica'] })
+    expect(second).toEqual({ names: { 'Ficus carica': 'Fig' }, englishFallbacks: ['Ficus carica'] })
+    // One lookup per language for the whole batch; the concurrent caller shared it.
+    expect(resolveCommonNames.mock.calls).toEqual([
+      [['Malus domestica', 'Ficus carica', 'Rubus idaeus'], 'fr'],
+      [['Ficus carica', 'Rubus idaeus'], 'en'],
+    ])
+
+    expect(await workbench.resolveDisplayNames(['Malus domestica', 'Ficus carica'], 'en'))
+      .toEqual({ names: { 'Malus domestica': 'Apple', 'Ficus carica': 'Fig' }, englishFallbacks: [] })
+    expect(await workbench.resolveCommonNames(['Rubus idaeus'], 'fr')).toEqual({})
+    // Only the apple's English name was new; the fig's came from the fallback lookup.
+    expect(resolveCommonNames).toHaveBeenCalledTimes(3)
+    expect(resolveCommonNames).toHaveBeenLastCalledWith(['Malus domestica'], 'en')
+
+    resolveCommonNames.mockRejectedValueOnce(new Error('catalog unavailable'))
+    await expect(workbench.resolveDisplayNames(['Prunus avium'], 'fr')).rejects.toThrow('catalog unavailable')
+    // A failed lookup caches nothing: the next call asks again, in the language and then in English.
+    expect(await workbench.resolveDisplayNames(['Prunus avium'], 'fr')).toEqual({ names: {}, englishFallbacks: [] })
+    expect(resolveCommonNames).toHaveBeenCalledTimes(6)
+    expect(resolveCommonNames).toHaveBeenLastCalledWith(['Prunus avium'], 'en')
+    workbench.dispose()
+  })
+
   it('resolves an English fallback name for a detail without a name in the interface language', async () => {
     const locale = signal('fr')
     const detail = (commonName: string | null) => ({

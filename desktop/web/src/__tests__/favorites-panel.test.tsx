@@ -287,9 +287,9 @@ describe('FavoritesPanel', () => {
     locale.value = 'fr'
     await act(async () => { render(<FavoritesPanel />, container); await flushEffects() })
     await act(async () => { await workbench.loadFavorites(); await flushEffects() })
-    await act(async () => { await flushEffects() })
     const favorite = container.querySelector<HTMLElement>('[data-favorite-species="Malus domestica"]')!
-    expect(favorite.querySelector('strong [lang="en"]')?.textContent).toBe('Apple')
+    // The English name follows the catalog's projection: the language's lookup, then English.
+    await vi.waitFor(() => expect(favorite.querySelector('strong [lang="en"]')?.textContent).toBe('Apple'))
     expect(favorite.querySelector('strong')?.textContent).toContain('(angl.)')
     expect(favorite.querySelector('em[lang="la"]')?.textContent).toBe('Malus domestica')
     expect(resolveCommonNamesMock).toHaveBeenCalledWith(['Malus domestica'], 'en')

@@ -86,7 +86,7 @@ describe('Find in key in the export sheet', () => {
     const workflow = createPdfWorkflow({
       capture: () => ({ identity: canvas, isCurrent: () => true, input: { name: 'Garden', locale: 'en', commonNames: {}, canvas } }),
       prepare: async () => ({ plan: PLAN, bytes: new Uint8Array([1]) }),
-      resolveNames: async () => ({}),
+      resolveDisplayNames: async () => ({ names: {}, englishFallbacks: [] }),
       delivery: { save: vi.fn(), dispose: vi.fn() },
       labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }),
       namePrintArea: (number) => `Area ${number}`,

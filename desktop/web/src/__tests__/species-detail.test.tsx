@@ -11,7 +11,7 @@ import { emptySpeciesDetail } from './support/species-detail'
 const ipc = vi.hoisted(() => ({
   getSpeciesDetail: vi.fn(),
   getLocaleCommonNames: vi.fn(async () => []),
-  getCommonNames: vi.fn(async (): Promise<Record<string, string>> => ({})),
+  getCommonNames: vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({})),
   getSpeciesHabits: vi.fn(async (): Promise<Record<string, string>> => ({})),
   getSpeciesImages: vi.fn(async (): Promise<SpeciesImage[]> => []),
   getCachedImagePath: vi.fn(async (url: string) => `/cache/${encodeURIComponent(url)}`),
@@ -27,7 +27,15 @@ const mapActions = vi.hoisted(() => ({ selectSpeciesPlants: vi.fn(), zoomToSpeci
 
 vi.mock('../ipc/species', () => ipc)
 vi.mock('@tauri-apps/api/core', () => ({ convertFileSrc: (path: string) => `asset://${path}` }))
-vi.mock('../app/plant-browser', () => ({ speciesCatalogWorkbench: workbench }))
+vi.mock('../app/plant-browser', async () => {
+  // The detail's "(en)" title comes from the catalog's one projection, here over the mocked lookup.
+  const { composeSpeciesDisplayNames } = await vi.importActual<typeof import('../app/plant-browser/workbench')>('../app/plant-browser/workbench')
+  return {
+    speciesCatalogWorkbench: Object.assign(workbench, {
+      resolveDisplayNames: composeSpeciesDisplayNames((names, locale) => ipc.getCommonNames([...names], locale)),
+    }),
+  }
+})
 vi.mock('../app/plant-finder/map-matches', () => mapActions)
 vi.mock('../components/plant-db/design-species', () => ({ useCatalogDesignSpecies: () => inDesign.species }))
 
@@ -166,7 +174,7 @@ describe('Species detail (Desktop)', () => {
 
   it('marks an English fallback name with the localized English mark when the language has none', async () => {
     locale.value = 'fr'
-    ipc.getCommonNames.mockResolvedValue({ 'Ribes nigrum': 'Blackcurrant' })
+    ipc.getCommonNames.mockImplementation(async (_names, requested): Promise<Record<string, string>> => requested === 'en' ? { 'Ribes nigrum': 'Blackcurrant' } : {})
     await open(emptySpeciesDetail('Ribes nigrum'))
 
     const title = container.querySelector('h2')!

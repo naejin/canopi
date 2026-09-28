@@ -1,3 +1,4 @@
+import type { SpeciesDisplayNames } from '../app/plant-browser/workbench'
 import type { CanvasPrintSnapshot, PrintPlant } from '../canvas/print'
 import type { PdfPreparation } from '../app/canvas-pdf/prepare'
 import { describe, expect, it, vi } from 'vitest'
@@ -12,14 +13,14 @@ function fixture(plants: PrintPlant[] = []) {
       plants, zones: [], annotations: [], measurements: [] } } }
   const prepare = vi.fn<(input: PdfPreparation, signal: AbortSignal) => Promise<PreparedPdf>>(async () => result)
   const save = vi.fn(async () => 'saved' as const)
-  const resolveNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<Record<string, string>> => ({}))
+  const resolveDisplayNames = vi.fn(async (_names: readonly string[], _locale: string): Promise<SpeciesDisplayNames> => ({ names: {}, englishFallbacks: [] }))
   let currentCanvas = capture.input.canvas
   const workflow = createPdfWorkflow({ capture: () => {
     const canvas = currentCanvas
     return { ...capture, input: { ...capture.input, canvas }, isCurrent: () => current && canvas === currentCanvas }
-  }, prepare, resolveNames,
+  }, prepare, resolveDisplayNames,
     delivery: { save, dispose: vi.fn() }, labels: () => ({ notes: 'Notes', observations: 'Field observations', keyAndNotes: 'Key and notes', overview: 'Overview', plants: 'Plants', actualSize: 'Actual size' }), namePrintArea: (number) => `Print area ${number}`, fontBaseUrl: () => 'https://test/fonts/' })
-  return { workflow, prepare, save, resolveNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
+  return { workflow, prepare, save, resolveDisplayNames, capture, setCanvas: (canvas: CanvasPrintSnapshot) => { currentCanvas = canvas }, replace: () => { current = false; workflow.synchronize({}) } }
 }
 describe('PDF workflow lifetime', () => {
   it('exports automatically prepared pages and clears temporary choices on Design replacement', async () => {
@@ -167,8 +168,8 @@ describe('PDF workflow lifetime', () => {
     workflow.dispose()
   })
   it('keeps full canonical names when the catalog is unavailable', async () => {
-    const { workflow, prepare, resolveNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
-    resolveNames.mockRejectedValue(new Error('catalog unavailable'))
+    const { workflow, prepare, resolveDisplayNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+    resolveDisplayNames.mockRejectedValue(new Error('catalog unavailable'))
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
     expect(prepare.mock.calls[0]![0].input.commonNames).toEqual({})
@@ -199,12 +200,12 @@ describe('PDF workflow lifetime', () => {
 
 it('bounds an unavailable name lookup and releases its deadline when preview closes', async () => {
   vi.useFakeTimers()
-  const { workflow, prepare, resolveNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
-  resolveNames.mockImplementation(() => new Promise(() => {}))
+  const { workflow, prepare, resolveDisplayNames } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  resolveDisplayNames.mockImplementation(() => new Promise(() => {}))
   try {
     workflow.show()
     await vi.advanceTimersByTimeAsync(0)
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
     workflow.addPrintArea({ x: -1, y: -1, width: 2, height: 2 })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(workflow.state.value.status).toBe('ready')
@@ -240,24 +241,24 @@ it('recovers from encoding and delivery failures without rebuilding valid bytes 
 })
 
 it('opens an overview without asking the catalog for any plant names', async () => {
-  const { workflow, resolveNames, prepare } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
+  const { workflow, resolveDisplayNames, prepare } = fixture([{ id: 'a', canonicalName: 'Malus domestica', position: { x: 0, y: 0 }, color: '#000000', symbol: 'round', mark: [], pinnedName: false }])
   try {
-    resolveNames.mockImplementation(() => new Promise(() => {}))
+    resolveDisplayNames.mockImplementation(() => new Promise(() => {}))
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
     expect(prepare).toHaveBeenCalledOnce()
   } finally { workflow.dispose() }
 })
 
 it('does not resolve plant names for uncovered annotations on an overview-only export', async () => {
   const plant = { id: 'remote', canonicalName: 'Prunus avium', speciesCode: 'PAV', position: { x: 30, y: 30 }, color: '#123456', symbol: 'round', mark: [], pinnedName: false }
-  const { workflow, capture, setCanvas, resolveNames } = fixture([plant])
+  const { workflow, capture, setCanvas, resolveDisplayNames } = fixture([plant])
   setCanvas({ ...capture.input.canvas, layers: [...capture.input.canvas.layers, { name: 'annotations', visible: true, opacity: 1 }],
     annotations: [{ id: 'note', text: 'Complete instruction '.repeat(30), fontSize: 16, rotation: 0, position: { x: 30, y: 30 } }] })
   try {
     workflow.show()
     await vi.waitFor(() => expect(workflow.state.value.status).toBe('ready'))
-    expect(resolveNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
   } finally { workflow.dispose() }
 })

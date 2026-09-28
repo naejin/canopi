@@ -119,12 +119,12 @@ describe('plant detail controller', () => {
 
   it('publishes an English fallback name with the detail when the language has none', async () => {
     const loadDetail = vi.fn().mockResolvedValue(createDetail('Ribes nigrum', null))
-    const loadCommonNames = vi.fn().mockResolvedValue({ 'Ribes nigrum': 'Blackcurrant' })
+    const resolveDisplayNames = vi.fn().mockResolvedValue({ names: { 'Ribes nigrum': 'Blackcurrant' }, englishFallbacks: ['Ribes nigrum'] })
     const loadHabits = vi.fn().mockResolvedValue({ 'Ribes nigrum': 'Shrub' })
     const controller = createPlantDetailController({
       loadDetail,
       loadLocaleCommonNames: vi.fn().mockResolvedValue([]),
-      loadCommonNames,
+      resolveDisplayNames,
       loadHabits,
     })
 
@@ -132,20 +132,20 @@ describe('plant detail controller', () => {
     await flushMicrotasks()
     await flushMicrotasks()
 
-    expect(loadCommonNames).toHaveBeenCalledWith(['Ribes nigrum'], 'en')
+    expect(resolveDisplayNames).toHaveBeenCalledWith(['Ribes nigrum'], 'fr')
     expect(controller.loadState.value).toBe('loaded')
     expect(controller.englishName.value).toBe('Blackcurrant')
     expect(controller.habitKey.value).toBe('Shrub')
   })
 
   it('asks for no English fallback in English or when the language has a name', async () => {
-    const loadCommonNames = vi.fn().mockResolvedValue({})
+    const resolveDisplayNames = vi.fn().mockResolvedValue({ names: {}, englishFallbacks: [] })
     const controller = createPlantDetailController({
       loadDetail: vi.fn()
         .mockResolvedValueOnce(createDetail('Ribes nigrum', null))
         .mockResolvedValueOnce(createDetail('Ribes nigrum', 'Cassissier')),
       loadLocaleCommonNames: vi.fn().mockResolvedValue([]),
-      loadCommonNames,
+      resolveDisplayNames,
       loadHabits: vi.fn().mockResolvedValue({}),
     })
 
@@ -154,7 +154,7 @@ describe('plant detail controller', () => {
     controller.setTarget('Ribes nigrum', 'fr')
     await flushMicrotasks()
 
-    expect(loadCommonNames).not.toHaveBeenCalled()
+    expect(resolveDisplayNames).not.toHaveBeenCalled()
     expect(controller.englishName.value).toBeNull()
   })
 })

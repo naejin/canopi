@@ -38,6 +38,9 @@ vi.mock('../app/plant-browser', async (importOriginal) => {
   const view = signal({ items: [] as readonly unknown[], loading: false, revision: 0 })
   favorites.view = view
   favorites.load = vi.fn(async () => {})
+  const resolveCommonNames = async (names: readonly string[], requested: string) => Object.fromEntries(names.flatMap((name) => (
+    requested === 'en' && favorites.englishNames[name] ? [[name, favorites.englishNames[name]!]] : []
+  )))
   return {
     ...original,
     speciesCatalogWorkbench: new Proxy(original.speciesCatalogWorkbench, {
@@ -49,11 +52,8 @@ vi.mock('../app/plant-browser', async (importOriginal) => {
             favorites.habits[name] ? [[name, favorites.habits[name]!]] : []
           )))
         }
-        if (property === 'resolveCommonNames') {
-          return async (names: readonly string[], requested: string) => Object.fromEntries(names.flatMap((name) => (
-            requested === 'en' && favorites.englishNames[name] ? [[name, favorites.englishNames[name]!]] : []
-          )))
-        }
+        if (property === 'resolveCommonNames') return resolveCommonNames
+        if (property === 'resolveDisplayNames') return original.composeSpeciesDisplayNames(resolveCommonNames)
         return Reflect.get(target, property)
       },
     }),
