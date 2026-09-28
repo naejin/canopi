@@ -76,20 +76,20 @@ const VERB_LABELS = new Set(['speciesKey.select'])
  * Panel names inside a sentence, as a pattern per locale. Russian inflects the name, so its
  * pattern accepts the case endings.
  */
-const NAMES_IN_SENTENCES: Record<string, { english: RegExp; locale: Record<Locale, RegExp> }> = {
+const NAMES_IN_SENTENCES: Record<string, { english: RegExp; locale: Terms }> = {
   'Plant catalog': {
     english: /plant catalog/i,
     locale: terms(
       'catalogue des plantes', 'catálogo de plantas', 'catálogo de plantas', 'catalogo delle piante', 'pflanzenkatalog',
       'plantencatalogus', 'каталог\\S* растений', '植物目录', '植物カタログ', '식물 카탈로그',
-    ) as unknown as Record<Locale, string>,
+    ),
   },
   'Data library': {
     english: /data library/i,
     locale: terms(
       'bibliothèque de données', 'biblioteca de datos', 'biblioteca de dados', 'libreria dati', 'datenbibliothek',
       'databibliotheek', 'библиотек\\S* данных', '数据资料库', 'データライブラリ', '데이터 라이브러리',
-    ) as unknown as Record<Locale, string>,
+    ),
   },
 }
 

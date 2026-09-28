@@ -34,6 +34,7 @@ describe('IPC wrappers', () => {
       const modulePath = join(IPC, file)
       const text = readFileSync(modulePath, 'utf8')
       for (const [, name] of text.matchAll(/^export (?:const|(?:async )?function) (\w+)/gm)) {
+        if (!name) continue
         wrappers.push(name)
         const used = sources.some((source) => source.path !== modulePath && source.identifiers.has(name))
         if (!used) unused.push(`${relative(SRC, modulePath)}: ${name}`)
