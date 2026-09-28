@@ -35,8 +35,10 @@
   padding: 0 var(--space-2) var(--space-3);
 }
 
+/* The finder stays above the scroll, like Plants and Budget, so it never scrolls away with the matrix. */
 .controls {
-  padding-bottom: var(--space-2);
+  flex: 0 0 auto;
+  padding: 0 var(--space-2) var(--space-2);
 }
 
 .matrixRegion {

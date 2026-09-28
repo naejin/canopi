@@ -95,6 +95,16 @@ describe('Consortium panel', () => {
     expect(container.textContent).toContain('4 species')
   })
 
+  it('keeps the plant finder above the scrolling matrix, like Plants and Budget', async () => {
+    await act(async () => { render(<ConsortiumPanel />, container) })
+    const finder = container.querySelector('input[type="search"], input[role="searchbox"], input')!
+    const table = container.querySelector('table')!
+    const scroller = [...container.querySelectorAll('div')].find((div) => div.contains(table) && getComputedStyle(div).overflowY === 'auto')
+      ?? table.closest('[class*="scroll"]')!
+    expect(scroller.contains(table)).toBe(true)
+    expect(scroller.contains(finder)).toBe(false)
+  })
+
   it('marks every cell holding a finder match and lists the matches', async () => {
     await act(async () => { render(<ConsortiumPanel />, container) })
     await search('pomier sauvage')

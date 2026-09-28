@@ -97,26 +97,26 @@ export function ConsortiumPanel() {
               >{t('canvas.consortium.noStratumYet', { count: withoutStratum })}</button>
             </>}
           </p>
+          <div className={styles.controls}>
+            <PlantFinder
+              value={workbench.search}
+              onChange={workbench.setSearch}
+              correction={finder.correction}
+              selectedOnMap={{
+                pressed: workbench.selectedOnMap,
+                plantCount: workbench.mapSelectionPlantCount,
+                onChange: workbench.setSelectedOnMap,
+              }}
+              filters={<StratumFormFilters filters={workbench.quickFilters} onChange={workbench.setQuickFilters} />}
+              summary={workbench.highlightedSpecies
+                ? t('canvas.consortium.foundInCells', {
+                  count: matchedCells,
+                  species: t('plantFinder.species', { count: workbench.highlightedSpecies.size }),
+                })
+                : undefined}
+            />
+          </div>
           <div ref={scrollRef} className={styles.scroll} onScroll={(event) => workbench.setScrollTop(event.currentTarget.scrollTop)}>
-            <div className={styles.controls}>
-              <PlantFinder
-                value={workbench.search}
-                onChange={workbench.setSearch}
-                correction={finder.correction}
-                selectedOnMap={{
-                  pressed: workbench.selectedOnMap,
-                  plantCount: workbench.mapSelectionPlantCount,
-                  onChange: workbench.setSelectedOnMap,
-                }}
-                filters={<StratumFormFilters filters={workbench.quickFilters} onChange={workbench.setQuickFilters} />}
-                summary={workbench.highlightedSpecies
-                  ? t('canvas.consortium.foundInCells', {
-                    count: matchedCells,
-                    species: t('plantFinder.species', { count: workbench.highlightedSpecies.size }),
-                  })
-                  : undefined}
-              />
-            </div>
             <ConsortiumMatrix workbench={workbench} />
             <div className={styles.listHead}>
               <ListHeading workbench={workbench} filterSummaryRef={filterSummaryRef} />
