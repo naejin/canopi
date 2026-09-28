@@ -27,9 +27,11 @@ run_sidecar() {
   fi
   local dir
   dir=$(dirname "$sidecar")
-  # The application executable must be beside it: that is where discovery looks.
+  # The application executable must be beside it: that is where discovery
+  # looks. Linux packages name it after the crate (canopi-desktop), macOS and
+  # Windows after the product (Canopi, Canopi.exe).
   local app
-  app=$(find "$dir" -maxdepth 1 -type f \( -iname 'canopi' -o -iname 'canopi.exe' \) | head -n 1)
+  app=$(find "$dir" -maxdepth 1 -type f \( -iname 'canopi' -o -iname 'canopi-desktop' -o -iname 'canopi.exe' \) | head -n 1)
   if [ -z "$app" ]; then
     echo "no Canopi executable beside $sidecar" >&2
     ls -l "$dir" >&2
