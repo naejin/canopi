@@ -67,6 +67,8 @@ describe('application translation authority', () => {
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
       .toBe('Command palette')
     expect(container.textContent).toContain('New Design')
+    const shortcutOf = (id: string) => container.querySelector(`[id="cmd-${id}"] span:last-child`)?.textContent
+    expect(shortcutOf('file.saveAs')).toBe('Ctrl Shift S')
 
     await act(async () => {
       locale.value = 'fr'
@@ -75,5 +77,7 @@ describe('application translation authority', () => {
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label'))
       .toBe('Palette de commandes')
     expect(container.textContent).toContain('Nouveau Design')
+    // Shell shortcuts are read when shown, like canvas ones: "Maj" in French.
+    expect(shortcutOf('file.saveAs')).toBe('Ctrl Maj S')
   })
 })

@@ -230,7 +230,10 @@ function shellAppCommandDefinition(
   return {
     id: command.id,
     label: () => t(command.labelKey),
-    shortcut: command.shortcut ? formatShortcut(command.shortcut, t) : undefined,
+    // Read when shown: the language can change after the catalog is built.
+    get shortcut() {
+      return command.shortcut ? formatShortcut(command.shortcut, t) : undefined
+    },
     palette: command.palette,
     run: () => command.execute(),
     disabled: (state) => command.isExecutionDisabled(state),
