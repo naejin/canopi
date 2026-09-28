@@ -1,73 +1,71 @@
 # PDF export
 
-Canvas PDF is a derived, printable view of a Design. It is identical on Linux, macOS, Windows and Web. The scope decision is [ADR 0008](../adr/0008-canvas-pdf-export.md): no map backgrounds and no network requests during export. Code lives in `desktop/web/src/app/canvas-pdf/` and `desktop/web/src/components/canvas-pdf/`.
+## Purpose
 
-## Acceptance behaviour
+The planting-plan PDF is a derived, printable view of a Design, identical on Linux, macOS, Windows and Web. This guide states the pipeline's boundaries and limits, what the print workspace must keep and how to verify it. The scope decision is [ADR 0008](../adr/0008-canvas-pdf-export.md): no map backgrounds, no network during export.
 
-| Surface | Behaviour to preserve |
-| --- | --- |
-| Entry and delivery | File → Export to PDF (`file.exportCanvasPdf`) opens the full-window page workspace. Desktop saves through a dialog. Web downloads. Save is enabled only for the current complete document. |
-| Print layers | Initially follow the visible printable Design layers. Overrides affect export only. Maps (basemap, satellite, LiDAR, terrain), Timeline, Budget and Consortium are never printed. |
-| Printable content | Plants, pinned plant names, zones, annotations and persistent measurement guides. Group members print once. Interaction decorations are excluded. |
-| Field sheets | Only explicitly drawn Print Areas or Whole design create detail pages. Clicking a zone never creates a page, and print setup never changes Design zones. |
-| Area picker | Fits printable content and existing coverage independently of the printed overview framing. Clicking without dragging creates nothing. Cancel or Escape returns to the previous page unchanged. |
-| Navigation | Thumbnails and the numbered overview coverage open the matching detail. Removing a detail removes its key pages. Find in key (Ctrl F) searches the printed key with the plant finder's matcher (`key-finder.ts`: each entry's page and box come from the key's own `:key:` link destinations); a result, or Enter for the first, opens that page, rings every matching entry on it and scrolls the chosen one into view. |
-| Framing | Drag or keyboard displacement and zoom (1–1000 %, default 100 %) can crop. Fit restores full coverage and centring. Per-page orientation keeps framing. Screen inspection never changes print scale. |
-| Readability | Authored plant appearance and positions are kept. Ambiguity resolves with print-only enclosures and Species Codes. Names, quantities and crowded notes continue in keys. The Design is never recoloured. |
-| Plant colours | As in the Design (default), Grayscale or Black, for printing only. Grayscale gives each distinct colour its own grey, ordered by luminance, so a species keeps one grey on every page. Enclosure choices follow the printed colours. |
-| North arrow and scale | On by default. Turning it off removes the ground scale bar and north arrow from map pages. The overview's 50 mm calibration bar always prints. Designs are drawn north-up. |
-| Key | Grouped by catalog habit: Tree, Shrub, Herbaceous, Climber, then Other. Each column that continues a group repeats its heading with "(continued)". Without any known habit (catalog failure, or the Web edition) the key stays one ungrouped list. Names missing in the chosen language use the English name marked "(en)", explained in the key header. Names wrap and are never truncated. |
-| Symbol legend | Page 1 lists the plant symbols it uses, drawn in ink with their localized names, in the header band beside the title. |
-| Zones and measurements | Zone interiors print transparent (a print-only rule). Stored guides keep their true distances. No spacing guides are synthesized. |
-| Annotations | The overview prints only notes that fit. Other notes need a chosen detail covering them. Notes never create sheets or move into unrelated keys. |
-| Splitting | Previews adjacent readable sheets and the page count. Apply commits, Cancel keeps the setup. The full requested rectangle is covered, including empty ground. |
-| Lifecycle | Print setup is temporary Design Session state. It survives closing the preview and editing, rebuilds on reopen and is discarded on Design replacement. Missing selected layers require review. Export never dirties, saves or changes Design content, history or settings. |
-| Physical scale | Pages are A4 or US Letter in a white print style independent of the app theme. The overview carries a labelled 50 mm calibration bar. Ground scale, zoom and screen inspection are separate quantities. |
+## Authorities and boundaries
 
-Map export is deferred, not rejected. When it returns, it must settle provider-compatible acquisition, alignment and printed attribution, and a failed map export must offer Retry or Export without map. Re-evaluate GeoLibre map capture and print layout then (see [architecture](../architecture.md#geolibre-reuse-boundary)).
+- Entry: File › Export › Planting plan (PDF)… (`file.exportCanvasPdf`, Ctrl P) opens the full-window print workspace (`components/canvas-pdf/CanvasPdfDialog.tsx`, mounted by `WorkspaceComposition` in both editions). Its title is "Export to PDF".
+- Capture: `CanvasQuerySurface.capturePrintSnapshot()` returns an owned, renderer-neutral projection of settled Scene state in session-plane metres, or `null` while an edit owns the Scene. Maps, viewport decorations and selection never enter it. It never settles an edit or touches persistence.
+- Composition: `app/canvas-pdf/live.ts` joins capture, name resolution (chosen language, then English fallbacks in `PdfInput.englishFallbacks`), catalog habits (`PdfInput.habits`: Desktop `get_species_habits`, Web `{}`) and the edition delivery adapter. `workflow.ts` owns the temporary setup, cancellation, admission of current results and delivery status.
+- Layout: `layout.ts` composes one page plan in PDF points from field modules that work in millimetres; `text.ts` shapes text with Fontkit over embedded Noto metrics for both preview outlines and PDF text; `encode.ts` replays the plan through PDFKit into one document with named destinations. No screenshot, print stylesheet, native renderer or system font takes part.
+- Worker: a lazily imported inline Vite worker (`worker.ts`, `job.ts`) runs each shaping and encoding job; progress messages carry preview-only plans, never exportable bytes; cancellation, timeout, completion or error terminates it. `PdfPagePreview.tsx` renders the same glyph outlines as SVG for previews and thumbnails.
+- Delivery: `#canvas-pdf-platform` selects it. Web clicks a Blob URL during the initiating gesture; Desktop uses the dialog and `save_canvas_pdf`, the only PDF command, in the executor's `Local` class through `write_derived_file()`.
+- Print setup is temporary Design Session state: it survives closing the preview and editing, rebuilds on reopen and is discarded on Design replacement. Export never dirties, saves or changes Design content, history or settings; layer overrides change print inclusion, not Scene visibility.
 
-## Pipeline
+## Rules
 
-- **Capture.** `CanvasQuerySurface.capturePrintSnapshot()` returns an owned, renderer-neutral projection of settled Scene state, or `null` while an edit owns the Scene. It never settles an edit or touches persistence. It captures symbol recipes (a body path in the plant colour, then a cut-out path that the PDF fills in paper or ink, whichever contrasts with that colour), resolved colours and native zone primitives (polygon or rectangle corners, ellipse centre, radii and rotation) in session-plane metres. Maps, viewport decorations and selection never enter it.
-- **Live composition.** `live.ts` composes capture, selected-language name resolution, the worker and the edition delivery adapter. It resolves names in the chosen language, then English for the rest (listed in `PdfInput.englishFallbacks`), and catalog habits (`PdfInput.habits`, desktop `get_species_habits`; the Web catalog projection has none). It invalidates stale output and rebuilds on Scene, attachment, Design name or locale changes. A Design Session identity change cancels, closes and discards the setup. One 30 s deadline bounds all name and habit lookups. A failed or late lookup contributes nothing: names fall back to canonical names and the key prints ungrouped.
-- **Workflow.** `workflow.ts` owns temporary setup, cancellation, admission of current results and delivery status. A 100 ms refresh timer coalesces revisions and is cleared on rebuild, close, replacement and disposal. A busy Scene is retried when the settled source changes, with no polling loop. Layer selections override print inclusion without changing Scene visibility.
-- **Layout.** `layout.ts` composes one page plan in PDF points. Field modules compute collision geometry in physical millimetres. `text.ts` shapes text with Fontkit and embedded Noto metrics, used for both the preview outlines and the PDF text. `encode.ts` replays the same plan through PDFKit into one document with named destinations. Never concatenate documents. No screenshot, print stylesheet, native renderer or system font takes part.
-- **Worker.** A lazily imported inline Vite worker (`worker.ts`, `job.ts`) runs each shaping and encoding job. Progress messages carry preview-only plans, never exportable bytes. Cancellation, timeout, completion or error terminates the worker and releases fonts and caches. There is no persistent worker. `PdfLayoutCache` keeps only the current setup's unnumbered map and key pages. Its signatures cover content, names, measurement homes, geometry, key orientation and labels.
-- **Preview.** `components/canvas-pdf/PdfPagePreview.tsx` renders shared SVG artwork from glyph outlines for the plain preview, thumbnails and page editor. Never replace it with browser text metrics. PDF text stays selectable.
-- **Limits.** 200 pages per document, 120 s per job, 30 s per font or name wait, 64 MiB for native delivery.
+- Limits: 200 pages per document (`layout.ts`), 120 s per job (`job.ts`), 30 s per font fetch (`text.ts`) and per name or habit lookup (`workflow.ts`), 64 MiB and a `%PDF-` … `%%EOF` payload with a `.pdf` destination for native delivery (`desktop/src/services/export.rs`). Tests: `canvas-pdf-job.test.ts`, `canvas-pdf-font-assets.test.ts`, `canvas-pdf-native-delivery.test.ts`, `native_command_policy::tests`.
+- Only Print Areas the user draws, or Whole design, create detail pages; clicking a zone never creates a page and print setup never changes Design zones (`canvas-pdf-areas.test.ts`, `canvas-pdf-area-drawing.test.tsx`).
+- Printable content is plants, pinned plant names, zones, annotations and persistent measurement guides; group members print once; maps, Timeline, Budget and Consortium never print (`canvas-pdf-layout.test.ts`, `canvas-print-snapshot.test.ts`; the `null`-during-edit case is in `canvas/runtime/scene-runtime.test.ts`).
+- Framing: zoom 1–1000 %, default 100 %; Fit restores full coverage; per-page orientation keeps framing; `PdfSetup.views` is keyed by stable id (`overview`, `area:<id>`, `<source>:legend:<index>`), never by page number (`canvas-pdf-details.test.ts`, `canvas-pdf-continuations.test.ts`).
+- Readability: authored appearance and positions are kept; ambiguity resolves with print-only enclosures and Species Codes, never by recolouring or moving the Design; names wrap and are never truncated (`canvas-pdf-readability.test.ts`, `canvas-pdf-species-codes.test.ts`).
+- Plant colours: As in the Design, Grayscale (each distinct colour its own grey, ordered by luminance) or Black, for printing only (`print-colors.ts`; `canvas-pdf-print-options.test.ts`, `canvas-pdf-color-mode-labels.test.ts`).
+- North arrow and scale default on; turning them off removes the ground scale bar and arrow from map pages; the overview's 50 mm calibration bar always prints (`canvas-pdf-print-options.test.ts`).
+- Key: grouped by catalog habit Tree, Shrub, Herbaceous, Climber, Other, with "(continued)" headings on continued columns; without any known habit (catalog failure, Web) the key is one ungrouped list; missing-language names show the English name marked "(en)" (`canvas-pdf-print-options.test.ts`).
+- Splitting partitions a sheet along its longest ground axis to about 120 positions per part (2–32 parts); the proposal stays separate from the committed setup and export is unavailable while it is under review (`split-sheets.ts`; `canvas-pdf-field-proposal.test.ts`).
+- Find in key (Ctrl F) runs the plant finder's matcher over the printed key and opens the matching page (`key-finder.ts`; `canvas-pdf-key-finder.test.tsx`).
+- Workflow: a 100 ms timer coalesces revisions; each effective edit cancels the older job; a Design Session identity change cancels, closes and discards the setup (`canvas-pdf-workflow.test.ts`, `canvas-pdf-dialog.test.tsx`).
+- Fonts: `app/canvas-pdf/font-assets.json` pins five Noto files (latin regular and semibold, CJK SC/JP/KR) by upstream commit URL and SHA-256; `npm run prepare:pdf-fonts` downloads or verifies them into ignored `public/pdf-fonts/` before dev, build and test; the runtime verifies bytes on load (`canvas-pdf-font-assets.test.ts`). PDFKit 0.20.2 and Fontkit 2.0.4 are pinned in `package.json`.
+- The Tauri CSP keeps `worker-src 'self' blob:` for the inline worker (advice).
+- PDF layout imports no renderer or runtime state; no policy test enforces it (advice).
 
-## Layout model
+## The side sheet keeps
 
-- `PdfPrintArea` is a named temporary rectangle with a session id and ground bounds, independent of zones. At 100 % its exact ground extent fits a physical frame. `coverage.ts` owns fit, zoom and displacement. Automatic orientation maximizes usable scale, and exact squares use portrait. `addWholeDesign()` uses the fitted picker extent.
-- `PdfSetup.views` stores zoom, ground-centre displacement (metres) and orientation by stable id (`overview`, `area:<id>`, `<source>:legend:<index>`), never by page number. Key pages inherit their source's orientation unless overridden.
-- `split-sheets.ts` partitions a requested sheet along its longest ground axis, aiming for at most about 120 positions per part (2–32 parts). `splitPreview` is separate from committed `setup`. Export is unavailable while a proposal is under review.
-- Each detail map gets a complete local key on the same sheet when it fits (`integrated-key.ts`). Otherwise automatic key and notes pages follow. The map may shift across spare paper, but its scale and coverage never change.
-- `field-layout.ts` composes drawing, identification, annotations and dimensions. `field-identity.ts` chooses plain, circle, square or diamond enclosures only for local symbol and colour collisions. Occasional members and excess conflicts use the existing Species Code. Unique appearances stay plain. A code that cannot fit keeps coordinates in its key entry. P references are reserved for coincident placements. Positions closer than the 0.7 mm mark diameter keep coordinates.
-- `field-placement.ts` reserves actual Fontkit ink and mark bounds. Its clear-path association checks are never printed as connectors. `field-annotations.ts` places 8.5–12 pt whole-word notes near the anchor, keeping rotation. Only notes that do not fit use an N reference.
-- `field-dimensions.ts` draws dimensions from stored measurement guide endpoints and keeps the full distance when cropped. `zone-measurements.ts` derives sizes from real edges and diameters, never bounding boxes, and only native rectangles use the rectangle shortcut. `zone-ink.ts` interrupts zone outlines around text and never paints opaque erasers.
-- The overview (`overview.ts`, `overview-guides.ts`, `overview-measurements.ts`) keeps every selected guide, groups repeated values per zone in a table, and paginates long dimension indexes into continuations. Overview annotations print only as complete text that fits with 2 mm clearance in at most two lines. There are no N markers or annotation lists on the overview.
-- Sheet furniture (`page-furniture.ts`): 8 mm side margin, 26 mm header band plus zone summaries, 20 mm bottom clearance, Design title, detail number, counts, an actual-size reminder, a 1/2/5 ground scale and a north arrow beside it (`groundScale`). `symbolLegend` draws the page 1 symbol legend, up to four rows per column within about 45 % of the page width; symbols beyond that are counted in its title ("+N"). Plant marks keep opacity and compact symbol recipes, and their colour unless `PdfSetup.plantColors` recolours them (`print-colors.ts`). Radii are capped at 0.8 mm (detail) and 1 mm (overview). Zones draw first in quiet neutral ink with no fill.
-- Keys (`field-key.ts`) are compact. Compact keys use 8 pt semibold codes, 9.5 pt common names, 7.5 pt botanical names and 9 pt notes. Standalone keys use 10/8/9.5 pt. The code sits left of one enclosed sample. Keys have up to three columns and ruled observation space. Every appearance and count is represented. Habit groups keep their heading with their first entry and repeat it at the top of every continued column.
-- `layout.ts` assigns physical page numbers only after all continuations exist. `detailNumber` counts detail maps only.
-- `field-geometry.ts` owns spatial indices, clipping and flattening of captured paths. PDF layout imports neither renderers nor runtime state.
+Title, paper (A4 / US Letter), Plant colors (segmented radio), Include (printable layer checkboxes and the North arrow and scale switch), the selected page's options or the split review, Find in key, Add field sheet, page thumbnails and Save with the page count (`canvas-pdf-dialog.test.tsx`). The preview holds only the page heading, hint, page editor and errors. While a plan rebuilds, the last plan stays visible, marked busy, with framing input disabled and exportable bytes cleared.
 
-## Print workspace
+## Do not
 
-- `CanvasPdfDialog.tsx` mounts the shared full-window workspace in both editions, registered by `WorkspaceComposition`. It lays out one side sheet beside the live page preview: title, paper, plant colours (a segmented radio group), Include (print layer checkboxes and the north arrow and scale switch), the selected page's options or the split review, Find in key (`PdfKeyFinder.tsx`), Add field sheet, page thumbnails and Save. The preview holds only the page heading, hint, page editor (drag or arrow-key displacement) and errors. It owns page selection, the Add field sheet and inspection modes, and focus trapping and restoration.
-- `PdfPageToolbar` is the sheet's selected-page section; it edits the selected page through workflow commands only. `PdfPageRail` shows source pages and their continuations. Thumbnails materialize glyph SVGs only while visible (owned `IntersectionObserver`s, disconnected on unmount).
-- `PdfPlan.pickerPage` is a separate fitted drawing surface for Add field sheet. It is never exported or counted.
-- While a plan rebuilds, the workspace keeps the last displayed plan, marks it busy, disables framing input and clears exportable bytes. Each effective edit cancels the older job.
-
-## Assets and delivery
-
-- PDFKit 0.20.2 and Fontkit 2.0.4 are pinned in `desktop/web/package.json`. `app/canvas-pdf/font-assets.json` pins Noto Sans 2.008 (regular and semibold) and Noto Sans CJK 2.004 SC/JP/KR by URL and SHA-256.
-- `npm run prepare:pdf-fonts` downloads or verifies the fonts and licences into ignored `desktop/web/public/pdf-fonts/`. It runs before dev, builds and tests. Valid cached files need no network. Both builds ship all five fonts (about 50 MB). The runtime loads only the fonts it needs from its own base URL and verifies their bytes.
-- `#canvas-pdf-platform` selects delivery. Web clicks a Blob URL during the initiating gesture, then revokes it. Desktop uses the dialog and the executor-backed `save_canvas_pdf` command, which validates the payload (`%PDF-` … `%%EOF`, 64 MiB at most) and writes through operation-owned temporary-file replacement in the `Local` class. `save_canvas_pdf` is the only PDF command.
-- The Tauri CSP allows same-app font fetches and blob workers (`worker-src 'self' blob:`).
+- Do not add a map background, tile fetch or any network request to the pipeline (ADR 0008).
+- Do not add a second PDF or image export command; there is no PNG export.
+- Do not concatenate documents, use browser text metrics for the preview, or let a screenshot stand in for layout.
+- Do not keep a persistent worker or let progress messages carry exportable bytes.
+- Do not let export dirty, save or edit the Design, or change Scene visibility through print layer overrides.
+- Do not treat encoder fixtures or screen checks as printer tests; physical readability and the 50 mm bar need paper evidence.
+- Do not commit generated validation artifacts or private `--input` Designs.
 
 ## Verification
 
-- `npx tsc --noEmit`, the focused `canvas-pdf-*` and `canvas-print-snapshot` tests and both builds. Shell or shared runtime changes need `npm test`. Changes to native delivery need the Rust gates and `native_command_policy::tests`. Run `npm run prepare:pdf-fonts` first when invoking Vitest directly.
-- Production sample runner: `npm run build:pdf-validation` builds `desktop/web/scripts/pdf-validation/` against production modules into ignored `dist-pdf-validation/`. Serve it on loopback, then run `run-browser.py` (Playwright Python 1.58.0) and `verify.py` (Poppler and Pillow comparison of SVG previews with rendered PDF pages). Keep generated artifacts and any private `--input` Designs outside Git. Preview verifier tests: `python3 -m unittest discover -s desktop/web/scripts/pdf-validation -p 'test_*.py'`.
-- `.github/workflows/pdf-production-probe.yml` runs that host in the desktop WebView engines through `scripts/pdf-native-webview/run.py` with explicit `--fixture` and `--script`. It covers the worker, CSP and fixed-path delivery, not the Tauri save dialog. Keep its push and pull-request path filters aligned.
-- Encoder fixtures and screen checks are not printer tests. Physical readability and the 50 mm bar need paper evidence.
+```bash
+cd desktop/web && npm run prepare:pdf-fonts                      # before invoking Vitest directly
+cd desktop/web && npx vitest run src/__tests__/canvas-pdf src/__tests__/canvas-print-snapshot.test.ts
+cd desktop/web && npm run build:pdf-validation                    # production sample host into ignored dist-pdf-validation/
+python3 desktop/web/scripts/pdf-validation/run-browser.py …       # Playwright drives the host on loopback
+python3 desktop/web/scripts/pdf-validation/verify.py …            # Poppler + Pillow compare SVG previews with rendered pages
+python3 -m unittest discover -s desktop/web/scripts/pdf-validation -p 'test_*.py'
+```
+
+Shell or shared runtime changes also need `npm test` and both builds; native delivery changes need the Rust gates. `.github/workflows/pdf-production-probe.yml` runs the validation host in the desktop WebView engines through `scripts/pdf-native-webview/run.py` (worker, CSP and fixed-path delivery, not the save dialog); keep its push and pull-request path filters aligned.
+
+## Where to look
+
+| Area | Module | Tests |
+| --- | --- | --- |
+| Capture | `canvas/runtime/query-surface.ts` | `canvas-print-snapshot.test.ts`, `canvas/runtime/scene-runtime.test.ts` |
+| Workflow and live composition | `app/canvas-pdf/workflow.ts`, `live.ts` | `canvas-pdf-workflow.test.ts` |
+| Layout | `app/canvas-pdf/layout.ts`, `coverage.ts`, `field-*.ts`, `overview*.ts`, `page-furniture.ts`, `field-key.ts`, `integrated-key.ts` | `canvas-pdf-layout.test.ts`, `canvas-pdf-overview.test.ts`, `canvas-pdf-strips.test.ts`, `canvas-pdf-zone-measurements.test.ts` |
+| Text and encoding | `app/canvas-pdf/text.ts`, `encode.ts`, `worker.ts`, `job.ts` | `canvas-pdf-text.test.ts`, `canvas-pdf-encoding.test.ts`, `canvas-pdf-worker-errors.test.ts` |
+| Print workspace | `components/canvas-pdf/` | `canvas-pdf-dialog.test.tsx`, `canvas-pdf-preview.test.tsx`, `canvas-pdf-key-finder.test.tsx` |
+| Delivery | `app/canvas-pdf/platform.*.ts`, `desktop/src/services/export.rs` | `canvas-pdf-delivery.test.ts`, `canvas-pdf-native-delivery.test.ts` |
+| Validation host | `desktop/web/scripts/pdf-validation/`, `scripts/pdf-native-webview/` | `test_preview_files.py`, `pdf-production-probe.yml` |
