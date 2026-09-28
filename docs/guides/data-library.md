@@ -15,7 +15,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 
 ## Rules
 
-- One catalogue schema, `CATALOGUE_VERSION` (`catalogue.rs`, 21), no migration ladder. An older library is deleted on open; a newer one is refused, never written. (`mod.rs` tests)
+- One catalogue schema, `CATALOGUE_VERSION` (`catalogue.rs`), no migration ladder. Every original carries a derived `sources/<sha256>/meta.json` (`source_meta.rs`); an older or corrupt catalogue is set aside byte for byte under `lidar-library.set-aside/` and rebuilt from those files, with items and results prepared again on Retry; a newer catalogue is refused and the library runs empty and read-only. Nothing on the recovery path deletes an original. (`mod.rs` recovery tests, `recovery.rs`, `source_meta.rs` tests)
 - An import publishes one fixed item from one batch; listed order is source priority (first valid sample wins, NoData reveals the next). A published item never gains, loses or reorders sources. (`import.rs` tests)
 - Files first, then references: originals to `sources/<sha256>/original`, COGs to `assets/<sha256>/cog.tif` by idempotent rename, then one `BEGIN IMMEDIATE` transaction writes the rows. A crash leaves no item or a complete one plus unreferenced files, which the startup sweep removes (never while a job is in flight). (`mod.rs`, `import.rs` tests)
 - A run publishes all outputs or none, only while every input is still at its pinned generation; superseded generations stay for history. Restart marks unfinished jobs failed and recalculates nothing. (`analyses/tests.rs`)
@@ -46,7 +46,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 
 ## Do not
 
-- Add a catalogue migration, backup or compatibility reader; bump `CATALOGUE_VERSION` and discard.
+- Add a catalogue migration or compatibility reader; bump `CATALOGUE_VERSION` and let the rebuild carry the data, keeping `meta.json` complete.
 - Store a library path, pixel or runtime URL in a `.canopi`, log or Problem Report.
 - Let a source item gain files after publication; a new batch is a new item.
 - Guess a quantity or unit from a filename, band description or value range.
@@ -61,7 +61,7 @@ Boundaries for Canopi Desktop's local store of LiDAR terrain rasters (imported s
 | Area | Module | Tests |
 |---|---|---|
 | Admission, import, publication | `admission.rs`, `import.rs`, `collection.rs`, `generation.rs` | inline tests, `fixed_library_tests.rs`, `e2e.rs` |
-| Catalogue, paths, sweep | `catalogue.rs`, `paths.rs`, `mod.rs` | inline tests |
+| Catalogue, paths, sweep, recovery | `catalogue.rs`, `paths.rs`, `mod.rs`, `recovery.rs`, `source_meta.rs` | inline tests |
 | Registry, executors | `common-types/analysis-registry.json`, `common-types/src/analysis_registry.rs`, `analyses/` | `analyses/tests.rs`, `bindings-gen analysis_registry` |
 | Engines, readers | `engine.rs`, `geolibre.rs`, `prepared_raster.rs` | inline tests, `lidar-native` lane |
 | Display | `display_cog.rs`, `maplibre/raster-display/`, `app/lidar/display.ts`, `item-types.ts` | `__tests__/raster-display-*`, `lidar-display`, `item-types` |
