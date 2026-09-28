@@ -1,11 +1,15 @@
 // @vitest-environment node
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ConfigEnv, Plugin, PluginOption, UserConfig } from 'vite'
 
 import viteConfig from '../../vite.config'
 import { parseCssDeclarations } from './support/architecture/css-facts'
+
+const SCANNER_URL = new URL('../../scripts/check-web-build-boundaries.mjs', import.meta.url)
 
 describe('Web Edition build configuration', () => {
   it('selects shared browser and desktop adapters at build time', async () => {
@@ -62,23 +66,41 @@ describe('Web Edition build configuration', () => {
     const packageJson = JSON.parse(
       readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
     ) as { scripts?: Record<string, string> }
-    const scannerUrl = new URL('../../scripts/check-web-build-boundaries.mjs', import.meta.url)
-    const scanner = readFileSync(scannerUrl, 'utf8')
 
-    expect(existsSync(scannerUrl)).toBe(true)
     expect(packageJson.scripts?.['build:web']).toContain('npm run build:web:bundle')
     expect(packageJson.scripts?.['build:web:bundle']).toContain(
       'vite build --mode web && node scripts/check-web-build-boundaries.mjs',
     )
-    expect(scanner).toContain('MAX_CLOUDFLARE_PAGES_ASSET_BYTES')
-    expect(scanner).toContain('FORBIDDEN_DUCKDB_WASM_PATTERN')
-    expect(scanner).toContain('dist-web')
-    expect(scanner).toContain('statSync')
-    expect(scanner).toContain('@tauri-apps')
-    expect(scanner).toContain('__TAURI__')
-    expect(scanner).toContain('__TAURI_INTERNALS__')
-    expect(scanner).toContain('app/shell/bootstrap')
-    expect(scanner).toContain('ipc/design')
+  })
+
+  it('passes a browser-only build and names every Desktop leak, raw WASM asset and oversize file', async () => {
+    const { scanWebBuild } = await import(SCANNER_URL.href) as {
+      scanWebBuild(distRoot: string, options?: { maxAssetBytes?: number }): string[]
+    }
+    const dist = mkdtempSync(join(tmpdir(), 'canopi-web-boundaries-'))
+    try {
+      mkdirSync(join(dist, 'assets'), { recursive: true })
+      writeFileSync(join(dist, 'index.html'), '<script type="module" src="/app/assets/web-1.js"></script>\n')
+      writeFileSync(join(dist, 'assets', 'web-1.js'), 'console.log("browser only")\n')
+      writeFileSync(join(dist, 'assets', 'shared.css'), '.root{color:red}\n')
+      expect(scanWebBuild(dist)).toEqual([])
+
+      // The markers a minified Tauri chunk keeps (globals, plugin command names) and the
+      // chunk name vite.config.ts gives @tauri-apps; raw WASM the CDN serves instead.
+      writeFileSync(join(dist, 'assets', 'web-1.js'), 'window.__TAURI_INTERNALS__.invoke("plugin:dialog|open")\n')
+      writeFileSync(join(dist, 'assets', 'tauri-2f3a.js'), 'export{}\n')
+      writeFileSync(join(dist, 'assets', 'duckdb-eh.wasm'), '\0asm')
+      writeFileSync(join(dist, 'assets', 'big.parquet'), 'x'.repeat(128))
+      expect(scanWebBuild(dist, { maxAssetBytes: 100 }).sort()).toEqual([
+        'assets/big.parquet is 128 bytes; Cloudflare Pages allows at most 100 bytes per file',
+        'assets/duckdb-eh.wasm must not bundle DuckDB raw WASM; use CDN-selected DuckDB-WASM bundles',
+        'assets/tauri-2f3a.js is the Tauri API chunk; the Web entry graph reached @tauri-apps',
+        'assets/web-1.js contains __TAURI_INTERNALS__',
+        'assets/web-1.js contains plugin:dialog|',
+      ])
+    } finally {
+      rmSync(dist, { recursive: true, force: true })
+    }
   })
 
   it('keeps the browser shell and optional sidebar inside the workspace', () => {

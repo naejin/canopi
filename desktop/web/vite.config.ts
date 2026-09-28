@@ -87,7 +87,7 @@ export default defineConfig(({ mode }) => {
       coverage: {
         provider: "v8",
         include: ["src/**/*.{ts,tsx}"],
-        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**", "src/vendor/**"],
+        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/generated/**"],
         reporter: ["text-summary", "json-summary"],
         // Ratchet: the floor is the measured baseline; raise it, never lower it.
         thresholds: { statements: 89.7, branches: 81.85, functions: 90.7, lines: 92.8 },
