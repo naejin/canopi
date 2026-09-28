@@ -10,6 +10,8 @@ import {
   locale,
   plantSpacingIntervalM,
   savedStampsFrameHeight,
+  scrollWheel,
+  singleKeyShortcuts,
   theme,
 } from '../app/settings/state'
 import { mapLayers } from '../app/map-layers/state'
@@ -26,6 +28,8 @@ describe('generated settings defaults', () => {
     )
     expect(snapToGridEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_grid)
     expect(snapToGuidesEnabled.value).toBe(DEFAULT_SETTINGS.snap_to_guides)
+    expect(singleKeyShortcuts.value).toBe(DEFAULT_SETTINGS.single_key_shortcuts)
+    expect(scrollWheel.value).toBe(DEFAULT_SETTINGS.scroll_wheel)
     expect(mapLayers.value).toEqual({
       basemap: {
         style: DEFAULT_SETTINGS.basemap_style,

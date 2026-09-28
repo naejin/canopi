@@ -7,6 +7,7 @@ import { mutateSettingsProjection, type SettingsPersistMode } from '../../app/se
 import {
   locale,
   newDesignDefaults,
+  scrollWheel,
   singleKeyShortcuts,
   theme,
   type NewDesignDefaults,
@@ -18,7 +19,7 @@ import {
 } from '../../app/shell/dialogs'
 import { toggleToolNames, toolRailShowsNames } from '../../app/tool-rail/learning'
 import { PLANT_SYMBOL_SCALE_MAX, PLANT_SYMBOL_SCALE_MIN } from '../../canvas/runtime/plant-display'
-import type { AppFolder, AppFolderLocations, BasemapStyle, PlantLabels } from '../../generated/contracts'
+import type { AppFolder, AppFolderLocations, BasemapStyle, PlantLabels, ScrollWheel } from '../../generated/contracts'
 import { SETTINGS_BASEMAP_STYLES } from '../../generated/settings'
 import type { Locale, Theme } from '../../types/settings'
 import { t } from '../../i18n'
@@ -45,11 +46,12 @@ const LANGUAGE_ITEMS: DropdownItem<Locale>[] = [
   { value: 'ko', label: '한국어' },
 ]
 
-type SettingsSectionId = 'appearance' | 'map' | 'new-designs' | 'keyboard' | 'files' | 'about'
+type SettingsSectionId = 'appearance' | 'map' | 'canvas' | 'new-designs' | 'keyboard' | 'files' | 'about'
 
 const SECTIONS: readonly { readonly id: SettingsSectionId; readonly icon: ControlIconName; readonly labelKey: string }[] = [
   { id: 'appearance', icon: 'sun', labelKey: 'settings.appearance' },
   { id: 'map', icon: 'image', labelKey: 'settings.mapAndImagery' },
+  { id: 'canvas', icon: 'fit', labelKey: 'settings.canvas' },
   { id: 'new-designs', icon: 'plus', labelKey: 'settings.newDesigns' },
   { id: 'keyboard', icon: 'keyboard', labelKey: 'settings.keyboard' },
   { id: 'files', icon: 'folder-open', labelKey: 'settings.filesAndData' },
@@ -98,6 +100,7 @@ function SettingsDialogContent({ folders }: { readonly folders?: SettingsFolders
           <h3 className={styles.heading} id={`${id}-heading`}>{t(section.labelKey)}</h3>
           {active === 'appearance' && <AppearanceSection />}
           {active === 'map' && <MapSection />}
+          {active === 'canvas' && <CanvasSection />}
           {active === 'new-designs' && <NewDesignsSection />}
           {active === 'keyboard' && <KeyboardSection />}
           {active === 'files' && <FilesSection folders={folders} />}
@@ -168,6 +171,25 @@ function MapSection() {
       onChange={setSoftenBackground}
     />
     <span className={styles.hint}>{t('settings.mapNewDesignsHint')}</span>
+  </>
+}
+
+/** Settings › Canvas: how a plain wheel or two-finger scroll moves the map. */
+function CanvasSection() {
+  return <>
+    <div className={styles.field}>
+      <span className={styles.label}>{t('settings.scrollWheel')}</span>
+      <SegmentedControl<ScrollWheel>
+        label={t('settings.scrollWheel')}
+        value={scrollWheel.value}
+        options={[
+          { value: 'zoom', label: t('settings.scrollWheelZoom') },
+          { value: 'pan', label: t('settings.scrollWheelPan') },
+        ]}
+        onChange={(next) => mutateSettingsProjection((settings) => { settings.scrollWheel = next }, { persist: 'immediate' })}
+      />
+      <span className={styles.hint}>{t('settings.scrollWheelHint')}</span>
+    </div>
   </>
 }
 

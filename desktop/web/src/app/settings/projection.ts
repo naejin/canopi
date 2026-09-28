@@ -1,5 +1,5 @@
 import { batch } from '@preact/signals'
-import type { LastView, SatelliteSource } from '../../generated/contracts'
+import type { LastView, SatelliteSource, ScrollWheel } from '../../generated/contracts'
 import { WEB_MERCATOR_MAX_LATITUDE_DEG } from '../../generated/canopi-design-format'
 import type { Locale, Settings, Theme } from '../../types/settings'
 import { FALLBACK_PLANT_SPACING_INTERVAL_M } from '../../canvas/plant-spacing-interval'
@@ -25,6 +25,7 @@ import {
   plantSpacingIntervalM,
   satelliteSource,
   savedStampsFrameHeight,
+  scrollWheel,
   singleKeyShortcuts,
   theme,
   toolNamesVisible,
@@ -56,6 +57,7 @@ export interface SettingsProjectionDraft {
     namesVisible: boolean | null
   }
   singleKeyShortcuts: boolean
+  scrollWheel: ScrollWheel
   newDesigns: NewDesignDefaults
 }
 
@@ -145,6 +147,7 @@ function createDraftFromProjection(): SettingsProjectionDraft {
       namesVisible: toolNamesVisible.value,
     },
     singleKeyShortcuts: singleKeyShortcuts.value,
+    scrollWheel: scrollWheel.value,
     newDesigns: newDesignDefaults.value,
   }
 }
@@ -187,6 +190,7 @@ function normalizeDraft(draft: SettingsProjectionDraft): SettingsProjectionDraft
       namesVisible: draft.toolRail.namesVisible,
     },
     singleKeyShortcuts: draft.singleKeyShortcuts,
+    scrollWheel: draft.scrollWheel === 'pan' ? 'pan' : 'zoom',
     newDesigns: {
       satellite: draft.newDesigns.satellite,
       symbolScale: clampPlantSymbolScale(draft.newDesigns.symbolScale),
@@ -211,6 +215,7 @@ function applyDraftToProjection(draft: SettingsProjectionDraft): void {
     if (!sameStrings(usedCanvasTools.value, draft.toolRail.usedTools)) usedCanvasTools.value = draft.toolRail.usedTools
     toolNamesVisible.value = draft.toolRail.namesVisible
     singleKeyShortcuts.value = draft.singleKeyShortcuts
+    scrollWheel.value = draft.scrollWheel
     if (!sameNewDesignDefaults(newDesignDefaults.value, draft.newDesigns)) newDesignDefaults.value = draft.newDesigns
   })
 }
@@ -241,6 +246,7 @@ function settingsFromDraft(draft: SettingsProjectionDraft): Settings {
     used_canvas_tools: [...draft.toolRail.usedTools],
     tool_names_visible: draft.toolRail.namesVisible,
     single_key_shortcuts: draft.singleKeyShortcuts,
+    scroll_wheel: draft.scrollWheel,
     new_design_satellite: draft.newDesigns.satellite,
     new_design_symbol_scale: draft.newDesigns.symbolScale,
     new_design_labels: draft.newDesigns.labels,
@@ -333,6 +339,7 @@ function projectSettingsToSignals(settings: Settings): Settings {
       namesVisible: settings.tool_names_visible ?? null,
     },
     singleKeyShortcuts: settings.single_key_shortcuts,
+    scrollWheel: settings.scroll_wheel,
     newDesigns: {
       satellite: settings.new_design_satellite,
       symbolScale: settings.new_design_symbol_scale,

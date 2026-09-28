@@ -364,6 +364,7 @@ function createTestSettingsAdapter(
     readSnapToGridEnabled: () => snapToGrid,
     readSnapToGuidesEnabled: () => snapToGuides,
     readSingleKeyShortcuts: () => true,
+    readScrollWheel: () => 'zoom',
     readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
     commitPlantSpacingIntervalMeters: (meters) => {
       plantSpacingIntervalM = meters

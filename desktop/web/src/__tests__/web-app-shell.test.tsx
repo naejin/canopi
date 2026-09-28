@@ -83,6 +83,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     used_canvas_tools: [],
     tool_names_visible: null,
     single_key_shortcuts: true,
+    scroll_wheel: 'zoom',
     new_design_satellite: false,
     new_design_symbol_scale: 1,
     new_design_labels: 'names',

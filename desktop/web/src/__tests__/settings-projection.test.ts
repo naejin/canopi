@@ -20,6 +20,7 @@ import {
   newDesignDefaults,
   satelliteSource,
   activeGoogleMapsApiKey,
+  scrollWheel,
   singleKeyShortcuts,
 } from '../app/settings/state'
 import {
@@ -55,6 +56,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     used_canvas_tools: [],
     tool_names_visible: null,
     single_key_shortcuts: true,
+    scroll_wheel: 'zoom',
     new_design_satellite: false,
     new_design_symbol_scale: 1,
     new_design_labels: 'names',
@@ -74,6 +76,7 @@ function resetProjectionSignals(): void {
   plantSpacingIntervalM.value = 0.5
   savedStampsFrameHeight.value = 220
   singleKeyShortcuts.value = true
+  scrollWheel.value = 'zoom'
   newDesignDefaults.value = { satellite: false, symbolScale: 1, labels: 'names' }
 }
 
@@ -218,6 +221,7 @@ describe('settings projection', () => {
       used_canvas_tools: [],
       tool_names_visible: null,
       single_key_shortcuts: true,
+      scroll_wheel: 'zoom',
       new_design_satellite: false,
       new_design_symbol_scale: 1,
       new_design_labels: 'names',
@@ -278,6 +282,7 @@ describe('settings projection', () => {
   it('projects Keyboard and New Designs settings and clamps the default symbol size', () => {
     hydrateSettingsProjectionForTests(baseSettings({
       single_key_shortcuts: false,
+      scroll_wheel: 'zoom',
       new_design_satellite: true,
       new_design_symbol_scale: 9,
       new_design_labels: 'none',
@@ -291,10 +296,23 @@ describe('settings projection', () => {
     }, { persist: 'none' })
     expect(snapshotSettingsProjection()).toMatchObject({
       single_key_shortcuts: true,
+      scroll_wheel: 'zoom',
       new_design_satellite: true,
       new_design_symbol_scale: 0.5,
       new_design_labels: 'codes',
     })
+  })
+
+  it('projects the Canvas scroll wheel choice both ways and falls back to zoom', () => {
+    hydrateSettingsProjectionForTests(baseSettings({ scroll_wheel: 'pan' }))
+    expect(scrollWheel.value).toBe('pan')
+
+    mutateSettingsProjection((draft) => { draft.scrollWheel = 'zoom' }, { persist: 'none' })
+    expect(snapshotSettingsProjection().scroll_wheel).toBe('zoom')
+
+    mutateSettingsProjection((draft) => { draft.scrollWheel = 'fling' as never }, { persist: 'none' })
+    expect(scrollWheel.value).toBe('zoom')
+    expect(snapshotSettingsProjection().scroll_wheel).toBe('zoom')
   })
 
   it('normalizes theme, map layer choices, opacities, and contour interval at the seam', () => {

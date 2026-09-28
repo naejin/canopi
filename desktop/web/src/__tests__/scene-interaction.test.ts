@@ -4617,6 +4617,76 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  describe('Settings › Canvas › Scroll wheel', () => {
+    function wheelSession(scrollWheel: 'zoom' | 'pan') {
+      const navigation = { panBy: vi.fn(), zoomAroundScreenPoint: vi.fn() }
+      const deps: SceneInteractionSessionDeps = {
+        ...createInteractionDeps(container, store, camera),
+        cameraNavigation: navigation,
+        readScrollWheel: () => scrollWheel,
+      }
+      return { navigation, session: createTestSession(deps) }
+    }
+    const pointer = { x: 200, y: 150 }
+
+    it.each([
+      { input: { deltaY: -120 }, expects: 'zoom' },
+      { input: { deltaX: 24, deltaY: -40, shiftKey: true }, expects: 'pan' },
+      { input: { deltaY: -120, ctrlKey: true }, expects: 'zoom' },
+      { input: { deltaY: -120, ctrlKey: true, shiftKey: true }, expects: 'zoom' },
+    ])('with Zooms the map, $input $expects', ({ input, expects }) => {
+      const { navigation, session } = wheelSession('zoom')
+      const wheel = events.wheel(pointer, input)
+      expect(wheel.defaultPrevented).toBe(true)
+      if (expects === 'zoom') {
+        expect(navigation.zoomAroundScreenPoint).toHaveBeenCalledExactlyOnceWith(pointer, expect.closeTo(1.271249, 6))
+        expect(navigation.panBy).not.toHaveBeenCalled()
+      } else {
+        expect(navigation.panBy).toHaveBeenCalledExactlyOnceWith({ x: -24, y: 40 })
+        expect(navigation.zoomAroundScreenPoint).not.toHaveBeenCalled()
+      }
+      session.dispose()
+    })
+
+    it.each([
+      { input: { deltaX: 24, deltaY: -40 }, expects: 'pan', delta: { x: -24, y: 40 } },
+      { input: { deltaY: -40, shiftKey: true }, expects: 'pan', delta: { x: 40, y: 0 } },
+      { input: { deltaX: 24, deltaY: -40, shiftKey: true }, expects: 'pan', delta: { x: -24, y: 40 } },
+      { input: { deltaY: -120, ctrlKey: true }, expects: 'zoom' },
+      { input: { deltaY: -120, metaKey: true, shiftKey: true }, expects: 'zoom' },
+    ])('with Pans the map, $input $expects', ({ input, expects, delta }) => {
+      const { navigation, session } = wheelSession('pan')
+      const wheel = events.wheel(pointer, input)
+      expect(wheel.defaultPrevented).toBe(true)
+      if (expects === 'zoom') {
+        expect(navigation.zoomAroundScreenPoint).toHaveBeenCalledExactlyOnceWith(pointer, expect.closeTo(1.271249, 6))
+        expect(navigation.panBy).not.toHaveBeenCalled()
+      } else {
+        expect(navigation.panBy).toHaveBeenCalledExactlyOnceWith(delta)
+        expect(navigation.zoomAroundScreenPoint).not.toHaveBeenCalled()
+      }
+      session.dispose()
+    })
+
+    it('pans on a plain scroll through the camera and the viewport render path', () => {
+      const render = vi.fn()
+      const deps: SceneInteractionSessionDeps = {
+        ...createInteractionDeps(container, store, camera, { render }),
+        readScrollWheel: () => 'pan',
+      }
+      const session = createTestSession(deps)
+      const before = camera.viewport
+      const scene = structuredClone(store.persisted)
+
+      events.wheel(pointer, { deltaX: 12, deltaY: 30 })
+
+      expect(camera.viewport).toEqual({ x: before.x - 12, y: before.y - 30, scale: before.scale })
+      expect(store.persisted).toEqual(scene)
+      expect(render).toHaveBeenCalledWith('viewport')
+      session.dispose()
+    })
+  })
+
   it('commits a text Annotation with Enter and selects it', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

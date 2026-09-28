@@ -74,6 +74,9 @@ pub struct Settings {
     /// P, N, Shift G, brackets). Off leaves only shortcuts with Ctrl, Alt or
     /// a named key (Delete, Esc, arrows, F keys).
     pub single_key_shortcuts: bool,
+    /// Settings › Canvas: what a plain wheel or two-finger scroll does on the
+    /// map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.
+    pub scroll_wheel: ScrollWheel,
     /// Settings › New Designs: a new Design turns Satellite on. Off keeps the
     /// background last used. Applied when a Design is created, never after.
     pub new_design_satellite: bool,
@@ -134,6 +137,7 @@ impl Default for Settings {
             used_canvas_tools: Vec::new(),
             tool_names_visible: None,
             single_key_shortcuts: true,
+            scroll_wheel: ScrollWheel::Zoom,
             new_design_satellite: false,
             new_design_symbol_scale: 1.0,
             new_design_labels: PlantLabels::Names,
@@ -200,6 +204,17 @@ settings_enum! {
 }
 
 settings_enum! {
+    /// What a plain wheel or two-finger scroll does on the map.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+    #[serde(rename_all = "lowercase")]
+    pub enum ScrollWheel {
+        #[default]
+        Zoom,
+        Pan,
+    }
+}
+
+settings_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
     #[serde(rename_all = "lowercase")]
     pub enum Theme {
@@ -212,7 +227,7 @@ settings_enum! {
 mod tests {
     use super::{
         AppFolder, AppFolderLocations, BasemapStyle, LastView, PlantLabels, SatelliteSource,
-        Settings,
+        ScrollWheel, Settings,
     };
 
     #[test]
@@ -305,6 +320,24 @@ mod tests {
         assert_eq!(value["new_design_labels"], serde_json::json!("codes"));
         assert!(
             serde_json::from_value::<Settings>(serde_json::json!({ "new_design_labels": "all" }))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn scroll_wheel_defaults_to_zoom_and_round_trips() {
+        assert_eq!(Settings::default().scroll_wheel, ScrollWheel::Zoom);
+        let older: Settings = serde_json::from_value(serde_json::json!({ "theme": "dark" }))
+            .expect("a record without a scroll wheel choice should load");
+        assert_eq!(older.scroll_wheel, ScrollWheel::Zoom);
+
+        let chosen: Settings = serde_json::from_value(serde_json::json!({ "scroll_wheel": "pan" }))
+            .expect("an explicit scroll wheel choice should load");
+        assert_eq!(chosen.scroll_wheel, ScrollWheel::Pan);
+        let value = serde_json::to_value(&chosen).expect("settings should serialize");
+        assert_eq!(value["scroll_wheel"], serde_json::json!("pan"));
+        assert!(
+            serde_json::from_value::<Settings>(serde_json::json!({ "scroll_wheel": "fling" }))
                 .is_err()
         );
     }

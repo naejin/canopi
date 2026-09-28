@@ -204,6 +204,7 @@ export class SceneCanvasRuntime {
         readSnapToGridEnabled: () => this._appAdapter.settings.readSnapToGridEnabled(),
         readSnapToGuidesEnabled: () => this._appAdapter.settings.readSnapToGuidesEnabled(),
         readSingleKeyShortcuts: () => this._appAdapter.settings.readSingleKeyShortcuts(),
+        readScrollWheel: () => this._appAdapter.settings.readScrollWheel(),
         readPlantSpacingIntervalMeters: () => this._appAdapter.settings.readPlantSpacingIntervalMeters(),
         commitPlantSpacingIntervalMeters: (meters) =>
           this._appAdapter.settings.commitPlantSpacingIntervalMeters(meters),

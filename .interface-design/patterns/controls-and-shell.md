@@ -30,6 +30,7 @@ A wide dialog with a section list on the left (`nav`, the current section `aria-
 
 - Appearance: theme, language, tool names.
 - Map and imagery: Satellite imagery as a segmented Free imagery / My Google key. The key field is masked and a saved key is never put in the page; Show reveals only what is typed; Save key, Remove key (which chooses Free imagery); a note says the key stays on this device. Then Map style and Soften background.
+- Canvas: Scroll wheel as a segmented Zooms the map / Pans the map, with the note that pinch and Ctrl + wheel always zoom.
 - New Designs: Open on satellite, symbol size (50–200 %), labels (None, Codes, Names); applied once when a Design is created.
 - Keyboard: Single-key shortcuts and Show all shortcuts (closes Settings, opens F1). Remapping is not offered and the section says so.
 - Files and data: Desktop lists Drafts and Data library with their paths and Show in folder; Web says Designs and Drafts stay in the browser.

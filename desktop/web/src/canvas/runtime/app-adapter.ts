@@ -113,6 +113,9 @@ export interface CanvasRuntimeContextMenuAdapter {
   close(request: CanvasContextMenuRequest): void
 }
 
+/** Settings › Canvas › Scroll wheel: a plain wheel zooms or pans the map. */
+export type CanvasScrollWheelSetting = 'zoom' | 'pan'
+
 export interface CanvasRuntimeSettingsAdapter {
   readLocale(): string
   readChromeOverlay(): CanvasRuntimeChromeSettingsSnapshot
@@ -120,6 +123,8 @@ export interface CanvasRuntimeSettingsAdapter {
   readSnapToGuidesEnabled(): boolean
   /** Settings › Keyboard › Single-key shortcuts. */
   readSingleKeyShortcuts(): boolean
+  /** Settings › Canvas › Scroll wheel: what a plain wheel does; pinch and Ctrl wheel always zoom. */
+  readScrollWheel(): CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters(): number
   /** Where a new or empty Design opens: an overview of the app's last view (zoom capped by the app), if any. */
   readLastView?(): { readonly lon: number; readonly lat: number; readonly zoom: number } | null
@@ -200,6 +205,7 @@ export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter
       readSnapToGridEnabled: () => snapToGrid,
       readSnapToGuidesEnabled: () => snapToGuides,
       readSingleKeyShortcuts: () => true,
+      readScrollWheel: () => 'zoom',
       readPlantSpacingIntervalMeters: () => plantSpacingIntervalM,
       commitPlantSpacingIntervalMeters: (meters) => {
         plantSpacingIntervalM = meters

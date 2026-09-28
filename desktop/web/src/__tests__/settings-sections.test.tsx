@@ -13,6 +13,7 @@ import {
   newDesignDefaults,
   satelliteSource,
   activeGoogleMapsApiKey,
+  scrollWheel,
   singleKeyShortcuts,
 } from '../app/settings/state'
 import {
@@ -74,6 +75,7 @@ beforeEach(() => {
   mapLayers.value = createDefaultMapLayers()
   newDesignDefaults.value = DEFAULT_NEW_DESIGNS
   singleKeyShortcuts.value = true
+  scrollWheel.value = 'zoom'
   resetFrontendDiagnosticsForTests()
   consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) => vi.spyOn(console, method))
 })
@@ -95,7 +97,7 @@ describe('Settings sections', () => {
     await openSection('appearance')
     const nav = dialog().querySelector('nav')!
     expect([...nav.querySelectorAll('button')].map((item) => item.textContent)).toEqual([
-      'Appearance', 'Map and imagery', 'New Designs', 'Keyboard', 'Files and data', 'About',
+      'Appearance', 'Map and imagery', 'Canvas', 'New Designs', 'Keyboard', 'Files and data', 'About',
     ])
     expect(nav.querySelector('[aria-current="page"]')!.textContent).toBe('Appearance')
     await act(async () => { button('Keyboard').click() })
@@ -212,6 +214,18 @@ describe('Settings › New Designs', () => {
 
     await act(async () => { radio('Codes').click() })
     expect(newDesignDefaults.value.labels).toBe('codes')
+  })
+})
+
+describe('Settings › Canvas', () => {
+  it('chooses what the scroll wheel does and says pinch and Ctrl wheel always zoom', async () => {
+    await openSection('canvas')
+    expect(radio('Zooms the map').getAttribute('aria-checked')).toBe('true')
+    expect(dialog().textContent).toContain('Pinch and Ctrl + wheel always zoom.')
+
+    await act(async () => { radio('Pans the map').click() })
+    expect(scrollWheel.value).toBe('pan')
+    expect(radio('Pans the map').getAttribute('aria-checked')).toBe('true')
   })
 })
 

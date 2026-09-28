@@ -1,5 +1,5 @@
 import { computed, signal } from '@preact/signals'
-import type { LastView, Locale, PlantLabels, SatelliteSource, Theme } from '../../generated/contracts'
+import type { LastView, Locale, PlantLabels, SatelliteSource, ScrollWheel, Theme } from '../../generated/contracts'
 import { DEFAULT_SETTINGS } from '../../generated/settings'
 
 export const locale = signal<Locale>(DEFAULT_SETTINGS.locale)
@@ -48,6 +48,9 @@ export const toolNamesVisible = signal<boolean | null>(DEFAULT_SETTINGS.tool_nam
 
 /** Settings › Keyboard: character-key shortcuts (V, P, N, Shift G, brackets) are on. */
 export const singleKeyShortcuts = signal<boolean>(DEFAULT_SETTINGS.single_key_shortcuts)
+
+/** Settings › Canvas: a plain wheel or two-finger scroll zooms or pans the map. Pinch and Ctrl wheel always zoom. */
+export const scrollWheel = signal<ScrollWheel>(DEFAULT_SETTINGS.scroll_wheel)
 
 /** Settings › New Designs: what a new Design starts with. Never applied to an existing Design. */
 export interface NewDesignDefaults {

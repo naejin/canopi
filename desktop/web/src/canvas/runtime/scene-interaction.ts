@@ -86,6 +86,7 @@ import type {
   CanvasContextMenuCommands,
   CanvasRuntimeContextMenuAdapter,
   CanvasRuntimeTranslator,
+  CanvasScrollWheelSetting,
 } from './app-adapter'
 import {
   createLockedObjectAffordance,
@@ -158,6 +159,8 @@ export interface SceneInteractionSessionDeps {
   readSnapToGuidesEnabled: () => boolean
   /** Settings › Keyboard › Single-key shortcuts; on when absent. */
   readSingleKeyShortcuts?: () => boolean
+  /** Settings › Canvas › Scroll wheel; `zoom` when absent. Pinch and Ctrl wheel zoom either way. */
+  readScrollWheel?: () => CanvasScrollWheelSetting
   readPlantSpacingIntervalMeters: () => number
   commitPlantSpacingIntervalMeters: (meters: number) => void
   translate: CanvasRuntimeTranslator
@@ -833,9 +836,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const deltaY = event.deltaY * (mode === 1 ? 16 : mode === 2 ? size.height : 1)
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return
     const beforeRevision = this._deps.camera.snapshot.peek().revision
-    if (!event.shiftKey || event.ctrlKey || event.metaKey) {
+    const scrollPans = (this._deps.readScrollWheel?.() ?? 'zoom') === 'pan'
+    // A pinch arrives as Ctrl wheel and zooms whatever the setting says.
+    if (event.ctrlKey || event.metaKey || (!scrollPans && !event.shiftKey)) {
       const factor = Math.exp(Math.max(-1, Math.min(1, -deltaY * 0.002)))
       this._deps.cameraNavigation.zoomAroundScreenPoint(screen, factor)
+    } else if (scrollPans && event.shiftKey && deltaX === 0) {
+      // A mouse wheel has one axis: Shift turns its scroll sideways.
+      this._deps.cameraNavigation.panBy({ x: -deltaY, y: 0 })
     } else {
       this._deps.cameraNavigation.panBy({ x: -deltaX, y: -deltaY })
     }

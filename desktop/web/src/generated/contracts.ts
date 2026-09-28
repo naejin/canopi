@@ -890,6 +890,9 @@ export type SavedViewTerrain = {
 	hillshade: boolean,
 };
 
+// What a plain wheel or two-finger scroll does on the map.
+export type ScrollWheel = "zoom" | "pan";
+
 export type Settings = {
 	locale: Locale,
 	theme: Theme,
@@ -945,6 +948,11 @@ export type Settings = {
 	 *  a named key (Delete, Esc, arrows, F keys).
 	 */
 	single_key_shortcuts: boolean,
+	/**
+	 *  Settings › Canvas: what a plain wheel or two-finger scroll does on the
+	 *  map. Pinch and Ctrl wheel always zoom; Shift wheel always pans.
+	 */
+	scroll_wheel: ScrollWheel,
 	/**
 	 *  Settings › New Designs: a new Design turns Satellite on. Off keeps the
 	 *  background last used. Applied when a Design is created, never after.
