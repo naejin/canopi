@@ -32,9 +32,10 @@ import { locale } from '../app/settings/state'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { createSessionPlane } from '../canvas/session-plane'
 import { DesignSitePrompt } from '../components/canvas/DesignSitePrompt'
-import type { PendingDesignSite } from '../types/design'
+import type { CanopiFile, PendingDesignSite } from '../types/design'
 import { createTestCanvasCommandSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
+import { designSessionFixture } from './support/design-session-state'
 
 const pending: PendingDesignSite = {
   from_version: 6,
@@ -65,6 +66,7 @@ afterEach(() => {
   render(null, container)
   container.remove()
   setCurrentCanvasSession(null)
+  designSessionFixture.file = null
   placeSearch.clear()
   mocks.transport.mockReset()
   mocks.transport.mockImplementation(async () => [])
@@ -130,6 +132,7 @@ describe('Where is your site? for a pre-geolocation Design', () => {
 
   it('offers the map centre while a map is on screen, and Escape cancels', async () => {
     const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    designSessionFixture.file = openDesignFile()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
       queries: createTestCanvasQuerySurface({ sessionPlane: plane, viewport: { x: 200, y: 150, scale: 1 } }),
     }))
@@ -151,6 +154,17 @@ describe('Where is your site? for a pre-geolocation Design', () => {
   })
 
   it('hides the map-centre action without a map', async () => {
+    await act(async () => { render(<DesignSitePrompt />, container) })
+    void requestDesignSite(pending)
+    await act(async () => { await flush() })
+    expect(Array.from(container.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Cancel'])
+  })
+
+  it('hides the map-centre action on the Start screen, where the canvas session lingers without a Design', async () => {
+    const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({
+      queries: createTestCanvasQuerySurface({ sessionPlane: plane, viewport: { x: 200, y: 150, scale: 1 } }),
+    }))
     await act(async () => { render(<DesignSitePrompt />, container) })
     void requestDesignSite(pending)
     await act(async () => { await flush() })
@@ -187,3 +201,24 @@ describe('Desktop shell registers the site prompt', () => {
     await expect(resolveDesignLoadOutcome(outcome, '/a.canopi', placeAtSite)).rejects.toBeInstanceOf(CanopiDesignNeedsSiteError)
   })
 })
+
+function openDesignFile(): CanopiFile {
+  return {
+    version: 9,
+    name: 'Orchard',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [],
+    zones: [],
+    annotations: [],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    extra: {},
+    created_at: '2026-04-08T00:00:00.000Z',
+    updated_at: '2026-04-08T00:00:00.000Z',
+  } as unknown as CanopiFile
+}

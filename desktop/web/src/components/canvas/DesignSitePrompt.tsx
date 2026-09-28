@@ -2,6 +2,7 @@ import { useId } from 'preact/hooks'
 import { answerDesignSite, pendingDesignSitePrompt } from '../../app/document-session/design-site-prompt'
 import { placeSearch } from '../../app/geocoding/place-search-session'
 import { locale } from '../../app/settings/state'
+import { currentDesign } from '../../app/document-session/store'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 import { geographicViewOf } from '../../canvas/session-plane'
 import { t } from '../../i18n'
@@ -79,8 +80,14 @@ function DesignSitePromptCard({ pending }: { readonly pending: PendingDesignSite
   )
 }
 
-/** The map's centre as a site, while a map with a settled frame is on screen. */
+/**
+ * The map's centre as a site, while a map with a settled frame is on screen.
+ * The canvas session outlives a closed Design (the Start screen keeps the
+ * runtime warm), so an open Design is required too, or the offer would place
+ * the objects at a view nobody is looking at.
+ */
 function readMapCentre(): GeoPoint | null {
+  if (currentDesign.value === null) return null
   const queries = currentCanvasQuerySurface.value
   const plane = queries?.sessionPlane.value
   if (!queries || !plane) return null
