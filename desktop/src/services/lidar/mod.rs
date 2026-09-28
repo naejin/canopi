@@ -17,6 +17,7 @@ mod display_cog;
 #[cfg(test)]
 mod e2e;
 pub mod engine;
+mod gdal_engine;
 mod generation;
 mod geolibre;
 pub mod grid;
@@ -27,9 +28,8 @@ mod measurement;
 pub mod paths;
 mod prepared_raster;
 pub mod presentation;
-pub mod probe;
+mod process;
 mod raster_assets;
-mod raster_info;
 pub(crate) mod recovery;
 pub(crate) mod source_meta;
 
@@ -41,7 +41,7 @@ use common_types::library::{
 use common_types::lidar::{
     LidarImportJob, LidarImportJobState, LidarImportProgress, LidarImportProgressPhase,
 };
-use engine::GdalEngine;
+use engine::RasterEngine;
 use paths::LidarPaths;
 use rusqlite::{Connection, OptionalExtension as _};
 use std::collections::HashMap;
@@ -64,7 +64,7 @@ pub(crate) struct LidarLibraryInner {
     /// refused library takes no mutation.
     status: recovery::LibraryOpenStatus,
     display_cache: Mutex<Connection>,
-    pub(crate) engine: GdalEngine,
+    pub(crate) engine: Box<dyn RasterEngine>,
     /// The pinned GeoLibre CLI sidecar every registered analysis runs on.
     pub(crate) geolibre: geolibre::GeolibreEngine,
     cancel_flags: Mutex<HashMap<String, Arc<AtomicBool>>>,
@@ -334,7 +334,7 @@ impl LidarLibrary {
                 catalogue: Mutex::new(catalogue),
                 status,
                 display_cache: Mutex::new(display_cache),
-                engine: GdalEngine::in_dir(engine_logs.clone()),
+                engine: Box::new(gdal_engine::GdalEngine::in_dir(engine_logs.clone())),
                 geolibre: geolibre::GeolibreEngine::in_dir(engine_logs),
                 cancel_flags: Mutex::new(HashMap::new()),
                 executor: Mutex::new(None),
@@ -487,7 +487,7 @@ impl LidarLibrary {
         display_cog::prune_display_derivatives(self)?;
         self.prune_analysis_scratch()?;
         // Output files of engine children an earlier process never reaped.
-        let removed = engine::prune_engine_logs(&self.inner.paths.engine_log_dir())?;
+        let removed = process::prune_engine_logs(&self.inner.paths.engine_log_dir())?;
         if removed > 0 {
             tracing::info!(removed, "removed leftover engine output files");
         }
@@ -549,10 +549,10 @@ impl LidarLibrary {
 
     #[cfg(test)]
     pub fn engine_status(&self) -> common_types::lidar::LidarEngineStatus {
-        match self.inner.engine.discover() {
-            Ok(tools) => common_types::lidar::LidarEngineStatus {
+        match self.inner.engine.version() {
+            Ok(version) => common_types::lidar::LidarEngineStatus {
                 available: true,
-                version: Some(tools.version),
+                version: Some(version),
                 detail: None,
             },
             Err(error) => common_types::lidar::LidarEngineStatus {
@@ -569,7 +569,7 @@ impl LidarLibrary {
         &self,
         paths: &[std::path::PathBuf],
     ) -> Result<common_types::lidar::LidarImportCoverage, String> {
-        coverage::import_coverage(&self.inner.engine, paths)
+        coverage::import_coverage(self.inner.engine.as_ref(), paths)
     }
 
     /// Bytes the Data library folder occupies on this device: sources,
@@ -582,7 +582,7 @@ impl LidarLibrary {
     pub fn library_snapshot(&self) -> Result<LidarSnapshot, String> {
         let geolibre = self.inner.geolibre.discover();
         let connection = self.catalogue()?;
-        presentation::library_snapshot(&connection, &self.inner.engine, &geolibre)
+        presentation::library_snapshot(&connection, self.inner.engine.as_ref(), &geolibre)
     }
 
     /// One bounded numeric inspection lookup.
@@ -595,7 +595,7 @@ impl LidarLibrary {
         request: &common_types::lidar::LidarSampleRequest,
         cancel: &std::sync::atomic::AtomicBool,
     ) -> Result<common_types::lidar::LidarSampleOutcome, String> {
-        inspection::sample(self, &self.inner.engine, cancel, request)
+        inspection::sample(self, self.inner.engine.as_ref(), cancel, request)
     }
 
     /// Test support: an empty item row, before any import job is recorded.
@@ -2029,7 +2029,7 @@ mod tests {
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn one_step_import_publishes_without_review_and_refuses_an_invalid_batch() {
-        let engine = engine::GdalEngine::new();
+        let engine = gdal_engine::GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-one-step-import"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2438,7 +2438,7 @@ mod tests {
         let logs = library.inner.paths.engine_log_dir();
         assert!(logs.starts_with(library.inner.paths.root()));
         let stale = logs.join("0-0-1-out.log");
-        let own = logs.join(format!("{}-999999-err.log", engine::process_log_tag()));
+        let own = logs.join(format!("{}-999999-err.log", process::process_log_tag()));
         std::fs::write(&stale, b"left by a crash").unwrap();
         std::fs::write(&own, b"a live child").unwrap();
         drop(library);
@@ -2917,7 +2917,7 @@ mod tests {
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_rebuilt_item_is_prepared_again_from_its_managed_originals() {
-        let engine = engine::GdalEngine::new();
+        let engine = gdal_engine::GdalEngine::new();
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-rebuild-retry"));
         std::fs::create_dir_all(&root).unwrap();

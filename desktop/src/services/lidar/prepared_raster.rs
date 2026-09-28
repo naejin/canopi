@@ -3,7 +3,7 @@
 //! Import staging and slope result statistics need exact Float32 samples and
 //! validity in row order, but holding the whole raster is what the dense
 //! engine's capacity limit exists for. This module prepares one disposable
-//! derivative through the existing GDAL adapter — uncompressed, single-band
+//! derivative through the raster engine — uncompressed, single-band
 //! Float32 COG, 256×256 blocks, no overviews — and then streams it back
 //! through the native tiled reader GeoLibre selected (`wbgeotiff`), one
 //! bounded window at a time.
@@ -17,7 +17,7 @@
 //! that format instead of guessing.
 
 #[cfg(test)]
-use super::engine::{GdalEngine, GdalProgram};
+use super::engine::{ConversionDeadline, RasterEngine, RasterInput};
 use super::grid::RasterGrid;
 use super::paths;
 use std::fs::File;
@@ -148,7 +148,7 @@ impl PreparedRaster {
     /// reflected in the measured free space and must not be charged again.
     #[cfg(test)]
     pub(super) fn open(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         input: &Path,
         grid: &RasterGrid,
         nodata: Option<f32>,
@@ -164,10 +164,13 @@ impl PreparedRaster {
         paths::require_free_space(job_scratch, required, "the prepared raster working set")?;
 
         let path = derivative_path(job_scratch, input);
-        let prepared = engine.run(
-            GdalProgram::Translate,
-            &prepare_arguments(input, &path),
-            Some(cancel),
+        let prepared = engine.write_controlled_cog(
+            RasterInput::File(input),
+            &path,
+            None,
+            None,
+            ConversionDeadline::Bounded,
+            cancel,
         );
         if let Err(error) = prepared {
             remove_derivative(&path);
@@ -437,82 +440,6 @@ pub(super) fn required_free_bytes(
         })
 }
 
-/// Fixed GDAL arguments that create the controlled COG profile from an
-/// existing raster, including georeferencing for a freshly written scratch
-/// window. One profile definition is shared by source preparation and chunk
-/// creation; `None` NoData leaves the asset without a NoData tag.
-pub(super) fn controlled_cog_arguments(
-    input: &Path,
-    output: &Path,
-    crs_wkt: &str,
-    grid: &RasterGrid,
-    nodata: Option<f32>,
-) -> Vec<String> {
-    let mut args = prepare_arguments(input, output);
-    // Insert georeferencing immediately before the positional arguments.
-    let position = args.len() - 2;
-    let georeferencing = [
-        "-a_srs".to_string(),
-        crs_wkt.to_string(),
-        "-a_ullr".to_string(),
-        format!("{}", grid.geotransform[0]),
-        format!("{}", grid.geotransform[3]),
-        format!(
-            "{}",
-            grid.geotransform[0] + grid.geotransform[1] * f64::from(grid.width)
-        ),
-        format!(
-            "{}",
-            grid.geotransform[3] + grid.geotransform[5] * f64::from(grid.height)
-        ),
-    ];
-    for (offset, argument) in georeferencing.into_iter().enumerate() {
-        args.insert(position + offset, argument);
-    }
-    if let Some(nodata) = nodata {
-        let position = args.len() - 2;
-        args.insert(position, "-a_nodata".to_string());
-        args.insert(position + 1, format!("{nodata}"));
-    }
-    args
-}
-
-fn prepare_arguments(input: &Path, output: &Path) -> Vec<String> {
-    let mut args: Vec<String> = [
-        "-q",
-        "-of",
-        "COG",
-        "-ot",
-        "Float32",
-        "-b",
-        "1",
-        "-mask",
-        "none",
-        // No auxiliary metadata is written next to the read-only input.
-        "--config",
-        "GDAL_PAM_ENABLED",
-        "NO",
-        "-co",
-        "BLOCKSIZE=256",
-        "-co",
-        "COMPRESS=NONE",
-        "-co",
-        "OVERVIEWS=NONE",
-        "-co",
-        "NUM_THREADS=1",
-        "-co",
-        "STATISTICS=NO",
-        "-co",
-        "SPARSE_OK=NO",
-    ]
-    .iter()
-    .map(|argument| (*argument).to_string())
-    .collect();
-    args.push(input.display().to_string());
-    args.push(output.display().to_string());
-    args
-}
-
 #[cfg(test)]
 fn derivative_path(job_scratch: &Path, input: &Path) -> PathBuf {
     let token = super::grid::sha256_hex(
@@ -742,6 +669,7 @@ pub(super) mod observability {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::lidar::gdal_engine::{GdalEngine, GdalProgram};
 
     // -----------------------------------------------------------------
     // Hermetic TIFF fixture

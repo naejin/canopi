@@ -20,7 +20,7 @@ use common_types::library::LibraryItemRole;
 use common_types::lidar::{LidarSampleOutcome, LidarSampleRequest, LidarSampleUnavailableReason};
 
 use super::analyses;
-use super::engine::{GdalEngine, GdalProgram};
+use super::engine::RasterEngine;
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation, import};
 
@@ -94,12 +94,12 @@ fn resolve_target(
     }
 }
 
-/// Transform one WGS84 point into the generation's CRS through GDAL.
+/// Transform one WGS84 point into the generation's CRS through the engine.
 ///
-/// Uses the same bounded stdin/stdout contract as the display path, so the
-/// transform shares its timeout, cancellation and output limits.
+/// A point the transform cannot place is `None`, which the caller reports as
+/// a failed transform rather than an error.
 fn transform_point(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     crs_wkt: &str,
     longitude: f64,
@@ -108,32 +108,11 @@ fn transform_point(
     if crs_wkt.trim().is_empty() {
         return Ok(None);
     }
-    let input = format!("{longitude} {latitude}\n");
-    let output = engine.run_with_input(
-        GdalProgram::Transform,
-        &[
-            "-s_srs".to_string(),
-            "EPSG:4326".to_string(),
-            "-t_srs".to_string(),
-            crs_wkt.to_string(),
-        ],
-        input.as_bytes(),
-        Some(cancel),
-    )?;
-    let Some(line) = output.stdout.lines().next() else {
-        return Ok(None);
-    };
-    let mut parts = line.split_whitespace();
-    let (Some(x), Some(y)) = (parts.next(), parts.next()) else {
-        return Ok(None);
-    };
-    let (Ok(x), Ok(y)) = (x.parse::<f64>(), y.parse::<f64>()) else {
-        return Err(format!("gdaltransform produced an unreadable row: {line}"));
-    };
-    if !x.is_finite() || !y.is_finite() {
-        return Ok(None);
-    }
-    Ok(Some((x, y)))
+    Ok(engine
+        .transform_points("EPSG:4326", crs_wkt, &[(longitude, latitude)], cancel)?
+        .into_iter()
+        .next()
+        .flatten())
 }
 
 /// The largest lattice index this read will carry into a window.
@@ -240,7 +219,7 @@ fn cell_window(pixel: (i64, i64)) -> Result<generation::LatticeWindow, String> {
 /// product rule that out-of-coverage is no data rather than an error.
 pub(super) fn sample(
     library: &LidarLibrary,
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     request: &LidarSampleRequest,
 ) -> Result<LidarSampleOutcome, String> {
@@ -418,7 +397,7 @@ mod tests {
     #[test]
     #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn the_real_transform_lands_in_the_expected_cell() {
-        let engine = GdalEngine::new();
+        let engine = super::super::gdal_engine::GdalEngine::new();
         let cancel = AtomicBool::new(false);
         // A 250-metre Web Mercator grid whose north-west corner is the
         // projection of (-0.6°, 48.9°), north and west of every sample below, so

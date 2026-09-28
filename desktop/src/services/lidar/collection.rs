@@ -289,7 +289,7 @@ fn coverage_bounds(
     chunks: &[(i64, i64)],
     cancel: &AtomicBool,
 ) -> Result<[f64; 4], String> {
-    let engine = &library.inner.engine;
+    let engine = library.inner.engine.as_ref();
     if chunks.is_empty() {
         return import::raster_bounds_3857(engine, cancel, &plan.lattice, &plan.crs_wkt);
     }
@@ -316,7 +316,7 @@ pub(super) fn manifest_for(
         nodata: plan.nodata,
         crs_wkt: plan.crs_wkt.clone(),
         members: plan.manifest_members.clone(),
-        engine_version: import::engine_version(&library.inner.engine),
+        engine_version: import::engine_version(library.inner.engine.as_ref()),
         created_at: catalogue::now_iso(),
     };
     let json = serde_json::to_string(&manifest).map_err(|e| e.to_string())?;

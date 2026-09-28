@@ -206,7 +206,7 @@ fn plane(library: &LidarLibrary, root: &Path, name: &str, origin_x: f64) -> Path
     import::write_f32_raw(&raw, &values).unwrap();
     let source = root.join(format!("{name}.tif"));
     import::raw_to_tif(
-        &library.inner.engine,
+        library.inner.engine.as_ref(),
         &cancel,
         &raw,
         &source,

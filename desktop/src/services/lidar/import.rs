@@ -11,7 +11,7 @@ use super::LidarLibrary;
 use super::admission;
 use super::catalogue::{self, new_id, now_iso};
 use super::collection;
-use super::engine::{GdalEngine, GdalProgram};
+use super::engine::{RasterEngine, RasterGeoref};
 use super::generation::{self};
 use super::grid::{self, GeoTransform, RasterGrid, union_grid};
 use super::paths::LidarPaths;
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 
 /// Canonical NoData used for a layer whose first source declares none.
 pub const FALLBACK_NODATA: f32 = -99999.0;
@@ -149,7 +149,7 @@ pub fn stage_import(
     source_paths: &[PathBuf],
     cancel: &AtomicBool,
 ) -> Result<(), String> {
-    let engine = &library.inner.engine;
+    let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
     validate_source_selection(source_paths)?;
 
@@ -501,7 +501,7 @@ fn units_compatible(source: &str, layer: &str) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 fn stage_source(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     paths: &LidarPaths,
     library: &LidarLibrary,
     quantity: &str,
@@ -523,8 +523,14 @@ fn stage_source(
         stage_managed_original(paths, source_path, job_dir, cancel)?;
 
     // Probe from the managed copy so the flow survives user-file changes.
-    let probe_json = probe_gdalinfo(engine, &managed_original, cancel)?;
-    let probe = super::probe::parse_gdalinfo_json(&probe_json)?;
+    let probe = engine.probe(&managed_original, cancel)?;
+    if probe.crs_wkt.trim().is_empty() {
+        return Err(
+            "raster has no coordinate system; Canopi requires a horizontal CRS".to_string(),
+        );
+    }
+    let probe_json = serde_json::to_string(&probe)
+        .map_err(|e| format!("Failed to record the raster probe: {e}"))?;
 
     let mut issues = Vec::new();
     if probe.band_count != 1 {
@@ -578,9 +584,10 @@ fn stage_source(
         height: probe.height,
         geotransform: probe.geotransform,
     };
-    // No working-area check: `gdal_translate` streams the source into the
-    // retained COG and its facts are read from that COG in bounded windows.
-    // The item's bound is the admission processing budget.
+    // No working-area check here: the engine converts the source into the
+    // retained COG under its own capacity rule and its facts are read from
+    // that COG in bounded windows. The item's bound is the admission
+    // processing budget.
     validate_lattice(&source_grid, "source raster")?;
     let (source_cog, valid_cells) = stage_source_samples(
         engine,
@@ -681,7 +688,7 @@ fn stage_source(
 /// attempt removes its partial output.
 #[allow(clippy::too_many_arguments)]
 fn stage_source_samples(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     input: &Path,
     grid: &RasterGrid,
@@ -691,8 +698,8 @@ fn stage_source_samples(
     sha256: &str,
 ) -> Result<(RetainedSourceCog, u64), String> {
     let stem = format!("source-cog-{}", &sha256[..sha256.len().min(16)]);
-    // The conversion streams through GDAL and the admitted COG is the durable
-    // output, so no additional numeric output is charged beside it. The
+    // The engine writes the admitted COG as the durable output, so no
+    // additional numeric output is charged beside it. The
     // combined footprint is measured against the job scratch, which holds the
     // conversion until it is admitted.
     let asset = super::raster_assets::write_job_source_cog(
@@ -1287,7 +1294,7 @@ pub fn read_generation_manifest(json: &str) -> Result<GenerationManifest, String
 }
 
 pub fn raw_f32_bytes(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     raster: &Path,
     width: u32,
     height: u32,
@@ -1299,38 +1306,11 @@ pub fn raw_f32_bytes(
         geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
     };
     validate_working_grid(&grid, "raw raster extraction")?;
-    let expected = usize::try_from(u64::from(width) * u64::from(height) * 4)
-        .map_err(|_| "raw raster byte count exceeds this platform".to_string())?;
-    // Beside its input, which production keeps inside the job's own scratch
-    // directory, so the startup sweep reclaims it after a crash.
-    let scratch = raster.with_extension(format!("f32-{}.raw", std::process::id()));
-    engine.run(
-        GdalProgram::Translate,
-        &[
-            "-q".to_string(),
-            "-ot".to_string(),
-            "Float32".to_string(),
-            "-of".to_string(),
-            "ENVI".to_string(),
-            raster.display().to_string(),
-            scratch.display().to_string(),
-        ],
-        Some(cancel),
-    )?;
-    let scratch_size = std::fs::metadata(&scratch)
-        .map_err(|e| format!("Failed to inspect raw raster: {e}"))?
-        .len();
-    if scratch_size != expected as u64 {
-        let _ = std::fs::remove_file(&scratch);
-        let _ = std::fs::remove_file(scratch.with_extension("raw.aux.xml"));
-        return Err(format!(
-            "raw raster buffer has {scratch_size} bytes, expected {expected}"
-        ));
-    }
-    let bytes = std::fs::read(&scratch).map_err(|e| format!("Failed to read raw raster: {e}"))?;
-    let _ = std::fs::remove_file(&scratch);
-    let _ = std::fs::remove_file(scratch.with_extension("raw.aux.xml"));
-    Ok(bytes)
+    let values = engine.read_f32(raster, width, height, cancel)?;
+    Ok(values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect())
 }
 
 pub(crate) fn f32_sample(raw: &[u8], index: usize) -> f32 {
@@ -1357,9 +1337,10 @@ pub fn write_f32_raw(path: &Path, values: &[f32]) -> Result<(), String> {
         .map_err(|e| format!("Failed to flush raw buffer: {e}"))
 }
 
-/// Convert a raw Float32 buffer into a georeferenced tiled GeoTIFF.
+/// Convert a raw little-endian Float32 file into a georeferenced tiled
+/// GeoTIFF carrying `nodata`.
 pub fn raw_to_tif(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     raw: &Path,
     tif: &Path,
@@ -1367,120 +1348,40 @@ pub fn raw_to_tif(
     crs_wkt: &str,
     nodata: f32,
 ) -> Result<(), String> {
-    let hdr = raw.with_extension("hdr");
-    std::fs::write(
-        &hdr,
-        format!(
-            "ENVI\nsamples = {}\nlines = {}\nbands = 1\ndata type = 4\nbyte order = 0\nheader offset = 0\n",
-            grid.width, grid.height
-        ),
+    let bytes = std::fs::read(raw).map_err(|e| format!("Failed to read raw buffer: {e}"))?;
+    let expected = usize::try_from(u64::from(grid.width) * u64::from(grid.height) * 4)
+        .map_err(|_| "raw raster byte count exceeds this platform".to_string())?;
+    if bytes.len() != expected {
+        return Err(format!(
+            "raw raster buffer has {} bytes, expected {expected}",
+            bytes.len()
+        ));
+    }
+    let values: Vec<f32> = bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect();
+    engine.write_geotiff(
+        tif,
+        RasterGeoref { grid, crs: crs_wkt },
+        nodata,
+        &values,
+        cancel,
     )
-    .map_err(|e| format!("Failed to write ENVI header: {e}"))?;
-    let result = engine.run(
-        GdalProgram::Translate,
-        &[
-            "-q".to_string(),
-            "-ot".to_string(),
-            "Float32".to_string(),
-            "-a_srs".to_string(),
-            crs_wkt.to_string(),
-            "-a_ullr".to_string(),
-            format!("{}", grid.geotransform[0]),
-            format!("{}", grid.geotransform[3]),
-            format!(
-                "{}",
-                grid.geotransform[0] + grid.geotransform[1] * grid.width as f64
-            ),
-            format!(
-                "{}",
-                grid.geotransform[3] + grid.geotransform[5] * grid.height as f64
-            ),
-            "-a_nodata".to_string(),
-            // The exact decimal of a finite marker, so a reader comparing the
-            // tag to Float32 samples finds the very value that was written.
-            if nodata.is_finite() {
-                format!("{:?}", f64::from(nodata))
-            } else {
-                format!("{nodata}")
-            },
-            "-co".to_string(),
-            "TILED=YES".to_string(),
-            "-co".to_string(),
-            "COMPRESS=DEFLATE".to_string(),
-            "-co".to_string(),
-            "PREDICTOR=3".to_string(),
-            raw.display().to_string(),
-            tif.display().to_string(),
-        ],
-        Some(cancel),
-    );
-    let _ = std::fs::remove_file(&hdr);
-    result.map(|_| ())
 }
 
 /// Projected bounds in EPSG:3857 for presentation fit and tile alignment.
 pub fn raster_bounds_3857(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     cancel: &AtomicBool,
     grid: &RasterGrid,
     crs_wkt: &str,
 ) -> Result<[f64; 4], String> {
-    let bounds = grid.bounds();
-    let corners = [
-        (bounds[0], bounds[1]),
-        (bounds[2], bounds[1]),
-        (bounds[2], bounds[3]),
-        (bounds[0], bounds[3]),
-    ];
-    let input = corners
-        .iter()
-        .map(|(x, y)| format!("{x} {y}\n"))
-        .collect::<String>();
-    let output = engine.run_with_input(
-        GdalProgram::Transform,
-        &[
-            "-s_srs".to_string(),
-            crs_wkt.to_string(),
-            "-t_srs".to_string(),
-            "EPSG:3857".to_string(),
-        ],
-        input.as_bytes(),
-        Some(cancel),
-    )?;
+    let corners = super::engine::grid_corners(grid);
+    let placed = engine.transform_points(crs_wkt, "EPSG:3857", &corners, cancel)?;
     check_cancel(cancel)?;
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for line in output.stdout.lines() {
-        let parts: Vec<f64> = line
-            .split_whitespace()
-            .filter_map(|v| v.parse::<f64>().ok())
-            .collect();
-        if parts.len() >= 2 {
-            min_x = min_x.min(parts[0]);
-            max_x = max_x.max(parts[0]);
-            min_y = min_y.min(parts[1]);
-            max_y = max_y.max(parts[1]);
-        }
-    }
-    if !min_x.is_finite() {
-        return Err("gdaltransform produced no projected corners".to_string());
-    }
-    Ok([min_x, min_y, max_x, max_y])
-}
-
-fn probe_gdalinfo(
-    engine: &GdalEngine,
-    raster: &Path,
-    cancel: &AtomicBool,
-) -> Result<String, String> {
-    let output = engine.run(
-        GdalProgram::Info,
-        &["-json".to_string(), raster.display().to_string()],
-        Some(cancel),
-    )?;
-    Ok(output.stdout)
+    super::engine::bounds_of(&placed)
+        .ok_or_else(|| "the raster's corners have no projected position".to_string())
 }
 
 fn grid_for_source(source: &StagedSource) -> RasterGrid {
@@ -1513,20 +1414,18 @@ pub(crate) fn parse_geotransform(raw: &str) -> Result<GeoTransform, String> {
     Ok(transform)
 }
 
-pub(super) fn engine_version(engine: &GdalEngine) -> String {
-    engine.discover().map(|t| t.version).unwrap_or_default()
+pub(super) fn engine_version(engine: &dyn RasterEngine) -> String {
+    engine.version().unwrap_or_default()
 }
 
-pub fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
-    if cancel.load(Ordering::Relaxed) {
-        return Err("cancelled".to_string());
-    }
-    Ok(())
-}
+pub use super::engine::check_cancel;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::lidar::engine::{ConversionDeadline, RasterInput};
+    use crate::services::lidar::gdal_engine::{GdalEngine, GdalProgram};
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn raw_extraction_limit_rejects_extent_explosion_before_allocation() {
@@ -2130,13 +2029,6 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let source = root.join("cancel.tif");
         let output = root.join("cancel-out.tif");
-        let args = crate::services::lidar::prepared_raster::controlled_cog_arguments(
-            &source,
-            &output,
-            "EPSG:3857",
-            &grid,
-            None,
-        );
 
         let settled = std::sync::Arc::new(std::sync::Mutex::new(None));
         let handle = {
@@ -2148,10 +2040,16 @@ mod tests {
                 // The engine call itself is the owned work; the caller sets the
                 // flag from outside, exactly as the UI's cancel action does.
                 let started = std::time::Instant::now();
-                let outcome = engine.run(
-                    GdalProgram::Translate,
-                    &args,
-                    Some(cancel_for_thread.as_ref()),
+                let outcome = engine.write_controlled_cog(
+                    RasterInput::File(&source),
+                    &output,
+                    Some(RasterGeoref {
+                        grid: &grid,
+                        crs: "EPSG:3857",
+                    }),
+                    None,
+                    ConversionDeadline::Bounded,
+                    cancel_for_thread.as_ref(),
                 );
                 *settled.lock().unwrap() = Some((started.elapsed(), outcome.is_err()));
             })

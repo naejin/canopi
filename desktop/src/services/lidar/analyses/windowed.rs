@@ -12,7 +12,7 @@
 use super::{RunContext, StagedRaster, crs_class, values_in_metres};
 use crate::services::lidar::catalogue::{self, new_id};
 use crate::services::lidar::grid::RasterGrid;
-use crate::services::lidar::{generation, import, raster_assets, raster_info};
+use crate::services::lidar::{generation, import, raster_assets};
 use common_types::analysis_registry::{AnalysisLane, AnalysisOutputSpec, GridRequirement};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -207,13 +207,8 @@ pub(super) fn check_projected_metre_grid(
     cancel: &AtomicBool,
     raster: &Path,
 ) -> Result<(), String> {
-    let info = raster_info::gdalinfo_json(&library.inner.engine, cancel, raster)?;
-    let wkt = info
-        .get("coordinateSystem")
-        .and_then(|system| system.get("wkt"))
-        .and_then(|wkt| wkt.as_str())
-        .unwrap_or("");
-    match crs_class(wkt) {
+    let probe = library.inner.engine.probe(raster, cancel)?;
+    match crs_class(&probe.crs_wkt) {
         super::CRS_PROJECTED_METRE => Ok(()),
         super::CRS_PROJECTED_OTHER => {
             Err("the grid declares horizontal units other than metres".to_string())
@@ -238,7 +233,7 @@ fn compute_block(
     chunk_y: i64,
 ) -> Result<Block, String> {
     let library = context.library;
-    let engine = &library.inner.engine;
+    let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
     let cancel = context.cancel;
     let scratch = context.scratch;
@@ -300,8 +295,7 @@ fn compute_block(
     // The tool marks uncomputed cells with its own NoData marker, so read it
     // back and treat it as invalid before anything is persisted; a marker a
     // real value could equal is refused by name.
-    let info = raster_info::gdalinfo_json(engine, cancel, &block_path)?;
-    let block_nodata = raster_info::band_nodata(&info);
+    let block_nodata = engine.probe(&block_path, cancel)?.nodata;
     if let Some(marker) = block_nodata
         && marker.is_finite()
         && !(tool.marker_is_unambiguous)(marker)

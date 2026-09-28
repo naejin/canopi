@@ -23,6 +23,7 @@
 //! read a partial derivative. Keys include the generation or content identity
 //! and the profile, so a newer generation never reuses an older URL.
 
+use super::engine::{RasterGeoref, RasterInput};
 use super::grid::RasterGrid;
 use super::{LidarLibrary, catalogue, collection, generation};
 use common_types::library::LibraryItemRole;
@@ -30,7 +31,6 @@ use common_types::lidar::{
     LidarDisplayAsset, LidarDisplayDescriptor, LidarDisplayRequest, LidarDisplayState,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::io::{Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -482,7 +482,7 @@ impl LidarLibrary {
         let file = format!("{}.tif", part.key);
         let staged = staging.join(&file);
         let _ = std::fs::remove_file(&staged);
-        let engine = &self.inner.engine;
+        let engine = self.inner.engine.as_ref();
         match &part.source {
             PartSource::Asset { path, nodata } => {
                 let bytes = std::fs::metadata(path)
@@ -495,13 +495,12 @@ impl LidarLibrary {
                     bytes.saturating_add(bytes / 3),
                     "Display preparation",
                 )?;
-                let mut args = display_arguments(*nodata);
-                args.push(path.display().to_string());
-                args.push(staged.display().to_string());
-                let converted = engine.run_uncapped_conversion(
-                    super::engine::GdalProgram::Translate,
-                    &args,
-                    Some(cancel),
+                let converted = engine.write_display_cog(
+                    RasterInput::File(path),
+                    &staged,
+                    None,
+                    *nodata,
+                    cancel,
                 );
                 if let Err(error) = converted {
                     let _ = std::fs::remove_file(&staged);
@@ -530,7 +529,7 @@ impl LidarLibrary {
                 }
             }
         }
-        let bounds = match super::raster_info::wgs84_extent(engine, &staged, cancel) {
+        let bounds = match engine.wgs84_extent(&staged, cancel) {
             Ok(bounds) => bounds,
             Err(error) => {
                 let _ = std::fs::remove_file(&staged);
@@ -574,127 +573,80 @@ impl LidarLibrary {
             (row_bytes * height) as u64 * 2,
             "Display preparation",
         )?;
-        let raw = staged.with_extension("raw");
-        let header = staged.with_extension("hdr");
-        let cleanup = || {
-            let _ = std::fs::remove_file(&raw);
-            let _ = std::fs::remove_file(&header);
-        };
         let occupied: HashSet<(i64, i64)> = chunks.iter().copied().collect();
+        // The part is composed in memory: at most `PART_CHUNKS`² chunks, and
+        // empty space between distant chunks is never part of one group.
+        let mut samples = vec![PART_NODATA; width * height];
         let mut any_valid = false;
-        let result = (|| -> Result<(), String> {
-            let mut output = std::fs::File::create(&raw)
-                .map_err(|e| format!("Failed to create a display part: {e}"))?;
-            output
-                .set_len((row_bytes * height) as u64)
-                .map_err(|e| format!("Failed to size a display part: {e}"))?;
-            let empty_row: Vec<u8> = PART_NODATA
-                .to_le_bytes()
-                .iter()
-                .copied()
-                .cycle()
-                .take(side as usize * 4)
-                .collect();
-            let mut buffer = vec![0u8; side as usize * 4];
-            for chunk_y in min_y..=max_y {
-                for chunk_x in min_x..=max_x {
-                    if cancel.load(Ordering::Relaxed) {
-                        return Err("cancelled".to_string());
-                    }
-                    let column = (chunk_x - min_x) as usize;
-                    let row0 = (chunk_y - min_y) as usize * side as usize;
-                    let window = if occupied.contains(&(chunk_x, chunk_y)) {
-                        Some(reader.reader.read_window(
-                            self,
-                            &reader.lattice,
-                            generation::LatticeWindow {
-                                x: chunk_x * side,
-                                y: chunk_y * side,
-                                width: side as u32,
-                                height: side as u32,
-                            },
-                            cancel,
-                        )?)
-                    } else {
-                        None
-                    };
-                    for line in 0..side as usize {
-                        let offset = ((row0 + line) * width + column * side as usize) * 4;
-                        output
-                            .seek(SeekFrom::Start(offset as u64))
-                            .map_err(|e| format!("Failed to write a display part: {e}"))?;
-                        match &window {
-                            None => output
-                                .write_all(&empty_row)
-                                .map_err(|e| format!("Failed to write a display part: {e}"))?,
-                            Some(window) => {
-                                let start = line * side as usize;
-                                for (index, slot) in buffer.chunks_exact_mut(4).enumerate() {
-                                    let valid = window.valid[start + index] != 0;
-                                    let sample = window.samples[start + index];
-                                    let value = if valid && sample.is_finite() {
-                                        any_valid = true;
-                                        sample
-                                    } else {
-                                        PART_NODATA
-                                    };
-                                    slot.copy_from_slice(&value.to_le_bytes());
-                                }
-                                output
-                                    .write_all(&buffer)
-                                    .map_err(|e| format!("Failed to write a display part: {e}"))?;
-                            }
+        for chunk_y in min_y..=max_y {
+            for chunk_x in min_x..=max_x {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err("cancelled".to_string());
+                }
+                if !occupied.contains(&(chunk_x, chunk_y)) {
+                    continue;
+                }
+                let window = reader.reader.read_window(
+                    self,
+                    &reader.lattice,
+                    generation::LatticeWindow {
+                        x: chunk_x * side,
+                        y: chunk_y * side,
+                        width: side as u32,
+                        height: side as u32,
+                    },
+                    cancel,
+                )?;
+                let column = (chunk_x - min_x) as usize * side as usize;
+                let row0 = (chunk_y - min_y) as usize * side as usize;
+                for line in 0..side as usize {
+                    let start = line * side as usize;
+                    let target = (row0 + line) * width + column;
+                    for index in 0..side as usize {
+                        let valid = window.valid[start + index] != 0;
+                        let sample = window.samples[start + index];
+                        if valid && sample.is_finite() {
+                            any_valid = true;
+                            samples[target + index] = sample;
                         }
                     }
                 }
             }
-            output
-                .flush()
-                .map_err(|e| format!("Failed to flush a display part: {e}"))?;
-            std::fs::write(
-                &header,
-                format!(
-                    "ENVI\nsamples = {width}\nlines = {height}\nbands = 1\ndata type = 4\nbyte order = 0\nheader offset = 0\n"
-                ),
-            )
-            .map_err(|e| format!("Failed to write a display part header: {e}"))?;
-            Ok(())
-        })();
-        if let Err(error) = result {
-            cleanup();
-            return Err(error);
         }
         if !any_valid {
-            cleanup();
             return Ok(false);
         }
         let gt = reader.lattice.geotransform;
-        let origin_x = gt[0] + (min_x * side) as f64 * gt[1];
-        let origin_y = gt[3] + (min_y * side) as f64 * gt[5];
+        let grid = RasterGrid {
+            width: width as u32,
+            height: height as u32,
+            geotransform: [
+                gt[0] + (min_x * side) as f64 * gt[1],
+                gt[1],
+                0.0,
+                gt[3] + (min_y * side) as f64 * gt[5],
+                0.0,
+                gt[5],
+            ],
+        };
         let crs = if reader.crs_wkt.is_empty() {
             crs_wkt
         } else {
             &reader.crs_wkt
         };
-        let mut args = display_arguments(Some(PART_NODATA));
-        args.extend([
-            "-a_srs".to_string(),
-            crs.to_string(),
-            "-a_ullr".to_string(),
-            format!("{origin_x}"),
-            format!("{origin_y}"),
-            format!("{}", origin_x + width as f64 * gt[1]),
-            format!("{}", origin_y + height as f64 * gt[5]),
-            raw.display().to_string(),
-            staged.display().to_string(),
-        ]);
-        let converted = self.inner.engine.run_uncapped_conversion(
-            super::engine::GdalProgram::Translate,
-            &args,
-            Some(cancel),
-        );
-        cleanup();
-        converted.map(|_| true)
+        self.inner
+            .engine
+            .write_display_cog(
+                RasterInput::Samples {
+                    grid: &grid,
+                    values: &samples,
+                },
+                staged,
+                Some(RasterGeoref { grid: &grid, crs }),
+                Some(PART_NODATA),
+                cancel,
+            )
+            .map(|_| true)
     }
 }
 
@@ -725,45 +677,6 @@ impl LidarLibrary {
         }
         Ok(())
     }
-}
-
-/// `gdal_translate` options of the display profile, before the positionals.
-fn display_arguments(nodata: Option<f32>) -> Vec<String> {
-    let mut args: Vec<String> = [
-        "-q",
-        "-of",
-        "COG",
-        "-ot",
-        "Float32",
-        "-b",
-        "1",
-        "--config",
-        "GDAL_PAM_ENABLED",
-        "NO",
-        "-co",
-        "BLOCKSIZE=256",
-        "-co",
-        "COMPRESS=DEFLATE",
-        "-co",
-        "OVERVIEWS=IGNORE_EXISTING",
-        "-co",
-        "RESAMPLING=AVERAGE",
-        "-co",
-        "NUM_THREADS=2",
-        "-co",
-        "STATISTICS=NO",
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect();
-    if let Some(nodata) = nodata {
-        args.push("-a_nodata".to_string());
-        // Shortest round-trip form of the exact value: a rounded decimal such
-        // as f32::MIN's "-3.4028235e38" parses to a different f64 and makes the
-        // renderer draw invalid cells.
-        args.push(format!("{:?}", f64::from(nodata)));
-    }
-    args
 }
 
 /// Remove staging leftovers and published files the registry does not own.
@@ -893,7 +806,7 @@ mod gdal_tests {
         super::super::import::write_f32_raw(&raw, &values).unwrap();
         let source = root.join(format!("{name}.tif"));
         super::super::import::raw_to_tif(
-            engine,
+            engine.as_ref(),
             &cancel,
             &raw,
             &source,
@@ -909,17 +822,12 @@ mod gdal_tests {
         source
     }
 
-    fn info(library: &LidarLibrary, path: &str) -> serde_json::Value {
-        let output = library
+    fn info(library: &LidarLibrary, path: &str) -> super::super::engine::RasterProbe {
+        library
             .inner
             .engine
-            .run(
-                super::super::engine::GdalProgram::Info,
-                &["-json".to_string(), path.to_string()],
-                None,
-            )
-            .unwrap();
-        serde_json::from_str(&output.stdout).unwrap()
+            .probe(Path::new(path), &AtomicBool::new(false))
+            .unwrap()
     }
 
     /// A published multi-source item is displayed from one content-keyed,
@@ -979,18 +887,9 @@ mod gdal_tests {
             let path = Path::new(&asset.path);
             assert_eq!(path.parent(), Some(display_dir.as_path()));
             let meta = info(&library, &asset.path);
-            let band = &meta["bands"][0];
-            assert_eq!(band["noDataValue"].as_f64(), Some(-9999.0), "{meta}");
-            assert!(
-                band["overviews"]
-                    .as_array()
-                    .is_some_and(|levels| !levels.is_empty()),
-                "overviews: {meta}"
-            );
-            assert_eq!(
-                meta["metadata"]["IMAGE_STRUCTURE"]["COMPRESSION"].as_str(),
-                Some("DEFLATE")
-            );
+            assert_eq!(meta.nodata, Some(-9999.0), "{meta:?}");
+            assert!(meta.overview_count > 0, "overviews: {meta:?}");
+            assert_eq!(meta.compression, "DEFLATE");
             // Lambert-93 near 445 km E / 6806 km N lies around 0.4°W, 48.3°N.
             assert!(
                 (-0.5..-0.3).contains(&asset.bounds[0]),
@@ -1106,27 +1005,20 @@ mod chunk_display_tests {
         assert_eq!(descriptor.state, LidarDisplayState::Ready, "{descriptor:?}");
         assert_eq!(descriptor.assets.len(), 2, "one part per distant group");
         for asset in &descriptor.assets {
-            let output = library
+            let info = library
                 .inner
                 .engine
-                .run(
-                    super::super::engine::GdalProgram::Info,
-                    &["-json".to_string(), asset.path.clone()],
-                    None,
-                )
+                .probe(Path::new(&asset.path), &AtomicBool::new(false))
                 .unwrap();
-            let info: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
             assert_eq!(
-                info["size"],
-                serde_json::json!([1024, 1024]),
+                (info.width, info.height),
+                (1024, 1024),
                 "a part covers its own chunk only"
             );
-            // gdalinfo prints a Float32 tag at float precision; the renderer
-            // parses the TIFF tag itself, so check the stored text round-trips.
+            // A probe reports the tag at Float32 precision; the renderer parses
+            // the TIFF tag itself, so check the stored text round-trips.
             assert_eq!(
-                info["bands"][0]["noDataValue"]
-                    .as_f64()
-                    .map(|value| value as f32),
+                info.nodata,
                 Some(PART_NODATA),
                 "invalid cells use the display sentinel"
             );

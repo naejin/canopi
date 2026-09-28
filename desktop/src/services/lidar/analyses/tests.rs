@@ -1045,7 +1045,7 @@ fn raster(
     height: u32,
     origin_x: f64,
 ) -> PathBuf {
-    let engine = crate::services::lidar::engine::GdalEngine::new();
+    let engine = crate::services::lidar::gdal_engine::GdalEngine::new();
     let raw = root.join(format!("{name}.raw"));
     import::write_f32_raw(&raw, values).unwrap();
     let source = root.join(format!("{name}.tif"));
@@ -1423,7 +1423,7 @@ fn the_run_rechecks_the_grid_with_gdal() {
     windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &projected)
         .expect("a projected metre plane is eligible");
     let geographic = root.join("geographic.tif");
-    let engine = crate::services::lidar::engine::GdalEngine::new();
+    let engine = crate::services::lidar::gdal_engine::GdalEngine::new();
     let raw = root.join("geographic.raw");
     import::write_f32_raw(&raw, &values).unwrap();
     import::raw_to_tif(

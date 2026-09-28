@@ -1,7 +1,7 @@
 //! Import › "Covers your site": where the chosen files lie, read before import.
 //!
-//! A preflight only: it reads each file's geographic extent with `gdalinfo`
-//! (without writing a `.aux.xml` beside the user's file) and never copies,
+//! A preflight only: it reads each file's geographic extent through the raster
+//! engine (never writing anything beside the user's file) and never copies,
 //! hashes or records anything. The Design's extent is compared on the
 //! frontend, where the Design lives.
 
@@ -9,21 +9,21 @@ use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 use common_types::lidar::LidarImportCoverage;
 
-use super::engine::GdalEngine;
+use super::engine::RasterEngine;
 
 /// The extent of the chosen files: the box around every file whose extent
 /// could be read, and how many could not.
 pub(crate) fn import_coverage(
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     paths: &[PathBuf],
 ) -> Result<LidarImportCoverage, String> {
     super::admission::check_source_count(paths.len())?;
-    // The discovery error names the missing tools rather than every file.
-    engine.discover()?;
+    // An unavailable engine is named once rather than for every file.
+    engine.version()?;
     let cancel = AtomicBool::new(false);
-    Ok(union_of(paths.iter().map(|path| {
-        super::raster_info::wgs84_extent(engine, path, &cancel)
-    })))
+    Ok(union_of(
+        paths.iter().map(|path| engine.wgs84_extent(path, &cancel)),
+    ))
 }
 
 fn union_of(extents: impl Iterator<Item = Result<[f64; 4], String>>) -> LidarImportCoverage {
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn too_many_files_are_refused_before_any_is_read() {
-        let engine = GdalEngine::new();
+        let engine = super::super::gdal_engine::GdalEngine::new();
         let paths = vec![
             PathBuf::from("tile.tif");
             super::super::admission::MAX_SOURCE_FILES_PER_IMPORT + 1
@@ -92,7 +92,7 @@ mod tests {
     fn a_written_raster_reports_its_wgs84_extent_without_a_sidecar() {
         let root = std::env::temp_dir().join(format!("canopi-coverage-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = super::super::gdal_engine::GdalEngine::new();
         let raster = root.join("tile.tif");
         let grid = super::super::grid::RasterGrid {
             width: 4,

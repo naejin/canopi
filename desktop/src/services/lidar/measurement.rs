@@ -380,7 +380,7 @@ impl ProcessTreeSampler {
             interval_ms: u64::try_from(SAMPLE_INTERVAL.as_millis()).unwrap_or(100),
             peak_member_bytes: self.member_peak.load(Ordering::Relaxed),
             peak_member_count: self.member_count_peak.load(Ordering::Relaxed),
-            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
+            child_cache_ceiling_bytes: crate::services::lidar::gdal_engine::GDAL_CACHE_BYTES,
         }
     }
 }
@@ -751,7 +751,7 @@ mod tests {
             interval_ms: 50,
             peak_member_bytes: peak_total.unwrap_or(0),
             peak_member_count: 1,
-            child_cache_ceiling_bytes: crate::services::lidar::engine::GDAL_CACHE_BYTES,
+            child_cache_ceiling_bytes: crate::services::lidar::gdal_engine::GDAL_CACHE_BYTES,
         }
     }
 

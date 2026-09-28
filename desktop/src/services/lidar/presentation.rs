@@ -9,7 +9,7 @@
 
 use super::analyses::{self, FreshnessCheck, ItemFacts};
 use super::catalogue;
-use super::engine::GdalEngine;
+use super::engine::RasterEngine;
 use super::geolibre::GeolibreTool;
 use common_types::library::{
     AnalysisRunStatus, Freshness, LibraryEngines, LibraryItemRole, LibraryItemSummary,
@@ -20,7 +20,7 @@ use rusqlite::Connection;
 
 pub fn library_snapshot(
     connection: &Connection,
-    engine: &GdalEngine,
+    engine: &dyn RasterEngine,
     geolibre: &Result<GeolibreTool, String>,
 ) -> Result<LibrarySnapshot, String> {
     let mut items = Vec::new();
@@ -176,10 +176,10 @@ pub fn library_snapshot(
     Ok(LibrarySnapshot {
         items,
         engines: LibraryEngines {
-            gdal: match engine.discover() {
-                Ok(tools) => LidarEngineStatus {
+            gdal: match engine.version() {
+                Ok(version) => LidarEngineStatus {
                     available: true,
-                    version: Some(tools.version),
+                    version: Some(version),
                     detail: None,
                 },
                 Err(error) => LidarEngineStatus {

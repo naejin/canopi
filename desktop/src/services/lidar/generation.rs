@@ -306,7 +306,7 @@ pub(super) fn publish_test_chunk(
     height: u32,
     values: &[f32],
 ) -> CogAsset {
-    let engine = &library.inner.engine;
+    let engine = library.inner.engine.as_ref();
     let paths = &library.inner.paths;
     let dir = paths.root().to_path_buf();
     let grid = RasterGrid {
@@ -778,7 +778,7 @@ pub(super) fn retained_cog(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::lidar::engine::GdalEngine;
+    use crate::services::lidar::gdal_engine::GdalEngine;
     use crate::services::lidar::paths::LidarPaths;
     use crate::services::lidar::raster_assets::write_cog_asset;
     use std::path::{Path, PathBuf};

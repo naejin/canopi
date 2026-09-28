@@ -6,7 +6,7 @@
 //! `cargo test -p canopi-desktop lidar::e2e -- --ignored --nocapture`
 
 use super::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 /// Total bytes under a directory tree, and how many files they are.
@@ -99,27 +99,13 @@ fn assert_displays(
         "a displayed entity has assets"
     );
     let valid = descriptor.assets.iter().any(|asset| {
-        let output = library
+        library
             .inner
             .engine
-            .run(
-                engine::GdalProgram::Info,
-                &[
-                    "-json".to_string(),
-                    "-stats".to_string(),
-                    "--config".to_string(),
-                    "GDAL_PAM_ENABLED".to_string(),
-                    "NO".to_string(),
-                    asset.path.clone(),
-                ],
-                None,
-            )
-            .expect("derivative opens through GDAL");
-        let info: serde_json::Value = serde_json::from_str(&output.stdout).expect("info is JSON");
-        info["bands"][0]["metadata"][""]["STATISTICS_VALID_PERCENT"]
-            .as_str()
-            .and_then(|value| value.parse::<f64>().ok())
-            .is_some_and(|percent| percent > 0.0)
+            .statistics(Path::new(&asset.path), &AtomicBool::new(false))
+            .expect("derivative opens through the engine")
+            .valid_percent
+            > 0.0
     });
     assert!(
         valid,
@@ -175,8 +161,8 @@ fn dirs_home() -> PathBuf {
 #[test]
 #[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
-    let engine = engine::GdalEngine::new();
-    let tools = engine.discover().expect("GDAL engine must be available");
+    let engine = gdal_engine::GdalEngine::new();
+    let engine_version = engine.version().expect("GDAL engine must be available");
 
     let fixture = match fixture_mnt() {
         Ok(path) => path,
@@ -298,7 +284,7 @@ fn e2e_import_publish_slope_restart_reuse() {
     assert!(engine_status.available);
     assert_eq!(
         engine_status.version.as_deref(),
-        Some(tools.version.as_str())
+        Some(engine_version.as_str())
     );
 
     // Rename preserves identity and results.
@@ -389,8 +375,8 @@ fn e2e_import_publish_slope_restart_reuse() {
 #[test]
 #[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_sparse_generation_lifecycle() {
-    let engine = engine::GdalEngine::new();
-    engine.discover().expect("GDAL engine must be available");
+    let engine = gdal_engine::GdalEngine::new();
+    engine.version().expect("GDAL engine must be available");
     let fixture = match fixture_mnt() {
         Ok(path) => path,
         Err(reason) => panic!("{reason}"),
@@ -559,8 +545,8 @@ fn fixture_mnh_batch() -> Result<Vec<PathBuf>, String> {
 #[test]
 #[ignore = "requires system GDAL, the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
 fn e2e_mnh_batch_import_apply_display_restart() {
-    let engine = engine::GdalEngine::new();
-    engine.discover().expect("GDAL engine must be available");
+    let engine = gdal_engine::GdalEngine::new();
+    engine.version().expect("GDAL engine must be available");
     let files = match fixture_mnh_batch() {
         Ok(files) => files,
         Err(reason) => panic!("{reason}"),

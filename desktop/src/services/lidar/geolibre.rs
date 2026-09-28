@@ -3,11 +3,11 @@
 //! Executors run tools of the `geolibre` CLI built from `geolibre-rust` at
 //! [`GEOLIBRE_REVISION`] as job-owned child processes: fixed argv, no shell,
 //! bounded output, the finite process deadline, and kill/reap on cancel, all
-//! through the same runner as the GDAL engine. Discovery is cached like GDAL's,
+//! through the bounded child-process runner in `process.rs`. Discovery is cached,
 //! so a missing binary makes new analysis runs unavailable with a named reason
 //! and never falls back to another method.
 
-use super::engine::GdalEngine;
+use super::process;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -100,7 +100,7 @@ impl GeolibreEngine {
             ));
         }
         let output =
-            GdalEngine::run_managed(&path, &["version".to_string()], &[], None, &self.log_dir)?;
+            process::run_managed(&path, &["version".to_string()], &[], None, &self.log_dir)?;
         let version = output.stdout.trim().to_string();
         if version.is_empty() {
             return Err("the GeoLibre engine reported no version".to_string());
@@ -129,7 +129,7 @@ impl GeolibreEngine {
             format!("--output={}", output.display()),
         ];
         argv.extend_from_slice(args);
-        GdalEngine::run_managed(
+        process::run_managed(
             &runner.path,
             &argv,
             &[("RAYON_NUM_THREADS", RAYON_THREADS)],
@@ -182,7 +182,7 @@ impl SidecarSearch {
         }
         self.path_var
             .as_deref()
-            .and_then(|path_var| super::engine::which_in(path_var, EXECUTABLE))
+            .and_then(|path_var| process::which_in(path_var, EXECUTABLE))
             .ok_or_else(|| {
                 "the GeoLibre engine is not installed; new analysis runs are unavailable"
                     .to_string()
