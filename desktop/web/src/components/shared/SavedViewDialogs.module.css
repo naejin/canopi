@@ -180,6 +180,6 @@
   position: fixed;
   left: 50%;
   bottom: var(--space-6);
-  z-index: 110;
+  z-index: var(--z-toast);
   transform: translateX(-50%);
 }

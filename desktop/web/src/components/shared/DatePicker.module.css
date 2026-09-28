@@ -49,7 +49,7 @@
 
 .calendarFloating {
   position: fixed;
-  z-index: 50;
+  z-index: var(--z-popover);
   max-width: calc(100vw - var(--space-4));
 }
 

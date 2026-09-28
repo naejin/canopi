@@ -5,6 +5,14 @@
    ============================================ */
 
 :root {
+  /* Stacking scale. Popups portal to <body>, so a menu opened inside a dialog
+     must sit above every dialog and full-window surface. */
+  --z-full-window: 900;
+  --z-toast: 950;
+  --z-dialog: 1000;
+  --z-dialog-alert: 1010;
+  --z-popover: 1100;
+  --z-tooltip: 1200;
   /* ── Field Atlas — Light Theme ──
      Parchment, ink and ochre floating over the map.
      One meaning per colour: ochre = selected, active or primary; blue = keyboard focus;

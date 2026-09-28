@@ -9,9 +9,17 @@ function classZIndex(path: string, className: string): number {
   const source = readCssSource(path)
   const rule = new RegExp(`\\.${className}\\s*\\{(?<body>[\\s\\S]*?)\\}`).exec(source)
   if (!rule?.groups?.body) throw new Error(`Missing .${className} CSS rule in ${path}`)
-  const declaration = /z-index:\s*(?<value>-?\d+)\s*;/.exec(rule.groups.body)
-  if (!declaration?.groups?.value) throw new Error(`Missing .${className} z-index declaration`)
-  return Number.parseInt(declaration.groups.value, 10)
+  const declaration = /z-index:\s*(?:(?<value>-?\d+)|var\((?<token>--z-[a-z-]+)\))\s*;/.exec(rule.groups.body)
+  if (declaration?.groups?.value) return Number.parseInt(declaration.groups.value, 10)
+  if (declaration?.groups?.token) return scaleToken(declaration.groups.token)
+  throw new Error(`Missing .${className} z-index declaration`)
+}
+
+/** Resolves a stacking scale token from global.css. */
+function scaleToken(name: string): number {
+  const match = new RegExp(`${name}:\\s*(-?\\d+)`).exec(readCssSource('styles/global.css'))
+  if (!match?.[1]) throw new Error(`Missing ${name} in global.css`)
+  return Number.parseInt(match[1], 10)
 }
 
 function ruleBody(path: string, selector: string): string {

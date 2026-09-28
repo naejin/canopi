@@ -2,7 +2,7 @@
 .presenter {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-full-window);
   outline: none;
   touch-action: pan-y;
 }

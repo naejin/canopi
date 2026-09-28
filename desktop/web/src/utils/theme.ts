@@ -1,5 +1,5 @@
 import { effect } from "@preact/signals";
-import { theme } from "../app/settings/state";
+import { locale, theme } from "../app/settings/state";
 import { primeThemeProjectionFromFirstPaintCache } from "../app/settings/projection";
 
 function applyTheme(resolved: "light" | "dark") {
@@ -47,6 +47,9 @@ export function initTheme(): () => void {
   // Apply theme reactively whenever the signal changes, and sync the cache
   const installedEffect = effect(() => {
     applyTheme(theme.value);
+    // The page language follows the UI locale: screen readers, hyphenation and
+    // the CJK type sizes (`:root:lang(zh|ja|ko)` in global.css) read it.
+    document.documentElement.lang = locale.value;
     // Keep the sync cache up to date (settings bootstrap overwrites the signal,
     // which triggers this effect, which updates the cache for next startup)
     writeCachedTheme(theme.value);
