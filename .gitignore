@@ -14,9 +14,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Tauri
-desktop/web/src/bindings.ts
-
 # Root-level package files (not part of the app — real deps in desktop/web/)
 /package.json
 /package-lock.json
