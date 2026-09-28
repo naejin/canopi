@@ -78,7 +78,7 @@ Beads:
   - `lidar_rename_analysis`
 
 **`services/lidar/mod.rs`** (2702 lines)
-- `LidarLibrary` holds the catalogue `Mutex<Connection>`, `GdalEngine`, `GeolibreEngine`, cancel flags, the exclusive `heavy_job` lease and display admission.
+- `LidarLibrary` holds the catalogue `Mutex<Connection>`, the `RasterEngine` (pure Rust, ADR 0014), `GeolibreEngine`, cancel flags, the exclusive `heavy_job` lease and display admission.
 - `library_snapshot` (:466) discovers GeoLibre and reports it as `slope_engine`.
 - `run_analysis` (:1298) waits for the lease, parses the parameters, and runs `analysis::run_slope_job` on `Local`.
 - `create_analysis` / `create_analysis_unchecked` (:1378/:1393):
@@ -95,11 +95,11 @@ Beads:
   - `ResultManifest`.
 - `slope_eligibility`, run at job time, checks:
   - the values are in metres;
-  - the GDAL WKT is PROJCS with metre units.
+  - the raster's CRS (`wbprojection` from its GeoKeys/WKT) is projected with metre units.
 - `compute_slope_block`, per window:
   1. Read core plus halo, write raw, then `raw_to_tif`.
   2. Run `geolibre slope`.
-  3. Check the output's NoData with gdalinfo.
+  3. Check the output's NoData through the raster engine's probe.
   4. Read the output back into values and a quality mask.
   5. Store it with `write_cog_asset`.
 - `publish_sparse_slope` stages the chunks, then publishes in one `BEGIN IMMEDIATE` transaction:
@@ -155,7 +155,7 @@ Beads:
 **Other `services/lidar/` files**
 - `import.rs` (3647 lines), `collection.rs` (collection resolver), `prepared_raster.rs` (`wbgeotiff` reader).
 - `raster_assets.rs`: content-addressed COG assets (`write_cog_asset`, `admit_staged_cog`).
-- `probe.rs`, `grid.rs`, `raster_info.rs` (gdalinfo JSON).
+- `engine.rs` (`RasterEngine::probe`), `grid.rs`, `rust_engine/`.
 
 **`native_command_policy.rs`**
 - The sync allowlist, the state-access allowlist, and the rule that every command has an `invoke` call site.
@@ -572,12 +572,12 @@ pub struct LibrarySnapshot { pub items: Vec<LibraryItemSummary>, pub engines: En
 
 **Where each unavailable reason is computed**
 - The frontend adds "needs Desktop" (Web edition) and "already in Layers" (Design references), §3.5.
-- Everything that needs the catalogue, GDAL facts or the engine is computed natively into `offers`. That gives eligibility one authority (Rust) and deletes `slopeIneligibility`.
+- Everything that needs the catalogue, raster probe facts or the engine is computed natively into `offers`. That gives eligibility one authority (Rust) and deletes `slopeIneligibility`.
 
-**Grid facts without GDAL in the poll path**
-- `slope_eligibility` runs gdalinfo at job time, but offers are computed on every 1.5 s poll.
+**Grid facts without a raster read in the poll path**
+- `slope_eligibility` probes the raster at job time, but offers are computed on every 1.5 s poll.
 - So import records two facts on the generation: `crs_class` (`projected-metre`, `projected-other`, `geographic` or `unknown`) and extent cells.
-- Offers read those columns. The job still rechecks with GDAL, which stays authoritative.
+- Offers read those columns. The job still rechecks with the raster engine, which stays authoritative.
 
 ### 3.3 Catalogue v21 (no migration)
 
@@ -683,7 +683,7 @@ lidar_generation_vectors(generation_id PK, asset_sha256 REFERENCES lidar_vector_
    - one bounded child per step, below-normal priority;
    - make the deadline configurable per step instead of the fixed 600 s;
    - parse the final stdout JSON line to confirm each output path.
-4. **Read raster results back** window by window, using `gdal_translate -srcwin` into raw Float32 (a windowed `raw_f32_bytes`):
+4. **Read raster results back** window by window, using the raster engine's windowed Float32 read (`RasterEngine::read_f32`, `prepared_raster.rs`):
    - Map the tool's NoData (per output) and any non-finite values to invalid.
    - Force invalid wherever the input cell was invalid.
    - Write chunk COGs only for occupied chunks.

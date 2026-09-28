@@ -82,7 +82,7 @@ Every `#[tauri::command]` is registered once and is executor-backed async or one
 
 ## Persistence of app data
 
-[ADR 0013](adr/0013-stored-data-migrations.md) decides every store; until each migration ships, the store keeps ADR 0003's refusal:
+[ADR 0013](adr/0013-stored-data-migrations.md) decides every store; the floor is `.canopi` v7 and user-DB schema 8, older data is refused with a message:
 
 - Designs: formats v7 to current open and upgrade in memory; older (Canopi 1.2 and earlier) or newer files are refused with a typed `DesignLoadFailure` that says which.
 
