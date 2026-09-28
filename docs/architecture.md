@@ -86,6 +86,6 @@ Every `#[tauri::command]` is registered once and is executor-backed async or one
 
 - Designs: formats v5 to current open; a v5/v6 Design without a site waits for "Where is your site?" (`DesignLoadOutcome::NeedsSite`); older or newer files are refused with a typed `DesignLoadFailure`.
 
-- Desktop user DB: one schema, no migrations. An older database is renamed `<file>.v<N>-set-aside`, a damaged one `<file>.corrupt-<unix-seconds>`, and an empty one is created; a newer database is refused with a typed error.
+- Desktop user DB: an older database upgrades in place through the ladder in `desktop/src/db/user_db_migrations.rs` (one transaction, integrity check before commit, rollback leaves the file untouched); a newer one is refused with a typed error; only a damaged one is renamed `<file>.corrupt-<unix-seconds>` and replaced by an empty database.
 - LiDAR library: catalogue v21. A library written by an older Canopi is deleted on first open; a newer one is refused.
 - Web: independent browser-local records for drafts, settings, species activity and stamps; data from an older Canopi is ignored.

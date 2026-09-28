@@ -16,7 +16,7 @@ ADR 0003 refused every older stored format: Designs, the Desktop user database, 
 - **LiDAR library.** A catalogue from an older version is rebuilt from the content-addressed originals it keeps; derived items are recomputed on demand. A newer catalogue is refused.
 - **Web storage.** Same rule as Designs; browser-local data upgrades in memory.
 - **Settings.** New fields have defaults; values are never rewritten.
-- **Boundaries.** Migration code lives in one module per store (`common-types` for Designs, `desktop/src/db/migrations` for the user DB) and nowhere else; the runtime, codec and UI see only the current format. Old-format code paths outside those modules are still forbidden.
+- **Boundaries.** Migration code lives in one module per store (`common-types` for Designs, `desktop/src/db/user_db_migrations.rs` for the user DB) and nowhere else; the runtime, codec and UI see only the current format. Old-format code paths outside those modules are still forbidden.
 
 ## Consequences
 
