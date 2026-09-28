@@ -11,7 +11,6 @@ import {
   selectSavedObjectStampSourceForTests,
   writeSavedObjectStampDragData,
 } from '../canvas/saved-object-stamp-source'
-import { guides } from '../canvas/scene-metadata-state'
 import {
   IDLE_CANVAS_TOOL_GUIDANCE,
   selectedObjectIds,
@@ -736,7 +735,6 @@ describe('SceneInteractionSession', () => {
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
-    guides.value = []
     plantSpacingIntervalM.value = 0.5
   })
 
@@ -902,7 +900,6 @@ describe('SceneInteractionSession', () => {
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
     snapToGuidesEnabled.value = false
-    guides.value = []
     plantSpacingIntervalM.value = 0.5
     if (disposalErrors.length > 0) throw disposalErrors[0]
   })

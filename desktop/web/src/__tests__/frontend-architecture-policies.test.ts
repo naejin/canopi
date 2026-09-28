@@ -238,23 +238,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
   },
   {
     kind: 'forbid-imports',
-    name: 'Canvas Runtime reads do not depend on mirror modules',
-    from: ['src/canvas/runtime/**'],
-    exceptFrom: [
-      'src/canvas/runtime/**/*.test.ts',
-      'src/canvas/runtime/**/*.test.tsx',
-      'src/canvas/runtime/scene-runtime/scene-sync.ts',
-    ],
-    targets: ['src/canvas/scene-metadata-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Canvas guides do not read scene metadata mirrors',
-    from: ['src/canvas/guides.ts'],
-    targets: ['src/canvas/scene-metadata-state.ts'],
-  },
-  {
-    kind: 'forbid-imports',
     name: 'App-facing tests use explicit Canvas Runtime surfaces',
     from: ['src/__tests__/**/*.test.ts', 'src/__tests__/**/*.test.tsx'],
     exceptFrom: [

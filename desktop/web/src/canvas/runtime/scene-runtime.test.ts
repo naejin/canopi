@@ -11,7 +11,6 @@ import {
   snapToGridEnabled,
 } from '../../app/canvas-settings/signals'
 import { layerLockState, layerOpacity, layerVisibility } from '../../app/canvas-settings/signals'
-import { guides } from '../scene-metadata-state'
 import { plantColorMenuOpen } from '../plant-color-menu-state'
 import {
   clearPlantStampSource,
@@ -448,7 +447,6 @@ describe('scene canvas runtime', () => {
     clearPlantStampSource()
     clearSavedObjectStampSource()
     snapToGridEnabled.value = false
-    guides.value = []
     hoveredCanvasTargets.value = []
     hoveredPanelTargets.value = []
     selectedPanelTargetOrigin.value = null
@@ -3137,7 +3135,7 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
-  it('edits guides through the scene edit history and projection signals', () => {
+  it('edits guides through the scene edit history', () => {
     const cleanState = createCleanStateAdapterProbe()
     const runtime = new SceneCanvasRuntime({ appAdapter: cleanState.adapter })
     const file = makeFile()
@@ -3153,12 +3151,13 @@ describe('scene canvas runtime', () => {
     expect(serialized.extra).toEqual({
       guides: [{ id: expect.any(String), axis: 'v', lon: expect.closeTo(guideLon, 9) }],
     })
-    expect(guides.value).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
+    const sceneGuides = () => (runtime as any)._sceneState.persisted.guides
+    expect(sceneGuides()).toEqual([{ id: expect.any(String), axis: 'v', position: 42 }])
     expect(lastCleanState(cleanState.setCanvasClean)).toBe(false)
 
     runtime.commandSurface.history.undo()
     expect(runtime.documentSurface.captureForPersistence({ name: file.name }, file).content.extra).toEqual({})
-    expect(guides.value).toEqual([])
+    expect(sceneGuides()).toEqual([])
   })
 
   it('marks the canvas dirty when only the species default color changes', () => {
