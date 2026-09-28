@@ -28,13 +28,14 @@ pub(crate) fn write_derived_file(path: &Path, bytes: &[u8]) -> std::io::Result<(
 ///
 /// Writes an operation-owned temporary created with `create_new`, flushes it
 /// to stable storage, atomically replaces the target and, on Unix, flushes the
-/// parent directory so the rename itself survives a crash. On failure the
-/// temporary is removed and the previous target is left in place. Callers own
-/// write admission for the target.
+/// parent directory so the rename itself survives a crash. On failure before
+/// the replace, the temporary is removed and the previous target is left in
+/// place; once the replace succeeds the write has succeeded, and a failed
+/// directory flush is only logged. Callers own write admission for the target.
 pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::io::Result<()> {
     use std::io::Write;
     let temporary = operation_sidecar_path(path, role);
-    let result = (|| {
+    let result: std::io::Result<()> = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -43,7 +44,17 @@ pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::
         file.sync_all()?;
         drop(file);
         atomic_replace(&temporary, path)?;
-        sync_parent_directory(path)
+        // The new bytes are already in place under the target name. A failed
+        // directory flush only weakens crash durability of the rename; it is
+        // not a failed write, and reporting one would leave the caller with a
+        // stale fingerprint and false conflicts on the next save.
+        if let Err(error) = sync_parent_directory(path) {
+            tracing::warn!(
+                "Could not sync the folder after replacing a file ({:?})",
+                error.kind()
+            );
+        }
+        Ok(())
     })();
     if let Err(ref original) = result {
         match std::fs::remove_file(&temporary) {

@@ -1200,6 +1200,49 @@ mod tests {
         }
     }
 
+    /// A folder the user can write into but not list: the Design is renamed
+    /// into place, but the parent directory cannot be opened to sync it.
+    #[cfg(unix)]
+    #[test]
+    fn a_save_whose_directory_sync_fails_after_the_replace_is_still_saved() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = unique_dir("unlistable");
+        let folder = dir.join("write-only");
+        std::fs::create_dir(&folder).unwrap();
+        let path = folder.join("garden.canopi");
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o333)).unwrap();
+        let restore =
+            || std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+        if std::fs::File::open(&folder).is_ok() {
+            // Running with privileges that bypass directory permissions.
+            restore();
+            return;
+        }
+
+        let first = save_to_file(&path, &named("Garden"), None);
+        let second = first
+            .as_ref()
+            .ok()
+            .and_then(|result| match result {
+                SaveResult::Saved { fingerprint } => Some(fingerprint.clone()),
+                SaveResult::Conflict { .. } => None,
+            })
+            .map(|fingerprint| save_to_file(&path, &named("Garden 2"), Some(&fingerprint)));
+        let on_disk = std::fs::read(&path);
+        restore();
+
+        let saved = saved_fingerprint(first.expect("a replaced Design is a successful save"));
+        // The next continuous save with that fingerprint writes, not conflicts,
+        // and reports the fingerprint of the bytes now on disk.
+        let next = saved_fingerprint(
+            second
+                .expect("the first save returned its fingerprint")
+                .expect("the next save succeeds"),
+        );
+        assert_ne!(next, saved);
+        assert_eq!(next, crate::design::fingerprint(&on_disk.unwrap()));
+    }
+
     #[test]
     fn saved_and_loaded_fingerprints_are_the_sha256_of_the_file_bytes() {
         let dir = unique_dir("fingerprint");
