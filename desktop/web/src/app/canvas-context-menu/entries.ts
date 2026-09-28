@@ -120,17 +120,17 @@ export function buildCanvasContextMenuEntries(
   const species = options.summary?.species ?? []
   const oneSpecies = species.length === 1 ? species[0]!.canonicalName : null
   const plants = selectionIncludesPlants(selection)
-  const plain = (
+  const plain = <T,>(
     id: CanvasContextMenuItemId,
     labelKey: string,
-    target: string | CalendarAddTarget | null,
-    run: (target: never) => void,
+    target: T | null,
+    run: (target: T) => void,
   ): CanvasContextMenuCommand => ({
     id,
     label: options.translate(labelKey),
     disabled: target === null,
     run: () => {
-      if (target !== null) run(target as never)
+      if (target !== null) run(target)
     },
   })
   const calendarTarget = calendarTargetFor(selection)
