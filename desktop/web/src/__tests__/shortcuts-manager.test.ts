@@ -161,7 +161,11 @@ describe('shortcut manager canvas tool switching', () => {
 
     expect(commandPaletteOpen.value).toBe(true)
 
+    // Esc belongs to the palette's own field and the map's Esc chain, not the seam.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(commandPaletteOpen.value).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, shiftKey: true }))
 
     expect(commandPaletteOpen.value).toBe(false)
   })

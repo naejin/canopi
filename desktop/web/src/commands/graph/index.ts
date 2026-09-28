@@ -13,7 +13,6 @@ export type {
   MenuEntry,
 } from './projections'
 export {
-  isCommandPaletteEscapeEvent,
   isCommandPaletteToggleEvent,
   runAppCommandShortcutForEvent,
 } from './shortcuts'

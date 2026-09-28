@@ -24,10 +24,6 @@ export function isCommandPaletteToggleEvent(event: KeyboardEvent): boolean {
     && event.key.toUpperCase() === COMMAND_PALETTE_SHORTCUT_KEY
 }
 
-export function isCommandPaletteEscapeEvent(event: KeyboardEvent): boolean {
-  return event.key === 'Escape'
-}
-
 export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
   const match = matchAppCommandShortcut(event)
   if (!match) return false
