@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} зоны",
     "zoneCount_many": "{{count, number}} зон",
     "zoneCount_other": "{{count, number}} зоны",
+    "cantOpenTitle": "Не удаётся открыть этот проект",
     "cantRead": "Не удаётся прочитать этот файл",
     "inFolder": "В папке {{folder}}",
     "cantReadMissing": "Файл не найден: он перемещён или удалён",

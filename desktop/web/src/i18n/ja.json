@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} ゾーン",
     "zoneCount_many": "{{count, number}} ゾーン",
     "zoneCount_other": "{{count, number}} ゾーン",
+    "cantOpenTitle": "このデザインを開けません",
     "cantRead": "このファイルを読み込めません",
     "inFolder": "{{folder}} 内",
     "cantReadMissing": "ファイルが見つかりません：移動または削除されました",

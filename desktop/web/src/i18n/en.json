@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} zones",
     "zoneCount_many": "{{count, number}} zones",
     "zoneCount_other": "{{count, number}} zones",
+    "cantOpenTitle": "Can’t open this Design",
     "cantRead": "Can’t read this file",
     "inFolder": "In {{folder}}",
     "cantReadMissing": "Can’t find this file: it was moved or deleted",

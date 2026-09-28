@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     loadDesign: vi.fn(),
     newDesign: vi.fn(),
     message: vi.fn(),
+    presentOpenFailure: vi.fn(),
   }
 })
 
@@ -61,6 +62,14 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 vi.mock('../app/document-session/save-problem', () => ({
   requestSaveProblemDecision: mocks.requestSaveDecision,
 }))
+
+vi.mock('../app/document-session/open-failure', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../app/document-session/open-failure')>()
+  return {
+    ...actual,
+    presentDesignOpenFailure: (error: unknown) => mocks.presentOpenFailure(actual.designOpenFailureNoticeOf(error)),
+  }
+})
 
 import { activeTool, selectedObjectIds } from '../canvas/session-state'
 import {
@@ -193,6 +202,7 @@ beforeEach(() => {
   mocks.loadDesign.mockReset()
   mocks.newDesign.mockReset()
   mocks.message.mockReset()
+  mocks.presentOpenFailure.mockReset()
 
   designSessionFixture.file = makeFile('Current')
   designSessionFixture.name = 'Current'
@@ -323,10 +333,12 @@ describe('document replacement actions', () => {
 
     expect(mocks.canvasSession.replaceDocument).not.toHaveBeenCalled()
     expect(pendingDesignPath.value).toBe('/designs/broken.canopi')
-    expect(mocks.message).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to open broken'),
-      expect.objectContaining({ title: 'Open failed', kind: 'error' }),
-    )
+    expect(mocks.presentOpenFailure).toHaveBeenCalledTimes(1)
+    expect(mocks.presentOpenFailure.mock.calls[0]?.[0]).toEqual({
+      tone: 'error',
+      title: 'Can’t open this Design',
+      message: 'Can’t read this file',
+    })
   })
 
   it('applies a known path while the canvas session is detached', async () => {

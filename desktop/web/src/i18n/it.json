@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} zone",
     "zoneCount_many": "{{count, number}} zone",
     "zoneCount_other": "{{count, number}} zone",
+    "cantOpenTitle": "Impossibile aprire questo progetto",
     "cantRead": "Impossibile leggere questo file",
     "inFolder": "In {{folder}}",
     "cantReadMissing": "File non trovato: è stato spostato o eliminato",

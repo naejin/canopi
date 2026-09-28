@@ -1,4 +1,3 @@
-import { message } from "@tauri-apps/plugin-dialog";
 import {
   CanvasAuthorityBusyError,
   type CanvasDocumentSurface,
@@ -35,7 +34,7 @@ import {
   type ResolvedDesignReplacement,
 } from "./replacement";
 import { DESIGN_SESSION_WORKFLOWS } from "./workflows";
-import { describeDesignLoadError } from "../contracts/canopi-design-errors";
+import { presentDesignOpenFailure } from "./open-failure";
 import {
   createDesignSessionWorkflowRunner,
   type DesignSessionWorkflowRunner,
@@ -140,7 +139,7 @@ export interface DesignSessionStateMachineDeps {
   readonly deleteDesignDraft: typeof designIpc.deleteDesignDraft;
   readonly loadDesign: typeof designIpc.loadDesign;
   readonly createDraftId: () => string;
-  readonly showMessage: typeof message;
+  readonly presentOpenFailure: (error: unknown) => void;
   readonly requestSaveDecision: typeof requestSaveProblemDecision;
   readonly persistence: DesignSessionPersistence;
   readonly workflowRunner: DesignSessionWorkflowRunner;
@@ -172,7 +171,7 @@ const DEFAULT_DEPS: Omit<DesignSessionStateMachineDeps, "persistence"> = {
   deleteDesignDraft: (id) => designIpc.deleteDesignDraft(id),
   loadDesign: (path) => designIpc.loadDesign(path),
   createDraftId: () => globalThis.crypto.randomUUID(),
-  showMessage: (text, options) => message(text, options),
+  presentOpenFailure: presentDesignOpenFailure,
   requestSaveDecision: requestSaveProblemDecision,
   workflowRunner: createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
 };
@@ -821,11 +820,8 @@ export class DesignSessionStateMachine {
       }
       if (result.status === "failed") {
         if (!isStillPending()) return;
-        console.error("Queued document load failed:", result.error);
-        void this.deps.showMessage(`Failed to open ${label}.\n\n${formatError(result.error)}`, {
-          title: "Open failed",
-          kind: "error",
-        });
+        console.error(`Queued document load failed (${label}):`, result.error);
+        this.deps.presentOpenFailure(result.error);
       }
     });
 
@@ -1019,8 +1015,4 @@ export function isCancelled(error: unknown): boolean {
     : error instanceof Error
       ? error.message.includes("cancelled")
       : false;
-}
-
-function formatError(error: unknown): string {
-  return describeDesignLoadError(error);
 }

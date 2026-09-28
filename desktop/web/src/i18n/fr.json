@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} zones",
     "zoneCount_many": "{{count, number}} zones",
     "zoneCount_other": "{{count, number}} zones",
+    "cantOpenTitle": "Impossible d’ouvrir ce Design",
     "cantRead": "Impossible de lire ce fichier",
     "inFolder": "Dans {{folder}}",
     "cantReadMissing": "Fichier introuvable : il a été déplacé ou supprimé",

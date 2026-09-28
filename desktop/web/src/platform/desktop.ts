@@ -15,6 +15,8 @@ import { installDesignContinuousSave } from "../app/document-session/transition"
 import { installPlaceSearchSession } from "../app/geocoding/place-search-session";
 import { installToolRailLearning } from "../app/tool-rail/learning";
 import { installFocusRegionKeys } from "../app/shell/focus-regions";
+import { registerDesignOpenFailurePresenter } from "../app/document-session/open-failure";
+import { presentDesktopDesignOpenFailure } from "./open-failure.desktop";
 import { desktopSettingsPlatformAdapter } from "./settings.desktop";
 
 let shellBootstrap: ShellBootstrap | null = null;
@@ -30,12 +32,14 @@ export function bootstrapPlatform(): void {
   disposeToolRailLearning?.();
   disposePlaceSearchSession?.();
   disposeContinuousSave?.();
+  registerDesignOpenFailurePresenter(null);
   shellBootstrap?.dispose();
   // Desktop application/workspace lifetime: one LiDAR workflow owner that
   // outlives panel navigation and Design replacement.
   installLidarWorkflow();
   installLidarDisplayDescriptors();
   shellBootstrap = bootstrapShell(desktopSettingsPlatformAdapter);
+  registerDesignOpenFailurePresenter(presentDesktopDesignOpenFailure);
   disposeContinuousSave = installDesignContinuousSave();
   disposePlaceSearchSession = installPlaceSearchSession();
   disposeToolRailLearning = installToolRailLearning();
@@ -57,6 +61,7 @@ if (import.meta.hot) {
     disposeFocusRegionKeys = null;
     disposeContinuousSave?.();
     disposeContinuousSave = null;
+    registerDesignOpenFailurePresenter(null);
     shellBootstrap?.dispose();
     shellBootstrap = null;
   });

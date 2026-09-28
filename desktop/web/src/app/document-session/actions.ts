@@ -14,6 +14,7 @@ import {
   saveCurrentDesign,
   saveAsCurrentDesign,
 } from "./transition";
+import { presentDesignOpenFailure } from "./open-failure";
 
 interface DocumentLoadOptions {
   session?: CanvasDocumentSurface | null;
@@ -54,13 +55,16 @@ export async function revertDesign(): Promise<void> {
 
 /** Open a Design Draft through the shared replacement path. */
 export async function openDesignDraft(id: string): Promise<void> {
-  throwIfFailed(await openDesignDraftSession(id));
+  const result = await openDesignDraftSession(id);
+  presentIfFailed(result);
+  throwIfFailed(result);
 }
 
 /** Open file dialog and replace the active document through the shared guard. */
 export async function openDesign(): Promise<void> {
   const result = await openDesignSessionFromDialog();
 
+  presentIfFailed(result);
   throwIfFailed(result);
 }
 
@@ -74,6 +78,7 @@ export async function openDesignFromPath(
     isCancelled: options.isCancelled,
   });
 
+  presentIfFailed(result);
   throwIfFailed(result);
 }
 
@@ -90,6 +95,11 @@ export async function newDesignAction(): Promise<void> {
  */
 export async function closeDesign(): Promise<void> {
   throwIfFailed(await closeDesignSession());
+}
+
+/** A Design that could not be opened is told to the user before the caller sees the error. */
+function presentIfFailed(result: DocumentTransitionResult | null): void {
+  if (result?.status === "failed") presentDesignOpenFailure(result.error);
 }
 
 function throwIfFailed(result: DocumentTransitionResult | null): void {

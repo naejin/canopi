@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   deleteDesignDraft: vi.fn(),
   loadDesign: vi.fn(),
   message: vi.fn(),
+  presentOpenFailure: vi.fn(),
   requestSaveDecision: vi.fn(),
   saveDesign: vi.fn(),
   saveDesignDraft: vi.fn(),
@@ -284,6 +285,7 @@ function resetMachine({
   machine = createDesignSessionStateMachine({
     store,
     requestSaveDecision: mocks.requestSaveDecision,
+    presentOpenFailure: mocks.presentOpenFailure,
   });
   if (file) {
     machine.continuousSave.beginSession({
@@ -301,6 +303,7 @@ beforeEach(() => {
   mocks.deleteDesignDraft.mockResolvedValue(undefined);
   mocks.loadDesign.mockReset();
   mocks.message.mockReset();
+  mocks.presentOpenFailure.mockReset();
   mocks.requestSaveDecision.mockReset();
   mocks.requestSaveDecision.mockResolvedValue("cancel");
   mocks.saveDesign.mockReset();
@@ -2493,10 +2496,7 @@ describe("document session transition", () => {
 
     expect(session.replaceDocument).not.toHaveBeenCalled();
     expect(store.readPendingDesignPath()).toBe("/designs/broken.canopi");
-    expect(mocks.message).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to open broken"),
-      expect.objectContaining({ title: "Open failed", kind: "error" }),
-    );
+    expect(mocks.presentOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ message: "Disk read failed" }));
   });
 
   it("keeps queued loads pending when teardown cancels them before apply", async () => {

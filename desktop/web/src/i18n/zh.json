@@ -1694,6 +1694,7 @@
     "zoneCount_few": "{{count, number}} 个区域",
     "zoneCount_many": "{{count, number}} 个区域",
     "zoneCount_other": "{{count, number}} 个区域",
+    "cantOpenTitle": "无法打开此设计",
     "cantRead": "无法读取此文件",
     "inFolder": "位于 {{folder}}",
     "cantReadMissing": "找不到此文件：已被移动或删除",
