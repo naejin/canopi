@@ -14,13 +14,13 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Design Session**: The runtime context of the open Design: its state, Home, Continuous Save, lifecycle workflows and the attached scene runtime. _Avoid:_ Document session
 
-**Start screen**: What the app shows when no Design Session is active: New Design, Open Design…, Drafts and, on Desktop, Recent Designs. _Avoid:_ Welcome screen, homepage
+**Start screen**: What the app shows when no Design Session is active: New Design, Open Design… (Web: Open a .canopi file…), Drafts and, on Desktop, Recent Designs. A Design that cannot open says why ("Can’t open this Design": older, newer, missing or damaged), never a path. _Avoid:_ Welcome screen, homepage
 
 **Recent Design**: A Desktop reference to a `.canopi` file opened or saved before, with its sketch and counts. A file that is gone, older, newer or damaged shows its name and why it cannot open. _Avoid:_ Recent file, history item
 
 **Design notebook**: The Desktop panel that lists saved Designs in user-named sections. It stores references and organisation only; the `.canopi` file stays the authority. Not in the Web Edition. _Avoid:_ File browser, project folder
 
-**Web Edition**: Canopi in a browser: the same map canvas, panels, stories and PDF export with a reduced Plant catalog, browser-local Drafts and no terrain data. It is a real editor, not a demo or a website. _Avoid:_ Web sketch, demo app
+**Web Edition**: Canopi in a browser: the same map canvas, panels, stories and PDF export with a reduced Plant catalog and browser-local Drafts; it cannot import or show terrain data but keeps a Design's terrain layers for Desktop. It is a real editor, not a demo or a website. _Avoid:_ Web sketch, demo app
 
 **GeoJSON import and export**: A Design's objects as a WGS84 FeatureCollection. Import adds ordinary Design objects in one undoable step. _Avoid:_ Shapefile import
 
@@ -28,15 +28,15 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 ## Map and coordinates
 
-**Map canvas**: The design surface is the map itself: basemap, satellite, terrain data, contours and hillshading are its background. There is no separate local canvas and no Design location. _Avoid:_ Canvas, sketch, Design location
+**Map canvas**: The design surface is the map itself: basemap, satellite, terrain data, contours and hillshading are its background. There is no separate local canvas and no Design location; Settings › Canvas names the map's input options (Scroll wheel: Zooms the map or Pans the map). _Avoid:_ sketch, Design location
 
 **Session plane**: The runtime's local metre plane for the open Design, centred on the objects. Files store WGS84 longitude/latitude; the session plane converts to metres for tools, snapping, measurements and PDF layout. _Avoid:_ Anchor, spatial frame
 
 **Background**: The Layers choice under the Design: Satellite, Map or None (plain paper), with its opacity and Soften background. An app setting shared by every Design. _Avoid:_ Basemap layer, Design layer
 
-**Map layers**: Contours and Hillshading, drawn from online elevation, not from imported data. App settings, not Design content. _Avoid:_ Layer, Site data
+**Online elevation**: Contour lines and Hillshading, drawn from online elevation, not from imported data, listed in Layers. App settings, not Design content. _Avoid:_ Map layers, Site data
 
-**Place search**: The title-bar field (Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
+**Place search**: The title-bar field (Search a place…, Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
 
 **Last view**: The camera position Canopi remembers in settings; "Where is your site?" opens a new Design over it. _Avoid:_ Design location, default site
 
@@ -66,7 +66,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Group**: Design objects that move and transform together (Arrange › Group). Groups do not nest. _Avoid:_ Layer, selection
 
-**Layer**: A fixed visibility and locking group of Design objects (Plants, Zones, Annotations, Measurement guides, Grid and others) in the Design section of Layers. Not user-created folders. _Avoid:_ Folder, category
+**Layer**: A fixed visibility and locking group of Design objects (Annotations, Plants, Measurement guides, Zones) in the Design section of Layers. Not user-created folders. _Avoid:_ Folder, category
 
 **Lock**: A saved constraint on a Design object that stops selection, moving, deleting and copying while keeping it visible. Edit › Unlock all releases every lock as one Undo. _Avoid:_ Selection lock
 
@@ -102,7 +102,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Plants in this Design**: The panel listing the placed species with counts, colours, symbols and Display on the map (colour by Species, Stratum or One color; Symbol size; Outline; Labels). _Avoid:_ Species key, legend panel
 
-**Plant finder**: The Ctrl F search in every plant list: common names in every language, scientific names and codes; accent- and case-insensitive; with Selected on map, Stratum and Form filters. _Avoid:_ Global search
+**Find plants**: The Ctrl F search in every plant list (guides call it the plant finder): common names in every language, scientific names, synonyms and codes; accents, capitals and small typos do not matter; with Selected on map, Stratum and Form filters. _Avoid:_ Global search
 
 **Hardiness zone**: A USDA cold-tolerance zone of a species (min and max). _Avoid:_ Climate zone
 
@@ -122,7 +122,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 ## Data and analyses
 
-**Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
+**Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design; it reads rasters itself, with no GDAL or other install, and says when it was rebuilt or cannot open. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
 
 **Site data**: The Layers section that lists the Data library items this Design shows, with results nested under their source. Remove from Design keeps the item in the library. _Avoid:_ Data layer, terrain layer
 
@@ -130,13 +130,13 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 ## PDF export
 
-**Export to PDF**: File › Export to PDF: the planting plan as pages with a plant key, north arrow and scale, printed As in the Design, in Grayscale or in Black. Guides call it Canvas PDF. The Design never changes. _Avoid:_ Design report, screenshot
+**Planting plan (PDF)**: File › Export › Planting plan (PDF)…, titled "Export to PDF": the planting plan as pages with a plant key, north arrow and scale, printed As in the Design, in Grayscale or in Black. The Design never changes. _Avoid:_ Design report, screenshot
 
 **Field sheet**: A detail page added over a drawn print area (Add field sheet) or the Whole Design, with its own key. Print areas belong to the export, never to the Design. _Avoid:_ Zone, page zone
 
 ## Support
 
-**Problem report**: Help › Report a problem… (Desktop): a summary and a diagnostic bundle the user shares by hand. The bundle excludes the Design, screenshots, paths and keys unless the user opts in. _Avoid:_ Bug report, telemetry
+**Problem report**: Help › Report a problem… (Desktop): a summary and a diagnostic bundle the user shares by hand. The bundle never holds screenshots, raw paths or keys, and holds the Design only when the user opts in. _Avoid:_ Bug report, telemetry
 
 ## Architecture authorities
 
@@ -144,6 +144,6 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Design Edit**: A change to non-canvas Design state: Budget, Calendar, Consortium, saved views, stories, description and extra fields. _Avoid:_ Panel action, direct write
 
-**App Command Graph**: The one registry of user commands: labels, availability, shortcuts and dispatch for menus, the palette and rails. _Avoid:_ Menu registry, shortcut map
+**App Command Graph**: The one registry of user commands: labels, availability, shortcuts and dispatch for menus, the Command palette (Ctrl Shift P) and rails. _Avoid:_ Menu registry, shortcut map
 
 **Browser App Shell**: The Web Edition chrome (title bar, menus, phone layout) around the shared app core. _Avoid:_ Website navigation
