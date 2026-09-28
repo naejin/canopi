@@ -24,6 +24,8 @@ import { mapZoomToStageScale } from '../canvas/projection'
 import { createSessionPlane } from '../canvas/session-plane'
 import { setCurrentCanvasSession } from '../canvas/session'
 import type { PlantDisplay } from '../canvas/runtime/plant-display'
+import { createDefaultScenePersistedState } from '../canvas/runtime/scene/defaults'
+import type { ScenePlantEntity } from '../canvas/runtime/scene'
 import { locale } from '../app/settings/state'
 import { gridVisible, rulersVisible } from '../app/canvas-settings/signals'
 import { registerFocusRegion } from '../app/shell/focus-regions'
@@ -83,8 +85,16 @@ let focus: ReturnType<typeof vi.fn<(name: string | null) => void>>
 let showPlace: ReturnType<typeof vi.fn<(place: { readonly lon: number; readonly lat: number }, zoom: number, options?: { readonly motion?: 'fly' | 'jump' }) => boolean>>
 let container: HTMLDivElement
 
-function mountMap(): void {
+function plant(id: string, canonicalName: string): ScenePlantEntity {
+  return {
+    kind: 'plant', id, locked: false, canonicalName, commonName: null, color: null, stratum: null,
+    canopySpreadM: null, position: { x: 0, y: 0 }, rotationDeg: null, notes: null, plantedDate: null, quantity: 1,
+  }
+}
+
+function mountMap(planted: readonly ScenePlantEntity[] = [plant('p1', 'Lycium barbarum')]): void {
   const queries = createTestCanvasQuerySurface({
+    scene: { ...createDefaultScenePersistedState(), plants: [...planted] },
     viewport: { x: 200, y: 150, scale: mapZoomToStageScale(18, TEST_GEO_ORIGIN.lat) },
     sessionPlane: createSessionPlane(TEST_GEO_ORIGIN),
   })
@@ -147,6 +157,13 @@ describe('presenting a story', () => {
     expect(currentDesign.value).toBe(before)
     expect(designSessionStore.designDirty.value).toBe(false)
     expect(designSessionStore.committedDesignRevision.value).toBe(revision)
+  })
+
+  it('clears the highlight for a step whose species has no plants instead of keeping the previous one', () => {
+    setCurrentCanvasSession(null)
+    mountMap([])
+    presentStory('tour', 1, { reducedMotion: true })
+    expect(focus).toHaveBeenLastCalledWith(null)
   })
 
   it('flies between steps unless reduced motion asks for a jump', () => {
@@ -391,6 +408,39 @@ describe('the presenter', () => {
       expect(storyPresentationActive.value).toBe(false)
     } finally {
       Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true })
+    }
+  })
+
+  it('leaves full screen when the presentation ended while the window was still entering it', async () => {
+    let enter!: () => void
+    const requestFullscreen = vi.fn(() => new Promise<void>((resolve) => {
+      enter = () => {
+        Object.defineProperty(document, 'fullscreenElement', { value: document.documentElement, configurable: true })
+        document.dispatchEvent(new Event('fullscreenchange'))
+        resolve()
+      }
+    }))
+    const exitFullscreen = vi.fn(async () => {
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
+      document.dispatchEvent(new Event('fullscreenchange'))
+    })
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true })
+    Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
+    Object.defineProperty(document.documentElement, 'requestFullscreen', { value: requestFullscreen, configurable: true })
+    Object.defineProperty(document, 'exitFullscreen', { value: exitFullscreen, configurable: true })
+    try {
+      const presenter = await present(0)
+      await act(async () => { key(presenter, 'f') })
+      expect(requestFullscreen).toHaveBeenCalledTimes(1)
+      await act(async () => { key(presenter, 'Escape') })
+      expect(storyPresentationActive.value).toBe(false)
+      expect(exitFullscreen).not.toHaveBeenCalled()
+
+      await act(async () => { enter() })
+      expect(exitFullscreen).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true })
+      Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true })
     }
   })
 

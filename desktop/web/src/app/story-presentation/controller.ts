@@ -203,6 +203,8 @@ export async function togglePresentationFullScreen(): Promise<void> {
   try {
     await document.documentElement.requestFullscreen()
     enteredFullScreen = true
+    // The presentation ended while the window was still asking: leave again.
+    if (!active.peek()) exitFullScreen()
   } catch {
     // The window refused (no user gesture, or not allowed): presenting goes on in the window.
   }
@@ -252,7 +254,7 @@ function applyStep({ view }: PresentedStep): void {
   const labels = savedViewPlantLabels(currentDesign.peek(), view.id) ?? currentPlantDisplay.peek().labels
   setStoryPresentationOverrides(stepOverrides(view, mapLayers.peek(), labels))
   commands.layers.presentLayers(view.visible_layers.scene_layers)
-  commands.speciesFocus.focus(view.highlighted.species[0] ?? null)
+  commands.speciesFocus.focus(plantedSpeciesToFocus(view))
   goToSavedView(view.id, reducedMotionOverride === undefined ? {} : { reducedMotion: reducedMotionOverride })
 }
 
@@ -275,6 +277,16 @@ export function stepOverrides(view: SavedView, layers: MapLayersState, plantLabe
     plantLabels,
     targets: highlightTargets(view),
   }
+}
+
+/**
+ * The step's first highlighted species that still has plants. The runtime
+ * keeps the current focus for a species with no plants, which would carry the
+ * previous step's (or the user's) focus into this one.
+ */
+function plantedSpeciesToFocus(view: SavedView): string | null {
+  const plants = currentCanvasQuerySurface.peek()?.getSceneSnapshot().plants ?? []
+  return view.highlighted.species.find((name) => plants.some((plant) => plant.canonicalName === name)) ?? null
 }
 
 function highlightTargets(view: SavedView): PanelTarget[] {
