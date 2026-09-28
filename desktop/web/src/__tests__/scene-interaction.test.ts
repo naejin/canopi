@@ -6657,6 +6657,36 @@ describe('SceneInteractionSession', () => {
     session.dispose()
   })
 
+  it('keeps a polygon draft at its lon/lat when the session plane re-origins mid-draw', () => {
+    const deps = createInteractionDeps(container, store, camera)
+    const session = createTestSession(deps)
+    session.setTool('polygon')
+    events.pointerDown({ x: 10, y: 10 }, { button: 0 })
+    events.pointerDown({ x: 60, y: 10 }, { button: 0 })
+    const previous = store.sessionPlane
+    // The viewport is 1 px per metre at the origin, so screen (10, 10) is plane (10, 10).
+    const firstVertexGeo = previous.toGeo({ x: 10, y: 10 })
+    const secondVertexGeo = previous.toGeo({ x: 60, y: 10 })
+
+    // Panning 20 km east re-origins the plane; the camera follows it.
+    const transform = (deps.sceneEdits as SceneRuntimeEditCoordinator)
+      .reoriginSessionPlane(previous.toGeo({ x: 20_000, y: 0 }))!
+    expect(transform).not.toBeNull()
+    camera.reprojectViewport(transform)
+    expect(store.sessionPlane).not.toBe(previous)
+
+    events.pointerDown({ x: 60, y: 50 }, { button: 0 })
+    events.keyDown({ key: 'Enter' })
+
+    const zone = store.persisted.zones[0]!
+    const plane = store.sessionPlane
+    const near = (geo: { lon: number; lat: number }) => ({ lon: expect.closeTo(geo.lon, 8), lat: expect.closeTo(geo.lat, 8) })
+    expect(plane.toGeo(zone.points[0]!)).toEqual(near(firstVertexGeo))
+    expect(plane.toGeo(zone.points[1]!)).toEqual(near(secondVertexGeo))
+    expect(plane.toGeo(zone.points[2]!)).toEqual(near(plane.toGeo(camera.screenToWorld({ x: 60, y: 50 }))))
+    session.dispose()
+  })
+
   it('undoes and redoes polygonal zone draft vertices without dirtying the scene', () => {
     const onSceneEditCommit = vi.fn()
     const deps = createInteractionDeps(container, store, camera, { onSceneEditCommit })

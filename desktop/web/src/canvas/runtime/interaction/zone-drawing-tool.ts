@@ -1,6 +1,7 @@
 import { computeSelectionRect } from '../../operations'
 import type { WorkspaceCameraFrameReader } from '../camera'
 import type { SceneDesignObjectSelection, ScenePoint, SceneStateReader } from '../scene'
+import type { SessionPlane } from '../../session-plane'
 import { isSceneObjectGroupMemberTarget } from '../scene'
 import type {
   SceneEditCoordinator,
@@ -87,6 +88,20 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   let polygonDraftVertices: ScenePoint[] = []
   let polygonActiveWorld: ScenePoint | null = null
   let polygonRedoVertices: ScenePoint[] = []
+  // The plane the draft's metres belong to. A draft outlives a re-origin (it
+  // is not scene state), so its vertices follow the plane through lon/lat.
+  let polygonDraftPlane: SessionPlane | null = null
+
+  function syncPolygonDraftPlane(): void {
+    const plane = context.getSceneStore().sessionPlane
+    const previous = polygonDraftPlane
+    polygonDraftPlane = plane
+    if (previous === null || previous === plane) return
+    const move = (point: ScenePoint): ScenePoint => plane.toPlane(previous.toGeo(point))
+    polygonDraftVertices = polygonDraftVertices.map(move)
+    polygonRedoVertices = polygonRedoVertices.map(move)
+    if (polygonActiveWorld) polygonActiveWorld = move(polygonActiveWorld)
+  }
 
   function beginDrag(mode: DragZoneMode, world: ScenePoint): void {
     if (!isZonesLayerOpen()) return
@@ -170,6 +185,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       cancelPolygonDraft()
       return
     }
+    syncPolygonDraftPlane()
     const snapped = context.applySnapping(world)
     activeDrag = null
     zoneMeasurements.hide()
@@ -206,12 +222,14 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function updatePolygonPointerMove(rawWorld: ScenePoint, keep45 = false): void {
+    syncPolygonDraftPlane()
     polygonActiveWorld = constrainPolygonPoint(context.applySnapping(rawWorld), keep45)
     polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
     updateDraftPolygonMeasurements()
   }
 
   function handlePolygonKeyDown(event: KeyboardEvent): boolean {
+    syncPolygonDraftPlane()
     const hasDraftVertices = polygonDraftVertices.length > 0
     const hasRedoVertices = polygonRedoVertices.length > 0
     if (!hasDraftVertices && !hasRedoVertices) return false
@@ -247,6 +265,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
       cancelPolygonDraft()
       return
     }
+    syncPolygonDraftPlane()
     context.sceneEdits.run('interaction-polygon', (tx) => {
       let zoneId: string | null = null
       tx.mutate((draft) => {
@@ -270,6 +289,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function undoPolygonDraft(): boolean {
+    syncPolygonDraftPlane()
     const removed = polygonDraftVertices[polygonDraftVertices.length - 1]
     if (!removed) return false
     polygonRedoVertices = [...polygonRedoVertices, removed]
@@ -288,6 +308,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
   }
 
   function redoPolygonDraft(): boolean {
+    syncPolygonDraftPlane()
     const restored = polygonRedoVertices[polygonRedoVertices.length - 1]
     if (!restored) return false
     polygonRedoVertices = polygonRedoVertices.slice(0, -1)
@@ -305,6 +326,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
     polygonDraftVertices = []
     polygonActiveWorld = null
     polygonRedoVertices = []
+    polygonDraftPlane = null
     polygonDraftOverlay.hide()
     if (hadDraft) zoneMeasurements.hide()
     if (hadTransientHistory) context.notifyTransientHistoryChange()
@@ -360,6 +382,7 @@ export function createZoneDrawingTool(context: ZoneDrawingToolContext): ZoneDraw
 
   function refreshViewportDependent(): boolean {
     if (polygonDraftVertices.length === 0) return false
+    syncPolygonDraftPlane()
     polygonDraftOverlay.update(polygonDraftVertices, polygonActiveWorld, context.camera)
     updateDraftPolygonMeasurements()
     return true
