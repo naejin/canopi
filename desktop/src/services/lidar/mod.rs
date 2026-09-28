@@ -919,14 +919,54 @@ impl LidarLibrary {
         }
     }
 
+    /// Cancel from the UI. Sets the job's flag on the caller's thread, a
+    /// bounded in-memory step, and moves the row update onto the executor's
+    /// `UserData` lane: the synchronous cancel commands must never wait for
+    /// the catalogue lock a running import or deletion holds. The flag is
+    /// registered before a job's receipt is returned, so a job that has not
+    /// started yet finds it set; the job settles its own row either way.
+    pub fn signal_cancel(&self, job_id: &str) {
+        self.set_cancel_flag(job_id);
+        let Ok(executor) = self.executor() else {
+            return;
+        };
+        let library = self.clone();
+        let job_id = job_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = executor
+                .run(
+                    crate::native_operation::NativeOperationClass::UserData,
+                    "lidar cancel job",
+                    move || {
+                        library.mark_job_cancelled(&job_id);
+                        Ok(())
+                    },
+                )
+                .await
+            {
+                tracing::warn!(error = %error, "cancelled job row left to the job's own settlement");
+            }
+        });
+    }
+
+    /// Cancel from inside library work that already runs on the executor
+    /// (deleting an item): flag and rows together.
     pub fn cancel_job(&self, job_id: &str) {
-        // Bounded in-memory signal delivery; the running job observes the
-        // flag between steps and kills its engine processes.
+        self.set_cancel_flag(job_id);
+        self.mark_job_cancelled(job_id);
+    }
+
+    fn set_cancel_flag(&self, job_id: &str) {
+        // The running job observes the flag between steps and kills its
+        // engine processes.
         if let Ok(flags) = self.inner.cancel_flags.lock()
             && let Some(flag) = flags.get(job_id)
         {
             flag.store(true, Ordering::Relaxed);
         }
+    }
+
+    fn mark_job_cancelled(&self, job_id: &str) {
         if let Ok(connection) = self.catalogue() {
             let _ = connection.execute(
                 "UPDATE lidar_import_jobs
@@ -1514,6 +1554,38 @@ mod tests {
     }
 
     use super::*;
+
+    /// The UI cancel path is what the synchronous cancel commands call: it
+    /// must return while a job holds the catalogue, or Cancel would block the
+    /// main thread behind the very work it is trying to stop.
+    #[test]
+    fn signalling_a_cancel_never_waits_for_the_catalogue_lock() {
+        let root = std::env::temp_dir().join(super::new_id("canopi-cancel-signal"));
+        let library = LidarLibrary::open(&root).unwrap();
+        library.attach_executor(crate::native_operation::NativeOperationExecutor::production());
+        let flag = library.register_cancel("job-held");
+
+        let held = library.catalogue().unwrap();
+        let (done, signalled) = std::sync::mpsc::channel();
+        let signaller = library.clone();
+        std::thread::spawn(move || {
+            signaller.signal_cancel("job-held");
+            let _ = done.send(());
+        });
+        assert!(
+            signalled
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .is_ok(),
+            "signal_cancel blocked on the catalogue lock"
+        );
+        assert!(
+            flag.load(Ordering::Relaxed),
+            "the job's flag is set at once"
+        );
+        drop(held);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     fn row_count(connection: &Connection, table: &str) -> i64 {
         connection

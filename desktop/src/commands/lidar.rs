@@ -80,17 +80,19 @@ pub async fn lidar_delete_item(
 }
 
 /// Bounded cancellation signal delivery; must bypass queued executor work so
-/// a busy Local class cannot make Cancel unresponsive.
+/// a busy Local class cannot make Cancel unresponsive. Only the in-memory
+/// flag is set here; the job row is updated on the executor.
 #[tauri::command]
 pub fn lidar_cancel_import(library: State<'_, LidarLibrary>, job_id: String) {
-    library.cancel_job(&job_id);
+    library.signal_cancel(&job_id);
 }
 
 /// Bounded cancellation signal delivery; must bypass queued executor work so
-/// a busy Local class cannot make Cancel unresponsive.
+/// a busy Local class cannot make Cancel unresponsive. Only the in-memory
+/// flag is set here; the job row is updated on the executor.
 #[tauri::command]
 pub fn lidar_cancel_analysis_job(library: State<'_, LidarLibrary>, job_id: String) {
-    library.cancel_job(&job_id);
+    library.signal_cancel(&job_id);
 }
 
 /// Create a definition of a registered analysis and start its first run.
