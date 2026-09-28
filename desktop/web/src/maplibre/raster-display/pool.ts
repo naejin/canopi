@@ -182,14 +182,28 @@ export class RasterWorkerPool {
       else waiter.reject(new Error(reply.error))
     }
     worker.onerror = (event) => {
-      // A lane that crashed cannot answer; fail its work instead of hanging it.
+      // A lane that crashed cannot answer; fail its work instead of hanging it,
+      // then replace it so later tiles do not keep landing on a dead worker.
       lane.broken = new Error(event.message || 'Raster worker lane failed')
       for (const waiter of lane.pending.values()) waiter.reject(lane.broken)
       lane.pending.clear()
+      this.replaceLane(lane)
     }
     const budget = Math.max(1, Math.floor(this.options.budgetBytes / this.options.lanes))
     void this.post(lane, { id: 0, op: 'init', budgetBytes: budget }).catch(() => {})
     return lane
+  }
+
+  /** A fresh worker in the crashed lane's slot; its sources reopen on demand. */
+  private replaceLane(lane: Lane): void {
+    if (this.lanes[lane.index] !== lane) return
+    lane.worker.onmessage = null
+    lane.worker.onerror = null
+    lane.worker.terminate()
+    for (const lanes of this.openedIn.values()) lanes.delete(lane.index)
+    recordRaster({ kind: 'lane-restart', detail: `lane ${lane.index} ${lane.broken?.message ?? ''}`.trim() })
+    this.lanes[lane.index] = this.createLane(lane.index)
+    this.dispatch()
   }
 
   private post<T>(lane: Lane, request: RasterWorkerRequest, transfer: Transferable[] = []): Promise<T> {

@@ -111,4 +111,27 @@ describe('raster display worker pool', () => {
     created[0]!.onerror?.({ message: 'wasm trap' } as ErrorEvent)
     await expect(pending).rejects.toThrow('wasm trap')
   })
+
+  it('replaces a crashed lane so later tiles render instead of failing forever', async () => {
+    const { instance, created } = pool(1, 1)
+    const client = instance.acquire()
+    const source = await client.openCog('asset://localhost/a.tif')
+    const pending = source.renderTilePNG(8, 0, 0).catch((error: unknown) => error)
+    await settle()
+    created[0]!.onerror?.({ message: 'wasm trap' } as ErrorEvent)
+    await pending
+    expect(created[0]!.terminated).toBe(true)
+    expect(created).toHaveLength(2)
+    expect(instance.laneCount).toBe(1)
+
+    // The source is reopened in the new lane and its next tile renders there.
+    const next = source.renderTilePNG(8, 1, 0)
+    await settle()
+    const lane = created[1]!
+    expect(lane.requests.some((request) => request.op === 'open')).toBe(true)
+    lane.answer(lane.renders()[0]!)
+    expect(await next).toBeInstanceOf(Uint8Array)
+    client.dispose()
+    expect(lane.terminated).toBe(true)
+  })
 })
