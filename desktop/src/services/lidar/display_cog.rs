@@ -788,7 +788,7 @@ impl LidarLibrary {
 }
 
 #[cfg(test)]
-mod gdal_tests {
+mod library_tests {
     use super::*;
     use common_types::library::RasterQuantity;
 
@@ -836,7 +836,6 @@ mod gdal_tests {
     /// compressed, overviewed derivative per source, top-first, each keeping
     /// its source's own NoData rule; the numeric generation is untouched.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn published_sources_display_from_overviewed_derivatives_in_priority_order() {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-cog"));
         std::fs::create_dir_all(&root).unwrap();
@@ -980,7 +979,6 @@ mod chunk_display_tests {
     /// chunks: distant coverage produces two small parts, never one raster
     /// spanning the empty space between them.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn distant_result_chunks_display_as_separate_parts_without_the_gap() {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-chunks"));
         std::fs::create_dir_all(&root).unwrap();
@@ -1049,7 +1047,6 @@ mod chunk_display_tests {
     /// state; the numeric generation is untouched and a retry succeeds once
     /// space returns.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_failed_derivative_write_is_retryable_and_publishes_nothing_partial() {
         let root = std::env::temp_dir().join(catalogue::new_id("canopi-display-capacity"));
         std::fs::create_dir_all(&root).unwrap();

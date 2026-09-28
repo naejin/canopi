@@ -8,7 +8,7 @@
 //! Assets are content-addressed and immutable; a reader never deletes one, and
 //! a cancelled or failed job only removes files it staged itself.
 
-use super::engine::{ConversionDeadline, RasterEngine, RasterGeoref, RasterInput};
+use super::engine::{RasterEngine, RasterGeoref, RasterInput};
 use super::grid::RasterGrid;
 use super::paths::LidarPaths;
 use super::prepared_raster::{self, PreparedRaster};
@@ -87,14 +87,11 @@ pub(super) fn write_cog_asset(
         ));
     }
     let staged = scratch.join(format!("{stem}.tif"));
-    // Bounded chunk conversion keeps the ordinary finite deadline; only
-    // whole-source controlled conversion may outlive it (R49).
     let created = engine.write_controlled_cog(
         RasterInput::Samples { grid, values },
         &staged,
         Some(RasterGeoref { grid, crs: crs_wkt }),
         nodata,
-        ConversionDeadline::Bounded,
         cancel,
     );
     if let Err(error) = created {
@@ -128,7 +125,6 @@ pub(super) fn write_job_source_cog(
         &staged,
         Some(RasterGeoref { grid, crs: crs_wkt }),
         nodata,
-        ConversionDeadline::WholeSource,
         cancel,
     );
     if let Err(error) = created {
@@ -278,7 +274,7 @@ mod tests {
 
     #[test]
     fn cog_asset_size_must_match_the_grid() {
-        let engine = super::super::gdal_engine::GdalEngine::new();
+        let engine = super::super::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = scratch_dir("size");
         let paths = library_paths(&dir);
@@ -299,9 +295,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn chunk_cog_round_trips_through_gdal_and_the_native_reader() {
-        let engine = super::super::gdal_engine::GdalEngine::new();
+    fn chunk_cog_round_trips_through_the_engine_and_the_native_reader() {
+        let engine = super::super::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = scratch_dir("roundtrip");
         let paths = library_paths(&dir);

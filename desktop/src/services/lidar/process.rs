@@ -1,12 +1,13 @@
-//! Bounded runner for the managed child processes the Data library owns.
+//! Bounded runner for the managed child processes the Data library owns: the
+//! pinned GeoLibre CLI in production, the GDAL oracle in the comparison lane.
 //!
 //! The LiDAR subsystem never shells out ad hoc: a managed executable runs with
 //! a fixed argument vector (no shell), its output captured in files under the
 //! library's own log directory (never the shared system temp directory), a
-//! cap on captured output, a finite deadline unless the caller exempts one
-//! whole-source conversion, and kill-and-reap while a cancellation flag is
-//! set. Captured-output files carry a per-process tag so a later process can
-//! sweep leftovers without touching children that are still running.
+//! cap on captured output, a finite deadline, and kill-and-reap while a
+//! cancellation flag is set. Captured-output files carry a per-process tag so
+//! a later process can sweep leftovers without touching children that are
+//! still running.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};

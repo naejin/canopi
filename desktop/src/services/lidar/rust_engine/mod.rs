@@ -22,8 +22,8 @@ mod swiss;
 mod tiff;
 
 use super::engine::{
-    ConversionDeadline, RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics,
-    bounds_of, check_cancel, grid_corners,
+    RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics, bounds_of,
+    check_cancel, grid_corners,
 };
 use super::grid::RasterGrid;
 use super::import::validate_working_grid;
@@ -268,7 +268,6 @@ impl RasterEngine for RustRasterEngine {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
-        _deadline: ConversionDeadline,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         let prepared = Self::prepare(input, georef, nodata, "the raster conversion", cancel)?;
@@ -467,7 +466,6 @@ mod tests {
                     crs: "EPSG:2154",
                 }),
                 Some(-9999.0),
-                ConversionDeadline::Bounded,
                 &cancel(),
             )
             .unwrap();
@@ -510,7 +508,6 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 None,
-                ConversionDeadline::WholeSource,
                 &cancel(),
             )
             .unwrap();
@@ -692,7 +689,6 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 None,
-                ConversionDeadline::Bounded,
                 &cancel(),
             )
             .unwrap_err();
@@ -784,14 +780,7 @@ mod tests {
         let out = dir.join("grid.tif");
         assert!(
             engine
-                .write_controlled_cog(
-                    RasterInput::File(&path),
-                    &out,
-                    None,
-                    None,
-                    ConversionDeadline::Bounded,
-                    &cancel()
-                )
+                .write_controlled_cog(RasterInput::File(&path), &out, None, None, &cancel())
                 .unwrap_err()
                 .contains("no coordinate system")
         );
@@ -804,7 +793,6 @@ mod tests {
                     crs: "EPSG:3857",
                 }),
                 None,
-                ConversionDeadline::Bounded,
                 &cancel(),
             )
             .unwrap();

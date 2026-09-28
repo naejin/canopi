@@ -48,7 +48,7 @@ Check every section in light and dark, English and French, and a 720 px tall win
 3. Analyze… › Slope on a ground-elevation item: the result nests under its source with its unit; Details show Calculated from, processing history and Run again with changes….
 4. Refresh a result: it reruns in place with the same item, the earlier run stays in the processing history and every Design showing it sees the new result. An Out of date badge names its reason (source, recipe or tool changed).
 5. Data library dialog: the footer states the size on this computer and Show in folder opens the folder; Remove from Design keeps the item in the library; Delete everywhere warns and removes it.
-6. Without GDAL or the GeoLibre tool on the machine: import and new runs say they are unavailable by name; saved results still display.
+6. Without the GeoLibre tool on the machine: import still works (the raster engine is built in), new runs say the tool is unavailable by name, and saved results still display.
 7. Alt ↑ and Alt ↓ reorder Site data rows and the change survives reopening the Design.
 
 ## Planning panels

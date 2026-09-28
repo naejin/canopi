@@ -33,7 +33,7 @@ Rules for agents working in Canopi. Optimise for user work preserved, reviewable
 | Shared contracts (`common-types/`) | `cd desktop/web && npm run gen:types && npm run check:types` |
 | Frontend | `cd desktop/web && npx tsc --noEmit && npx vitest run --maxWorkers=4 && npm run test:coverage -- --maxWorkers=4 && npm run check:ui && npm run build && npm run build:web` |
 | Species catalog queries | `python3 scripts/species_catalog_contract.py check` and its Python tests |
-| LiDAR services | the GDAL and GeoLibre ignored lanes ([data library](docs/guides/data-library.md)) |
+| LiDAR services | the GeoLibre ignored lane and the engine comparison lane ([data library](docs/guides/data-library.md)) |
 | Docs | `python3 scripts/check_docs.py` (validator changes: `python3 -m unittest scripts.test_check_docs`) |
 
 Docs-only changes skip code gates; say so in the handoff.

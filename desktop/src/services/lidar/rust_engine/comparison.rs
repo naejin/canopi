@@ -8,9 +8,7 @@
 //! tolerances stated beside each assertion. Run with
 //! `cargo test -p canopi-desktop --lib rust_engine::comparison -- --ignored --nocapture`.
 
-use super::super::engine::{
-    ConversionDeadline, RasterEngine, RasterGeoref, RasterInput, RasterProbe,
-};
+use super::super::engine::{RasterEngine, RasterGeoref, RasterInput, RasterProbe};
 use super::super::gdal_engine::{GdalEngine, GdalProgram};
 use super::super::grid::RasterGrid;
 use super::super::prepared_raster::PreparedRaster;
@@ -257,7 +255,6 @@ fn compare_source(
         &gdal_cog,
         Some(georef),
         nodata,
-        ConversionDeadline::Bounded,
         &c,
     )
     .expect("GDAL writes the controlled COG");
@@ -266,7 +263,6 @@ fn compare_source(
         &rust_cog,
         Some(georef),
         nodata,
-        ConversionDeadline::Bounded,
         &c,
     )
     .expect("the Rust engine writes the controlled COG");

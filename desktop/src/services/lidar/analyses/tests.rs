@@ -1045,7 +1045,7 @@ fn raster(
     height: u32,
     origin_x: f64,
 ) -> PathBuf {
-    let engine = crate::services::lidar::gdal_engine::GdalEngine::new();
+    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
     let raw = root.join(format!("{name}.raw"));
     import::write_f32_raw(&raw, values).unwrap();
     let source = root.join(format!("{name}.tif"));
@@ -1170,7 +1170,7 @@ fn lon_lat(easting: f64, northing: f64) -> (f64, f64) {
 /// computed in. The plane rises one metre per metre, so its slope is 45° and
 /// 100 % wherever it has neighbours.
 #[test]
-#[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
+#[ignore = "requires the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
 fn inspection_reads_a_published_slope_in_both_units() {
     let root = scratch_root("inspection");
     let library = LidarLibrary::open(&root).unwrap();
@@ -1219,7 +1219,7 @@ fn inspection_reads_a_published_slope_in_both_units() {
 /// centres invalid, marks quality only where the whole 5×5 input was valid,
 /// records what ran, and a second analysis is a separate result.
 #[test]
-#[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
+#[ignore = "requires the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
 fn geolibre_slope_matches_the_analytic_surface_across_a_chunk_seam() {
     let root = scratch_root("seam");
     let library = LidarLibrary::open(&root).unwrap();
@@ -1368,7 +1368,7 @@ fn running(executable: &Path) -> usize {
 /// child, publishes nothing and leaves no scratch behind.
 #[cfg(target_os = "linux")]
 #[test]
-#[ignore = "requires GDAL and the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
+#[ignore = "requires the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
 fn cancelling_a_geolibre_run_kills_its_child_and_publishes_nothing() {
     let root = scratch_root("cancel-child");
     let library = LidarLibrary::open(&root).unwrap();
@@ -1414,7 +1414,6 @@ fn cancelling_a_geolibre_run_kills_its_child_and_publishes_nothing() {
 }
 
 #[test]
-#[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
 fn the_run_rechecks_the_grid_with_gdal() {
     let root = scratch_root("grid-check");
     let library = LidarLibrary::open(&root).unwrap();
@@ -1423,7 +1422,7 @@ fn the_run_rechecks_the_grid_with_gdal() {
     windowed::check_projected_metre_grid(&library, &AtomicBool::new(false), &projected)
         .expect("a projected metre plane is eligible");
     let geographic = root.join("geographic.tif");
-    let engine = crate::services::lidar::gdal_engine::GdalEngine::new();
+    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
     let raw = root.join("geographic.raw");
     import::write_f32_raw(&raw, &values).unwrap();
     import::raw_to_tif(
@@ -1451,7 +1450,7 @@ fn the_run_rechecks_the_grid_with_gdal() {
 /// A run cancelled before its first window publishes nothing and leaves no
 /// scratch or unpublished rows.
 #[test]
-#[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
+#[ignore = "requires the pinned GeoLibre CLI (CANOPI_GEOLIBRE_BIN)"]
 fn a_cancelled_run_publishes_nothing() {
     let root = scratch_root("cancel-early");
     let library = LidarLibrary::open(&root).unwrap();
@@ -1487,7 +1486,6 @@ fn a_cancelled_run_publishes_nothing() {
 /// Inspection never answers from a generation the caller did not aim at, even
 /// when the head moves while the value is being read.
 #[test]
-#[ignore = "requires GDAL on PATH; generated small plane, no private fixtures"]
 fn acceptance_inspection_rejects_head_changes_during_value_and_nodata_reads() {
     for mode in ["value", "hole", "early-nodata"] {
         let root = scratch_root(&format!("acceptance-inspect-{mode}"));
@@ -1597,7 +1595,7 @@ fn files(path: &Path, output: &mut Vec<(PathBuf, Vec<u8>)>) {
 /// A refresh that fails mid-write keeps the published result and its bytes;
 /// running the job again without the fault refreshes the same item in place.
 #[test]
-#[ignore = "requires GDAL on PATH and the pinned GeoLibre CLI; generated two-block plane, no private fixtures"]
+#[ignore = "requires the pinned GeoLibre CLI; generated two-block plane, no private fixtures"]
 fn acceptance_a_failed_refresh_keeps_the_published_result() {
     for fault in ["capacity", "write"] {
         let root = scratch_root(&format!("acceptance-midwrite-{fault}"));
@@ -1667,7 +1665,7 @@ fn acceptance_a_failed_refresh_keeps_the_published_result() {
 /// Through the real commands: create two results, refresh one in place, and
 /// retry a failed run with its saved identity.
 #[test]
-#[ignore = "requires GDAL on PATH and the pinned GeoLibre CLI; real published plane and Tauri-managed command state"]
+#[ignore = "requires the pinned GeoLibre CLI; real published plane and Tauri-managed command state"]
 fn acceptance_rerun_command_refreshes_in_place_and_retries_with_saved_identity() {
     use crate::native_operation::NativeOperationExecutor;
     use tauri::Manager;

@@ -283,8 +283,9 @@ pub struct LibraryItemSummary {
 /// The engines library work depends on.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct LibraryEngines {
-    /// GDAL command-line tools: import, display and inspection.
-    pub gdal: LidarEngineStatus,
+    /// The in-process raster engine: import, display and inspection. Always
+    /// available; its version names the crates it is built from.
+    pub raster: LidarEngineStatus,
     /// The pinned GeoLibre CLI sidecar: new analysis runs. Published results
     /// stay readable whatever this reports.
     pub geolibre: LidarEngineStatus,

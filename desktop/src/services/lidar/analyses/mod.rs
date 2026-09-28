@@ -40,9 +40,10 @@ const CRS_UNKNOWN: &str = "unknown";
 
 /// Classify a stored CRS for offers.
 ///
-/// Import records the class of the WKT GDAL reported, so offers are computed
-/// from the catalogue on every poll without a GDAL call; a run rechecks the
-/// stored raster with GDAL, which stays the projection authority.
+/// Import records the class of the WKT the raster engine reported, so offers
+/// are computed from the catalogue on every poll without a raster read; a run
+/// rechecks the stored raster with the engine, which stays the projection
+/// authority.
 pub(crate) fn crs_class(wkt: &str) -> &'static str {
     let upper = wkt.trim().to_ascii_uppercase();
     if upper.is_empty() {

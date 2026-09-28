@@ -62,7 +62,7 @@ export function librarySnapshot(items: LibraryItemSummary[], geolibre = true): L
   return {
     items,
     engines: {
-      gdal: { available: true, version: '3.8.4', detail: null },
+      raster: { available: true, version: 'canopi-raster-engine (test)', detail: null },
       geolibre: geolibre
         ? { available: true, version: 'geolibre-cli 1.5.3', detail: null }
         : { available: false, version: null, detail: 'not installed' },

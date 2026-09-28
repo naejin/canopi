@@ -1,7 +1,7 @@
 //! Import staging and publication for source items.
 //!
 //! Each selected source is probed, validated and prepared as a retained COG
-//! whose valid cells and range are measured once. GDAL performs format
+//! whose valid cells and range are measured once. The raster engine performs format
 //! conversion and georeferencing only. Catalogue locks are held only for short
 //! reads and the publish transaction — never during raster computation.
 //! Publication is atomic: promoted assets, the ordered members and the item's
@@ -170,7 +170,7 @@ pub fn stage_import(
     for source_path in source_paths {
         check_cancel(cancel)?;
         // A source this batch cannot use refuses the whole batch, and the
-        // refusal names the user's own file: "gdalinfo failed on a hashed copy"
+        // refusal names the user's own file: "the probe failed on a hashed copy"
         // is not an answer anyone can act on.
         let filename = source_path
             .file_name()
@@ -1423,8 +1423,7 @@ pub use super::engine::check_cancel;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::lidar::engine::{ConversionDeadline, RasterInput};
-    use crate::services::lidar::gdal_engine::{GdalEngine, GdalProgram};
+    use crate::services::lidar::engine::RasterEngine;
     use std::sync::atomic::Ordering;
 
     #[test]
@@ -1552,7 +1551,7 @@ mod tests {
     }
 
     fn write_staging_fixture(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         dir: &Path,
         name: &str,
         width: u32,
@@ -1585,14 +1584,13 @@ mod tests {
         tif
     }
 
-    /// The streamed production staging path must persist exactly what the
-    /// retained dense GDAL conversion produced, for every special value the
-    /// Float32 contract covers, and must really decode through the native
-    /// tiled reader rather than a full-buffer fallback.
+    /// The streamed production staging path must persist exactly the authored
+    /// values, for every special value the Float32 contract covers and for an
+    /// integer source through its cast, and must really decode through the
+    /// native tiled reader rather than a full-buffer fallback.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn staged_source_assets_match_the_gdal_conversion_oracle() {
-        let engine = GdalEngine::new();
+    fn staged_source_assets_match_the_authored_values() {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-staging-oracle"));
         let library = LidarLibrary::open(&root).expect("library opens");
@@ -1609,22 +1607,27 @@ mod tests {
         let (width, height) = (60u32, 45u32);
         let float_source =
             write_staging_fixture(&engine, &root, "oracle-f32", width, height, -9999.0);
+        // The same values as Int16 (NaN to 0, infinities saturated), the cast
+        // an integer source carries into Float32.
         let int_source = root.join("oracle-int16.tif");
-        engine
-            .run(
-                GdalProgram::Translate,
-                &[
-                    "-q".to_string(),
-                    "-ot".to_string(),
-                    "Int16".to_string(),
-                    "-co".to_string(),
-                    "TILED=YES".to_string(),
-                    float_source.display().to_string(),
-                    int_source.display().to_string(),
-                ],
-                Some(&cancel),
-            )
-            .expect("int16 fixture converts");
+        let int_values: Vec<i16> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| staged_value(x, y) as i16))
+            .collect();
+        wbgeotiff::GeoTiffWriter::new(width, height, 1)
+            .layout(wbgeotiff::WriteLayout::Tiled {
+                tile_width: 256,
+                tile_height: 256,
+            })
+            .geo_transform(wbgeotiff::GeoTransform::north_up(
+                0.0,
+                1.0,
+                f64::from(height),
+                -1.0,
+            ))
+            .epsg(3857)
+            .no_data(-9999.0)
+            .write_i16(&int_source, &int_values)
+            .expect("int16 fixture writes");
 
         use crate::services::lidar::prepared_raster::observability;
         observability::reset();
@@ -1653,8 +1656,19 @@ mod tests {
             assert_eq!(source.nodata, Some(-9999.0));
             assert_eq!(source.size_bytes, std::fs::metadata(fixture).unwrap().len());
 
-            let oracle =
-                raw_f32_bytes(&engine, fixture, width, height, &cancel).expect("oracle conversion");
+            // The authored values are the independent oracle: the Float32
+            // fixture verbatim, the Int16 one through the cast it was written with.
+            let oracle: Vec<u8> = (0..height)
+                .flat_map(|y| (0..width).map(move |x| staged_value(x, y)))
+                .map(|value| {
+                    if fixture == &int_source {
+                        f32::from(value as i16)
+                    } else {
+                        value
+                    }
+                })
+                .flat_map(|value| value.to_le_bytes())
+                .collect();
             let oracle_mask = grid::valid_mask_from_f32_raw_checked(
                 width,
                 height,
@@ -1726,7 +1740,7 @@ mod tests {
 
     #[test]
     fn staging_without_a_measurable_scratch_directory_fails_by_name() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let root = std::env::temp_dir().join(new_id("canopi-absent-scratch"));
         let missing = root.join("absent-scratch");
         let error = stage_source_samples(
@@ -1751,9 +1765,8 @@ mod tests {
     /// A failed conversion must fail staging, retain nothing durable and leave
     /// no partial asset behind.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn staged_output_write_failure_removes_partial_assets() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-write-failure"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1815,12 +1828,12 @@ mod tests {
     }
 
     /// The import caller charges the retained source COG, its conversion
-    /// scratch and the shared reserve together, and rejects before any GDAL
+    /// scratch and the shared reserve together, and rejects before any engine
     /// work when that combined footprint does not fit.
     #[test]
     fn staged_source_rejects_an_insufficient_combined_budget_before_preparation() {
         use crate::services::lidar::paths::capacity_probe;
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-combined-budget"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1836,7 +1849,7 @@ mod tests {
         )
         .unwrap();
         let _guard = capacity_probe::override_available(required - 1);
-        // A missing input never reaches GDAL: the capacity error proves the
+        // A missing input never reaches the engine: the capacity error proves the
         // combined check ran before the conversion.
         let error = stage_source_samples(
             &engine,
@@ -1873,10 +1886,9 @@ mod tests {
     /// byte less still rejects: the boundary is inclusive at the requirement
     /// and one retained COG is the only durable output.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn staged_source_admits_exactly_the_combined_requirement() {
         use crate::services::lidar::paths::capacity_probe;
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let dir = std::env::temp_dir().join(new_id("canopi-combined-boundary"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1962,7 +1974,7 @@ mod tests {
     /// members on the layer lattice without depending on probe defaults.
     #[allow(clippy::too_many_arguments)]
     fn write_placed_fixture(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         dir: &Path,
         name: &str,
         origin_x: f64,
@@ -1995,84 +2007,6 @@ mod tests {
         tif
     }
 
-    /// Cancellation settles owned subprocess work promptly, not eventually.
-    ///
-    /// The resource contract bounds this at five seconds because a cancelled
-    /// import must release its slot and its scratch without the user waiting on
-    /// an abandoned conversion. The engine polls the flag every 50 ms and then
-    /// kills and reaps the child, so this asserts on measured wall-clock elapsed
-    /// time rather than on the poll interval the code happens to use: the
-    /// timeout ceiling would be 600 seconds, so a pass here only means the
-    /// cancel path ran, and the elapsed bound is what proves it.
-    #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn a_cancelled_engine_conversion_settles_within_the_contract_bound() {
-        let root = std::env::temp_dir().join(new_id("canopi-cancel-settle"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
-
-        // Long enough that the conversion is still running when the cancel
-        // lands, and cheap to build: 128 MiB of Float32, written in whole
-        // little-endian words through one buffer rather than value by value.
-        let grid = RasterGrid {
-            width: 8_192,
-            height: 4_096,
-            geotransform: [0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
-        };
-        let raw = root.join("cancel.raw");
-        let total = grid.width as usize * grid.height as usize;
-        let words: Vec<u8> = (0..total).flat_map(|_| 1.0f32.to_le_bytes()).collect();
-        std::fs::write(&raw, &words).expect("raw writes");
-        drop(words);
-
-        let cancel = AtomicBool::new(false);
-        let source = root.join("cancel.tif");
-        let output = root.join("cancel-out.tif");
-
-        let settled = std::sync::Arc::new(std::sync::Mutex::new(None));
-        let handle = {
-            let engine = engine.clone();
-            let cancel = std::sync::Arc::new(AtomicBool::new(false));
-            let cancel_for_thread = cancel.clone();
-            let settled = settled.clone();
-            std::thread::spawn(move || {
-                // The engine call itself is the owned work; the caller sets the
-                // flag from outside, exactly as the UI's cancel action does.
-                let started = std::time::Instant::now();
-                let outcome = engine.write_controlled_cog(
-                    RasterInput::File(&source),
-                    &output,
-                    Some(RasterGeoref {
-                        grid: &grid,
-                        crs: "EPSG:3857",
-                    }),
-                    None,
-                    ConversionDeadline::Bounded,
-                    cancel_for_thread.as_ref(),
-                );
-                *settled.lock().unwrap() = Some((started.elapsed(), outcome.is_err()));
-            })
-        };
-
-        // Let the conversion start, then cancel it.
-        std::thread::sleep(std::time::Duration::from_millis(250));
-        cancel.store(true, Ordering::Relaxed);
-        handle.join().expect("the engine thread joins");
-
-        let (elapsed, was_error) = settled.lock().unwrap().expect("the run settled");
-        assert!(
-            was_error,
-            "a cancelled conversion must report an error rather than a success"
-        );
-        assert!(
-            elapsed < std::time::Duration::from_secs(5),
-            "cancellation settled in {elapsed:?}, above the 5 second contract bound"
-        );
-        println!("cancellation settled in {elapsed:?}");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// Declared NoData is not data, so it must not enter the source range.
     ///
     /// The range is the physical span a user sees, and a sentinel like -9999
@@ -2081,12 +2015,11 @@ mod tests {
     /// from the source's declared NoData, which keeps valid zero and negative
     /// samples and excludes the sentinel.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn source_range_excludes_declared_nodata_and_keeps_zero_and_negative() {
         let root = std::env::temp_dir().join(new_id("canopi-range-nodata"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
 
         let nodata = -9999.0f32;
@@ -2145,7 +2078,7 @@ mod tests {
     /// The same fixture placed with an explicit CRS declaration.
     #[allow(clippy::too_many_arguments)]
     fn write_crs_fixture(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         dir: &Path,
         name: &str,
         crs: &str,
@@ -2282,9 +2215,8 @@ mod tests {
     /// together: the lattice could not reconcile them and a later read could
     /// not reconcile them either.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_first_batch_refuses_sources_that_disagree_on_the_horizontal_crs() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-first-batch-crs"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2331,9 +2263,8 @@ mod tests {
 
     /// P1-4: an all-NoData source is refused by name before review.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn an_all_nodata_source_is_refused_by_name() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-zero-valid"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2375,9 +2306,8 @@ mod tests {
     /// superseded Add/ReplaceOverlap roles measured a different composition
     /// than the one the snapshot actually replays.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn published_statistics_match_the_reopened_composition() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-published-statistics"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2436,9 +2366,8 @@ mod tests {
     /// coverage and a 0..0 range, because every block was read as if it started
     /// at the member's first pixel.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn source_region_facts_cover_later_blocks() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-region-facts"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2480,9 +2409,8 @@ mod tests {
 
     /// P2-9: a bounded read resolves only the occurrences that can reach it.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_window_resolves_only_the_occurrences_that_can_reach_it() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-bounded-members"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2556,12 +2484,11 @@ mod tests {
     /// left of the anchor: only the occupied chunks may be stored, read and
     /// displayed, and the gap must never be walked.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn sparse_gap_import_stores_only_occupied_chunks() {
         let root = std::env::temp_dir().join(new_id("canopi-gap-run"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let sampler = crate::services::lidar::measurement::Sampler::start();
         let library = LidarLibrary::open(&root).expect("library opens");
@@ -2701,12 +2628,11 @@ mod tests {
     /// file-count ceiling allows, spread across a million-cell gap, imported
     /// as one batch and stored as occupied chunks only.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn sparse_twenty_four_tile_batch_stays_chunk_sized() {
         let root = std::env::temp_dir().join(new_id("canopi-24-tile"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let sampler = crate::services::lidar::measurement::Sampler::start();
         let library = LidarLibrary::open(&root).expect("library opens");
@@ -2836,12 +2762,11 @@ mod tests {
     /// the governing bound is the processing cells the collection proposes,
     /// and two 4x4 sources propose 32.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn admission_admits_a_separated_pair_by_its_own_cells() {
         let root = std::env::temp_dir().join(new_id("canopi-admit-over"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
         let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
@@ -2882,12 +2807,11 @@ mod tests {
     /// depends on it, and nothing is published: the ordered path consults the
     /// policy rather than a hard-coded ceiling of its own.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn admission_refuses_a_pair_over_the_processing_budget() {
         let root = std::env::temp_dir().join(new_id("canopi-admit-budget"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
         let south_west = write_placed_fixture(&engine, &root, "sw", 0.0, 4.0, 4, 4, -9999.0, 3.0);
@@ -2948,12 +2872,11 @@ mod tests {
     /// so a lowered bound stops a copy and a raised one lets it through: no
     /// hidden hard-coded ceiling survives beside the policy.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn the_copy_and_hash_paths_are_governed_by_the_same_policy() {
         let root = std::env::temp_dir().join(new_id("canopi-copy-policy"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let library = LidarLibrary::open(&root).expect("library opens");
         let source =
@@ -3008,7 +2931,7 @@ mod tests {
     /// included, so a read compares without a tolerance.
     #[allow(clippy::too_many_arguments)]
     fn write_oracle_fixture(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         dir: &Path,
         name: &str,
         origin_x: f64,
@@ -3102,10 +3025,9 @@ mod tests {
     /// copy appears, a restart reads the published generation without preparing
     /// anything, and replacement and undo leave the shared asset immutable.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_retained_source_cog_is_the_only_durable_member_payload() {
         use crate::services::lidar::prepared_raster::observability;
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-retained-payload"));
         let _ = std::fs::remove_dir_all(&root);
@@ -3283,9 +3205,8 @@ mod tests {
     /// shared asset another publication already references survives exactly as
     /// it was.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_failed_apply_leaves_a_reused_asset_and_the_head_intact() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-reused-asset"));
         let _ = std::fs::remove_dir_all(&root);
@@ -3417,7 +3338,6 @@ mod tests {
     /// next open; an asset another item references is never touched; a
     /// committed item reads exactly after restart.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_crash_at_any_publication_point_leaves_no_item_or_a_complete_one() {
         use promotion_probe::FaultPoint;
         #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3437,7 +3357,7 @@ mod tests {
             Crash::AfterRenameBeforeCommit,
             Crash::AfterCommit,
         ] {
-            let engine = GdalEngine::new();
+            let engine = crate::services::lidar::rust_engine::RustRasterEngine;
             let cancel = AtomicBool::new(false);
             let root = std::env::temp_dir().join(new_id("canopi-publication-crash"));
             let _ = std::fs::remove_dir_all(&root);

@@ -61,7 +61,7 @@ describe('Import coverage', () => {
     expect(await checkImportCoverage(['/d/a.tif'])).toBeNull()
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    coverage.read.mockRejectedValueOnce(new Error('GDAL is not installed'))
+    coverage.read.mockRejectedValueOnce(new Error('the file is not a readable raster'))
     expect(await checkImportCoverage(['/d/a.tif'])).toBeNull()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()

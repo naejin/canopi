@@ -249,11 +249,7 @@ fn gdal_metadata(xml: &str) -> (f64, f64, Option<String>) {
         match role.as_str() {
             "scale" => scale = value.parse().unwrap_or(1.0),
             "offset" => offset = value.parse().unwrap_or(0.0),
-            "unittype" => {
-                if !value.is_empty() {
-                    unit = Some(value.to_string());
-                }
-            }
+            "unittype" if !value.is_empty() => unit = Some(value.to_string()),
             _ => {}
         }
         rest = &item[close + 7..];

@@ -176,7 +176,7 @@ pub fn library_snapshot(
     Ok(LibrarySnapshot {
         items,
         engines: LibraryEngines {
-            gdal: match engine.version() {
+            raster: match engine.version() {
                 Ok(version) => LidarEngineStatus {
                     available: true,
                     version: Some(version),

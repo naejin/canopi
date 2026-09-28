@@ -778,7 +778,7 @@ pub(super) fn retained_cog(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::lidar::gdal_engine::GdalEngine;
+    use crate::services::lidar::engine::RasterEngine;
     use crate::services::lidar::paths::LidarPaths;
     use crate::services::lidar::raster_assets::write_cog_asset;
     use std::path::{Path, PathBuf};
@@ -817,7 +817,7 @@ mod tests {
 
     #[allow(clippy::too_many_arguments)]
     fn cog_member(
-        engine: &GdalEngine,
+        engine: &dyn RasterEngine,
         paths: &LidarPaths,
         dir: &Path,
         name: &str,
@@ -880,9 +880,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn members_above_and_left_of_the_anchor_resolve_signed_lattice_cells() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let dir = scratch("negative");
         let paths = LidarPaths::open(&dir).unwrap();
         let lattice = lattice();
@@ -971,9 +970,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn ordered_collection_resolves_topmost_valid_without_materializing_anything() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let dir = scratch("ordered-collection");
         let registry = LidarPaths::open(&dir).unwrap();
         let lattice = lattice();
@@ -1064,9 +1062,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn persisted_chunks_are_read_directly_and_absent_chunks_are_invalid() {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let dir = scratch("persisted");
         let paths = LidarPaths::open(&dir).unwrap();
         let lattice = lattice();
@@ -1151,7 +1148,6 @@ mod tests {
     /// A record whose committed file is gone stays an error, and a small window
     /// never opens the records it does not intersect.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn unrelated_records_are_never_opened_for_a_small_window() {
         let dir = scratch("paged-window");
         let library = crate::services::lidar::LidarLibrary::open(&dir).unwrap();

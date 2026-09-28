@@ -1,14 +1,13 @@
-//! The GDAL command-line adapter behind the raster engine seam.
+//! The GDAL command-line oracle of the engine comparison lane (test only).
 //!
-//! Discovers the pinned tool set once (`gdalinfo`, `gdal_translate`,
-//! `gdaltransform` from `CANOPI_LIDAR_GDAL_BIN`, then `PATH`), builds fixed
-//! argument vectors for every operation and runs them through the bounded
-//! child-process runner in `process.rs`. Detection results are cached so a
-//! missing engine degrades to explicit errors instead of repeated PATH scans.
+//! Canopi ships no GDAL and never runs it in production (ADR 0014). This
+//! adapter implements the raster engine seam on `gdalinfo`, `gdal_translate`
+//! and `gdaltransform` found on `PATH`, through the bounded child-process
+//! runner in `process.rs`, so `rust_engine::comparison` can hold the Rust
+//! engine to GDAL's answers on the same inputs. Without GDAL the lane skips.
 
 use super::engine::{
-    ConversionDeadline, RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics,
-    bounds_of,
+    RasterEngine, RasterGeoref, RasterInput, RasterProbe, RasterStatistics, bounds_of,
 };
 #[cfg(test)]
 use super::grid::RasterGrid;
@@ -23,12 +22,6 @@ use std::time::Duration;
 /// file on an unreachable share must not hold one of the two Local slots for
 /// the full conversion deadline; Import coverage runs up to 24 of these.
 const INFO_PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
-/// GDAL's block cache for every engine process.
-///
-/// Matches the resource policy's 128 MiB reserve for decoded raster data, so a
-/// conversion cannot take memory the pipeline has not budgeted.
-pub(super) const GDAL_CACHE_BYTES: u64 = 128 * 1024 * 1024;
-
 #[derive(Debug, Clone)]
 pub struct GdalEngine {
     discovery: ArcDiscovery,
@@ -70,9 +63,8 @@ impl GdalEngine {
         }
     }
 
-    /// Test support: an engine outside any library, capturing output in a
-    /// per-process scratch directory.
-    #[cfg(test)]
+    /// An oracle outside any library, capturing output in a per-process
+    /// scratch directory.
     pub fn new() -> Self {
         let log_dir = std::env::temp_dir().join(format!(
             "canopi-lidar-engine-test-logs-{}",
@@ -82,9 +74,8 @@ impl GdalEngine {
         Self::in_dir(log_dir)
     }
 
-    /// Detect the tool set once per process; detection failures are cached so
-    /// a missing engine degrades to explicit errors instead of repeated PATH
-    /// scans.
+    /// Detect the tool set once per process; a detection failure is cached and
+    /// names the missing tool.
     pub fn discover(&self) -> Result<DiscoveredTools, String> {
         let mut guard = self
             .discovery
@@ -100,15 +91,7 @@ impl GdalEngine {
     }
 
     fn discover_uncached(&self) -> Result<DiscoveredTools, String> {
-        let search_dir = std::env::var_os("CANOPI_LIDAR_GDAL_BIN").map(PathBuf::from);
         let find = |name: &str| -> Result<PathBuf, String> {
-            if let Some(dir) = &search_dir {
-                let candidate = dir.join(name);
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-                return Err(format!("GDAL tool {name} not found in {}", dir.display()));
-            }
             process::which_on_path(name)
                 .ok_or_else(|| format!("GDAL tool {name} not found on PATH"))
         };
@@ -155,21 +138,6 @@ impl GdalEngine {
         self.run_once(&path, args, None, cancel, Some(process_timeout(&program)))
     }
 
-    /// Run the controlled source-conversion call with no elapsed-time ceiling.
-    ///
-    /// Only this call may outlive the common finite deadline: a real large
-    /// conversion is the one operation the product contract exempts. Explicit
-    /// cancel and shutdown still terminate and reap the child.
-    pub fn run_uncapped_conversion(
-        &self,
-        program: GdalProgram,
-        args: &[String],
-        cancel: Option<&AtomicBool>,
-    ) -> Result<RunOutput, String> {
-        let path = self.tool(program)?;
-        self.run_once(&path, args, None, cancel, None)
-    }
-
     /// Run a GDAL tool with a small caller-owned stdin payload under the same
     /// timeout, cancellation and output limits as every other command.
     pub fn run_with_input(
@@ -197,22 +165,7 @@ impl GdalEngine {
         cancel: Option<&AtomicBool>,
         timeout: Option<Duration>,
     ) -> Result<RunOutput, String> {
-        // GDAL's block cache defaults to a share of *system* RAM, not to
-        // anything this pipeline budgeted: measured on the representative
-        // 400-million-cell plane it grew to the size of the whole raster
-        // (1.66 GiB) while converting, which breaks the combined working-set
-        // gate on its own. The resource policy already reserves 128 MiB for
-        // decoded raster data, so the engine is given exactly that.
-        let cache = GDAL_CACHE_BYTES.to_string();
-        process::run_bounded(
-            path,
-            args,
-            input,
-            &[("GDAL_CACHEMAX", cache.as_str())],
-            cancel,
-            timeout,
-            &self.log_dir,
-        )
+        process::run_bounded(path, args, input, &[], cancel, timeout, &self.log_dir)
     }
 
     fn info_json(&self, raster: &Path, stats: bool, cancel: &AtomicBool) -> Result<String, String> {
@@ -575,7 +528,6 @@ impl RasterEngine for GdalEngine {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
-        deadline: ConversionDeadline,
         cancel: &AtomicBool,
     ) -> Result<(), String> {
         if georef.is_none() && matches!(input, RasterInput::Samples { .. }) {
@@ -583,13 +535,8 @@ impl RasterEngine for GdalEngine {
         }
         let staged = Self::stage_input(input, output)?;
         let args = controlled_cog_arguments(&staged.path, output, georef, nodata);
-        match deadline {
-            ConversionDeadline::Bounded => self.run(GdalProgram::Translate, &args, Some(cancel)),
-            ConversionDeadline::WholeSource => {
-                self.run_uncapped_conversion(GdalProgram::Translate, &args, Some(cancel))
-            }
-        }
-        .map(|_| ())
+        self.run(GdalProgram::Translate, &args, Some(cancel))
+            .map(|_| ())
     }
 
     fn write_display_cog(
@@ -605,7 +552,7 @@ impl RasterEngine for GdalEngine {
         }
         let staged = Self::stage_input(input, output)?;
         let args = display_cog_arguments(&staged.path, output, georef, nodata);
-        self.run_uncapped_conversion(GdalProgram::Translate, &args, Some(cancel))
+        self.run(GdalProgram::Translate, &args, Some(cancel))
             .map(|_| ())
     }
 

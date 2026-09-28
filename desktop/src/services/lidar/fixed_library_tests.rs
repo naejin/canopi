@@ -252,7 +252,6 @@ fn await_import(library: &LidarLibrary, job_id: &str) -> LidarImportJobState {
 /// derivatives already exist, a published item refuses more sources, and
 /// neither import nor reopening enqueues any analysis.
 #[test]
-#[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
 fn an_import_publishes_one_fixed_item_with_display_ready_and_nothing_refreshes() {
     let root = scratch("import-publish");
     let library = LidarLibrary::open(&root).unwrap();

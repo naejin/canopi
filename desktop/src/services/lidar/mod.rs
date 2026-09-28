@@ -253,7 +253,7 @@ impl Drop for DisplayTicket {
 /// The lease is held for exactly as long as the work runs and released when
 /// the guard drops, so a queued submission is refused promptly instead of
 /// creating running work that would compete for the same disk, memory and
-/// GDAL children.
+/// in-process raster buffers.
 pub(crate) struct HeavyJobLease {
     inner: Arc<LidarLibraryInner>,
     job_id: String,
@@ -2029,9 +2029,8 @@ mod tests {
     /// properties that flow depends on — including that a batch with an
     /// unusable file publishes nothing and names the file.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn one_step_import_publishes_without_review_and_refuses_an_invalid_batch() {
-        let engine = gdal_engine::GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-one-step-import"));
         let _ = std::fs::remove_dir_all(&root);
@@ -2913,13 +2912,12 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// GDAL lane: a real import writes the meta a rebuild needs, and Retry on
+    /// A real import writes the meta a rebuild needs, and Retry on
     /// the rebuilt item prepares it again from the managed originals alone,
     /// under the same item id, with the same members in the same order.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_rebuilt_item_is_prepared_again_from_its_managed_originals() {
-        let engine = gdal_engine::GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         let root = std::env::temp_dir().join(new_id("canopi-rebuild-retry"));
         std::fs::create_dir_all(&root).unwrap();

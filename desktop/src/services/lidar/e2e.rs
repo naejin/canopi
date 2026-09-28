@@ -1,8 +1,8 @@
 //! End-to-end vertical-slice validation against the real IGN 0446_6807 MNT
-//! fixture and the system GDAL engine.
+//! fixture, the raster engine and the pinned GeoLibre CLI.
 //!
-//! Ignored by default: it requires the GDAL command-line tools and the
-//! fixture under `~/Downloads`. Run on a development OS with:
+//! Ignored by default: it requires the GeoLibre CLI (`CANOPI_GEOLIBRE_BIN`)
+//! and the fixture under `~/Downloads`. Run on a development OS with:
 //! `cargo test -p canopi-desktop lidar::e2e -- --ignored --nocapture`
 
 use super::*;
@@ -159,10 +159,12 @@ fn dirs_home() -> PathBuf {
 /// separate item, and delete. Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_import_publish --nocapture`
 #[test]
-#[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "requires the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_import_publish_slope_restart_reuse() {
-    let engine = gdal_engine::GdalEngine::new();
-    let engine_version = engine.version().expect("GDAL engine must be available");
+    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+    let engine_version = engine
+        .version()
+        .expect("the raster engine reports a version");
 
     let fixture = match fixture_mnt() {
         Ok(path) => path,
@@ -373,10 +375,12 @@ fn e2e_import_publish_slope_restart_reuse() {
 /// Run with:
 /// `CANOPI_LIDAR_E2E_FIXTURE=<mnt> cargo test -p canopi-desktop --lib -- --ignored e2e_sparse --nocapture`
 #[test]
-#[ignore = "requires system GDAL, the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
+#[ignore = "requires the pinned GeoLibre CLI and an IGN MNT fixture; see CANOPI_LIDAR_E2E_FIXTURE"]
 fn e2e_sparse_generation_lifecycle() {
-    let engine = gdal_engine::GdalEngine::new();
-    engine.version().expect("GDAL engine must be available");
+    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+    engine
+        .version()
+        .expect("the raster engine reports a version");
     let fixture = match fixture_mnt() {
         Ok(path) => path,
         Err(reason) => panic!("{reason}"),
@@ -522,11 +526,18 @@ fn fixture_mnh_batch() -> Result<Vec<PathBuf>, String> {
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
-            path.is_file()
-                && path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().contains("_MNH_"))
-                    .unwrap_or(false)
+            path.file_name()
+                .map(|name| name.to_string_lossy().contains("_MNH_"))
+                .unwrap_or(false)
+        })
+        // IGN delivers each tile either as a bare file or as a folder holding
+        // the raster under the tile's own name beside its JSON sidecar.
+        .filter_map(|path| {
+            if path.is_file() {
+                return Some(path);
+            }
+            let inner = path.join(path.file_name()?);
+            inner.is_file().then_some(inner)
         })
         .collect();
     files.sort();
@@ -543,10 +554,12 @@ fn fixture_mnh_batch() -> Result<Vec<PathBuf>, String> {
 /// published sparsely, displayed on demand, and reopened. MNH is height above
 /// ground, so it is deliberately never used as slope input here.
 #[test]
-#[ignore = "requires system GDAL, the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
+#[ignore = "requires the 12-tile MNH batch and a host with headroom; see CANOPI_LIDAR_MNH_DIR"]
 fn e2e_mnh_batch_import_apply_display_restart() {
-    let engine = gdal_engine::GdalEngine::new();
-    engine.version().expect("GDAL engine must be available");
+    let engine = crate::services::lidar::rust_engine::RustRasterEngine;
+    engine
+        .version()
+        .expect("the raster engine reports a version");
     let files = match fixture_mnh_batch() {
         Ok(files) => files,
         Err(reason) => panic!("{reason}"),

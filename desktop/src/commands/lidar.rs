@@ -1,6 +1,6 @@
 //! Tauri IPC commands for the LiDAR library.
 //!
-//! UI callers never orchestrate SQL, GDAL, masks, engine processes, cache
+//! UI callers never orchestrate SQL, rasters, masks, engine processes, cache
 //! publication or recovery: every capability here returns library identities,
 //! receipts or snapshots. All heavy work runs through the managed Native
 //! Operation Executor.
@@ -172,8 +172,8 @@ pub async fn lidar_layer_collection(
 /// nothing could ever set: a superseded lookup then stops at its next bounded
 /// read, and a burst of abandoned lookups cannot outrun the active-request
 /// budget. The admission name is scoped to the inspection surface, so a caller
-/// can only ever cancel its own lookup. The read runs GDAL against raster
-/// files, so it belongs to the `Local` class, never to `UserData`.
+/// can only ever cancel its own lookup. The read opens raster files, so it
+/// belongs to the `Local` class, never to `UserData`.
 #[tauri::command]
 pub async fn lidar_sample_pixel(
     library: State<'_, LidarLibrary>,

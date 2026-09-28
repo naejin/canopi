@@ -369,7 +369,7 @@ mod tests {
 
     /// Web Mercator, derived independently of the engine.
     ///
-    /// Written here rather than read from GDAL so the oracle cannot agree with a
+    /// Written here rather than read from the engine so the oracle cannot agree with a
     /// broken transform by sharing its source. The formula is the published one:
     /// `x = R * lambda`, `y = R * ln(tan(pi/4 + phi/2))` with the ellipsoid
     /// replaced by the sphere Web Mercator actually uses.
@@ -387,17 +387,16 @@ mod tests {
     /// oracle, at a non-equatorial latitude.
     ///
     /// The other tests in this module exercise the half-open convention in
-    /// isolation. This one runs the actual `gdaltransform` call and then selects
-    /// the containing pixel from the projected point, so a wrong `-t_srs` axis
+    /// isolation. This one runs the engine's real transform and then selects
+    /// the containing pixel from the projected point, so a wrong axis
     /// order, a swapped coordinate pair or an off-by-one in the row inversion
     /// would all surface here rather than passing as a plausible number. The
     /// grid is deliberately placed away from the equator: a transform that
     /// silently ignored latitude scaling would still land inside a
     /// Mercator-centred rectangle but not inside this one.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn the_real_transform_lands_in_the_expected_cell() {
-        let engine = super::super::gdal_engine::GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = AtomicBool::new(false);
         // A 250-metre Web Mercator grid whose north-west corner is the
         // projection of (-0.6°, 48.9°), north and west of every sample below, so

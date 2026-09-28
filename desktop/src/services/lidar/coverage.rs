@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn too_many_files_are_refused_before_any_is_read() {
-        let engine = super::super::gdal_engine::GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let paths = vec![
             PathBuf::from("tile.tif");
             super::super::admission::MAX_SOURCE_FILES_PER_IMPORT + 1
@@ -88,11 +88,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn a_written_raster_reports_its_wgs84_extent_without_a_sidecar() {
         let root = std::env::temp_dir().join(format!("canopi-coverage-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        let engine = super::super::gdal_engine::GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let raster = root.join("tile.tif");
         let grid = super::super::grid::RasterGrid {
             width: 4,

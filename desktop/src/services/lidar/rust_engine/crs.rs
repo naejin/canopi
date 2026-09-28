@@ -98,7 +98,7 @@ impl ResolvedCrs {
     }
 
     /// A point of this CRS from geodetic WGS84 (lon, lat).
-    fn from_wgs84(&self, lon: f64, lat: f64, wgs84: &Crs) -> Result<(f64, f64), String> {
+    fn place_wgs84(&self, lon: f64, lat: f64, wgs84: &Crs) -> Result<(f64, f64), String> {
         match self.own {
             Some(own) => {
                 let (lon, lat) = wgs84
@@ -121,7 +121,7 @@ impl ResolvedCrs {
     ) -> Result<(f64, f64), String> {
         let wgs84 = Crs::wgs84_geographic();
         let (lon, lat) = self.to_wgs84(x, y, &wgs84)?;
-        target.from_wgs84(lon, lat, &wgs84)
+        target.place_wgs84(lon, lat, &wgs84)
     }
 }
 

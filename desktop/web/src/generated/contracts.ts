@@ -322,8 +322,11 @@ export type LibraryDeleteImpact = {
 
 // The engines library work depends on.
 export type LibraryEngines = {
-	// GDAL command-line tools: import, display and inspection.
-	gdal: LidarEngineStatus,
+	/**
+	 *  The in-process raster engine: import, display and inspection. Always
+	 *  available; its version names the crates it is built from.
+	 */
+	raster: LidarEngineStatus,
 	/**
 	 *  The pinned GeoLibre CLI sidecar: new analysis runs. Published results
 	 *  stay readable whatever this reports.

@@ -55,7 +55,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 | Piece | Source | How |
 |---|---|---|
 | COG display | `maplibre-gl-raster`, `cog-tiler-wasm` (pinned in `desktop/web/package.json`) | Dependency |
-| Native GeoTIFF/COG reader | `wbgeotiff` from `opengeos/whitebox-wasm` (git rev in `desktop/Cargo.toml`) | Dependency |
+| Raster engine | `wbgeotiff` (`opengeos/whitebox-wasm` rev in `desktop/Cargo.toml`), `wbraster`, `wbprojection` ([ADR 0014](adr/0014-pure-rust-raster-engine.md)) | Dependency |
 | Analyses | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
 | Geocoding registry | `packages/core/src/geocoding.ts` | Copied into `app/geocoding/` |
 | Basemap presets | `OPENFREEMAP_BASEMAPS` | Copied into `maplibre/openfreemap-basemap.ts` |

@@ -182,7 +182,7 @@ CREATE TABLE lidar_layer_generations (
     display_basis TEXT,
     bounds_3857 TEXT NOT NULL,
     -- `projected-metre`, `projected-other`, `geographic` or `unknown`, read from
-    -- the stored CRS at import so analysis offers need no GDAL call.
+    -- the stored CRS at import so analysis offers need no raster read.
     crs_class TEXT NOT NULL,
     CHECK ((display_min_value IS NULL) = (display_max_value IS NULL)),
     CHECK (display_min_value IS NULL OR display_min_value <= display_max_value)

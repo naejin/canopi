@@ -65,12 +65,6 @@ pub(super) enum TreeMeasurement {
         /// Largest number of readable members seen in any one tick, the root
         /// included. This is the observed concurrency, not a configured limit.
         peak_member_count: u64,
-        /// Resident bytes of one managed GDAL conversion's block cache ceiling.
-        ///
-        /// The engine sets `GDAL_CACHEMAX` for every child it launches, so this
-        /// many bytes per concurrent conversion is attributable to the cache
-        /// rather than to job logic.
-        child_cache_ceiling_bytes: u64,
     },
     /// This platform cannot measure the process tree.
     Unsupported(String),
@@ -102,7 +96,6 @@ impl TreeMeasurement {
                 interval_ms,
                 peak_member_bytes,
                 peak_member_count,
-                child_cache_ceiling_bytes,
             } => {
                 let incremental = match peak_incremental_bytes {
                     Some(bytes) => format!("{} MiB", bytes / (1024 * 1024)),
@@ -122,14 +115,10 @@ impl TreeMeasurement {
                     peak_total_bytes / (1024 * 1024),
                     peak_subtotal_bytes / (1024 * 1024),
                 ) + &format!(
-                    "; composition: largest single member {} MiB over {} member(s) at most, \
-                     and each managed conversion may hold up to {} MiB of block cache \
-                     (GDAL_CACHEMAX), so {} concurrent conversion(s) could account for the \
-                     cache share",
+                    "; composition: largest single member {} MiB over {} member(s) at most \
+                     (raster work runs in process; members beyond the root are GeoLibre children)",
                     peak_member_bytes / (1024 * 1024),
                     peak_member_count,
-                    child_cache_ceiling_bytes / (1024 * 1024),
-                    peak_member_count.saturating_sub(1),
                 )
             }
             Self::Unsupported(reason) => format!("process tree measurement unavailable: {reason}"),
@@ -380,7 +369,6 @@ impl ProcessTreeSampler {
             interval_ms: u64::try_from(SAMPLE_INTERVAL.as_millis()).unwrap_or(100),
             peak_member_bytes: self.member_peak.load(Ordering::Relaxed),
             peak_member_count: self.member_count_peak.load(Ordering::Relaxed),
-            child_cache_ceiling_bytes: crate::services::lidar::gdal_engine::GDAL_CACHE_BYTES,
         }
     }
 }
@@ -722,7 +710,7 @@ mod tests {
     fn stat_parsing_survives_spaces_and_parentheses_in_the_command_name() {
         // `comm` is parenthesised, so splitting on whitespace is only safe
         // after the final `)`.
-        let stat = "4242 (gdal_trans late (x)) S 1 4242 4242 0 -1 4194560 100 0 0 0 \
+        let stat = "4242 (geolibre slope (x)) S 1 4242 4242 0 -1 4194560 100 0 0 0 \
                     5 3 0 0 20 0 7 0 987654 1000 200";
         assert_eq!(parse_stat(stat), Some((1, 987654)));
         assert_eq!(
@@ -751,7 +739,6 @@ mod tests {
             interval_ms: 50,
             peak_member_bytes: peak_total.unwrap_or(0),
             peak_member_count: 1,
-            child_cache_ceiling_bytes: crate::services::lidar::gdal_engine::GDAL_CACHE_BYTES,
         }
     }
 

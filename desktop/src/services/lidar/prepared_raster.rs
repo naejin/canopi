@@ -17,7 +17,7 @@
 //! that format instead of guessing.
 
 #[cfg(test)]
-use super::engine::{ConversionDeadline, RasterEngine, RasterInput};
+use super::engine::{RasterEngine, RasterInput};
 use super::grid::RasterGrid;
 use super::paths;
 use std::fs::File;
@@ -139,7 +139,7 @@ impl PreparedRaster {
     /// `input` is an admitted managed original or an immutable result; the
     /// derivative is written into `job_scratch`, which the owning job removes.
     /// `nodata` is the effective validity rule already established by the
-    /// GDAL probe for this interpretation; validity stays finite-and-not-NoData
+    /// probe for this interpretation; validity stays finite-and-not-NoData
     /// exactly as the previous full-buffer conversion defined it.
     /// `additional_output_bytes` is the numeric output the caller will write
     /// while this derivative is alive; it is charged together with the
@@ -164,14 +164,8 @@ impl PreparedRaster {
         paths::require_free_space(job_scratch, required, "the prepared raster working set")?;
 
         let path = derivative_path(job_scratch, input);
-        let prepared = engine.write_controlled_cog(
-            RasterInput::File(input),
-            &path,
-            None,
-            None,
-            ConversionDeadline::Bounded,
-            cancel,
-        );
+        let prepared =
+            engine.write_controlled_cog(RasterInput::File(input), &path, None, None, cancel);
         if let Err(error) = prepared {
             remove_derivative(&path);
             return Err(error);
@@ -669,7 +663,6 @@ pub(super) mod observability {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::lidar::gdal_engine::{GdalEngine, GdalProgram};
 
     // -----------------------------------------------------------------
     // Hermetic TIFF fixture
@@ -1535,7 +1528,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Real preparation through the GDAL adapter
+    // Real preparation through the raster engine
     // -----------------------------------------------------------------
 
     const F32_NODATA: f32 = -9999.0;
@@ -1554,50 +1547,44 @@ mod tests {
         }
     }
 
-    /// Build a real GeoTIFF fixture through GDAL from authored values.
-    fn gdal_source(scratch: &Scratch, name: &str, width: u32, height: u32) -> PathBuf {
-        let engine = GdalEngine::new();
-        let cancel = cancellation();
-        let values: Vec<f32> = (0..height)
-            .flat_map(|y| (0..width).map(move |x| (x, y)))
-            .map(|(x, y)| real_value(x, y))
-            .collect();
-        let raw = scratch.path(&format!("{name}.raw"));
-        crate::services::lidar::import::write_f32_raw(&raw, &values).expect("fixture raw writes");
+    fn authored_values(width: u32, height: u32) -> Vec<f32> {
+        (0..height)
+            .flat_map(|y| (0..width).map(move |x| real_value(x, y)))
+            .collect()
+    }
+
+    /// Build a real GeoTIFF fixture through the engine from authored values.
+    fn authored_source(scratch: &Scratch, name: &str, width: u32, height: u32) -> PathBuf {
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let tif = scratch.path(&format!("{name}.tif"));
         let source_grid = RasterGrid {
             width,
             height,
             geotransform: [0.0, 1.0, 0.0, height as f64, 0.0, -1.0],
         };
-        crate::services::lidar::import::raw_to_tif(
-            &engine,
-            &cancel,
-            &raw,
-            &tif,
-            &source_grid,
-            "EPSG:3857",
-            F32_NODATA,
-        )
-        .expect("fixture converts to GeoTIFF");
-        let _ = std::fs::remove_file(&raw);
-        let _ = std::fs::remove_file(raw.with_extension("hdr"));
+        engine
+            .write_geotiff(
+                &tif,
+                crate::services::lidar::engine::RasterGeoref {
+                    grid: &source_grid,
+                    crs: "EPSG:3857",
+                },
+                F32_NODATA,
+                &authored_values(width, height),
+                &cancellation(),
+            )
+            .expect("fixture converts to GeoTIFF");
         tif
     }
 
-    /// The retained whole-buffer GDAL conversion, used here only as the
-    /// independent oracle the streaming reader must match.
-    fn gdal_oracle(source: &Path, grid: &RasterGrid) -> (Vec<u8>, Vec<u8>) {
-        let engine = GdalEngine::new();
-        let cancel = cancellation();
-        let raw = crate::services::lidar::import::raw_f32_bytes(
-            &engine,
-            source,
-            grid.width,
-            grid.height,
-            &cancel,
-        )
-        .expect("oracle reads");
+    /// The authored values, through the cast a typed fixture was written with,
+    /// as the independent oracle the streaming reader must match.
+    fn authored_oracle(grid: &RasterGrid, cast: fn(f32) -> f32) -> (Vec<u8>, Vec<u8>) {
+        let raw: Vec<u8> = authored_values(grid.width, grid.height)
+            .into_iter()
+            .map(cast)
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
         let mask = crate::services::lidar::grid::valid_mask_from_f32_raw_checked(
             grid.width,
             grid.height,
@@ -1611,7 +1598,7 @@ mod tests {
 
     /// Collect the streaming reader's output for a whole raster.
     fn streamed_bytes(source: &Path, grid: &RasterGrid, scratch: &Scratch) -> (Vec<u8>, Vec<u8>) {
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let cancel = cancellation();
         let cells = (grid.width as usize) * (grid.height as usize);
         let mut samples = vec![0f32; cells];
@@ -1664,7 +1651,7 @@ mod tests {
                 assert_eq!(
                     got.to_bits(),
                     expected.to_bits(),
-                    "sample {index} differs from the GDAL Float32 conversion"
+                    "sample {index} differs from the authored Float32 value"
                 );
             }
             assert_eq!(valid[index], oracle_valid[index], "validity at {index}");
@@ -1672,14 +1659,13 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
-    fn preparation_streams_exactly_what_gdal_float32_conversion_wrote() {
+    fn preparation_streams_exactly_the_authored_float32_values() {
         observability::reset();
         let scratch = Scratch::new("real-f32");
         let (width, height) = (300, 260);
-        let source = gdal_source(&scratch, "f32", width, height);
+        let source = authored_source(&scratch, "f32", width, height);
         let grid = test_grid(width, height);
-        let (oracle_raw, oracle_valid) = gdal_oracle(&source, &grid);
+        let (oracle_raw, oracle_valid) = authored_oracle(&grid, |value| value);
         let (raw, valid) = streamed_bytes(&source, &grid, &scratch);
         assert_matches_oracle(&raw, &valid, &oracle_raw, &oracle_valid);
         assert_eq!(raw.len(), (width * height * 4) as usize);
@@ -1707,78 +1693,85 @@ mod tests {
         assert!(source.exists(), "the managed original is untouched");
     }
 
+    /// Every admitted sample type and layout streams back as the Float32 cast
+    /// of what was written: a striped Float32 file, Int16, Byte, UInt32 and
+    /// Float64, each written through wbgeotiff from the authored values.
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn preparation_matches_the_oracle_for_admitted_numeric_types_and_layouts() {
+        use wbgeotiff::{GeoTiffWriter, GeoTransform, WriteLayout};
         let scratch = Scratch::new("real-types");
-        let engine = GdalEngine::new();
-        let cancel = cancellation();
         let (width, height) = (180, 140);
-        let base = gdal_source(&scratch, "base", width, height);
+        let base = authored_source(&scratch, "base", width, height);
         let grid = test_grid(width, height);
-
+        let values = authored_values(width, height);
+        let writer = |layout: WriteLayout| {
+            GeoTiffWriter::new(width, height, 1)
+                .layout(layout)
+                .geo_transform(GeoTransform::north_up(0.0, 1.0, f64::from(height), -1.0))
+                .epsg(3857)
+                .no_data(f64::from(F32_NODATA))
+        };
+        let tiled = WriteLayout::Tiled {
+            tile_width: 256,
+            tile_height: 256,
+        };
         // A striped source exercises preparation from a legacy layout.
         let striped = scratch.path("striped.tif");
-        engine
-            .run(
-                GdalProgram::Translate,
-                &[
-                    "-q".to_string(),
-                    "-co".to_string(),
-                    "TILED=NO".to_string(),
-                    "-co".to_string(),
-                    "BLOCKYSIZE=32".to_string(),
-                    base.display().to_string(),
-                    striped.display().to_string(),
-                ],
-                Some(&cancel),
+        writer(WriteLayout::Stripped { rows_per_strip: 32 })
+            .write_f32(&striped, &values)
+            .expect("striped fixture writes");
+        let int16 = scratch.path("int16.tif");
+        writer(tiled)
+            .write_i16(
+                &int16,
+                &values.iter().map(|v| *v as i16).collect::<Vec<_>>(),
             )
-            .expect("striped fixture converts");
+            .expect("int16 fixture writes");
+        let byte = scratch.path("byte.tif");
+        writer(tiled)
+            .write_u8(&byte, &values.iter().map(|v| *v as u8).collect::<Vec<_>>())
+            .expect("byte fixture writes");
+        let uint32 = scratch.path("uint32.tif");
+        writer(tiled)
+            .write_u32(
+                &uint32,
+                &values.iter().map(|v| *v as u32).collect::<Vec<_>>(),
+            )
+            .expect("uint32 fixture writes");
+        let float64 = scratch.path("float64.tif");
+        writer(tiled)
+            .write_f64(
+                &float64,
+                &values.iter().map(|v| f64::from(*v)).collect::<Vec<_>>(),
+            )
+            .expect("float64 fixture writes");
 
-        let variants: [(&str, Option<&[&str]>, PathBuf); 6] = [
-            ("float32-tiled", None, base.clone()),
-            ("float32-striped", None, striped.clone()),
-            ("int16", Some(&["-ot", "Int16"]), scratch.path("int16.tif")),
-            ("byte", Some(&["-ot", "Byte"]), scratch.path("byte.tif")),
-            (
-                "uint32",
-                Some(&["-ot", "UInt32"]),
-                scratch.path("uint32.tif"),
-            ),
-            (
-                "float64",
-                Some(&["-ot", "Float64"]),
-                scratch.path("float64.tif"),
-            ),
+        type Cast = fn(f32) -> f32;
+        let variants: [(&str, Cast, PathBuf); 6] = [
+            ("float32-tiled", |v| v, base),
+            ("float32-striped", |v| v, striped),
+            ("int16", |v| f32::from(v as i16), int16),
+            ("byte", |v| f32::from(v as u8), byte),
+            ("uint32", |v| v as u32 as f32, uint32),
+            ("float64", |v| v, float64),
         ];
-        for (label, extra, target) in variants {
-            if let Some(extra) = extra {
-                let mut args = vec!["-q".to_string(), "-of".to_string(), "GTiff".to_string()];
-                args.extend(extra.iter().map(|argument| (*argument).to_string()));
-                args.push("-co".to_string());
-                args.push("TILED=YES".to_string());
-                args.push(base.display().to_string());
-                args.push(target.display().to_string());
-                engine
-                    .run(GdalProgram::Translate, &args, Some(&cancel))
-                    .unwrap_or_else(|error| panic!("{label} fixture converts: {error}"));
-            }
-            let (oracle_raw, oracle_valid) = gdal_oracle(&target, &grid);
+        for (label, cast, target) in variants {
+            let (oracle_raw, oracle_valid) = authored_oracle(&grid, cast);
             let (raw, valid) = streamed_bytes(&target, &grid, &scratch);
+            println!("{label}: {} samples", raw.len() / 4);
             assert_matches_oracle(&raw, &valid, &oracle_raw, &oracle_valid);
         }
     }
 
     #[test]
-    #[ignore = "requires the GDAL command-line tools on PATH or CANOPI_LIDAR_GDAL_BIN"]
     fn preparation_failure_and_cancellation_leave_no_derivative() {
         let scratch = Scratch::new("real-failure");
-        let engine = GdalEngine::new();
+        let engine = crate::services::lidar::rust_engine::RustRasterEngine;
         let grid = test_grid(64, 64);
 
         let cancel = cancellation();
         cancel.store(true, Ordering::Relaxed);
-        let source = gdal_source(&scratch, "cancel", 64, 64);
+        let source = authored_source(&scratch, "cancel", 64, 64);
         let error = PreparedRaster::open(
             &engine,
             &source,

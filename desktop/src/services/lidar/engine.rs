@@ -3,10 +3,13 @@
 //! Every numeric raster operation the library performs on files goes through
 //! [`RasterEngine`]: header probes, exact statistics, whole-raster Float32
 //! reads under the capacity limit, the two controlled output profiles
-//! (numeric COG and display COG), georeferenced fixture output, and point
-//! transforms between coordinate reference systems. Callers never depend on
-//! how an engine reads, converts or reprojects; an engine records which
-//! implementation produced a numeric output through [`RasterEngine::version`].
+//! (numeric COG and display COG), the tiled GeoTIFF handed to the GeoLibre
+//! sidecar, and point transforms between coordinate reference systems.
+//! Production has one implementation, `rust_engine::RustRasterEngine`
+//! (ADR 0014); the test-only GDAL oracle in `gdal_engine.rs` implements the
+//! same trait so the comparison lane can hold both to the same contract.
+//! Vocabulary (driver, band type, mask flags, compression names) stays
+//! GDAL's, which the catalogue and admission rules were written against.
 //!
 //! Every operation takes the caller's cancellation flag and returns
 //! `Err("cancelled")` when it is set between phases.
@@ -84,16 +87,6 @@ pub enum RasterInput<'a> {
     },
 }
 
-/// Whether a conversion keeps the finite deadline every bounded run has.
-///
-/// Only the whole-source conversion of one import may outlive it (R49); an
-/// explicit cancel still stops it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConversionDeadline {
-    Bounded,
-    WholeSource,
-}
-
 /// The operations the Data library needs from a raster engine.
 pub trait RasterEngine: Send + Sync + std::fmt::Debug {
     /// The engine's identity, recorded in manifests; an error names why the
@@ -144,7 +137,6 @@ pub trait RasterEngine: Send + Sync + std::fmt::Debug {
         output: &Path,
         georef: Option<RasterGeoref<'_>>,
         nodata: Option<f32>,
-        deadline: ConversionDeadline,
         cancel: &AtomicBool,
     ) -> Result<(), String>;
 

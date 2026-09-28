@@ -136,8 +136,9 @@ jobs:
         run: npm run build:web --prefix desktop/web
 
   lidar-native:
-    # GDAL-backed and GeoLibre-backed LiDAR lanes (ignored in the default
-    # suite). Fixture e2e lanes stay local: they need IGN tiles.
+    # GeoLibre-backed LiDAR lanes (ignored in the default suite); the engine
+    # comparison lane skips itself here, as CI installs no GDAL. Fixture e2e
+    # lanes stay local: they need IGN tiles.
     runs-on: ubuntu-24.04
     env:
       CANOPI_SKIP_BUNDLED_DB: "1"
@@ -152,11 +153,6 @@ jobs:
 
       - name: Install Linux dependencies
         uses: ./.github/actions/install-linux-deps
-
-      - name: Install GDAL (Ubuntu 24.04 ships 3.8.4)
-        run: |
-          sudo apt-get install -y gdal-bin
-          gdalinfo --version
 
       - uses: ./.github/actions/build-geolibre-cli
 

@@ -163,7 +163,7 @@ pub(super) fn run(
 
 /// Recheck an input's requirements against the stored raster itself.
 ///
-/// Offers read facts recorded at import; the run asks GDAL, which stays the
+/// Offers read facts recorded at import; the run asks the engine, which stays the
 /// projection authority, so a stored WKT the catalogue misclassified can never
 /// be computed on.
 fn check_requirements(
@@ -201,7 +201,7 @@ fn check_requirements(
     Ok(())
 }
 
-/// Refuse a raster whose GDAL-reported CRS is not projected in metres.
+/// Refuse a raster whose engine-reported CRS is not projected in metres.
 pub(super) fn check_projected_metre_grid(
     library: &crate::services::lidar::LidarLibrary,
     cancel: &AtomicBool,
