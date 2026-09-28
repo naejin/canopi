@@ -32,9 +32,7 @@ export {
   formatImageBytes,
   readStoryImageFile,
   STORY_IMAGE_ACCEPT,
-  type DecodedStoryImage,
   type StoryImageDecoder,
-  type StoryImageProblem,
   type StoryImageRead,
 } from './images'
 export {
@@ -45,8 +43,6 @@ export {
   richTextFromDom,
   richTextFromHtml,
   richTextFromPlainText,
-  richTextPlainText,
   sameRichText,
-  spansFragment,
 } from './rich-text'
-export { highlightedSpeciesSummary, stepViewTags, type StepViewTag } from './step-view'
+export { highlightedSpeciesSummary, stepViewTags } from './step-view'

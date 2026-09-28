@@ -9,7 +9,7 @@ import {
   TERRAIN_HILLSHADE_LAYER_ID,
 } from '../../maplibre/terrain'
 
-export type MapLayerBand =
+type MapLayerBand =
   | 'basemap'
   | 'lidar'
   | 'geographic-reference'

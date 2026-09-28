@@ -1,14 +1,14 @@
 import type { PanelTarget, SpeciesPanelTarget } from '../types/design'
 
-export type Target = PanelTarget
-export type SpeciesTarget = SpeciesPanelTarget
+type Target = PanelTarget
+type SpeciesTarget = SpeciesPanelTarget
 
 export interface TargetScenePoint {
   readonly x: number
   readonly y: number
 }
 
-export interface TargetPlantRef {
+interface TargetPlantRef {
   readonly id: string
   readonly canonicalName: string
   readonly position?: TargetScenePoint
@@ -32,7 +32,7 @@ export interface TargetSceneIndex {
   readonly zonesById: ReadonlyMap<string, TargetZoneRef>
 }
 
-export type ResolvedTargetRef =
+type ResolvedTargetRef =
   | { readonly kind: 'plant'; readonly id: string; readonly plant: TargetPlantRef }
   | { readonly kind: 'zone'; readonly id: string; readonly zone: TargetZoneRef }
 
@@ -55,7 +55,7 @@ export function isSpeciesTarget(target: Target): target is SpeciesTarget {
   return target.kind === 'species'
 }
 
-export function targetKey(target: Target): string {
+function targetKey(target: Target): string {
   switch (target.kind) {
     case 'placed_plant':
       return `placed_plant:${target.plant_id}`
@@ -70,7 +70,7 @@ export function targetKey(target: Target): string {
   }
 }
 
-export function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
+function targetListsEqual(left: readonly Target[], right: readonly Target[]): boolean {
   if (left.length !== right.length) return false
   for (let i = 0; i < left.length; i++) {
     if (targetKey(left[i]!) !== targetKey(right[i]!)) return false
@@ -78,7 +78,7 @@ export function targetListsEqual(left: readonly Target[], right: readonly Target
   return true
 }
 
-export function targetsEqual(left: Target, right: Target): boolean {
+function targetsEqual(left: Target, right: Target): boolean {
   return targetKey(left) === targetKey(right)
 }
 

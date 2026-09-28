@@ -40,7 +40,7 @@ import {
   type DesignSessionWorkflowRunner,
 } from "./workflow-runner";
 
-export type DocumentTransitionSource =
+type DocumentTransitionSource =
   | "new"
   | "open-path"
   | "open-dialog"
@@ -54,7 +54,7 @@ export type DocumentTransitionSource =
  * `flush` writes the current Design to its home before replacing it and asks
  * the user only when that write fails; `skip` replaces without writing.
  */
-export type DirtyGuardMode = "flush" | "skip";
+type DirtyGuardMode = "flush" | "skip";
 
 export interface DocumentTransitionLoadResult {
   file: CanopiFile;
@@ -70,7 +70,7 @@ export interface DocumentTransitionLoadResult {
   migratedFrom?: number | null;
 }
 
-export interface DocumentLoadTransitionRequest {
+interface DocumentLoadTransitionRequest {
   source: Exclude<DocumentTransitionSource, "close">;
   dirtyGuard: DirtyGuardMode;
   session?: CanvasDocumentSurface | null;
@@ -80,7 +80,7 @@ export interface DocumentLoadTransitionRequest {
 }
 
 /** Ends the current Design Session without loading another Design. */
-export interface DocumentCloseTransitionRequest {
+interface DocumentCloseTransitionRequest {
   source: "close";
   dirtyGuard: "flush";
   session?: CanvasDocumentSurface | null;
@@ -90,7 +90,7 @@ export type DocumentTransitionRequest =
   | DocumentLoadTransitionRequest
   | DocumentCloseTransitionRequest;
 
-export type DocumentTransitionStatus = "applied" | "cancelled" | "queued" | "failed";
+type DocumentTransitionStatus = "applied" | "cancelled" | "queued" | "failed";
 
 export interface DocumentTransitionResult {
   status: DocumentTransitionStatus;
@@ -993,7 +993,7 @@ function cancelledResult(session: CanvasDocumentSurface | null): DocumentTransit
   };
 }
 
-export function nameFromPath(path: string): string {
+function nameFromPath(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   return base.replace(/\.canopi$/i, "") || "Untitled";
 }
@@ -1009,7 +1009,7 @@ export function loadResultOf(design: LoadedDesign, path: string): DocumentTransi
   };
 }
 
-export function isCancelled(error: unknown): boolean {
+function isCancelled(error: unknown): boolean {
   return typeof error === "string"
     ? error.includes("Dialog cancelled") || error.includes("cancelled")
     : error instanceof Error

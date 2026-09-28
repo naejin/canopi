@@ -69,7 +69,7 @@ function findPlants(): void {
   requestAnimationFrame(() => { focusOpenPlantFinder() })
 }
 
-export function toggleTheme(): void {
+function toggleTheme(): void {
   mutateSettingsProjection((settings) => {
     settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
   }, { persist: 'immediate' })

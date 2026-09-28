@@ -11,14 +11,12 @@ import type {
 import { speciesSearchAdmission } from '../../utils/species-search-normalization'
 import { createEmptySpeciesFilter, plantFilterModel } from './plant-filter-model'
 
-export { createEmptySpeciesFilter }
-
 export type PlantSearchStatus = 'idle' | 'loading-first-page' | 'loading-next-page' | 'error'
 
 /** Browse orders a user can pick; an active search text always ranks by relevance. */
 export type SpeciesBrowseSort = Exclude<SpeciesSearchRequest['sort'], 'Relevance'>
 
-export const DEFAULT_SPECIES_BROWSE_SORT: SpeciesBrowseSort = 'Recommended'
+const DEFAULT_SPECIES_BROWSE_SORT: SpeciesBrowseSort = 'Recommended'
 
 export interface PlantSearchIntent {
   readonly text: string
@@ -39,7 +37,7 @@ export interface PlantSearchResultState {
   readonly error: string | null
 }
 
-export interface PlantSearchSession {
+interface PlantSearchSession {
   readonly intent: ReadonlySignal<PlantSearchIntent>
   readonly results: ReadonlySignal<PlantSearchResultState>
   setText(text: string): void
@@ -61,7 +59,7 @@ export type DynamicFilterOptionsAdapter = (
   locale: string,
 ) => Promise<DynamicFilterOptions[]>
 
-export interface PlantSearchSessionSignals {
+interface PlantSearchSessionSignals {
   readonly text: Signal<string>
   readonly browseSort: Signal<SpeciesBrowseSort>
   readonly filters: Signal<SpeciesFilter>

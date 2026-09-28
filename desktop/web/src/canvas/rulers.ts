@@ -7,13 +7,13 @@ import { getCanvasColor } from './theme-refresh'
 export const CANVAS_RULER_SIZE_PX = 24
 const RULER_SIZE = CANVAS_RULER_SIZE_PX
 /** Tick labels keep the 12 px type floor; they are digits and units, never CJK text. */
-export const CANVAS_RULER_LABEL_FONT_SIZE_PX = 12
+const CANVAS_RULER_LABEL_FONT_SIZE_PX = 12
 /** Clear space between neighbouring tick labels; a label that would come closer is left out. */
 const RULER_LABEL_GAP_PX = 6
 
-export type RulerAxis = 'h' | 'v'
+type RulerAxis = 'h' | 'v'
 
-export interface RulerOverlaySnapshot {
+interface RulerOverlaySnapshot {
   readonly camera: CameraViewportSnapshot
   readonly chromeVisible: boolean
   readonly rulersVisible: boolean

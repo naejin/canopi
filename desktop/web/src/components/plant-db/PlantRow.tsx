@@ -111,7 +111,7 @@ export function PlantRow({ plant, inDesign, englishName, highlight }: Props) {
 }
 
 /** "Tree · 8 m · USDA 5–9 · Edible 4/5": form, height, hardiness and edibility when known. */
-export function catalogFacts(plant: SpeciesListItem, currentLocale: string): string {
+function catalogFacts(plant: SpeciesListItem, currentLocale: string): string {
   const facts: string[] = []
   if (plant.habit) facts.push(t(`filters.habit_${plant.habit}`, plant.habit))
   if (plant.height_max_m !== null) {

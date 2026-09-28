@@ -1,6 +1,6 @@
 import type { MapLibreCanvasSurfaceState } from '../../maplibre/canvas-surface-state'
 
-export type MapNoticeTone = 'loading' | 'ready' | 'error'
+type MapNoticeTone = 'loading' | 'ready' | 'error'
 
 export interface MapNoticeReadModel {
   readonly visible: boolean

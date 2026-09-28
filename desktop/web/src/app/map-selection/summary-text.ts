@@ -8,7 +8,7 @@ import { formatArea, formatLength, zoneTypeLabel } from './zone-label'
 // menu's heading.
 
 /** One part after the head; a measure never breaks inside ("0.52 m apart"). */
-export interface ChipDetail {
+interface ChipDetail {
   readonly text: string
   readonly measure?: boolean
   /** The text is a species' English catalog name, shown marked "(en)". */

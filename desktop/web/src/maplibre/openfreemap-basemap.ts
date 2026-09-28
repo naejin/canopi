@@ -23,7 +23,7 @@ export interface VectorStyleDocument {
   readonly layers: readonly VectorStyleLayer[]
 }
 
-export interface VectorStyleLayer {
+interface VectorStyleLayer {
   readonly id: string
   readonly type: string
   readonly source?: string
@@ -216,14 +216,14 @@ export class VectorBasemap {
   }
 }
 
-export interface PreparedVectorStyle {
+interface PreparedVectorStyle {
   readonly sources: Record<string, Record<string, unknown>>
   readonly layers: Record<string, unknown>[]
   readonly installedLayers: InstalledLayer[]
 }
 
 /** Namespaces, localizes and opacity-scales one style document. Pure. */
-export function prepareOpenFreeMapStyle(
+function prepareOpenFreeMapStyle(
   document: VectorStyleDocument,
   presentation: Pick<VectorBasemapPresentation, 'opacity' | 'locale'>,
 ): PreparedVectorStyle {
@@ -256,7 +256,7 @@ export function prepareOpenFreeMapStyle(
   return { sources, layers, installedLayers }
 }
 
-export function localizedLabel(locale: string): unknown[] {
+function localizedLabel(locale: string): unknown[] {
   return ['coalesce', ['get', `name:${locale}`], ['get', 'name']]
 }
 

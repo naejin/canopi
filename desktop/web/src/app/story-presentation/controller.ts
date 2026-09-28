@@ -41,7 +41,7 @@ interface Restore {
  * Where focus goes after leaving: the Stories panel's Present button that
  * started the presentation, else the map.
  */
-export type PresentationReturnFocus = 'present-button' | 'map'
+type PresentationReturnFocus = 'present-button' | 'map'
 
 const active = signal<ActivePresentation | null>(null)
 let restore: Restore | null = null
@@ -79,7 +79,7 @@ export const presentedStep: ReadonlySignal<PresentedStep | null> = computed(() =
 /** A story is presented: editing chrome hides and editing commands stand down. */
 export const storyPresentationActive: ReadonlySignal<boolean> = computed(() => active.value !== null)
 
-export interface StoryPresentationOptions {
+interface StoryPresentationOptions {
   /** Jump between steps instead of flying; defaults to the platform reduced-motion preference. */
   readonly reducedMotion?: boolean
   /** Where focus goes after leaving; the map by default. */
@@ -259,7 +259,7 @@ function applyStep({ view }: PresentedStep): void {
 }
 
 /** What a view shows, over the user's own map layer settings (opacities, style choices). */
-export function stepOverrides(view: SavedView, layers: MapLayersState, plantLabels: PlantLabelMode): StoryPresentationOverrides {
+function stepOverrides(view: SavedView, layers: MapLayersState, plantLabels: PlantLabelMode): StoryPresentationOverrides {
   const background = view.visible_layers.background
   return {
     mapLayers: {

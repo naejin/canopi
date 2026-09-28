@@ -18,7 +18,7 @@ import type { DesignSessionStore } from "./store";
 import type { DesignSessionWorkflowRunner } from "./workflow-runner";
 
 /** `close` ends the session: the Canvas gets an empty Scene and the store no Design. */
-export type DesignReplacementKind = "new" | "loaded" | "close";
+type DesignReplacementKind = "new" | "loaded" | "close";
 
 export interface ResolvedDesignReplacement {
   readonly file: CanopiFile;
@@ -29,7 +29,7 @@ export interface ResolvedDesignReplacement {
   readonly onDesignFinalized?: () => void;
 }
 
-export interface DesignSessionApplicationReceipt {
+interface DesignSessionApplicationReceipt {
   readonly file: CanopiFile | null;
   readonly canvasHydrated: boolean;
 }
@@ -40,13 +40,13 @@ export interface DesignSessionPendingCanvasReplacementIdentity {
   readonly [designSessionPendingCanvasReplacementBrand]: true;
 }
 
-export interface PendingDesignReplacementStatus {
+interface PendingDesignReplacementStatus {
   readonly identity: DesignSessionPendingCanvasReplacementIdentity;
   readonly isDesignBaselineCurrent: boolean;
   readonly designWasApplied: boolean;
 }
 
-export interface DesignReplacementSettlementReceipt {
+interface DesignReplacementSettlementReceipt {
   readonly preservedCurrentDesign: boolean;
 }
 

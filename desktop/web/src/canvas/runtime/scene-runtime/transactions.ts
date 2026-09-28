@@ -74,7 +74,7 @@ export interface SceneHistoryCommands {
   redo(): boolean
 }
 
-export type ScenePersistenceAcknowledgement = 'applied' | 'stale'
+type ScenePersistenceAcknowledgement = 'applied' | 'stale'
 
 export interface ScenePersistenceCapture {
   readonly scene: ScenePersistedState
@@ -119,7 +119,7 @@ export interface SceneDocumentReplacementStages {
   readonly finalizeReplacement?: () => void
 }
 
-export type SceneRuntimeAuthority = SceneEditCoordinator
+type SceneRuntimeAuthority = SceneEditCoordinator
   & SceneCommandAdmission
   & SettledSceneReader
   & SceneHistoryCommands

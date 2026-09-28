@@ -7,7 +7,7 @@ import type { PdfPreparation } from './prepare'
 import type { SpeciesDisplayNames } from '../plant-browser/workbench'
 import type { PdfInput, PdfLabels, PdfSetup, PreparedPdf, PdfPlan, PdfLayoutCache } from './types'
 export interface PdfCapture { readonly identity: object; readonly input: PdfInput; isCurrent(): boolean }
-export type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
+type PdfDeliveryResult = 'saved' | 'downloaded' | 'cancelled'
 export interface PdfDelivery { save(bytes: Uint8Array, name: string, signal: AbortSignal): Promise<PdfDeliveryResult>; dispose(): void }
 export interface PdfWorkflowDependencies {
   capture(): PdfCapture | null

@@ -21,13 +21,13 @@ export interface MapLibreCameraScreenSize {
   readonly height: number
 }
 
-export interface MapLibreCameraOptions {
+interface MapLibreCameraOptions {
   readonly center: readonly [number, number]
   readonly zoom: number
   readonly bearing: number
 }
 
-export interface MapFrameDiagnostics {
+interface MapFrameDiagnostics {
   readonly projectionId: typeof LOCAL_MERCATOR_PROJECTION_ID
   readonly viewportCenterWorld: { x: number; y: number }
   readonly viewportCornerGeo: readonly [

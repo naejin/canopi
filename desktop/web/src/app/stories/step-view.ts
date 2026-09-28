@@ -4,7 +4,7 @@ import type { SavedView } from '../../types/design'
 import { savedViewPresentedLabels } from '../saved-views/snapshot'
 
 /** One "This step shows" tag: what the step's view shows, in words. */
-export interface StepViewTag {
+interface StepViewTag {
   readonly key: string
   readonly label: string
   readonly kind: 'view' | 'background' | 'terrain' | 'species' | 'objects' | 'labels'

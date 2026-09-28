@@ -51,7 +51,7 @@ export interface RasterTileRequest {
   readonly y: number
 }
 
-export type RasterTileRelevance = (tile: RasterTileRequest) => boolean
+type RasterTileRelevance = (tile: RasterTileRequest) => boolean
 
 /** One opened COG as the upstream engine sees it. */
 export interface RasterProxySource extends RasterSourceMetadata {
@@ -111,7 +111,7 @@ interface ClientState {
   readonly handles: Set<number>
 }
 
-export function abortError(message = 'Raster request aborted'): Error {
+function abortError(message = 'Raster request aborted'): Error {
   const error = new Error(message)
   error.name = 'AbortError'
   return error
@@ -449,7 +449,7 @@ export class RasterWorkerPool {
 }
 
 /** Decoded-block cache shared by all display sources (plan §5: 128 MiB). */
-export const RASTER_DECODED_CACHE_BYTES = 128 * 1024 * 1024
+const RASTER_DECODED_CACHE_BYTES = 128 * 1024 * 1024
 
 let workspacePool: RasterWorkerPool | null = null
 

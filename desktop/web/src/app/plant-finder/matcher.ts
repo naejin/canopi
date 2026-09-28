@@ -11,7 +11,7 @@ import { normalizeSpeciesSearch } from '../../utils/species-search-normalization
  * the words it searched instead so the list can say "Showing results for …".
  */
 
-export type PlantFinderNameKind = 'common' | 'scientific' | 'synonym' | 'code'
+type PlantFinderNameKind = 'common' | 'scientific' | 'synonym' | 'code'
 
 export interface PlantFinderName {
   readonly text: string
@@ -29,7 +29,7 @@ export interface PlantFinderRange {
   readonly end: number
 }
 
-export interface PlantFinderMark {
+interface PlantFinderMark {
   readonly text: string
   readonly ranges: readonly PlantFinderRange[]
 }

@@ -77,7 +77,7 @@ export interface SavedViewDeleteConfirmation {
 const deleteConfirmationState = signal<Fenced<SavedViewDeleteConfirmation> | null>(null)
 export const savedViewDeleteConfirmation = fenced(deleteConfirmationState)
 
-export interface SavedViewUndo {
+interface SavedViewUndo {
   readonly message: string
   readonly deletion: SavedViewDeletion
 }

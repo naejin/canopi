@@ -15,20 +15,20 @@ import {
 } from './identity'
 import type { PanelTarget } from '../types/design'
 
-export type TargetMapProjectionPoint = TargetScenePoint
+type TargetMapProjectionPoint = TargetScenePoint
 
-export interface TargetMapProjectionLocation {
+interface TargetMapProjectionLocation {
   readonly lat: number
   readonly lon: number
 }
 
-export interface TargetMapPlantRef {
+interface TargetMapPlantRef {
   readonly id: string
   readonly canonicalName: string
   readonly position: TargetMapProjectionPoint
 }
 
-export interface TargetMapZoneRef {
+interface TargetMapZoneRef {
   readonly id: string
   readonly zoneType?: string
   readonly points: readonly TargetMapProjectionPoint[]
@@ -40,7 +40,7 @@ export interface TargetMapProjectionScene {
   readonly zones: readonly TargetMapZoneRef[]
 }
 
-export interface TargetMapPlantFeature {
+interface TargetMapPlantFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Point'
@@ -52,7 +52,7 @@ export interface TargetMapPlantFeature {
   }
 }
 
-export interface TargetMapPolygonZoneFeature {
+interface TargetMapPolygonZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'Polygon'
@@ -64,7 +64,7 @@ export interface TargetMapPolygonZoneFeature {
   }
 }
 
-export interface TargetMapLineZoneFeature {
+interface TargetMapLineZoneFeature {
   readonly type: 'Feature'
   readonly geometry: {
     readonly type: 'LineString'
@@ -76,9 +76,9 @@ export interface TargetMapLineZoneFeature {
   }
 }
 
-export type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
+type TargetMapZoneFeature = TargetMapPolygonZoneFeature | TargetMapLineZoneFeature
 export type TargetMapFeature = TargetMapPlantFeature | TargetMapZoneFeature
-export type TargetMapSkippedReason = 'missing_location' | null
+type TargetMapSkippedReason = 'missing_location' | null
 
 export interface TargetMapProjectionResult {
   readonly features: readonly TargetMapFeature[]
@@ -242,8 +242,3 @@ function targetZoneToSceneZone(zone: TargetZoneRef): SceneZoneEntity {
     notes: null,
   }
 }
-
-export const targetMapProjection = {
-  project: projectTargetResolutionToMapFeatures,
-  projectTargets: projectTargetsToMapFeatures,
-} as const

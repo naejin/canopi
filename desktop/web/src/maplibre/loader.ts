@@ -26,11 +26,11 @@ export interface MapLibreMapConstructorOptions {
   transformRequest?: (url: string) => MapLibreRequestParameters
 }
 
-export interface MapLibreRequestParameters {
+interface MapLibreRequestParameters {
   url: string
 }
 
-export interface MapLibreGetResourceResponse<T = ArrayBuffer> {
+interface MapLibreGetResourceResponse<T = ArrayBuffer> {
   data: T
 }
 

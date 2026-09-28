@@ -56,7 +56,7 @@ export interface CalendarDayProjection {
   readonly actions: readonly CalendarPlanningAction[]
 }
 
-export interface CalendarAgendaGroup {
+interface CalendarAgendaGroup {
   readonly date: CivilDate
   readonly dateKey: string
   readonly actions: readonly CalendarPlanningAction[]

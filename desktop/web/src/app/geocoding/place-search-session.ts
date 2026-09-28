@@ -12,7 +12,7 @@ export const placeSearch: PlaceSearchController = createPlaceSearchController({
 })
 
 /** Forget the place search results; the field's text belongs to the field. */
-export function dismissPlaceSearch(): void {
+function dismissPlaceSearch(): void {
   placeSearch.clear()
 }
 
@@ -39,7 +39,7 @@ export function installPlaceSearchSession(): () => void {
   return dispose
 }
 
-export function disposePlaceSearchSession(): void {
+function disposePlaceSearchSession(): void {
   disposeActiveSession?.()
 }
 

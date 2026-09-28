@@ -8,8 +8,6 @@ import {
 } from './host'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
 
-export type { MapLibreHostViewState } from './host'
-
 type MapLibreSurfaceEventListener = (event?: unknown) => void
 type MapLibreSurfaceLogError = (message?: unknown, ...optionalParams: unknown[]) => void
 
@@ -35,7 +33,7 @@ export interface MapLibreSurfaceContext<TMap extends MapLibreMapInstance> {
   isCurrent(): boolean
 }
 
-export interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
+interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
   readonly key: string
   createMap(
     maplibre: MapLibreApi,

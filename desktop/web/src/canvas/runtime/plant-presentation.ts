@@ -19,8 +19,8 @@ import { getCanvasPlantDisplay, resolveDisplayedPlantColor, type PlantDisplay } 
 /** Stack badge count text: the 12 px type floor (digits only, so no CJK raise). */
 export const STACK_BADGE_FONT_SIZE_PX = 12
 /** Badge height; it is a circle for one digit and a pill for more. */
-export const STACK_BADGE_HEIGHT_PX = 18
-export const STACK_BADGE_GAP_PX = 2
+const STACK_BADGE_HEIGHT_PX = 18
+const STACK_BADGE_GAP_PX = 2
 // A 12 px Source Sans 3 digit is about 6.1 px wide; 7 keeps a margin for fallback fonts.
 const STACK_BADGE_DIGIT_WIDTH_PX = 7
 const STACK_BADGE_PADDING_PX = 5

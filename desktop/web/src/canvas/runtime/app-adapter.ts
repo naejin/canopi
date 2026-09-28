@@ -21,14 +21,14 @@ export interface CanvasRuntimeLayerProjectionSource {
   readonly opacity: number
 }
 
-export interface CanvasRuntimeChromeSettingsSnapshot {
+interface CanvasRuntimeChromeSettingsSnapshot {
   readonly gridVisible: boolean
   readonly rulersVisible: boolean
   /** The Design's ruler guides; the app hides them while it presents the map. */
   readonly guidesVisible: boolean
 }
 
-export interface CanvasRuntimeCleanStateAdapter {
+interface CanvasRuntimeCleanStateAdapter {
   setCanvasClean(clean: boolean): void
 }
 
@@ -38,7 +38,7 @@ export interface CanvasRuntimeDocumentCompositionInput {
   readonly canvas: CanopiFile
 }
 
-export interface CanvasRuntimeDocumentAdapter {
+interface CanvasRuntimeDocumentAdapter {
   composeDocumentForSave(input: CanvasRuntimeDocumentCompositionInput): CanopiFile
 }
 

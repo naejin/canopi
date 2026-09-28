@@ -19,7 +19,7 @@
  * (its MapLibre layers, sources, protocol and listeners) and releases the pool
  * client, which rejects queued work and closes worker sources.
  */
-import type { RasterPoolClient, RasterTileRequest, RasterWorkerPool } from './pool'
+import type { RasterTileRequest, RasterWorkerPool } from './pool'
 import { rasterWorkerPool } from './pool'
 import { recordRaster } from './diagnostics'
 
@@ -27,9 +27,9 @@ type RasterModule = typeof import('maplibre-gl-raster')
 type LayerManager = InstanceType<RasterModule['LayerManager']>
 type LayerManagerMap = ConstructorParameters<RasterModule['LayerManager']>[0]
 
-export type RasterBounds = readonly [west: number, south: number, east: number, north: number]
+type RasterBounds = readonly [west: number, south: number, east: number, north: number]
 
-export interface RasterDisplayAsset {
+interface RasterDisplayAsset {
   /** Range-readable URL of one immutable display COG. */
   readonly url: string
   /** WGS84 footprint used to cull the asset per tile. */
@@ -50,7 +50,7 @@ export interface RasterDisplayLayer {
   readonly reversed: boolean
 }
 
-export type RasterDisplayLayerState = 'loading' | 'ready' | 'error'
+type RasterDisplayLayerState = 'loading' | 'ready' | 'error'
 
 export interface RasterDisplayOptions {
   /** The engine added, replaced or removed map layers after an async load. */
@@ -317,5 +317,3 @@ export function tileIsRelevant(map: RasterDisplayMap, tile: RasterTileRequest): 
   const overlapsX = wraps || [0, -360, 360].some((shift) => tileEast + shift >= west && tileWest + shift <= east)
   return overlapsX && tileNorth >= south && tileSouth <= north
 }
-
-export type { RasterPoolClient }

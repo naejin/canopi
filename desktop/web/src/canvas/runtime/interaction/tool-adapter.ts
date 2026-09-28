@@ -17,12 +17,12 @@ export interface SceneToolTransientOptions {
   readonly preserveActiveDraft?: boolean
 }
 
-export interface SceneToolPointerDownContext extends SceneToolPointerEvent {
+interface SceneToolPointerDownContext extends SceneToolPointerEvent {
   readonly beginDrag: (drag: SceneToolPointerDrag) => void
   readonly clearPointerGesture: () => void
 }
 
-export interface SceneToolCapturedPointerContext extends SceneToolPointerEvent {
+interface SceneToolCapturedPointerContext extends SceneToolPointerEvent {
   readonly startScreen: ScenePoint
   readonly startWorld: ScenePoint
   readonly beginDrag: (drag: SceneToolPointerDrag) => void

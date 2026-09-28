@@ -90,7 +90,7 @@ async function loadEnglishFallbacks(canonicalNames: readonly string[], requested
   }
 }
 
-export async function loadCatalogNames(
+async function loadCatalogNames(
   canonicalNames: readonly string[],
   locales: readonly string[] = SUPPORTED_LOCALES,
 ): Promise<void> {

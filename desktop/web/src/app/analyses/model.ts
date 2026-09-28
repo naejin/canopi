@@ -25,7 +25,7 @@ import type {
  * stays authoritative.
  */
 
-export type Edition = 'desktop' | 'web'
+type Edition = 'desktop' | 'web'
 
 /** Why an analysis cannot run from one item, native or frontend. */
 export type AnalysisAvailability =
@@ -41,7 +41,7 @@ export interface AnalysisSubject {
 }
 
 /** A derived library item that may duplicate a request. */
-export interface ExistingResult {
+interface ExistingResult {
   readonly id: string
   readonly provenance: Provenance | null
 }
@@ -54,7 +54,7 @@ export interface AnalysisContext {
   readonly inDesign: ReadonlySet<string>
 }
 
-export interface AnalysisOption {
+interface AnalysisOption {
   readonly entry: AnalysisEntry
   readonly unavailable: AnalysisAvailability | null
 }
@@ -196,7 +196,7 @@ function defaultValue(param: AnalysisParamSpec, locale: string): FormValue {
   }
 }
 
-export function suggestedResultName(subjectName: string, title: string): string {
+function suggestedResultName(subjectName: string, title: string): string {
   return `${subjectName} · ${title}`
 }
 
@@ -249,7 +249,7 @@ function paramError(param: AnalysisParamSpec, value: FormValue, locale: string):
 }
 
 /** Typed values of the parameters that apply; hidden ones are omitted so native defaults apply. */
-export function requestParameters(entry: AnalysisEntry, form: AnalysisForm, locale: string): AnalysisParamValue[] {
+function requestParameters(entry: AnalysisEntry, form: AnalysisForm, locale: string): AnalysisParamValue[] {
   const parameters: AnalysisParamValue[] = []
   for (const param of entry.params) {
     if (!isParamVisible(entry, form.values, param.key)) continue
@@ -275,7 +275,7 @@ function paramValue(param: AnalysisParamSpec, value: FormValue, locale: string):
 }
 
 /** Keys of the outputs to produce, in registry order: required ones plus the selected optional ones. */
-export function requestedOutputs(entry: AnalysisEntry, form: AnalysisForm): string[] {
+function requestedOutputs(entry: AnalysisEntry, form: AnalysisForm): string[] {
   return entry.outputs
     .filter((output) => !output.optional || form.outputs[output.key] === true)
     .map((output) => output.key)

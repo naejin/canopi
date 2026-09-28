@@ -48,7 +48,7 @@ export interface DesignWriteAdmission {
   withReplacementFence<T>(replace: () => Promise<T>): Promise<T>
 }
 
-export type DesignWriteAdmissionResult<T> =
+type DesignWriteAdmissionResult<T> =
   | { readonly status: 'written'; readonly value: T }
   | { readonly status: 'stale' }
 

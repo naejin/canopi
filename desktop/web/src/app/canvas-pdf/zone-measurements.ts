@@ -1,6 +1,6 @@
 import type { PrintPoint, PrintZone } from '../../canvas/print'
 
-export interface ZoneDimension { id: string; start: PrintPoint; end: PrintPoint; metres: number }
+interface ZoneDimension { id: string; start: PrintPoint; end: PrintPoint; metres: number }
 export interface ZoneMeasurements { zone: PrintZone; reference: string; lengths: number[]; widths: number[]; dimensions: ZoneDimension[]; diameter: boolean }
 
 export function insideZone(zone: PrintZone, point: PrintPoint): boolean {

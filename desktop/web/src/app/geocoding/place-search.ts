@@ -20,7 +20,7 @@ export interface PlaceSearchResult {
   readonly source: 'coordinates' | 'geocoder'
 }
 
-export type PlaceSearchStatus = 'idle' | 'searching' | 'results' | 'no-results' | 'error'
+type PlaceSearchStatus = 'idle' | 'searching' | 'results' | 'no-results' | 'error'
 
 export interface PlaceSearchController {
   readonly results: ReadonlySignal<readonly PlaceSearchResult[]>

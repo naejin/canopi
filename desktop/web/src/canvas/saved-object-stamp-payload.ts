@@ -52,7 +52,7 @@ export interface SavedObjectStampAnnotation {
   readonly rotationDeg: number | null
 }
 
-export interface SavedObjectStampGroup {
+interface SavedObjectStampGroup {
   readonly id: string
   readonly name: string | null
   readonly members: SceneObjectGroupMember[]

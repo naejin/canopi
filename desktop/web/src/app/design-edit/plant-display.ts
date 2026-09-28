@@ -43,7 +43,7 @@ interface StoredPlantDisplay {
   stratum_colors?: StratumColors
 }
 
-export const DEFAULT_PLANT_DISPLAY_OPTIONS: PlantDisplayOptions = Object.freeze({
+const DEFAULT_PLANT_DISPLAY_OPTIONS: PlantDisplayOptions = Object.freeze({
   colorBy: DEFAULT_PLANT_DISPLAY.colorBy,
   oneColor: DEFAULT_PLANT_DISPLAY.oneColor,
   symbolScale: DEFAULT_PLANT_DISPLAY.symbolScale,

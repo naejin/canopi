@@ -9,9 +9,9 @@ import {
 } from './coordinator'
 import type { DesignTemplateEnvelope, DesignTemplateImportResult } from './types'
 
-export type DesignTemplateOpenResult = 'opened' | 'cancelled'
+type DesignTemplateOpenResult = 'opened' | 'cancelled'
 
-export interface StaticTemplateAssetResponse {
+interface StaticTemplateAssetResponse {
   readonly ok: boolean
   readonly status: number
   readonly statusText: string
@@ -71,7 +71,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => defaultWorkflow.dispose())
 }
 
-export function resolveStaticTemplateAssetUrl(
+function resolveStaticTemplateAssetUrl(
   downloadUrl: string,
   options: Pick<BrowserDesignTemplateImportAdapters, 'baseUrl' | 'allowedAssetOrigins'> = {},
 ): URL {

@@ -22,12 +22,12 @@ import type {
   ReducedSpeciesRow,
 } from '../../web/reduced-species-catalog'
 
-export interface ReducedSpeciesArtifactRow extends ReducedSpeciesRow {
+interface ReducedSpeciesArtifactRow extends ReducedSpeciesRow {
   readonly normalized_canonical_name: string
   readonly normalized_common_name: string | null
 }
 
-export interface ReducedSpeciesNameRow {
+interface ReducedSpeciesNameRow {
   readonly species_id: string
   readonly language: string
   readonly common_name: string

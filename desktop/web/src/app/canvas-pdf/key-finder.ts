@@ -18,7 +18,7 @@ export interface PdfKeyLocation {
   readonly bounds: PrintBounds
 }
 
-export interface PdfKeyResult {
+interface PdfKeyResult {
   readonly location: PdfKeyLocation
   readonly hit: PlantFinderHit<string>
 }

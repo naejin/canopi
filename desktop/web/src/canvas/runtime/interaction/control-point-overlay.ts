@@ -9,7 +9,7 @@ export interface ControlPointOverlayPoint {
   readonly world: ScenePoint
 }
 
-export interface ControlPointOverlayDragPresentation<TEntity> {
+interface ControlPointOverlayDragPresentation<TEntity> {
   update(entity: TEntity): void
   hide(): void
   dispose(): void

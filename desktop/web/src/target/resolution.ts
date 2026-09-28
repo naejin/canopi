@@ -3,7 +3,7 @@ import type { PanelTarget } from '../types/design'
 
 export type TargetResolutionScene = TargetSceneInput
 
-export interface TargetResolutionResult {
+interface TargetResolutionResult {
   readonly plantIds: readonly string[]
   readonly zoneIds: readonly string[]
   readonly sceneIds: readonly string[]

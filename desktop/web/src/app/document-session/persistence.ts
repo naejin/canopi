@@ -24,12 +24,12 @@ export interface DesignSaveSettlement {
   readonly content: CanopiFile;
 }
 
-export interface DesignExistingPathSaveOperation {
+interface DesignExistingPathSaveOperation {
   readonly destinationPath: string;
   execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
-export interface DesignSaveAsOperation {
+interface DesignSaveAsOperation {
   readonly destinationHint: {
     readonly currentPath: string | null;
     readonly suggestedName: string;
@@ -37,17 +37,17 @@ export interface DesignSaveAsOperation {
   execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
-export interface DesignSnapshotSaveOperation {
+interface DesignSnapshotSaveOperation {
   execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
-export interface DesignSynchronousSnapshotSaveOperation {
+interface DesignSynchronousSnapshotSaveOperation {
   executeImmediately(
     destination: PreparedSynchronousDesignWriteDestination,
   ): DesignSaveSettlement;
 }
 
-export interface DesignPersistenceCanvasLease {
+interface DesignPersistenceCanvasLease {
   isCurrent(): boolean;
   assertCurrent(): void;
 }
@@ -62,7 +62,7 @@ export interface DesignReplacementGuardCapture {
   resume(): DesignReplacementGuard | null;
 }
 
-export interface DesignReplacementWriteFence {
+interface DesignReplacementWriteFence {
   invalidatePredecessorWrites(): void;
 }
 

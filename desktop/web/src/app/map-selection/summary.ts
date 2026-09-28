@@ -28,7 +28,7 @@ export interface MapSelectionSummary {
   readonly measurementLengthM: number | null
 }
 
-export interface MapSelectionZone {
+interface MapSelectionZone {
   /** The name the user gave the zone; null until it has one. */
   readonly name: string | null
   /** `rect`, `ellipse`, `polygon` or `line`. */
@@ -39,7 +39,7 @@ export interface MapSelectionZone {
   readonly perimeterM: number | null
 }
 
-export interface MapSelectionSpecies {
+interface MapSelectionSpecies {
   readonly canonicalName: string
   /** The common name in the current language, else the English catalog name, else the Design's, else the scientific name. */
   readonly name: string

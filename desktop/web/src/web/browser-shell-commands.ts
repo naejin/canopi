@@ -19,8 +19,6 @@ import { t } from '../i18n'
 import type { DesignSaveStatus } from '../app/document-session/continuous-save'
 import type { GeoJsonWorkflow } from '../app/geojson/workflow'
 
-export type { MenuDefinition } from '../app/shell-commands/menus'
-
 type BrowserShellCapabilityId =
   | 'newDesign'
   | 'openCanopi'
@@ -55,7 +53,7 @@ type BrowserShellCapabilityId =
   | 'gettingStarted'
   | 'aboutCanopi'
 
-export type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
+type BrowserShellCommandId = ShellCommandIdForCapability<BrowserShellCapabilityId>
 
 export type BrowserShellProjectedCommand = ProjectedShellCommand<BrowserShellCommandId>
 export type BrowserShellCatalog = readonly ShellCommandCatalogEntry<BrowserShellCommandId>[]

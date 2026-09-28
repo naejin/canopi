@@ -6,7 +6,7 @@ import type { WorkspaceSettledView } from './workspace-runtime-composition'
  * is your site?" appears over an overview, never at the previous Design's
  * site scale.
  */
-export const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
+const NEW_DESIGN_OVERVIEW_MAX_ZOOM = 5
 
 /** Remembers the settled view as the app's last view. */
 export function persistLastView(view: WorkspaceSettledView): void {

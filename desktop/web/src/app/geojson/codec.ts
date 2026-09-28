@@ -52,21 +52,21 @@ export interface GeoJsonDesignObjects {
   readonly groups: readonly ObjectGroup[]
 }
 
-export type GeoJsonPosition = [number, number]
+type GeoJsonPosition = [number, number]
 
-export type GeoJsonGeometry =
+type GeoJsonGeometry =
   | { type: 'Point'; coordinates: GeoJsonPosition }
   | { type: 'LineString'; coordinates: GeoJsonPosition[] }
   | { type: 'Polygon'; coordinates: GeoJsonPosition[][] }
 
-export interface GeoJsonFeature {
+interface GeoJsonFeature {
   type: 'Feature'
   id: string
   geometry: GeoJsonGeometry
   properties: Record<string, unknown>
 }
 
-export interface GeoJsonGroupRecord {
+interface GeoJsonGroupRecord {
   id: string
   name: string | null
   locked: boolean
@@ -298,7 +298,7 @@ export function parseDesignGeoJson(text: string, options: GeoJsonDecodeOptions =
   return decodeDesignGeoJson(parsed, options)
 }
 
-export function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOptions = {}): GeoJsonDecodeResult {
+function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOptions = {}): GeoJsonDecodeResult {
   const features = rootFeatures(value)
   if (features.length > GEOJSON_MAX_FEATURES) throw new GeoJsonImportError('too_many_features')
 

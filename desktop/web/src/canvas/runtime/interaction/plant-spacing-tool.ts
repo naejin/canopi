@@ -47,7 +47,7 @@ interface PlantSpacingSource {
   glyph: { symbol: PlantSymbolId; color: string }
 }
 
-export interface PlantSpacingPointerDownResult {
+interface PlantSpacingPointerDownResult {
   readonly clearPointerGesture: boolean
 }
 

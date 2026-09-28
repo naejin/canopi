@@ -1,7 +1,7 @@
 import type { PrintBounds, PrintPoint } from '../../canvas/print'
 import { PDF_ZOOM } from './types'
 
-export function pageZoom(zoom = 100): number {
+function pageZoom(zoom = 100): number {
   if (!Number.isFinite(zoom) || zoom < PDF_ZOOM.min || zoom > PDF_ZOOM.max) throw new Error('invalid-page-view')
   return zoom
 }

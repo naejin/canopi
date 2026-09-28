@@ -25,7 +25,7 @@ export function designStrata(design: Pick<CanopiFile, 'consortiums'> | null): Re
   return strata
 }
 
-export function plantDisplayOf(design: CanopiFile | null): PlantDisplay {
+function plantDisplayOf(design: CanopiFile | null): PlantDisplay {
   return normalizePlantDisplay({ ...readPlantDisplayOptions(design), strata: designStrata(design) })
 }
 

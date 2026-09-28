@@ -12,7 +12,7 @@ import { embeddedImageBytes } from '../contracts/views-admission'
 // 1 MiB is made smaller in the browser (a canvas, then WebP, or JPEG where the
 // browser cannot write WebP, at falling quality and size) until it fits.
 
-export type StoryImageProblem = 'type' | 'tooLarge' | 'designFull' | 'unreadable'
+type StoryImageProblem = 'type' | 'tooLarge' | 'designFull' | 'unreadable'
 
 export type StoryImageRead =
   | {
@@ -27,7 +27,7 @@ export type StoryImageRead =
 type ShrinkType = 'image/webp' | 'image/jpeg'
 
 /** A decoded image that can be drawn again at another size and encoded. */
-export interface DecodedStoryImage {
+interface DecodedStoryImage {
   readonly width: number
   readonly height: number
   /** Null when the browser cannot encode; the blob's type says what it wrote. */

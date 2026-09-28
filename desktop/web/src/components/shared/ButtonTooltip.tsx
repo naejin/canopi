@@ -4,7 +4,7 @@ import styles from './ButtonTooltip.module.css'
  * `top` opens above the button and `bottom` below it, both aligned to its end
  * edge (for bars along the bottom or top of the window).
  */
-export type ButtonTooltipSide = 'left' | 'right' | 'top' | 'bottom'
+type ButtonTooltipSide = 'left' | 'right' | 'top' | 'bottom'
 
 interface ButtonTooltipProps {
   label: string

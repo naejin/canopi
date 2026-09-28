@@ -13,7 +13,7 @@ export interface MapLibreHostViewState {
   readonly bearing?: number
 }
 
-export interface MapLibreHostResizeObserver {
+interface MapLibreHostResizeObserver {
   observe(target: Element): void
   disconnect(): void
 }

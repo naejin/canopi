@@ -91,7 +91,7 @@ function WorkspaceTitleBarContent({
   )
 }
 
-export function TitleBarIconButton({ command, icon }: {
+function TitleBarIconButton({ command, icon }: {
   readonly command: TitleBarCommand
   readonly icon: ControlIconName
 }) {

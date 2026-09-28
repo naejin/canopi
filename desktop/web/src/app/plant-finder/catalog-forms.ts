@@ -30,7 +30,7 @@ export function useCatalogHabits(canonicalNames: readonly string[]): ReadonlyMap
   }, [key, currentRevision])
 }
 
-export async function loadCatalogHabits(canonicalNames: readonly string[]): Promise<void> {
+async function loadCatalogHabits(canonicalNames: readonly string[]): Promise<void> {
   const missing = canonicalNames.filter((name) => !habitsBySpecies.has(name) && !pending.has(name))
   if (missing.length === 0) return
   for (const name of missing) pending.add(name)

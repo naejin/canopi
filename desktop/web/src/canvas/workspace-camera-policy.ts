@@ -2,7 +2,7 @@ import { mapZoomToStageScale } from './projection'
 
 export const WORKSPACE_MAP_MIN_ZOOM = 0
 export const WORKSPACE_MAP_MAX_ZOOM = 27
-export const WORKSPACE_OVERVIEW_SCALE_THRESHOLD = 0.1
+const WORKSPACE_OVERVIEW_SCALE_THRESHOLD = 0.1
 
 const MAPLIBRE_WORLD_TILE_SIZE = 512
 

@@ -26,13 +26,13 @@ import { CONSORTIUM_STRATA, SUCCESSION_PHASE_COUNT } from './time-model'
 
 const consortiumTargetPresentation = createPanelTargetPresentationController('consortium')
 
-export interface ConsortiumEditDraft {
+interface ConsortiumEditDraft {
   readonly stratum: string
   readonly startPhase: number
   readonly endPhase: number
 }
 
-export interface ConsortiumEditorState {
+interface ConsortiumEditorState {
   readonly canonicalName: string
   readonly sessionIdentity: object
   readonly draft: ConsortiumEditDraft

@@ -94,7 +94,7 @@ export function selectSpeciesPlants(canonicalNames: readonly string[]): void {
   currentCanvasSceneEditCommandSurface.peek()?.selectSpecies(canonicalNames)
 }
 
-export function speciesPlantBounds(
+function speciesPlantBounds(
   scene: ScenePersistedState,
   canonicalNames: readonly string[],
 ): SceneBounds | null {

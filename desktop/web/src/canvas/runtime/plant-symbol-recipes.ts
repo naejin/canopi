@@ -1,7 +1,7 @@
 import type { PlantSymbolId } from './scene/plant-symbols'
 
 /** Native path commands, normalized to the Placed Plant radius (the symbol box is -1..1). */
-export type PlantSymbolCommand =
+type PlantSymbolCommand =
   | readonly ['M' | 'L', number, number]
   | readonly ['C', number, number, number, number, number, number]
 /** One closed contour; the close back to the first point is implicit. */
@@ -27,7 +27,7 @@ export interface PlantSymbolRecipe {
 
 export type PlantSymbolFamily = 'form' | 'gives' | 'does' | 'abstract'
 
-export const PLANT_SYMBOL_DETAIL_DIAMETER_PX = 16
+const PLANT_SYMBOL_DETAIL_DIAMETER_PX = 16
 export const ROUND_PLANT_SYMBOL_RADIUS = 0.8
 
 // ---------------------------------------------------------------------------

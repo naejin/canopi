@@ -36,18 +36,18 @@ export interface GeoJsonNotice {
   readonly message: string
 }
 
-export interface GeoJsonCanvas {
+interface GeoJsonCanvas {
   readonly commands: Pick<CanvasCommandSurface, 'sceneEdits' | 'viewport'>
   readonly queries: Pick<CanvasQuerySurface, 'getSettledDesignObjects'>
 }
 
-export type GeoJsonImportOutcome =
+type GeoJsonImportOutcome =
   | { readonly status: 'imported'; readonly counts: GeoJsonImportCounts; readonly skipped: number }
   | { readonly status: 'empty'; readonly skipped: number }
   | { readonly status: 'rejected'; readonly code: GeoJsonImportErrorCode }
   | { readonly status: 'cancelled' | 'unavailable' | 'busy' | 'read-failed' }
 
-export type GeoJsonExportOutcome =
+type GeoJsonExportOutcome =
   | { readonly status: 'written'; readonly featureCount: number }
   | { readonly status: 'cancelled' | 'unavailable' | 'busy' | 'write-failed' }
 
@@ -67,7 +67,7 @@ export interface GeoJsonWorkflow {
   exportGeoJson(): Promise<GeoJsonExportOutcome>
 }
 
-export function readCurrentGeoJsonCanvas(): GeoJsonCanvas | null {
+function readCurrentGeoJsonCanvas(): GeoJsonCanvas | null {
   const session = getCurrentCanvasSession()
   return session ? { commands: session.commands, queries: session.queries } : null
 }

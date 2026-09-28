@@ -1,4 +1,4 @@
-export type DesignSessionWorkflowDisposer = () => void
+type DesignSessionWorkflowDisposer = () => void
 
 export interface DesignSessionWorkflowContext {}
 
@@ -12,14 +12,14 @@ export interface DesignSessionWorkflowRunner {
   dispose(): void
 }
 
-export class DesignSessionWorkflowCleanupError extends Error {
+class DesignSessionWorkflowCleanupError extends Error {
   constructor(readonly errors: readonly unknown[]) {
     super('Multiple Design Session workflow cleanups failed')
     this.name = 'DesignSessionWorkflowCleanupError'
   }
 }
 
-export class DesignSessionWorkflowInstallError extends Error {
+class DesignSessionWorkflowInstallError extends Error {
   constructor(
     readonly installError: unknown,
     readonly cleanupErrors: readonly unknown[],

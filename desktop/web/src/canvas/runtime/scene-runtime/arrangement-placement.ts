@@ -16,7 +16,7 @@ import {
 } from '../scene'
 import type { SceneEditCoordinator } from './transactions'
 
-export interface SceneArrangementPrototype<T> {
+interface SceneArrangementPrototype<T> {
   readonly sourceId: string
   readonly entity: T
 }
@@ -29,14 +29,14 @@ export interface SceneArrangementTemplate {
   readonly groups: readonly SceneArrangementPrototype<SceneObjectGroupEntity>[]
 }
 
-export interface SceneArrangementPlacementInput {
+interface SceneArrangementPlacementInput {
   readonly template: SceneArrangementTemplate
   readonly translateBy: ScenePoint
   readonly historyType: string
   readonly onCommitted?: () => void
 }
 
-export interface SceneArrangementPlacementReceipt {
+interface SceneArrangementPlacementReceipt {
   readonly committed: boolean
   readonly createdCount: number
   readonly selectedTopLevelTargets: readonly SceneDesignObjectTarget[]

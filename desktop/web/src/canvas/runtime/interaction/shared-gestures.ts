@@ -65,7 +65,7 @@ export interface SceneInteractionSharedGestureContext {
   readonly beginAnnotationTextEdit: (annotationId: string) => boolean
 }
 
-export interface SharedGesturePointerDownContext {
+interface SharedGesturePointerDownContext {
   readonly event: PointerEvent
   readonly screen: ScenePoint
   readonly world: ScenePoint
@@ -73,18 +73,18 @@ export interface SharedGesturePointerDownContext {
   readonly spaceHeld: boolean
 }
 
-export interface SharedGesturePointerMoveContext {
+interface SharedGesturePointerMoveContext {
   readonly screen: ScenePoint
   readonly rawWorld: ScenePoint
 }
 
-export interface SharedGesturePointerUpContext {
+interface SharedGesturePointerUpContext {
   readonly screen: ScenePoint
   readonly rawWorld: ScenePoint
   readonly preserveActiveDraft: boolean
 }
 
-export interface SharedGesturePointerUpResult {
+interface SharedGesturePointerUpResult {
   readonly preserveActiveDraft: boolean
 }
 

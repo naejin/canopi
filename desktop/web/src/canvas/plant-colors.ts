@@ -69,7 +69,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-export function normalizeHslColor(color: HslColor): HslColor {
+function normalizeHslColor(color: HslColor): HslColor {
   const h = ((color.h % 360) + 360) % 360
   return {
     h,
@@ -190,7 +190,7 @@ export function pointerPositionToSaturationLightness(
   }
 }
 
-export function pickPrimaryFlowerColorToken(value: string | null | undefined): string | null {
+function pickPrimaryFlowerColorToken(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
   const primary = value
     .split(/[,/]/)[0]

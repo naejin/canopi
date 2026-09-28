@@ -24,7 +24,7 @@ export type HomeWriteOutcome =
   | { readonly kind: 'written' }
   | { readonly kind: 'conflict'; readonly fileGone: boolean }
 
-export interface ContinuousSaveConflict {
+interface ContinuousSaveConflict {
   /** The file was moved or deleted rather than changed. */
   readonly fileGone: boolean
 }

@@ -7,7 +7,7 @@ export interface ZoneMeasurementRect {
   height: number
 }
 
-export type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
+type ZoneMeasurementLabelKind = 'edge' | 'dimension' | 'area'
 
 export interface ZoneMeasurementLabel {
   id: string
@@ -150,7 +150,7 @@ function createEdgeLabel(id: string, start: ScenePoint, end: ScenePoint): ZoneMe
   }
 }
 
-export function rectanglePoints(rect: ZoneMeasurementRect): ScenePoint[] {
+function rectanglePoints(rect: ZoneMeasurementRect): ScenePoint[] {
   return [
     { x: rect.x, y: rect.y },
     { x: rect.x + rect.width, y: rect.y },

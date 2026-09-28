@@ -1,7 +1,7 @@
 import type { CameraViewportSnapshot } from './runtime/camera'
 
 /** One CSS pixel on screen is 1/96 inch. */
-export const CSS_PIXEL_METERS = 0.0254 / 96
+const CSS_PIXEL_METERS = 0.0254 / 96
 
 /** Common scales offered by the zoom group's scale menu. */
 export const COMMON_MAP_SCALES: readonly number[] = [100, 200, 500, 1000, 2000, 5000, 10000, 25000]

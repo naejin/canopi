@@ -1,7 +1,7 @@
 import type { CanvasPrintSnapshot, PrintBounds, PrintPlant } from '../../canvas/print'
 import type { GlyphOutline, TextLine } from './text'
 export type PdfPaper = 'A4' | 'Letter'
-export type PdfOrientation = 'auto' | 'portrait' | 'landscape'
+type PdfOrientation = 'auto' | 'portrait' | 'landscape'
 /** Print-only plant colouring; the Design is never recoloured. */
 export type PdfPlantColors = 'design' | 'grayscale' | 'black'
 export const PDF_PLANT_COLORS: readonly PdfPlantColors[] = ['design', 'grayscale', 'black']
@@ -43,7 +43,7 @@ export interface PdfLabels extends Partial<typeof import('./labels').fieldLabelD
   /** Localized plant symbol names by symbol id, for the page 1 symbol legend. */
   readonly symbolNames?: Readonly<Record<string, string>>
 }
-export type PdfMatrix = readonly [number, number, number, number, number, number]
+type PdfMatrix = readonly [number, number, number, number, number, number]
 export type PdfOperation =
   | { readonly kind: 'path'; readonly d: string; readonly matrix: PdfMatrix; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly opacity: number }
   | { readonly kind: 'text'; readonly line: TextLine; readonly x: number; readonly y: number; readonly size: number; readonly rotation: number; readonly opacity: number; readonly color?: string }

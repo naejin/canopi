@@ -1,8 +1,8 @@
 import ts from 'typescript'
 
-export type TypeScriptImportKind = 'static' | 'dynamic' | 'import-type' | 'reexport'
+type TypeScriptImportKind = 'static' | 'dynamic' | 'import-type' | 'reexport'
 
-export interface TypeScriptImportBindingFact {
+interface TypeScriptImportBindingFact {
   readonly importedName: string
   readonly localName: string
   readonly typeOnly: boolean
@@ -20,9 +20,9 @@ export interface TypeScriptImportFact {
   readonly reexportAll: boolean
 }
 
-export type TypeScriptExportKind = 'local' | 'named-reexport' | 'star-reexport' | 'namespace-reexport'
+type TypeScriptExportKind = 'local' | 'named-reexport' | 'star-reexport' | 'namespace-reexport'
 
-export interface TypeScriptExportFact {
+interface TypeScriptExportFact {
   readonly kind: TypeScriptExportKind
   readonly exportedName: string | null
   readonly sourceName: string | null
@@ -31,9 +31,9 @@ export interface TypeScriptExportFact {
   readonly typeOnly: boolean
 }
 
-export type TypeScriptWriteKind = 'assignment' | 'update' | 'object-property'
+type TypeScriptWriteKind = 'assignment' | 'update' | 'object-property'
 
-export interface TypeScriptWriteFact {
+interface TypeScriptWriteFact {
   readonly kind: TypeScriptWriteKind
   readonly target: string
   readonly property: string | null
@@ -42,9 +42,9 @@ export interface TypeScriptWriteFact {
   readonly column: number
 }
 
-export type TypeScriptCallKind = 'call' | 'new'
+type TypeScriptCallKind = 'call' | 'new'
 
-export interface TypeScriptCallFact {
+interface TypeScriptCallFact {
   readonly kind: TypeScriptCallKind
   readonly target: string
   readonly property: string | null

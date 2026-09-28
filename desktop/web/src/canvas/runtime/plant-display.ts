@@ -74,7 +74,7 @@ export function stratumDisplayColor(key: StratumColorKey, display: Pick<PlantDis
   return display.stratumColors[key] ?? defaultStratumColor(key)
 }
 
-export function defaultStratumColor(key: StratumColorKey): string {
+function defaultStratumColor(key: StratumColorKey): string {
   return key === 'none' ? NO_STRATUM_DISPLAY_COLOR : STRATUM_DISPLAY_COLORS[key]
 }
 

@@ -28,7 +28,7 @@ export interface BrowserDraftSummary {
   readonly updatedAt: string;
 }
 
-export interface BrowserSavedObjectStampRecord {
+interface BrowserSavedObjectStampRecord {
   readonly id: string;
   readonly name: string;
   readonly payload: unknown;

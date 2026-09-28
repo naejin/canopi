@@ -112,7 +112,7 @@ export function viewportCenterGeo(
   return worldToGeo(center.x, center.y, originLat, originLon)
 }
 
-export function viewportCornerWorldPoints(
+function viewportCornerWorldPoints(
   viewport: { x: number; y: number; scale: number },
   screenSize: { width: number; height: number },
 ): readonly [

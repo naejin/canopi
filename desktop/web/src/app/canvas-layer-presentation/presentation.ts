@@ -15,14 +15,14 @@ import { t } from '../../i18n'
 const SCENE_LAYER_ROW_IDS = ['annotations', 'plants', 'measurement-guides', 'zones'] as const
 const MAP_LAYER_ROW_IDS: ReadonlySet<string> = new Set<MapLayerId>(['basemap', 'satellite', 'contours', 'hillshade'])
 
-export type CanvasLayerPresentationAuthority = 'scene' | 'map-layers'
+type CanvasLayerPresentationAuthority = 'scene' | 'map-layers'
 
 /**
  * The Layers section a row belongs to: the Design's own objects, site data
  * (the Design's LiDAR items and the online-elevation terrain rows), and the
  * background the map draws under everything.
  */
-export type CanvasLayerPresentationGroup = 'design' | 'site' | 'background'
+type CanvasLayerPresentationGroup = 'design' | 'site' | 'background'
 
 export type CanvasLayerPresentationDetail =
   | { readonly type: 'scene' }

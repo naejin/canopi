@@ -28,7 +28,7 @@ export const currentCanvasToolCommandSurface = computed<CanvasToolCommandSurface
 export const currentCanvasViewportCommandSurface = computed<CanvasViewportCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.viewport ?? null,
 )
-export const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
+const currentCanvasLayerCommandSurface = computed<CanvasLayerCommandSurface | null>(() =>
   commandSurfaceFrom(currentCanvasSession.value)?.layers ?? null,
 )
 export const currentCanvasSceneEditCommandSurface = computed<CanvasSceneEditCommandSurface | null>(() =>

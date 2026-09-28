@@ -35,7 +35,7 @@ const RECENT_PLANT_STAMP_SOURCE_LIMIT = 8
 /** Species chosen to place this session, newest first; Place plants' chooser offers them. */
 export const recentPlantStampSources = signal<readonly PlantStampSource[]>([])
 
-export function plantStampSourceFromSpecies(source: PlantStampSourceInput): PlantStampSource {
+function plantStampSourceFromSpecies(source: PlantStampSourceInput): PlantStampSource {
   return {
     canonical_name: source.canonical_name,
     common_name: source.common_name,

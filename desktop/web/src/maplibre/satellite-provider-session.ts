@@ -74,9 +74,9 @@ export type SatelliteState =
 /** The fixed retry/timeout policy the product contract settles. */
 export const PROVIDER_REQUEST_TIMEOUT_MS = 15_000
 export const PROVIDER_MAX_RETRIES = 2
-export const PROVIDER_RETRY_BACKOFF_MS = [1_000, 2_000] as const
+const PROVIDER_RETRY_BACKOFF_MS = [1_000, 2_000] as const
 /** Renew an official session within this window of its expiry. */
-export const PROVIDER_SESSION_RENEWAL_WINDOW_MS = 60_000
+const PROVIDER_SESSION_RENEWAL_WINDOW_MS = 60_000
 /** The longest single timer any runtime reliably supports, in milliseconds. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 

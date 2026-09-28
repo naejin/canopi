@@ -1,6 +1,6 @@
 import type { MapFrame } from '../canvas/maplibre-camera'
 
-export type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
+type MapLibreCanvasSurfaceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 export interface MapLibreCanvasSurfaceState {
   readonly status: MapLibreCanvasSurfaceStatus

@@ -77,7 +77,7 @@ export function selectCanvasTool(tool: CanvasToolId): void {
   setCurrentCanvasTool(tool)
 }
 
-export function runCanvasEditAction(action: CanvasEditAction): void {
+function runCanvasEditAction(action: CanvasEditAction): void {
   withCanvas(({ sceneEdits }) => {
     switch (action) {
       case 'cut':
@@ -109,7 +109,7 @@ export function runCanvasEditAction(action: CanvasEditAction): void {
   })
 }
 
-export function runCanvasViewAction(action: CanvasViewAction): void {
+function runCanvasViewAction(action: CanvasViewAction): void {
   if (action === 'search-place') {
     if (currentCanvasCommandSurface.peek()) requestPlaceSearchFocus()
     return

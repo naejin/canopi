@@ -23,7 +23,7 @@ const ZOOM_FACTOR = 1.1
 const DEFAULT_CAMERA_POLICY = createWorkspaceCameraPolicy()
 const DEFAULT_SCALE_BOUNDS = cameraScaleBoundsForPolicy(DEFAULT_CAMERA_POLICY)
 
-export type WorkspaceCameraMode = 'site' | 'overview'
+type WorkspaceCameraMode = 'site' | 'overview'
 
 /**
  * CSS-pixel edges of the screen covered by floating chrome (title bar, rails,
@@ -36,7 +36,7 @@ export interface CameraFrameInsets {
   readonly left: number
 }
 
-export const NO_CAMERA_FRAME_INSETS: CameraFrameInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+const NO_CAMERA_FRAME_INSETS: CameraFrameInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
 /** The screen rectangle fitting frames into, in CSS pixels. */
 interface CameraFramingRect {
@@ -125,11 +125,6 @@ export interface WorkspaceCameraOwner {
   readonly navigation: WorkspaceCameraNavigation
   /** Must detach owner-specific listeners and be safe to call during failed setup. */
   dispose(): void
-}
-
-export interface WorkspaceCameraPolicyOwner {
-  readonly policy: WorkspaceCameraPolicy
-  replacePolicy(policy: WorkspaceCameraPolicy): SceneViewportState
 }
 
 export interface SceneBounds {
@@ -420,7 +415,7 @@ export function createInitialCameraFrame(
  * monotonic revisions, and exact no-op identity. Shared camera owners use this
  * instead of keeping a second mutable viewport representation.
  */
-export function nextCameraViewportSnapshot(
+function nextCameraViewportSnapshot(
   current: CameraViewportSnapshot,
   next: CameraViewportPublication,
 ): CameraViewportSnapshot {
@@ -479,7 +474,7 @@ export function nextCameraViewportSnapshot(
 }
 
 /** Derives a pointer-anchored zoom without publishing a second frame. */
-export function zoomCameraViewport(
+function zoomCameraViewport(
   snapshot: CameraViewportSnapshot,
   pointer: ScenePoint,
   factor: number,

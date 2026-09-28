@@ -5,7 +5,7 @@ import { nearestPlantSpacing } from '../plant-spacing'
 import type { ScenePlantEntity } from './scene'
 
 // Matches the lens name buttons: 12px type, 16px lines, 4px padding.
-export const INSPECTION_TYPE = { size: 12, line: 16, padding: 4 } as const
+const INSPECTION_TYPE = { size: 12, line: 16, padding: 4 } as const
 
 export function inspectionLayout(plants: readonly ScenePlantEntity[], centre: InspectionPoint,
   frame: { width: number; height: number }, names: ReadonlyMap<string, string | null>, measure: (text: string) => number,

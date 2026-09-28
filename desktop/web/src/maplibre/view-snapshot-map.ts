@@ -23,21 +23,21 @@ import {
 /** The custom layer id on the snapshot map; the workspace map uses its own. */
 export const VIEW_SNAPSHOT_SCENE_LAYER_ID = 'canopi-snapshot-scene'
 /** How long the off-screen map (and its WebGL context) outlives its last capture. */
-export const VIEW_SNAPSHOT_IDLE_RELEASE_MS = 30_000
+const VIEW_SNAPSHOT_IDLE_RELEASE_MS = 30_000
 /** Largest snapshot side in device pixels: MapLibre's default canvas limit. */
-export const VIEW_SNAPSHOT_MAX_DEVICE_PIXELS = 4096
+const VIEW_SNAPSHOT_MAX_DEVICE_PIXELS = 4096
 /** How long the map may take to load, the scene layer to initialize or dispose; past it the capture fails and the map goes. */
-export const VIEW_SNAPSHOT_SETUP_TIMEOUT_MS = 15_000
+const VIEW_SNAPSHOT_SETUP_TIMEOUT_MS = 15_000
 /** How long the encoder may take; a `toBlob` that never calls back must not hold the queue. */
-export const VIEW_SNAPSHOT_ENCODE_TIMEOUT_MS = 10_000
+const VIEW_SNAPSHOT_ENCODE_TIMEOUT_MS = 10_000
 
-export interface ViewSnapshotCamera {
+interface ViewSnapshotCamera {
   readonly lon: number
   readonly lat: number
   readonly zoom: number
 }
 
-export interface ViewSnapshotScene {
+interface ViewSnapshotScene {
   /** Session plane origin that the scene's metres are measured from. */
   readonly origin: { readonly lat: number; readonly lon: number }
   /** Scene state at the snapshot's viewport. Throwing fails the capture. */
@@ -63,7 +63,7 @@ export interface ViewSnapshotRequest {
   readonly signal?: AbortSignal
 }
 
-export interface ViewSnapshotTimings {
+interface ViewSnapshotTimings {
   /** Creating the map, its style and the scene renderer; 0 when reused. */
   readonly mapSetupMs: number
   /** From camera move to a complete frame, or to the timeout. */
@@ -91,14 +91,14 @@ export interface ViewSnapshotCapture {
 }
 
 /** A copied frame, encoded later outside the frame's task. */
-export interface ViewSnapshotFrame {
+interface ViewSnapshotFrame {
   readonly width: number
   readonly height: number
   encode(type: ViewSnapshotImageType, quality: number | undefined): Promise<Blob>
 }
 
 /** What the snapshot owner needs from a MapLibre map. */
-export interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
+interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
   jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
   resize(): void
   redraw(): void
@@ -111,7 +111,7 @@ export interface ViewSnapshotMapLibreMap extends SharedMapSceneMap {
   getLayer(id: string): unknown
 }
 
-export interface ViewSnapshotMapLibre {
+interface ViewSnapshotMapLibre {
   readonly Map: new (options: MapLibreMapConstructorOptions) => unknown
 }
 
@@ -133,7 +133,7 @@ export interface ViewSnapshotMapOptions {
   readonly now?: () => number
 }
 
-export interface ViewSnapshotMapDiagnostics {
+interface ViewSnapshotMapDiagnostics {
   /** Whether an off-screen map (one WebGL context) is alive now. */
   readonly live: boolean
   readonly mapsCreated: number
@@ -169,7 +169,7 @@ interface SnapshotInstance {
   releaseListeners: () => void
 }
 
-export class ViewSnapshotAbortError extends Error {
+class ViewSnapshotAbortError extends Error {
   constructor() {
     super('The view snapshot was cancelled.')
     this.name = 'AbortError'

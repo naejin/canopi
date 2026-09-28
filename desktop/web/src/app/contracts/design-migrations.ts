@@ -37,7 +37,7 @@ export class DesignMigrationError extends Error {
   }
 }
 
-export function unsupportedVersionMessage(version: number): string {
+function unsupportedVersionMessage(version: number): string {
   return `$.version: unsupported Canopi Design version ${version}; this build opens versions ${MINIMUM_SUPPORTED_CANOPI_FILE_VERSION} to ${CURRENT_CANOPI_FILE_VERSION}`
 }
 

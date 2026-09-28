@@ -65,7 +65,7 @@ interface DesignSessionStoreSignals {
   readonly designDirty: ReadonlySignal<boolean>
 }
 
-export interface DesignSessionStoreTestState extends Partial<DesignSessionIdentity> {
+interface DesignSessionStoreTestState extends Partial<DesignSessionIdentity> {
   readonly nonCanvasRevision?: number
   readonly nonCanvasSavedRevision?: number
   readonly persistenceDiverged?: boolean

@@ -3,7 +3,7 @@ import type { SpeciesCatalogFilterStripView } from '../../app/plant-browser'
 import { toggleArrayValue } from './filter-utils'
 
 /** The minimum edibility rating the "Edible" quick filter asks for. */
-export const EDIBLE_QUICK_FILTER_MIN = 3
+const EDIBLE_QUICK_FILTER_MIN = 3
 
 /**
  * The catalog's quick filters: the few an agroforestry designer reaches for first. Each

@@ -17,7 +17,7 @@ interface PlaceOption {
 }
 
 /** "48.2201° N, 0.0351° E": the coordinates a result or the field names. */
-export function formatCoordinates(lat: number, lon: number): string {
+function formatCoordinates(lat: number, lon: number): string {
   return t('canvas.placeSearch.coordinates', {
     lat: Math.abs(lat).toFixed(4),
     lon: Math.abs(lon).toFixed(4),

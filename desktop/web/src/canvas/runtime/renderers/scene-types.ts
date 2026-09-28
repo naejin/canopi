@@ -38,7 +38,7 @@ export interface SceneRendererSnapshot {
   readonly plantLabels?: PlantLabelMode
 }
 
-export interface SceneRendererContext {
+interface SceneRendererContext {
   readonly container: HTMLElement
 }
 

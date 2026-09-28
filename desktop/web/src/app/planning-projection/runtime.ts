@@ -19,7 +19,7 @@ const EMPTY_BUDGET: readonly BudgetItem[] = []
 const EMPTY_TIMELINE: readonly TimelineAction[] = []
 const EMPTY_CONSORTIUMS: readonly Consortium[] = []
 
-export interface PlanningProjectionCanvasSnapshot {
+interface PlanningProjectionCanvasSnapshot {
   readonly plants: readonly PlacedPlant[]
   /** Names in the UI language, with English fallbacks filled in. */
   readonly localizedNames: ReadonlyMap<string, string | null>

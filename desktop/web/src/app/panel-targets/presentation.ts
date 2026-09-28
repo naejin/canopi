@@ -13,7 +13,7 @@ import type { PanelTargetPresentationOrigin } from './state'
 
 export type { PanelTargetPresentationOrigin } from './state'
 
-export interface PanelTargetSelectionSnapshot {
+interface PanelTargetSelectionSnapshot {
   readonly origin: PanelTargetPresentationOrigin | null
   readonly targets: readonly PanelTarget[]
   readonly ownsOrigin: boolean
@@ -41,7 +41,7 @@ export interface PanelTargetOverlaySnapshot {
   readonly selectedTargets: readonly PanelTarget[]
 }
 
-export function readPanelTargetSelection(
+function readPanelTargetSelection(
   origin: PanelTargetPresentationOrigin,
 ): PanelTargetSelectionSnapshot {
   const currentOrigin = selectedPanelTargetOrigin.value
@@ -53,7 +53,7 @@ export function readPanelTargetSelection(
   }
 }
 
-export function panelTargetSelectionMatches(
+function panelTargetSelectionMatches(
   selection: PanelTargetSelectionSnapshot,
   targetList: readonly PanelTarget[],
 ): boolean {
@@ -115,7 +115,7 @@ export function setHoveredPanelTargets(targetList: readonly PanelTarget[]): void
   }
 }
 
-export function setHoveredPanelSpecies(canonicalName: string): void {
+function setHoveredPanelSpecies(canonicalName: string): void {
   setHoveredPanelTargets([speciesTarget(canonicalName)])
 }
 
@@ -162,7 +162,7 @@ export function clearPanelOriginTargets(): void {
   }
 }
 
-export function prunePanelTargetSelectionForOrigin(
+function prunePanelTargetSelectionForOrigin(
   origin: PanelTargetPresentationOrigin,
   visibleTargetLists: readonly (readonly PanelTarget[])[],
 ): void {

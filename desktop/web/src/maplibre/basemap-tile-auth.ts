@@ -13,10 +13,10 @@
  */
 
 /** The only endpoint this transport authenticates. */
-export const GOOGLE_OFFICIAL_TILE_ENDPOINT = 'https://tile.googleapis.com/v1/2dtiles/'
+const GOOGLE_OFFICIAL_TILE_ENDPOINT = 'https://tile.googleapis.com/v1/2dtiles/'
 
 /** The placeholder a published descriptor carries instead of a live token. */
-export const GOOGLE_SESSION_PLACEHOLDER = '{session}'
+const GOOGLE_SESSION_PLACEHOLDER = '{session}'
 
 export interface BasemapTileCredentials {
   readonly sessionToken: string
@@ -24,7 +24,7 @@ export interface BasemapTileCredentials {
 }
 
 /** Whether a URL addresses the fixed official tile endpoint. */
-export function isOfficialGoogleTileUrl(url: string): boolean {
+function isOfficialGoogleTileUrl(url: string): boolean {
   return url.startsWith(GOOGLE_OFFICIAL_TILE_ENDPOINT)
 }
 

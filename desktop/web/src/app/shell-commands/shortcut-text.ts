@@ -101,12 +101,6 @@ export function matchesShortcut(shortcut: string, input: ShortcutInput): boolean
   return parsed.alt && input.metaKey && /^[A-Z]$/i.test(parsed.key) && input.code === `Key${parsed.key.toUpperCase()}`
 }
 
-/** Whether a shortcut is a key alone or Shift and a key: those act only while the map has focus. */
-export function isSingleKeyShortcut(shortcut: string): boolean {
-  const parsed = parseShortcut(shortcut)
-  return !parsed.ctrl && !parsed.alt
-}
-
 /**
  * A character key alone or with Shift (V, N, ], Shift G). Settings › Keyboard
  * can turn these off, so they never fire while someone types or dictates;

@@ -9,20 +9,20 @@ import { currentDesignSessionKey, editCurrentDesign, readCurrentDesign } from '.
 // Undo that meets a missing view parks its steps until that view's own Undo.
 
 /** What deleting a story removed, so Undo can put it back where it was. */
-export interface StoryDeletion {
+interface StoryDeletion {
   readonly story: Story
   readonly index: number
 }
 
 /** What deleting a step removed, so Undo can put it back where it was. */
-export interface StoryStepDeletion {
+interface StoryStepDeletion {
   readonly storyId: string
   readonly step: StoryStep
   readonly index: number
 }
 
 /** The fields of a step an editor changes. */
-export type StoryStepPatch = Partial<Pick<StoryStep, 'title' | 'text' | 'images' | 'view_id'>>
+type StoryStepPatch = Partial<Pick<StoryStep, 'title' | 'text' | 'images' | 'view_id'>>
 
 /**
  * Steps an Undo could not put back because their view had been deleted in

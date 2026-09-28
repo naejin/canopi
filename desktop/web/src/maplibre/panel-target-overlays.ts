@@ -15,7 +15,7 @@ export interface PanelTargetMapOverlayFeatureCollection {
   readonly features: readonly TargetMapFeature[]
 }
 
-export interface PanelTargetMapOverlaySourceSpec {
+interface PanelTargetMapOverlaySourceSpec {
   readonly id: string
   readonly type: 'geojson'
   readonly data: PanelTargetMapOverlayFeatureCollection
@@ -31,7 +31,7 @@ type PanelTargetMapOverlayLayerFilter =
   | PanelTargetMapOverlayKindFilter
   | readonly ['all', PanelTargetMapOverlayKindFilter, PanelTargetMapOverlayGeometryFilter]
 
-export interface PanelTargetMapOverlayLayerSpec {
+interface PanelTargetMapOverlayLayerSpec {
   readonly id: string
   readonly source: string
   readonly type: 'circle' | 'fill' | 'line'

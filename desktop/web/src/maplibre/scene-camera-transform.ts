@@ -1,7 +1,7 @@
 import { worldToGeo } from '../canvas/projection'
 import type { SceneViewportState } from '../canvas/runtime/scene'
 
-export interface SharedMapPoint {
+interface SharedMapPoint {
   readonly x: number
   readonly y: number
 }

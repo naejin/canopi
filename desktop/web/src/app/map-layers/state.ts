@@ -34,7 +34,7 @@ export interface MapLayersState {
  * Soften background multiplies the Basemap or Satellite opacity by this, so
  * the map's light paper shows through and plant symbols stand out.
  */
-export const SOFTENED_BACKGROUND_OPACITY_FACTOR = 0.4
+const SOFTENED_BACKGROUND_OPACITY_FACTOR = 0.4
 
 /** The opacity the background band is drawn with: its own, dimmed when softened. */
 export function effectiveBackgroundOpacity(state: MapLayersState, layer: 'basemap' | 'satellite'): number {

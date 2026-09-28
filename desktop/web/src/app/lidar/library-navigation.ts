@@ -98,7 +98,7 @@ export function analyzeItem(
 const SITE_ROW_PREFIX = 'site:'
 
 /** The Layers row id of one site data item; one row is active across Layers. */
-export function siteRowId(itemId: string): string {
+function siteRowId(itemId: string): string {
   return `${SITE_ROW_PREFIX}${itemId}`
 }
 

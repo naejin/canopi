@@ -55,7 +55,7 @@ export function mapBackgroundPresentationsEqual(
 }
 
 /** Every layer that belongs to the background band. */
-export function isMapBackgroundLayer(id: string): boolean {
+function isMapBackgroundLayer(id: string): boolean {
   return id === MAPLIBRE_BASEMAP_BACKGROUND_LAYER_ID
     || id === MAPLIBRE_SATELLITE_LAYER_ID
     || id.startsWith(OPENFREEMAP_LAYER_PREFIX)

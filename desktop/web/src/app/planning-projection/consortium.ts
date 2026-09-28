@@ -29,7 +29,7 @@ export interface ConsortiumPlanningRow {
   readonly endPhase: number
 }
 
-export interface ConsortiumPlanningGroup {
+interface ConsortiumPlanningGroup {
   readonly stratum: string
   readonly supported: boolean
   readonly rows: readonly ConsortiumPlanningRow[]
@@ -37,7 +37,7 @@ export interface ConsortiumPlanningGroup {
   readonly plantCount: number
 }
 
-export interface ConsortiumMatrixRow {
+interface ConsortiumMatrixRow {
   readonly stratum: string
   readonly counts: readonly number[]
 }

@@ -67,12 +67,12 @@ export function sharedPixiRendererInitOptions(view: SharedPixiRendererView): Sha
  * and `Ticker.system`, which Pixi's scheduler started, stops; nothing of
  * ours listens on it.
  */
-export function detachPixiFromHost(renderer: SharedPixiRenderer): void {
+function detachPixiFromHost(renderer: SharedPixiRenderer): void {
   renderer.events?.setTargetElement(null)
   Ticker.system.stop()
 }
 
-export interface SharedMapSceneDiagnostics {
+interface SharedMapSceneDiagnostics {
   readonly phase: 'new' | 'initializing' | 'initialized' | 'attached' | 'detached' | 'disposing' | 'disposed' | 'failed'
   readonly initializeCount: number
   readonly renderCount: number

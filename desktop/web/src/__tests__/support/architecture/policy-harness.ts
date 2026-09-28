@@ -14,7 +14,7 @@ interface ImportPolicyBase {
   readonly edgeKinds?: readonly ImportKind[]
 }
 
-export interface ForbidImportsPolicy extends ImportPolicyBase {
+interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly kind: 'forbid-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
@@ -24,7 +24,7 @@ export interface ForbidImportsPolicy extends ImportPolicyBase {
   readonly importedNames?: readonly string[]
 }
 
-export interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
+interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
   readonly kind: 'forbid-transitive-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
@@ -32,26 +32,26 @@ export interface ForbidTransitiveImportsPolicy extends ImportPolicyBase {
   readonly exceptTargets?: readonly string[]
 }
 
-export interface ForbidNonLiteralDynamicImportsPolicy {
+interface ForbidNonLiteralDynamicImportsPolicy {
   readonly kind: 'forbid-nonliteral-dynamic-imports'
   readonly name: string
   readonly from: readonly string[]
   readonly exceptFrom?: readonly string[]
 }
 
-export interface ConfineImportersPolicy extends ImportPolicyBase {
+interface ConfineImportersPolicy extends ImportPolicyBase {
   readonly kind: 'confine-importers'
   readonly targets: readonly string[]
   readonly allowedFrom: readonly string[]
 }
 
-export interface RequireImportsPolicy extends ImportPolicyBase {
+interface RequireImportsPolicy extends ImportPolicyBase {
   readonly kind: 'require-imports'
   readonly from: readonly string[]
   readonly targets: readonly string[]
 }
 
-export interface NamedImportsPolicy extends ImportPolicyBase {
+interface NamedImportsPolicy extends ImportPolicyBase {
   readonly kind: 'named-imports'
   readonly from: readonly string[]
   readonly target: string
@@ -59,21 +59,21 @@ export interface NamedImportsPolicy extends ImportPolicyBase {
   readonly allowedNames: readonly string[]
 }
 
-export interface ForbidExportsPolicy {
+interface ForbidExportsPolicy {
   readonly kind: 'forbid-exports'
   readonly name: string
   readonly from: readonly string[]
   readonly names: readonly string[]
 }
 
-export interface ForbidSourceSymbolsPolicy {
+interface ForbidSourceSymbolsPolicy {
   readonly kind: 'forbid-source-symbols'
   readonly name: string
   readonly from: readonly string[]
   readonly names: readonly string[]
 }
 
-export interface ConfineSymbolsPolicy {
+interface ConfineSymbolsPolicy {
   readonly kind: 'confine-symbols'
   readonly name: string
   readonly from?: readonly string[]
@@ -81,7 +81,7 @@ export interface ConfineSymbolsPolicy {
   readonly allowedFrom: readonly string[]
 }
 
-export interface ForbidWritesPolicy {
+interface ForbidWritesPolicy {
   readonly kind: 'forbid-writes'
   readonly name: string
   readonly from: readonly string[]
@@ -92,7 +92,7 @@ export interface ForbidWritesPolicy {
   readonly writeKinds?: readonly WriteKind[]
 }
 
-export interface ForbidCallsPolicy {
+interface ForbidCallsPolicy {
   readonly kind: 'forbid-calls'
   readonly name: string
   readonly from: readonly string[]
@@ -102,7 +102,7 @@ export interface ForbidCallsPolicy {
   readonly callKinds?: readonly CallKind[]
 }
 
-export interface SourceTombstonesPolicy {
+interface SourceTombstonesPolicy {
   readonly kind: 'source-tombstones'
   readonly name: string
   readonly files?: readonly string[]
@@ -500,7 +500,7 @@ export function matchesPathPattern(value: string, pattern: string): boolean {
   return new RegExp(`^${expression}$`).test(value)
 }
 
-export interface CssPolicyException {
+interface CssPolicyException {
   readonly file: string
   readonly rule: string
   readonly atRules: readonly string[]

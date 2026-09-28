@@ -29,7 +29,7 @@ import { createMutationQueue } from '../mutation-queue'
 
 const MAX_RECENT_DESIGNS = 5
 
-export interface DesignNotebookView {
+interface DesignNotebookView {
   readonly entries: readonly DesignNotebookEntry[]
   readonly visibleEntries: readonly DesignNotebookEntry[]
   readonly sections: readonly DesignNotebookSection[]

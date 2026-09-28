@@ -2,14 +2,14 @@ import { vi } from 'vitest'
 import type { CameraController } from '../../canvas/runtime/camera'
 import type { ScenePoint } from '../../canvas/runtime/scene'
 
-export interface SceneInteractionBounds {
+interface SceneInteractionBounds {
   readonly left: number
   readonly top: number
   readonly width: number
   readonly height: number
 }
 
-export interface SceneInteractionPointerOptions extends MouseEventInit {
+interface SceneInteractionPointerOptions extends MouseEventInit {
   readonly pointerId?: number
   readonly pointerType?: string
   readonly isPrimary?: boolean
@@ -28,11 +28,11 @@ export interface SceneInteractionEventHarnessOptions {
   }
 }
 
-export interface SceneInteractionKeyboardOptions extends KeyboardEventInit {
+interface SceneInteractionKeyboardOptions extends KeyboardEventInit {
   readonly target?: EventTarget
 }
 
-export interface SceneInteractionListenerLog {
+interface SceneInteractionListenerLog {
   containerAdds(eventName: string): unknown[]
   containerRemoves(eventName: string): unknown[]
   windowAdds(eventName: string): unknown[]

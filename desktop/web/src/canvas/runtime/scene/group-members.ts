@@ -9,7 +9,7 @@ import {
   type SceneDesignObjectTarget,
 } from './design-object-targets'
 
-export function cloneSceneObjectGroupMember(
+function cloneSceneObjectGroupMember(
   member: SceneObjectGroupMember,
 ): SceneObjectGroupMember {
   return { ...member }
@@ -52,7 +52,7 @@ export function dedupeSceneObjectGroupMembers(
   return deduped
 }
 
-export function resolveSceneObjectGroupMember(
+function resolveSceneObjectGroupMember(
   scene: ScenePersistedState,
   member: SceneObjectGroupMember,
 ): SceneConcreteDesignObjectTarget | null {

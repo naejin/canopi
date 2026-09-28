@@ -22,11 +22,6 @@ export function getBudgetSpeciesTarget(item: BudgetItem): SpeciesPanelTarget | n
   return isSpeciesTarget(item.target) ? item.target : null
 }
 
-export function getTimelineSpeciesTarget(action: TimelineAction): SpeciesPanelTarget | null {
-  const firstSpecies = action.targets.find(isSpeciesTarget)
-  return firstSpecies ?? null
-}
-
 export function getConsortiumCanonicalName(consortium: Consortium): string {
   return consortium.target.canonical_name
 }

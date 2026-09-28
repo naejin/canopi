@@ -8,7 +8,7 @@ import type { SceneAnnotationEntity, ScenePlantEntity, ScenePoint, SceneZoneEnti
 import { isEditableTarget } from './pointer-utils'
 
 /** `[` and `]` turn a held stamp by this much; positive is clockwise on the map. */
-export const STAMP_ROTATION_STEP_DEG = 15
+const STAMP_ROTATION_STEP_DEG = 15
 
 export interface StampRotationKeys {
   /** The map host: with single-key shortcuts off, the keys work only while it has focus. */

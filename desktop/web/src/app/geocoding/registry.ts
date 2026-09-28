@@ -5,7 +5,7 @@
  * pacing). Copyright (c) 2026 Qiusheng Wu. MIT License; see THIRD_PARTY_NOTICES.md.
  */
 
-export const DEFAULT_FORWARD_GEOCODE_ENDPOINT = 'https://nominatim.openstreetmap.org/search'
+const DEFAULT_FORWARD_GEOCODE_ENDPOINT = 'https://nominatim.openstreetmap.org/search'
 /** Host whose public usage policy (1 request per second) must be respected. */
 export const NOMINATIM_PUBLIC_HOST = 'nominatim.openstreetmap.org'
 /** Nominatim's public policy is 1 request/second; 1.1 s leaves margin. */
@@ -13,7 +13,7 @@ export const NOMINATIM_MIN_INTERVAL_MS = 1100
 export const NOMINATIM_ATTRIBUTION = 'Search by Nominatim · © OpenStreetMap contributors'
 
 export type GeocodingProviderId = 'nominatim' | 'pelias'
-export const DEFAULT_GEOCODING_PROVIDER_ID: GeocodingProviderId = 'nominatim'
+const DEFAULT_GEOCODING_PROVIDER_ID: GeocodingProviderId = 'nominatim'
 
 export interface GeocoderConfig {
   readonly providerId: GeocodingProviderId
@@ -73,7 +73,7 @@ function readString(obj: unknown, key: string): string | undefined {
 }
 
 /** Build a Nominatim forward-geocoding URL (jsonv2). */
-export function buildForwardGeocodeUrl(
+function buildForwardGeocodeUrl(
   endpoint: string,
   query: string,
   options: { email?: string; limit?: number } = {},
@@ -160,7 +160,7 @@ const peliasProvider: GeocodingProvider = {
 }
 
 /** Selectable providers, Nominatim first (the default). */
-export const GEOCODING_PROVIDERS: readonly GeocodingProvider[] = [nominatimProvider, peliasProvider]
+const GEOCODING_PROVIDERS: readonly GeocodingProvider[] = [nominatimProvider, peliasProvider]
 
 export function getGeocodingProvider(id: GeocodingProviderId | null | undefined): GeocodingProvider {
   return GEOCODING_PROVIDERS.find((provider) => provider.id === id) ?? nominatimProvider
@@ -171,7 +171,7 @@ export function defaultGeocoderConfig(): GeocoderConfig {
 }
 
 /** Whether requests to `endpoint` fall under Nominatim's public usage policy. */
-export function shouldThrottle(endpoint: string): boolean {
+function shouldThrottle(endpoint: string): boolean {
   try {
     return new URL(endpoint).hostname === NOMINATIM_PUBLIC_HOST
   } catch {

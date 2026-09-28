@@ -113,13 +113,6 @@ export function renderRichTextInto(root: HTMLElement, blocks: readonly RichTextB
   if (root.childNodes.length === 0) root.append(document.createElement('p'))
 }
 
-/** Builds the nodes of one line of spans, for inserting pasted text inline. */
-export function spansFragment(document: Document, spans: readonly RichTextSpan[]): DocumentFragment {
-  const fragment = document.createDocumentFragment()
-  appendSpans(fragment, spans)
-  return fragment
-}
-
 function appendSpans(parent: ParentNode, spans: readonly RichTextSpan[]): void {
   const document = (parent as Node).ownerDocument ?? (parent as Document)
   for (const span of spans) {

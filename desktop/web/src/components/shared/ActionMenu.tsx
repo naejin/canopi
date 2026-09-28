@@ -6,7 +6,7 @@ import { ControlIcon, type ControlIconName } from './ControlIcon'
 import { focusMenuItem, placePopupVertically, placeSidePopupVertically } from '../../utils/floating-position'
 import styles from './ActionMenu.module.css'
 
-export interface ActionMenuCommand {
+interface ActionMenuCommand {
   readonly label: string
   /**
    * Runs after the menu closes. `itemBounds` is where the item was, so a
@@ -28,7 +28,7 @@ export interface ActionMenuCommand {
   readonly keyShortcuts?: string
 }
 
-export interface ActionMenuSubmenu {
+interface ActionMenuSubmenu {
   readonly label: string
   /** Stable id for the item (`data-command`). */
   readonly id?: string

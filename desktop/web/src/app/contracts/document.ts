@@ -9,9 +9,9 @@ import type {
 } from '../../generated/known-canopi-keys'
 import type { CanopiFile } from '../../types/design'
 
-export { DEFAULT_BUDGET_CURRENCY, KNOWN_CANOPI_KEYS }
+export { DEFAULT_BUDGET_CURRENCY }
 
-export interface DocumentFileSaveMetadata {
+interface DocumentFileSaveMetadata {
   name: string
   description?: string | null
 }
@@ -24,7 +24,7 @@ export interface ComposeDocumentForSaveOptions {
 
 export const DOCUMENT_FILE_FIELD_OWNERS = GENERATED_DOCUMENT_FILE_FIELD_OWNERS
 
-export const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
+const DOCUMENT_FILE_KNOWN_KEYS = KNOWN_CANOPI_KEYS
 
 const KNOWN_CANOPI_KEY_SET = new Set<string>(DOCUMENT_FILE_KNOWN_KEYS)
 const SHARED_EXTRA_FIELD_OWNERS = {

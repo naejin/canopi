@@ -4,7 +4,7 @@ import { t } from '../../i18n'
 import { ControlIcon } from './ControlIcon'
 import styles from './save-status-label.module.css'
 
-export interface SaveStatusAction {
+interface SaveStatusAction {
   readonly label: string
   run(): void
 }

@@ -1,9 +1,5 @@
 import { computed } from '@preact/signals'
-import type {
-  CanvasCommandProjection,
-  CanvasToolbarActionCommand,
-  CanvasToolbarToolCommand,
-} from '../../app/canvas-commands'
+import type { CanvasCommandProjection } from '../../app/canvas-commands'
 import {
   projectShellCommandCatalog,
   type ProjectedShellCommand,
@@ -34,12 +30,9 @@ export type {
   MenuAction,
   MenuDefinition,
   MenuEntry,
-  MenuLabel,
-  MenuSeparator,
-  MenuSubmenu,
 } from '../../app/shell-commands/menus'
 
-export interface Command {
+interface Command {
   id: AppCommandId
   label: () => string
   shortcut?: string
@@ -48,7 +41,7 @@ export interface Command {
 }
 
 /** A title-bar button's command: label, shortcut and action from the graph. */
-export interface AppCommandGraphTitleBarCommand {
+interface AppCommandGraphTitleBarCommand {
   readonly label: string
   readonly shortcut?: string
   readonly ariaShortcut?: string
@@ -65,7 +58,7 @@ export interface AppCommandGraphChromeProjection {
   }
 }
 
-export interface AppCommandGraphPanelCommand {
+interface AppCommandGraphPanelCommand {
   readonly panel: Panel
   readonly commandId: AppCommandId
   readonly label: string
@@ -82,8 +75,6 @@ export interface AppCommandGraphPanelProjection {
   readonly planning: AppCommandGraphPanelCommand[]
 }
 
-export type AppCommandGraphToolbarToolCommand = CanvasToolbarToolCommand
-export type AppCommandGraphToolbarActionCommand = CanvasToolbarActionCommand
 export type AppCommandGraphToolbarProjection = CanvasCommandProjection
 
 function commandProjection(command: AppCommandDefinition): Command {

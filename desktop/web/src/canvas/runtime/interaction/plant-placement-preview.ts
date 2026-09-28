@@ -15,7 +15,7 @@ const PREVIEW_OPACITY = 0.85
 const NEAREST_PLANT_MAX_SCREEN_PX = 320
 const PREVIEW_PLANT_ID = 'plant-placement-preview'
 
-export interface PlantPlacementPreviewInput {
+interface PlantPlacementPreviewInput {
   readonly source: PlantStampSource
   readonly world: ScenePoint
   readonly scene: ScenePersistedState

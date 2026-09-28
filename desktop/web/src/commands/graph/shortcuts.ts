@@ -41,7 +41,7 @@ export function runAppCommandShortcutForEvent(event: KeyboardEvent): boolean {
  * shortcuts need a canvas and never steal keys from a text field, except
  * the few that are meant to (Ctrl K).
  */
-export function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcutMatch | null {
+function matchAppCommandShortcut(event: KeyboardEvent): AppCommandShortcutMatch | null {
   const input = shortcutInput(event)
   const shellCommand = matchShellCommandShortcut(DESKTOP_SHELL_COMMAND_CATALOG, input)
   if (shellCommand) return { commandId: shellCommand.id, preventDefault: true }

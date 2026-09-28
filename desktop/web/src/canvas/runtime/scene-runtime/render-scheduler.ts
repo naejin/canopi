@@ -7,7 +7,7 @@ import type { SceneViewportState } from '../scene'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
 
-export interface SceneRuntimePreparedRender {
+interface SceneRuntimePreparedRender {
   publish(): SceneRendererSnapshot
 }
 

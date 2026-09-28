@@ -200,7 +200,7 @@ function getPlantNamePinning(
   }
 }
 
-export function getSelectionLayer(target: SceneSelectionTarget): string {
+function getSelectionLayer(target: SceneSelectionTarget): string {
   if (target.kind === 'zone') return 'zones'
   if (target.kind === 'annotation') return 'annotations'
   if (target.kind === 'measurement-guide') return 'measurement-guides'
@@ -228,7 +228,7 @@ export function getCombinedTargetBounds(
   return combined
 }
 
-export function getTargetBounds(
+function getTargetBounds(
   persisted: ScenePersistedState,
   target: SceneSelectionTarget,
   options: SceneSelectionReadModelOptions,

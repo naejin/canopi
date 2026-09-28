@@ -21,7 +21,7 @@ export function useMapSelectionSpecies(): MapSelectionSpecies {
   )
 }
 
-export function readMapSelectionSpecies(queries: CanvasQuerySurface | null): MapSelectionSpecies {
+function readMapSelectionSpecies(queries: CanvasQuerySurface | null): MapSelectionSpecies {
   if (!queries) return NO_SELECTION
   const plantIds = new Set(queries.getSelectedPlantColorContext().plantIds)
   if (plantIds.size === 0) return NO_SELECTION

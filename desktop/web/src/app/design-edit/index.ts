@@ -36,7 +36,4 @@ export {
   restoreStory,
   restoreStoryStep,
   updateStoryStep,
-  type StoryDeletion,
-  type StoryStepDeletion,
-  type StoryStepPatch,
 } from './stories'

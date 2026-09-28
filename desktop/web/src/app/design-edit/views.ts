@@ -15,7 +15,7 @@ import { takeStepsAwaitingView } from './stories'
  * A saved view has no field for it, and the format stays as it is. Every write
  * prunes entries whose view is gone.
  */
-export const SAVED_VIEW_DISPLAY_EXTRA_KEY = DESIGN_EDIT_EXTRA_KEYS.savedViewDisplay
+const SAVED_VIEW_DISPLAY_EXTRA_KEY = DESIGN_EDIT_EXTRA_KEYS.savedViewDisplay
 
 export interface SavedViewDisplay {
   readonly labels: PlantLabelMode

@@ -11,17 +11,17 @@ import { EmptyState } from './EmptyState'
 import { formatRelativeDate } from './relative-date'
 import styles from './StartScreen.module.css'
 
-export interface StartScreenAction {
+interface StartScreenAction {
   readonly label: string
   readonly shortcut?: string
   run(): void
 }
 
-export interface StartScreenLink extends StartScreenAction {
+interface StartScreenLink extends StartScreenAction {
   readonly icon: ControlIconName
 }
 
-export interface StartScreenDesign {
+interface StartScreenDesign {
   readonly id: string
   readonly name: string
   /** The file's path, shown in part only when another row has the same name. */

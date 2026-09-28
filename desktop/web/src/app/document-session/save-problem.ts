@@ -17,9 +17,9 @@ export type SaveProblemRequest =
   | { readonly kind: 'conflict'; readonly fileGone: boolean }
   | { readonly kind: 'revert' }
 
-export type FlushFailedChoice = 'retry' | 'discard' | 'cancel'
-export type ConflictChoice = 'keep-mine' | 'use-file' | 'save-copy' | 'cancel'
-export type RevertChoice = 'revert' | 'cancel'
+type FlushFailedChoice = 'retry' | 'discard' | 'cancel'
+type ConflictChoice = 'keep-mine' | 'use-file' | 'save-copy' | 'cancel'
+type RevertChoice = 'revert' | 'cancel'
 export type SaveProblemChoice = FlushFailedChoice | ConflictChoice | RevertChoice
 
 type ChoiceFor<R extends SaveProblemRequest> = R extends { readonly kind: 'conflict' }

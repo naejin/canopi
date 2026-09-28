@@ -34,16 +34,16 @@ export interface MapOccluderBox {
 }
 
 /** The least map width the labelled tool rail may leave between itself and the right chrome. */
-export const MIN_VISIBLE_MAP_WIDTH_PX = 360
+const MIN_VISIBLE_MAP_WIDTH_PX = 360
 /**
  * The least room the map credits need on one line between the view chip and
  * the zoom group; with less they fold into MapLibre's (i) button instead of
  * wrapping up under a panel.
  */
-export const MAP_ATTRIBUTION_MIN_ROOM_PX = 360
+const MAP_ATTRIBUTION_MIN_ROOM_PX = 360
 
 /** The least gap between a rail's bottom and the chrome under its column. */
-export const RAIL_BOTTOM_GAP_PX = 8
+const RAIL_BOTTOM_GAP_PX = 8
 
 /** The two floating rails: tools on the left, panels on the right. */
 export type ChromeRail = 'tool' | 'panel'

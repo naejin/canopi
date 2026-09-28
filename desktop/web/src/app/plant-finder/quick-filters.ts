@@ -13,8 +13,8 @@ import { useCatalogHabits } from './catalog-forms'
 export type SpeciesStratumChoice = PlantDisplayStratum | 'none'
 export type SpeciesFormChoice = 'tree' | 'shrub' | 'herbaceous' | 'climber' | 'none'
 
-export const SPECIES_STRATUM_CHOICES: readonly SpeciesStratumChoice[] = [...PLANT_DISPLAY_STRATA, 'none']
-export const SPECIES_FORM_CHOICES: readonly SpeciesFormChoice[] = ['tree', 'shrub', 'herbaceous', 'climber', 'none']
+const SPECIES_STRATUM_CHOICES: readonly SpeciesStratumChoice[] = [...PLANT_DISPLAY_STRATA, 'none']
+const SPECIES_FORM_CHOICES: readonly SpeciesFormChoice[] = ['tree', 'shrub', 'herbaceous', 'climber', 'none']
 
 export interface SpeciesQuickFilterValue {
   readonly stratum: SpeciesStratumChoice | null

@@ -236,7 +236,7 @@ export function previewSavedObjectStampAt(
   return true
 }
 
-export function canPlaceSavedObjectStamp(scene: ScenePersistedState, source: SavedObjectStampPayload): boolean {
+function canPlaceSavedObjectStamp(scene: ScenePersistedState, source: SavedObjectStampPayload): boolean {
   if (source.plants.length + source.zones.length + source.annotations.length === 0) return false
   return requiredLayers(source).every((layerName) => isSceneLayerOpenForCreation(scene, layerName))
 }

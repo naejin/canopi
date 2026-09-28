@@ -6,7 +6,7 @@ import {
   type ShortcutInput,
 } from './shortcut-text'
 
-export type ShellCommandIdByCapability = {
+type ShellCommandIdByCapability = {
   readonly newDesign: 'file.new'
   readonly openDesign: 'file.open'
   readonly openCanopi: 'file.openCanopi'
@@ -56,9 +56,9 @@ export type ShellCommandIdForCapability<
   Capability extends ShellCommandCapabilityId,
 > = ShellCommandIdByCapability[Capability]
 
-export type ShellMenuId = 'file' | 'edit' | 'view' | 'help'
+type ShellMenuId = 'file' | 'edit' | 'view' | 'help'
 export type ShellSubmenuId = 'export' | 'background'
-export type ShellPanelGroup = 'primary' | 'design' | 'planning'
+type ShellPanelGroup = 'primary' | 'design' | 'planning'
 
 export interface ShellCommandState {
   readonly hasDesign: boolean
@@ -68,7 +68,7 @@ export interface ShellCommandState {
   readonly sidePanel: SidePanel | null
 }
 
-export interface ShellCommandCapability {
+interface ShellCommandCapability {
   execute(): void
   isExecutionDisabled?(state: ShellCommandState): boolean
   isProjectionDisabled?(state: ShellCommandState): boolean
@@ -128,7 +128,7 @@ export interface ProjectedShellCommand<
   action(): void
 }
 
-export interface ShellMenuProjection<
+interface ShellMenuProjection<
   Id extends ShellCommandId = ShellCommandId,
 > {
   readonly id: ShellMenuId

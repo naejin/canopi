@@ -3,7 +3,7 @@ import { getLocaleCommonNames, getSpeciesDetail, getSpeciesHabits } from '../../
 import { speciesCatalogWorkbench, type SpeciesDisplayNameResolver } from '../plant-browser'
 import type { CommonNameEntry, SpeciesDetail } from '../../types/species'
 
-export type PlantDetailLoadState = 'loading' | 'loaded' | 'error'
+type PlantDetailLoadState = 'loading' | 'loaded' | 'error'
 
 export interface PlantDetailController {
   detail: Signal<SpeciesDetail | null>

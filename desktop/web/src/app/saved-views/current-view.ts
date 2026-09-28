@@ -26,7 +26,7 @@ export function canShowSavedViews(): boolean {
 }
 
 /** What the map shows now as a saved view, with the labels it shows; null without a Design on a map. */
-export interface CurrentViewCapture {
+interface CurrentViewCapture {
   readonly view: SavedView
   readonly labels: PlantLabelMode
 }
@@ -66,7 +66,7 @@ export function captureCurrentView({ id, name, title = '' }: {
   }
 }
 
-export interface GoToSavedViewOptions {
+interface GoToSavedViewOptions {
   /** Jump instead of flying; defaults to the platform reduced-motion preference. */
   readonly reducedMotion?: boolean
 }

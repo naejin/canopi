@@ -4,10 +4,6 @@ export {
   appCommandGraphToolbarProjection,
 } from './projections'
 export type {
-  AppCommandGraphPanelCommand,
-  AppCommandGraphTitleBarCommand,
-  AppCommandGraphToolbarActionCommand,
-  AppCommandGraphToolbarToolCommand,
   MenuAction,
   MenuDefinition,
   MenuEntry,

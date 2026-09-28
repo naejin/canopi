@@ -35,16 +35,16 @@ import {
 const calendarTargetPresentation = createPanelTargetPresentationController('timeline')
 
 export type CalendarTargetMode = 'preserve' | 'design' | 'species' | 'selection' | 'zone'
-export type CalendarEditorError = 'date-order' | 'empty-targets' | null
+type CalendarEditorError = 'date-order' | 'empty-targets' | null
 
-export interface CalendarActionDraft extends CalendarActionFormData {
+interface CalendarActionDraft extends CalendarActionFormData {
   readonly scheduled: boolean
   readonly range: boolean
   readonly targetMode: CalendarTargetMode
   readonly targetsChanged: boolean
 }
 
-export interface CalendarEditorState {
+interface CalendarEditorState {
   readonly mode: 'add' | 'edit'
   readonly actionId: string | null
   readonly sessionIdentity: object

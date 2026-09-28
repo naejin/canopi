@@ -11,7 +11,7 @@ import type { ScenePersistedState, ScenePoint, SceneZoneEntity } from './types'
 // each position hydrated to. A position whose plane coordinates are unchanged
 // writes its original lon/lat verbatim, so open → save is byte-identical;
 // anything else is converted and rounded to 1e-9 degree.
-export class SceneGeoLedger {
+class SceneGeoLedger {
   private readonly _points = new Map<string, GeoPosition>()
   private readonly _ellipses = new Map<string, readonly [GeoPosition, GeoPosition]>()
   private readonly _latitudes = new Map<number, number>()

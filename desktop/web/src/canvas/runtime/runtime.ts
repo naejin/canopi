@@ -31,7 +31,7 @@ export interface CanvasRuntimeDocumentMetadata {
 
 export type CanvasDesignObjectSelectionTarget = SceneDesignObjectTarget
 
-export type CanvasDesignObjectSelectionBlockReason =
+type CanvasDesignObjectSelectionBlockReason =
   | 'grouped-member'
   | 'hidden-layer'
   | 'locked-layer'

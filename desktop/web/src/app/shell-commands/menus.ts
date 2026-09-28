@@ -15,7 +15,7 @@ import type {
  * composed from the shell and canvas command projections so every command
  * appears once, with its shortcut, and nothing duplicates an action.
  */
-export type WorkspaceMenuId = 'file' | 'edit' | 'view' | 'tools' | 'help'
+type WorkspaceMenuId = 'file' | 'edit' | 'view' | 'tools' | 'help'
 
 export interface MenuAction {
   readonly type: 'action'
@@ -39,7 +39,7 @@ export interface MenuItemThumbnail {
   load(): void
 }
 
-export interface MenuSubmenu {
+interface MenuSubmenu {
   readonly type: 'submenu'
   readonly id: string
   readonly label: string
@@ -50,12 +50,12 @@ export interface MenuSubmenu {
   readonly items: readonly MenuAction[]
 }
 
-export interface MenuLabel {
+interface MenuLabel {
   readonly type: 'label'
   readonly label: string
 }
 
-export interface MenuSeparator {
+interface MenuSeparator {
   readonly type: 'separator'
 }
 

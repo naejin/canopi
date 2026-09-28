@@ -23,7 +23,7 @@ export function formatNumber(value: number, locale: string, maximumFractionDigit
 }
 
 /** "8 m" with the unit placed as the interface language places it. */
-export function formatMetres(value: number, locale: string): string {
+function formatMetres(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, { style: 'unit', unit: 'meter', maximumFractionDigits: 1 }).format(value)
 }
 

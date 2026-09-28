@@ -20,7 +20,7 @@ import {
 // Scene. Every object URL is revoked when it is replaced, when its view goes
 // away, when another Design replaces this one and on HMR.
 
-export interface SavedViewThumbnail {
+interface SavedViewThumbnail {
   /** Object URL of the latest image; a stale image stays until the new one is ready. */
   readonly url: string | null
   readonly status: 'loading' | 'ready' | 'failed'
@@ -194,7 +194,7 @@ export function createSavedViewThumbnailCache(options: SavedViewThumbnailCacheOp
  * What a view's thumbnail depends on besides the view itself. Reading it in a
  * component subscribes the component to those signals.
  */
-export function savedViewThumbnailKey(view: SavedView): string {
+function savedViewThumbnailKey(view: SavedView): string {
   const sceneRevision = currentCanvasQuerySurface.value?.revision.scene.value ?? -1
   const layers = mapLayers.value
   return JSON.stringify([

@@ -262,7 +262,7 @@ let inspectionObserverDisposer: (() => void) | null = null
  * change all arrive here reactively, so a completed answer cannot silently
  * outlive the generation it was read from even when no action module runs.
  */
-export function installInspectionObserver(): () => void {
+function installInspectionObserver(): () => void {
   disposeInspectionObserver()
   inspectionObserverDisposer = effect(() => {
     const target = inspectionSession.value
@@ -286,7 +286,7 @@ export function installInspectionObserver(): () => void {
   return disposeInspectionObserver
 }
 
-export function disposeInspectionObserver(): void {
+function disposeInspectionObserver(): void {
   inspectionObserverDisposer?.()
   inspectionObserverDisposer = null
 }
@@ -420,7 +420,7 @@ function readCurrentGenerationId(target: InspectionTarget): string | null {
 let pointerHandler: ((point: { x: number; y: number }) => boolean) | null = null
 
 /** Publish or withdraw the handler the canvas gesture consults. */
-export function setInspectionPointerHandler(
+function setInspectionPointerHandler(
   handler: ((point: { x: number; y: number }) => boolean) | null,
 ): void {
   pointerHandler = handler
@@ -443,7 +443,7 @@ export function tryInspectAt(point: { x: number; y: number }): boolean {
  * release it: a leaked handler would keep claiming clicks for a session that no
  * longer exists.
  */
-export function installInspectionPointerHandler(): () => void {
+function installInspectionPointerHandler(): () => void {
   setInspectionPointerHandler((point) => sampleInspectionScenePoint(point))
   const dispose = () => setInspectionPointerHandler(null)
   pointerDisposer = dispose
@@ -451,7 +451,7 @@ export function installInspectionPointerHandler(): () => void {
 }
 
 /** Release the installed pointer handler, if one is installed. */
-export function releaseInspectionPointerHandler(): void {
+function releaseInspectionPointerHandler(): void {
   pointerDisposer?.()
   pointerDisposer = null
 }
@@ -468,7 +468,7 @@ export function hasInspectionPointerHandlerForTests(): boolean {
  * calls the same session and the same native command as a click, so a user
  * without a pointer can still read a value.
  */
-export function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
+function sampleInspectionScenePoint(point: { x: number; y: number }): boolean {
   if (!inspectionTarget.value) return false
   const aim = inspectionPointForScenePoint(point)
   if (!aim) return false

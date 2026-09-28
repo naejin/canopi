@@ -46,7 +46,7 @@ export function toggleToolNames(): void {
   }, { persist: 'immediate' })
 }
 
-export function recordCanvasToolUsed(tool: string): void {
+function recordCanvasToolUsed(tool: string): void {
   if (!(RAIL_TOOL_IDS as readonly string[]).includes(tool)) return
   if (usedCanvasTools.peek().includes(tool)) return
   mutateSettingsProjection((draft) => {

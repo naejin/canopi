@@ -1,7 +1,7 @@
 import { getCanvasTextOpacity } from './text-visibility'
 import type { SceneAnnotationEntity, SceneDesignObjectSelection, ScenePoint, SceneViewportState } from './scene'
 
-export interface AnnotationTextMetrics {
+interface AnnotationTextMetrics {
   widthPx: number
   heightPx: number
   lineHeightPx: number
@@ -22,7 +22,7 @@ export interface AnnotationScreenFrame {
   rotationDeg: number
 }
 
-export const ANNOTATION_MARKER_SIZE_PX = 8
+const ANNOTATION_MARKER_SIZE_PX = 8
 export const ANNOTATION_MARKER_STROKE_PX = 1.5
 export const ANNOTATION_MARKER_PATHS: readonly (readonly ScenePoint[])[] = [
   [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 4, y: 4 }, { x: -4, y: 4 }, { x: -4, y: -4 }],
@@ -112,7 +112,7 @@ const CHARACTER_WIDTH_FACTOR = 0.6
 const LINE_HEIGHT_FACTOR = 1.25
 const HIT_EPSILON = 0.000001
 
-export function getAnnotationTextMetrics(annotation: SceneAnnotationEntity): AnnotationTextMetrics {
+function getAnnotationTextMetrics(annotation: SceneAnnotationEntity): AnnotationTextMetrics {
   const lines = annotation.text.split('\n')
   const maxLineLength = Math.max(...lines.map((line) => line.length), 1)
   const lineHeightPx = annotation.fontSize * LINE_HEIGHT_FACTOR
@@ -144,7 +144,7 @@ export function getAnnotationScreenFrame(
   }
 }
 
-export function getAnnotationWorldCorners(
+function getAnnotationWorldCorners(
   annotation: SceneAnnotationEntity,
   viewportScale: number,
   paddingPx: { x: number; y: number } = { x: 0, y: 0 },
@@ -161,7 +161,7 @@ export function getAnnotationWorldCorners(
   })
 }
 
-export function isPointInAnnotationText(
+function isPointInAnnotationText(
   annotation: SceneAnnotationEntity,
   point: ScenePoint,
   viewportScale: number,

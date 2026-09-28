@@ -179,7 +179,7 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
  * serving a live map: `update()` re-reads it, and no caller has to capture the
  * key at map-creation time and go stale.
  */
-export function createSatelliteImagery(
+function createSatelliteImagery(
   tileAuth: BasemapTileAuth | null = null,
 ): SatelliteImageryProvider {
   return new Provider(
@@ -202,7 +202,7 @@ export function createSatelliteImagery(
  * must be updated when any of these change, so the configuration identity is
  * re-evaluated and an incompatible session is replaced. Returns its disposer.
  */
-export function installSatelliteConfigObserver(
+function installSatelliteConfigObserver(
   provider: SatelliteImageryProvider,
   readViewport: () => SatelliteViewport,
 ): () => void {

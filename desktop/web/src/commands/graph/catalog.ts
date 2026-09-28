@@ -252,7 +252,7 @@ const commandById = new Map<AppCommandId, AppCommandDefinition>(
   APP_COMMANDS.map((command) => [command.id, command]),
 )
 
-export function getAppCommandDefinition(id: AppCommandId): AppCommandDefinition | null {
+function getAppCommandDefinition(id: AppCommandId): AppCommandDefinition | null {
   return commandById.get(id) ?? null
 }
 

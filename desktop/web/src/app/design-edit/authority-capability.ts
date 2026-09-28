@@ -1,6 +1,6 @@
 import type { CanopiFile } from '../../types/design'
 
-export type DesignProjector = (design: CanopiFile) => CanopiFile
+type DesignProjector = (design: CanopiFile) => CanopiFile
 
 export interface DesignEditAuthorityCapability {
   editCommitted(projector: DesignProjector): CanopiFile | null

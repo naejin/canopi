@@ -3,7 +3,7 @@ import assets from './font-assets.json'
 import { textGraphemes } from '../../utils/text-graphemes'
 
 export type PdfFontId = 'latin' | 'strong' | 'sc' | 'jp' | 'kr'
-export interface TextRun {
+interface TextRun {
   readonly text: string
   readonly font: PdfFontId
   readonly width: number

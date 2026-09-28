@@ -141,7 +141,7 @@ export function QuickFilterChip({ pressed, onChange, label, accessibleLabel }: {
  * then "Stratum: High" in the pressed look. Each choice carries how many species it
  * holds; "All …" clears it.
  */
-export function QuickFilterMenu<T extends string>({ label, allLabel, value, choices, onChange }: {
+function QuickFilterMenu<T extends string>({ label, allLabel, value, choices, onChange }: {
   readonly label: string
   readonly allLabel: string
   readonly value: T | null

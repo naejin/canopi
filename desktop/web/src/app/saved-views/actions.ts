@@ -8,7 +8,7 @@ export function defaultSavedViewName(): string {
   return t('savedViews.defaultName', { number: currentSavedViews().length + 1 })
 }
 
-export interface SaveCurrentViewInput {
+interface SaveCurrentViewInput {
   readonly name: string
   /** Shown with the view when it is presented; blank means none. */
   readonly title?: string

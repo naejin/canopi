@@ -20,7 +20,7 @@ export type CanvasToolId =
   | 'measurement-guide'
 
 /** Tool rail groups, top to bottom. Only `zones` carries a heading. */
-export type CanvasToolGroupId = 'navigate' | 'plant' | 'zones' | 'annotate'
+type CanvasToolGroupId = 'navigate' | 'plant' | 'zones' | 'annotate'
 
 export type CanvasEditAction =
   | 'cut'
@@ -149,7 +149,7 @@ export interface CanvasToolbarActionCommand extends CanvasProjectedCommand {
   readonly pressed?: boolean
 }
 
-export interface CanvasToolGroupProjection {
+interface CanvasToolGroupProjection {
   readonly id: CanvasToolGroupId
   /** Heading shown above the group while tool names are shown. */
   readonly heading?: string
@@ -180,18 +180,18 @@ interface CanvasCommandDefinitionBase {
   readonly worksInTextFields?: boolean
 }
 
-export interface CanvasToolCommandDefinition extends CanvasCommandDefinitionBase {
+interface CanvasToolCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'tool'
   readonly group: CanvasToolGroupId
   readonly tool: CanvasToolId
 }
 
-export interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionBase {
+interface CanvasHistoryCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'history'
   readonly id: 'undo' | 'redo'
 }
 
-export interface CanvasSettingsCommandDefinition extends CanvasCommandDefinitionBase {
+interface CanvasSettingsCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'settings'
   readonly id: 'grid' | 'snap' | 'rulers'
   readonly stateKey: 'gridVisible' | 'snapToGridEnabled' | 'rulersVisible'
@@ -202,7 +202,7 @@ export interface CanvasEditCommandDefinition extends CanvasCommandDefinitionBase
   readonly id: CanvasEditAction
 }
 
-export interface CanvasViewCommandDefinition extends CanvasCommandDefinitionBase {
+interface CanvasViewCommandDefinition extends CanvasCommandDefinitionBase {
   readonly kind: 'view'
   readonly id: CanvasViewAction
 }
@@ -412,21 +412,6 @@ export function canvasCommandIdForShortcut(
   input: CanvasCommandShortcutInput,
 ): CanvasCommandId | null {
   return canvasCommandDefinitionForShortcut(input)?.commandId ?? null
-}
-
-export function canvasCommandIntentForShortcut(
-  input: CanvasCommandShortcutInput,
-): CanvasCommandIntent | null {
-  return canvasCommandDefinitionForShortcut(input)?.intent ?? null
-}
-
-export function canvasCommandIdForTool(toolId: CanvasToolId): CanvasCommandId {
-  const definition = canvasCommandDefinitions.find(
-    (candidate): candidate is CanvasToolCommandDefinition =>
-      candidate.kind === 'tool' && candidate.tool === toolId,
-  )
-  if (!definition) throw new Error(`Missing Canvas command for tool '${toolId}'`)
-  return definition.commandId
 }
 
 const SELECTION_EDITS: ReadonlySet<CanvasEditAction> = new Set([

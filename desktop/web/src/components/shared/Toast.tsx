@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { ControlIcon, type ControlIconName } from './ControlIcon'
 import styles from './Toast.module.css'
 
-export const TOAST_TIMEOUT_MS = 8000
+const TOAST_TIMEOUT_MS = 8000
 
 /**
  * A short confirmation with at most one action (usually Undo). It dismisses itself after

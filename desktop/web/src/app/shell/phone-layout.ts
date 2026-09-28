@@ -14,11 +14,11 @@ export type PhoneLayout = 'portrait' | 'landscape'
 export type PhoneSheetHeight = 'peek' | 'half' | 'full'
 
 /** Narrower than this is a phone held upright. */
-export const PHONE_MAX_WIDTH_PX = 640
+const PHONE_MAX_WIDTH_PX = 640
 /** Shorter than this, and wider than tall, is a phone on its side. */
-export const PHONE_LANDSCAPE_MAX_HEIGHT_PX = 480
+const PHONE_LANDSCAPE_MAX_HEIGHT_PX = 480
 /** A short window at least this wide is a desktop window, not a phone. */
-export const PHONE_LANDSCAPE_MAX_WIDTH_PX = 960
+const PHONE_LANDSCAPE_MAX_WIDTH_PX = 960
 
 const SHEET_HEIGHTS: readonly PhoneSheetHeight[] = ['peek', 'half', 'full']
 
