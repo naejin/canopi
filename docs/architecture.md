@@ -1,99 +1,89 @@
 # Canopi v2 architecture
 
-Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a map. This page is the lasting description of the v2 architecture. Decisions and their rationale live in [ADRs](adr/); subsystem detail lives in the guides linked from [`AGENTS.md`](../AGENTS.md).
+Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a map. This page states the architecture as rules, each with the ADR that decided it. Subsystem boundaries live in the guides linked from [`AGENTS.md`](../AGENTS.md); rationale lives in [ADRs](adr/).
 
 ## Principles
 
-1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location. See [ADR 0001](adr/0001-geolocated-map-canvas.md).
-2. **Every design object is geolocated.** Plants, zones, annotations, measurement guides and group members are stored in WGS84 longitude/latitude. Metres exist only inside the runtime, never in files.
-3. **Reuse GeoLibre before writing code.** Generic GIS pieces come from GeoLibre modules, copied with attribution or depended on as light packages. Canopi does not fork the GeoLibre app. See [ADR 0002](adr/0002-geolibre-module-reuse.md).
-4. **No backward compatibility.** No migrations, legacy readers, compatibility shims or old-format fixtures. Old data is refused, set aside or deleted. See [ADR 0003](adr/0003-no-backward-compatibility.md).
-5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies are removed in the change that makes them dead.
+1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
+2. **Every design object is geolocated.** Files store WGS84 longitude/latitude; metres exist only in the runtime's session plane ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
+3. **Reuse GeoLibre before writing code.** Generic GIS pieces are copied with attribution or depended on as light packages; Canopi never forks the GeoLibre app or imports its React code ([ADR 0002](adr/0002-geolibre-module-reuse.md)).
+4. **No backward compatibility.** No migrations, legacy readers, compatibility shims or old-format fixtures; old data is refused, set aside or deleted ([ADR 0003](adr/0003-no-backward-compatibility.md)).
+5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies go in the change that makes them dead.
 
 ## Stack
 
-- Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services and DB access. `common-types/` holds the authored cross-language contracts; `bindings-gen/` generates the TypeScript transport.
-- Frontend: Preact, `@preact/signals`, TypeScript, Vite, CSS Modules, i18next core with 11 UI languages. Source is in `desktop/web/src/`.
-- Map and scene: MapLibre GL JS owns the WebGL2 context and camera. The design scene is drawn by PixiJS inside a MapLibre custom layer (`maplibre-pixi`), the only renderer. See [ADR 0004](adr/0004-one-renderer.md).
+- Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services and DB access; `common-types/` the authored cross-language contracts; `bindings-gen/` the TypeScript transport generator.
+- Frontend: Preact, `@preact/signals`, TypeScript, Vite, CSS Modules, i18next core with 11 UI languages, in `desktop/web/src/`.
+- Map and scene: MapLibre GL JS owns the WebGL2 context and camera; the design scene is drawn by PixiJS inside one MapLibre custom layer (`maplibre-pixi`), the only renderer ([ADR 0004](adr/0004-one-renderer.md)). If WebGL2 or MapLibre fails, the workspace shows an explicit "map unavailable" state and the Design stays loaded; there is no fallback renderer.
 
 ## Authorities
 
 | Owner | Owns | Mutation path |
 |---|---|---|
-| Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, layers | Runtime transactions |
-| Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, saved views, stories, extra | Design Edit commands |
-| Map layer store (`app/map-layers/`) | Map layers: basemap, satellite, LiDAR items, contours, hillshade; order, visibility, opacity, provider choice | Layer-store actions |
-| Settings | Last view, basemap style, Google key (device-local credential), locale, theme | Settings actions |
+| Scene runtime (`SceneStore` via `SceneCanvasRuntime`) | Design objects: plants, zones, annotations, measurement guides, groups, locks, species colours, symbols and codes, scene layers | Runtime transactions |
+| Design Edit (`app/design-edit/`) | Budget, currency, timeline, consortiums, description, saved views, stories, LiDAR presentation order, extra | Design Edit commands |
+| Map layer store (`app/map-layers/`) | Basemap, satellite, LiDAR items, contours, hillshade: order, visibility, opacity, provider | Layer-store actions |
+| Settings | Last view, basemap style, Google key (device-local credential), locale, theme, single-key shortcuts, New Design defaults | Settings actions |
 
-- Undo covers scene runtime edits only. Design Edit commands, map layers and settings are not undoable.
-- Neither document authority duplicates the other's data. Save composition goes through the document-session seam, which asks each authority for its part.
-- Panels read canvas entities through read-only runtime queries, not mirrored signals.
-- Every resource-owning surface (runtime, renderer, MapLibre instance, timers, listeners, cancellation tokens, DOM overlays) has one lifecycle owner for setup, update and teardown.
+- Scene history covers scene runtime edits. A Design Edit is outside scene history unless it opts in (LiDAR presentation order) or offers its own Undo toast (deleting a view or story); map layers and settings are never undoable.
+- Neither document authority duplicates the other's data; save composition goes through the document-session seam, which asks each authority for its part ([design document](guides/design-document.md)).
+- Panels read canvas entities through read-only runtime queries, never mirrored signals.
+- Every resource-owning surface (runtime, renderer, MapLibre instance, timer, listener, cancellation token, DOM overlay) has one lifecycle owner for setup, update and teardown ([frontend](guides/frontend.md)).
 
 ## Geolocation model
 
-- **Files store lon/lat.** `.canopi` format v9 stores every persisted position, including saved-view cameras, as `GeoPoint { lon, lat }` (WGS84 degrees). Zone rotation is degrees clockwise from true north. The file has no anchor, north bearing, placement status or altitude.
-- **Session plane.** On load, the codec builds a local tangent plane (local Mercator, `canvas/projection.ts`) with its origin at the centre of the objects' bounds, or at the current view centre for an empty Design. All runtime geometry, tools, snapping, measurements, hit testing and PDF layout work in metres in this plane. Camera `{x, y, scale}` is pixels per metre in the plane.
-- **Re-origin.** When the view centre moves more than 10 km from the plane origin, the runtime rebuilds the plane at the view centre and re-projects every object from its stored lon/lat. This is lossless because lon/lat is authoritative.
-- **Canonical write-back.** The codec remembers each object's loaded lon/lat. On save, an object whose plane coordinates did not change writes its original lon/lat unchanged; a changed object writes lon/lat rounded to 1e-9 degree (about 0.1 mm). Open then save without edits is byte-identical.
-- **Relative arrangements.** Saved object stamps stay relative arrangements in metres. Design templates are current-format `.canopi` files and are placed relative to the view on insert.
-- **LiDAR** sampling and coverage fit use the session plane.
-- **View, not placement.** Pan, zoom, fit and place search move the camera only. Objects never move unless the user edits them (cut and paste relocates objects).
-- **New Design view.** A new Design opens at an overview: centred on the app's last view (`last_view {lon, lat, zoom}` in settings) but zoomed out to at most country level (zoom 5); without one, at lat 23.0, lon 13.0, zoom 4. It asks "Where is your site?" (flying to the chosen place) before "Start your Design". Opening a Design fits the camera to its objects; an empty Design uses that overview.
+Decided by [ADR 0001](adr/0001-geolocated-map-canvas.md); constants live in `desktop/web/src/canvas/session-plane.ts`.
+
+- **Files store lon/lat.** `.canopi` format v9 (`CURRENT_CANOPI_FILE_VERSION`) stores every persisted position, including saved-view cameras, as `GeoPoint { lon, lat }`; zone rotation is degrees clockwise from true north. There is no anchor, north bearing, placement status or altitude, and the obsolete root keys are refused.
+- **Session plane.** On load the codec builds a local Mercator-anchored plane (`canvas/projection.ts`) at the centre of the objects' bounds, or the view centre for an empty Design. All runtime geometry, tools, snapping, measurement, hit testing, LiDAR sampling and PDF layout work in metres there; camera `{x, y, scale}` is pixels per metre.
+- **Re-origin.** When the view centre moves more than 10 km from the origin, the runtime rebuilds the plane and re-projects every object from its stored lon/lat, losslessly.
+- **Canonical write-back.** An object whose plane coordinates did not change writes its loaded lon/lat unchanged; a changed one writes lon/lat rounded to 1e-9 degree. Open then save without edits is byte-identical (`geolocated-design-codec.test.ts`).
+- **View, not placement.** Pan, zoom, fit and place search move the camera only; objects move only when the user edits them. Saved object stamps stay relative arrangements in metres; templates are current-format `.canopi` files placed relative to the view.
+- **New Design view.** A new Design opens centred on the app's last view zoomed out to at most zoom 5, or at lon 13.0, lat 23.0, zoom 4 without one, and asks "Where is your site?" before "Start your Design".
 
 ## Map stack
 
-- The map layer store (`app/map-layers/state.ts`, signals persisted through settings) holds Basemap, Satellite, Contours and Hillshade. `maplibre/map-background.ts` applies the background band to every map (workspace and templates world map); `app/map-layers/bands.ts` orders Canopi layers into bands, back to front:
-
-```text
-background: basemap or satellite
-LiDAR items (ordered)
-terrain references: contours, hillshade
-shared scene layer (Pixi design objects, existing layer order)
-interaction overlays
-```
-
-- **Basemap.** OpenFreeMap vector styles (Liberty by default; Positron, Bright, Dark) with the attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap". The style is added as a vector source, style layers, glyphs and sprite without `setStyle()`, so the map lifetime, camera and edits survive a style change. Row opacity scales each style layer's paint opacity. Labels follow the app locale (`name:<locale>`, falling back to `name`).
-- **Satellite.** A raster source in its own row under Basemap; turning it on hides the Basemap. Google is the only imagery (Esri World Imagery was rejected on its licence terms). Without a key, Google serves its public `mt1.google.com` tiles, as GeoLibre's basemap control does; with the user's device key it uses the official Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary (see [ADR 0001](adr/0001-geolocated-map-canvas.md)). The key never enters a Design, export, snapshot, diagnostic bundle or log.
-- **Layers** sections, front to back: Design (scene layers), Site data (LiDAR items with their results nested under them, then Contours and Hillshade from online elevation) and Background (Basemap, Satellite). The Data library, Import and Analyze are modal dialogs ([data library](guides/data-library.md#product-contract)).
-- **Place search.** The title-bar place field (Ctrl K) searches a place name or coordinates. Coordinates are parsed locally. Place names go through one geocoding provider registry (Nominatim first, Enter only, at least 1.1 s between requests, OSM attribution on results). Desktop uses the native HTTP transport with an identifying User-Agent; Web uses browser `fetch`. Confirm moves the view only.
-- **Failure.** If WebGL2 or MapLibre cannot start, or the map fails later, the workspace shows an explicit "map unavailable" state: the map surface publishes its error status, no renderer or editing session is mounted, and the Design stays loaded so it can still be saved. There is no fallback renderer.
+- Layers are ordered into bands, back to front: background (basemap or satellite), LiDAR items, terrain references (contours, hillshade), the shared scene layer, interaction overlays (`app/map-layers/bands.ts`).
+- **Basemap:** OpenFreeMap vector styles (Liberty default; Positron, Bright, Dark) installed as source, layers, glyphs and sprite without `setStyle()`, so map lifetime, camera and edits survive a style change; attribution comes from the provider's TileJSON; labels follow the app locale.
+- **Satellite:** Google only (Esri was rejected on licence terms). Without a key the public `mt1.google.com` tiles; with the user's device key the Map Tiles API session in `maplibre/basemap-tile-auth.ts`, the credential boundary. The key never enters a Design, export, snapshot, diagnostic bundle or log ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
+- **Place search:** the title-bar place field (Ctrl K) parses coordinates locally and sends place names through the geocoding registry copied from GeoLibre (Nominatim, Enter only, at least 1.1 s between requests, OSM attribution). Confirm moves the view only. Details: [map workspace](guides/map-workspace.md).
 
 ## GeoLibre reuse boundary
 
-GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app; Canopi never imports its React components or stores. Reference commit for copied TypeScript modules: `e9df9e2`.
+GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app; Canopi never imports its components or stores ([ADR 0002](adr/0002-geolibre-module-reuse.md)). Reference commit for copied TypeScript modules: `e9df9e2`.
 
 | Piece | Source | How |
 |---|---|---|
-| COG display | `maplibre-gl-raster`, `cog-tiler-wasm` (npm, pinned in `desktop/web/package.json`) | Dependency |
-| Native GeoTIFF/COG reader | `wbgeotiff` from `opengeos/whitebox-wasm` (pinned git rev in `desktop/Cargo.toml`) | Dependency |
-| Analyses (slope) | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
-| Geocoding registry | `packages/core/src/geocoding.ts` | Copy into `app/geocoding/` |
-| Basemap presets | `packages/core/src/types.ts` (`OPENFREEMAP_BASEMAPS`) | Copy |
-| Layer sync pattern | `packages/map/src/layer-sync.ts` | Pattern only (store-driven, idempotent sync); no code copied |
-| Evaluated, not adopted (V7) | `packages/map/src/{layer-sync,terrain-control,cog-dem-source,cog-imagery,fill-patterns,map-capture,collapsed-attribution-control,map-resize,map-bounds}.ts`, `apps/geolibre-desktop/src/lib/print-layout-export.ts` | None would make Canopi code smaller or clearly better; reasons in the [map workspace guide](guides/map-workspace.md#geolibre-reuse-decisions). |
+| COG display | `maplibre-gl-raster`, `cog-tiler-wasm` (pinned in `desktop/web/package.json`) | Dependency |
+| Native GeoTIFF/COG reader | `wbgeotiff` from `opengeos/whitebox-wasm` (git rev in `desktop/Cargo.toml`) | Dependency |
+| Analyses | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
+| Geocoding registry | `packages/core/src/geocoding.ts` | Copied into `app/geocoding/` |
+| Basemap presets | `OPENFREEMAP_BASEMAPS` | Copied into `maplibre/openfreemap-basemap.ts` |
+| Layer sync | `packages/map/src/layer-sync.ts` | Pattern only (store-driven, idempotent sync) |
 
-Every copied file keeps an MIT header naming its source path and commit and gets an entry in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). `@geolibre/map` is not a dependency (it pulls Cesium and React); `@geolibre/core` may be used for types only if it adds no heavy runtime.
+Every copied file keeps an MIT header naming its source path and commit and an entry in the root [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md); pinned dependencies and the AGPL sidecar are in `desktop/THIRD_PARTY_NOTICES.md` (`third-party-notices.test.ts`). `@geolibre/map` is never a dependency (it pulls Cesium and React). Modules evaluated and not adopted, with reasons, are listed in [map workspace](guides/map-workspace.md).
 
 ## Editions
 
-- **Desktop** (Tauri) and **Web** (static bundle) share the codec, scene runtime, workbenches and workspace composition. Platform adapters are chosen at compile time through separate build entries and aliases; build checks reject desktop imports in Web chunks.
-- **Web** is a static app with browser-local data, geocoding through the shared registry, no problem reports and `.canopi` plus PDF plus GeoJSON as its file outputs. See [ADR 0005](adr/0005-web-edition-scope.md).
-- **Species catalog:** Desktop reads SQLite through Rust; Web reads generated Parquet through DuckDB-WASM. See [ADR 0006](adr/0006-species-catalog-storage.md).
-- **Personal libraries:** saved object stamps and the Design Notebook live in the Desktop user DB; Web keeps stamps browser-local. See [ADR 0007](adr/0007-design-objects-and-personal-libraries.md).
-- **PDF:** one browser-compatible layout and encoder for every edition, never with map backgrounds. See [ADR 0008](adr/0008-canvas-pdf-export.md).
-- **Saving:** always-on continuous save to each Design's home (a file or a Design Draft), with conflict detection and no unsaved-changes prompts. See [ADR 0009](adr/0009-continuous-save.md).
-- **Interface:** a map-first Field Atlas interface with floating chrome, menus for every command, one plant finder and one species row everywhere. See [ADR 0010](adr/0010-map-first-interface.md).
-- **Analyses and stories:** analyses come from a registry over typed library items with recorded provenance; Designs hold saved views and stories presented inside Canopi. See [ADR 0011](adr/0011-analyses-provenance-and-stories.md). The registry is an authored contract (`common-types/analysis-registry.json`) generated into Rust and TypeScript; what each analysis is lives there, how it runs is a handwritten executor in `desktop/src/services/lidar/analyses/`, and the Analyze dialog is generated from it. Eligibility has one authority, the native offers in the library snapshot. See [data library](guides/data-library.md#analyze).
-- **Vegetation analysis:** canopy gaps, tree tops, crowns and terrain from points are ported from the ONF Computree plugin or written by Canopi from published methods, in the LGPL `vegetation/` crate, and run in the registry's in-process `native` lane. See [ADR 0012](adr/0012-vegetation-analysis.md).
-- **GeoJSON:** RFC 7946 import and export of design objects in both editions through one pure codec (`app/geojson/`). Export reads canonical lon/lat; import rejects malformed files before mutation and adds objects as one undoable runtime transaction.
+- **Desktop** (Tauri) and **Web** (static bundle) share the codec, scene runtime, workbenches and workspace composition; adapters are chosen at compile time through five Vite aliases, and the Web build rejects Tauri markers ([editions](guides/editions.md)).
+- **Web scope:** browser-local data, geocoding through the shared registry, no problem reports, `.canopi`, PDF and GeoJSON as file outputs ([ADR 0005](adr/0005-web-edition-scope.md)).
+- **Species catalog:** Desktop reads SQLite through Rust; Web reads generated Parquet through DuckDB-WASM ([ADR 0006](adr/0006-species-catalog-storage.md)).
+- **Personal libraries:** saved object stamps and the Design Notebook live in the Desktop user DB; Web keeps stamps browser-local ([ADR 0007](adr/0007-design-objects-and-personal-libraries.md)).
+- **PDF:** one browser-compatible layout and encoder for every edition, never with map backgrounds ([ADR 0008](adr/0008-canvas-pdf-export.md)).
+- **Saving:** always-on continuous save to each Design's home (a file or a Draft), with conflict detection and no unsaved-changes prompts ([ADR 0009](adr/0009-continuous-save.md)).
+- **Interface:** map-first Field Atlas chrome floating over the map, menus for every command, one plant finder and one species row everywhere ([ADR 0010](adr/0010-map-first-interface.md)).
+- **Analyses and stories:** analyses are entries in the authored registry `common-types/analysis-registry.json`, generated into Rust and TypeScript, each run by a handwritten executor in `desktop/src/services/lidar/analyses/` with recorded provenance; Designs hold saved views and stories presented inside Canopi ([ADR 0011](adr/0011-analyses-provenance-and-stories.md), [data library](guides/data-library.md)).
+- **Vegetation analysis** from ONF Computree methods in an LGPL crate is decided but not built: no `vegetation/` crate or `native` lane exists yet ([ADR 0012](adr/0012-vegetation-analysis.md)).
+- **GeoJSON:** RFC 7946 import and export of design objects in both editions through one pure codec (`app/geojson/`); import rejects malformed files before mutation and adds objects as one undoable transaction.
 
 ## Native execution
 
-Every `#[tauri::command]` is registered once and is either executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`. Filesystem, SQLite, network, rendering, encoding, compression, process, sleeping and unbounded CPU work never run synchronously on a command thread. Direct global blocking-pool calls belong only in `desktop/src/native_operation.rs`.
+Every `#[tauri::command]` is registered once and is executor-backed async or one of the reviewed bounded synchronous commands in `desktop/src/native_command_policy.rs`. Filesystem, SQLite, network, rendering, encoding, compression, process, sleeping and unbounded CPU work never run synchronously on a command thread; direct blocking-pool calls belong only in `desktop/src/native_operation.rs` (`native_command_policy::tests`; [native and release](guides/native-and-release.md)).
 
 ## Persistence of app data
 
-- Desktop user DB: one schema, no migrations. An older database is renamed `user.db.v<N>-set-aside`, an unreadable or damaged one `user.db.corrupt-<unix-seconds>`, and an empty one is created. A newer database is refused with a typed error.
-- LiDAR library: catalogue v21 (typed items, analysis definitions, derived items, runs). A library written by an older Canopi is deleted on first open; a newer one is refused.
-- Web: independent browser-local records for drafts, settings, species activity and stamps. Web v1 storage is ignored.
+[ADR 0003](adr/0003-no-backward-compatibility.md) applies to every store:
+
+- Desktop user DB: one schema, no migrations. An older database is renamed `<file>.v<N>-set-aside`, a damaged one `<file>.corrupt-<unix-seconds>`, and an empty one is created; a newer database is refused with a typed error.
+- LiDAR library: catalogue v21. A library written by an older Canopi is deleted on first open; a newer one is refused.
+- Web: independent browser-local records for drafts, settings, species activity and stamps; data from an older Canopi is ignored.
