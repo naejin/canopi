@@ -15,7 +15,7 @@ Canopi v1 accumulated migrations, legacy readers, compatibility corpora and pres
 - **LiDAR library:** catalogue v20. A library written by an older Canopi is deleted on first open and starts empty; a newer catalogue is refused, not deleted.
 - **Web storage:** v1 browser storage is ignored, never read or rewritten.
 - **Settings:** no value rewriting (for example, no "system" theme conversion).
-- Superseded by [ADR 0013](0013-stored-data-migrations.md): stored data migrates forward. Until those migrations ship, this refusal behaviour is what the code does.
+- Superseded by [ADR 0013](0013-stored-data-migrations.md): stored data migrates forward from `.canopi` v7 and user-DB schema 8; older data is still refused.
 
 ## Consequences
 

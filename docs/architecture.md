@@ -7,14 +7,14 @@ Canopi is a desktop (Tauri) and Web app for designing agroecological sites on a 
 1. **The map is the canvas.** Basemap, satellite, LiDAR and terrain are the background of the design surface. There is no separate local canvas and no Design location ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 2. **Every design object is geolocated.** Files store WGS84 longitude/latitude; metres exist only in the runtime's session plane ([ADR 0001](adr/0001-geolocated-map-canvas.md)).
 3. **Reuse GeoLibre before writing code.** Generic GIS pieces are copied with attribution or depended on as light packages; Canopi never forks the GeoLibre app or imports its React code ([ADR 0002](adr/0002-geolibre-module-reuse.md)).
-4. **Stored data migrates forward, in one module per store.** Designs from v7 (the first Canopi 2 preview) upgrade in memory through `common-types/src/migrations.rs`; Canopi 1.2 and earlier are refused with a typed message. Nothing outside the migration modules reads an older format, and dead compatibility code is still deleted ([ADR 0013](adr/0013-stored-data-migrations.md)). The user DB upgrades in place from schema 8 (Canopi 1.0) (`desktop/src/db/user_db_migrations.rs`); the LiDAR library rebuilds its catalogue from originals; Web storage still refuses older data until its migration ships.
+4. **Stored data migrates forward, in one module per store.** Designs from v7 (the first Canopi 2 preview) upgrade in memory through `common-types/src/migrations.rs`; Canopi 1.2 and earlier are refused with a typed message. Nothing outside the migration modules reads an older format ([ADR 0013](adr/0013-stored-data-migrations.md)). Every store's rule is under [Persistence of app data](#persistence-of-app-data).
 5. **Delete, don't deprecate.** Dead code, docs, tests, scripts and dependencies go in the change that makes them dead.
 
 ## Stack
 
 - Backend: Rust workspace (Tauri v2, rusqlite, specta). `desktop/src/` holds IPC commands, services and DB access; `common-types/` the authored cross-language contracts; `bindings-gen/` the TypeScript transport generator.
 - Frontend: Preact, `@preact/signals`, TypeScript, Vite, CSS Modules, i18next core with 11 UI languages, in `desktop/web/src/`.
-- Map and scene: MapLibre GL JS owns the WebGL2 context and camera; the design scene is drawn by PixiJS inside one MapLibre custom layer (`maplibre-pixi`), the only renderer ([ADR 0004](adr/0004-one-renderer.md)). If WebGL2 or MapLibre fails, the workspace shows an explicit "map unavailable" state and the Design stays loaded; there is no fallback renderer.
+- Map and scene: MapLibre GL JS owns the WebGL2 context and camera; the design scene is drawn by PixiJS inside one MapLibre custom layer (`maplibre-pixi`), the only scene renderer; LiDAR COG display draws through `maplibre-gl-raster` ([ADR 0004](adr/0004-one-renderer.md)). If WebGL2 or MapLibre fails, the workspace shows an explicit "map unavailable" state and the Design stays loaded; there is no fallback renderer.
 
 ## Authorities
 
@@ -54,7 +54,7 @@ GeoLibre (MIT, https://github.com/opengeos/GeoLibre) is a React and Zustand app;
 
 | Piece | Source | How |
 |---|---|---|
-| COG display | `maplibre-gl-raster`, `cog-tiler-wasm` (pinned in `desktop/web/package.json`) | Dependency |
+| COG display | `maplibre-gl-raster`, `cog-tiler-wasm`, `whitebox-wasm`, `geotiff` (pinned in `desktop/web/package.json`) | Dependency |
 | Raster engine | `wbgeotiff` (`opengeos/whitebox-wasm` rev in `desktop/Cargo.toml`), `wbraster`, `wbprojection` ([ADR 0014](adr/0014-pure-rust-raster-engine.md)) | Dependency |
 | Analyses | GeoLibre CLI from `opengeos/geolibre-rust` (revision in `scripts/build-geolibre-cli.sh` and `desktop/src/services/lidar/geolibre.rs`) | Sidecar binary |
 | Geocoding registry | `packages/core/src/geocoding.ts` | Copied into `app/geocoding/` |

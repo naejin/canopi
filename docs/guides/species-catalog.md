@@ -30,7 +30,7 @@ Boundaries of the plant catalog: storage contract, Desktop SQLite plant DB, sear
 - Translations: `translated_values` has one column per language and `translate_value()` maps a locale through an allowlist; contract gap fills must match DB values exactly, including case. Common Name lookup: selected-language `best_common_names`, then `species_common_names`, then `species.common_name` for English only; `display_order` is the rank (advice).
 - Web: `web/duckdb-wasm-catalog.ts` loads DuckDB through `selectBundle(getJsDelivrBundles())`, never a bundled `duckdb-*.wasm`; a failed open rolls back and is retryable; failures surface as workbench error state with Retry, never an empty catalog (`duckdb-wasm-catalog.test.ts`, `web-species-catalog-runtime.test.ts`). Startup and packaging reject a stale manifest (`web-catalog-artifact-contract.test.ts`, `web-edition-packaging.test.ts`).
 - Web detail shows only the hero image, names, climate zone, habit and life cycle (`web-species-catalog-panel.test.tsx`).
-- User DB: a database from Canopi 1.0 to 1.2 (schema 8) is upgraded in place by `desktop/src/db/user_db_migrations.rs`, one step per version inside one transaction with the foreign-key check before commit; a failed upgrade rolls back, leaves the file untouched and is reported (`UserDbInitError::Migration`). Schemas below 8 (Canopi 0.x and development builds) and newer schemas are refused untouched with a typed error; only a damaged file is set aside as `<file>.corrupt-<unix-seconds>`. (`user_db_migrations.rs`, `db/mod.rs` tests)
+- User DB: a database from Canopi 1.0 to 1.2 (schema 8) is upgraded in place by `desktop/src/db/user_db_migrations.rs`, one step per version inside one transaction with the foreign-key check before commit; a failed upgrade rolls back, leaves the file untouched and is reported (`UserDbInitError::Migration`). Schemas below 8 (Canopi 0.x and development builds) and newer schemas are refused untouched with a typed error; only a damaged file is renamed `<file>.corrupt-<unix-seconds>` and replaced by an empty database. (`user_db_migrations.rs`, `db/mod.rs` tests)
 - Images: Desktop caches through `desktop/src/image_cache.rs` (500 MB cap, single-flight); Web loads one hero image (`image_cache.rs` tests).
 
 ## Do not
@@ -67,7 +67,7 @@ Schema change (exports at `~/projects/canopi-data/data/exports/`): `schema-contr
 | Read projections | `desktop/src/services/species_catalog_read/` | module tests, latency harness |
 | Workbench | `desktop/web/src/app/plant-browser/` | `species-catalog-*.test.ts`, `plant-catalog-browser.test.tsx` |
 | Web artifact | `scripts/generate-web-catalog.py`, `desktop/web/src/web/duckdb-wasm-catalog.ts` | `web-catalog-artifact-contract.test.ts`, `duckdb-wasm-*.test.ts`, `web-species-catalog-*.test.ts(x)` |
-| User DB | `desktop/src/db/user_db.rs` | module tests |
+| User DB | `desktop/src/db/user_db.rs`, `user_db_migrations.rs` | module tests |
 
 ## Open decisions
 

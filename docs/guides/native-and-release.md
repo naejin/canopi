@@ -9,7 +9,7 @@ Rules for the Rust/Tauri backend (execution policy, files, network, redaction, t
 - `desktop/src/native_command_policy.rs` decides how a `#[tauri::command]` may run; `desktop/src/native_operation.rs` owns the `NativeOperationExecutor` and is the only module that calls the global blocking pool.
 - `desktop/tauri.conf.json` is the version authority (read by the About dialog) and holds the CSP and asset-protocol scope; `capabilities/main-window.json` grants exactly the permissions the frontend calls.
 - `desktop/src/design/mod.rs` owns file writes; `services/export.rs` admits export payloads; `image_cache.rs` owns outbound image fetches; `services/problem_report/` and `services/folder_reveal.rs` own reports and folder opening.
-- `bindings-gen` (`npm run gen:types`) is the only writer of the generated adapter set (it embeds its checkout path, so never share a Cargo target directory between worktrees).
+- `bindings-gen` (`npm run gen:types`) is the only writer of the generated adapter set; it embeds its checkout path at compile time, so run it from the worktree whose bindings you regenerate.
 - IPC types come from `common-types` with `specta::Type`; commands return `Result<T, String>`.
 
 ## Rules

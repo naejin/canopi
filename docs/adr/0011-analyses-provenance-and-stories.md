@@ -12,7 +12,7 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
   - An analysis is an entry in an authored JSON contract (`common-types/analysis-registry.json`, generated into Rust and TypeScript): id, recipe version, input item types, parameters (typed, with defaults and units in metres, m² and degrees), output item types and a lane.
   - Executors stay handwritten in Rust.
   - Lanes: the pinned GeoLibre CLI sidecar, windowed (slope, hillshade) or global (contours, hydrology, bounded by an extent cap), and the in-process `native` lane for vegetation analysis ([ADR 0012](0012-vegetation-analysis.md)).
-  - The Analyze dialog is generated from the registry for the selected source; slope, hillshade and contours are entries.
+  - The Analyze dialog is generated from the registry for the selected source. Slope (`terrain.slope`) is the only entry in v2.0.0; hillshade, contours and hydrology become entries as they land ([plan](../plans/analysis-registry-and-hydrology.md)).
   - Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
 - **Typed library items.** Library and site-data items carry a kind: raster (elevation, height, slope, flow…), point cloud, or vector result (streams, watersheds, detected trees, crowns). Layers, legends and value readouts dispatch on kind; nothing assumes an elevation raster.
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
@@ -21,6 +21,6 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
 
 ## Consequences
 
-- The LiDAR slope path is refactored into the registry before new analyses land; the library catalogue gains kind and provenance fields (no migration: older catalogues are deleted per ADR 0003).
+- The LiDAR slope path is refactored into the registry before new analyses land; the library catalogue gains kind and provenance fields (no migration ladder: an older catalogue is set aside and rebuilt from the originals per [ADR 0013](0013-stored-data-migrations.md)).
 - `.canopi` gains `views` and `stories` before v2.0 ships; the format version bumps and older files are refused. Landing them later would refuse every v2.0 Design.
 - Hydrology (canopi-5ys2.1) and canopy analysis (canopi-5ys2.2, per ADR 0012) and story maps (canopi-5ys2.3) build on these seams only.

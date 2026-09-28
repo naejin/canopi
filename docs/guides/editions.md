@@ -7,7 +7,7 @@ One frontend ships as a Desktop edition (Tauri), a Web edition (static bundle) a
 ## Authorities and boundaries
 
 - Entries: `desktop/web/src/main.tsx` with `index.html` (Desktop) and `main.web.tsx` with `web.html` (Web). The codec, scene runtime, workbenches, Design Edit and `components/workspace/WorkspaceComposition.tsx` are shared; `DesktopWorkspace.tsx` and `web/WebWorkspace.tsx` bind the edition's capabilities.
-- Every edition difference is a compile-time alias (`desktop/web/vite.config.ts`, mirrored in `tsconfig.json`) or an injected capability. These are the only aliases:
+- Every edition difference is a compile-time alias (`desktop/web/vite.config.ts`, mirrored in `tsconfig.json`; the UI gallery maps the same aliases to its memory fixtures) or an injected capability (for example `context.edition` in `app/analyses/model.ts`). These are the only aliases:
 
 | Alias | Desktop | Web |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ One frontend ships as a Desktop edition (Tauri), a Web edition (static bundle) a
 ## Rules
 
 - Shared modules never branch on the edition to choose I/O; add an alias or a capability. The Web entry graph must not reach `@tauri-apps/**` or `ipc/**`, and the alias table stays in sync with `WEB_EDITION_ALIAS_TARGETS` (`__tests__/frontend-architecture-policies.test.ts`: "Web entry stays outside the Desktop app graph", "resolves every edition alias to the Web target Vite uses").
-- Web chunks carry no Tauri markers (`__TAURI__`, `__TAURI_INTERNALS__`), no raw `.wasm` and no asset over 25 MiB: `desktop/web/scripts/check-web-build-boundaries.mjs`, run by `npm run build:web` (`__tests__/web-build-configuration.test.ts`). Never weaken it.
+- Web chunks carry no Tauri markers (`__TAURI__`, `__TAURI_INTERNALS__`), no raw DuckDB or Desktop raster-decoder `.wasm` and no asset over 25 MiB: `desktop/web/scripts/check-web-build-boundaries.mjs`, run by `npm run build:web` (`__tests__/web-build-configuration.test.ts`). Never weaken it.
 - The Web shell renders only browser-safe commands and chrome (`__tests__/web-app-shell.test.tsx`, `web-shell-projection.test.ts`, `web-canvas-shortcuts.test.ts`).
 - A missing, corrupt or foreign browser record reads as empty; a failed write returns `{ ok: false }` and keeps the previous record; data from an older Canopi is ignored (`__tests__/browser-app-data.test.ts`).
 - Phone classification and the sheet's heights and keys are pure and tested (`__tests__/phone-layout.test.tsx`).
