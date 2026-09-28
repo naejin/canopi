@@ -148,6 +148,19 @@ describe('Data Library actions', () => {
     expect(upsertMock).not.toHaveBeenCalled()
   })
 
+  it('drops an import from Layers whose item left the library before it was published', async () => {
+    dismissAttachmentFailure()
+    importItemMock.mockResolvedValue({ layer_id: 'layer-7', job_id: 'job-7' })
+    await importLibraryItem(['/a.tif'], 'Ground', 'GroundElevation', { label: null, unknown: false }, true)
+    expect(pendingAttachments.value.map((entry) => entry.itemIds)).toContainEqual(['layer-7'])
+
+    // Cancelled, then dismissed: the library no longer lists the item at all.
+    settleResultAttachments(librarySnapshot([]))
+    expect(pendingAttachments.value.map((entry) => entry.itemIds)).not.toContainEqual(['layer-7'])
+    expect(attachmentFailure.value).toBeNull()
+    expect(upsertMock).not.toHaveBeenCalled()
+  })
+
   it('imports into the library only, in the listed priority order', async () => {
     importItemMock.mockResolvedValue({ layer_id: 'layer-1', job_id: 'job-1' })
     await importLibraryItem(['/b.tif', '/a.tif'], 'Ground', 'GroundElevation', { label: 'm', unknown: false })

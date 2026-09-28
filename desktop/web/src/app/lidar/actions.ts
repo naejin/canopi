@@ -273,11 +273,12 @@ export function settleResultAttachments(snapshot: LibrarySnapshot | null): void 
   const current = designSessionStore.sessionIdentity.value
   const remaining: PendingAttachment[] = []
   for (const pending of pendingList) {
-    const items = pending.itemIds.map((id) => snapshot.items.find((candidate) => candidate.id === id))
-    const settled = items.every((item) => item?.generation_id)
     if (pending.identity !== current) continue
-    const failed = items.find((item) => !item || (item.state === 'Failed' && !item.generation_id))
-    if (failed !== undefined) {
+    const items = pending.itemIds.map((id) => snapshot.items.find((candidate) => candidate.id === id))
+    // An item the library no longer lists (a dismissed import) can never publish.
+    const gone = items.some((item) => item === undefined)
+    const failed = items.find((item) => item?.state === 'Failed' && !item.generation_id)
+    if (gone || failed) {
       const job = failed?.import_job ?? null
       const run = failed?.run ?? null
       if (failed && (job?.state === 'Failed' || run?.state === 'Failed')) {
@@ -285,7 +286,7 @@ export function settleResultAttachments(snapshot: LibrarySnapshot | null): void 
       }
       continue
     }
-    if (!settled) {
+    if (!items.every((item) => item?.generation_id)) {
       remaining.push(pending)
       continue
     }
