@@ -121,7 +121,7 @@ mod tests {
         services::problem_report::ProblemReportContext,
     };
     use common_types::{
-        health::{PlantDbStatus, SubsystemHealth},
+        health::{LidarLibraryStatus, PlantDbStatus, SubsystemHealth},
         support::{ProblemReportRequest, ProblemReportSensitiveAttachments},
     };
     use std::{
@@ -206,6 +206,7 @@ mod tests {
                     settings_error: None,
                     health: SubsystemHealth {
                         plant_db: PlantDbStatus::Available,
+                        lidar_library: LidarLibraryStatus::Ready,
                     },
                 },
             )

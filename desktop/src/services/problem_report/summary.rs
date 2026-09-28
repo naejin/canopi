@@ -38,7 +38,7 @@ pub(crate) fn build_report_summary(
          Created: {timestamp_iso}\n\
          App: Canopi {app_version}\n\
          Platform: {target}\n\
-         Health: plant catalog {plant_db}\n\
+         Health: plant catalog {plant_db}, Data library {lidar_library}\n\
          {settings_line}\n\
          \n\
          What happened:\n\
@@ -56,6 +56,7 @@ pub(crate) fn build_report_summary(
         app_version = context.app_version,
         target = context.target,
         plant_db = plant_db_label(&context.health),
+        lidar_library = lidar_library_label(&context.health),
         summary_file = SUMMARY_FILENAME,
         bundle_file = BUNDLE_FILENAME,
     );
@@ -92,6 +93,16 @@ fn theme_label(settings: &Settings) -> &'static str {
     match settings.theme {
         common_types::settings::Theme::Light => "light",
         common_types::settings::Theme::Dark => "dark",
+    }
+}
+
+/// The Data library's open state, without counts, paths or reasons.
+fn lidar_library_label(health: &SubsystemHealth) -> &'static str {
+    match health.lidar_library {
+        common_types::health::LidarLibraryStatus::Ready => "ready",
+        common_types::health::LidarLibraryStatus::Recovered { .. } => "recovered",
+        common_types::health::LidarLibraryStatus::RefusedNewer => "refused (newer version)",
+        common_types::health::LidarLibraryStatus::Unavailable => "unavailable",
     }
 }
 

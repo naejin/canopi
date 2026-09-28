@@ -537,6 +537,23 @@ export type LidarLayerSource = {
 	value_range: [number, number],
 };
 
+/**
+ *  How the LiDAR Data library opened at startup. Everything but `Ready` is
+ *  shown to the user; `RefusedNewer` and `Unavailable` also make the library
+ *  empty and read-only for the session.
+ */
+export type LidarLibraryStatus = { kind: "ready" } |
+/**
+ *  An older or corrupt catalogue was set aside and rebuilt from the
+ *  originals: `items` listed again from their metadata, `generated` of
+ *  them under a generated name because no metadata described them.
+ */
+{ kind: "recovered"; items: number; generated: number } |
+// The catalogue was written by a newer Canopi and is left untouched.
+{ kind: "refused_newer" } |
+// The catalogue could be neither opened nor rebuilt.
+{ kind: "unavailable" };
+
 export type LidarPresentationEntry = {
 	kind: LidarPresentationEntryKind,
 	id: string,
@@ -1193,6 +1210,7 @@ export type StoryStep = {
 
 export type SubsystemHealth = {
 	plant_db: PlantDbStatus,
+	lidar_library: LidarLibraryStatus,
 };
 
 export type Theme = "light" | "dark";

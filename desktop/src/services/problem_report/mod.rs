@@ -117,7 +117,7 @@ fn create_unique_report_folder(root: &Path, folder_name: &str) -> Result<PathBuf
 
 #[cfg(test)]
 mod tests {
-    use common_types::health::{PlantDbStatus, SubsystemHealth};
+    use common_types::health::{LidarLibraryStatus, PlantDbStatus, SubsystemHealth};
     use common_types::settings::Settings;
     use common_types::support::{
         FrontendDiagnosticEntry, ProblemReportRequest, ProblemReportSensitiveAttachments,
@@ -209,6 +209,7 @@ mod tests {
                 settings_error: None,
                 health: SubsystemHealth {
                     plant_db: PlantDbStatus::Available,
+                    lidar_library: LidarLibraryStatus::Ready,
                 },
             },
         )
@@ -280,6 +281,7 @@ mod tests {
                 settings_error: None,
                 health: SubsystemHealth {
                     plant_db: PlantDbStatus::Available,
+                    lidar_library: LidarLibraryStatus::Ready,
                 },
             },
         )
@@ -319,6 +321,7 @@ mod tests {
             settings_error: None,
             health: SubsystemHealth {
                 plant_db: PlantDbStatus::Available,
+                lidar_library: LidarLibraryStatus::Ready,
             },
         }
     }

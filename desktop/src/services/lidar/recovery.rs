@@ -12,6 +12,7 @@
 use super::catalogue::{self, new_id, now_iso};
 use super::paths::LidarPaths;
 use super::source_meta::{self, AnalysisMeta, SourceMeta};
+use common_types::health::LidarLibraryStatus;
 use rusqlite::Connection;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -92,6 +93,22 @@ pub enum LibraryOpenStatus {
 }
 
 impl LibraryOpenStatus {
+    /// The state as the frontend sees it in `SubsystemHealth`: no paths or
+    /// reasons, only what the user can act on.
+    pub fn health(&self) -> LidarLibraryStatus {
+        match self {
+            Self::Ready => LidarLibraryStatus::Ready,
+            Self::Recovered {
+                items, generated, ..
+            } => LidarLibraryStatus::Recovered {
+                items: u32::try_from(*items).unwrap_or(u32::MAX),
+                generated: u32::try_from(*generated).unwrap_or(u32::MAX),
+            },
+            Self::RefusedNewer { .. } => LidarLibraryStatus::RefusedNewer,
+            Self::Unavailable { .. } => LidarLibraryStatus::Unavailable,
+        }
+    }
+
     /// Why a mutation is refused, when the library is read-only.
     pub fn refusal(&self) -> Option<String> {
         match self {
@@ -505,6 +522,46 @@ fn insert_definition(connection: &Connection, analysis: &AnalysisMeta) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Health carries the state and counts only: never the set-aside path,
+    /// the version numbers or the failure reason.
+    #[test]
+    fn health_keeps_the_state_and_counts_but_no_paths_or_reasons() {
+        let recovered = LibraryOpenStatus::Recovered {
+            reason: RecoveryReason::Corrupt("garbage".into()),
+            set_aside: PathBuf::from("/private/set-aside"),
+            items: 4,
+            generated: 2,
+        };
+        assert_eq!(
+            recovered.health(),
+            LidarLibraryStatus::Recovered {
+                items: 4,
+                generated: 2
+            }
+        );
+        assert_eq!(LibraryOpenStatus::Ready.health(), LidarLibraryStatus::Ready);
+        assert_eq!(
+            LibraryOpenStatus::RefusedNewer {
+                found: 9,
+                supported: 3
+            }
+            .health(),
+            LidarLibraryStatus::RefusedNewer
+        );
+        assert_eq!(
+            LibraryOpenStatus::Unavailable {
+                reason: "/private/path unreadable".into()
+            }
+            .health(),
+            LidarLibraryStatus::Unavailable
+        );
+        let json = serde_json::to_string(&recovered.health()).unwrap();
+        assert!(
+            !json.contains("private") && !json.contains("garbage"),
+            "{json}"
+        );
+    }
 
     #[test]
     fn the_set_aside_stamp_is_utc_civil_time() {

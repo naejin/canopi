@@ -181,6 +181,7 @@ pub fn run() {
                 .map_err(|e| format!("Failed to initialize LiDAR library: {e}"))?;
             lidar_library.attach_executor(native_executor);
             tracing::info!(status = ?lidar_library.open_status(), "LiDAR library initialized");
+            let lidar_library_status = lidar_library.open_status().health();
             app.manage(lidar_library);
 
             // Image cache (disk-backed, in app data dir)
@@ -235,6 +236,7 @@ pub fn run() {
 
             app.manage(AppHealth(SubsystemHealth {
                 plant_db: plant_db_status,
+                lidar_library: lidar_library_status,
             }));
 
             Ok(())

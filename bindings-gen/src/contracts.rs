@@ -29,6 +29,7 @@ pub(crate) fn render_typescript_contracts() -> Result<String, Box<dyn std::error
         .register::<common_types::design::SpeciesPanelTargetKind>()
         .register::<common_types::design::TimelineAction>()
         .register::<common_types::design::Zone>()
+        .register::<common_types::health::LidarLibraryStatus>()
         .register::<common_types::health::PlantDbStatus>()
         .register::<common_types::health::SubsystemHealth>()
         .register::<common_types::library::AnalysisInputBinding>()
