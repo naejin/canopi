@@ -18,6 +18,6 @@ Canopi 1.x asked people to Save, prompted about unsaved changes on close or swit
 
 ## Consequences
 
-- The rotating autosave folder, its recovery commands and the `auto_save_interval_s` setting are deleted; an existing autosave folder is deleted at startup.
+- The rotating autosave folder, its recovery commands and the `auto_save_interval_s` setting are deleted; an existing autosave folder is deleted at startup once the user database has opened, so a refused startup leaves it in place.
 - Web Download is an export; the Web durable save is the browser Draft, lost if site data is cleared (see ADR 0005).
 - A new Design is written on its first edit, so an untouched New leaves no empty draft.

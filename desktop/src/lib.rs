@@ -154,11 +154,9 @@ pub fn run() {
             // User DB (writable, in app data dir)
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            design::drafts::remove_retired_autosave_store(&data_dir);
             app.manage(design::drafts::DesignDrafts::new(&data_dir));
             app.manage(services::recent_design_previews::RecentDesignPreviews::default());
-            let user_db_path = data_dir.join("user.db");
-            let user_db = match db::UserDb::open(&user_db_path) {
+            let user_db = match open_user_data(&data_dir) {
                 Ok(user_db) => user_db,
                 Err(error) => {
                     // A user database this Canopi cannot own (written by a newer
@@ -251,6 +249,17 @@ pub fn run() {
     }
 }
 
+/// Open the user database in `data_dir`, then take over the data folder.
+///
+/// Retired stores are removed only after the user database opened: a refused
+/// startup promises the user that it changed nothing, and an earlier Canopi
+/// may still read those stores.
+fn open_user_data(data_dir: &std::path::Path) -> Result<db::UserDb, db::UserDbInitError> {
+    let user_db = db::UserDb::open(data_dir.join("user.db"))?;
+    design::drafts::remove_retired_autosave_store(data_dir);
+    Ok(user_db)
+}
+
 /// The message for a startup failure the user can act on, or `None` when the
 /// failure is an internal error.
 fn startup_refusal_message(error: &db::UserDbInitError) -> Option<String> {
@@ -318,6 +327,38 @@ mod tests {
         );
         let internal = super::db::UserDbInitError::ForeignKeysDisabled;
         assert!(super::startup_refusal_message(&internal).is_none());
+    }
+
+    #[test]
+    fn a_refused_user_database_leaves_the_retired_autosave_store_in_place() {
+        let data_dir = super::test_scratch::TestScratch::new("startup-refused");
+        let autosave = data_dir.join("autosave");
+        std::fs::create_dir(&autosave).unwrap();
+        std::fs::write(autosave.join("recovery.canopi"), "unsaved work").unwrap();
+        let connection = rusqlite::Connection::open(data_dir.join("user.db")).unwrap();
+        connection.pragma_update(None, "user_version", 99).unwrap();
+        drop(connection);
+
+        let error = super::open_user_data(&data_dir)
+            .err()
+            .expect("newer data is refused");
+        assert!(super::startup_refusal_message(&error).is_some());
+        assert_eq!(
+            std::fs::read_to_string(autosave.join("recovery.canopi")).unwrap(),
+            "unsaved work",
+            "a refused startup changes nothing in the data folder"
+        );
+    }
+
+    #[test]
+    fn an_opened_user_database_takes_over_and_removes_the_retired_autosave_store() {
+        let data_dir = super::test_scratch::TestScratch::new("startup-opened");
+        std::fs::create_dir(data_dir.join("autosave")).unwrap();
+
+        let user_db = super::open_user_data(&data_dir).expect("a fresh data folder opens");
+        drop(user_db);
+
+        assert!(!data_dir.join("autosave").exists());
     }
 
     #[test]
