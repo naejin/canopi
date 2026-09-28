@@ -795,7 +795,13 @@ function syncPlants(
   ))
   const nextVisiblePlantIds = new Set(visiblePlants.map((plant) => plant.id))
   for (const plantId of visiblePlantIds) {
-    if (!nextVisiblePlantIds.has(plantId)) plantGraphicsById.get(plantId)!.visible = false
+    if (nextVisiblePlantIds.has(plantId)) continue
+    const graphic = plantGraphicsById.get(plantId)!
+    graphic.visible = false
+    // A hidden symbol must not keep a cache context alive or, worse, hold one
+    // the cache retires two generations later: Pixi still validates hidden
+    // renderables, and a destroyed context has no instructions to read.
+    graphic.context = emptyPlantGraphicsContext
   }
   plantGraphicsContexts.beginGeneration()
 

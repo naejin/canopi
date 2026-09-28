@@ -55,7 +55,8 @@ vi.mock('pixi.js', () => {
     closePath = vi.fn(() => this.record('closePath'))
     fill = vi.fn((...args: unknown[]) => this.record('fill', args))
     stroke = vi.fn((...args: unknown[]) => this.record('stroke', args))
-    destroy = vi.fn(() => { this.owners.clear() })
+    destroyed = false
+    destroy = vi.fn(() => { this.destroyed = true })
     constructor() {
       state.graphicsContexts.push(this)
     }
@@ -105,6 +106,7 @@ vi.mock('pixi.js', () => {
     })
     destroy = vi.fn((options?: boolean | { context?: boolean }) => {
       if (options === true || (typeof options === 'object' && options.context)) this._context.destroy()
+      this._context.detach(this)
     })
     constructor(options?: MockGraphicsContext | { context?: MockGraphicsContext }) {
       this._context = options instanceof MockGraphicsContext
@@ -235,6 +237,30 @@ describe('createPixiScenePresentation', () => {
     expect(plant.fill).toHaveBeenLastCalledWith(expect.objectContaining({ color: 0xff0000 }))
     renderer.dispose()
   })
+  it('never leaves a plant symbol bound to a drawing context the cache has destroyed', async () => {
+    // A story step zooms away from a plant, the cache retires its glyph two
+    // generations later, and the step back must not render a dead context
+    // ("null is not an object (evaluating 'context.instructions.length')").
+    const pixi = await import('pixi.js') as unknown as {
+      __pixiMockState: { graphicsContexts: Array<{ destroyed: boolean; ownerCount: number }> }
+    }
+    const container = document.createElement('div')
+    Object.defineProperties(container, { clientWidth: { value: 400 }, clientHeight: { value: 300 } })
+    const renderer = mountPresentation(container)
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [
+      createPlant({ symbol: 'shrub', position: { x: 2, y: 2 } }),
+    ] }, viewport: { x: 0, y: 0, scale: 30 } })
+    renderer.renderScene(snapshot)
+    const orphaned = () => pixi.__pixiMockState.graphicsContexts.filter((c) => c.destroyed && c.ownerCount > 0).length
+    for (let generation = 0; generation < 4; generation += 1) {
+      renderer.renderScene({ ...snapshot, viewport: { x: 10000 + generation, y: 0, scale: 60 } })
+      expect(orphaned()).toBe(0)
+    }
+    expect(() => renderer.renderScene({ ...snapshot, viewport: { x: 0, y: 0, scale: 60 } })).not.toThrow()
+    expect(orphaned()).toBe(0)
+    renderer.dispose()
+  })
+
   it('retains annotation text style during pan and updates it after an authored font change', async () => {
     const pixi = await import('pixi.js') as unknown as {
       __pixiMockState: { texts: Array<{ style: unknown }> }
