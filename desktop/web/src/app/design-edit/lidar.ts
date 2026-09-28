@@ -140,10 +140,10 @@ function nextOrder(entries: LidarPresentationEntry[]): number {
  * Set the saved order of several entries at once.
  *
  * Order is the document's own presentation order, so this is a Design Edit: it
- * dirties the current Design and travels through document history, which is
- * what makes a move undoable. Reordering presentation changes no numeric data
+ * dirties the current Design for continuous save and, like every Design Edit,
+ * has no undo. Reordering presentation changes no numeric data
  * and starts no computation; it is display order only. Orders that are already
- * saved leave the Design untouched, so a no-op creates no history entry.
+ * saved leave the Design untouched.
  */
 export function setLidarEntryOrders(orders: ReadonlyMap<string, number>): void {
   editCurrentDesign((design) => {

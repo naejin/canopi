@@ -282,7 +282,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
       result = {
         items: lidarItems,
         engines: {
-          gdal: { available: true, version: '3.8.4', detail: null },
+          raster: { available: true, version: 'wbgeotiff 0.1.2, wbraster 0.2.1, wbprojection 0.3.3 (gallery)', detail: null },
           geolibre: { available: true, version: galleryTool.version, detail: null },
         },
       }; break

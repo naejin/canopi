@@ -1,11 +1,11 @@
 //! Sampled process-tree resident memory for the representative raster runs.
 //!
 //! The combined-memory gate needs the working set that is actually live while a
-//! raster operation runs, including the GDAL children the engine launches. This
-//! module samples the root process and every descendant it can observe on a
-//! fixed interval, tracking `(pid, start time)` identity so a recycled pid is
-//! never counted twice and a child that exits between discovery and read is
-//! reported as an unreadable sample rather than as zero.
+//! raster operation runs, including the GDAL children the comparison lane
+//! launches. This module samples the root process and every descendant it can
+//! observe on a fixed interval, tracking `(pid, start time)` identity so a
+//! recycled pid is never counted twice and a child that exits between
+//! discovery and read is reported as an unreadable sample rather than as zero.
 //!
 //! Reported limitations, which every gate must state:
 //!
