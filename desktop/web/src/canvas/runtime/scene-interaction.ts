@@ -176,6 +176,9 @@ export interface SceneInteractionSessionDeps {
 /** Arrow-key nudge steps, in session-plane metres (y grows southward). */
 const NUDGE_STEP_M = 0.1
 const NUDGE_LARGE_STEP_M = 1
+/** Arrow-key pan steps with nothing selected, in screen pixels. */
+const ARROW_PAN_STEP_PX = 64
+const ARROW_PAN_LARGE_STEP_PX = 256
 /** A pause this long ends a nudge series, so its edit commits. */
 const NUDGE_SERIES_IDLE_MS = 800
 const NUDGE_DIRECTIONS: Readonly<Record<string, ScenePoint>> = {
@@ -1139,13 +1142,22 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
   }
 
-  /** Arrow keys on the focused map move the editable selection (Select tool only). */
+  /**
+   * Arrow keys on the focused map: with nothing selected they pan the map (any
+   * tool, overview included); otherwise they move the editable selection
+   * (Select tool only). Fields and controls keep their own arrows.
+   */
   private _nudgeFromKeyboard(event: KeyboardEvent): boolean {
     const direction = NUDGE_DIRECTIONS[event.key]
-    if (!direction || !this._deps.nudge || event.ctrlKey || event.metaKey || event.altKey) return false
-    if (this._tool !== 'select' || this._pointerGesture || this._overviewMode) return false
+    if (!direction || event.ctrlKey || event.metaKey || event.altKey || this._pointerGesture) return false
     const target = event.target
     if (!(target instanceof Node) || !this._deps.container.contains(target) || isKeyboardInteractiveEventTarget(target)) return false
+    if (this._deps.getSelection().length === 0) {
+      event.preventDefault()
+      this._panFromKeyboard(direction, event.shiftKey)
+      return true
+    }
+    if (!this._deps.nudge || this._tool !== 'select' || this._overviewMode) return false
     event.preventDefault()
     const step = event.shiftKey ? NUDGE_LARGE_STEP_M : NUDGE_STEP_M
     if (!this._deps.nudge.nudgeSelected({ x: direction.x * step, y: direction.y * step })) return true
@@ -1157,6 +1169,16 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }, NUDGE_SERIES_IDLE_MS)
     this._refreshSelectionDependentMeasurements()
     return true
+  }
+
+  /** Pans one step in the arrow's direction, as a wheel pan does. */
+  private _panFromKeyboard(direction: ScenePoint, large: boolean): void {
+    const step = large ? ARROW_PAN_LARGE_STEP_PX : ARROW_PAN_STEP_PX
+    const beforeRevision = this._deps.camera.snapshot.peek().revision
+    this._deps.cameraNavigation.panBy({ x: -direction.x * step, y: -direction.y * step })
+    if (this._deps.camera.snapshot.peek().revision === beforeRevision) return
+    this._deps.render('viewport')
+    this._refreshViewportDependentMeasurements()
   }
 
   private _endNudge(options?: { readonly abort?: boolean }): void {

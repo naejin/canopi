@@ -10784,14 +10784,63 @@ describe('SceneInteractionSession', () => {
     })
   })
   describe('arrow-key nudges', () => {
-    function nudgeSession(): { nudge: { nudgeSelected: ReturnType<typeof vi.fn>, endNudge: ReturnType<typeof vi.fn> }, session: SceneInteractionSession, deps: SceneInteractionSessionDeps } {
+    function nudgeSession(selected = true): { nudge: { nudgeSelected: ReturnType<typeof vi.fn>, endNudge: ReturnType<typeof vi.fn> }, session: SceneInteractionSession, deps: SceneInteractionSessionDeps, render: ReturnType<typeof vi.fn> } {
       const nudge = { nudgeSelected: vi.fn(() => true), endNudge: vi.fn() }
-      const deps = createInteractionDeps(container, store, camera, { nudge })
+      const render = vi.fn()
+      const deps = createInteractionDeps(container, store, camera, { nudge, render })
       const session = createTestSession(deps)
+      if (selected) deps.setSelection([plantTarget('plant-1')])
       container.tabIndex = 0
       container.focus()
-      return { nudge, session, deps }
+      return { nudge, session, deps, render }
     }
+
+    it('pans the map 64 px per arrow, 256 px with Shift, when nothing is selected', () => {
+      const { nudge, render } = nudgeSession(false)
+      const before = camera.viewport
+      render.mockClear()
+
+      const right = events.keyDown({ key: 'ArrowRight', cancelable: true, target: container })
+      expect(right.defaultPrevented).toBe(true)
+      expect(camera.viewport).toEqual({ x: before.x - 64, y: before.y, scale: before.scale })
+      expect(render).toHaveBeenCalledWith('viewport')
+
+      events.keyDown({ key: 'ArrowDown', shiftKey: true, target: container })
+      events.keyDown({ key: 'ArrowLeft', target: container })
+      events.keyDown({ key: 'ArrowUp', target: container })
+      expect(camera.viewport).toEqual({ x: before.x, y: before.y - 256 + 64, scale: before.scale })
+      expect(nudge.nudgeSelected).not.toHaveBeenCalled()
+      expect(nudge.endNudge).not.toHaveBeenCalled()
+    })
+
+    it('pans with an empty selection under any tool and in overview, but not from a field or with Ctrl', () => {
+      const { session, deps } = nudgeSession(false)
+      const before = camera.viewport
+      session.setTool('polygon')
+      events.keyDown({ key: 'ArrowRight', target: container })
+      session.setTool('select')
+      session.setOverviewMode(true)
+      events.keyDown({ key: 'ArrowRight', target: container })
+      session.setOverviewMode(false)
+      expect(camera.viewport.x).toBe(before.x - 128)
+
+      const field = document.createElement('textarea')
+      container.append(field)
+      field.focus()
+      const inField = events.keyDown({ key: 'ArrowRight', cancelable: true, target: field })
+      expect(inField.defaultPrevented).toBe(false)
+      field.remove()
+      container.focus()
+      events.keyDown({ key: 'ArrowRight', ctrlKey: true, target: container })
+      events.keyDown({ key: 'ArrowRight', altKey: true, target: container })
+      expect(camera.viewport.x).toBe(before.x - 128)
+
+      // With a selection the same key nudges instead.
+      deps.setSelection([plantTarget('plant-1')])
+      events.keyDown({ key: 'ArrowRight', target: container })
+      expect(camera.viewport.x).toBe(before.x - 128)
+      expect(deps.nudge!.nudgeSelected).toHaveBeenCalledExactlyOnceWith({ x: 0.1, y: 0 })
+    })
 
     it('nudges the selection 0.1 m per arrow, 1 m with Shift, north-up', () => {
       const { nudge } = nudgeSession()
@@ -10809,7 +10858,7 @@ describe('SceneInteractionSession', () => {
     it('ends the series on another key, a press, leaving the map, a pause or a tool change', () => {
       vi.useFakeTimers()
       try {
-        const { nudge, session } = nudgeSession()
+        const { nudge, session, deps } = nudgeSession()
         events.keyDown({ key: 'ArrowRight', target: container })
         events.keyDown({ key: 'z', ctrlKey: true, target: container })
         expect(nudge.endNudge).toHaveBeenCalledTimes(1)
@@ -10819,6 +10868,8 @@ describe('SceneInteractionSession', () => {
         events.pointerDown({ x: 200, y: 200 }, { button: 0 })
         expect(nudge.endNudge).toHaveBeenCalledTimes(2)
         events.pointerUp({ x: 200, y: 200 }, { button: 0 })
+        // The press on empty map cleared the selection; the series needs one.
+        deps.setSelection([plantTarget('plant-1')])
 
         events.keyDown({ key: 'ArrowRight', target: container })
         vi.advanceTimersByTime(1000)
