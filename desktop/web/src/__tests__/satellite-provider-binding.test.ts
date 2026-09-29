@@ -329,6 +329,52 @@ describe('Google official provider drives the live map', () => {
     dispose()
   })
 
+  it('applies a state published while tiles load once the style is ready again, without a style load event', async () => {
+    const { http } = googleHttp()
+    const tileAuth = new BasemapTileAuth()
+    const key: { value: string | null } = { value: API_KEY }
+    const provider = officialProvider(http, tileAuth, key)
+    const map = recordingMap()
+    // Ready at bind time, so the binding registers no wait up front.
+    let ready = true
+    const readyListeners: Array<() => void> = []
+    const added: string[] = []
+    const target: SatelliteReconcileTarget = {
+      ...map.target,
+      addSource: (id, source) => {
+        added.push(id)
+        map.sources.set(id, source)
+      },
+    }
+    const dispose = bindSatelliteImagery({
+      provider,
+      map: target,
+      tileAuth,
+      styleReady: {
+        isReady: () => ready,
+        whenReady: (listener) => {
+          readyListeners.push(listener)
+          return () => {
+            const index = readyListeners.indexOf(listener)
+            if (index >= 0) readyListeners.splice(index, 1)
+          }
+        },
+      },
+    })
+
+    // Tiles are loading when the provider publishes `ready`.
+    ready = false
+    provider.update(VIEWPORT)
+    await vi.waitFor(() => expect(provider.snapshot().state).toBe('ready'))
+    expect(added).toEqual([])
+
+    ready = true
+    for (const listener of [...readyListeners]) listener()
+    expect(added).toEqual([MAPLIBRE_SATELLITE_SOURCE_ID])
+    expect(map.sources.get(MAPLIBRE_SATELLITE_SOURCE_ID)?.tiles).toEqual([OFFICIAL_TILE])
+    dispose()
+  })
+
   it('clears the transport credential when the provider is disposed', async () => {
     const { http } = googleHttp()
     const tileAuth = new BasemapTileAuth()

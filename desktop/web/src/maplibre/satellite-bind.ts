@@ -110,13 +110,7 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
       map.replaceSatelliteAttribution?.(attribution)
   }
 
-  const apply = (state: SatelliteState): void => {
-    // The latest state always wins: a state that arrives while the style is
-    // still loading is what gets applied when it finishes, not the one that
-    // happened to arrive first.
-    pending = state
-    if (deps.styleReady && !deps.styleReady.isReady()) return
-    pending = null
+  const reconcile = (state: SatelliteState): void => {
     reconcileSatelliteContribution(target, state, {
       officialTilesResolvable: tileAuth?.installed === true,
       ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
@@ -130,29 +124,35 @@ export function bindSatelliteImagery(deps: SatelliteBindingDeps): () => void {
     deps.afterApply?.()
   }
 
+  const apply = (state: SatelliteState): void => {
+    // The latest state always wins: a state that arrives while the style is
+    // not ready is what gets applied when it is, not the one that happened to
+    // arrive first. Every deferral keeps one wait pending, not only the one at
+    // bind time, so a state published while tiles load is never dropped.
+    pending = state
+    if (deps.styleReady && !deps.styleReady.isReady()) {
+      if (!cancelReadyWait) {
+        cancelReadyWait = deps.styleReady.whenReady(() => {
+          cancelReadyWait = null
+          if (disposed) return
+          const latest = pending ?? provider.snapshot()
+          pending = null
+          reconcile(latest)
+        })
+      }
+      return
+    }
+    pending = null
+    cancelReadyWait?.()
+    cancelReadyWait = null
+    reconcile(state)
+  }
 
   // Adopt whatever the provider already published. Without this a map created
   // after the provider resolved would show no basemap until the next change.
   apply(provider.snapshot())
 
   const unsubscribe = provider.subscribe(apply)
-  if (deps.styleReady && !deps.styleReady.isReady()) {
-    cancelReadyWait = deps.styleReady.whenReady(() => {
-      cancelReadyWait = null
-      if (disposed) return
-      const state = pending ?? provider.snapshot()
-      pending = null
-      reconcileSatelliteContribution(target, state, {
-        officialTilesResolvable: tileAuth?.installed === true,
-        ...(deps.beforeLayerId ? { beforeLayerId: deps.beforeLayerId } : {}),
-      })
-      setSatelliteContributionVisibility(
-        target,
-        effectiveBasemapVisibility(state, visible()),
-      )
-      deps.afterApply?.()
-    })
-  }
 
   return () => {
     disposed = true
@@ -229,9 +229,13 @@ function installSatelliteConfigObserver(
 /**
  * Read style readiness from a live map and its lifetime.
  *
- * `isStyleLoaded` is the precise answer and `loaded` is the conservative
- * fallback; a map that exposes neither is treated as ready so a stub map with
- * no asynchronous style load is not blocked forever.
+ * Ready means the style accepts sources and layers. MapLibre's own flag for
+ * that (`style._loaded`, what `addSource` checks) is read first: the public
+ * `isStyleLoaded()` also stays false while any tile, sprite or source update
+ * is loading, which on a map that already loaded is not followed by another
+ * `load` or `style.load`. `isStyleLoaded` and then `loaded` are the fallbacks;
+ * a map that exposes none is treated as ready so a stub map with no
+ * asynchronous style load is not blocked forever.
  */
 export function mapStyleReadiness(
   map: { isStyleLoaded?(): boolean; loaded?(): boolean },
@@ -241,6 +245,12 @@ export function mapStyleReadiness(
   },
 ): MapStyleReadiness {
   const read = (): boolean | null => {
+    try {
+      const style = (map as { style?: { _loaded?: unknown } }).style
+      if (typeof style?._loaded === 'boolean') return style._loaded
+    } catch {
+      // Fall through to the public probes.
+    }
     for (const probe of [map.isStyleLoaded, map.loaded]) {
       if (typeof probe !== 'function') continue
       try {
@@ -251,15 +261,16 @@ export function mapStyleReadiness(
     }
     return null
   }
+  const isReady = () => read() ?? true
   return {
-    isReady: () => read() ?? true,
+    isReady,
     whenReady: (listener) => {
       let settled = false
       const release = () => {
         if (settled) return
         settled = true
-        lifetime.off('load', onReady)
-        lifetime.off('style.load', onReady)
+        for (const type of READY_EVENTS) lifetime.off(type, onReady)
+        for (const type of RECHECK_EVENTS) lifetime.off(type, onRecheck)
       }
       // `load` and `style.load` both signal readiness; whichever comes first
       // wins and a later style reload is not this wait's business.
@@ -268,12 +279,21 @@ export function mapStyleReadiness(
         release()
         listener()
       }
-      lifetime.on('load', onReady)
-      lifetime.on('style.load', onReady)
+      // A map that already loaded fires neither again: readiness lost to
+      // loading tiles returns on one of these, so each re-checks it.
+      const onRecheck = () => {
+        if (settled || !isReady()) return
+        onReady()
+      }
+      for (const type of READY_EVENTS) lifetime.on(type, onReady)
+      for (const type of RECHECK_EVENTS) lifetime.on(type, onRecheck)
       return release
     },
   }
 }
+
+const READY_EVENTS = ['load', 'style.load'] as const
+const RECHECK_EVENTS = ['idle', 'data', 'sourcedata', 'styledata'] as const
 
 /**
  * One per-map basemap mount operation.

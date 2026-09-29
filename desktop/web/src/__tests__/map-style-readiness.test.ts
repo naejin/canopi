@@ -147,6 +147,53 @@ describe('map style readiness', () => {
   })
 })
 
+describe('map style readiness after the first load', () => {
+  it('reports ready while tiles load once the style itself accepts mutations', () => {
+    const lifetime = fakeLifetime()
+    // MapLibre's isStyleLoaded() is false while any tile loads; the style's own
+    // loaded flag is what addSource and addLayer check.
+    const readiness = mapStyleReadiness({ style: { _loaded: true }, isStyleLoaded: () => false } as never, lifetime)
+    expect(readiness.isReady()).toBe(true)
+  })
+
+  it('releases a wait when readiness returns without a load or style.load event', () => {
+    const lifetime = fakeLifetime()
+    let ready = false
+    const readiness = mapStyleReadiness({ isStyleLoaded: () => ready }, lifetime)
+    const listener = vi.fn()
+    const release = readiness.whenReady(listener)
+    lifetime.emit('sourcedata')
+    expect(listener).not.toHaveBeenCalled()
+    ready = true
+    lifetime.emit('idle')
+    expect(listener).toHaveBeenCalledTimes(1)
+    lifetime.emit('idle')
+    expect(listener).toHaveBeenCalledTimes(1)
+    release()
+  })
+
+  it('applies a background update made while tiles were loading once they finish', async () => {
+    const { map, lifetime, background } = mount()
+    map.state.ready = true
+    background.update(presentation(false))
+    await settle()
+    expect(satelliteAdds(map)).toBe(0)
+
+    // Tiles start loading on a map that already loaded: no load event follows.
+    map.state.ready = false
+    background.update(presentation(true))
+    background.update(presentation(true))
+    await settle()
+    expect(satelliteAdds(map)).toBe(0)
+
+    map.state.ready = true
+    lifetime.emit('idle')
+    await settle()
+    expect(satelliteAdds(map)).toBe(1)
+    background.dispose()
+  })
+})
+
 describe('map background waits for style readiness without accumulating', () => {
   it('keeps one pending wait across repeated Satellite toggles and applies once on style load', async () => {
     const { map, lifetime, background } = mount()
