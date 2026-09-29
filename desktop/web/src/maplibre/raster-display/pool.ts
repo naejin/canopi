@@ -63,6 +63,12 @@ export interface RasterProxySource extends RasterSourceMetadata {
 export interface RasterPoolClient {
   init(): Promise<void>
   openCog(url: string): Promise<RasterProxySource>
+  /**
+   * Close every source this client opened for these URLs, in every lane. The
+   * upstream engine only forgets a dropped layer's proxy, so the owner of the
+   * layers calls this once no remaining layer reads the URL.
+   */
+  releaseSources(urls: readonly string[]): void
   colormaps(): string[]
   rgbaToPng(rgba: Uint8Array | Uint8ClampedArray, width?: number, height?: number): Promise<Uint8Array>
   /** Render several COGs over one WGS84 box, first listed on top, as PNG bytes. */
@@ -109,6 +115,8 @@ interface ClientState {
   disposed: boolean
   relevance: RasterTileRelevance | null
   readonly handles: Set<number>
+  /** Handles opened through `openCog`, by URL, for `releaseSources`. */
+  readonly sources: Map<string, Set<number>>
 }
 
 function abortError(message = 'Raster request aborted'): Error {
@@ -137,7 +145,7 @@ export class RasterWorkerPool {
   acquire(): RasterPoolClient {
     if (this.clients === 0) this.start()
     this.clients += 1
-    const state: ClientState = { disposed: false, relevance: null, handles: new Set() }
+    const state: ClientState = { disposed: false, relevance: null, handles: new Set(), sources: new Map() }
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const pool = this
     const client: RasterPoolClient = {
@@ -145,6 +153,7 @@ export class RasterWorkerPool {
         if (state.disposed) throw abortError('Raster client is disposed')
       },
       openCog: (url) => pool.openSource(state, url),
+      releaseSources: (urls) => pool.releaseSources(state, urls),
       colormaps: () => [...COLORMAPS],
       rgbaToPng: (rgba, width = 256, height = 256) => {
         const copy = new Uint8ClampedArray(rgba)
@@ -324,21 +333,33 @@ export class RasterWorkerPool {
     const handle = ++this.handleSequence
     this.urls.set(handle, url)
     client.handles.add(handle)
+    let opened = client.sources.get(url)
+    if (!opened) {
+      opened = new Set()
+      client.sources.set(url, opened)
+    }
+    opened.add(handle)
     let metadata: RasterSourceMetadata
     try {
       metadata = await this.schedule<RasterSourceMetadata>(client, 'control', undefined, undefined, (lane) =>
         this.ensureOpen(lane, handle))
     } catch (error) {
-      this.closeHandle(handle)
-      client.handles.delete(handle)
+      this.forgetSource(client, url, handle)
       throw error
     }
     if (client.disposed) {
       this.closeHandle(handle)
       throw abortError('Raster client is disposed')
     }
+    if (!client.handles.has(handle)) {
+      // Released while it was opening: the layer that asked for it is gone.
+      this.closeHandle(handle)
+      throw abortError('Raster source is released')
+    }
     const render = (encoding: 'png' | 'rgba', z: number, x: number, y: number, options: RasterRenderOptions = {}) =>
       this.schedule<Uint8Array | Uint8ClampedArray | null>(client, 'tile', { z, x, y }, undefined, async (lane) => {
+        // A released source is closed in every lane; never reopen it.
+        if (!client.handles.has(handle)) throw abortError('Raster source is released')
         await this.ensureOpen(lane, handle)
         return this.post(lane, { id: 0, op: 'render', handle, z, x, y, render: options, encoding })
       })
@@ -393,6 +414,20 @@ export class RasterWorkerPool {
         this.closeHandle(handle)
       }
     }
+  }
+
+  private releaseSources(client: ClientState, urls: readonly string[]): void {
+    for (const url of urls) {
+      for (const handle of client.sources.get(url) ?? []) this.forgetSource(client, url, handle)
+    }
+  }
+
+  private forgetSource(client: ClientState, url: string, handle: number): void {
+    const opened = client.sources.get(url)
+    opened?.delete(handle)
+    if (opened?.size === 0) client.sources.delete(url)
+    client.handles.delete(handle)
+    this.closeHandle(handle)
   }
 
   private closeHandle(handle: number): void {

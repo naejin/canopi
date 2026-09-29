@@ -102,6 +102,26 @@ describe('raster display worker pool', () => {
     await expect(client.openCog('asset://localhost/b.tif')).rejects.toMatchObject({ name: 'AbortError' })
   })
 
+  it('closes the sources opened for a released URL in every lane and keeps the others open', async () => {
+    const { instance, created } = pool(1, 1)
+    const client = instance.acquire()
+    const released = await client.openCog('asset://localhost/a.tif')
+    await client.openCog('asset://localhost/b.tif')
+    const lane = created[0]!
+    const handleOf = (url: string) => lane.requests.find((request) => request.op === 'open' && request.url === url)!
+    const releasedHandle = (handleOf('asset://localhost/a.tif') as { handle: number }).handle
+    const keptHandle = (handleOf('asset://localhost/b.tif') as { handle: number }).handle
+
+    client.releaseSources(['asset://localhost/a.tif'])
+    const closed = lane.requests.filter((request) => request.op === 'close').map((request) => (request as { handle: number }).handle)
+    expect(closed).toEqual([releasedHandle])
+    expect(closed).not.toContain(keptHandle)
+    // A released source never reopens behind the engine's back.
+    await expect(released.renderTilePNG(1, 0, 0)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(lane.requests.filter((request) => request.op === 'open')).toHaveLength(2)
+    client.dispose()
+  })
+
   it('fails a crashed lane’s pending work instead of leaving it waiting', async () => {
     const { instance, created } = pool(1, 1)
     const client = instance.acquire()

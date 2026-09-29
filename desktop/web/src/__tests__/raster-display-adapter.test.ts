@@ -89,6 +89,25 @@ describe('Canopi raster display adapter', () => {
     ])
   })
 
+  it('releases the worker sources of a removed layer unless a remaining layer still uses them', async () => {
+    FakeLayerManager.instances = []
+    const pool = new RasterWorkerPool({ lanes: 1, budgetBytes: 1024, maxInFlightPerLane: 1, createWorker: () => new IdleLane() })
+    const released: string[][] = []
+    const acquire = pool.acquire.bind(pool)
+    pool.acquire = () => {
+      const client = acquire()
+      client.releaseSources = (urls) => { released.push([...urls]) }
+      return client
+    }
+    const display = createRasterDisplay({}, { pool, loadRasterModule: async () => ({ LayerManager: FakeLayerManager }) as never })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const shared = { url: 'asset://localhost/shared.tif', bbox: [0, 0, 1, 1] as [number, number, number, number] }
+    display.sync([layer('lidar-a-gen1'), layer('lidar-c-gen1', { assets: [shared] }), layer('lidar-d-gen1', { assets: [shared] })], undefined)
+    display.sync([layer('lidar-a-gen2'), layer('lidar-d-gen1', { assets: [shared] })], undefined)
+    expect(released).toEqual([['asset://localhost/lidar-a-gen1.tif']])
+    display.dispose()
+  })
+
   it('renders a multi-source item as one ordered mosaic resolved in memory', async () => {
     const { display, release } = setup()
     await release()

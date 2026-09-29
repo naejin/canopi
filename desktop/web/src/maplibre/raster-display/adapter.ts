@@ -171,15 +171,24 @@ export function createRasterDisplay(
     const current = manager
     if (!current || disposed) return
     const wanted = new Map(desired.map((layer) => [layer.id, layer]))
+    const removedUrls = new Set<string>()
     for (const id of [...applied.keys()]) {
       const next = wanted.get(id)
-      if (next && applied.get(id)!.sourceKey === sourceKey(next)) continue
+      const previous = applied.get(id)!
+      if (next && previous.sourceKey === sourceKey(next)) continue
       current.removeRaster(id)
       recordRaster({ kind: 'remove', id })
+      for (const asset of previous.layer.assets) removedUrls.add(asset.url)
       applied.delete(id)
       mosaics.delete(id)
       states.delete(id)
     }
+    // The engine only forgets a dropped layer's COG proxies; close their worker
+    // sources unless a layer still on the map reads the same asset.
+    for (const kept of applied.values()) {
+      for (const asset of kept.layer.assets) removedUrls.delete(asset.url)
+    }
+    if (removedUrls.size > 0) client.releaseSources([...removedUrls])
     desired.forEach((layer, index) => {
       const previous = applied.get(layer.id)
       const styleKey = styleKeyOf(layer)
