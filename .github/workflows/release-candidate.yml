@@ -290,7 +290,10 @@ jobs:
         shell: bash
         run: |
           python -m pip install --quiet pefile
-          exe=$(find target/${{ matrix.target }}/release -maxdepth 1 -type f \( -iname 'canopi.exe' -o -iname 'canopi-desktop.exe' \) | head -n 1)
+          exe=""
+          for name in canopi-desktop.exe Canopi.exe; do
+            if [ -f "target/${{ matrix.target }}/release/$name" ]; then exe="target/${{ matrix.target }}/release/$name"; break; fi
+          done
           test -n "$exe" || { echo "no Canopi executable under target/${{ matrix.target }}/release" >&2; exit 1; }
           python scripts/check_windows_manifest.py "$exe"
 
