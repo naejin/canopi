@@ -148,6 +148,26 @@ describe('Budget Item workbench', () => {
     expect(priceInput('Apple').value).toBe('4,50')
   })
 
+  it('keeps a price with more than two decimals when the field is only focused and left', async () => {
+    designSessionFixture.file = makeDesign({
+      budget: [{ target: speciesBudgetTarget('Malus domestica'), category: 'plants', description: 'Malus domestica', quantity: 0, unit_cost: 0.125, currency: 'EUR' }],
+    })
+    await act(async () => { render(<BudgetPanel />, container) })
+    const designBefore = currentDesign.value
+
+    const input = priceInput('Apple')
+    expect(input.value).toBe('0.125')
+    await act(async () => { input.focus() })
+    await act(async () => { input.blur() })
+    await act(async () => { priceInput('Apple').focus() })
+    await act(async () => {
+      priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(0.125)
+    expect(currentDesign.value).toBe(designBefore)
+  })
+
   it('rejects an invalid draft and lets Escape restore the saved price', async () => {
     await act(async () => { render(<BudgetPanel />, container) })
     const input = priceInput('Apple')

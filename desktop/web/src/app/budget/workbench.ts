@@ -115,6 +115,8 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
   const exportPending = useSignal(false)
   const exportFailed = useSignal(false)
   const editingIdentityRef = useRef<object | null>(null)
+  // The draft a price field showed when editing began; null when it had no price.
+  const shownPriceRef = useRef<string | null>(null)
   const exportEpochRef = useRef(0)
   const projectionRef = useRef(projection)
   const list = useMemo(() => buildBudgetListProjection(projection, {
@@ -166,6 +168,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
     if (editingCanonical.peek() === canonical) return
     const existing = projectionRef.current.lineItemPriceMap.get(canonical)
     editPrice.value = existing ? formatBudgetPriceInput(existing.unit_cost, activeLocale) : ''
+    shownPriceRef.current = existing ? editPrice.value : null
     priceInvalid.value = false
     editingIdentityRef.current = designSessionStore.sessionIdentity.peek()
     editingCanonical.value = canonical
@@ -189,7 +192,9 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
       return false
     }
 
-    setPlantBudgetPrice(canonical, parsed.value)
+    // Leaving an untouched field writes nothing, so the stored price is never
+    // replaced by how the field displays it.
+    if (editPrice.value !== shownPriceRef.current) setPlantBudgetPrice(canonical, parsed.value)
     priceInvalid.value = false
     if (advance) {
       const rows = listRef.current.rows
@@ -197,6 +202,7 @@ export function useBudgetItemWorkbench(): BudgetItemWorkbench {
       if (next) {
         const existing = projectionRef.current.lineItemPriceMap.get(next.canonical)
         editPrice.value = existing ? formatBudgetPriceInput(existing.unit_cost, activeLocale) : ''
+        shownPriceRef.current = existing ? editPrice.value : null
         editingCanonical.value = next.canonical
         return true
       }

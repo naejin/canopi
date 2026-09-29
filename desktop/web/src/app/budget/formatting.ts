@@ -27,7 +27,8 @@ export function formatBudgetPriceInput(amount: number, locale: string): string {
   if (!formatter) {
     formatter = new Intl.NumberFormat(locale, {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      // Enough places that a typed price like 0.125 reads back as itself.
+      maximumFractionDigits: 6,
       useGrouping: false,
     })
     _inputFormatterCache.set(locale, formatter)
