@@ -4,6 +4,7 @@ import type { CanvasQueryRevision } from './runtime'
 import type { WorkspaceCameraFrameReader } from './camera'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import type { SceneDesignObjectTarget } from './scene'
+import type { SessionPlane } from '../session-plane'
 import { drawInspectionLensScene } from './inspection-lens-drawing'
 import { getSceneLayerStyle } from './scene-visuals'
 import { inspectionLayout } from './inspection-layout'
@@ -12,6 +13,8 @@ import { runCanvasRuntimeCleanups } from './cleanup'
 interface InspectionOwnerOptions {
   readonly camera: WorkspaceCameraFrameReader
   readonly revision: CanvasQueryRevision
+  /** The live session plane; the inspected point follows it across a re-origin. */
+  readSessionPlane?(): SessionPlane | null
   getSnapshot(): SceneRendererSnapshot
   setHoveredTarget(target: SceneDesignObjectTarget | null): void
 }
@@ -29,7 +32,9 @@ export class SceneCanvasInspectionOwner {
     let ctx: CanvasRenderingContext2D | null = null
     try { ctx = canvas.getContext('2d') } catch (error) { console.error('Canvas inspection preview unavailable:', error) }
     container.appendChild(canvas)
+    // The inspected point in session-plane metres, and the plane it belongs to.
     let point: InspectionPoint | null = null
+    let pointPlane: SessionPlane | null = null
     let magnification = 1
     let highlightedId: string | null = null
     let frame: number | null = null
@@ -41,6 +46,19 @@ export class SceneCanvasInspectionOwner {
       return { x: (camera.screenSize.width / 2 - camera.viewport.x) / camera.viewport.scale,
         y: (camera.screenSize.height / 2 - camera.viewport.y) / camera.viewport.scale }
     }
+    function setPoint(next: InspectionPoint | null) {
+      point = next
+      pointPlane = options.readSessionPlane?.() ?? null
+    }
+    /** The inspected point in the current plane: a re-origin keeps the same ground. */
+    function livePoint(): InspectionPoint | null {
+      const plane = options.readSessionPlane?.() ?? null
+      if (point && pointPlane && plane && plane !== pointPlane) {
+        point = plane.toPlane(pointPlane.toGeo(point))
+      }
+      pointPlane = plane
+      return point
+    }
     function schedule() {
       if (!released && frame === null) frame = requestAnimationFrame(paint)
     }
@@ -49,8 +67,8 @@ export class SceneCanvasInspectionOwner {
       if (released) return
       const snapshot = options.getSnapshot()
       const camera = options.camera.snapshot.peek()
-      const centre = point ?? canvasCenter()
-      point = centre
+      const centre = livePoint() ?? canvasCenter()
+      setPoint(centre)
       const layer = getSceneLayerStyle(snapshot.scene, 'plants')
       const visible = layer.visible && layer.opacity > 0 ? snapshot.scene.plants : []
       const width = Math.max(1, container.clientWidth || 430), height = Math.max(1, container.clientHeight || 390)
@@ -97,7 +115,7 @@ export class SceneCanvasInspectionOwner {
     let observer: ResizeObserver | null = null
     const owned = {
       refresh: schedule,
-      reset: () => { if (!released) { point = null; magnification = 1; clearHighlight(); schedule() } },
+      reset: () => { if (!released) { setPoint(null); magnification = 1; clearHighlight(); schedule() } },
       dispose: () => {
         if (released) return
         released = true
@@ -135,14 +153,14 @@ export class SceneCanvasInspectionOwner {
         const { viewport } = options.camera.snapshot.peek()
         const next = { x: (screenPoint.x - viewport.x) / viewport.scale, y: (screenPoint.y - viewport.y) / viewport.scale }
         if (point?.x === next.x && point.y === next.y) return
-        point = next
+        setPoint(next)
         schedule()
       },
-      centerOnCanvas: () => { if (!released) { point = canvasCenter(); schedule() } },
+      centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },
       panBy: (delta) => {
         if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return
-        const centre = point ?? canvasCenter()
-        point = { x: centre.x + delta.x, y: centre.y + delta.y }
+        const centre = livePoint() ?? canvasCenter()
+        setPoint({ x: centre.x + delta.x, y: centre.y + delta.y })
         schedule()
       },
       zoomBy: (factor) => {
@@ -165,7 +183,7 @@ export class SceneCanvasInspectionOwner {
         if (!layer.visible || layer.opacity === 0) return
         const plant = snapshot.scene.plants.find((entry) => entry.id === id)
         if (!plant) return
-        point = { ...plant.position }
+        setPoint({ ...plant.position })
         schedule()
       },
       dispose: owned.dispose,

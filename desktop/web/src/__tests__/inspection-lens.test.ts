@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneCanvasInspectionOwner } from '../canvas/runtime/inspection-lens'
+import { createSessionPlane } from '../canvas/session-plane'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
@@ -46,6 +47,40 @@ describe('Inspection Lens ownership', () => {
     camera.panBy({ x: 120, y: 80 })
     vi.advanceTimersByTime(20)
     expect(view.state.value!.point).toEqual(point)
+    owner.dispose()
+  })
+
+  it('keeps inspecting the same ground after the session plane re-origins', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    camera.setViewport({ x: 100, y: 50, scale: 10 })
+    const firstPlane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    let plane = firstPlane
+    const scene = signal(0)
+    const owner = new SceneCanvasInspectionOwner({ camera,
+      revision: { scene, plantNames: signal(0) },
+      readSessionPlane: () => plane,
+      getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+    view.inspectAtScreenPoint({ x: 250, y: 180 })
+    vi.advanceTimersByTime(20)
+    const inspected = firstPlane.toGeo(view.state.value!.point)
+
+    const nextPlane = createSessionPlane(firstPlane.toGeo({ x: 15_000, y: -4_000 }))
+    plane = nextPlane
+    camera.reprojectViewport(firstPlane.transformTo(nextPlane))
+    scene.value += 1
+    vi.advanceTimersByTime(20)
+
+    const after = nextPlane.toGeo(view.state.value!.point)
+    expect(after.lon).toBeCloseTo(inspected.lon, 9)
+    expect(after.lat).toBeCloseTo(inspected.lat, 9)
+    view.panBy({ x: 1, y: 0 })
+    vi.advanceTimersByTime(20)
+    const panned = nextPlane.toGeo(view.state.value!.point)
+    expect(panned.lat).toBeCloseTo(inspected.lat, 6)
     owner.dispose()
   })
 

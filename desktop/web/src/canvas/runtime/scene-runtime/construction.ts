@@ -206,6 +206,7 @@ export function createSceneRuntimeConstruction(
   })
   const inspection = new SceneCanvasInspectionOwner({
     camera, revision,
+    readSessionPlane: () => sceneStore.sessionPlane,
     getSnapshot: () => presentation.buildRendererSnapshot(),
     setHoveredTarget: callbacks.setHoveredTarget,
   })
