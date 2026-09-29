@@ -47,47 +47,45 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
 const MAX_GEOJSON_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Extensions the GeoJSON open dialog offers; the only files the import reads.
-const GEOJSON_IMPORT_EXTENSIONS: [&str; 2] = ["geojson", "json"];
+pub const GEOJSON_IMPORT_EXTENSIONS: [&str; 2] = ["geojson", "json"];
 
 /// Read a user-chosen GeoJSON file as UTF-8 text. Decoding and validation
 /// happen in the shared frontend codec; a leading UTF-8 BOM is dropped so both
-/// editions hand it the same text. Like `export_file`, only the dialog's
-/// extensions are accepted, so the boundary cannot return the text of a key,
-/// a credential or any other document.
-pub fn read_geojson_file(path: String) -> Result<String, String> {
+/// editions hand it the same text. The path comes from the native dialog, never
+/// from the webview; only the dialog's extensions are accepted as a second line.
+pub fn read_geojson_file(path: impl AsRef<std::path::Path>) -> Result<String, String> {
     use std::io::Read;
 
-    if !std::path::Path::new(&path)
-        .extension()
-        .is_some_and(|extension| {
-            GEOJSON_IMPORT_EXTENSIONS
-                .iter()
-                .any(|allowed| extension.eq_ignore_ascii_case(allowed))
-        })
-    {
+    let path = path.as_ref();
+    if !path.extension().is_some_and(|extension| {
+        GEOJSON_IMPORT_EXTENSIONS
+            .iter()
+            .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+    }) {
         return Err("GeoJSON source must have a .geojson or .json extension".to_string());
     }
-    let file = std::fs::File::open(&path)
-        .map_err(|e| format!("Failed to open GeoJSON file {path}: {e}"))?;
+    let shown = path.display();
+    let file = std::fs::File::open(path)
+        .map_err(|e| format!("Failed to open GeoJSON file {shown}: {e}"))?;
     if !file
         .metadata()
-        .map_err(|e| format!("Failed to inspect GeoJSON file {path}: {e}"))?
+        .map_err(|e| format!("Failed to inspect GeoJSON file {shown}: {e}"))?
         .is_file()
     {
-        return Err(format!("GeoJSON source {path} is not a file"));
+        return Err(format!("GeoJSON source {shown} is not a file"));
     }
     let mut bytes = Vec::new();
     file.take(MAX_GEOJSON_IMPORT_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|e| format!("Failed to read GeoJSON file {path}: {e}"))?;
+        .map_err(|e| format!("Failed to read GeoJSON file {shown}: {e}"))?;
     if bytes.len() as u64 > MAX_GEOJSON_IMPORT_BYTES {
         return Err(format!(
-            "GeoJSON file {path} exceeds the {} MiB import limit",
+            "GeoJSON file {shown} exceeds the {} MiB import limit",
             MAX_GEOJSON_IMPORT_BYTES / (1024 * 1024)
         ));
     }
     let text =
-        String::from_utf8(bytes).map_err(|_| format!("GeoJSON file {path} is not UTF-8 text"))?;
+        String::from_utf8(bytes).map_err(|_| format!("GeoJSON file {shown} is not UTF-8 text"))?;
     Ok(text
         .strip_prefix('\u{feff}')
         .map(str::to_owned)

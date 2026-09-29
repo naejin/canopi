@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { open, save } from '@tauri-apps/plugin-dialog'
+import { save } from '@tauri-apps/plugin-dialog'
 import type {
   GeoJsonFileAdapter,
   GeoJsonSourceFile,
@@ -8,15 +8,12 @@ import type {
 
 const GEOJSON_FILTERS = [{ name: 'GeoJSON', extensions: ['geojson', 'json'] }]
 
-/** Desktop GeoJSON file I/O: native dialogs choose the path, Rust reads/writes it. */
+/** Desktop GeoJSON file I/O: Rust picks and reads imports; exports go through the save dialog. */
 export const desktopGeoJsonFiles: GeoJsonFileAdapter = {
+  // Rust shows the open dialog and reads the file itself, so no path the page
+  // chooses ever reaches the native reader.
   async pickGeoJsonFile(): Promise<GeoJsonSourceFile | null> {
-    const selected = await open({ filters: GEOJSON_FILTERS, multiple: false })
-    if (!selected) return null
-    const path = typeof selected === 'string' ? selected : selected[0]
-    if (!path) return null
-    const text = await invoke<string>('read_geojson_file', { path })
-    return { name: path.split(/[\\/]/).pop() ?? path, text }
+    return invoke<GeoJsonSourceFile | null>('pick_geojson_file')
   },
 
   async writeGeoJsonFile(text: string, fileName: string): Promise<GeoJsonWriteOutcome> {

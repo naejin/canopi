@@ -66,26 +66,19 @@ afterEach(() => {
 })
 
 describe('Desktop GeoJSON file adapter', () => {
-  it('reads the chosen file through the native GeoJSON command', async () => {
-    tauri.open.mockResolvedValue('/home/user/site/beds.geojson')
-    tauri.invoke.mockResolvedValue('{"type":"FeatureCollection","features":[]}')
+  it('lets the native side pick and read the file, so the page never names a path', async () => {
+    const source = { name: 'beds.geojson', text: '{"type":"FeatureCollection","features":[]}' }
+    tauri.invoke.mockResolvedValue(source)
 
-    await expect(desktopGeoJsonFiles.pickGeoJsonFile()).resolves.toEqual({
-      name: 'beds.geojson',
-      text: '{"type":"FeatureCollection","features":[]}',
-    })
-    expect(tauri.open).toHaveBeenCalledWith({
-      filters: [{ name: 'GeoJSON', extensions: ['geojson', 'json'] }],
-      multiple: false,
-    })
-    expect(tauri.invoke).toHaveBeenCalledWith('read_geojson_file', { path: '/home/user/site/beds.geojson' })
+    await expect(desktopGeoJsonFiles.pickGeoJsonFile()).resolves.toEqual(source)
+    expect(tauri.invoke).toHaveBeenCalledWith('pick_geojson_file')
+    expect(tauri.open).not.toHaveBeenCalled()
   })
 
-  it('returns null without IPC when the open dialog is cancelled', async () => {
-    tauri.open.mockResolvedValue(null)
+  it('returns null when the native open dialog is cancelled', async () => {
+    tauri.invoke.mockResolvedValue(null)
 
     await expect(desktopGeoJsonFiles.pickGeoJsonFile()).resolves.toBeNull()
-    expect(tauri.invoke).not.toHaveBeenCalled()
   })
 
   it('writes through the text export command with a GeoJSON extension', async () => {
@@ -136,13 +129,14 @@ describe('Desktop App Command Graph GeoJSON commands', () => {
   it('opens the native picker of the shared workflow and imports nothing when it is cancelled', async () => {
     designSessionFixture.file = emptyDesign()
     setCurrentCanvasSession(createTestCanvasRuntimeSurfaces())
-    tauri.open.mockResolvedValue(null)
+    tauri.invoke.mockResolvedValue(null)
 
     appCommandGraphChromeProjection.value.paletteCommands
       .find((command) => command.id === 'file.importGeoJson')!
       .action()
-    await vi.waitFor(() => expect(tauri.open).toHaveBeenCalledOnce())
-    expect(tauri.invoke).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(tauri.invoke).toHaveBeenCalledOnce())
+    expect(tauri.invoke).toHaveBeenCalledWith('pick_geojson_file')
+    expect(tauri.open).not.toHaveBeenCalled()
   })
 })
 

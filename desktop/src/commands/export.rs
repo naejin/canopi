@@ -38,17 +38,51 @@ async fn export_file_with_executor(
         .await
 }
 
-/// Read a user-chosen GeoJSON file as text for the shared frontend codec.
+/// A GeoJSON file the user chose in the native dialog, read for the shared
+/// frontend codec.
+#[derive(serde::Serialize)]
+pub struct GeoJsonSource {
+    name: String,
+    text: String,
+}
+
+/// Show the native GeoJSON open dialog and read the chosen file. The path never
+/// crosses to the webview, so page script cannot ask for any other file.
+/// `None` means the user cancelled.
 #[tauri::command]
-pub async fn read_geojson_file(
+pub async fn pick_geojson_file(
+    app: tauri::AppHandle,
     executor: State<'_, NativeOperationExecutor>,
-    path: String,
-) -> Result<String, String> {
-    executor
+) -> Result<Option<GeoJsonSource>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (chosen, picked) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter(
+            "GeoJSON",
+            &crate::services::export::GEOJSON_IMPORT_EXTENSIONS,
+        )
+        .pick_file(move |path| {
+            let _ = chosen.send(path);
+        });
+    let Some(path) = picked
+        .await
+        .map_err(|_| "The GeoJSON dialog closed without an answer".to_string())?
+    else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|error| error.to_string())?;
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string());
+    let text = executor
         .run(NativeOperationClass::Local, "GeoJSON import", move || {
             crate::services::export::read_geojson_file(path)
         })
-        .await
+        .await?;
+    Ok(Some(GeoJsonSource { name, text }))
 }
 
 #[cfg(test)]

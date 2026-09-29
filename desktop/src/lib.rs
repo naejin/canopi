@@ -113,7 +113,7 @@ pub fn run() {
             commands::design_notebook::reorder_design_references,
             commands::design_notebook::relocate_design_reference,
             commands::export::export_file,
-            commands::export::read_geojson_file,
+            commands::export::pick_geojson_file,
             commands::export::save_canvas_pdf,
             commands::health::get_health,
             commands::problem_report::create_problem_report,
