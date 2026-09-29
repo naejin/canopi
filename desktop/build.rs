@@ -82,10 +82,33 @@ fn main() {
         }
     }
 
-    tauri_build::try_build(
-        tauri_build::Attributes::new().capabilities_path_pattern(capabilities_pattern),
-    )
-    .expect("tauri build configuration");
+    let mut attributes =
+        tauri_build::Attributes::new().capabilities_path_pattern(capabilities_pattern);
+    if embed_windows_manifest_in_every_target() {
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    }
+    tauri_build::try_build(attributes).expect("tauri build configuration");
+}
+
+/// On Windows the dialog plugin needs Common Controls v6, which only the
+/// application manifest selects. tauri-build puts its manifest in a resource
+/// that reaches the app binary only, so the unit-test binary could not start
+/// (STATUS_ENTRYPOINT_NOT_FOUND). The MSVC linker embeds the same manifest,
+/// Tauri's default copied verbatim, into every linked target instead; CI
+/// checks the packaged executable still carries it.
+fn embed_windows_manifest_in_every_target() -> bool {
+    let windows_msvc = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
+    if !windows_msvc {
+        return false;
+    }
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    let manifest = std::path::Path::new(&manifest_dir).join("windows-app-manifest.xml");
+    println!("cargo:rerun-if-changed={}", manifest.display());
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
+    true
 }
 
 /// Whether `binaries/geolibre-<target triple>[.exe]`, the sidecar name Tauri
