@@ -363,6 +363,14 @@ describe('FavoritesPanel', () => {
 
     const placeButton = container.querySelector<HTMLButtonElement>('button[aria-label^="Place stamp "]')
     expect(placeButton).toBeTruthy()
+    // Placing hands focus to the map so Esc cancels the armed stamp (canopi-agjl).
+    const map = document.createElement('div')
+    map.tabIndex = 0
+    document.body.append(map)
+    // The panel is imported after vi.resetModules, so register through the same module copy.
+    const { registerFocusRegion } = await import('../app/shell/focus-regions')
+    const releaseMap = registerFocusRegion('map', map)
+    placeButton!.focus()
 
     await act(async () => {
       placeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -370,6 +378,9 @@ describe('FavoritesPanel', () => {
     })
 
     expect(placeStampMock).toHaveBeenCalledWith(stampLibrary.value.items[0])
+    expect(document.activeElement).toBe(map)
+    releaseMap()
+    map.remove()
 
     await openStampActions()
     const exportButton = document.querySelector<HTMLButtonElement>('button[aria-label="Export stamp…"]')
