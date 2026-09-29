@@ -328,7 +328,7 @@ describe('createWorkspaceRuntimeComposition', () => {
       const view = onViewSettled.mock.calls[0]![0]
       expect(view.lon).toBeCloseTo(centre.lon, 12)
       expect(view.lat).toBeCloseTo(centre.lat, 12)
-      expect(view.zoom).toBeCloseTo(stageScaleToMapZoom(2, centre.lat), 12)
+      expect(view.zoom).toBeCloseTo(stageScaleToMapZoom(2, plane.origin.lat), 12)
       vi.advanceTimersByTime(WORKSPACE_VIEW_SETTLE_MS * 4)
       expect(onViewSettled).toHaveBeenCalledOnce()
 
