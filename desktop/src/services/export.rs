@@ -46,12 +46,27 @@ pub fn export_file(data: String, path: String) -> Result<String, String> {
 /// Upper bound for an imported GeoJSON file; the read stops one byte past it.
 const MAX_GEOJSON_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Extensions the GeoJSON open dialog offers; the only files the import reads.
+const GEOJSON_IMPORT_EXTENSIONS: [&str; 2] = ["geojson", "json"];
+
 /// Read a user-chosen GeoJSON file as UTF-8 text. Decoding and validation
 /// happen in the shared frontend codec; a leading UTF-8 BOM is dropped so both
-/// editions hand it the same text.
+/// editions hand it the same text. Like `export_file`, only the dialog's
+/// extensions are accepted, so the boundary cannot return the text of a key,
+/// a credential or any other document.
 pub fn read_geojson_file(path: String) -> Result<String, String> {
     use std::io::Read;
 
+    if !std::path::Path::new(&path)
+        .extension()
+        .is_some_and(|extension| {
+            GEOJSON_IMPORT_EXTENSIONS
+                .iter()
+                .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+        })
+    {
+        return Err("GeoJSON source must have a .geojson or .json extension".to_string());
+    }
     let file = std::fs::File::open(&path)
         .map_err(|e| format!("Failed to open GeoJSON file {path}: {e}"))?;
     if !file
@@ -201,6 +216,31 @@ mod tests {
             read_geojson_file(marked.display().to_string()).unwrap(),
             "{\"type\":\"Feature\"}"
         );
+    }
+
+    #[test]
+    fn geojson_import_reads_only_geojson_or_json_files() {
+        let temp_dir = TempTestDir::new("geojson-extension");
+        for name in [
+            "id_ed25519",
+            "credentials",
+            "notes.txt",
+            "garden.canopi",
+            "user.db",
+        ] {
+            let other = temp_dir.file(name);
+            std::fs::write(&other, "{\"type\":\"FeatureCollection\",\"features\":[]}").unwrap();
+            let error = read_geojson_file(other.display().to_string()).unwrap_err();
+            assert!(error.contains("extension"), "{name}: {error}");
+        }
+        for name in ["upper.GEOJSON", "plain.json"] {
+            let accepted = temp_dir.file(name);
+            std::fs::write(&accepted, "{}").unwrap();
+            assert_eq!(
+                read_geojson_file(accepted.display().to_string()).unwrap(),
+                "{}"
+            );
+        }
     }
 
     #[test]
