@@ -17,6 +17,7 @@ import { findAnalysis } from '../../../app/analyses/registry'
 import {
   filterLibraryItems,
   libraryItems,
+  takenItemNames,
   type LibraryItem,
   type LibraryTypeFilter,
 } from '../../../app/lidar/library-items'
@@ -35,6 +36,7 @@ import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
 import { ItemDetails } from './ItemDetails'
 import { formatDiskSize, isRunning, isStale, itemStatusLabel, itemSummary } from './item-text'
 import { LibraryPreview, usePreviewClient } from './LibraryPreview'
+import { LibraryItemNameField, isItemNameTaken } from './LibraryItemNameField'
 import styles from './data-library.module.css'
 
 type View =
@@ -422,17 +424,16 @@ function RenameForm({ item, busy, error, onCancel, onSubmit }: {
   onSubmit(name: string): void
 }) {
   const [name, setName] = useState(item.name)
+  const taken = takenItemNames(lidarLibrary.value, item.id)
+  const ready = name.trim() !== '' && !isItemNameTaken(name, taken)
   return (
-    <form className={styles.form} onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSubmit(name.trim()) }}>
+    <form className={styles.form} onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit(name.trim()) }}>
       <h3>{t('canvas.lidar.library.renameTitle')}</h3>
-      <label className={styles.field}>
-        <span>{t('canvas.lidar.library.name')}</span>
-        <input required value={name} data-autofocus="true" onInput={(event) => setName(event.currentTarget.value)} />
-      </label>
+      <LibraryItemNameField value={name} taken={taken} onInput={setName} initialFocus="data-autofocus" />
       {error && <p className={styles.error} role="alert">{error}</p>}
       <div className={styles.formActions}>
         <button type="button" className={styles.dialogButton} onClick={onCancel}>{t('canvas.lidar.library.cancel')}</button>
-        <button type="submit" className={`${styles.dialogButton} ${styles.primary}`} disabled={busy || !name.trim()}>{t('canvas.lidar.library.saveName')}</button>
+        <button type="submit" className={`${styles.dialogButton} ${styles.primary}`} disabled={busy || !ready}>{t('canvas.lidar.library.saveName')}</button>
       </div>
     </form>
   )

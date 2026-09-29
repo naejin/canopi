@@ -148,6 +148,17 @@ export function suggestedItemName(paths: readonly string[]): string {
 }
 
 /**
+ * The names library items use, trimmed and lower-cased: the set Import and
+ * Rename check a new name against. `exceptId` leaves out the item being
+ * renamed, so changing only the case of its own name is allowed.
+ */
+export function takenItemNames(library: LibrarySnapshot | null, exceptId?: string): Set<string> {
+  return new Set((library?.items ?? [])
+    .filter((item) => item.id !== exceptId)
+    .map((item) => libraryItemName(item, library).trim().toLocaleLowerCase()))
+}
+
+/**
  * A name no library item uses yet, from `name`: "Terrain (2)", "Terrain (3)"…
  * `taken` holds used names trimmed and lower-cased. Import refuses a used
  * name so two items are never told apart by name alone.

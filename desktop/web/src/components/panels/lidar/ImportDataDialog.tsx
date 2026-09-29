@@ -2,8 +2,8 @@ import { useEffect, useId, useState } from 'preact/hooks'
 import { importLibraryItem } from '../../../app/lidar/actions'
 import { checkImportCoverage, coverageCanvas, type ImportCoverage } from '../../../app/lidar/import-coverage'
 import { IMPORTABLE_QUANTITIES, RASTER_QUANTITIES } from '../../../app/lidar/item-types'
-import { suggestedItemName, uniqueItemName } from '../../../app/lidar/library-items'
-import { libraryItemName, lidarLibrary } from '../../../app/lidar/library-store'
+import { suggestedItemName, takenItemNames } from '../../../app/lidar/library-items'
+import { lidarLibrary } from '../../../app/lidar/library-store'
 import { locale } from '../../../app/settings/state'
 import type { RasterQuantity } from '../../../generated/contracts'
 import { t } from '../../../i18n'
@@ -13,6 +13,7 @@ import { ControlIcon } from '../../shared/ControlIcon'
 import { Dropdown } from '../../shared/Dropdown'
 import { Notice } from '../../shared/Notice'
 import { WorkspaceDialog } from '../../shared/WorkspaceDialog'
+import { LibraryItemNameField, isItemNameTaken } from './LibraryItemNameField'
 import styles from './data-library.module.css'
 
 /**
@@ -37,10 +38,9 @@ export function ImportDataDialog({ paths, attach, onClose }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [coverage, setCoverage] = useState<ImportCoverage | null>(null)
-  const library = lidarLibrary.value
-  const taken = new Set((library?.items ?? []).map((item) => libraryItemName(item, library).trim().toLocaleLowerCase()))
+  const taken = takenItemNames(lidarLibrary.value)
   const trimmed = name.trim()
-  const duplicate = trimmed !== '' && taken.has(trimmed.toLocaleLowerCase())
+  const duplicate = isItemNameTaken(name, taken)
   const unitReady = quantity !== 'OtherContinuous' || unitUnknown || unitLabel.trim() !== ''
   const ready = !busy && quantity !== '' && trimmed !== '' && !duplicate && unitReady && files.length > 0
   const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
@@ -91,22 +91,7 @@ export function ImportDataDialog({ paths, attach, onClose }: {
         <Notice tone="info">
           <strong>{t('canvas.lidar.import.supportedTitle')}</strong> {t('canvas.lidar.import.supported')}
         </Notice>
-        <label className={styles.field}>
-          <span>{t('canvas.lidar.library.name')}</span>
-          <input
-            required
-            value={name}
-            data-dialog-initial-focus
-            aria-invalid={duplicate ? 'true' : undefined}
-            aria-describedby={duplicate ? `${formId}-name-error` : undefined}
-            onInput={(event) => setName(event.currentTarget.value)}
-          />
-          {duplicate && (
-            <span id={`${formId}-name-error`} className={styles.fieldError}>
-              {t('canvas.lidar.import.nameTaken', { name: trimmed, suggestion: uniqueItemName(trimmed, taken) })}
-            </span>
-          )}
-        </label>
+        <LibraryItemNameField value={name} taken={taken} onInput={setName} initialFocus="data-dialog-initial-focus" />
         <div className={styles.pair}>
           <div className={styles.field}>
             <span aria-hidden="true">{t('canvas.lidar.library.quantityLabel')}</span>

@@ -351,13 +351,40 @@ describe('Layers site data details', () => {
     act(() => { render(<SiteDataDetails id="s" />, container) })
     await click(button('Rename…'))
     const input = container.querySelector<HTMLInputElement>('input[name="name"]')!
-    input.value = 'Orchard slope'
+    await act(async () => {
+      input.value = 'Orchard slope'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
     await act(async () => {
       container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     })
     expect(actions.renameLibraryItem).toHaveBeenCalledWith('s', 'Orchard slope')
     await click(button('Back to Layers'))
     expect(siteDataDetails.value).toBeNull()
+  })
+
+  it('refuses a rename to a name another library item uses', async () => {
+    act(() => { render(<SiteDataDetails id="s" />, container) })
+    await click(button('Rename…'))
+    const input = container.querySelector<HTMLInputElement>('input[name="name"]')!
+    await act(async () => {
+      input.value = 'ground'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('already has data named “ground”')
+    expect(container.textContent).toContain('“ground (2)”')
+    expect(button('Save name').disabled).toBe(true)
+    await act(async () => {
+      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(actions.renameLibraryItem).not.toHaveBeenCalled()
+
+    // Changing only the case of its own name is allowed.
+    await act(async () => {
+      input.value = 'steepness'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(button('Save name').disabled).toBe(false)
   })
 
   it('opens the Data library for deleting', async () => {

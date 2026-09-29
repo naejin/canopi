@@ -239,6 +239,32 @@ describe('Data library, Import and Analyze dialogs', () => {
     expect(container.textContent).toContain('added to this Design when it is ready')
   })
 
+  it('refuses a rename to a name another library item uses', async () => {
+    lidarLibrary.value = library([layer('a', 'Elevation'), layer('b', 'Terrain')])
+    mount()
+    await click(button('Actions for Terrain'))
+    await click(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'))
+      .find((candidate) => candidate.textContent?.includes('Rename'))!)
+    const name = container.querySelector<HTMLInputElement>('form input')!
+    await act(async () => {
+      name.value = 'elevation'
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('already has data named “elevation”')
+    expect(button('Save name').disabled).toBe(true)
+    await act(async () => {
+      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(actions.renameLibraryItem).not.toHaveBeenCalled()
+
+    await act(async () => {
+      name.value = 'Terrain model'
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).not.toContain('already has data named')
+    expect(button('Save name').disabled).toBe(false)
+  })
+
   it('adds a ready item to the Design and marks items the Design already uses', async () => {
     lidarLibrary.value = library([layer('a', 'Ground'), layer('b', 'Canopy')])
     setDesign(design([{ kind: 'Source', id: 'b' }]))
