@@ -69,6 +69,7 @@
     "whitebox-wasm": "0.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@preact/preset-vite": "^2.9.0",
     "@vitest/coverage-v8": "^4.1.11",
     "husky": "^9.1.7",

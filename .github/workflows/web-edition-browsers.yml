@@ -1,0 +1,79 @@
+name: Web Edition browsers
+
+# Serves the built Web Edition and drives it in Chromium (stands in for WebView2) and
+# WebKit (stands in for WKWebView) with real input; canvas v2 plan section 3.2, canopi-9x95.
+on:
+  push:
+    branches: [main, feature/geolibre-adoption]
+  pull_request:
+    branches: [main, feature/geolibre-adoption]
+  workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: Record the screenshot baselines in the pinned image and upload them as an artifact
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  browsers:
+    name: Chromium and WebKit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The same image run locally gives the same pixels, so baselines can be recorded with
+    # `docker run` on a workstation. Its tag matches the exact @playwright/test version in
+    # desktop/web/package.json; a bump changes both and re-records the baselines.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: desktop/web
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 like every other job (package.json engines ^22.13.0); the image ships Node 24.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build the Web Edition
+        run: npm run build:web
+
+      - name: Type-check the browser specs
+        run: npx tsc -p e2e --noEmit
+
+      - name: Drive the Web Edition in Chromium and WebKit
+        if: ${{ !inputs.update_snapshots }}
+        run: npx playwright test e2e/canvas --project=chromium --project=webkit
+
+      - name: Record the screenshot baselines
+        if: ${{ inputs.update_snapshots }}
+        run: npx playwright test e2e/canvas --project=chromium --project=webkit --update-snapshots
+
+      - name: Upload the report and traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-edition-browsers-report
+          path: |
+            desktop/web/playwright-report/
+            desktop/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the recorded baselines
+        if: ${{ !cancelled() && inputs.update_snapshots }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-edition-snapshots
+          path: desktop/web/e2e/**/*-snapshots/
+          if-no-files-found: error

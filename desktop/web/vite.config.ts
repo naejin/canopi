@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { configDefaults } from "vitest/config";
 import preact from "@preact/preset-vite";
 import { fileURLToPath, URL } from "node:url";
 import { resolveWebEditionDevHtmlUrl } from "./src/web/dev-entry";
@@ -82,6 +83,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
+      // Playwright specs (e2e/) run under Playwright's own runner; its `test()` throws in vitest.
+      exclude: [...configDefaults.exclude, "e2e/**"],
       // An unhandled error or rejection fails the run even when every test passes.
       dangerouslyIgnoreUnhandledErrors: false,
       coverage: {

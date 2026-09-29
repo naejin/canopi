@@ -1,0 +1,636 @@
+{
+  "version": 9,
+  "name": "Untitled",
+  "description": null,
+  "plant_species_colors": {},
+  "plant_species_symbols": {},
+  "plant_species_codes": {
+    "Corylus avellana": "CAV",
+    "Malus domestica": "MDO",
+    "Symphytum officinale": "SOF",
+    "Fragaria vesca": "FVE"
+  },
+  "layers": [
+    {
+      "name": "climate",
+      "visible": false,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "zones",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "water",
+      "visible": false,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "plants",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "measurement-guides",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    },
+    {
+      "name": "annotations",
+      "visible": true,
+      "locked": false,
+      "opacity": 1.0
+    }
+  ],
+  "plants": [
+    {
+      "id": "46595420-3ba9-4184-a4b0-b65fb40eff31",
+      "locked": false,
+      "canonical_name": "Malus domestica",
+      "common_name": "Apple",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877071839,
+        "lat": 43.611230142
+      },
+      "rotation": null,
+      "scale": 8.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "091aea96-ac66-431b-aace-e64d9a384036",
+      "locked": false,
+      "canonical_name": "Malus domestica",
+      "common_name": "Apple",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877568675,
+        "lat": 43.611230142
+      },
+      "rotation": null,
+      "scale": 8.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "79addfb3-8c31-4f1e-9915-a707f64ad2ae",
+      "locked": false,
+      "canonical_name": "Malus domestica",
+      "common_name": "Apple",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877022155,
+        "lat": 43.611122224
+      },
+      "rotation": null,
+      "scale": 8.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "537efd31-2c7f-4962-88d3-73cdf1316ab8",
+      "locked": false,
+      "canonical_name": "Malus domestica",
+      "common_name": "Apple",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877196048,
+        "lat": 43.611104238
+      },
+      "rotation": null,
+      "scale": 8.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "755865a9-238a-46cf-821a-ab4e375c5dab",
+      "locked": false,
+      "canonical_name": "Malus domestica",
+      "common_name": "Apple",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877394783,
+        "lat": 43.611086251
+      },
+      "rotation": null,
+      "scale": 8.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "b2935f2c-ca63-4490-8c93-9f48db11ac40",
+      "locked": false,
+      "canonical_name": "Corylus avellana",
+      "common_name": "European hazelnut",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877618359,
+        "lat": 43.611122224
+      },
+      "rotation": null,
+      "scale": 3.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "9ac681cc-a048-458e-83b1-2ea0c62f0362",
+      "locked": false,
+      "canonical_name": "Corylus avellana",
+      "common_name": "European hazelnut",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.87749415,
+        "lat": 43.61114021
+      },
+      "rotation": null,
+      "scale": 3.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "71c8acf4-319c-4a4d-b82f-27618714749d",
+      "locked": false,
+      "canonical_name": "Corylus avellana",
+      "common_name": "European hazelnut",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877096681,
+        "lat": 43.611050278
+      },
+      "rotation": null,
+      "scale": 3.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "5388c55c-1433-4423-b1c7-c6e560c79e85",
+      "locked": false,
+      "canonical_name": "Corylus avellana",
+      "common_name": "European hazelnut",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877270573,
+        "lat": 43.611032292
+      },
+      "rotation": null,
+      "scale": 3.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "194bfdad-00ea-47b7-8074-ccc1b808a0bc",
+      "locked": false,
+      "canonical_name": "Corylus avellana",
+      "common_name": "European hazelnut",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877518992,
+        "lat": 43.61119417
+      },
+      "rotation": null,
+      "scale": 3.0,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "86e22b16-b0a2-4aa2-99cc-6204338ecb59",
+      "locked": false,
+      "canonical_name": "Symphytum officinale",
+      "common_name": "Comfrey",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877320257,
+        "lat": 43.611230142
+      },
+      "rotation": null,
+      "scale": 0.6,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "7c59360b-be35-4382-b249-bb6fbd5ab9b9",
+      "locked": false,
+      "canonical_name": "Symphytum officinale",
+      "common_name": "Comfrey",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877394783,
+        "lat": 43.611230142
+      },
+      "rotation": null,
+      "scale": 0.6,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "2d8d2333-f578-4448-82c7-07a091658565",
+      "locked": false,
+      "canonical_name": "Symphytum officinale",
+      "common_name": "Comfrey",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877543834,
+        "lat": 43.611050278
+      },
+      "rotation": null,
+      "scale": 0.6,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "39724625-f97d-455b-a38a-93bad457b844",
+      "locked": false,
+      "canonical_name": "Symphytum officinale",
+      "common_name": "Comfrey",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877022155,
+        "lat": 43.610996319
+      },
+      "rotation": null,
+      "scale": 0.6,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "09f8ce2e-01a7-40f4-a6cd-7e9de9bd2343",
+      "locked": false,
+      "canonical_name": "Symphytum officinale",
+      "common_name": "Comfrey",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877171206,
+        "lat": 43.610996319
+      },
+      "rotation": null,
+      "scale": 0.6,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "c4b41d1d-2ef8-41ba-8f6b-f55b5546579b",
+      "locked": false,
+      "canonical_name": "Fragaria vesca",
+      "common_name": "Alpine strawberry",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877518992,
+        "lat": 43.611248129
+      },
+      "rotation": null,
+      "scale": null,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "b1da5bce-18ae-4dcf-a62c-a89e72aa4d99",
+      "locked": false,
+      "canonical_name": "Fragaria vesca",
+      "common_name": "Alpine strawberry",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877618359,
+        "lat": 43.611212156
+      },
+      "rotation": null,
+      "scale": null,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "b71d425b-71a7-48f5-97fe-62e66ec0c074",
+      "locked": false,
+      "canonical_name": "Fragaria vesca",
+      "common_name": "Alpine strawberry",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877345099,
+        "lat": 43.610978332
+      },
+      "rotation": null,
+      "scale": null,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "d628998c-d501-44e9-8584-71be3a44560a",
+      "locked": false,
+      "canonical_name": "Fragaria vesca",
+      "common_name": "Alpine strawberry",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877469308,
+        "lat": 43.610996319
+      },
+      "rotation": null,
+      "scale": null,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    },
+    {
+      "id": "6652cf39-89e5-4cfc-a33d-3bd713bdbc6a",
+      "locked": false,
+      "canonical_name": "Fragaria vesca",
+      "common_name": "Alpine strawberry",
+      "color": null,
+      "symbol": null,
+      "pinned_name": false,
+      "position": {
+        "lon": 3.877643201,
+        "lat": 43.611014305
+      },
+      "rotation": null,
+      "scale": null,
+      "notes": null,
+      "planted_date": null,
+      "quantity": 1
+    }
+  ],
+  "zones": [
+    {
+      "id": "zone-07347bad-0764-4b58-85fe-d9e06b321963",
+      "name": null,
+      "locked": false,
+      "zone_type": "rect",
+      "points": [
+        {
+          "lon": 3.877022155,
+          "lat": 43.611266115
+        },
+        {
+          "lon": 3.877196048,
+          "lat": 43.611266115
+        },
+        {
+          "lon": 3.877196048,
+          "lat": 43.61119417
+        },
+        {
+          "lon": 3.877022155,
+          "lat": 43.61119417
+        }
+      ],
+      "rotation": 0.0,
+      "fill_color": null,
+      "notes": null
+    },
+    {
+      "id": "zone-a3c26ddc-8c4c-44e6-b394-de89fd2f4b2d",
+      "name": null,
+      "locked": false,
+      "zone_type": "ellipse",
+      "points": [
+        {
+          "lon": 3.877270573,
+          "lat": 43.611266115
+        },
+        {
+          "lon": 3.877419624,
+          "lat": 43.611212156
+        }
+      ],
+      "rotation": 0.0,
+      "fill_color": null,
+      "notes": null
+    },
+    {
+      "id": "zone-8e3ee43c-f8a7-4d82-ba73-42d0d7e41d9c",
+      "name": null,
+      "locked": false,
+      "zone_type": "polygon",
+      "points": [
+        {
+          "lon": 3.87749415,
+          "lat": 43.611284102
+        },
+        {
+          "lon": 3.877618359,
+          "lat": 43.611266115
+        },
+        {
+          "lon": 3.877668043,
+          "lat": 43.611212156
+        },
+        {
+          "lon": 3.877568675,
+          "lat": 43.611176183
+        },
+        {
+          "lon": 3.877469308,
+          "lat": 43.611212156
+        }
+      ],
+      "rotation": 0.0,
+      "fill_color": null,
+      "notes": null
+    }
+  ],
+  "annotations": [
+    {
+      "id": "4d96d524-a904-470d-b098-7c9570af32ed",
+      "locked": false,
+      "annotation_type": "text",
+      "position": {
+        "lon": 3.877324594,
+        "lat": 43.611307027
+      },
+      "text": "North gate",
+      "font_size": 16.0,
+      "rotation": null
+    },
+    {
+      "id": "7007f00f-949c-41dc-8486-b928d8c82003",
+      "locked": false,
+      "annotation_type": "text",
+      "position": {
+        "lon": 3.877665811,
+        "lat": 43.611157218
+      },
+      "text": "Pond",
+      "font_size": 16.0,
+      "rotation": null
+    },
+    {
+      "id": "3fafbdb6-d6da-4800-b368-d0d0ef9ba7d3",
+      "locked": false,
+      "annotation_type": "text",
+      "position": {
+        "lon": 3.877048716,
+        "lat": 43.610957471
+      },
+      "text": "Compost",
+      "font_size": 16.0,
+      "rotation": null
+    }
+  ],
+  "measurement_guides": [],
+  "consortiums": [
+    {
+      "target": {
+        "kind": "species",
+        "canonical_name": "Malus domestica"
+      },
+      "stratum": "unassigned",
+      "start_phase": 0,
+      "end_phase": 2
+    },
+    {
+      "target": {
+        "kind": "species",
+        "canonical_name": "Corylus avellana"
+      },
+      "stratum": "unassigned",
+      "start_phase": 0,
+      "end_phase": 2
+    },
+    {
+      "target": {
+        "kind": "species",
+        "canonical_name": "Symphytum officinale"
+      },
+      "stratum": "unassigned",
+      "start_phase": 0,
+      "end_phase": 2
+    },
+    {
+      "target": {
+        "kind": "species",
+        "canonical_name": "Fragaria vesca"
+      },
+      "stratum": "unassigned",
+      "start_phase": 0,
+      "end_phase": 2
+    }
+  ],
+  "groups": [],
+  "timeline": [],
+  "budget": [],
+  "budget_currency": "EUR",
+  "views": [
+    {
+      "id": "236e714f-0d6a-401d-a9e0-48dfefa449ce",
+      "name": "Story 1 · step 1",
+      "camera": {
+        "lon": 3.877281034,
+        "lat": 43.611141448,
+        "zoom": 19.88539,
+        "bearing": 0.0
+      },
+      "visible_layers": {
+        "background": {
+          "kind": "basemap",
+          "style": "liberty"
+        },
+        "terrain": {
+          "contours": false,
+          "hillshade": false
+        },
+        "scene_layers": [
+          "zones",
+          "plants",
+          "measurement-guides",
+          "annotations"
+        ],
+        "site_data": []
+      },
+      "highlighted": {
+        "species": [],
+        "objects": []
+      },
+      "title": null,
+      "text": [],
+      "extent": {
+        "west": 3.876772837,
+        "south": 43.610904906,
+        "east": 3.87778923,
+        "north": 43.611377989
+      }
+    }
+  ],
+  "stories": [
+    {
+      "id": "93013d18-6675-4826-9a92-079a1ac5617b",
+      "name": "Tour",
+      "steps": [
+        {
+          "id": "6d891b4f-550b-43a5-9488-140e6a383655",
+          "view_id": "236e714f-0d6a-401d-a9e0-48dfefa449ce",
+          "title": "Overview",
+          "text": [],
+          "images": []
+        }
+      ]
+    }
+  ],
+  "created_at": "2026-09-29T20:28:17Z",
+  "updated_at": "2026-09-29T20:39:43.191Z",
+  "saved_view_display": {
+    "236e714f-0d6a-401d-a9e0-48dfefa449ce": {
+      "labels": "names"
+    }
+  }
+}

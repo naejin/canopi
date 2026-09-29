@@ -1,0 +1,57 @@
+// The network rule of the Web Edition browser checks (canvas v2 plan section 3.2, "Network").
+// Every committed scenario runs offline except for the preview server, so baselines never
+// change with OpenFreeMap's tiles or the network's speed. Every spec imports `test` and
+// `expect` from this file, never from '@playwright/test'.
+import { test as base, expect, type ConsoleMessage } from '@playwright/test'
+
+/** The preview server of playwright.config.ts; the only origin a scenario may reach. */
+export const APP_ORIGIN = 'http://localhost:4174'
+
+/**
+ * Console errors a scenario allows. Anything else logged as an error, and every uncaught
+ * page error, fails the test.
+ */
+function isAllowedConsoleError(message: ConsoleMessage, aborted: ReadonlySet<string>): boolean {
+  const text = message.text()
+  const source = message.location().url
+  // The Web Edition's default basemap is remote (OpenFreeMap). Its style request is aborted
+  // below, so the basemap never installs and the map keeps its backdrop colour; the app only
+  // logs this (app/canvas-map-surface/workspace-map-controls.ts:351) and shows no notice.
+  if (text.startsWith('Map basemap style failed to load:')) return true
+  // The browser's own log line for a request this file aborted (Chromium:
+  // "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"); its location is the aborted
+  // URL, so the line is caused only by the offline rule.
+  if (text.startsWith('Failed to load resource:') && aborted.has(source)) return true
+  // Not the network: the Web plant catalog (public/canopi-catalog/, git-ignored) is generated
+  // from canopi-core.db by `npm run generate:web-catalog` and packaged separately, so
+  // `npm run build:web` (the job's build) has none and its manifest answers 404. The Place
+  // plants card asks for it; "In this Design" still lists the Design's species without it.
+  if (
+    text === 'Failed to load resource: the server responded with a status of 404 (Not Found)'
+    && source === `${APP_ORIGIN}/app/canopi-catalog/manifest.json`
+  ) return true
+  return false
+}
+
+// Named `networkRule`: `offline` is Playwright's own context option.
+export const test = base.extend<{ networkRule: void }>({
+  networkRule: [async ({ context }, use) => {
+    const aborted = new Set<string>()
+    await context.route('**/*', (route) => {
+      const url = route.request().url()
+      if (new URL(url).origin === APP_ORIGIN) return route.continue()
+      aborted.add(url)
+      return route.abort('internetdisconnected')
+    })
+    const unexpected: string[] = []
+    context.on('console', (message) => {
+      if (message.type() !== 'error' || isAllowedConsoleError(message, aborted)) return
+      unexpected.push(`console error: ${message.text()} (${message.location().url})`)
+    })
+    context.on('weberror', (error) => unexpected.push(`uncaught: ${error.error().stack ?? error.error().message}`))
+    await use()
+    expect(unexpected, 'console errors and uncaught page errors').toEqual([])
+  }, { auto: true }],
+})
+
+export { expect }
