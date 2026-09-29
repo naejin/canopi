@@ -354,10 +354,10 @@ function decodeDesignGeoJson(value: unknown, options: GeoJsonDecodeOptions = {})
             pinned_name: booleanOr(properties.pinned_name, false),
             position: point,
             rotation: finiteOrNull(properties.rotation),
-            scale: finiteOrNull(properties.canopy_spread_m),
+            scale: positiveOrNull(properties.canopy_spread_m),
             notes: stringOrNull(properties.notes),
             planted_date: stringOrNull(properties.planted_date),
-            quantity: finiteOrNull(properties.quantity),
+            quantity: countOrNull(properties.quantity),
           })
           addMemberships(properties, { kind: 'plant', id })
           return
@@ -576,6 +576,21 @@ function booleanOr(value: unknown, fallback: boolean): boolean {
 
 function finiteOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+// The Design format admits a plant spread only above 0 and a quantity only
+// as a u32, so an imported value outside those ranges is dropped.
+function positiveOrNull(value: unknown): number | null {
+  const number = finiteOrNull(value)
+  return number !== null && number > 0 ? number : null
+}
+
+const MAX_PLANT_QUANTITY = 0xffff_ffff
+
+function countOrNull(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= MAX_PLANT_QUANTITY
+    ? value as number
+    : null
 }
 
 function finiteOr(value: unknown, fallback: number): number {

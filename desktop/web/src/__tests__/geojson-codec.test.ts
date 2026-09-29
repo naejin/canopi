@@ -244,6 +244,24 @@ describe('GeoJSON codec import', () => {
     expect(imported.skipped).toBe(5)
   })
 
+  it.each<[unknown, number | null]>([
+    [0, null], [-2, null], [Number.MAX_VALUE, Number.MAX_VALUE], ['3', null], [2.5, 2.5],
+  ])('reads canopy_spread_m %s as a spread the Design format accepts', (spread, scale) => {
+    const imported = parseDesignGeoJson(collection(
+      feature({ type: 'Point', coordinates: [1, 2] }, { species: 'Foo bar', canopy_spread_m: spread }),
+    ))
+    expect(imported.objects.plants[0]?.scale).toBe(scale)
+  })
+
+  it.each<[unknown, number | null]>([
+    [0, 0], [3, 3], [2.5, null], [-1, null], [4294967295, 4294967295], [4294967296, null], ['2', null],
+  ])('reads quantity %s as a count the Design format accepts', (quantity, expected) => {
+    const imported = parseDesignGeoJson(collection(
+      feature({ type: 'Point', coordinates: [1, 2] }, { species: 'Malus domestica', quantity }),
+    ))
+    expect(imported.objects.plants[0]?.quantity).toBe(expected)
+  })
+
   it('accepts a single Feature as the root', () => {
     const imported = parseDesignGeoJson(JSON.stringify(feature({ type: 'Point', coordinates: [3, 4] }, { text: 'Gate' })))
     expect(imported.objects.annotations).toHaveLength(1)
