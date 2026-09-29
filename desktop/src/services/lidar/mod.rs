@@ -296,8 +296,9 @@ impl LidarLibrary {
     ///
     /// A bad catalogue never stops the app: an older or corrupt one is set
     /// aside and rebuilt from the originals, a newer one is refused and the
-    /// library runs empty in memory (`recovery.rs`). Only the managed
-    /// directories failing to exist is an error.
+    /// library runs empty in memory (`recovery.rs`). The display cache and the
+    /// startup sweep are best effort too. Only the managed directories failing
+    /// to exist is an error.
     pub fn open(app_data_dir: &std::path::Path) -> Result<Self, String> {
         let paths = LidarPaths::open(app_data_dir)?;
         let recovery::OpenedCatalogue {
@@ -328,7 +329,7 @@ impl LidarLibrary {
                 "LiDAR catalogue could not be opened or rebuilt; the library is empty and read-only"
             ),
         }
-        let display_cache = open_display_cache(&paths.display_cache_path())?;
+        let display_cache = open_display_cache_or_recreate(&paths.display_cache_path())?;
         let engine_logs = paths.engine_log_dir();
         let library = Self {
             inner: Arc::new(LidarLibraryInner {
@@ -357,7 +358,7 @@ impl LidarLibrary {
             let connection = library.catalogue()?;
             analyses::recover_interrupted_jobs(&connection)?;
         }
-        library.prune_transient_artifacts()?;
+        library.prune_transient_artifacts();
         library.refresh_source_meta();
         Ok(library)
     }
@@ -460,8 +461,34 @@ impl LidarLibrary {
 
     /// Best-effort bounded cleanup at startup: job roots of settled jobs,
     /// unregistered display derivatives, settled analysis scratch, leftover engine
-    /// output, unpublished chunk rows and unreferenced assets.
-    fn prune_transient_artifacts(&self) -> Result<(), String> {
+    /// output, unpublished chunk rows and unreferenced assets. Each step that
+    /// fails is logged and left for the next start; none stops the library.
+    fn prune_transient_artifacts(&self) {
+        type Step = fn(&LidarLibrary) -> Result<(), String>;
+        let steps: [(&str, Step); 6] = [
+            ("settled job roots", Self::prune_settled_job_roots),
+            // Display derivatives nobody registered, and interrupted writes,
+            // can go now: no WebView reader exists before the library opens.
+            (
+                "display derivatives",
+                display_cog::prune_display_derivatives,
+            ),
+            ("analysis scratch", Self::prune_analysis_scratch),
+            ("engine output", Self::prune_leftover_engine_logs),
+            (
+                "unpublished chunk rows",
+                Self::discard_unpublished_chunk_rows,
+            ),
+            ("unreferenced assets", Self::prune_unreferenced_assets),
+        ];
+        for (step, prune) in steps {
+            if let Err(error) = prune(self) {
+                tracing::warn!(step, %error, "startup cleanup step failed; kept until the next start");
+            }
+        }
+    }
+
+    fn prune_settled_job_roots(&self) -> Result<(), String> {
         let connection = self.catalogue()?;
         let settled: Vec<(String, String)> = {
             let mut statement = connection
@@ -484,27 +511,29 @@ impl LidarLibrary {
                 tracing::warn!(job_id, %error, "a settled job root was kept until the next start");
             }
         }
-        // Display derivatives nobody registered, and interrupted writes, can go
-        // now: no WebView reader exists before the library opens.
-        display_cog::prune_display_derivatives(self)?;
-        self.prune_analysis_scratch()?;
-        // Output files of engine children an earlier process never reaped.
+        Ok(())
+    }
+
+    /// Output files of engine children an earlier process never reaped.
+    fn prune_leftover_engine_logs(&self) -> Result<(), String> {
         let removed = process::prune_engine_logs(&self.inner.paths.engine_log_dir())?;
         if removed > 0 {
             tracing::info!(removed, "removed leftover engine output files");
         }
-        // A job that crashed before its publish transaction left chunk rows
-        // that were never readable. Removing them cannot revoke an accepted
-        // generation; the files they named are swept with the other
-        // unreferenced assets below.
-        {
-            let connection = self.catalogue()?;
-            let discarded = catalogue::discard_unpublished_chunks(&connection)?;
-            if discarded > 0 {
-                tracing::info!(discarded, "discarded unpublished raster chunk rows");
-            }
+        Ok(())
+    }
+
+    /// A job that crashed before its publish transaction left chunk rows that
+    /// were never readable. Removing them cannot revoke an accepted
+    /// generation; the files they named are swept with the other unreferenced
+    /// assets afterwards.
+    fn discard_unpublished_chunk_rows(&self) -> Result<(), String> {
+        let connection = self.catalogue()?;
+        let discarded = catalogue::discard_unpublished_chunks(&connection)?;
+        if discarded > 0 {
+            tracing::info!(discarded, "discarded unpublished raster chunk rows");
         }
-        self.prune_unreferenced_assets()
+        Ok(())
     }
 
     /// Delete asset directories and metadata rows no catalogue reference owns.
@@ -2332,7 +2361,7 @@ mod tests {
             std::fs::create_dir_all(scratch(job)).unwrap();
             std::fs::write(scratch(job).join("window.tif"), b"partial").unwrap();
         }
-        library.prune_transient_artifacts().unwrap();
+        library.prune_transient_artifacts();
         assert!(
             !scratch("adef-item-1-job").exists(),
             "a settled job's scratch is swept"
@@ -2447,6 +2476,41 @@ mod tests {
         assert!(!stale.exists(), "an earlier process's output is swept");
         assert!(own.exists(), "this process's output is never swept");
         drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The display cache and the startup sweep are best effort: a display
+    /// cache that is not a database is replaced, and a scratch directory the
+    /// sweep cannot list is left for the next start. Neither stops the app.
+    #[cfg(unix)]
+    #[test]
+    fn a_damaged_display_cache_or_unreadable_scratch_never_stops_the_library() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = crate::test_scratch::TestScratch::new("lidar-best-effort-open");
+        let library = LidarLibrary::open(&root).unwrap();
+        let cache = library.inner.paths.display_cache_path();
+        let prepared = library.inner.paths.prepared_dir();
+        drop(library);
+        std::fs::write(&cache, b"definitely not a sqlite display cache").unwrap();
+        std::fs::set_permissions(&prepared, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = std::fs::read_dir(&prepared).is_err();
+
+        let opened = LidarLibrary::open(&root);
+        std::fs::set_permissions(&prepared, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let library = opened.expect("a damaged cache or sweep never fails the open");
+        assert!(
+            unreadable,
+            "the scratch directory was unreadable during the open"
+        );
+        assert_eq!(*library.open_status(), recovery::LibraryOpenStatus::Ready);
+        library
+            .display()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM display_cogs", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("the display cache was recreated");
+        drop(library);
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -3131,9 +3195,45 @@ impl std::ops::Deref for CatalogueGuard<'_> {
     }
 }
 
+/// Open the display cache, best effort: it only indexes regenerable display
+/// derivatives, so a file that cannot be opened or initialised is removed and
+/// recreated, and when that fails too the cache runs in memory for this run.
+/// Derivatives the lost index named are swept at startup as unregistered.
+fn open_display_cache_or_recreate(path: &std::path::Path) -> Result<Connection, String> {
+    match open_display_cache(path) {
+        Ok(connection) => return Ok(connection),
+        Err(error) => {
+            tracing::warn!(%error, "LiDAR display cache is unusable; recreating it");
+        }
+    }
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let file = std::path::PathBuf::from(format!("{}{suffix}", path.display()));
+        if let Err(error) = std::fs::remove_file(&file)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(path = %file.display(), %error, "failed to remove the display cache");
+        }
+    }
+    match open_display_cache(path) {
+        Ok(connection) => Ok(connection),
+        Err(error) => {
+            tracing::error!(%error, "LiDAR display cache could not be recreated; using memory");
+            let connection = Connection::open_in_memory()
+                .map_err(|e| format!("Failed to open an in-memory display cache: {e}"))?;
+            init_display_cache(&connection)?;
+            Ok(connection)
+        }
+    }
+}
+
 fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
         .map_err(|e| format!("Failed to open display cache {}: {e}", path.display()))?;
+    init_display_cache(&connection)?;
+    Ok(connection)
+}
+
+fn init_display_cache(connection: &Connection) -> Result<(), String> {
     connection
         .execute_batch(
             "CREATE TABLE IF NOT EXISTS display_cogs (
@@ -3148,7 +3248,7 @@ fn open_display_cache(path: &std::path::Path) -> Result<Connection, String> {
             );",
         )
         .map_err(|e| format!("Failed to init display cache: {e}"))?;
-    Ok(connection)
+    Ok(())
 }
 
 /// One import job as the UI reads it.
