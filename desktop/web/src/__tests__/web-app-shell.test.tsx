@@ -665,6 +665,24 @@ describe('Web Edition Browser App Shell', () => {
     expect(container.querySelector('[data-save-status] [role="status"]')?.textContent).toBe('Saved in this browser')
     expect(appDataStore.loadDraft('draft-identity-state')?.description).toBe('Browser edit')
   })
+  it('offers Resolve… when another browser tab changed the open Draft', async () => {
+    const onResolveSaveConflict = vi.fn()
+    await act(async () => {
+      render(
+        <BrowserAppShell
+          commandProjection={shellCommandProjection()}
+          designIdentity={{ name: 'Orchard', saveStatus: 'conflict', saveFailureReason: null }}
+          onResolveSaveConflict={onResolveSaveConflict}
+        />,
+        container,
+      )
+    })
+    const status = container.querySelector<HTMLElement>('[data-save-status="conflict"]')!
+    expect(status.querySelector('[role="alert"]')?.textContent).toBe('Changed in another tab')
+    await act(async () => { status.querySelector('button')!.click() })
+    expect(onResolveSaveConflict).toHaveBeenCalledOnce()
+  })
+
   describe('on a phone', () => {
     const size = { width: window.innerWidth, height: window.innerHeight }
     const resizeTo = (width: number, height: number) => {

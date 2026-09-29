@@ -13,9 +13,14 @@ export type SaveProblemRequest =
     readonly purpose: 'replace' | 'close'
     /** The failure is a pending conflict, so Retry cannot succeed. */
     readonly conflict: boolean
+    /** Where the conflicting change came from; omitted: outside Canopi. */
+    readonly where?: SaveConflictSource
   }
-  | { readonly kind: 'conflict'; readonly fileGone: boolean }
+  | { readonly kind: 'conflict'; readonly fileGone: boolean; readonly where?: SaveConflictSource }
   | { readonly kind: 'revert' }
+
+/** A browser Draft written by another tab of the Web Edition. */
+export type SaveConflictSource = 'another-tab'
 
 type FlushFailedChoice = 'retry' | 'discard' | 'cancel'
 type ConflictChoice = 'keep-mine' | 'use-file' | 'save-copy' | 'cancel'

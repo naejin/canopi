@@ -1514,7 +1514,8 @@
     "detailsSafe": "Canopi 保持打开时，您的工作是安全的。请重试，或保存到其他位置。",
     "saveAs": "另存为…",
     "resolve": "解决…",
-    "savedUpgraded": "已按 Canopi 2 格式保存"
+    "savedUpgraded": "已按 Canopi 2 格式保存",
+    "conflictAnotherTab": "已在另一个标签页中更改"
   },
   "saveProblem": {
     "flushFailedTitle": "无法保存您的更改",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "另存为…",
     "revertTitle": "恢复到打开时的版本？",
     "revertMessage": "自打开此设计以来所做的所有更改都将被替换。",
-    "revertConfirm": "恢复"
+    "revertConfirm": "恢复",
+    "tabConflictTitle": "已在另一个标签页中更改",
+    "tabConflictMessage": "自此标签页上次保存以来，另一个浏览器标签页更改了此设计。请选择要保留的版本。",
+    "tabConflictPendingMessage": "此设计已在另一个浏览器标签页中更改，因此您最近的更改未写入。放弃这些更改以继续，或取消并先处理该更改。",
+    "useOtherTab": "使用另一个标签页中的版本"
   },
   "drafts": {
     "title": "草稿",

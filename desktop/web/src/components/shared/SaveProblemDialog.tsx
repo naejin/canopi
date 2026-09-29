@@ -103,7 +103,9 @@ function describe(request: SaveProblemRequest): {
     if (request.conflict) {
       return {
         title: t('saveProblem.flushFailedTitle'),
-        message: t('saveProblem.conflictPendingMessage'),
+        message: t(request.where === 'another-tab'
+          ? 'saveProblem.tabConflictPendingMessage'
+          : 'saveProblem.conflictPendingMessage'),
         actions: [cancel, discard],
       }
     }
@@ -113,6 +115,18 @@ function describe(request: SaveProblemRequest): {
         ? 'saveProblem.flushFailedCloseMessage'
         : 'saveProblem.flushFailedMessage'),
       actions: [{ choice: 'retry', label: t('saveProblem.retry'), tone: 'primary' }, discard, cancel],
+    }
+  }
+  if (request.where === 'another-tab') {
+    // A browser Draft another tab wrote: keep this tab's version or reload that one.
+    return {
+      title: t('saveProblem.tabConflictTitle'),
+      message: t('saveProblem.tabConflictMessage'),
+      actions: [
+        { choice: 'keep-mine', label: t('saveProblem.keepMine'), tone: 'primary' },
+        { choice: 'use-file', label: t('saveProblem.useOtherTab'), tone: 'danger' },
+        cancel,
+      ],
     }
   }
   if (request.fileGone) {

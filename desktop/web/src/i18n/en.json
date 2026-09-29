@@ -1514,7 +1514,8 @@
     "detailsSafe": "Your work is safe in Canopi while it stays open. Retry, or save it to another place.",
     "saveAs": "Save as…",
     "resolve": "Resolve…",
-    "savedUpgraded": "Saved as Canopi 2 format"
+    "savedUpgraded": "Saved as Canopi 2 format",
+    "conflictAnotherTab": "Changed in another tab"
   },
   "saveProblem": {
     "flushFailedTitle": "Couldn't save your changes",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Save as…",
     "revertTitle": "Revert to version when opened?",
     "revertMessage": "Every change made since this Design was opened will be replaced.",
-    "revertConfirm": "Revert"
+    "revertConfirm": "Revert",
+    "tabConflictTitle": "Changed in another tab",
+    "tabConflictMessage": "Another browser tab changed this Design since this tab last saved it. Choose which version to keep.",
+    "tabConflictPendingMessage": "This Design was changed in another browser tab, so your latest changes were not written. Discard them to continue, or cancel and resolve the change first.",
+    "useOtherTab": "Use the other tab's version"
   },
   "drafts": {
     "title": "Drafts",

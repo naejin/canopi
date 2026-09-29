@@ -1514,7 +1514,8 @@
     "detailsSafe": "Solange Canopi geöffnet bleibt, ist Ihre Arbeit sicher. Versuchen Sie es erneut oder speichern Sie sie an einem anderen Ort.",
     "saveAs": "Speichern unter…",
     "resolve": "Klären…",
-    "savedUpgraded": "Im Canopi-2-Format gespeichert"
+    "savedUpgraded": "Im Canopi-2-Format gespeichert",
+    "conflictAnotherTab": "In einem anderen Tab geändert"
   },
   "saveProblem": {
     "flushFailedTitle": "Änderungen konnten nicht gespeichert werden",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Speichern unter…",
     "revertTitle": "Zur Version beim Öffnen zurückkehren?",
     "revertMessage": "Alle Änderungen seit dem Öffnen dieses Designs werden ersetzt.",
-    "revertConfirm": "Zurücksetzen"
+    "revertConfirm": "Zurücksetzen",
+    "tabConflictTitle": "In einem anderen Tab geändert",
+    "tabConflictMessage": "Ein anderer Browser-Tab hat dieses Design geändert, seit dieser Tab es zuletzt gespeichert hat. Wählen Sie, welche Version Sie behalten möchten.",
+    "tabConflictPendingMessage": "Dieses Design wurde in einem anderen Browser-Tab geändert, daher wurden Ihre letzten Änderungen nicht geschrieben. Verwerfen Sie sie, um fortzufahren, oder brechen Sie ab und klären Sie zuerst die Änderung.",
+    "useOtherTab": "Version des anderen Tabs verwenden"
   },
   "drafts": {
     "title": "Skizzen",

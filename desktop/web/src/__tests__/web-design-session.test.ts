@@ -924,6 +924,92 @@ describe('browser Design Session lifecycle', () => {
     expect(store.readCurrentDesign()?.description).toBe('second edited')
   })
 
+  it('pauses instead of overwriting a Draft another browser tab has changed', async () => {
+    const storage = memoryStorage()
+    let tick = 0
+    const clock = () => new Date(Date.UTC(2026, 6, 4, 12, 0, tick++))
+    createBrowserAppDataStore({ storage }).saveDraft({
+      id: 'draft-shared',
+      file: makeCanopiFile({ name: 'Shared Garden', description: 'as opened' }),
+      now: clock().toISOString(),
+    })
+    function openTab(requestSaveDecision: ReturnType<typeof vi.fn>) {
+      const store = createMemoryDesignSessionStore()
+      const appDataStore = createBrowserAppDataStore({ storage })
+      const controller = createBrowserDesignSessionController({
+        store,
+        appDataStore,
+        fileAdapter: testFileAdapter(),
+        now: clock,
+        requestSaveDecision: requestSaveDecision as never,
+      })
+      expect(controller.restoreLatestDraft()).toBe(true)
+      return { store, appDataStore, controller }
+    }
+    const decideA = vi.fn(async () => 'keep-mine')
+    const decideB = vi.fn(async () => 'use-file')
+    const tabA = openTab(decideA)
+    const tabB = openTab(decideB)
+
+    editDesignSessionForTest(tabA.store, (design) => ({ ...design, description: 'twenty plants' }))
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+
+    // Tab B still holds the Design as opened; its write must not replace tab A's.
+    editDesignSessionForTest(tabB.store, (design) => ({ ...design, description: 'nudged zone' }))
+    await expect(tabB.controller.continuousSave.flush()).resolves.toBe(false)
+    expect(tabB.controller.continuousSave.status.value).toBe('conflict')
+    expect(tabB.appDataStore.loadDraft('draft-shared')?.description).toBe('twenty plants')
+
+    // Using the other tab's version reloads the Draft as stored.
+    await tabB.controller.resolveSaveConflict()
+    expect(decideB).toHaveBeenCalledWith({ kind: 'conflict', fileGone: false, where: 'another-tab' })
+    expect(tabB.store.readCurrentDesign()?.description).toBe('twenty plants')
+    expect(tabB.controller.continuousSave.status.value).toBe('draft')
+    editDesignSessionForTest(tabB.store, (design) => ({ ...design, description: 'twenty plants and a zone' }))
+    await expect(tabB.controller.continuousSave.flush()).resolves.toBe(true)
+
+    // Now tab A is behind; keeping its version overwrites on purpose.
+    editDesignSessionForTest(tabA.store, (design) => ({ ...design, description: 'tab A again' }))
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(false)
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.description).toBe('twenty plants and a zone')
+    await tabA.controller.resolveSaveConflict()
+    expect(tabA.appDataStore.loadDraft('draft-shared')?.description).toBe('tab A again')
+    expect(tabA.controller.continuousSave.status.value).toBe('draft')
+    editDesignSessionForTest(tabA.store, (design) => ({ ...design, description: 'tab A continues' }))
+    await expect(tabA.controller.continuousSave.flush()).resolves.toBe(true)
+  })
+
+  it('asks about a Draft another tab changed before a replacement discards this tab\'s edits', async () => {
+    const storage = memoryStorage()
+    let tick = 0
+    const clock = () => new Date(Date.UTC(2026, 6, 4, 12, 0, tick++))
+    const other = createBrowserAppDataStore({ storage })
+    other.saveDraft({ id: 'draft-shared', file: makeCanopiFile({ name: 'Shared' }), now: clock().toISOString() })
+    const store = createMemoryDesignSessionStore()
+    const requestSaveDecision = vi.fn(async () => 'cancel')
+    const controller = createBrowserDesignSessionController({
+      store,
+      appDataStore: createBrowserAppDataStore({ storage }),
+      fileAdapter: testFileAdapter(),
+      now: clock,
+      requestSaveDecision: requestSaveDecision as never,
+    })
+    expect(controller.restoreLatestDraft()).toBe(true)
+    other.saveDraft({ id: 'draft-shared', file: makeCanopiFile({ name: 'Shared', description: 'other tab' }), now: clock().toISOString() })
+    editDesignSessionForTest(store, (design) => ({ ...design, description: 'this tab' }))
+
+    await controller.newDesign()
+
+    expect(requestSaveDecision).toHaveBeenCalledWith({
+      kind: 'flush-failed',
+      purpose: 'replace',
+      conflict: true,
+      where: 'another-tab',
+    })
+    expect(store.readCurrentDesign()?.description).toBe('this tab')
+    expect(other.loadDraft('draft-shared')?.description).toBe('other tab')
+  })
+
   it('deletes a Draft other than the open one', async () => {
     const store = createMemoryDesignSessionStore()
     const appDataStore = createBrowserAppDataStore({ storage: memoryStorage() })

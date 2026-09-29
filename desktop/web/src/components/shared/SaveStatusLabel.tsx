@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { DesignSaveStatus } from '../../app/document-session/continuous-save'
+import type { SaveConflictSource } from '../../app/document-session/save-problem'
 import { t } from '../../i18n'
 import { ControlIcon } from './ControlIcon'
 import styles from './save-status-label.module.css'
@@ -24,6 +25,8 @@ interface SaveStatusLabelProps {
    * current format (ADR 0013); the first Saved after that says so, once.
    */
   readonly upgradedFormatWritten?: boolean
+  /** Where a conflicting change came from; omitted: outside Canopi. */
+  readonly conflictSource?: SaveConflictSource
   onRetry(): void
   onResolveConflict?(): void
 }
@@ -39,6 +42,7 @@ export function SaveStatusLabel({
   draftAction,
   saveElsewhere,
   upgradedFormatWritten = false,
+  conflictSource,
   onRetry,
   onResolveConflict,
 }: SaveStatusLabelProps) {
@@ -75,7 +79,7 @@ export function SaveStatusLabel({
       )}
       {status === 'conflict' && (
         <>
-          <span className={styles.errorText} role="alert"><ControlIcon name="alert" />{t('saveStatus.conflict')}</span>
+          <span className={styles.errorText} role="alert"><ControlIcon name="alert" />{t(conflictSource === 'another-tab' ? 'saveStatus.conflictAnotherTab' : 'saveStatus.conflict')}</span>
           {onResolveConflict && (
             <button type="button" className={styles.action} onClick={onResolveConflict}>
               {t('saveStatus.resolve')}

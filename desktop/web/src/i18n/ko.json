@@ -1514,7 +1514,8 @@
     "detailsSafe": "Canopi가 열려 있는 동안 작업은 안전합니다. 다시 시도하거나 다른 위치에 저장하세요.",
     "saveAs": "다른 이름으로 저장…",
     "resolve": "해결…",
-    "savedUpgraded": "Canopi 2 형식으로 저장됨"
+    "savedUpgraded": "Canopi 2 형식으로 저장됨",
+    "conflictAnotherTab": "다른 탭에서 변경됨"
   },
   "saveProblem": {
     "flushFailedTitle": "변경 사항을 저장하지 못했습니다",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "다른 이름으로 저장…",
     "revertTitle": "열었을 때 버전으로 되돌릴까요?",
     "revertMessage": "이 디자인을 연 이후의 모든 변경 사항이 대체됩니다.",
-    "revertConfirm": "되돌리기"
+    "revertConfirm": "되돌리기",
+    "tabConflictTitle": "다른 탭에서 변경됨",
+    "tabConflictMessage": "이 탭이 마지막으로 저장한 뒤 다른 브라우저 탭이 이 디자인을 변경했습니다. 유지할 버전을 선택하세요.",
+    "tabConflictPendingMessage": "이 디자인이 다른 브라우저 탭에서 변경되어 최근 변경 사항이 기록되지 않았습니다. 변경 사항을 버리고 계속하거나, 취소하고 먼저 변경을 해결하세요.",
+    "useOtherTab": "다른 탭의 버전 사용"
   },
   "drafts": {
     "title": "초안",

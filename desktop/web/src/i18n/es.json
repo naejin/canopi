@@ -1514,7 +1514,8 @@
     "detailsSafe": "Tu trabajo está a salvo en Canopi mientras siga abierto. Reintenta o guárdalo en otro lugar.",
     "saveAs": "Guardar como…",
     "resolve": "Resolver…",
-    "savedUpgraded": "Guardado en formato Canopi 2"
+    "savedUpgraded": "Guardado en formato Canopi 2",
+    "conflictAnotherTab": "Cambiado en otra pestaña"
   },
   "saveProblem": {
     "flushFailedTitle": "No se pudieron guardar los cambios",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Guardar como…",
     "revertTitle": "¿Volver a la versión al abrir?",
     "revertMessage": "Se reemplazarán todos los cambios realizados desde que se abrió este diseño.",
-    "revertConfirm": "Volver"
+    "revertConfirm": "Volver",
+    "tabConflictTitle": "Cambiado en otra pestaña",
+    "tabConflictMessage": "Otra pestaña del navegador cambió este diseño desde la última vez que esta pestaña lo guardó. Elige qué versión conservar.",
+    "tabConflictPendingMessage": "Este diseño cambió en otra pestaña del navegador, así que tus últimos cambios no se escribieron. Descártalos para continuar, o cancela y resuelve primero el cambio.",
+    "useOtherTab": "Usar la versión de la otra pestaña"
   },
   "drafts": {
     "title": "Borradores",

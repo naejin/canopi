@@ -1514,7 +1514,8 @@
     "detailsSafe": "Votre travail reste en sécurité dans Canopi tant qu’il est ouvert. Réessayez, ou enregistrez-le ailleurs.",
     "saveAs": "Enregistrer sous…",
     "resolve": "Résoudre…",
-    "savedUpgraded": "Enregistré au format Canopi 2"
+    "savedUpgraded": "Enregistré au format Canopi 2",
+    "conflictAnotherTab": "Modifié dans un autre onglet"
   },
   "saveProblem": {
     "flushFailedTitle": "Impossible d’enregistrer vos modifications",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Enregistrer sous…",
     "revertTitle": "Revenir à la version d’ouverture ?",
     "revertMessage": "Toutes les modifications faites depuis l’ouverture de ce Design seront remplacées.",
-    "revertConfirm": "Revenir"
+    "revertConfirm": "Revenir",
+    "tabConflictTitle": "Modifié dans un autre onglet",
+    "tabConflictMessage": "Un autre onglet du navigateur a modifié ce Design depuis le dernier enregistrement de cet onglet. Choisissez la version à conserver.",
+    "tabConflictPendingMessage": "Ce Design a été modifié dans un autre onglet du navigateur, vos dernières modifications n’ont donc pas été écrites. Abandonnez-les pour continuer, ou annulez et résolvez d’abord la modification.",
+    "useOtherTab": "Utiliser la version de l’autre onglet"
   },
   "drafts": {
     "title": "Brouillons",

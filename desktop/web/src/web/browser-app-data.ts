@@ -106,6 +106,21 @@ interface SaveDraftOptions {
   readonly id?: string;
   readonly file: CanopiFile;
   readonly now: string;
+  /**
+   * The `updatedAt` this writer last read or wrote for the Draft (null: it
+   * never saw one). When another browser tab has since written the Draft, the
+   * save is refused with `BrowserDraftChangedError` instead of replacing it.
+   * Omitted: overwrite unconditionally.
+   */
+  readonly expectedUpdatedAt?: string | null;
+}
+
+/** Another browser tab wrote the Draft after this writer last read or wrote it. */
+export class BrowserDraftChangedError extends Error {
+  constructor(readonly draftId: string) {
+    super("The Draft was changed in another browser tab");
+    this.name = "BrowserDraftChangedError";
+  }
 }
 
 interface BrowserAppDataStoreOptions {
@@ -158,11 +173,18 @@ export function createBrowserAppDataStore({
   }
 
   return {
-    saveDraft({ id: requestedId, file, now }) {
+    saveDraft({ id: requestedId, file, now, expectedUpdatedAt }) {
       return writePartition(
         PARTITIONS.drafts,
         (current) => {
           const id = normalizeDraftId(requestedId, file.name);
+          if (expectedUpdatedAt !== undefined) {
+            // A Draft deleted meanwhile is written again rather than lost.
+            const stored = current.drafts.find((draft) => draft.id === id);
+            if (stored && stored.updatedAt !== expectedUpdatedAt) {
+              throw new BrowserDraftChangedError(id);
+            }
+          }
           const summary = {
             id,
             name: file.name || "Untitled",

@@ -124,6 +124,13 @@ describe('SaveStatusLabel', () => {
     expect(onResolveConflict).toHaveBeenCalledOnce()
   })
 
+  it('says a browser Draft was changed in another tab', async () => {
+    const onResolveConflict = vi.fn()
+    await act(async () => { render(label({ status: 'conflict', conflictSource: 'another-tab', onResolveConflict }), container) })
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Changed in another tab')
+    expect(labels()).toEqual(['Resolve…'])
+  })
+
   it('shows "Saved in this browser" with a Download a copy link on the Web', async () => {
     const run = vi.fn()
     await act(async () => {
@@ -192,6 +199,25 @@ describe('SaveProblemDialog', () => {
       )
     })
     await expect(decision).resolves.toBe('cancel')
+  })
+
+  it('offers keeping this tab\'s version or the other tab\'s for a browser Draft', async () => {
+    let decision: Promise<string> | null = null
+    await act(async () => {
+      render(<SaveProblemDialog />, container)
+      decision = requestSaveProblemDecision({ kind: 'conflict', fileGone: false, where: 'another-tab' })
+    })
+    expect(container.textContent).toContain('Changed in another tab')
+    expect(container.textContent).toContain('Another browser tab changed this Design')
+    expect(labels()).toEqual(['Keep my version', "Use the other tab's version", 'Cancel'])
+    await act(async () => { buttons()[1]?.click() })
+    await expect(decision).resolves.toBe('use-file')
+
+    await act(async () => {
+      void requestSaveProblemDecision({ kind: 'flush-failed', purpose: 'replace', conflict: true, where: 'another-tab' })
+    })
+    expect(container.textContent).toContain('another browser tab')
+    expect(labels()).toEqual(['Cancel', 'Discard changes'])
   })
 
   it('offers Save As or recreating the file when it was moved or deleted', async () => {

@@ -101,6 +101,9 @@ export function WebApp({
         onRetrySave={() => {
           void controller.continuousSave.flush().catch(logWebAppCommandError);
         }}
+        onResolveSaveConflict={() => {
+          void controller.resolveSaveConflict().catch(logWebAppCommandError);
+        }}
         placeSearch={hasDesign}
         undo={hasDesign ? workspaceCanvasCommandProjection.value.historyActions.find((action) => action.id === "undo") : undefined}
       >

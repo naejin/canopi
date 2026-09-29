@@ -1514,7 +1514,8 @@
     "detailsSafe": "Je werk blijft veilig in Canopi zolang het open blijft. Probeer het opnieuw of sla het elders op.",
     "saveAs": "Opslaan als…",
     "resolve": "Oplossen…",
-    "savedUpgraded": "Opgeslagen in Canopi 2-indeling"
+    "savedUpgraded": "Opgeslagen in Canopi 2-indeling",
+    "conflictAnotherTab": "Gewijzigd in een ander tabblad"
   },
   "saveProblem": {
     "flushFailedTitle": "Je wijzigingen konden niet worden opgeslagen",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Opslaan als…",
     "revertTitle": "Terug naar de versie bij openen?",
     "revertMessage": "Alle wijzigingen sinds het openen van dit ontwerp worden vervangen.",
-    "revertConfirm": "Terugzetten"
+    "revertConfirm": "Terugzetten",
+    "tabConflictTitle": "Gewijzigd in een ander tabblad",
+    "tabConflictMessage": "Een ander browsertabblad heeft dit ontwerp gewijzigd sinds dit tabblad het laatst opsloeg. Kies welke versie je wilt behouden.",
+    "tabConflictPendingMessage": "Dit ontwerp is in een ander browsertabblad gewijzigd, dus je laatste wijzigingen zijn niet weggeschreven. Verwerp ze om door te gaan, of annuleer en los de wijziging eerst op.",
+    "useOtherTab": "Versie van het andere tabblad gebruiken"
   },
   "drafts": {
     "title": "Concepten",

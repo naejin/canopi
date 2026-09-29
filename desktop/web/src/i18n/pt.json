@@ -1514,7 +1514,8 @@
     "detailsSafe": "Seu trabalho está seguro no Canopi enquanto ele estiver aberto. Tente novamente ou salve em outro lugar.",
     "saveAs": "Salvar como…",
     "resolve": "Resolver…",
-    "savedUpgraded": "Salvo no formato Canopi 2"
+    "savedUpgraded": "Salvo no formato Canopi 2",
+    "conflictAnotherTab": "Alterado em outra aba"
   },
   "saveProblem": {
     "flushFailedTitle": "Não foi possível salvar suas alterações",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Salvar como…",
     "revertTitle": "Reverter para a versão de abertura?",
     "revertMessage": "Todas as alterações feitas desde que este design foi aberto serão substituídas.",
-    "revertConfirm": "Reverter"
+    "revertConfirm": "Reverter",
+    "tabConflictTitle": "Alterado em outra aba",
+    "tabConflictMessage": "Outra aba do navegador alterou este design desde que esta aba o salvou pela última vez. Escolha qual versão manter.",
+    "tabConflictPendingMessage": "Este design foi alterado em outra aba do navegador, então suas últimas alterações não foram gravadas. Descarte-as para continuar ou cancele e resolva a alteração primeiro.",
+    "useOtherTab": "Usar a versão da outra aba"
   },
   "drafts": {
     "title": "Rascunhos",

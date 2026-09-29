@@ -1514,7 +1514,8 @@
     "detailsSafe": "Canopi を開いている間、作業内容は失われません。再試行するか、別の場所に保存してください。",
     "saveAs": "名前を付けて保存…",
     "resolve": "解決…",
-    "savedUpgraded": "Canopi 2 形式で保存しました"
+    "savedUpgraded": "Canopi 2 形式で保存しました",
+    "conflictAnotherTab": "別のタブで変更されました"
   },
   "saveProblem": {
     "flushFailedTitle": "変更を保存できませんでした",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "名前を付けて保存…",
     "revertTitle": "開いたときのバージョンに戻しますか？",
     "revertMessage": "このデザインを開いてから行ったすべての変更が置き換えられます。",
-    "revertConfirm": "元に戻す"
+    "revertConfirm": "元に戻す",
+    "tabConflictTitle": "別のタブで変更されました",
+    "tabConflictMessage": "このタブが最後に保存してから、ブラウザーの別のタブがこのデザインを変更しました。残すバージョンを選んでください。",
+    "tabConflictPendingMessage": "このデザインはブラウザーの別のタブで変更されたため、最新の変更は書き込まれていません。変更を破棄して続行するか、キャンセルして先に変更を解決してください。",
+    "useOtherTab": "別のタブのバージョンを使う"
   },
   "drafts": {
     "title": "下書き",

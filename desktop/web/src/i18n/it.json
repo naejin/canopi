@@ -1514,7 +1514,8 @@
     "detailsSafe": "Il tuo lavoro è al sicuro in Canopi finché resta aperto. Riprova o salvalo altrove.",
     "saveAs": "Salva con nome…",
     "resolve": "Risolvi…",
-    "savedUpgraded": "Salvato nel formato Canopi 2"
+    "savedUpgraded": "Salvato nel formato Canopi 2",
+    "conflictAnotherTab": "Modificato in un’altra scheda"
   },
   "saveProblem": {
     "flushFailedTitle": "Impossibile salvare le modifiche",
@@ -1534,7 +1535,11 @@
     "saveElsewhere": "Salva con nome…",
     "revertTitle": "Tornare alla versione all’apertura?",
     "revertMessage": "Tutte le modifiche fatte dall’apertura di questo progetto verranno sostituite.",
-    "revertConfirm": "Ripristina"
+    "revertConfirm": "Ripristina",
+    "tabConflictTitle": "Modificato in un’altra scheda",
+    "tabConflictMessage": "Un’altra scheda del browser ha modificato questo progetto dall’ultimo salvataggio di questa scheda. Scegli quale versione tenere.",
+    "tabConflictPendingMessage": "Questo progetto è stato modificato in un’altra scheda del browser, quindi le ultime modifiche non sono state scritte. Scartale per continuare, oppure annulla e risolvi prima la modifica.",
+    "useOtherTab": "Usa la versione dell’altra scheda"
   },
   "drafts": {
     "title": "Bozze",

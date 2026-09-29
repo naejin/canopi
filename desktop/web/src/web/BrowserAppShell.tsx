@@ -32,6 +32,8 @@ interface BrowserAppShellProps {
   readonly designIdentity?: BrowserShellDesignIdentity | null;
   readonly onRenameDesign?: (name: string) => void;
   readonly onRetrySave?: () => void;
+  /** Settles a Draft another browser tab changed. */
+  readonly onResolveSaveConflict?: () => void;
   /** Whether the title bar offers the place search (while a Design is open). */
   readonly placeSearch?: boolean;
   /** Undo, which the phone top bar carries in place of the tool rail's history. */
@@ -52,6 +54,7 @@ export function BrowserAppShell({
   designIdentity = null,
   onRenameDesign,
   onRetrySave,
+  onResolveSaveConflict,
   placeSearch = false,
   undo,
   children,
@@ -107,6 +110,8 @@ export function BrowserAppShell({
               draftAction={{ ...downloadAction, style: "link" }}
               saveElsewhere={downloadAction}
               onRetry={() => onRetrySave?.()}
+              conflictSource="another-tab"
+              onResolveConflict={onResolveSaveConflict}
             />
           </>
         ) : undefined}

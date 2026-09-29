@@ -5,6 +5,7 @@ import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
 import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
 import {
   createContinuousSave,
+  DesignHomeConflictError,
   type ContinuousSave,
   type DesignHome,
   type HomeWriteOutcome,
@@ -50,6 +51,7 @@ import {
 } from "../generated/new-design-defaults";
 import {
   browserAppDataStore,
+  BrowserDraftChangedError,
   type BrowserAppDataStore,
   type BrowserAppDataWriteResult,
   type BrowserDraftSummary,
@@ -106,6 +108,8 @@ export interface BrowserDesignSessionController {
   downloadCanopi(): Promise<void>;
   renameDesign(name: string): void;
   revertDesign(): Promise<boolean>;
+  /** Ask how to settle a Draft another browser tab changed, then act on it. */
+  resolveSaveConflict(): Promise<void>;
   listDrafts(): readonly BrowserDraftSummary[];
   openDraft(id: string): Promise<boolean>;
   deleteDraft(id: string): BrowserAppDataWriteResult<null>;
@@ -151,10 +155,16 @@ export function createBrowserDesignSessionController({
     delayMs: saveDelayMs,
   });
 
+  // What this tab last read or wrote for its Draft. Every tab of the Web
+  // Edition shares the same Drafts, so a write checks that no other tab has
+  // written the Draft since; `overwrite` is the user's "keep my version".
+  let draftStamp: { id: string; updatedAt: string | null; overwrite: boolean } | null = null;
+
   // Web homes are always browser Design Drafts; a write is one synchronous
   // localStorage record update, so a page-hide flush completes before unload.
   function writeDraftHome(home: DesignHome): HomeWriteOutcome {
     if (home.kind !== "draft") throw new Error("Web Designs live in browser Drafts");
+    const stamp = draftStamp?.id === home.id ? draftStamp : null;
     persistence.beginBrowserDraft().executeImmediately(
       prepareSynchronousDesignWriteDestination({
         resource: "browser-app-data:drafts",
@@ -163,8 +173,15 @@ export function createBrowserDesignSessionController({
             id: home.id,
             file: content,
             now: now().toISOString(),
+            expectedUpdatedAt: stamp && !stamp.overwrite ? stamp.updatedAt : undefined,
           });
-          if (!result.ok) throw new BrowserDraftStorageError(result);
+          if (!result.ok) {
+            if (result.error instanceof BrowserDraftChangedError) {
+              throw new DesignHomeConflictError(false);
+            }
+            throw new BrowserDraftStorageError(result);
+          }
+          draftStamp = { id: home.id, updatedAt: result.value.updatedAt, overwrite: false };
           return undefined;
         },
       }),
@@ -172,16 +189,22 @@ export function createBrowserDesignSessionController({
     return { kind: "written" };
   }
 
+  function storedDraftUpdatedAt(id: string): string | null {
+    return appDataStore.listDrafts().find((draft) => draft.id === id)?.updatedAt ?? null;
+  }
+
   function draftReplacement(
     input: Omit<ResolvedDesignReplacement, "path" | "finalizationIdentity" | "onDesignFinalized">,
     draftId: string,
     writePending: boolean,
+    draftUpdatedAt: string | null = null,
   ): ResolvedDesignReplacement {
     return {
       ...input,
       path: null,
       finalizationIdentity: `browser-draft:${draftId}:${writePending}`,
       onDesignFinalized: () => {
+        draftStamp = { id: draftId, updatedAt: draftUpdatedAt, overwrite: false };
         continuousSave.beginSession({ draftId, fingerprint: null, writePending });
       },
     };
@@ -235,11 +258,10 @@ export function createBrowserDesignSessionController({
     for (;;) {
       if (await continuousSave.flush()) return intent === replacementIntent;
       if (intent !== replacementIntent) return false;
-      const choice = await requestSaveDecision({
-        kind: "flush-failed",
-        purpose: "replace",
-        conflict: false,
-      });
+      const conflict = continuousSave.conflict.peek() !== null;
+      const choice = await requestSaveDecision(conflict
+        ? { kind: "flush-failed", purpose: "replace", conflict, where: "another-tab" }
+        : { kind: "flush-failed", purpose: "replace", conflict });
       if (intent !== replacementIntent) return false;
       if (choice === "discard") return true;
       if (choice === "cancel") return false;
@@ -381,8 +403,31 @@ export function createBrowserDesignSessionController({
       file: snapshot,
       kind: "loaded",
       name: snapshot.name || "Untitled",
-    }, home.id, true));
+    }, home.id, true, draftStamp?.id === home.id ? draftStamp.updatedAt : null));
     return true;
+  }
+
+  async function resolveSaveConflict(): Promise<void> {
+    const token = continuousSave.sessionToken();
+    const home = continuousSave.readHome();
+    if (!continuousSave.conflict.peek() || !token || home?.kind !== "draft") return;
+    const intent = replacementIntent;
+    const choice = await requestSaveDecision({
+      kind: "conflict",
+      fileGone: false,
+      where: "another-tab",
+    });
+    // The answer belongs to the Design that asked; a replacement during the dialog voids it.
+    if (continuousSave.sessionToken() !== token || replacementIntent !== intent) return;
+    if (choice === "keep-mine") {
+      draftStamp = { id: home.id, updatedAt: null, overwrite: true };
+      await continuousSave.overwriteHome(token);
+      return;
+    }
+    if (choice === "use-file") {
+      replacementIntent += 1;
+      applyDraft(home.id);
+    }
   }
 
   function applyDraft(id: string): boolean {
@@ -392,7 +437,7 @@ export function createBrowserDesignSessionController({
       file: draft,
       kind: "loaded",
       name: draft.name || "Untitled",
-    }, id, false));
+    }, id, false, storedDraftUpdatedAt(id)));
     return true;
   }
 
@@ -512,6 +557,7 @@ export function createBrowserDesignSessionController({
     downloadCanopi,
     renameDesign,
     revertDesign,
+    resolveSaveConflict,
     listDrafts: () => appDataStore.listDrafts(),
     openDraft,
     deleteDraft,
