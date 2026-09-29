@@ -1,0 +1,232 @@
+// Phase 0 of canvas v2 (the refactor that must change nothing): steps 2-6 of the phase-0 live
+// check (docs/plans/canvas-v2-plan.md section 4) on the base fixture, with real input in
+// Chromium and WebKit. The baselines were recorded on the pre-0A commit in the pinned image:
+// they are the phase-0 Web reference. Each step opens the fixture afresh, so a failure names
+// the one step that broke; DOM reads say what broke, screenshots say what it looks like.
+// Screenshots are taken on settled states only, never mid-drag (drafts are compared by eye).
+import { fileURLToPath } from 'node:url'
+import type { Page } from '@playwright/test'
+import { expect, test } from '../support/offline'
+
+const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
+/** Empty map, away from every object and chrome of the fixture's opening camera. */
+const NEUTRAL = { x: 800, y: 450 }
+/** A point on the left edge of the fixture's rectangle zone (14 m x 8 m) at the opening camera. */
+const RECT_ZONE_EDGE = { x: 362, y: 300 }
+const RECT_ZONE_CHIP = 'Rectangle zone · 112 m² · 44 m'
+/** The Apple (Malus domestica) inside the rectangle zone, at the opening camera. */
+const APPLE = { x: 425, y: 273 }
+
+async function openBaseFixture(page: Page): Promise<void> {
+  await page.goto('')
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: /Open a \.canopi file…/ }).first().click(),
+  ])
+  await chooser.setFiles(FIXTURE)
+  await expect(page.getByRole('application', { name: 'Design map' })).toBeVisible()
+  await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+  // The opening camera frames the Design.
+  await expect(scaleChip(page)).toHaveText('1:240')
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+}
+
+function tool(page: Page, name: string) {
+  return page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name, exact: true })
+}
+
+function scaleChip(page: Page) {
+  return page.getByRole('group', { name: 'Zoom' }).getByRole('button', { name: /^Map scale/ })
+}
+
+function selection(page: Page) {
+  return page.getByRole('group', { name: 'Selection' })
+}
+
+/** Centres of the selected zone's control points, in page pixels. */
+async function zoneCorners(page: Page): Promise<Array<{ x: number, y: number }>> {
+  const handles = page.getByRole('button', { name: /^Zone control point \d+$/ })
+  const count = await handles.count()
+  if (count === 0) throw new Error('no zone is selected: no "Zone control point" is shown')
+  const corners: Array<{ x: number, y: number }> = []
+  for (let index = 0; index < count; index += 1) {
+    const box = await handles.nth(index).boundingBox()
+    if (!box) throw new Error(`zone control point ${index + 1} has no box`)
+    corners.push({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+  }
+  return corners
+}
+
+async function firstCorner(page: Page): Promise<{ x: number, y: number }> {
+  const [corner] = await zoneCorners(page)
+  if (!corner) throw new Error('no zone control point')
+  return corner
+}
+
+/**
+ * Both engines lay boxes out in 1/64 px units, so a handle centre read from the DOM is off by
+ * up to a few 1/64 px; 1/16 px stays far below the smallest step measured here (10 cm is
+ * 1.57 px at the opening scale).
+ */
+const LAYOUT_TOLERANCE_PX = 1 / 16
+
+function expectPx(actual: number, expected: number, what: string): void {
+  expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(3)} px, expected ${expected.toFixed(3)} px`).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX)
+}
+
+/**
+ * A screenshot once two consecutive captures are identical, for comparing two states of one
+ * run with each other (toHaveScreenshot compares with the baseline instead).
+ */
+async function settledScreenshot(page: Page): Promise<Buffer> {
+  let previous = await page.screenshot({ animations: 'disabled', caret: 'hide' })
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.waitForTimeout(100)
+    const next = await page.screenshot({ animations: 'disabled', caret: 'hide' })
+    if (next.equals(previous)) return next
+    previous = next
+  }
+  throw new Error('the page never settled: consecutive screenshots kept changing for 3 s')
+}
+
+test('step 2: the wheel zooms, and zooming back restores the opening pixels', async ({ page }) => {
+  await openBaseFixture(page)
+  await expect(page).toHaveScreenshot('phase0-02a-opening.png')
+  const opening = await settledScreenshot(page)
+
+  await page.mouse.wheel(0, -300)
+  await expect(scaleChip(page), 'wheel up changes the scale').not.toHaveText('1:240')
+  const zoomed = Number((await scaleChip(page).textContent())?.replace(/^1:/, '').replace(/[^\d]/g, ''))
+  expect(zoomed, 'wheel up zooms in (a smaller scale denominator)').toBeLessThan(240)
+  await expect(page).toHaveScreenshot('phase0-02b-zoomed.png')
+
+  await page.mouse.wheel(0, 300)
+  await expect(scaleChip(page), 'the opposite wheel returns to the opening scale').toHaveText('1:240')
+  const back = await settledScreenshot(page)
+  if (!back.equals(opening)) {
+    await test.info().attach('opening', { body: opening, contentType: 'image/png' })
+    await test.info().attach('back', { body: back, contentType: 'image/png' })
+  }
+  expect(back.equals(opening), 'zooming back gives the opening pixels').toBe(true)
+})
+
+test('step 3: Space and a 200 px left drag pan the map 200 px; objects stay on their ground', async ({ page }) => {
+  await openBaseFixture(page)
+  // The zone's corner handle is the DOM's measure of where the zone is drawn.
+  await page.mouse.click(RECT_ZONE_EDGE.x, RECT_ZONE_EDGE.y)
+  await expect(selection(page).getByRole('status')).toHaveText(RECT_ZONE_CHIP)
+  const before = await firstCorner(page)
+  await page.keyboard.press('Escape')
+  await expect(selection(page), 'Esc in Select clears the selection').toHaveCount(0)
+
+  await page.keyboard.down('Space')
+  await page.mouse.move(500, 620)
+  await page.mouse.down()
+  await page.mouse.move(700, 620, { steps: 10 })
+  await page.mouse.up()
+  await page.keyboard.up('Space')
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expect(scaleChip(page), 'a pan keeps the scale').toHaveText('1:240')
+  await expect(tool(page, 'Undo'), 'panning never edits the Design').toBeDisabled()
+  await expect(selection(page), 'Space-drag pans; it does not marquee-select').toHaveCount(0)
+  await expect(page).toHaveScreenshot('phase0-03-space-pan.png')
+
+  await page.mouse.click(RECT_ZONE_EDGE.x + 200, RECT_ZONE_EDGE.y)
+  await expect(selection(page).getByRole('status'), 'the zone edge is now 200 px right').toHaveText(RECT_ZONE_CHIP)
+  const after = await firstCorner(page)
+  expectPx(after.x - before.x, 200, 'the zone moved with the map, 200 px right')
+  expectPx(after.y - before.y, 0, 'a horizontal drag does not move the map vertically')
+})
+
+test('step 4: right-click on a plant opens the canvas menu with today\'s entries; Esc closes it', async ({ page }) => {
+  await openBaseFixture(page)
+  await page.mouse.click(APPLE.x, APPLE.y, { button: 'right' })
+  const menu = page.getByRole('menu', { name: 'Apple' })
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    /^Cut/, /^Copy/, /^Paste/, /^Duplicate/,
+    /^Select all of this species/, /^Plant color/, /^Plant symbol/, /^Show name/, /^Species details/,
+    /^Add to calendar…/, /^Set unit cost…/,
+    /^Arrange/, /^Rotate…/,
+    /^Lock/, /^Unlock/,
+    /^Delete/,
+  ])
+  await expect(selection(page).getByRole('status'), 'the right-click selects the plant').toHaveText('Apple')
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expect(page).toHaveScreenshot('phase0-04a-context-menu.png')
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu'), 'Esc closes the canvas menu').toHaveCount(0)
+  await expect(page).toHaveScreenshot('phase0-04b-menu-closed.png')
+})
+
+test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc returns to Select and clears', async ({ page }) => {
+  await openBaseFixture(page)
+  await page.mouse.click(NEUTRAL.x, NEUTRAL.y)
+  await page.keyboard.press('p')
+  await expect(tool(page, 'Place plants')).toHaveAttribute('aria-pressed', 'true')
+  // The Design's own species: the Web plant catalog is not part of the job's build.
+  await page.getByRole('region', { name: 'In this Design' }).getByRole('button', { name: 'Apple Malus domestica' }).click()
+  await expect(page.getByRole('region', { name: 'Place plants' }).getByRole('status')).toContainText('Apple')
+
+  await page.mouse.click(680, 420)
+  await expect(tool(page, 'Undo'), 'placing a plant is one Design edit').toBeEnabled()
+  await expect(selection(page).getByRole('status'), 'the placed plant is selected').toHaveText('Apple')
+  await expect(page).toHaveScreenshot('phase0-05a-plant-placed.png')
+
+  await page.keyboard.press('Control+z')
+  await expect(tool(page, 'Undo'), 'Ctrl+Z undid the only edit').toBeDisabled()
+  await expect(tool(page, 'Redo')).toBeEnabled()
+  await expect(selection(page), 'the removed plant is no longer selected').toHaveCount(0)
+  await expect(tool(page, 'Place plants'), 'undo keeps the tool').toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveScreenshot('phase0-05b-plant-undone.png')
+
+  await page.keyboard.press('r')
+  await expect(tool(page, 'Rectangle zone')).toHaveAttribute('aria-pressed', 'true')
+  await page.mouse.move(360, 440)
+  await page.mouse.down()
+  await page.mouse.move(620, 640, { steps: 10 })
+  await page.mouse.up()
+  await expect(selection(page).getByRole('status'), 'the drawn rectangle is selected').toHaveText('Rectangle zone · 192 m² · 56 m')
+  await expect(tool(page, 'Rectangle zone'), 'the tool stays armed after a rectangle').toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveScreenshot('phase0-05c-rect-drawn.png')
+
+  await page.keyboard.press('Escape')
+  await expect(tool(page, 'Select'), 'the first Esc returns to Select').toHaveAttribute('aria-pressed', 'true')
+  await expect(selection(page).getByRole('status'), 'the first Esc keeps the selection').toHaveText('Rectangle zone · 192 m² · 56 m')
+  await expect(page).toHaveScreenshot('phase0-05d-esc-select.png')
+
+  await page.keyboard.press('Escape')
+  await expect(selection(page), 'the second Esc clears the selection').toHaveCount(0)
+  await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveScreenshot('phase0-05e-esc-cleared.png')
+})
+
+test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m', async ({ page }) => {
+  await openBaseFixture(page)
+  await page.mouse.click(RECT_ZONE_EDGE.x, RECT_ZONE_EDGE.y)
+  await expect(selection(page).getByRole('status')).toHaveText(RECT_ZONE_CHIP)
+  await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  const start = await zoneCorners(page)
+  const [c1, c2, , c4] = start
+  if (!c1 || !c2 || !c4) throw new Error('the rectangle zone shows fewer than four control points')
+  // Pixels per metre from the zone itself: its handles span 14 m x 8 m (112 m², the chip).
+  const pxPerMetre = Math.sqrt(Math.abs((c2.x - c1.x) * (c4.y - c1.y)) / 112)
+  await expect(page).toHaveScreenshot('phase0-06a-zone-selected.png')
+
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => (await firstCorner(page)).x - c1.x, 'ArrowRight moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
+  const nudged = await firstCorner(page)
+  // Today's world axes: the camera is north-up, so east is +x on screen and y does not change.
+  expectPx(nudged.x - c1.x, 0.1 * pxPerMetre, 'ArrowRight moves the zone 10 cm east')
+  expectPx(nudged.y - c1.y, 0, 'ArrowRight does not move the zone north or south')
+  await expect(page).toHaveScreenshot('phase0-06b-nudge-10cm.png')
+
+  await page.keyboard.press('Shift+ArrowRight')
+  await expect.poll(async () => (await firstCorner(page)).x - nudged.x, 'Shift+ArrowRight moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
+  const shifted = await firstCorner(page)
+  expectPx(shifted.x - nudged.x, pxPerMetre, 'Shift+ArrowRight moves the zone 1 m east')
+  expectPx(shifted.y - nudged.y, 0, 'Shift+ArrowRight does not move the zone north or south')
+  await expect(selection(page).getByRole('status'), 'nudging keeps the zone selected').toHaveText(RECT_ZONE_CHIP)
+  await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
+})
