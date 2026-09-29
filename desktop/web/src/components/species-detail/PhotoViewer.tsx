@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { t } from '../../i18n'
 import { locale } from '../../app/settings/state'
 import { ButtonTooltip } from '../shared/ButtonTooltip'
@@ -145,22 +145,26 @@ function PhotoAttribution({ photo, linkSources }: { readonly photo: SpeciesPhoto
   )
 }
 
-/** A viewer model over photos whose addresses are known up front (the Web hero image). */
+/**
+ * A viewer model over photos whose addresses are known up front (the Web hero image).
+ * A new list resets the viewer during render, not in a deferred effect: a cached image can
+ * fire `load` before effects run, and a late reset would hide it behind the shimmer.
+ */
 export function usePhotoList(photos: readonly SpeciesPhoto[]): PhotoViewerModel {
   const identity = photos.map(photo => photo.url).join('\n')
-  const [index, setIndex] = useState(0)
-  const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    setIndex(0)
-    setReady(false)
-    setFailed(false)
-  }, [identity])
+  const generation = useRef({ identity, value: 0 })
+  if (generation.current.identity !== identity) {
+    generation.current = { identity, value: generation.current.value + 1 }
+  }
+  const current = generation.current.value
+  const [view, setView] = useState<PhotoListView>(() => freshView(current))
+  const shown = view.generation === current ? view : freshView(current)
+  const { index, ready, failed } = shown
+  const update = (change: Partial<PhotoListView>) =>
+    setView(previous => ({ ...(previous.generation === current ? previous : freshView(current)), ...change }))
   const select = (next: number) => {
     if (next < 0 || next >= photos.length || next === index) return
-    setIndex(next)
-    setReady(false)
-    setFailed(false)
+    update({ index: next, ready: false, failed: false })
   }
   const count = photos.length
   return {
@@ -173,7 +177,18 @@ export function usePhotoList(photos: readonly SpeciesPhoto[]): PhotoViewerModel 
     select,
     next: () => select(count > 1 ? (index + 1) % count : index),
     prev: () => select(count > 1 ? (index - 1 + count) % count : index),
-    loaded: () => setReady(true),
-    errored: () => setFailed(true),
+    loaded: () => update({ ready: true }),
+    errored: () => update({ failed: true }),
   }
+}
+
+interface PhotoListView {
+  readonly generation: number
+  readonly index: number
+  readonly ready: boolean
+  readonly failed: boolean
+}
+
+function freshView(generation: number): PhotoListView {
+  return { generation, index: 0, ready: false, failed: false }
 }
