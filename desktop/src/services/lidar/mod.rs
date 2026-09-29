@@ -2744,6 +2744,93 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// A recovered library that is rebuilt again before anything was retried
+    /// keeps every item: the metas the first recovered open rewrites still
+    /// describe the unpublished items, their member order and their analyses,
+    /// and an original first listed under a generated name keeps that item.
+    #[test]
+    fn a_second_rebuild_before_any_retry_keeps_every_item() {
+        let root = crate::test_scratch::TestScratch::new("lidar-double-rebuild");
+        let lidar = paths::library_root(&root);
+        let mut orchard = single_item_meta(
+            "sha-1",
+            "lyr-1",
+            "Orchard",
+            RasterQuantity::GroundElevation.key(),
+            "m",
+        );
+        orchard.items[0].analyses.push(source_meta::AnalysisMeta {
+            definition_id: "adef-1".into(),
+            analysis_id: "terrain.slope".into(),
+            parameters: serde_json::json!([{"key":"unit","value":{"Choice":"degrees"}}]),
+            outputs: serde_json::json!(["slope"]),
+            created_at: "11".into(),
+            inputs: vec![source_meta::AnalysisInputMeta {
+                input_key: "dem".into(),
+                item_id: "lyr-1".into(),
+            }],
+            items: vec![source_meta::DerivedItemMeta {
+                id: "item-slope".into(),
+                output_key: "slope".into(),
+                quantity: "slope".into(),
+                units: "°".into(),
+                name: Some("Steepness".into()),
+                created_at: "11".into(),
+            }],
+        });
+        write_original(&lidar, "sha-1", Some(&orchard));
+        write_original(&lidar, "0123456789abcdef", None);
+        let catalogue_path = lidar.join(paths::CATALOGUE_FILE);
+        write_catalogue_with_version(&catalogue_path, "20");
+
+        let items_of = |library: &LidarLibrary| -> Vec<(String, String, String)> {
+            library
+                .library_snapshot()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| {
+                    (
+                        item.id.clone(),
+                        item.name.clone().unwrap_or_default(),
+                        item.units.clone(),
+                    )
+                })
+                .collect()
+        };
+        let library = LidarLibrary::open(&root).unwrap();
+        let first = items_of(&library);
+        assert_eq!(first.len(), 3, "{first:?}");
+        drop(library);
+
+        // A second rebuild, before any Retry: the catalogue is older again.
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", catalogue_path.display()));
+        }
+        write_catalogue_with_version(&catalogue_path, "20");
+        let reopened = LidarLibrary::open(&root).unwrap();
+        assert!(
+            matches!(
+                reopened.open_status(),
+                recovery::LibraryOpenStatus::Recovered { .. }
+            ),
+            "{:?}",
+            reopened.open_status()
+        );
+        assert_eq!(items_of(&reopened), first, "no item is lost");
+        assert_eq!(
+            saved_selection(&reopened, "lyr-1"),
+            vec![reopened.inner.paths.source_original("sha-1")]
+        );
+        assert_eq!(
+            reopened.delete_impact("lyr-1").unwrap().dependent_item_ids,
+            vec!["item-slope"],
+            "the analysis over the item survives"
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     /// Member order is the item's source priority and survives the rebuild.
     #[test]
     fn a_rebuilt_item_keeps_its_member_order() {

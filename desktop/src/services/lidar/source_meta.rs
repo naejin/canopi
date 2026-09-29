@@ -8,13 +8,16 @@
 //! defined over it. Everything measured from pixels (COGs, chunks, ranges,
 //! results) is left out and recomputed on demand after a rebuild.
 //!
-//! A meta whose `items` is empty says the original belongs to no published
-//! item; a missing meta says nothing is known, and recovery lists such an
-//! original under a generated name rather than losing it.
+//! An item is recorded while it is published, and also while it is
+//! unpublished with a saved import over managed originals only (a recovered
+//! item waiting for Retry), so a second rebuild before the Retry loses nothing.
+//! A meta whose `items` is empty says the original belongs to no such item; a
+//! missing meta says nothing is known, and recovery lists such an original
+//! under a generated name rather than losing it.
 
 use super::catalogue;
 use super::paths::LidarPaths;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
@@ -29,7 +32,8 @@ pub struct SourceMeta {
     pub original_filename: String,
     pub size_bytes: u64,
     pub imported_at: String,
-    /// Published items this original is a member of, in creation order.
+    /// Items this original is a member of, in creation order: published ones
+    /// and unpublished ones whose saved import names only managed originals.
     pub items: Vec<ItemMeta>,
 }
 
@@ -75,7 +79,7 @@ pub struct DerivedItemMeta {
 }
 
 /// Derive the meta of every recorded original from the catalogue.
-pub fn derive_all(connection: &Connection) -> Result<Vec<SourceMeta>, String> {
+pub fn derive_all(connection: &Connection, paths: &LidarPaths) -> Result<Vec<SourceMeta>, String> {
     let mut metas: BTreeMap<String, SourceMeta> = {
         let mut statement = connection
             .prepare(
@@ -123,20 +127,26 @@ pub fn derive_all(connection: &Connection) -> Result<Vec<SourceMeta>, String> {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     for (id, name, quantity, units, created_at) in layer_rows {
-        let Some(head) = catalogue::head_generation(connection, &id)? else {
-            continue;
+        let members = match catalogue::head_generation(connection, &id)? {
+            Some(head) => {
+                let mut members = Vec::new();
+                for member in catalogue::collection_members(connection, &head.id)? {
+                    let sha256: String = connection
+                        .query_row(
+                            "SELECT source_sha256 FROM lidar_interpretations WHERE id = ?1",
+                            [&member.interpretation_id],
+                            |row| row.get(0),
+                        )
+                        .map_err(|e| format!("Failed to read a member's source: {e}"))?;
+                    members.push(sha256);
+                }
+                members
+            }
+            None => match unpublished_members(connection, paths, &id, &metas)? {
+                Some(members) => members,
+                None => continue,
+            },
         };
-        let mut members = Vec::new();
-        for member in catalogue::collection_members(connection, &head.id)? {
-            let sha256: String = connection
-                .query_row(
-                    "SELECT source_sha256 FROM lidar_interpretations WHERE id = ?1",
-                    [&member.interpretation_id],
-                    |row| row.get(0),
-                )
-                .map_err(|e| format!("Failed to read a member's source: {e}"))?;
-            members.push(sha256);
-        }
         let item = ItemMeta {
             id: id.clone(),
             name,
@@ -157,6 +167,48 @@ pub fn derive_all(connection: &Connection) -> Result<Vec<SourceMeta>, String> {
         }
     }
     Ok(metas.into_values().collect())
+}
+
+/// The member originals of an unpublished item, from its latest saved import
+/// selection, when every selected path is a recorded managed original.
+///
+/// A recovered item waits for Retry in exactly this state; an import still
+/// selecting files outside the library is left out, as before publication.
+fn unpublished_members(
+    connection: &Connection,
+    paths: &LidarPaths,
+    layer_id: &str,
+    recorded: &BTreeMap<String, SourceMeta>,
+) -> Result<Option<Vec<String>>, String> {
+    let request: Option<Option<String>> = connection
+        .query_row(
+            "SELECT request_json FROM lidar_import_jobs WHERE layer_id = ?1
+             ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            [layer_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to read an item's saved import: {e}"))?;
+    let Some(Some(request)) = request else {
+        return Ok(None);
+    };
+    let Ok(selection) = super::parse_import_request(&request) else {
+        return Ok(None);
+    };
+    let mut members = Vec::with_capacity(selection.len());
+    for path in selection {
+        let managed = path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .and_then(|name| name.to_str())
+            .filter(|sha256| recorded.contains_key(*sha256))
+            .filter(|sha256| paths.source_original(sha256) == path);
+        match managed {
+            Some(sha256) => members.push(sha256.to_string()),
+            None => return Ok(None),
+        }
+    }
+    Ok((!members.is_empty()).then_some(members))
 }
 
 fn all_analyses(connection: &Connection) -> Result<Vec<AnalysisMeta>, String> {
@@ -258,7 +310,7 @@ fn analyses_over(item_id: &str, analyses: &[AnalysisMeta]) -> Vec<AnalysisMeta> 
 /// skipped. Returns how many files changed.
 pub fn refresh(connection: &Connection, paths: &LidarPaths) -> Result<usize, String> {
     let mut written = 0;
-    for meta in derive_all(connection)? {
+    for meta in derive_all(connection, paths)? {
         if !paths.source_original(&meta.sha256).is_file() {
             continue;
         }
@@ -444,7 +496,9 @@ mod tests {
             None,
         );
 
-        let metas = derive_all(&connection).unwrap();
+        let scratch = crate::test_scratch::TestScratch::new("canopi-source-meta-derive");
+        let paths = LidarPaths::open(&scratch).unwrap();
+        let metas = derive_all(&connection, &paths).unwrap();
         assert_eq!(metas.len(), 3);
         let second = metas.iter().find(|meta| meta.sha256 == "sha-2").unwrap();
         assert_eq!(second.original_filename, "tile-2.tif");
@@ -464,6 +518,7 @@ mod tests {
         assert_eq!(item.analyses[0].inputs[0].item_id, "lyr-a");
         let other = metas.iter().find(|meta| meta.sha256 == "sha-3").unwrap();
         assert_eq!(other.items[0].analyses.len(), 1);
+        std::fs::remove_dir_all(&scratch).unwrap();
     }
 
     /// Writing is atomic and idempotent, and a meta of another version is not
