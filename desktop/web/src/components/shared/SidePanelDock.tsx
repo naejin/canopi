@@ -89,6 +89,9 @@ function SidePanelResizeHandle({
     commit: (session, event) => {
       onManualResize?.()
       commitSidePanelWidth(resolveSidebarWidth(session, event.clientX))
+      // The setting now drives --side-panel-width; a leftover inline width
+      // would override it and freeze later keyboard or Expand resizes.
+      session.panel.style.width = session.previousInlineWidth
     },
     rollback: (session) => {
       session.panel.style.width = session.previousInlineWidth

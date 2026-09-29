@@ -126,8 +126,12 @@ describe('App sidebar width', () => {
       }))
     })
 
-    expect(panel.style.width).toBe('540px')
     expect(commitSidePanelWidth).toHaveBeenCalledWith(540)
+    // The preview's inline width goes once the setting holds the width, so
+    // later keyboard steps and Calendar's Expand still resize the dock.
+    expect(panel.style.width).toBe('')
+    await act(async () => { sidePanelWidth.value = 540 })
+    expect(panel.getAttribute('style')).toContain('--side-panel-width: 540px')
   })
 
   it('resizes the shared dock from its focused keyboard separator', async () => {
