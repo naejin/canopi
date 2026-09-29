@@ -78,7 +78,10 @@ export function prepareDraftWrite(id: string): PreparedDesignWriteDestination {
  */
 export async function openDesignDialog(): Promise<{ design: LoadedDesign; path: string }> {
   const currentPath = designPath.peek()
-  const defaultDir = currentPath ? currentPath.substring(0, currentPath.lastIndexOf('/') + 1) : undefined
+  // Windows paths separate folders with backslashes.
+  const defaultDir = currentPath
+    ? currentPath.substring(0, Math.max(currentPath.lastIndexOf('/'), currentPath.lastIndexOf('\\')) + 1)
+    : undefined
   const selected = await open({
     defaultPath: defaultDir,
     filters: [{ name: 'Canopi Design', extensions: ['canopi'] }],
