@@ -106,6 +106,18 @@ describe('geographic extent of a view', () => {
     expect(geographicViewOf(frame(18, 800, 600), plane)!.zoom).toBeCloseTo(18, 9)
   })
 
+  it('reads the zoom of a view far from the plane origin at the origin latitude', () => {
+    const farPlane = createSessionPlane({ lon: 13, lat: 23 })
+    const oslo = farPlane.toPlane({ lon: 10.75, lat: 59.91 })
+    const scale = mapZoomToStageScale(17, farPlane.origin.lat)
+    const view = geographicViewOf({
+      viewport: { x: 400 - oslo.x * scale, y: 300 - oslo.y * scale, scale },
+      screenSize: { width: 800, height: 600 },
+    }, farPlane)!
+    expect(view.lat).toBeCloseTo(59.91, 6)
+    expect(view.zoom).toBeCloseTo(17, 9)
+  })
+
   it('fits back into the same screen at the same zoom, and one zoom level closer on a screen twice as big', () => {
     const extent = geographicExtentOf(frame(18, 800, 600), plane)!
     expect(mapZoomToFitExtent(extent, { width: 800, height: 600 })).toBeCloseTo(18, 6)

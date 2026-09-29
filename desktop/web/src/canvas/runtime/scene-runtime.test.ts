@@ -1,5 +1,6 @@
 import type { SceneRendererSnapshot } from './renderers/scene-types'
 import { effect } from '@preact/signals'
+import { stageScaleToMapZoom } from '../projection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../ipc/species', async (importOriginal) => ({
@@ -1035,6 +1036,19 @@ describe('scene canvas runtime', () => {
     expect(runtime.querySurface.sessionPlane.value).toBe(plane)
     expect(runtime.commandSurface.history.canUndo.value).toBe(false)
     expect(runtime.commandSurface.viewport.showPlace({ lon: Number.NaN, lat: 0 }, 17)).toBe(false)
+    runtime.destroy()
+  })
+
+  it('shows a place far from the plane origin at the MapLibre zoom it asked for', () => {
+    const runtime = new SceneCanvasRuntime()
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    const plane = runtime.querySurface.sessionPlane.value!
+    const oslo = { lon: 10.75, lat: plane.origin.lat + 11 }
+
+    expect(runtime.commandSurface.viewport.showPlace(oslo, 17)).toBe(true)
+
+    const scale = runtime.querySurface.viewport.value.viewport.scale
+    expect(stageScaleToMapZoom(scale, plane.origin.lat)).toBeCloseTo(17, 9)
     runtime.destroy()
   })
 

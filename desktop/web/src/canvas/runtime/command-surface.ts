@@ -387,8 +387,11 @@ class SceneCanvasCommandRole implements CanvasCommandSurface {
     options?: { readonly motion?: 'fly' | 'jump' },
   ): boolean {
     if (![place.lon, place.lat, zoom].every(Number.isFinite)) return false
-    const point = this.options.sceneStore.sessionPlane.toPlane(place)
-    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, place.lat), {
+    const plane = this.options.sceneStore.sessionPlane
+    const point = plane.toPlane(place)
+    // Plane metres are Mercator units scaled at the origin latitude, so the
+    // zoom converts there, as the map frame converts it back.
+    this.options.cameraNavigation.centerOn(point, mapZoomToStageScale(zoom, plane.origin.lat), {
       animate: options?.motion === 'fly',
     })
     this.options.invalidate('viewport')

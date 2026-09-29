@@ -64,7 +64,8 @@ export function geographicViewOf(
   plane: SessionPlane,
 ): GeographicView | null {
   const centre = plane.toGeo(viewportCenterWorld(frame.viewport, frame.screenSize))
-  const zoom = stageScaleToMapZoom(frame.viewport.scale, centre.lat)
+  // Plane metres are scaled at the origin latitude, wherever the view is.
+  const zoom = stageScaleToMapZoom(frame.viewport.scale, plane.origin.lat)
   return [centre.lon, centre.lat, zoom].every(Number.isFinite)
     ? { lon: centre.lon, lat: centre.lat, zoom }
     : null
