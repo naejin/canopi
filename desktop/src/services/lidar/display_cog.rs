@@ -538,8 +538,7 @@ impl LidarLibrary {
                 return Err(error);
             }
         };
-        std::fs::File::open(&staged)
-            .and_then(|file| file.sync_all())
+        crate::design::sync_file(&staged)
             .map_err(|e| format!("Failed to sync a display derivative: {e}"))?;
         let bytes = std::fs::metadata(&staged)
             .map(|meta| meta.len())

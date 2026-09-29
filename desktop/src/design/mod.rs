@@ -71,6 +71,17 @@ pub(crate) fn write_file_durably(path: &Path, bytes: &[u8], role: &str) -> std::
     result
 }
 
+/// Flush an existing file's contents to stable storage. Windows flushes only
+/// through a handle opened for writing (FlushFileBuffers needs write access),
+/// so a read-only handle fails there with "Access is denied"; the handle is
+/// opened for writing without truncating or changing the file.
+pub(crate) fn sync_file(path: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)?
+        .sync_all()
+}
+
 #[cfg(unix)]
 pub(crate) fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
     let parent = path
@@ -427,6 +438,16 @@ mod tests {
 
         let _ = fs::remove_file(&dest);
         let _ = fs::remove_file(&old);
+    }
+
+    #[test]
+    fn syncing_a_published_file_leaves_its_bytes_and_length_unchanged() {
+        let root = unique_root("sync_file");
+        let path = root.join("asset.tif");
+        std::fs::write(&path, b"published bytes").unwrap();
+        super::sync_file(&path).expect("a written file can be synced");
+        assert_eq!(std::fs::read(&path).unwrap(), b"published bytes");
+        assert!(super::sync_file(&root.join("missing.tif")).is_err());
     }
 
     #[test]

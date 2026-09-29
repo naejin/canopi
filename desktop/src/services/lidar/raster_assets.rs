@@ -154,8 +154,7 @@ pub(super) fn write_job_source_cog(
 /// this a crash could leave that row pointing at a truncated asset, which the
 /// sweep never removes because it is referenced.
 pub(super) fn sync_published_asset(path: &Path) -> Result<(), String> {
-    std::fs::File::open(path)
-        .and_then(|file| file.sync_all())
+    crate::design::sync_file(path)
         .and_then(|()| crate::design::sync_parent_directory(path))
         .map_err(|e| format!("Failed to sync a published raster asset: {e}"))
 }
