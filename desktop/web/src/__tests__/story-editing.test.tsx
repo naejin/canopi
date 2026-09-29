@@ -221,6 +221,58 @@ describe('the rich text editor', () => {
     expect(empty.defaultPrevented).toBe(false)
   })
 
+  function dropAt(surface: HTMLElement, node: Node, offset: number, text: string): DragEvent {
+    const point = document.createRange()
+    point.setStart(node, offset)
+    point.collapse(true)
+    Object.defineProperty(document, 'caretRangeFromPoint', { value: () => point.cloneRange(), configurable: true })
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: { getData: (type: string) => type === 'text/plain' ? text : '' } })
+    surface.dispatchEvent(drop)
+    return drop
+  }
+
+  function select(node: Text, start: number, end: number): void {
+    const range = document.createRange()
+    range.setStart(node, start)
+    range.setEnd(node, end)
+    document.getSelection()!.removeAllRanges()
+    document.getSelection()!.addRange(range)
+  }
+
+  it('drops outside text at the drop point and keeps the selected text', async () => {
+    const { onChange, surface } = await mount([
+      { kind: 'paragraph', spans: [span('An orchard here')] },
+      { kind: 'paragraph', spans: [span('Last line')] },
+    ])
+    const [first, second] = [...surface.querySelectorAll('p')].map((p) => p.firstChild as Text)
+    select(first!, 3, 10)
+    let drop!: DragEvent
+    await act(async () => { drop = dropAt(surface, second!, 9, ' snippet') })
+    expect(drop.defaultPrevented).toBe(true)
+    expect(onChange).toHaveBeenLastCalledWith([
+      { kind: 'paragraph', spans: [span('An orchard here')] },
+      { kind: 'paragraph', spans: [span('Last line snippet')] },
+    ])
+    delete (document as { caretRangeFromPoint?: unknown }).caretRangeFromPoint
+  })
+
+  it('moves text dragged within the editor to the drop point', async () => {
+    const { onChange, surface } = await mount([
+      { kind: 'paragraph', spans: [span('An orchard here')] },
+      { kind: 'paragraph', spans: [span('Last line')] },
+    ])
+    const [first, second] = [...surface.querySelectorAll('p')].map((p) => p.firstChild as Text)
+    select(first!, 2, 10)
+    surface.dispatchEvent(new Event('dragstart', { bubbles: true }))
+    await act(async () => { dropAt(surface, second!, 9, ' orchard') })
+    expect(onChange).toHaveBeenLastCalledWith([
+      { kind: 'paragraph', spans: [span('An here')] },
+      { kind: 'paragraph', spans: [span('Last line orchard')] },
+    ])
+    delete (document as { caretRangeFromPoint?: unknown }).caretRangeFromPoint
+  })
+
   it('shows new text given from outside, but not its own report back', async () => {
     const { surface } = await mount()
     await act(async () => {

@@ -17,7 +17,7 @@ import styles from './RichTextEditor.module.css'
 // A small editor over `RichTextBlock`: paragraphs, bullets, bold, italic and
 // links, on a `contenteditable` element. The DOM is read back into blocks on
 // every input, so nothing but the block model is ever stored. Paste and drop
-// are read into blocks first (never inserted as HTML), and the editor is
+// (at the drop point) are read into blocks first (never inserted as HTML), and the editor is
 // rebuilt from the blocks it was given only when they differ from what it
 // last reported, so typing never loses the caret.
 
@@ -34,6 +34,8 @@ export function RichTextEditor({ value, onChange, label, placeholder, trailingTo
   const root = useRef<HTMLDivElement>(null)
   const reported = useRef<readonly RichTextBlock[] | null>(null)
   const savedRange = useRef<Range | null>(null)
+  /** Text being dragged from inside the editor, removed when it is dropped here. */
+  const dragged = useRef<Range | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [empty, setEmpty] = useState(value.length === 0)
 
@@ -56,12 +58,15 @@ export function RichTextEditor({ value, onChange, label, placeholder, trailingTo
     onChange(blocks)
   }
 
-  function insert(blocks: RichTextBlock[]): void {
+  /**
+   * Inserts blocks at `range`. A paste replaces the selection; a drop lands at
+   * the drop point and removes only the text it moved from inside the editor.
+   */
+  function insert(blocks: RichTextBlock[], range: Range, moved: Range | null = null): void {
     const element = root.current
     if (!element || blocks.length === 0) return
-    const range = selectionRangeIn(element) ?? endRange(element)
-    range.deleteContents()
     range.insertNode(element.ownerDocument.createTextNode(CARET))
+    moved?.deleteContents()
     const merged = insertAtCaret(richTextFromDom(element, { preserveSpaces: true }), blocks)
     renderRichTextInto(element, merged)
     placeCaret(element)
@@ -70,18 +75,34 @@ export function RichTextEditor({ value, onChange, label, placeholder, trailingTo
 
   function onPaste(event: ClipboardEvent): void {
     const data = event.clipboardData
-    if (!data) return
+    const element = root.current
+    if (!data || !element) return
     event.preventDefault()
     const html = data.getData('text/html')
-    insert(html ? richTextFromHtml(html) : richTextFromPlainText(data.getData('text/plain')))
+    const range = selectionRangeIn(element) ?? endRange(element)
+    range.deleteContents()
+    insert(html ? richTextFromHtml(html) : richTextFromPlainText(data.getData('text/plain')), range)
+  }
+
+  function onDragStart(): void {
+    const element = root.current
+    const range = element ? selectionRangeIn(element) : null
+    dragged.current = range && !range.collapsed ? range : null
   }
 
   function onDrop(event: DragEvent): void {
     const data = event.dataTransfer
-    if (!data) return
+    const element = root.current
+    if (!data || !element) return
     event.preventDefault()
+    const moved = dragged.current
+    dragged.current = null
     const html = data.getData('text/html')
-    insert(html ? richTextFromHtml(html) : richTextFromPlainText(data.getData('text/plain')))
+    const blocks = html ? richTextFromHtml(html) : richTextFromPlainText(data.getData('text/plain'))
+    const point = dropRangeIn(element, event) ?? endRange(element)
+    // Text dropped back onto itself stays where it is.
+    if (moved && moved.comparePoint(point.startContainer, point.startOffset) === 0) return
+    insert(blocks, point, moved)
   }
 
   function format(command: 'bold' | 'italic' | 'insertUnorderedList'): void {
@@ -146,6 +167,8 @@ export function RichTextEditor({ value, onChange, label, placeholder, trailingTo
         onInput={report}
         onBlur={report}
         onPaste={onPaste}
+        onDragStart={onDragStart}
+        onDragEnd={() => { dragged.current = null }}
         onDrop={onDrop}
       />
     </div>
@@ -227,6 +250,27 @@ function selectionRangeIn(element: HTMLElement): Range | null {
   if (!selection || selection.rangeCount === 0) return null
   const range = selection.getRangeAt(0)
   return element.contains(range.commonAncestorContainer) ? range.cloneRange() : null
+}
+
+/** The collapsed caret position under the drop point, when it lies in the editor. */
+function dropRangeIn(element: HTMLElement, event: DragEvent): Range | null {
+  const document = element.ownerDocument as Document & {
+    caretRangeFromPoint?(x: number, y: number): Range | null
+    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null
+  }
+  let range: Range | null = null
+  if (typeof document.caretPositionFromPoint === 'function') {
+    const position = document.caretPositionFromPoint(event.clientX, event.clientY)
+    if (position) {
+      range = document.createRange()
+      range.setStart(position.offsetNode, position.offset)
+    }
+  } else if (typeof document.caretRangeFromPoint === 'function') {
+    range = document.caretRangeFromPoint(event.clientX, event.clientY)
+  }
+  if (!range || !element.contains(range.startContainer)) return null
+  range.collapse(true)
+  return range
 }
 
 function endRange(element: HTMLElement): Range {
