@@ -8,6 +8,15 @@ import { test as base, expect, type ConsoleMessage } from '@playwright/test'
 export const APP_ORIGIN = 'http://localhost:4174'
 
 /**
+ * The Web plant catalog (public/canopi-catalog/, git-ignored) is generated from canopi-core.db
+ * by `npm run generate:web-catalog` and packaged separately, so the job's `npm run build:web`
+ * has none. A checkout that has generated it would copy it into dist-web, and the Place plants
+ * card would then start DuckDB-WASM, whose worker comes from a CDN this file aborts. Every
+ * checkout answers as the job does: the catalog is missing.
+ */
+const WEB_CATALOG = `${APP_ORIGIN}/app/canopi-catalog/`
+
+/**
  * Console errors a scenario allows. Anything else logged as an error, and every uncaught
  * page error, fails the test.
  */
@@ -22,13 +31,11 @@ function isAllowedConsoleError(message: ConsoleMessage, aborted: ReadonlySet<str
   // "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"); its location is the aborted
   // URL, so the line is caused only by the offline rule.
   if (text.startsWith('Failed to load resource:') && aborted.has(source)) return true
-  // Not the network: the Web plant catalog (public/canopi-catalog/, git-ignored) is generated
-  // from canopi-core.db by `npm run generate:web-catalog` and packaged separately, so
-  // `npm run build:web` (the job's build) has none and its manifest answers 404. The Place
-  // plants card asks for it; "In this Design" still lists the Design's species without it.
+  // The Web plant catalog's manifest, answered 404 below (WEB_CATALOG). The Place plants card
+  // asks for it; "In this Design" still lists the Design's species without it.
   if (
     text === 'Failed to load resource: the server responded with a status of 404 (Not Found)'
-    && source === `${APP_ORIGIN}/app/canopi-catalog/manifest.json`
+    && source === `${WEB_CATALOG}manifest.json`
   ) return true
   return false
 }
@@ -39,6 +46,7 @@ export const test = base.extend<{ networkRule: void }>({
     const aborted = new Set<string>()
     await context.route('**/*', (route) => {
       const url = route.request().url()
+      if (url.startsWith(WEB_CATALOG)) return route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' })
       if (new URL(url).origin === APP_ORIGIN) return route.continue()
       aborted.add(url)
       return route.abort('internetdisconnected')

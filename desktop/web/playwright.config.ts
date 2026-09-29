@@ -3,6 +3,9 @@
 // and driven in Chromium (stands in for WebView2) and WebKit (stands in for WKWebView).
 // Baselines are made only in the pinned image mcr.microsoft.com/playwright:v1.63.0-noble,
 // the CI job's container; screenshots from the host's own browsers are never committed.
+// After recording, run the suite in that image on fewer cores than the hosted runner's four
+// (`docker run --cpus=2 … npx playwright test e2e/canvas --repeat-each=3`): a screenshot of a
+// state that a timer is still due to change passes on a fast workstation and fails there.
 import { defineConfig } from '@playwright/test'
 
 const PORT = 4174
@@ -16,7 +19,13 @@ export default defineConfig({
   // The same on a workstation as on the hosted runner (four cores); a spec file's tests run in order.
   workers: 2,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  // Measured in the pinned image limited to four cores (the hosted runner's size), the base
+  // scenario takes about 25 s, near Playwright's default 30 s; on two cores a screenshot can
+  // take more than the default 5 s to settle, and so can the PDF preview. These limits only
+  // bound how long a check waits; they never change what passes.
+  timeout: 180_000,
   expect: {
+    timeout: 20_000,
     toHaveScreenshot: {
       // Playwright's default comparison, not loosened: no pixel budget (maxDiffPixels 0) and
       // the default per-pixel colour threshold; the pinned image makes the pixels reproducible.
