@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals'
+import { computed, effect, signal } from '@preact/signals'
 import { designSessionStore } from '../document-session/store'
 import { currentCanvasQuerySurface } from '../../canvas/session'
 
@@ -6,6 +6,10 @@ import { currentCanvasQuerySurface } from '../../canvas/session'
  * New-Design guidance, per Design session: "Where is your site?" while an
  * empty Draft has not been placed, then a "Start your Design" card and a
  * chip naming the place that was found. Nothing here is Design state.
+ *
+ * The question is settled once per session: locate, Skip or the first object
+ * closes it, so a Design emptied later (select all, Delete) keeps its tool
+ * rail and Undo. Only "Search again" asks it again.
  */
 interface SiteOnboardingSession {
   readonly identity: object
@@ -28,7 +32,7 @@ function update(next: Omit<SiteOnboardingSession, 'identity'>): void {
   session.value = { identity: designSessionStore.sessionIdentity.peek(), ...next }
 }
 
-/** An empty Draft (never saved to a file) whose site has not been searched yet. */
+/** An empty Draft (never saved to a file) whose site is not settled yet. */
 export const siteLocateOpen = computed(() => {
   const queries = currentCanvasQuerySurface.value
   if (designSessionStore.currentDesign.value === null || !queries) return false
@@ -38,6 +42,18 @@ export const siteLocateOpen = computed(() => {
   void queries.revision.scene.value
   return queries.getScenePhysicalExtentMeters() === null
 })
+
+// The first object settles the question for a session that has no answer yet
+// (every record is an answer or a "Search again"). A computed may not write.
+const disposeFirstObjectLatch = effect(() => {
+  const queries = currentCanvasQuerySurface.value
+  if (!queries || currentSession()) return
+  void queries.revision.scene.value
+  if (queries.getScenePhysicalExtentMeters() === null) return
+  update({ locateDone: true, locateRequested: false, startCardOpen: false, placeLabel: null })
+})
+
+if (import.meta.hot) import.meta.hot.dispose(disposeFirstObjectLatch)
 
 export const startDesignCardOpen = computed(() => currentSession()?.startCardOpen ?? false)
 

@@ -1,0 +1,147 @@
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { WorkspaceRuntimeComposition } from '../app/canvas-map-surface/workspace-runtime-composition'
+import { encodeCanopiDesign } from '../app/contracts/canopi-design-wire'
+import { createDesignSessionStoreTestFixture, designSessionStore } from '../app/document-session/store'
+import { currentCanvasSession } from '../canvas/session'
+import { CURRENT_CANOPI_FILE_VERSION } from '../generated/canopi-design-format'
+import type { CanopiFile } from '../types/design'
+import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
+import { createBrowserCanvasRuntimeAppAdapter } from '../web/browser-canvas-runtime'
+import { createBrowserDesignSessionController } from '../web/browser-design-session'
+import { disposeWebCanvasShortcuts, installWebCanvasShortcuts } from '../web/canvas-shortcuts'
+import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
+import { geoAt } from './support/geo-design'
+import { createLiveTestCanvasRuntimeHost } from './support/live-canvas-runtime'
+
+/**
+ * canopi-28w8 on the Web Edition: the Web workspace with its real floating
+ * chrome, Draft session and keyboard routing over a live Scene runtime (the
+ * map itself is left out; it plays no part in the prompt or in history).
+ */
+describe('Where is your site? and Undo on the Web Edition', () => {
+  let container: HTMLDivElement
+
+  afterEach(async () => {
+    // Unmounting the workspace releases the runtime through the composition.
+    await act(async () => {
+      render(null, container)
+      await flushMicrotasks()
+    })
+    container.remove()
+    disposeWebCanvasShortcuts()
+    createDesignSessionStoreTestFixture(designSessionStore).reset()
+  })
+
+  it('select all, delete, Ctrl+Z restores every object on the Web edition', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const host = createLiveTestCanvasRuntimeHost({ appAdapter: createBrowserCanvasRuntimeAppAdapter() })
+    const composition: WorkspaceRuntimeComposition = {
+      surfaces: host.surfaces,
+      start: async () => 'shared-ready',
+      dispose: () => host.destroy(),
+    }
+    const controller = createBrowserDesignSessionController({
+      appDataStore: createBrowserAppDataStore({ storage: memoryStorage() }),
+      fileAdapter: {
+        openCanopiFile: async () => ({ fileName: 'orchard.canopi', text: JSON.stringify(encodeCanopiDesign(orchard())) }),
+        downloadCanopiFile: async () => undefined,
+      },
+      now: () => new Date('2026-09-29T12:00:00.000Z'),
+    })
+    installWebCanvasShortcuts()
+
+    await act(async () => {
+      render(<WebCanvasWorkspace controller={controller} createRuntimeComposition={() => composition} />, container)
+      await flushMicrotasks()
+    })
+    await flushMicrotasks()
+    expect(currentCanvasSession.value).toBe(host.surfaces)
+
+    // Open Design… from the start screen: the orchard opens as a Draft.
+    await act(async () => {
+      await controller.openCanopi()
+    })
+    const { queries } = host.surfaces
+    const opened = queries.getSceneSnapshot()
+    expect(designSessionStore.designPath.value).toBeNull()
+    expect(opened.plants).toHaveLength(3)
+    expect(opened.zones).toHaveLength(1)
+    expect(opened.annotations).toHaveLength(1)
+    expect(undoButton()).not.toBeNull()
+
+    await press({ key: 'a', ctrlKey: true })
+    await press({ key: 'Delete' })
+
+    const emptied = queries.getSceneSnapshot()
+    expect([emptied.plants, emptied.zones, emptied.annotations].flat()).toEqual([])
+    expect(container.querySelector('[data-site-locate]')).toBeNull()
+    expect(undoButton()).not.toBeNull()
+    expect(undoButton()!.getAttribute('aria-disabled')).toBeNull()
+
+    await press({ key: 'z', ctrlKey: true })
+
+    const restored = queries.getSceneSnapshot()
+    expect(restored.plants).toEqual(opened.plants)
+    expect(restored.zones).toEqual(opened.zones)
+    expect(restored.annotations).toEqual(opened.annotations)
+  })
+
+  function undoButton(): HTMLButtonElement | null {
+    return container.querySelector<HTMLButtonElement>('[data-command="edit.undo"]')
+  }
+})
+
+/** A key pressed wherever focus is, as the browser delivers it. */
+async function press(init: KeyboardEventInit): Promise<void> {
+  await act(async () => {
+    const target = document.activeElement ?? document.body
+    target.dispatchEvent(new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true }))
+    await flushMicrotasks()
+  })
+}
+
+async function flushMicrotasks(): Promise<void> {
+  for (let index = 0; index < 20; index += 1) await Promise.resolve()
+}
+
+function memoryStorage(): BrowserStorageAdapter {
+  const values = new Map<string, string>()
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { values.set(key, value) },
+    removeItem: (key) => { values.delete(key) },
+  }
+}
+
+function orchard(): CanopiFile {
+  const plant = (id: string, x: number, y: number): CanopiFile['plants'][number] => ({
+    id, locked: false, canonical_name: 'Malus domestica', common_name: 'Apple', color: null,
+    position: geoAt(x, y), rotation: null, scale: null, notes: null, planted_date: null, quantity: 1,
+  })
+  return {
+    version: CURRENT_CANOPI_FILE_VERSION,
+    name: 'Orchard',
+    description: null,
+    plant_species_colors: {},
+    layers: [],
+    plants: [plant('apple-1', 0, 0), plant('apple-2', 6, 0), plant('apple-3', 12, 0)],
+    zones: [{
+      id: 'bed', name: 'Bed', zone_type: 'ellipse', points: [geoAt(-4, -4), geoAt(16, 4)],
+      rotation: 0, fill_color: null, notes: null, locked: false,
+    }],
+    annotations: [{
+      id: 'note', annotation_type: 'text', position: geoAt(0, 8), text: 'Mulch in spring',
+      font_size: 16, rotation: null, locked: false,
+    }],
+    consortiums: [],
+    groups: [],
+    timeline: [],
+    budget: [],
+    budget_currency: 'EUR',
+    created_at: '2026-09-29T00:00:00.000Z',
+    updated_at: '2026-09-29T00:00:00.000Z',
+  }
+}
