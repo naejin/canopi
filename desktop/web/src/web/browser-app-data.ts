@@ -39,6 +39,16 @@ interface BrowserDraftsRecord {
   readonly version: 2;
   readonly drafts: readonly BrowserDraftSummary[];
   readonly draftFiles: Record<string, CanopiFile>;
+  /**
+   * Drafts this Canopi refuses to open (an older or damaged Design), kept as
+   * their stored values so a write of another Draft never erases them.
+   */
+  readonly refused: RefusedDrafts;
+}
+
+interface RefusedDrafts {
+  readonly summaries: readonly unknown[];
+  readonly files: Record<string, unknown>;
 }
 
 interface BrowserSettingsRecord {
@@ -170,6 +180,7 @@ export function createBrowserAppDataStore({
                 ...current.draftFiles,
                 [summary.id]: file,
               },
+              refused: withoutRefusedDraft(current.refused, summary.id),
             },
             value: summary,
           };
@@ -198,6 +209,7 @@ export function createBrowserAppDataStore({
               version: RECORD_VERSION,
               drafts: current.drafts.filter((draft) => draft.id !== id),
               draftFiles,
+              refused: withoutRefusedDraft(current.refused, id),
             },
             value: null,
           };
@@ -317,16 +329,23 @@ function isSupportedStampsRecord(value: unknown): boolean {
 
 function normalizeDraftsRecord(value: unknown): BrowserDraftsRecord {
   if (!isV2Record(value)) return emptyDraftsRecord();
-  const draftFiles = decodeDraftFiles(value.draftFiles);
+  const { decoded: draftFiles, refused: refusedFiles } = decodeDraftFiles(value.draftFiles);
   const validDraftIds = new Set(Object.keys(draftFiles));
+  const summaries: readonly unknown[] = Array.isArray(value.drafts) ? value.drafts : [];
   return {
     version: RECORD_VERSION,
-    drafts: Array.isArray(value.drafts)
-      ? value.drafts.filter((draft): draft is BrowserDraftSummary => (
-        isDraftSummary(draft) && validDraftIds.has(draft.id)
-      ))
-      : [],
+    drafts: summaries.filter((draft): draft is BrowserDraftSummary => (
+      isDraftSummary(draft) && validDraftIds.has(draft.id)
+    )),
     draftFiles,
+    refused: {
+      summaries: summaries.filter((draft) => (
+        isRecord(draft)
+        && typeof draft.id === "string"
+        && Object.prototype.hasOwnProperty.call(refusedFiles, draft.id)
+      )),
+      files: refusedFiles,
+    },
   };
 }
 
@@ -362,7 +381,7 @@ function normalizeStampsRecord(value: unknown): BrowserSavedObjectStampsRecord {
 }
 
 function emptyDraftsRecord(): BrowserDraftsRecord {
-  return { version: RECORD_VERSION, drafts: [], draftFiles: {} };
+  return { version: RECORD_VERSION, drafts: [], draftFiles: {}, refused: { summaries: [], files: {} } };
 }
 
 function emptySettingsRecord(): BrowserSettingsRecord {
@@ -387,34 +406,54 @@ function isV2Record(value: unknown): value is Record<string, unknown> & { versio
 
 function encodeDraftsRecord(record: BrowserDraftsRecord): unknown {
   const draftFiles: Record<string, unknown> = {};
-  for (const [id, file] of Object.entries(record.draftFiles)) {
-    Object.defineProperty(draftFiles, id, {
-      configurable: true,
-      enumerable: true,
-      value: encodeCanopiDesign(file),
-      writable: true,
-    });
+  for (const [id, file] of Object.entries(record.refused.files)) {
+    defineOwn(draftFiles, id, file);
   }
-  return { ...record, draftFiles };
+  for (const [id, file] of Object.entries(record.draftFiles)) {
+    defineOwn(draftFiles, id, encodeCanopiDesign(file));
+  }
+  return {
+    version: record.version,
+    drafts: [...record.drafts, ...record.refused.summaries],
+    draftFiles,
+  };
 }
 
-function decodeDraftFiles(value: unknown): Record<string, CanopiFile> {
-  if (!isRecord(value)) return {};
+function withoutRefusedDraft(refused: RefusedDrafts, id: string): RefusedDrafts {
+  if (!Object.prototype.hasOwnProperty.call(refused.files, id)) return refused;
+  const { [id]: _removed, ...files } = refused.files;
+  return {
+    summaries: refused.summaries.filter((draft) => !isRecord(draft) || draft.id !== id),
+    files,
+  };
+}
+
+function decodeDraftFiles(value: unknown): {
+  decoded: Record<string, CanopiFile>;
+  refused: Record<string, unknown>;
+} {
   const decoded: Record<string, CanopiFile> = {};
+  const refused: Record<string, unknown> = {};
+  if (!isRecord(value)) return { decoded, refused };
   for (const [id, rawFile] of Object.entries(value)) {
     try {
-      Object.defineProperty(decoded, id, {
-        configurable: true,
-        enumerable: true,
-        value: decodeCanopiDesign(rawFile),
-        writable: true,
-      });
+      defineOwn(decoded, id, decodeCanopiDesign(rawFile));
     } catch {
-      // A corrupt Draft is local convenience data; omit it without poisoning
-      // settings, Species data, stamps, or other independently valid Drafts.
+      // An older or damaged Draft does not open and is not listed, but its
+      // stored value is kept: it is the user's Design, not ours to erase.
+      defineOwn(refused, id, rawFile);
     }
   }
-  return decoded;
+  return { decoded, refused };
+}
+
+function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 function isDraftSummary(value: unknown): value is BrowserDraftSummary {

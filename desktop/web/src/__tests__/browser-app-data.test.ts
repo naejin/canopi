@@ -177,6 +177,38 @@ describe('browser app data store', () => {
     expect(store.loadDraft(saved.value.id)?.name).toBe('Safe Draft')
   })
 
+  it('keeps the stored bytes of Drafts it cannot open when another Draft is saved or deleted', () => {
+    const storage = memoryStorage()
+    // The released Web Edition stored Drafts as in-memory files at version 6
+    // with a root `extra`; this Canopi refuses them but must not erase them.
+    const olderDraft = { ...makeDesign({ name: 'Orchard' }), version: 6, extra: {}, spatial_frame: null }
+    const damagedDraft = { ...makeDesign({ name: 'Pond' }), plants: 'not-an-array' }
+    const olderSummary = { id: 'orchard', name: 'Orchard', updatedAt: '2026-07-04T12:00:00.000Z' }
+    const damagedSummary = { id: 'pond', name: 'Pond', updatedAt: '2026-07-04T11:00:00.000Z' }
+    storage.values.set(V2_KEYS.drafts, JSON.stringify({
+      version: 2,
+      drafts: [olderSummary, damagedSummary],
+      draftFiles: { orchard: olderDraft, pond: damagedDraft },
+    }))
+    const store = createBrowserAppDataStore({ storage })
+    expect(store.listDrafts()).toEqual([])
+
+    const saved = store.saveDraft({ id: 'new', file: makeDesign({ name: 'New' }), now: '2026-07-05T12:00:00.000Z' })
+    expect(saved.ok).toBe(true)
+    expect(store.deleteDraft('new').ok).toBe(true)
+    expect(store.saveDraft({ id: 'next', file: makeDesign({ name: 'Next' }), now: '2026-07-05T13:00:00.000Z' }).ok).toBe(true)
+
+    const stored = JSON.parse(storage.values.get(V2_KEYS.drafts)!) as {
+      drafts: unknown[]
+      draftFiles: Record<string, unknown>
+    }
+    expect(stored.draftFiles.orchard).toEqual(olderDraft)
+    expect(stored.draftFiles.pond).toEqual(damagedDraft)
+    expect(stored.draftFiles).not.toHaveProperty('new')
+    expect(stored.drafts).toEqual(expect.arrayContaining([olderSummary, damagedSummary]))
+    expect(store.listDrafts().map((draft) => draft.id)).toEqual(['next'])
+  })
+
   it('isolates corrupted Drafts without discarding unrelated browser app data', () => {
     const storage = memoryStorage()
     seedV2Partitions(storage)
