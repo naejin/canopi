@@ -970,11 +970,12 @@ fn audit_repository() -> Vec<String> {
     let owned_rust_sources = rust_paths
         .into_iter()
         .map(|path| {
+            // The allowlist names paths with '/', as on Windows too.
             let relative = path
                 .strip_prefix(manifest)
                 .unwrap()
                 .to_string_lossy()
-                .into_owned();
+                .replace('\\', "/");
             let source = fs::read_to_string(path).unwrap();
             (relative, source)
         })

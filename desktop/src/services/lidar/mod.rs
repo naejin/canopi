@@ -2326,7 +2326,8 @@ mod tests {
         );
         waiter.join().unwrap();
         drop(library);
-        std::fs::remove_dir_all(root).unwrap();
+        // Best-effort: Windows refuses to delete a file another handle still has open.
+        let _ = std::fs::remove_dir_all(root);
     }
 
     /// Startup removes analysis scratch that no running job owns.

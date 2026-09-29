@@ -1765,6 +1765,8 @@ mod tests {
 
     /// A failed conversion must fail staging, retain nothing durable and leave
     /// no partial asset behind.
+    // A read-only directory needs Unix permissions; Windows ignores them on folders.
+    #[cfg(unix)]
     #[test]
     fn staged_output_write_failure_removes_partial_assets() {
         let engine = crate::services::lidar::rust_engine::RustRasterEngine;
