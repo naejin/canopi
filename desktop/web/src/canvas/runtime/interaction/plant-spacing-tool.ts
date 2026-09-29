@@ -16,6 +16,7 @@ import {
   type PlantPresentationContext,
 } from '../plant-presentation'
 import type { ScenePlantEntity, ScenePoint, SceneStateReader } from '../scene'
+import type { SessionPlane } from '../../session-plane'
 import {
   isSceneDesignObjectLocked,
   isSceneObjectGroupMemberTarget,
@@ -100,6 +101,20 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   let missed = false
   let shownCount: { readonly count: number; readonly density: CanvasPlantRowGuidance['density'] } | null = null
   let focusRequest = 0
+  // The plane the source position and endpoint belong to. A picked source
+  // outlives a re-origin (the tool is not a Scene Edit until it commits), so
+  // its metres follow the plane through lon/lat.
+  let sourcePlane: SessionPlane | null = null
+
+  function syncSourcePlane(): void {
+    const plane = context.getSceneStore().sessionPlane
+    const previous = sourcePlane
+    sourcePlane = plane
+    if (previous === null || previous === plane) return
+    const move = (point: ScenePoint): ScenePoint => plane.toPlane(previous.toGeo(point))
+    if (source) source = { ...source, plant: { ...source.plant, position: move(source.plant.position) } }
+    if (endpoint) endpoint = move(endpoint)
+  }
 
   const overlay: PlantSpacingOverlayController = createPlantSpacingOverlay(context.container)
 
@@ -144,6 +159,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
     event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>,
     world: ScenePoint,
   ): PlantSpacingPointerDownResult {
+    syncSourcePlane()
     if (source) {
       commitPreview(endpointFromEvent(event))
       return { clearPointerGesture: false }
@@ -204,6 +220,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function showState(): void {
+    syncSourcePlane()
     if (!source) {
       showSourcePicking()
       return
@@ -212,6 +229,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function updatePreviewFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): void {
+    syncSourcePlane()
     const screen = clampedScreenPoint(event)
     previewPointer = { screen, shiftKey: event.shiftKey }
     updatePreview(endpointFromScreen(screen, event.shiftKey))
@@ -285,6 +303,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function commitDragFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'shiftKey'>): void {
+    syncSourcePlane()
     commitPreview(dragCommitEndpoint(event))
   }
 
@@ -339,6 +358,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function handleIntervalInput(value: string): void {
+    syncSourcePlane()
     intervalText = value
     intervalValid = parsePlantSpacingIntervalInput(value).valid
     if (endpoint) updatePreview(endpoint)
@@ -350,6 +370,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   ): void {
     const focusCanvasOnValid = options.focusCanvasOnValid ?? true
     const focusInputOnInvalid = options.focusInputOnInvalid ?? true
+    syncSourcePlane()
     intervalText = value
     const parsed = parsePlantSpacingIntervalInput(value)
     intervalValid = parsed.valid
@@ -366,6 +387,7 @@ export function createPlantSpacingTool(context: PlantSpacingToolContext): PlantS
   }
 
   function refreshViewportDependent(): void {
+    syncSourcePlane()
     overlay.refreshSourceHighlight(source ? sourceView(source) : null, context.camera)
     if (endpoint) updatePreview(endpoint)
   }

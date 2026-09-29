@@ -38,6 +38,7 @@ function createPlantSpacingAdapter(
   options: {
     readPlantSpacingIntervalMeters: () => number
     commitPlantSpacingIntervalMeters: (meters: number) => void
+    sceneEdits?: SceneRuntimeEditCoordinator
   },
 ): SceneToolAdapter {
   const tool = createPlantSpacingTool({
@@ -49,7 +50,7 @@ function createPlantSpacingAdapter(
     getLocalizedCommonNames: () => new Map(),
     readPlantSpacingIntervalMeters: options.readPlantSpacingIntervalMeters,
     commitPlantSpacingIntervalMeters: options.commitPlantSpacingIntervalMeters,
-    sceneEdits: createSceneEdits(store),
+    sceneEdits: options.sceneEdits ?? createSceneEdits(store),
     switchTool: () => {},
     focusHost: () => {},
     applySnapping: (point) => point,
@@ -142,6 +143,41 @@ describe('Plant Spacing tool adapter', () => {
     expect(store.persisted.plants).toHaveLength(1)
     expect(container.querySelector('[data-plant-spacing-source="plant-1"]')).not.toBeNull()
 
+    adapter.dispose?.()
+  })
+
+  it('lays a row from the picked plant after the session plane re-origins', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [plantFixture()]
+    })
+    const sceneEdits = createSceneEdits(store)
+    const adapter = createPlantSpacingAdapter(container, store, camera, {
+      readPlantSpacingIntervalMeters: () => 1,
+      commitPlantSpacingIntervalMeters: () => {},
+      sceneEdits,
+    })
+
+    adapter.onActivate?.()
+    dispatchPointerDown(adapter, events, camera, { x: 20, y: 30 })
+    expect(adapter.describeGuidance?.().plantRow).toMatchObject({ phase: 'row' })
+
+    const previous = store.sessionPlane
+    const transform = sceneEdits.reoriginSessionPlane(previous.toGeo({ x: 12_000, y: 3_000 }))!
+    camera.reprojectViewport(transform)
+    const source = store.persisted.plants[0]!.position
+    expect(source.x).not.toBeCloseTo(20, 3)
+
+    // An endpoint five metres east of the picked plant, in the new plane.
+    const end = camera.worldToScreen({ x: source.x + 5, y: source.y })
+    dispatchPointerDown(adapter, events, camera, end)
+
+    const added = store.persisted.plants.slice(1)
+    expect(added.length).toBeGreaterThan(0)
+    for (const plant of added) {
+      expect(plant.position.y).toBeCloseTo(source.y, 3)
+      expect(plant.position.x).toBeGreaterThan(source.x)
+      expect(plant.position.x).toBeLessThanOrEqual(source.x + 5 + 1e-3)
+    }
     adapter.dispose?.()
   })
 })
