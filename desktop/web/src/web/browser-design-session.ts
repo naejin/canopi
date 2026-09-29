@@ -165,7 +165,7 @@ export function createBrowserDesignSessionController({
   function writeDraftHome(home: DesignHome): HomeWriteOutcome {
     if (home.kind !== "draft") throw new Error("Web Designs live in browser Drafts");
     const stamp = draftStamp?.id === home.id ? draftStamp : null;
-    persistence.beginBrowserDraft().executeImmediately(
+    const settlement = persistence.beginBrowserDraft().executeImmediately(
       prepareSynchronousDesignWriteDestination({
         resource: "browser-app-data:drafts",
         write(content) {
@@ -186,7 +186,7 @@ export function createBrowserDesignSessionController({
         },
       }),
     );
-    return { kind: "written" };
+    return settlement.status === "stale" ? { kind: "stale" } : { kind: "written" };
   }
 
   function storedDraftUpdatedAt(id: string): string | null {

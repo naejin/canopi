@@ -22,6 +22,8 @@ export type DesignHome =
 
 export type HomeWriteOutcome =
   | { readonly kind: 'written' }
+  /** A newer save overtook this one, so the home may not hold this content. */
+  | { readonly kind: 'stale' }
   | { readonly kind: 'conflict'; readonly fileGone: boolean }
 
 interface ContinuousSaveConflict {
@@ -249,6 +251,10 @@ export function createContinuousSave({
     if (outcome.kind === 'conflict') {
       clearTimer()
       conflict.value = { fileGone: outcome.fileGone }
+      return false
+    }
+    if (outcome.kind === 'stale') {
+      if (pending.peek()) schedule()
       return false
     }
     batch(() => {

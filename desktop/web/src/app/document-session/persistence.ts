@@ -37,6 +37,17 @@ interface DesignSaveAsOperation {
   execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
 
+/**
+ * A Save As whose destination is still being chosen. It claims no save
+ * intent, so continuous writes made while the path dialog is open never
+ * supersede it; `begin` issues the Save As once the path is known.
+ */
+interface DesignSaveAsPreparation {
+  readonly destinationHint: DesignSaveAsOperation["destinationHint"];
+  /** Issue the Save As; it settles stale when the Design was replaced meanwhile. */
+  begin(): DesignSaveAsOperation;
+}
+
 interface DesignSnapshotSaveOperation {
   execute(destination: PreparedDesignWriteDestination): Promise<DesignSaveSettlement>;
 }
@@ -79,6 +90,7 @@ export interface DesignSessionPersistence {
   detachCanvas(session: CanvasDocumentSurface): void;
   beginSave(): DesignExistingPathSaveOperation;
   beginSaveAs(): DesignSaveAsOperation;
+  prepareSaveAs(): DesignSaveAsPreparation;
   /** Save to a pathless home (a Design Draft) and acknowledge the baseline. */
   beginSnapshotSave(): DesignSnapshotSaveOperation;
   /** Export a copy; never acknowledges the baseline or changes the home. */
@@ -484,14 +496,38 @@ export function createDesignSessionPersistence({
     });
   }
 
+  function saveAsDestinationHint(
+    persistenceCapture: PersistenceCapture,
+  ): DesignSaveAsOperation["destinationHint"] {
+    return Object.freeze({
+      currentPath: persistenceCapture.store.path,
+      suggestedName: persistenceCapture.content.name
+        || persistenceCapture.store.name
+        || "Untitled",
+    });
+  }
+
+  function prepareSaveAs(): DesignSaveAsPreparation {
+    const prepared = capture();
+    const destinationHint = saveAsDestinationHint(prepared);
+    return Object.freeze({
+      destinationHint,
+      begin(): DesignSaveAsOperation {
+        if (captureSessionIsCurrent(prepared)) return beginSaveAs();
+        const stale = createSettlement("stale", null, prepared.content);
+        return Object.freeze({
+          destinationHint,
+          execute: () => Promise.resolve(stale),
+        });
+      },
+    });
+  }
+
   function beginSaveAs(): DesignSaveAsOperation {
     const state = createIntent("save-as");
     let execution: WriteExecution<DesignSaveSettlement> | null = null;
     return Object.freeze({
-      destinationHint: Object.freeze({
-        currentPath: state.capture.store.path,
-        suggestedName: state.capture.content.name || state.capture.store.name || "Untitled",
-      }),
+      destinationHint: saveAsDestinationHint(state.capture),
       execute(destination: PreparedDesignWriteDestination) {
         if (execution) return repeatExecution(execution, destination);
         const destinationPath = writeAdmission.destinationPath(destination);
@@ -611,6 +647,7 @@ export function createDesignSessionPersistence({
     detachCanvas,
     beginSave,
     beginSaveAs,
+    prepareSaveAs,
     beginSnapshotSave,
     beginBrowserDownload,
     beginBrowserDraft,

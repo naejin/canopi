@@ -486,6 +486,61 @@ describe("continuous save homes", () => {
     });
   });
 
+  it("writes the Save As file when a continuous write runs while its dialog is open", async () => {
+    resetMachine({ file: makeFile("Draft Garden"), path: null, name: "Draft Garden" });
+    markDesignSessionDirtyForTest(store);
+    const selected = deferred<string>();
+    mocks.selectDesignSavePath.mockReturnValueOnce(selected.promise);
+
+    const saving = machine.saveAsCurrentDesign({ session: null });
+    await flushMicrotasks();
+    // The dialog takes focus, so close-guard flushes the Draft meanwhile.
+    markDesignSessionDirtyForTest(store);
+    await expect(machine.continuousSave.flush()).resolves.toBe(true);
+    expect(mocks.saveDesignDraft).toHaveBeenCalledOnce();
+    selected.resolve("/designs/garden.canopi");
+
+    await expect(saving).resolves.toMatchObject({
+      status: "applied",
+      path: "/designs/garden.canopi",
+    });
+    expect(mocks.saveDesign).toHaveBeenCalledWith("/designs/garden.canopi", expect.anything());
+    expect(store.readDesignPath()).toBe("/designs/garden.canopi");
+    expect(machine.continuousSave.readHome()).toMatchObject({
+      kind: "file",
+      path: "/designs/garden.canopi",
+    });
+  });
+
+  it("keeps the home pending when a continuous write settles stale", async () => {
+    store = createMemoryDesignSessionStore({ file: makeFile("Template"), path: null, name: "Template" });
+    const persistence = createDesignSessionPersistence({ store });
+    machine = createDesignSessionStateMachine({
+      store,
+      requestSaveDecision: mocks.requestSaveDecision,
+      presentOpenFailure: mocks.presentOpenFailure,
+      persistence: {
+        ...persistence,
+        beginSnapshotSave: () => ({
+          execute: async () => ({
+            status: "stale" as const,
+            path: null,
+            content: makeFile("Template"),
+          }),
+        }),
+      },
+    });
+    machine.continuousSave.beginSession({
+      draftId: "draft-template",
+      fingerprint: null,
+      writePending: true,
+    });
+
+    await expect(machine.continuousSave.flush()).resolves.toBe(false);
+
+    expect(machine.continuousSave.hasPendingChanges()).toBe(true);
+  });
+
   it("asks before reverting and keeps the Design when cancelled", async () => {
     editDesignSessionForTest(store, (design) => ({ ...design, description: "edited" }));
     mocks.requestSaveDecision.mockResolvedValueOnce("cancel");
@@ -605,7 +660,7 @@ describe("document session sequences", () => {
     expect(machine.getState()).toMatchObject({ status: "attached-ready", operation: null });
   });
 
-  it("keeps the Draft home and writes the Draft again after Save As is cancelled during a Draft write", async () => {
+  it("keeps the Draft home and its write when Save As is cancelled during a Draft write", async () => {
     resetMachine({ path: null });
     const session = makeSession();
     await machine.startAttachedDesignSession(session);
@@ -617,16 +672,15 @@ describe("document session sequences", () => {
     const flushing = machine.continuousSave.flush();
     await flushMicrotasks();
     expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(1);
-    // Save As supersedes the Draft write's settlement, then the user cancels the dialog.
+    // A Save As whose dialog is cancelled never issues a save, so the Draft write stands.
     await expect(machine.saveAsCurrentDesign({ session })).resolves.toBeNull();
     pending.resolve();
-    await flushing;
+    await expect(flushing).resolves.toBe(true);
 
     expect(machine.continuousSave.readHome()).toEqual({ kind: "draft", id: "draft-current" });
     expect(machine.getState()).toMatchObject({ status: "attached-ready", operation: null });
-    // The superseded write did not acknowledge the baseline; the next flush writes the Draft again.
     await expect(machine.continuousSave.flush()).resolves.toBe(true);
-    expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(2);
+    expect(mocks.saveDesignDraft).toHaveBeenCalledTimes(1);
     expect(store.isDesignDirty()).toBe(false);
     expect(machine.continuousSave.status.peek()).toBe("draft");
   });
@@ -1755,6 +1809,7 @@ describe("document session transition", () => {
     mocks.saveDesign.mockReturnValue(pending.promise);
 
     const saving = machine.saveAsCurrentDesign({ session });
+    await flushMicrotasks();
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Edited while save was pending",
@@ -2194,6 +2249,7 @@ describe("document session transition", () => {
     mocks.saveDesign.mockReturnValue(pending.promise);
 
     const saving = machine.saveAsCurrentDesign({ session: null });
+    await flushMicrotasks();
     editDesignSessionForTest(store, (design) => ({
       ...design,
       description: "Later field note",

@@ -307,16 +307,19 @@ export class DesignSessionStateMachine {
         this.operationState("saving", "save-as", session),
       );
       stateStarted = true;
-      const saveAs = this.deps.persistence.beginSaveAs();
+      // The intent is issued only once the path is chosen: continuous writes
+      // made while the dialog is open must not supersede this Save As.
+      const prepared = this.deps.persistence.prepareSaveAs();
       const token = this.continuousSave.sessionToken();
       const previousHome = this.continuousSave.readHome();
       let path: string;
       try {
-        path = await this.deps.selectDesignSavePath(saveAs.destinationHint);
+        path = await this.deps.selectDesignSavePath(prepared.destinationHint);
       } catch (error) {
         if (isCancelled(error)) return null;
         throw error;
       }
+      const saveAs = prepared.begin();
       const settlement = await saveAs.execute(this.deps.prepareDesignWrite(
         path,
         null,
@@ -465,7 +468,7 @@ export class DesignSessionStateMachine {
         if (save.destinationPath !== home.path) {
           throw new Error("Design file home does not match the saved path");
         }
-        await save.execute(this.deps.prepareDesignWrite(
+        const settlement = await save.execute(this.deps.prepareDesignWrite(
           home.path,
           home.fingerprint,
           (fingerprint) => this.continuousSave.recordFileFingerprint(
@@ -474,9 +477,11 @@ export class DesignSessionStateMachine {
             fingerprint,
           ),
         ));
+        if (settlement.status === "stale") return { kind: "stale" };
       } else {
         const save = this.deps.persistence.beginSnapshotSave();
-        await save.execute(this.deps.prepareDraftWrite(home.id));
+        const settlement = await save.execute(this.deps.prepareDraftWrite(home.id));
+        if (settlement.status === "stale") return { kind: "stale" };
       }
       return { kind: "written" };
     } catch (error) {
