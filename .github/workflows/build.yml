@@ -166,7 +166,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -236,6 +236,14 @@ jobs:
           python scripts/species_catalog_contract.py verify-db
           --profile prepared
           desktop/resources/canopi-core.db
+
+      # The test job runs the suite on Linux only. File saving, atomic
+      # replace, directory sync, locking and paths differ on Windows and
+      # macOS, so the native tests run on those runners too, before packaging.
+      - name: Rust tests on this platform
+        if: runner.os != 'Linux'
+        shell: bash
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
 
       # The sidecar must exist before `tauri build`: build.rs bundles it only
       # when desktop/binaries holds it for the target (the runner's host).
