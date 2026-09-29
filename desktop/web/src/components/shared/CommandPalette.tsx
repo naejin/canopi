@@ -22,7 +22,7 @@ function CommandPaletteDialog() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = "command-palette-list";
 
-  useModalLayer();
+  const releaseModalLayer = useModalLayer();
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   // A save problem asks over everything; the palette must not run commands under it.
@@ -38,6 +38,10 @@ function CommandPaletteDialog() {
   function execute(idx: number) {
     const cmd = filtered[idx];
     if (!cmd || cmd.disabled()) return;
+    // Release the chrome before the command runs: a command that focuses the
+    // title bar or a panel (Find plants, Search a place) must find it live, and
+    // the palette's unmount must not send focus back over it.
+    releaseModalLayer();
     commandPaletteOpen.value = false;
     cmd.action();
   }

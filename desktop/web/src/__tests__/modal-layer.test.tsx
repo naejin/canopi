@@ -11,6 +11,7 @@ import {
 } from '../app/shell/dialogs'
 import { cycleFocusRegion } from '../app/shell/focus-regions'
 import { modalLayerOpen } from '../app/shell/modal-layer'
+import { registerPlantFinder } from '../app/plant-finder/focus'
 import { sidePanel, activePanel } from '../app/shell/state'
 import { closeSaveViewDialog, openSaveViewDialog } from '../app/saved-views'
 import { closeAboutCanopiDialog, openAboutCanopiDialog } from '../app/about/state'
@@ -190,6 +191,39 @@ describe('Modal layer', () => {
     })
     expect(commandPaletteOpen.value).toBe(false)
     expect(document.activeElement).toBe(view)
+  })
+
+  it('runs a palette command after the chrome is live again, so Find plants focuses the finder', async () => {
+    await act(async () => { render(<><Workspace /><CommandPalette /></>, container) })
+    const rail = container.querySelector<HTMLElement>('[data-panel-rail]')!
+    const view = container.querySelector<HTMLButtonElement>('button[data-menu-id="view"]')!
+    // A finder in chrome that the palette makes inert while it holds the layer.
+    const finder = document.createElement('input')
+    rail.appendChild(finder)
+    let layerOpenWhenFocused: boolean | null = null
+    const unregister = registerPlantFinder(() => {
+      layerOpenWhenFocused = modalLayerOpen.peek()
+      finder.focus()
+    })
+    try {
+      view.focus()
+      await act(async () => { commandPaletteOpen.value = true })
+      const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!
+      await act(async () => {
+        input.value = 'Find plants'
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      })
+      expect(commandPaletteOpen.value).toBe(false)
+      expect(layerOpenWhenFocused).toBe(false)
+      expect(rail.hasAttribute('inert')).toBe(false)
+      expect(document.activeElement).toBe(finder)
+    } finally {
+      unregister()
+      finder.remove()
+    }
   })
 
   it('closes an open menu when a dialog opens over it', async () => {
