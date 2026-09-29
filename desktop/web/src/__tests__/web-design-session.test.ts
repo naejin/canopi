@@ -27,6 +27,13 @@ import {
   type BrowserPageLifecycleTarget,
 } from '../web/browser-design-session'
 import type { CanopiFile } from '../types/design'
+import { registerDesignOpenFailurePresenter } from '../app/document-session/open-failure'
+import {
+  browserShellNotice,
+  dismissBrowserShellNotice,
+  showBrowserShellNotice,
+} from '../web/browser-shell-notice'
+import { t } from '../i18n'
 import {
   editDesignSessionForTest,
   markDesignSessionDirtyForTest,
@@ -220,7 +227,18 @@ describe('browser Design Session lifecycle', () => {
       now: () => NOW,
     })
 
-    await expect(controller.openCanopi()).rejects.toThrow('$.plants: expected an array')
+    const presented = vi.fn()
+    registerDesignOpenFailurePresenter(presented)
+    try {
+      await expect(controller.openCanopi()).resolves.toBe(false)
+    } finally {
+      registerDesignOpenFailurePresenter(null)
+    }
+    expect(presented).toHaveBeenCalledWith({
+      tone: 'error',
+      title: t('start.cantOpenTitle'),
+      message: t('start.cantReadDamaged'),
+    })
     expect(store.readDesignName()).toBe('Working Garden')
     expect(store.readCurrentDesign()).toEqual(original)
   })
@@ -277,6 +295,7 @@ describe('browser Design Session lifecycle', () => {
       path: null,
       name: original.name,
     })
+    const presentOpenFailure = vi.fn()
     const controller = createBrowserDesignSessionController({
       store,
       fileAdapter: testFileAdapter({
@@ -286,13 +305,68 @@ describe('browser Design Session lifecycle', () => {
         })),
       }),
       now: () => NOW,
+      presentOpenFailure,
     })
 
-    const opening = controller.openCanopi()
-    await expect(opening).rejects.toThrow(message)
-    await expect(opening).rejects.toMatchObject({ kind })
+    await expect(controller.openCanopi()).resolves.toBe(false)
+    expect(presentOpenFailure).toHaveBeenCalledOnce()
+    const refusal: unknown = presentOpenFailure.mock.calls[0]?.[0]
+    expect(refusal).toBeInstanceOf(Error)
+    expect((refusal as Error).message).toContain(message)
+    expect(refusal).toMatchObject({ kind })
     expect(store.readDesignName()).toBe('Working Garden')
     expect(store.readCurrentDesign()).toEqual(original)
+  })
+
+  it.each([
+    {
+      label: 'a Canopi 1.1 Design (version 6)',
+      fileName: 'orchard.canopi',
+      text: () => JSON.stringify({ ...makeCanopiFile(), version: 6, extra: {} }),
+      messageKey: 'start.cantReadOlderVersion',
+    },
+    {
+      label: 'a Design from a newer Canopi',
+      fileName: 'future.canopi',
+      text: () => JSON.stringify({ ...makeCanopiFile(), version: 99 }),
+      messageKey: 'start.cantReadNewerVersion',
+    },
+    {
+      label: 'a truncated file',
+      fileName: 'truncated.canopi',
+      text: () => JSON.stringify(makeCanopiFile()).slice(0, 40),
+      messageKey: 'start.cantReadDamaged',
+    },
+    {
+      label: 'a file that is not a .canopi Design',
+      fileName: 'notes.txt',
+      text: () => 'hello',
+      messageKey: 'start.cantRead',
+    },
+  ])('tells the user why $label cannot be opened', async ({ fileName, text, messageKey }) => {
+    dismissBrowserShellNotice()
+    registerDesignOpenFailurePresenter(showBrowserShellNotice)
+    try {
+      const store = createMemoryDesignSessionStore()
+      const controller = createBrowserDesignSessionController({
+        store,
+        fileAdapter: testFileAdapter({
+          openCanopiFile: vi.fn(async () => ({ fileName, text: text() })),
+        }),
+        now: () => NOW,
+      })
+
+      await expect(controller.openCanopi()).resolves.toBe(false)
+      expect(browserShellNotice.value).toEqual({
+        tone: 'error',
+        title: t('start.cantOpenTitle'),
+        message: t(messageKey),
+      })
+      expect(store.hasCurrentDesign()).toBe(false)
+    } finally {
+      registerDesignOpenFailurePresenter(null)
+      dismissBrowserShellNotice()
+    }
   })
 
   it('opens a current-version Design with lon/lat positions', async () => {

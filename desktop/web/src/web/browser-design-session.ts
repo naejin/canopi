@@ -1,4 +1,5 @@
 import { decodeCanopiDesign } from "../app/contracts/design-ingestion";
+import { asCanopiDesignIngestionError } from "../app/contracts/canopi-design-errors";
 import { encodeCanopiDesign } from "../app/contracts/canopi-design-wire";
 import { DEFAULT_BUDGET_CURRENCY } from "../app/contracts/document";
 import type { DesignTemplateEnvelope } from "../app/design-template-import/types";
@@ -14,6 +15,7 @@ import {
   type DesignSessionPendingCanvasReplacementIdentity,
   type ResolvedDesignReplacement,
 } from "../app/document-session/replacement";
+import { presentDesignOpenFailure } from "../app/document-session/open-failure";
 import { requestSaveProblemDecision } from "../app/document-session/save-problem";
 import {
   designSessionStore,
@@ -84,6 +86,8 @@ interface BrowserDesignSessionControllerOptions {
   readonly createDraftId?: () => string;
   readonly workflowRunner?: DesignSessionWorkflowRunner;
   readonly requestSaveDecision?: typeof requestSaveProblemDecision;
+  /** Tells the user why a picked file cannot be opened (older, newer, damaged). */
+  readonly presentOpenFailure?: (error: unknown) => void;
   readonly saveDelayMs?: number;
 }
 
@@ -123,6 +127,7 @@ export function createBrowserDesignSessionController({
   createDraftId = createBrowserDraftId,
   workflowRunner = createDesignSessionWorkflowRunner(DESIGN_SESSION_WORKFLOWS),
   requestSaveDecision = requestSaveProblemDecision,
+  presentOpenFailure = presentDesignOpenFailure,
   saveDelayMs,
 }: BrowserDesignSessionControllerOptions = {}): BrowserDesignSessionController {
   let canvasSession: CanvasDocumentSurface | null = null;
@@ -292,11 +297,17 @@ export function createBrowserDesignSessionController({
     const opened = await fileAdapter.openCanopiFile();
     if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
     if (!opened) return false;
-    if (!opened.fileName.toLowerCase().endsWith(".canopi")) {
-      throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
+    let file: CanopiFile;
+    try {
+      if (!opened.fileName.toLowerCase().endsWith(".canopi")) {
+        throw new Error(`Expected a .canopi file, received ${opened.fileName}.`);
+      }
+      file = parseCanopiJson(opened.text);
+    } catch (error) {
+      // A refused file leaves the open Design as it was and says why.
+      presentOpenFailure(error);
+      return false;
     }
-
-    const file = parseCanopiJson(opened.text);
     const draftId = createDraftId();
     if (intent !== replacementIntent || !replacementGuard.isCurrent()) return false;
     applyDesignReplacement(draftReplacement({
@@ -551,7 +562,13 @@ function createNewWebCanopiFile(name: string, timestamp: string): CanopiFile {
 }
 
 function parseCanopiJson(text: string): CanopiFile {
-  const parsed: unknown = JSON.parse(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    // Unparseable text is a damaged Design, like any other refused document.
+    throw asCanopiDesignIngestionError(error);
+  }
   return decodeCanopiDesign(parsed);
 }
 
