@@ -27,7 +27,8 @@ export function PlantDbPanel() {
     <section className={styles.panel} aria-label={t('plantDb.title')}>
       <div
         ref={mainRef}
-        className={`${styles.main} ${selected !== null ? plantDetailStyles.detailHidden : ''}`}
+        className={styles.main}
+        hidden={selected !== null}
         aria-hidden={selected !== null}
         inert={selected !== null}
       >

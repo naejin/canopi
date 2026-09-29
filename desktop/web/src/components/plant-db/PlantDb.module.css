@@ -3,6 +3,7 @@
 .panel {
   flex: 1;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   min-width: 0;
   background: var(--panel-gradient);
@@ -16,6 +17,9 @@
   min-width: 0;
   position: relative;
 }
+
+/* The species detail replaces the list; the list stays mounted so Back keeps its search and scroll. */
+.main[hidden] { display: none; }
 
 /* Finder, filters and active tokens above the rows. */
 .controls {
