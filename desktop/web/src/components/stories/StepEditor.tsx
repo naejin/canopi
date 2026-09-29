@@ -38,15 +38,19 @@ export function StepEditor({ storyId, step, number, view }: {
   const [problem, setProblem] = useState<string | null>(null)
   const [shrinking, setShrinking] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  /** Only the latest chosen file may show: an earlier one still shrinking is dropped. */
+  const latestRead = useRef(0)
   const images = step.images ?? []
   const canCapture = canAddStorySteps()
   const shared = view ? stepsShowingView(view.id) - 1 : 0
 
   async function chooseImage(file: File): Promise<void> {
+    const request = ++latestRead.current
     setProblem(null)
     // Making a large image smaller can take a moment.
     setShrinking(file.size > STORY_IMAGE_MAX_BYTES)
     const read = await readStoryImageFile(file, currentDesign.peek())
+    if (request !== latestRead.current) return
     setShrinking(false)
     if (read.ok) {
       setPending({
@@ -124,6 +128,7 @@ export function StepEditor({ storyId, step, number, view }: {
           </ul>
           {pending && (
             <PendingImage
+              key={pending.src}
               src={pending.src}
               resized={pending.resized}
               number={images.length + 1}

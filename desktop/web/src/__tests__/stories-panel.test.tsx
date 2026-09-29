@@ -551,6 +551,50 @@ describe('step editor', () => {
   // jsdom base64-encodes the 2.5 MB file on the main thread; slow under a loaded runner.
   }, 15_000)
 
+  it('keeps the latest chosen image when an earlier, larger one finishes shrinking after it', async () => {
+    const editor = await openStep('s1')
+    const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
+    let decode!: () => void
+    const decoded = new Promise<void>((resolve) => { decode = resolve })
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => {
+      await decoded
+      return { width: 3000, height: 2000, close: vi.fn() }
+    }))
+    const context = { drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: '', imageSmoothingQuality: 'low' }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (done, type) {
+      done(new Blob([new Uint8Array(64)], { type: type ?? 'image/png' }))
+    })
+    const reads = vi.spyOn(FileReader.prototype, 'readAsDataURL')
+    const choose = async (file: File) => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true })
+      await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+    }
+    try {
+      await choose(new File([new Uint8Array(1024 * 1024 + 1)], 'orchard.jpg', { type: 'image/jpeg' }))
+      expect(editor.textContent).toContain('Making this image smaller')
+      await choose(new File([new Uint8Array([137, 80, 78, 71])], 'diagram.png', { type: 'image/png' }))
+      await until(() => editor.querySelector('input[required]') !== null)
+      const alt = editor.querySelector<HTMLInputElement>('input[required]')!
+      await act(async () => {
+        alt.value = 'The diagram'
+        alt.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+
+      decode()
+      await until(() => reads.mock.calls.length === 2)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await act(async () => {})
+
+      const preview = editor.querySelector<HTMLImageElement>('form img')!
+      expect(preview.getAttribute('src')).toBe('data:image/png;base64,iVBORw==')
+      expect(editor.textContent).not.toContain('Making this image smaller')
+    } finally {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    }
+  })
+
   it('embeds a chosen image once it has a description, and refuses images of another type or that cannot be made small enough', async () => {
     const editor = await openStep('s1')
     const input = editor.querySelector<HTMLInputElement>('input[type="file"]')!
