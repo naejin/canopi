@@ -54,6 +54,22 @@ describe('budget export', () => {
     expect(csv).toContain('Pear,2,,,EUR')
   })
 
+  it('escapes a Design currency code that is not a plain ISO code', async () => {
+    await exportBudgetCsv(
+      [{ canonical: 'Malus domestica', commonName: 'Apple', count: 3 }],
+      {
+        currency: '=HYPERLINK("http://x","EUR")',
+        designName: 'orchard',
+        lineItemPriceMap: new Map([['Malus domestica', { unit_cost: 1, currency: 'EUR' }]]),
+        grandTotal: 3,
+      },
+    )
+
+    const csv = vi.mocked(exportFile).mock.calls.at(-1)?.[0] as string
+    const appleLine = csv.split('\n').find((line) => line.startsWith('Apple,'))
+    expect(appleLine).toBe('Apple,3,1.00,3.00,"\'=HYPERLINK(""http://x"",""EUR"")"')
+  })
+
   it('downloads the shared CSV through the browser delivery adapter', async () => {
     let observed: HTMLAnchorElement | undefined
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {

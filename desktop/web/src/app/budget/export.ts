@@ -37,7 +37,7 @@ export async function exportBudgetCsv(
     const priceColumns = entry
       ? `${entry.unit_cost.toFixed(2)},${(row.count * entry.unit_cost).toFixed(2)}`
       : ','
-    csvRows.push(`${escapeBudgetCsvField(displayName)},${row.count},${priceColumns},${options.currency}`)
+    csvRows.push(`${escapeBudgetCsvField(displayName)},${row.count},${priceColumns},${escapeBudgetCsvField(options.currency)}`)
   }
   csvRows.push(`${escapeBudgetCsvField(t('canvas.budget.grandTotal'))},,,${options.grandTotal.toFixed(2)},`)
 
