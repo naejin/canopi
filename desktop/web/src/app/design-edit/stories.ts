@@ -110,8 +110,15 @@ function editStory(storyId: string, update: (story: Story) => Story): StoryEditO
   })
 }
 
+/** Adds a story when its id is new, its step ids are unique and every step's view exists. */
 export function addStory(story: Story): void {
-  editStories((stories) => stories.some((existing) => existing.id === story.id) ? stories : [...stories, story])
+  editStories((stories, design) => {
+    if (stories.some((existing) => existing.id === story.id)) return stories
+    const stepIds = new Set(story.steps.map((step) => step.id))
+    if (stepIds.size !== story.steps.length) return stories
+    if (!story.steps.every((step) => viewExists(design, step.view_id))) return stories
+    return [...stories, story]
+  })
 }
 
 /** Renames a story; a blank name keeps the old one. */
