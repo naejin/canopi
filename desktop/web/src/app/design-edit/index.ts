@@ -36,4 +36,5 @@ export {
   restoreStory,
   restoreStoryStep,
   updateStoryStep,
+  type StoryEditOutcome,
 } from './stories'

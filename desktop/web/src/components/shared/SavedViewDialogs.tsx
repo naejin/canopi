@@ -283,9 +283,10 @@ function SavedViewUndoToast({ floating = false }: { readonly floating?: boolean 
     <div className={floating ? styles.floatingToast : styles.toastSlot}>
       <Toast
         message={undo.message}
-        actionLabel={t('savedViews.undo')}
-        onAction={undoDeleteView}
-        onDismiss={dismissDeleteViewUndo}
+        icon={undo.deletion ? 'check' : 'alert'}
+        actionLabel={undo.deletion ? t('savedViews.undo') : undefined}
+        onAction={undo.deletion ? undoDeleteView : undefined}
+        onDismiss={() => dismissDeleteViewUndo(undo)}
       />
     </div>
   )

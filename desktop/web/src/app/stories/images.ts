@@ -4,7 +4,9 @@ import {
   STORY_IMAGES_MAX_TOTAL_BYTES,
 } from '../../generated/canopi-design-format'
 import type { CanopiFile } from '../../types/design'
-import { embeddedImageBytes } from '../contracts/views-admission'
+import { designEmbeddedImageBytes, embeddedImageBytes } from '../contracts/views-admission'
+
+export { designEmbeddedImageBytes }
 
 // Story images are embedded in the Design as base64 `data:` URIs (decision D1):
 // PNG, JPEG, WebP or GIF, at most 1 MiB each and 10 MiB per Design, the same
@@ -49,17 +51,6 @@ const SHRINK_SCALE_STEP = 0.75
 
 /** The file types an image picker offers. */
 export const STORY_IMAGE_ACCEPT = STORY_IMAGE_DATA_TYPES.join(',')
-
-/** Decoded bytes of every image a Design embeds. */
-export function designEmbeddedImageBytes(design: Pick<CanopiFile, 'stories'> | null): number {
-  let bytes = 0
-  for (const story of design?.stories ?? []) {
-    for (const step of story.steps) {
-      for (const image of step.images ?? []) bytes += embeddedImageBytes(image.src)
-    }
-  }
-  return bytes
-}
 
 /**
  * Reads a chosen image file as a data URI when the Design can hold it: a

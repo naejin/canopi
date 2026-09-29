@@ -1901,6 +1901,7 @@
     "imageType": "请选择 PNG、JPEG、WebP 或 GIF 图片。",
     "imageTooLarge": "此图片大小为 {{size}}。每张图片最大 1 MB，请选择更小的图片。",
     "imageDesignFull": "此设计中的图片已达 {{used}}，而一个设计最多可容纳 10 MB。请移除一张图片或选择更小的图片。",
+    "imagesDoNotFit": "这些图片放不下：一个设计最多可容纳 10 MB 图片。请移除一张图片后重试。",
     "imageUnreadable": "Canopi 无法读取此图片。请尝试其他文件。",
     "imageResized": "Canopi 已缩小此图片以符合上限：{{from}} → {{to}}。",
     "imageShrinking": "正在缩小图片…",

@@ -1901,6 +1901,7 @@
     "imageType": "Scegli un’immagine PNG, JPEG, WebP o GIF.",
     "imageTooLarge": "Questa immagine pesa {{size}}. Un’immagine può pesare al massimo 1 MB; scegline una più piccola.",
     "imageDesignFull": "Questo progetto contiene già {{used}} di immagini, e un progetto può contenerne 10 MB. Rimuovi un’immagine o scegline una più piccola.",
+    "imagesDoNotFit": "Queste immagini non ci stanno: un progetto contiene al massimo 10 MB di immagini. Rimuovi un’immagine e riprova.",
     "imageUnreadable": "Canopi non è riuscito a leggere questa immagine. Prova un altro file.",
     "imageResized": "Canopi ha rimpicciolito questa immagine perché rientri nel limite: da {{from}} a {{to}}.",
     "imageShrinking": "Riduzione dell’immagine…",

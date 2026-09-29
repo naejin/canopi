@@ -79,7 +79,8 @@ export const savedViewDeleteConfirmation = fenced(deleteConfirmationState)
 
 interface SavedViewUndo {
   readonly message: string
-  readonly deletion: SavedViewDeletion
+  /** Null for a notice that offers no Undo, such as images that do not fit. */
+  readonly deletion: SavedViewDeletion | null
 }
 
 const undoState = signal<Fenced<SavedViewUndo> | null>(null)
@@ -119,10 +120,19 @@ export function cancelDeleteView(): void {
 export function undoDeleteView(): void {
   const undo = savedViewUndo.peek()
   undoState.value = null
-  if (undo) restoreSavedView(undo.deletion)
+  if (!undo?.deletion) return
+  // The view's steps may bring back more images than the Design can still hold.
+  if (restoreSavedView(undo.deletion) === 'images-do-not-fit') {
+    undoState.value = {
+      session: currentSession(),
+      value: { deletion: null, message: t('stories.imagesDoNotFit') },
+    }
+  }
 }
 
-export function dismissDeleteViewUndo(): void {
+/** Dismisses the toast; given the toast being dismissed, only while it still shows. */
+export function dismissDeleteViewUndo(toast?: SavedViewUndo): void {
+  if (toast && savedViewUndo.peek() !== toast) return
   undoState.value = null
 }
 

@@ -2,7 +2,7 @@ import type { CanopiFile, SavedView, StoryStep } from '../../types/design'
 import { PLANT_LABEL_MODES, type PlantLabelMode } from '../../canvas/runtime/plant-display'
 import { editCurrentDesign, readCurrentDesign } from './core'
 import { DESIGN_EDIT_EXTRA_KEYS, readExtra, reportExtraRepair, withExtra } from './extra-keys'
-import { takeStepsAwaitingView } from './stories'
+import { editWithinImageLimit, parkStepsAwaitingView, takeStepsAwaitingView, type StoryEditOutcome } from './stories'
 
 // Saved views are Design Edit data (ADR 0011): every command dirties the Design
 // for continuous save, none is in the scene history, and a command that changes
@@ -149,11 +149,12 @@ export function deleteSavedView(id: string): SavedViewDeletion | null {
  * gone. Steps whose story is gone stay deleted; a view that exists again is
  * left alone.
  */
-export function restoreSavedView(deletion: SavedViewDeletion): void {
+export function restoreSavedView(deletion: SavedViewDeletion): StoryEditOutcome {
   const current = readCurrentDesign()
-  if (!current || (current.views ?? []).some((view) => view.id === deletion.view.id)) return
-  const restoredSteps = [...deletion.steps, ...takeStepsAwaitingView(deletion.view.id)]
-  editCurrentDesign((design) => {
+  if (!current || (current.views ?? []).some((view) => view.id === deletion.view.id)) return 'unchanged'
+  const parked = takeStepsAwaitingView(deletion.view.id)
+  const restoredSteps = [...deletion.steps, ...parked]
+  const outcome = editWithinImageLimit((design) => {
     const views = design.views ?? []
     if (views.some((view) => view.id === deletion.view.id)) return design
     const nextViews = [...views]
@@ -172,4 +173,6 @@ export function restoreSavedView(deletion: SavedViewDeletion): void {
     const restored = { ...design, views: nextViews, stories: nextStories }
     return deletion.display ? withSavedViewDisplay(restored, deletion.view.id, deletion.display) : restored
   })
+  if (outcome !== 'applied') parkStepsAwaitingView(parked)
+  return outcome
 }

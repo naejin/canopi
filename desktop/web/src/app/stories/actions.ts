@@ -17,6 +17,7 @@ import {
   restoreStory,
   restoreStoryStep,
   updateStoryStep,
+  type StoryEditOutcome,
 } from '../design-edit'
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { canShowSavedViews, captureCurrentView, goToSavedView } from '../saved-views/current-view'
@@ -81,20 +82,23 @@ export function selectStep(stepId: string | null): void {
 
 export interface StoryUndo {
   readonly message: string
-  undo(): void
+  /** Null for a notice that offers no Undo, such as images that do not fit. */
+  readonly undo: (() => void) | null
 }
 
 const undoState = signal<Fenced<StoryUndo> | null>(null)
-/** The Undo toast after deleting a story or a step. */
+/** The Undo toast after deleting a story or a step, or a notice in its place. */
 export const storyUndo = fenced(undoState)
 
 export function undoStoryDelete(): void {
   const undo = storyUndo.peek()
   undoState.value = null
-  undo?.undo()
+  undo?.undo?.()
 }
 
-export function dismissStoryUndo(): void {
+/** Dismisses the toast; given the toast being dismissed, only while it still shows. */
+export function dismissStoryUndo(toast?: StoryUndo): void {
+  if (toast && storyUndo.peek() !== toast) return
   undoState.value = null
 }
 
@@ -118,7 +122,7 @@ export function registerStoryUndoToast(): () => void {
  */
 export function runStoryUndoShortcut(event: KeyboardEvent): boolean {
   if ((event.ctrlKey === event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') return false
-  if (undoToastsShowing === 0 || !storyUndo.peek() || modalLayerOpen.peek() || isEditableTarget(event.target)) return false
+  if (undoToastsShowing === 0 || !storyUndo.peek()?.undo || modalLayerOpen.peek() || isEditableTarget(event.target)) return false
   event.preventDefault()
   undoStoryDelete()
   return true
@@ -126,6 +130,12 @@ export function runStoryUndoShortcut(event: KeyboardEvent): boolean {
 
 function offerUndo(message: string, undo: () => void): void {
   undoState.value = { session: currentSession(), value: { message, undo } }
+}
+
+/** Says why an edit changed nothing when its images would not fit in the Design. */
+function reportOutcome(outcome: StoryEditOutcome): void {
+  if (outcome !== 'images-do-not-fit') return
+  undoState.value = { session: currentSession(), value: { message: t('stories.imagesDoNotFit'), undo: null } }
 }
 
 function findStory(storyId: string): Story | null {
@@ -155,8 +165,9 @@ export function requestDeleteStory(storyId: string): void {
   const deletion = deleteStory(storyId)
   if (!deletion) return
   offerUndo(t('stories.deleted', { name: deletion.story.name }), () => {
-    restoreStory(deletion)
-    selectStory(deletion.story.id)
+    const outcome = restoreStory(deletion)
+    reportOutcome(outcome)
+    if (outcome === 'applied') selectStory(deletion.story.id)
   })
 }
 
@@ -225,7 +236,7 @@ export function setStepText(storyId: string, stepId: string, text: RichTextBlock
 }
 
 export function setStepImages(storyId: string, stepId: string, images: StoryImage[]): void {
-  updateStoryStep(storyId, stepId, { images })
+  reportOutcome(updateStoryStep(storyId, stepId, { images }))
 }
 
 /** Moves a step up (-1) or down (+1) in its story. */
@@ -245,7 +256,7 @@ export function reorderSteps(storyId: string, stepIds: readonly string[]): void 
 /** Copies a step right after itself and selects the copy. */
 export function duplicateStep(storyId: string, stepId: string): void {
   const id = createUuid()
-  duplicateStoryStep(storyId, stepId, id)
+  reportOutcome(duplicateStoryStep(storyId, stepId, id))
   if (findStep(storyId, id)) selectionState.value = { session: currentSession(), value: { storyId, stepId: id } }
 }
 
@@ -259,7 +270,7 @@ export function requestDeleteStep(storyId: string, stepId: string): void {
   if (!deletion) return
   if (selection.peek()?.stepId === stepId) selectStep(null)
   offerUndo(t('stories.stepDeleted', { name: deletion.step.title || t('stories.untitledStep') }), () => {
-    restoreStoryStep(deletion)
+    reportOutcome(restoreStoryStep(deletion))
   })
 }
 

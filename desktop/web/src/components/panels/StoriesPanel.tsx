@@ -320,7 +320,13 @@ function StoryUndoToastContent({ undo }: { readonly undo: StoryUndo }) {
   useEffect(() => registerStoryUndoToast(), [])
   return (
     <div className={styles.toastSlot}>
-      <Toast message={undo.message} actionLabel={t('stories.undo')} onAction={undoStoryDelete} onDismiss={dismissStoryUndo} />
+      <Toast
+        message={undo.message}
+        icon={undo.undo ? 'check' : 'alert'}
+        actionLabel={undo.undo ? t('stories.undo') : undefined}
+        onAction={undo.undo ? undoStoryDelete : undefined}
+        onDismiss={() => dismissStoryUndo(undo)}
+      />
     </div>
   )
 }

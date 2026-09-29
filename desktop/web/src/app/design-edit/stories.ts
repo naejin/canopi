@@ -1,4 +1,6 @@
+import { STORY_IMAGES_MAX_TOTAL_BYTES } from '../../generated/canopi-design-format'
 import type { CanopiFile, RichTextBlock, Story, StoryImage, StoryStep } from '../../types/design'
+import { designEmbeddedImageBytes } from '../contracts/views-admission'
 import { currentDesignSessionKey, editCurrentDesign, readCurrentDesign } from './core'
 
 // Stories are Design Edit data (ADR 0011), like saved views: every command
@@ -7,6 +9,13 @@ import { currentDesignSessionKey, editCurrentDesign, readCurrentDesign } from '.
 // saved view of the same Design by id; callers pass only ids of views that
 // exist, and deleting a view (views.ts) removes the steps that show it. An
 // Undo that meets a missing view parks its steps until that view's own Undo.
+// A Design embeds at most 10 MiB of images, the limit admission refuses above;
+// a command that would take it over (duplicating a step, an Undo) changes
+// nothing and says `images-do-not-fit`, so continuous save never writes a
+// Design that cannot be opened again.
+
+/** What a story command did. */
+export type StoryEditOutcome = 'applied' | 'unchanged' | 'images-do-not-fit'
 
 /** What deleting a story removed, so Undo can put it back where it was. */
 interface StoryDeletion {
@@ -32,7 +41,7 @@ type StoryStepPatch = Partial<Pick<StoryStep, 'title' | 'text' | 'images' | 'vie
  */
 const parkedSteps = new WeakMap<object, Map<string, StoryStepDeletion[]>>()
 
-function parkStepsAwaitingView(entries: readonly StoryStepDeletion[]): void {
+export function parkStepsAwaitingView(entries: readonly StoryStepDeletion[]): void {
   if (entries.length === 0) return
   const key = currentDesignSessionKey()
   let byView = parkedSteps.get(key)
@@ -56,16 +65,41 @@ function viewExists(design: CanopiFile, viewId: string): boolean {
   return (design.views ?? []).some((view) => view.id === viewId)
 }
 
-function editStories(update: (stories: readonly Story[], design: CanopiFile) => readonly Story[]): void {
+/** Whether `next` may replace `design`: its images fit, or it embeds no more than before. */
+function imagesFit(design: CanopiFile, next: CanopiFile): boolean {
+  const bytes = designEmbeddedImageBytes(next)
+  return bytes <= STORY_IMAGES_MAX_TOTAL_BYTES || bytes <= designEmbeddedImageBytes(design)
+}
+
+/** A Design Edit whose result must keep the Design's images within their limit. */
+export function editWithinImageLimit(update: (design: CanopiFile) => CanopiFile): StoryEditOutcome {
+  let outcome: StoryEditOutcome = 'unchanged'
   editCurrentDesign((design) => {
+    const next = update(design)
+    if (next === design) {
+      outcome = 'unchanged'
+      return design
+    }
+    if (next.stories !== design.stories && !imagesFit(design, next)) {
+      outcome = 'images-do-not-fit'
+      return design
+    }
+    outcome = 'applied'
+    return next
+  })
+  return outcome
+}
+
+function editStories(update: (stories: readonly Story[], design: CanopiFile) => readonly Story[]): StoryEditOutcome {
+  return editWithinImageLimit((design) => {
     const stories = design.stories ?? []
     const next = update(stories, design)
     return next === stories ? design : { ...design, stories: [...next] }
   })
 }
 
-function editStory(storyId: string, update: (story: Story) => Story): void {
-  editStories((stories) => {
+function editStory(storyId: string, update: (story: Story) => Story): StoryEditOutcome {
+  return editStories((stories) => {
     const index = stories.findIndex((story) => story.id === storyId)
     if (index === -1) return stories
     const next = update(stories[index]!)
@@ -102,26 +136,27 @@ export function deleteStory(storyId: string): StoryDeletion | null {
  * Undo for `deleteStory`. Steps whose view is gone since stay out, so none
  * dangles; they are parked and return with the view's own Undo.
  */
-export function restoreStory(deletion: StoryDeletion): void {
+export function restoreStory(deletion: StoryDeletion): StoryEditOutcome {
   const design = readCurrentDesign()
-  if (!design || (design.stories ?? []).some((story) => story.id === deletion.story.id)) return
+  if (!design || (design.stories ?? []).some((story) => story.id === deletion.story.id)) return 'unchanged'
   const dropped = deletion.story.steps.flatMap((step, index) => (
     viewExists(design, step.view_id) ? [] : [{ storyId: deletion.story.id, step, index }]
   ))
   const kept = new Set(dropped.map((entry) => entry.step.id))
-  editStories((stories) => {
+  const outcome = editStories((stories) => {
     if (stories.some((story) => story.id === deletion.story.id)) return stories
     const story = { ...deletion.story, steps: deletion.story.steps.filter((step) => !kept.has(step.id)) }
     const copy = [...stories]
     copy.splice(Math.min(deletion.index, copy.length), 0, story)
     return copy
   })
-  parkStepsAwaitingView(dropped)
+  if (outcome === 'applied') parkStepsAwaitingView(dropped)
+  return outcome
 }
 
 /** Adds a step at `index` (the end by default) when its view exists. */
-export function addStoryStep(storyId: string, step: StoryStep, index?: number): void {
-  editCurrentDesign((design) => {
+export function addStoryStep(storyId: string, step: StoryStep, index?: number): StoryEditOutcome {
+  return editWithinImageLimit((design) => {
     if (!(design.views ?? []).some((view) => view.id === step.view_id)) return design
     const stories = design.stories ?? []
     const storyIndex = stories.findIndex((story) => story.id === storyId)
@@ -135,8 +170,8 @@ export function addStoryStep(storyId: string, step: StoryStep, index?: number): 
   })
 }
 
-export function updateStoryStep(storyId: string, stepId: string, patch: StoryStepPatch): void {
-  editCurrentDesign((design) => {
+export function updateStoryStep(storyId: string, stepId: string, patch: StoryStepPatch): StoryEditOutcome {
+  return editWithinImageLimit((design) => {
     if (patch.view_id !== undefined && !(design.views ?? []).some((view) => view.id === patch.view_id)) return design
     const stories = design.stories ?? []
     const storyIndex = stories.findIndex((story) => story.id === storyId)
@@ -198,8 +233,8 @@ export function moveStoryStepToStory(fromStoryId: string, stepId: string, toStor
 }
 
 /** Copies a step right after itself under a new id; the copy shows the same view. */
-export function duplicateStoryStep(storyId: string, stepId: string, newStepId: string): void {
-  editStory(storyId, (story) => {
+export function duplicateStoryStep(storyId: string, stepId: string, newStepId: string): StoryEditOutcome {
+  return editStory(storyId, (story) => {
     const index = story.steps.findIndex((step) => step.id === stepId)
     if (index === -1 || story.steps.some((step) => step.id === newStepId)) return story
     const steps = [...story.steps]
@@ -223,15 +258,15 @@ export function deleteStoryStep(storyId: string, stepId: string): StoryStepDelet
  * Undo for `deleteStoryStep`. Nothing comes back when the story is gone; a
  * step whose view is gone is parked and returns with the view's own Undo.
  */
-export function restoreStoryStep(deletion: StoryStepDeletion): void {
+export function restoreStoryStep(deletion: StoryStepDeletion): StoryEditOutcome {
   const design = readCurrentDesign()
-  if (!design) return
+  if (!design) return 'unchanged'
   const storyExists = (design.stories ?? []).some((story) => story.id === deletion.storyId)
   if (storyExists && !viewExists(design, deletion.step.view_id)) {
     parkStepsAwaitingView([deletion])
-    return
+    return 'unchanged'
   }
-  addStoryStep(deletion.storyId, deletion.step, deletion.index)
+  return addStoryStep(deletion.storyId, deletion.step, deletion.index)
 }
 
 function definedFields(patch: StoryStepPatch): StoryStepPatch {

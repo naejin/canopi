@@ -283,6 +283,18 @@ describe('story actions', () => {
     expect(storyUndo.value).toBeNull()
   })
 
+  it('says the images do not fit instead of duplicating a step past the Design limit', () => {
+    const photo = { src: `data:image/png;base64,${'A'.repeat(1398100)}`, alt: 'photo' }
+    open([{ id: 'visit', name: 'Visit', steps: [{ id: 'a', view_id: 'v1', title: 'A', text: [], images: Array(6).fill(photo) }] }])
+
+    duplicateStep('visit', 'a')
+
+    expect(currentDesign.value!.stories![0]!.steps).toHaveLength(1)
+    expect(storyUndo.value).toEqual({ message: 'These images do not fit: a Design holds at most 10 MB of images. Remove an image, then try again.', undo: null })
+    undoStoryDelete()
+    expect(currentDesign.value!.stories![0]!.steps).toHaveLength(1)
+  })
+
   it('does nothing for unknown stories or steps, or without a map', () => {
     expect(addCurrentViewAsStep('missing')).toBeNull()
     expect(addCurrentViewAsStep('visit')).toBeNull()

@@ -14,7 +14,9 @@ import {
   restoreStoryStep,
   updateStoryStep,
   deleteSavedView,
+  restoreSavedView,
 } from '../app/design-edit'
+import { viewsAndStoriesProblem } from '../app/contracts/views-admission'
 import { savedViewPlantLabels } from '../app/design-edit/views'
 import { currentDesign, designSessionStore } from '../app/document-session/store'
 import { replaceCurrentDesignState } from './support/design-session-state'
@@ -150,6 +152,59 @@ describe('story Design Edit commands', () => {
     deleteSavedView('b')
     restoreStory(deletion)
     expect(steps()).toEqual(['x'])
+  })
+})
+
+describe('the 10 MiB of images a Design embeds', () => {
+  // 1 MiB less 1 byte of PNG data: the picker's limit per image.
+  const image = { src: `data:image/png;base64,${'A'.repeat(1398100)}`, alt: 'photo' }
+  const withImages = (id: string, count: number, viewId = 'a'): StoryStep => ({
+    ...step(id, viewId),
+    images: Array.from({ length: count }, () => image),
+  })
+  const admitted = () => viewsAndStoriesProblem(currentDesign.value!.views ?? [], currentDesign.value!.stories ?? [])
+
+  it('refuses to duplicate a step whose images would not fit', () => {
+    open([story('s1', [withImages('x', 6)])])
+    expect(duplicateStoryStep('s1', 'x', 'x2')).toBe('images-do-not-fit')
+    expect(steps()).toEqual(['x'])
+    expect(admitted()).toBeNull()
+    expect(designSessionStore.isDesignDirty()).toBe(false)
+
+    open([story('s1', [withImages('x', 3)])])
+    expect(duplicateStoryStep('s1', 'x', 'x2')).toBe('applied')
+    expect(steps()).toEqual(['x', 'x2'])
+    expect(admitted()).toBeNull()
+  })
+
+  it('refuses an Undo that would bring back more images than fit', () => {
+    open([story('s1', [withImages('x', 4), withImages('y', 5)])])
+    const deletion = deleteStoryStep('s1', 'x')!
+    updateStoryStep('s1', 'y', { images: withImages('y', 9).images })
+    expect(restoreStoryStep(deletion)).toBe('images-do-not-fit')
+    expect(steps()).toEqual(['y'])
+    expect(admitted()).toBeNull()
+
+    open([story('s1', [withImages('x', 4)]), story('s2', [withImages('y', 5)])])
+    const storyDeletion = deleteStory('s1')!
+    updateStoryStep('s2', 'y', { images: withImages('y', 9).images })
+    expect(restoreStory(storyDeletion)).toBe('images-do-not-fit')
+    expect(currentDesign.value?.stories?.map((entry) => entry.id)).toEqual(['s2'])
+    expect(admitted()).toBeNull()
+
+    open([story('s1', [withImages('x', 4, 'b')]), story('s2', [withImages('y', 5)])])
+    const viewDeletion = deleteSavedView('b')!
+    updateStoryStep('s2', 'y', { images: withImages('y', 9).images })
+    expect(restoreSavedView(viewDeletion)).toBe('images-do-not-fit')
+    expect(currentDesign.value?.views?.map((entry) => entry.id)).toEqual(['a'])
+    expect(admitted()).toBeNull()
+  })
+
+  it('refuses images added to a step beyond the Design limit', () => {
+    open([story('s1', [withImages('x', 6), withImages('y', 0)])])
+    updateStoryStep('s1', 'y', { images: withImages('y', 5).images })
+    expect(currentDesign.value?.stories?.[0]?.steps[1]?.images).toEqual([])
+    expect(admitted()).toBeNull()
   })
 })
 

@@ -4,7 +4,7 @@ import {
   STORY_IMAGE_MAX_BYTES,
   STORY_IMAGES_MAX_TOTAL_BYTES,
 } from '../../generated/canopi-design-format'
-import type { RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
+import type { CanopiFile, RichTextBlock, RichTextSpan, SavedView, Story } from '../../types/design'
 
 // Mirrors common_types::views::validate_views_and_stories. The generated schema
 // already bounds each camera and extent; this checks extent order, ids, cross-references, link schemes
@@ -92,6 +92,17 @@ export function embeddedImageBytes(src: string): number {
   const payload = src.slice(marker + ';base64,'.length)
   const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
   return Math.floor(payload.length / 4) * 3 - padding
+}
+
+/** Decoded bytes of every image a Design embeds. */
+export function designEmbeddedImageBytes(design: Pick<CanopiFile, 'stories'> | null): number {
+  let bytes = 0
+  for (const story of design?.stories ?? []) {
+    for (const step of story.steps) {
+      for (const image of step.images ?? []) bytes += embeddedImageBytes(image.src)
+    }
+  }
+  return bytes
 }
 
 /** Decoded bytes an image source embeds (0 for an https: link), or why it is refused. */
