@@ -129,7 +129,7 @@ export interface ToolHost {
   nudge(direction: ScreenPoint, large: boolean): 'nudged' | 'blocked' | 'no-selection'
   hasNudgeSeries(): boolean                                     // the Esc layer 65
   endNudgeSeries(commit: boolean): void                         // Esc aborts; idle, focusout, a press or another key commit
-  /** Transient history (today's canUndo/…TransientHistory): forwards to CanvasTool.undoTransient and friends. */
+  /** Transient history (today's canUndo/…TransientHistory): sends the active tool the 'undo-transient' and 'redo-transient' commands and reads its canUndoTransient?/canRedoTransient?. */
   readonly transientHistory: {
     readonly revision: ReadonlySignal<number>
     canUndo(): boolean; canRedo(): boolean; undo(): boolean; redo(): boolean

@@ -4,7 +4,7 @@ import type { ReadonlySignal } from '@preact/signals'
 import type { SessionPlane } from '../../session-plane'
 import type { WorkspaceCameraPolicy } from '../../workspace-camera-policy'
 import type { NavigationPolicy } from './navigation-policy'
-import type { ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
+import type { PlanarCamera, ScreenInsets, ScreenPoint, ViewCamera, ViewFrameSource, ViewScreen } from './types'
 
 export type CameraMove =
   /** deltaPx is content movement: the ground under the pointer moves by deltaPx. New centre = unproject(screenCentre − deltaPx). */
@@ -28,6 +28,12 @@ export type CameraMove =
       readonly animation: 'none' | 'ease' | 'fly'
       readonly durationMs?: number              // ease: 300 default
     }
+  /**
+   * setViewport's exact placement (createTestView, and the legacy facade's setViewport and reprojectViewport). The headless driver
+   * clamps the scale as today and adopts the rest bit for bit; the MapLibre driver converts it to a ViewCamera through the plane once
+   * and jumps.
+   */
+  | { readonly kind: 'place'; readonly planar: PlanarCamera }
 
 export interface CameraDriver {
   readonly frames: ViewFrameSource
@@ -36,7 +42,9 @@ export interface CameraDriver {
   /** The bearing a running tween or flight will end at, else the live bearing. */
   bearingTarget(): number
   stopAnimation(): void
-  /** Re-origin: attached rebuilds against the new plane; headless recomputes (camera is geographic). */
+  /** Re-origin and the attached refreshOrigin only (hydration keeps the plane camera): the MapLibre driver rebuilds against the new
+   *  plane; the headless driver applies old.transformTo(new) to its PlanarCamera in plane terms, no lon/lat (today's
+   *  reprojectPlaneViewport, exact at bearing 0). */
   planeChanged(plane: SessionPlane): void
   setScreen(screen: ViewScreen): void
   setInsets(insets: ScreenInsets): void

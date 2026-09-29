@@ -19,8 +19,9 @@ export interface SceneBounds { readonly minX: number; readonly minY: number; rea
 export interface SceneBoundsOptions {
   /** The scene's extent at a candidate scale: corner points of every plant, zone and note footprint, in plane metres.
    *  Notes and default-mode plants are screen-sized, so the extent depends on the scale (today camera.ts:521-565,
-   *  :640-670). The runtime supplies it (command-surface.ts, query-surface.ts) from plant-presentation.ts,
-   *  annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Replaces camera.ts's plantContext. */
+   *  :640-670). The runtime supplies it (command-surface.ts, document-surface.ts) through canvas/runtime/scene-extent.ts, from
+   *  plant-presentation.ts, annotation-layout.ts and zone-geometry.ts, so view/ imports none of them (P4). Replaces camera.ts's
+   *  plantContext; when it is absent the legacy facade falls back to today's computeSceneBounds (0A to the end of 0D2). */
   readonly extentPoints?: (pixelsPerMetre: number) => readonly WorldPoint[]
   /** Scale that frames an empty Design, centred on the session plane origin. */
   readonly emptySceneScale?: number
@@ -31,8 +32,8 @@ export interface TemporaryBoundsFocusOptions {
   /** Optional external ceiling, such as a MapLibre zoom-limit equivalent. */
   readonly maximumScale?: number
 }
-// ScenePersistedState and ScenePlantEntity are type-only imports from canvas/runtime/scene/types.ts (P4 allows them). Every view/ file
-// imports them from '../scene/types', never the barrel '../scene' (P4 would reject it); files outside view/ keep today's barrel imports.
+// This file uses no scene type. A view/ file that needs one (navigation.ts: ScenePersistedState) imports it type-only from
+// '../scene/types' (P4 allows it), never the barrel '../scene' (P4 would reject it); files outside view/ keep today's barrel imports.
 
 /**
  * The geographic camera in MapLibre's terms. bearingDeg: the compass direction that is
@@ -46,6 +47,15 @@ export interface ViewCamera {
   /** Literal 0 until the pitch phase widens it to number; the compiler then lists every consumer. */
   readonly pitchDeg: 0
 }
+
+/**
+ * The headless driver's camera (ADR 0016, amended 2026-09-30): today's CameraController placement plus a bearing, in CSS px and
+ * session-plane metres. A plane point p lands on screen at turn(p × scale, bearingDeg) + { x, y }: scaled, turned counter-clockwise
+ * on screen by bearingDeg about the screen origin (so the compass direction bearingDeg points up), then translated, so { x, y } is the
+ * plane origin's screen point; at bearing 0 it is today's viewport. The headless driver moves it with today's arithmetic, bit for
+ * bit at bearing 0, and derives its ViewCamera from it for readers; the MapLibre driver never holds one.
+ */
+export interface PlanarCamera { readonly x: number; readonly y: number; readonly scale: number; readonly bearingDeg: number }
 
 export interface ViewScreen { readonly width: number; readonly height: number; readonly devicePixelRatio: number }
 

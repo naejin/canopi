@@ -74,10 +74,13 @@ export type SceneLayerKind = SceneLayerEntity['name']
  * The entities are already where a click would put them: the tool builds the plant as a click would (today plantEntityFromStampSource)
  * and applies the stamp's offset and held rotation to the template (today objectStampEntities and rotateStampEntities).
  * `anchor` and `rotationDeg` describe the pick for tests and guidance; the renderer never re-applies them.
- * A plant ghost is the symbol only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
+ * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
+ * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
+ * border of the same colour, radius half the plant's world AABB (today plant-spacing-overlay.ts:158-181; Plant a row emits its row ghosts
+ * with 'dot' at opacity 0.35). Colours come from the scene's plant presentation, never a raw colour in the draft.
  */
 export type GhostEntity =
-  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity }
+  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot' }
   | { readonly kind: 'objects'; readonly anchor: WorldPoint; readonly rotationDeg: number; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 export interface TextEntryRequest {
   readonly anchor: WorldPoint
