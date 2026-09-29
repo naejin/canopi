@@ -72,3 +72,7 @@ desktop/web/dist-pdf-validation/
 # Locally built sidecars (scripts/build-geolibre-cli.sh)
 /desktop/binaries/
 desktop/web/coverage/
+
+# Playwright output (desktop/web/playwright.config.ts): results, traces, the HTML report
+desktop/web/test-results/
+desktop/web/playwright-report/
