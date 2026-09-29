@@ -90,3 +90,23 @@ Tool names are the `canvas.tools.*` keys and panel names the `panelRail.*` keys 
 | Budget | Budget | Бюджет | 预算 | 予算 | 예산 |
 | Design notebook | Ontwerpnotitieboek | Блокнот проектов | 设计笔记本 | デザインノート | 디자인 노트북 |
 | Stories | Verhalen | Истории | 故事 | ストーリー | 이야기 |
+
+## Map navigation terms
+
+These arrive with Canvas v2 phases 1 and 2 ([ADR 0015](../adr/0015-rotating-map-and-canvas-controls.md)); they are proposals until those strings land, and each phase confirms them by hand. Turning the view always names the view or the map, so it never reads as the object command Rotate. Map orientation is a PDF setting and never shares a word with the paper Orientation.
+
+| English | fr | es | pt | it | de |
+| --- | --- | --- | --- | --- | --- |
+| compass | boussole | brújula | bússola | bussola | Kompass |
+| Reset north | Rétablir le nord | Restablecer el norte | Redefinir o norte | Ripristina il nord | Nach Norden ausrichten |
+| turn the view | tourner la vue | girar la vista | girar a vista | ruotare la vista | Ansicht drehen |
+| Map orientation | Orientation de la carte | Orientación del mapa | Orientação do mapa | Orientamento della mappa | Kartenausrichtung |
+| Pointing device | Périphérique de pointage | Dispositivo señalador | Dispositivo apontador | Dispositivo di puntamento | Zeigegerät |
+
+| English | nl | ru | zh | ja | ko |
+| --- | --- | --- | --- | --- | --- |
+| compass | kompas | компас | 指南针 | コンパス | 나침반 |
+| Reset north | Noorden herstellen | Север вверх | 重置为正北 | 北を上にする | 북쪽을 위로 |
+| turn the view | weergave draaien | повернуть вид | 旋转视图 | ビューを回転 | 보기 회전 |
+| Map orientation | Kaartoriëntatie | Ориентация карты | 地图方向 | 地図の向き | 지도 방향 |
+| Pointing device | Aanwijsapparaat | Указывающее устройство | 指点设备 | ポインティングデバイス | 포인팅 장치 |

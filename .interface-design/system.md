@@ -1,12 +1,13 @@
 # Canopi interface design system
 
-Canopi is a field atlas for designing a living landscape on the map: parchment, ink and ochre floating over satellite or map, with dense, readable controls. Reasons: [ADR 0010](../docs/adr/0010-map-first-interface.md). The visual target is the set of design boards in [`boards/`](boards/README.md); the UI gallery shows the shipped surfaces.
+Canopi is a field atlas for designing a living landscape on the map: parchment, ink and ochre floating over satellite or map, with dense, readable controls. Reasons: [ADR 0010](../docs/adr/0010-map-first-interface.md). The target is the design boards in [`boards/`](boards/README.md); the UI gallery shows what shipped.
 
 Read this file, then the one pattern file for the surface you touch:
 
 | Surface | Pattern |
 | --- | --- |
-| Map canvas, rails, view chip, zoom, map annotations, selection and right-click menu, inspection lens, symbol and colour, presenting a story | [Canvas workspace](patterns/canvas-workspace.md) |
+| Map canvas, rails, view chip, zoom, annotations, selection and canvas menu, inspection lens, symbol and colour, stories | [Canvas workspace](patterns/canvas-workspace.md) |
+| Pan, zoom and turn the map, compass, Pointing device, F1 gestures, PDF map orientation | [Canvas navigation](patterns/canvas-navigation.md) |
 | Plants in this Design, Layers, data library and analysis, Calendar, Budget, Consortium, Favorites, Design notebook, Stories, finder | [Dock panels](patterns/dock-panels.md) |
 | Plant catalog, filters, species detail, photos | [Catalog and details](patterns/catalog-and-details.md) |
 | Title bar, menus, start screen, dialogs, settings, notices, empty/loading/error states, PDF export, Web on phones | [Controls and shell](patterns/controls-and-shell.md) |
@@ -14,17 +15,17 @@ Read this file, then the one pattern file for the surface you touch:
 ## Direction
 
 - Parchment, ink and ochre, in light and dark. Green never appears in chrome; it is plant data.
-- Floating surfaces (`--color-glass`, blur, soft shadow, 14 px radius) over a full-bleed map. Panels, menus and dialogs sit on `--color-surface`.
+- Floating surfaces (`--color-glass`, blur, soft shadow, 14 px radius) over a full-bleed map.
 - One meaning per colour: ochre = selected, active or primary; blue ring = keyboard focus; amber = warning; red = error or destruction. Never ochre for decoration or warnings.
 - Type: Literata 600 for titles (28 display, 20 dialog, 18 panel), Source Sans 3 for UI (15 body, 14 controls, 12.5 captions), IBM Plex Mono 600 12 for species codes. Weights 400 and 600 only; nothing below 12 px (13 for CJK).
 
 ## Workspace layout
 
 - Title bar (floating, 50 px): logo, menubar (File, Edit, View, Tools, Help), Design name (click to rename), save status with its one action, place search (Ctrl K), Help, Settings.
-- Left: tool rail (Select, Pan · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool has been used once, then icons with labelled tooltips. In a short window the last tools fold into a More tools menu; Undo and Redo always stay.
-- Right: panel rail (Ctrl 1–9; the last panels fold into a More menu in a short window) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar can Expand.
-- Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design).
-- Tool cards sit top-left beside the rail (320 px). Status chips (highlight, search results, selection) sit top- or bottom-centre of the visible map area at 40 px.
+- Left: tool rail (Select · Place plants, Plant a row, Place a stamp · Polygon, Rectangle, Ellipse, Line · Text note, Measure · Undo, Redo), labelled with keys until each tool is used once, then icons; in a short window the last tools fold into More tools, never Undo and Redo. Pan (H) is off the rail, in View and Tools.
+- Right: panel rail (Ctrl 1–9; folds into More in a short window) and one panel at a time: 380 px, or 440 px for Budget, Consortium and Stories; Calendar can Expand.
+- Bottom left: view chip with pressed toggles (Grid, Snap to grid, Rulers). Bottom right: attribution pill, then zoom group (scale bar, −, scale ratio menu, +, Fit to Design, compass).
+- Tool cards sit top-left beside the rail (320 px). Status chips (40 px) sit top- or bottom-centre of the visible map area.
 
 ## Tokens
 
@@ -45,9 +46,8 @@ Read this file, then the one pattern file for the surface you touch:
 ## Plants
 
 - Symbols: 29 single-colour glyphs from the shared recipes (`canvas/runtime/plant-symbol-recipes.ts`) in three families (plant form, what it gives, what it does) plus four abstract marks; the picker shows them by family, five to a row.
-- Colour by species (default), stratum or one colour; any species can take any colour. Stratum colours are Okabe-Ito hues (Emergent blue, High bluish green, Mid orange, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour.
+- Colour by species (default), stratum or one colour; any species takes any colour. Stratum colours are Okabe-Ito hues (Emergent blue, High bluish green, Mid orange, Low reddish purple) plus a grey for "No stratum yet"; the stratum is the Design's (Consortium), never the catalog's. Display never changes a stored colour. Plant forms are not strata.
 - One species row: glyph 22 · common name (600) over italic scientific name (`lang="la"`) · mono code (44 px, right-aligned) · count (40 px, tabular) · actions. Never a code instead of a name; no name in the interface language shows the English name marked "(en)".
-- Strata are Emergent, High, Mid, Low; plant forms are a separate vocabulary.
 - Every plant list uses the shared finder: search (Ctrl F) over names in every language, scientific names, synonyms and codes, tolerant of accents, capitals and small typos; quick filters (Selected on map, Stratum and Form, then list-specific ones); a live count.
 
 ## Layout and interaction
@@ -55,8 +55,8 @@ Read this file, then the one pattern file for the surface you touch:
 - Keep the map visible and useful. A panel has one title, a close action, compact controls and a scrolling body; apply actions stay visible.
 - Preview before mutation; each action keeps its command or workbench authority. Selection, focus, hover, visibility and locks are distinct states.
 - Destructive actions confirm and name what is lost, or show an Undo toast (also Ctrl Z). Toasts do not time out while hovered or focused.
-- Keyboard: every pointer action has a keyboard path. F6 and Shift F6 move between title bar, tool rail, map and open panel. Esc closes a menu or dialog → cancels a gesture → returns to Select → clears the selection. Single-key tool shortcuts work only while the map has focus and can be turned off.
-- Popups anchor to their trigger and never leave the viewport: a menu too tall for the room below flips above when that fits, or caps its height and scrolls. Dialogs are modal, trap focus and return it. Layering uses only the stacking scale in `global.css` (`stacking-order.test.ts`).
+- Keyboard: every pointer action has a keyboard path, turning the map included; one keyboard owner routes keys. F6 and Shift F6 cycle title bar, tool rail, map and open panel. One Esc does one thing, the tool's first: menu or dialog → text entry → gesture → held pick or draft → Select → selection. Single keys work anywhere except text fields and dialogs and can be turned off; Shift N always resets north.
+- Popups anchor to their trigger and stay in the viewport: flipped above, or capped and scrolling, when too tall. Dialogs are modal, trap focus and return it. Layering uses only the stacking scale in `global.css` (`stacking-order.test.ts`).
 - Locale: numbers, dates, currency and units through `Intl`; message formats for plurals and names inside sentences; buttons, footers and segments wrap instead of clipping; terms from the [UI glossary](../docs/guides/ui-glossary.md).
 
 ## Reuse before adding a pattern

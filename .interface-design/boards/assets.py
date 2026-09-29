@@ -152,6 +152,7 @@ def write_all(out):
         'plants-close.svg': overlay.overlay(data, zoom=2.6, size=18),
         'plants-close-goji.svg': overlay.overlay(data, zoom=2.6, size=18, keep={'LBA'}),
         'plants-find.svg': overlay.overlay(data, zoom=1, size=14, keep={'MDO', 'MSY'}),
+        'plants-turned.svg': overlay.overlay(data, zoom=1.9, size=16, bearing=30),
         'orchard-json.json': json.dumps(data, separators=(',', ':'), ensure_ascii=False),
     }
     for name, text in files.items():

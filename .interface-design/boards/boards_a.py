@@ -26,7 +26,12 @@ def _ds_body():
                + '</div><div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">'
                + ib('select', 'Select', on=True) + ib('hand', 'Pan') + ib('eye', 'Hide layer') + ib('lock', 'Unlock layer', cls='soft') + ib('more', 'More actions', size='sm')
                + ib('star', 'Remove from favorites', size='sm', cls='fav')
-               + f'<span class="ib focus-demo" style="display: inline-flex;" aria-hidden="true">{icon("layers")}</span><span class="small muted">Keyboard focus: 2 px blue ring, never ochre</span></div>')
+               + f'<span class="ib focus-demo" style="display: inline-flex;" aria-hidden="true">{icon("layers")}</span><span class="small muted">Keyboard focus: 2 px blue ring, never ochre</span></div>'
+               + '<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">'
+               + compass(0) + '<span class="small muted">North up</span>' + compass(30) + '<span class="small muted">Turned 30°</span>'
+               + compass(30, cls='dragging') + '<span class="small muted">Turning</span>' + compass(30, cls='focus-demo')
+               + '<span class="tip" role="tooltip" style="flex-direction: column; align-items: flex-start; white-space: normal; width: 250px; gap: 2px;">'
+               + '<span>Reset north <span class="k">N</span></span><span class="k">Click to reset north. Drag the ring to turn the view; hold Shift for 15° steps.</span></span></div>')
     forms = ('<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">'
              + field('Design name', textin(ORCHARD, aria='Design name'))
              + field('Google Maps API key', textin('', 'Optional', 'key', aria='Google Maps API key'), 'Without a key Canopi uses the free imagery.')
@@ -75,12 +80,16 @@ board('DesignSystemDark', h=1700, title='Design system · dark', group='foundati
 @board('Rules', w=1440, h=1180, title='Behavior rules for implementation', group='foundations')
 def rules():
     groups = [
-        ('Keyboard', ['Every pointer action has a keyboard path: rows are buttons, drag-to-reorder has Move up/down (Alt ↑/↓), rotate has Rotate… (Ctrl Alt R), zone corners can be added with the arrow keys and Enter.',
-                      'Single-letter tool keys work only while the map has focus, never while typing or while an input method is composing. Settings › Keyboard turns them off and lets people remap them.',
+        ('Keyboard', ['Every pointer action has a keyboard path: rows are buttons, drag-to-reorder has Move up/down (Alt ↑/↓), rotate has Rotate… (Ctrl Alt R), turning the map has Shift ← and Shift →, zone corners can be added with the arrow keys and Enter.',
+                      'One keyboard owner routes every key. Single-letter shortcuts work anywhere except text fields and dialogs, never while an input method is composing. Settings › Keyboard turns them off; Shift N still resets north. Shortcuts cannot be remapped yet.',
                       'Match shortcuts on the key produced, then fall back to the physical key, so Cyrillic and CJK layouts work. Show shortcuts in the platform style: ⌘⇧Z on macOS, Ctrl Maj Z in French.',
-                      'Esc does one thing at a time, in this order: close the open menu or dialog → cancel the gesture in progress → leave the tool and return to Select → clear the selection.',
+                      'Esc does one thing at a time, the active tool first: close the open menu or dialog → cancel text entry → cancel the gesture in progress → drop a held stamp, row source or draft → return to Select → clear the selection.',
                       'Enter never commits while an input method is composing (Chinese, Japanese, Korean).',
-                      'The Web Edition binds shortcuts only while the map has focus and avoids keys browsers reserve (Ctrl N, W, Q, T).']),
+                      'The Web Edition avoids keys browsers reserve (Ctrl N, W, Q, T).']),
+        ('Moving and turning the map', ['Left click and left drag always select or draw. Right-drag, middle-drag and Space + drag pan in every tool; right- and middle-drag also pan mid-drawing; a still right-click opens the menu. Only the Pan tool (H) pans with a left drag.',
+                                        'The map turns only on purpose: Shift + right-drag, Shift + middle-drag, the compass, Shift ← / →, two fingers, a trackpad twist. Add Ctrl (Cmd on Mac) during a turn drag for 15° steps. Within 7° of north a free turn settles on north.',
+                                        'Plant symbols, names, measurements and chrome stay upright; zones, notes and the grid turn with the map. Rulers show only when north is up.',
+                                        'The compass is always in the zoom group: click to reset north, drag to turn. N, Shift N and Shift ↑ reset north too.']),
         ('Focus and announcements', ['A blue 2 px focus ring on every control, never removed. Dialogs trap focus and return it to the control that opened them.',
                                      'Save status is a live region: changes of state are announced once (Saved → Couldn’t save), “Saving…” is not. Errors use alert.',
                                      'Toasts stay until dismissed or replaced, pause on hover and focus, and Undo is always also Ctrl Z.',
@@ -97,7 +106,7 @@ def rules():
                             'Matches are highlighted in the names, counted, and shown on the map with a ring; one action selects them all or zooms to them.',
                             'A selection on the map filters any open panel with “Selected on map”, so the list and the map always point at the same plants.',
                             'Large lists can be grouped by stratum or form and sorted by name, count or total; the choice is kept per panel.']),
-        ('Motion and platform', ['Fly-to (place search, Fit to Design, Return to Design) jumps instead of flying when reduced motion is requested.',
+        ('Motion and platform', ['Fly-to (place search, Fit to Design, Return to Design) and turning the view jump instead of animating when reduced motion is requested.',
                                  'macOS uses the native menu bar; Windows and Linux show the in-window menus.',
                                  'Touch: 44 px targets, bottom sheet with peek, half and full heights, safe-area insets, a side sheet in landscape.']),
     ]
@@ -180,7 +189,7 @@ def locate():
     <span class="small muted">Place names © OpenStreetMap contributors</span>{btn("Skip, I’ll find it on the map", "link", size="sm")}
   </div>
 </div>
-{zoombar("1:50,000,000", "2,000 km", 90, attrib="© OpenStreetMap contributors")}
+{zoombar("1:50,000,000", "2,000 km", 90, attrib="© OpenStreetMap contributors", show_compass=False)}
 '''
 
 
@@ -398,7 +407,7 @@ def _ws_body():
   <button type="button" class="ib sm" aria-label="Zoom out (Ctrl −)" onClick="{{{{zoomOut}}}}">{icon("minus")}</button>
   <button type="button" class="btn ghost sm num" style="min-width: 62px; color: var(--ink);" aria-haspopup="listbox" aria-label="Map scale {{{{scaleRatio}}}}. Choose a scale">{{{{scaleRatio}}}}</button>
   <button type="button" class="ib sm" aria-label="Zoom in (Ctrl +)" onClick="{{{{zoomIn}}}}">{icon("plus")}</button>
-  {ib("fit", "Fit to Design (Shift F)", size="sm")}
+  {ib("fit", "Fit to Design (Shift F)", size="sm")}<div class="vrule" style="margin: 9px 2px;"></div>{compass()}
 </div></div>'''
 
 
@@ -539,7 +548,7 @@ def place_plants():
 
 @board('PlantRow', title='Plant a row · repeat a plant along a line', group='designing')
 def plant_row():
-    card = toolcard('Plant a row', ['<b style="font-weight: 600;">Framboisier</b> · drag along the row', 'Esc to cancel'],
+    card = toolcard('Plant a row', ['<b style="font-weight: 600;">Framboisier</b> · drag along the row', 'Esc to clear the row'],
                     lead=glyph('berry', '#AB5268', 24),
                     extra=(f'<div style="display: flex; align-items: flex-end; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px;">'
                            f'{field("Spacing", textin("0.5", aria="Spacing in meters", trail=chr(60) + "span class=muted" + chr(62) + "m" + chr(60) + "/span" + chr(62)))}'
@@ -558,7 +567,7 @@ def stamp_place():
     ghost = ''.join(f'<svg viewBox="0 0 24 24" aria-hidden="true" style="position: absolute; left: {cx + dx - s / 2}px; top: {cy + dy - s / 2}px; width: {s}px; height: {s}px; color: {c}; opacity: 0.75; stroke: #FFFFFF; stroke-width: 2px; paint-order: stroke; --ko: #FFFFFF;"><use href="#p-{g}"></use></svg>'
                     for g, c, dx, dy, s in comp)
     ring = '<svg width="1440" height="900" style="position: absolute; inset: 0;" aria-hidden="true">' + cased(f'<rect x="{cx - 66}" y="{cy - 50}" width="132" height="106" rx="8" fill="none" stroke="#FFF3D6" stroke-width="1.6" stroke-dasharray="6 5"></rect>') + '</svg>'
-    card = toolcard('Place a stamp', ['<b style="font-weight: 600;">Guilde pommier</b> · 10 plants · 4 species · click to place', '[ and ] rotate by 15° · Esc to stop placing'],
+    card = toolcard('Place a stamp', ['<b style="font-weight: 600;">Guilde pommier</b> · 10 plants · 4 species · click to place', '[ and ] rotate by 15° · Esc to clear the stamp'],
                     lead=icon('stamp'))
     card = card.replace('<b style="font-weight: 600; flex: 1 1 auto;">Place a stamp</b>', '<b style="font-weight: 600; flex: 1 1 auto;">Place a stamp</b>' + btn('Change stamp', 'link', size='sm'))
     return close_map() + ring + ghost + card + chrome('stamp', scale=CLOSE)
@@ -625,7 +634,7 @@ def zone_draw():
            + f'<circle cx="{cur[0]}" cy="{cur[1]}" r="4.5" fill="#9C5A16" stroke="#FFFFFF" stroke-width="1.5"></circle>')
     svg = f'<svg width="1440" height="900" viewBox="0 0 1440 900" style="position: absolute; inset: 0;" aria-hidden="true">{els}</svg>'
     labels = tag(776, 272, '105 m') + tag(965, 300, '61 m') + tag(955, 486, '103 m') + tag(783, 586, '67 m', live=True) + tag(820, 420, 'Area 1.07 ha')
-    card = toolcard('Polygon zone', ['Click to add corners. Click the first corner or press Enter to finish.', 'Backspace removes the last corner · Shift keeps 45° angles · Esc to cancel'])
+    card = toolcard('Polygon zone', ['Click to add corners. Click the first corner, double-click or press Enter to finish.', 'Backspace removes the last corner · Shift keeps 45° angles · Esc to cancel'])
     return z18_map() + svg + labels + card + chrome('polygon', name='Untitled Design', status='Draft', kind='draft', scale=('1:1,500', '50 m', 126))
 
 

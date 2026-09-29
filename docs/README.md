@@ -9,16 +9,16 @@ Every document answers one of four questions. Start with the narrowest one for y
 | Where is this area's boundary? | one guide per area in [`guides/`](guides/) (see below) |
 | What changed for users? | [`release-notes/`](release-notes/), the in-app Getting started |
 
-Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; [`review-checklist.md`](review-checklist.md) for what to try before a release; [`plans/`](plans/) for agreed but unbuilt work; [`CONTEXT.md`](../CONTEXT.md) for product vocabulary.
+Also: [`workflow.md`](workflow.md) for beads, branches, ownership and delivery; [`review-checklist.md`](review-checklist.md) for what to try before a release; [`plans/`](plans/) for agreed but unbuilt work (the canvas v2 [implementation prompt](plans/canvas-v2-implementation-prompt.md), to start from, and its [plan](plans/canvas-v2-plan.md), [spec](plans/canvas-v2-spec.md) and [inventory](plans/canvas-v2-inventory.md) carry out ADRs [0015](adr/0015-rotating-map-and-canvas-controls.md) to [0020](adr/0020-focus-and-keyboard-ownership.md)); [`CONTEXT.md`](../CONTEXT.md) for product vocabulary.
 
 ## Guides
 
 | Area | Guide |
 | --- | --- |
-| Map canvas, scene runtime, renderer, camera, snapshots | [map-workspace.md](guides/map-workspace.md) |
+| Map canvas, scene runtime, renderer, camera, input, tools, snapshots | [map-workspace.md](guides/map-workspace.md) |
 | `.canopi` format, Design Edit, settings, views and stories | [design-document.md](guides/design-document.md) |
 | LiDAR library, Layers, analyses | [data-library.md](guides/data-library.md) |
-| Frontend structure, commands, localisation, tests | [frontend.md](guides/frontend.md) |
+| Frontend structure, commands, keys and focus, localisation, tests | [frontend.md](guides/frontend.md) |
 | Terms per locale and copy rules | [ui-glossary.md](guides/ui-glossary.md) |
 | Desktop, Web, phones, the gallery | [editions.md](guides/editions.md) |
 | Plant catalog and search | [species-catalog.md](guides/species-catalog.md) |

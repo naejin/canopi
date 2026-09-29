@@ -3,7 +3,7 @@
 python3 .interface-design/boards/build.py            → out/<Board>.html for every board, out/index.html, out/assets/
 python3 .interface-design/boards/build.py Name ...   → only those boards (assets and index are always refreshed)
 
-Boards are registered by importing boards_a and boards_b. Everything under out/ is generated and ignored by git.
+Boards are registered by importing boards_a, boards_b and boards_nav. Everything under out/ is generated and ignored by git.
 """
 import json
 import os
@@ -22,6 +22,7 @@ ROWS = [
     ('Foundations: tokens, components, icons and behavior rules', ['DesignSystem', 'DesignSystemDark', 'Rules']),
     ('Start a Design and find the site', ['Start', 'LocateSite', 'SiteFound', 'Overview']),
     ('The workspace on your orchard', ['Workspace', 'FindPlants', 'SelectedToList', 'NamesOnMap']),
+    ('Moving and turning the map: compass, rulers, pointing device', ['Navigation', 'NavigationSettings', 'NavigationPhone']),
     ('Designing: catalog and placing', ['Catalog', 'CatalogFilters', 'SpeciesDetail', 'PlacePlants', 'PlantRow', 'StampPlace']),
     ('Designing: selection, appearance, zones, notes', ['Selection', 'Appearance', 'ZoneDraw', 'ZoneSelected', 'MeasureText']),
     ('Site data: layers, import, analysis, library', ['Layers', 'AddDataMenu', 'AddData', 'ImportProgress', 'AnalyzeDialog', 'SlopeAnalysis', 'Library']),
@@ -123,6 +124,7 @@ def main(names):
     shutil.copy(os.path.join(HERE, 'runtime.js'), os.path.join(OUT, 'runtime.js'))
     import boards_a  # noqa: F401  (registers boards on this module)
     import boards_b  # noqa: F401
+    import boards_nav  # noqa: F401
     unknown = [n for n in names if n not in BOARDS]
     if unknown:
         sys.exit(f'unknown board(s): {" ".join(unknown)}; known: {" ".join(BOARDS)}')

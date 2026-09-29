@@ -6,17 +6,17 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Design**: An agroecological plan drawn on the map: plants, zones, notes, measurements, planning (Calendar, Budget, Consortium), saved views and stories. Saved as a `.canopi` file; "Design" is always capitalised. _Avoid:_ Document, file, project
 
-**Draft**: A Design that has no `.canopi` file yet. Every new Design starts as one; Desktop keeps drafts in app data until Save as…, the Web Edition keeps them in the browser, where they are the only home. The Start screen lists drafts. _Avoid:_ Autosave backup, untitled file
+**Draft**: A Design that has no `.canopi` file yet. Every new Design starts as one; Desktop keeps drafts in app data until Save as…, the Web Edition in the browser, their only home. _Avoid:_ Autosave backup, untitled file
 
 **Home**: Where a Design Session writes: the `.canopi` file it was opened from or saved as (Desktop), or a Draft. Save as… moves it to a file; a Web download never changes it. _Avoid:_ Save location, target
 
-**Continuous Save**: Canopi's always-on saving: committed changes are written to the Home shortly after each change, when the window is left, before another Design replaces it and on close. The user is asked only when a write fails or the file changed outside Canopi. _Avoid:_ Autosave, save prompt
+**Continuous Save**: Canopi's always-on saving: changes are written to the Home shortly after each change, when the window is left, before another Design replaces it and on close. The user is asked only when a write fails or the file changed outside Canopi. _Avoid:_ Autosave, save prompt
 
 **Design Session**: The runtime context of the open Design: its state, Home, Continuous Save, lifecycle workflows and the attached scene runtime. _Avoid:_ Document session
 
-**Start screen**: What the app shows when no Design Session is active: New Design, Open Design… (Web: Open a .canopi file…), Drafts and, on Desktop, Recent Designs. A Design that cannot open says why ("Can’t open this Design": older, newer, missing or damaged), never a path. _Avoid:_ Welcome screen, homepage
+**Start screen**: What the app shows when no Design Session is active: New Design, Open Design… (Web: Open a .canopi file…), Drafts and, on Desktop, Recent Designs. A Design that cannot open says why, never a path. _Avoid:_ Welcome screen, homepage
 
-**Recent Design**: A Desktop reference to a `.canopi` file opened or saved before, with its sketch and counts. A file that is gone, older, newer or damaged shows its name and why it cannot open. _Avoid:_ Recent file, history item
+**Recent Design**: A Desktop reference to a `.canopi` file opened or saved before, with its sketch and counts. A file that cannot open shows its name and why. _Avoid:_ Recent file, history item
 
 **Design notebook**: The Desktop panel that lists saved Designs in user-named sections. It stores references and organisation only; the `.canopi` file stays the authority. Not in the Web Edition. _Avoid:_ File browser, project folder
 
@@ -28,7 +28,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 ## Map and coordinates
 
-**Map canvas**: The design surface is the map itself: basemap, satellite, terrain data, contours and hillshading are its background. There is no separate local canvas and no Design location; Settings › Canvas names the map's input options (Scroll wheel: Zooms the map or Pans the map). _Avoid:_ sketch, Design location
+**Map canvas**: The design surface is the map itself: basemap, satellite, terrain data, contours and hillshading are its background. There is no separate local canvas and no Design location. The view can turn; editing stays top-down. _Avoid:_ sketch, Design location
 
 **Session plane**: The runtime's local metre plane for the open Design, centred on the objects. Files store WGS84 longitude/latitude; the session plane converts to metres for tools, snapping, measurements and PDF layout. _Avoid:_ Anchor, spatial frame
 
@@ -38,9 +38,15 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Place search**: The title-bar field (Search a place…, Ctrl K) that finds a place by name (on Enter) or by typed coordinates and moves the view there. Only the camera moves; objects never do. _Avoid:_ Location editing, geocoding
 
-**Last view**: The camera position Canopi remembers in settings; "Where is your site?" opens a new Design over it. _Avoid:_ Design location, default site
+**Last view**: The camera position and direction Canopi remembers on this device; reopening a Design restores it, and "Where is your site?" opens a new Design north-up over it. _Avoid:_ Design location, default site
 
-**Saved view**: A named camera position kept in the Design (View › Save current view…), with the background, layers, labels and focused species it showed, and a picture. Going to a view moves only the camera. _Avoid:_ Bookmark, camera preset
+**Saved view**: A named camera position and direction kept in the Design (View › Save current view…), with the background, layers, labels and focused species it showed, and a picture. Going to a view moves only the camera. _Avoid:_ Bookmark, camera preset
+
+**Turn the view**: Rotate the map so north is no longer up (Shift + right-drag, Shift + ← or →, the compass, two fingers). Objects keep their stored angle. _Avoid:_ Rotate the map, spin (Rotate… turns objects)
+
+**Reset north**: Turn the view back to north up (N, Shift N, Shift + ↑, a compass click). _Avoid:_ Reset rotation, north-up mode
+
+**Compass**: The zoom-group button whose needle points north: click to reset north, drag its ring to turn the view. _Avoid:_ North arrow (the PDF's), orientation button
 
 **Story**: An ordered set of steps kept in the Design, each showing a saved view with a title, text and pictures. Present shows a story full-window. Presenting never changes the Design. _Avoid:_ Slideshow, tour
 
@@ -72,7 +78,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Selection chip**: The chip at the bottom of the map that names the selection ("12 plants · 3 species · 0.52 m apart", "Zone · Z04 · 118 m² · 46 m") with Select all of this species, Rename… and Clear selection. _Avoid:_ Status bar, inspector
 
-**Right-click menu**: The one context menu for objects and the empty map (right-click, the Menu key or Shift F10): Cut, Copy, Paste, Duplicate, Plant color, Plant symbol, Arrange, Save as stamp, Lock, Rotate…, Species details, Add to calendar…, Set unit cost… and more. _Avoid:_ Selection toolbar, action bar
+**Right-click menu**: The one context menu for objects and the empty map (a still right-click, the Menu key or Shift F10; a right-drag pans): Cut, Copy, Paste, Duplicate, Plant color, Plant symbol, Arrange, Save as stamp, Lock, Rotate…, Species details, Add to calendar…, Set unit cost… and more. _Avoid:_ Selection toolbar, action bar
 
 **Tool card**: The card beside the tool rail that names the active tool, what to do now and its keys. _Avoid:_ Toolbar hint, status text
 
@@ -92,7 +98,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Plant catalog**: The searchable species database with filters, details, photos and Favorites. Guides call the subsystem the species catalog. A species enters a Design only as placed plants. _Avoid:_ Plant database, species browser
 
-**Species**: A catalog entry describing a plant taxon and its ecological, morphological, agronomic, use and media data, identified by its canonical name. _Avoid:_ Plant, catalog plant
+**Species**: A catalog entry describing a plant taxon, identified by its canonical name. _Avoid:_ Plant, catalog plant
 
 **Canonical name**: The scientific name Canopi uses to identify a species; one per species. _Avoid:_ Latin name, species name
 
@@ -102,7 +108,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Plants in this Design**: The panel listing the placed species with counts, colours, symbols and Display on the map (colour by Species, Stratum or One color; Symbol size; Outline; Labels). _Avoid:_ Species key, legend panel
 
-**Find plants**: The Ctrl F search in every plant list (guides call it the plant finder): common names in every language, scientific names, synonyms and codes; accents, capitals and small typos do not matter; with Selected on map, Stratum and Form filters. _Avoid:_ Global search
+**Find plants**: The Ctrl F search in every plant list (guides call it the plant finder): common names in every language, scientific names, synonyms and codes, ignoring accents, capitals and small typos. _Avoid:_ Global search
 
 **Hardiness zone**: A USDA cold-tolerance zone of a species (min and max). _Avoid:_ Climate zone
 
@@ -122,7 +128,7 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 ## Data and analyses
 
-**Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design; it reads rasters itself, with no GDAL or other install, and says when it was rebuilt or cannot open. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
+**Data library**: The Desktop store of imported terrain and height rasters (single-band GeoTIFF: ground elevation, surface elevation, height above ground) and calculated results, shared by every Design; it needs no GDAL or other install. Delete everywhere removes an item from the library and every Design. _Avoid:_ LiDAR panel, layer store
 
 **Site data**: The Layers section that lists the Data library items this Design shows, with results nested under their source. Remove from Design keeps the item in the library. _Avoid:_ Data layer, terrain layer
 
@@ -132,11 +138,13 @@ Canopi helps people create agroecological designs for permaculture, syntropic ag
 
 **Planting plan (PDF)**: File › Export › Planting plan (PDF)…, titled "Export to PDF": the planting plan as pages with a plant key, north arrow and scale, printed As in the Design, in Grayscale or in Black. The Design never changes. _Avoid:_ Design report, screenshot
 
+**Map orientation**: The PDF choice North up (default) or As on screen; the north arrow always points to true north. _Avoid:_ Orientation (the paper's), rotation
+
 **Field sheet**: A detail page added over a drawn print area (Add field sheet) or the Whole Design, with its own key. Print areas belong to the export, never to the Design. _Avoid:_ Zone, page zone
 
 ## Support
 
-**Problem report**: Help › Report a problem… (Desktop): a summary and a diagnostic bundle the user shares by hand. The bundle never holds screenshots, raw paths or keys, and holds the Design only when the user opts in. _Avoid:_ Bug report, telemetry
+**Problem report**: Help › Report a problem… (Desktop): a summary and a diagnostic bundle the user shares by hand, never with screenshots, raw paths or keys, and with the Design only when the user opts in. _Avoid:_ Bug report, telemetry
 
 ## Architecture authorities
 

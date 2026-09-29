@@ -8,9 +8,9 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 
 - **Scene runtime** (`SceneStore` behind `SceneCanvasRuntime`) owns plants, zones, annotations, measurement guides, ruler guides (`extra.guides`), groups, locks, Design layers and the per-species colour, symbol and code maps. It changes only through runtime transactions; panels read it through `CanvasQuerySurface`.
 - **Design Edit** (`app/design-edit/`) owns `name`, `description`, `budget`, `budget_currency`, `timeline`, `consortiums`, `lidar` entries, `views`, `stories`, `created_at`, `extra.plant_display`, `extra.saved_view_display` and unknown root keys under `extra`. Nothing else writes them; its key names live in `app/design-edit/extra-keys.ts` and go through `readExtra`/`withExtra`.
-- **Settings** (`common-types/src/settings.rs`) own device state: locale, theme, map layers, `soften_background`, `scroll_wheel`, the Google key and `satellite_source`, `last_view`, snapping, tool-rail learning, single-key shortcuts and New Design defaults. A setting never travels with a file; a Design field never depends on the device.
+- **Settings** (`common-types/src/settings.rs`) own device state: locale, theme, map layers, `soften_background`, `scroll_wheel`, the Google key and `satellite_source`, `last_view` (centre, zoom and bearing; a missing bearing reads as 0), snapping, tool-rail learning, single-key shortcuts and New Design defaults. A setting never travels with a file; a Design field never depends on the device.
 - **Undo** covers Scene edits only. Design Edit commands, map layers and settings are not undoable.
-- **Coordinates.** The file stores WGS84 `GeoPoint { lon, lat }` for every position and zone rotation in degrees clockwise from north. Metres exist only in the session plane (`canvas/session-plane.ts`); camera moves never move objects.
+- **Coordinates.** The file stores WGS84 `GeoPoint { lon, lat }` for every position, and zone and note rotation in degrees clockwise from true north. Metres exist only in the session plane (`canvas/session-plane.ts`); camera moves, turning the view included, never move objects or change a stored rotation ([ADR 0015](../adr/0015-rotating-map-and-canvas-controls.md)).
 - **Trust boundaries.** Native: `desktop/src/design/format.rs`. Web: `app/contracts/design-ingestion.ts`. Nothing else casts raw JSON to `CanopiFile`; `canopi-design-wire.ts` is the only serializer; only `common-types/src/migrations.rs` and its mirror `design-migrations.ts` know older formats.
 - **Persistence.** Every write goes through `app/document-session/persistence.ts`; only a successful write to the session's home (file or Draft) acknowledges the captured baseline. Downloads, handoffs and Problem Report attachments are exports.
 
@@ -46,7 +46,7 @@ The `.canopi` file, the Design session (open, continuous save, replacement, clos
 
 - Read an older format outside the two migration modules, or convert inside `Deserialize`.
 - Write a Design field from a component, workbench or raw `store.ts` signal.
-- Persist a runtime metre, a plane origin, an anchor or a bearing.
+- Persist a runtime metre, a plane origin, an anchor or a Design-level bearing. Only view cameras carry a bearing: `views[].camera.bearing` in the Design, `last_view` in settings.
 - Call a serializer and then mark the Design saved; only `persistence.ts` acknowledges.
 - Infer a canvas replacement from `currentDesign` changing.
 - Read `updated_at` into a replacement guard; it is generated.

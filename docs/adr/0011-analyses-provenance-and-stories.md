@@ -2,6 +2,8 @@
 
 Status: Accepted (2026-09-26, Canopi v2)
 
+Amended by [ADR 0015](0015-rotating-map-and-canvas-controls.md) (2026-09-29): saved views and stories restore their bearing.
+
 ## Context
 
 v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned work adds hydrology (from the Whitebox tools bundled in the pinned GeoLibre CLI), canopy analysis ([ADR 0012](0012-vegetation-analysis.md)) and story maps that are designed and presented inside Canopi. Without shared seams each would add its own dialog, result bookkeeping and file fields.
@@ -16,7 +18,7 @@ v2.0 ships one analysis (slope) wired directly into the LiDAR workflow. Planned 
   - Unavailable entries say why (already in Layers, needs Desktop, needs a point cloud).
 - **Typed library items.** Library and site-data items carry a kind: raster (elevation, height, slope, flow…), point cloud, or vector result (streams, watersheds, detected trees, crowns). Layers, legends and value readouts dispatch on kind; nothing assumes an elevation raster.
 - **Provenance.** Every derived item records its input items and generations, analysis id and recipe version, parameters and tool version. Refresh re-runs a result in place (every Design that uses it sees the new result; the run stays in the processing history); stale results are flagged with their reason (input, recipe or tool changed); refresh is always explicit, never automatic.
-- **Saved views.** A Design can hold named views: camera (lon, lat, zoom, bearing), the ground it frames (so a view looks the same at any window size), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else.
+- **Saved views.** A Design can hold named views: camera (lon, lat, zoom, bearing), the lon/lat bounding box of the ground it frames (four corners when rotated; used by thumbnails and older builds), visible layers, highlighted species or objects, and optional title and text. Views are Design data (Design Edit authority), stored in lon/lat like everything else. Showing a view or story step restores centre, zoom and bearing exactly; it never snaps to north.
 - **Stories.** A story is an ordered list of saved views with rich text and optional images, authored in a Story panel beside the live map and presented full-window inside Canopi (keyboard and click navigation, reduced-motion jumps). Export to a self-contained web page and PDF comes from the same model. Canopi does not depend on ArcGIS StoryMaps.
 
 ## Consequences

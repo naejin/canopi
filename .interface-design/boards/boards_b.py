@@ -364,6 +364,7 @@ def pdf_export():
   {field("Background", seg(["None", "Map", "Satellite"], "Satellite", "Background"))}
   {check("Fade the background", True)}
   {field("Plant colors", seg(["As in the Design", "Grayscale", "Black"], "As in the Design", "Plant colors"))}
+  {field("Map orientation", seg(["North up", "As on screen"], "North up", "Map orientation"))}
   {slider("Symbol size on paper", "4.5", " mm", 3, 10)}
   <div style="display: flex; flex-direction: column; gap: 2px;"><span class="lbl">Include</span>{check("Species codes beside symbols", False)}{check("Zones and notes", True)}{check("Slope from Terrain", False)}{check("North arrow and scale bar", True)}</div>
   {field("Species key", seg(["On the plan", "On page 2"], "On page 2", "Species key"), "117 species: page 2 keeps the key readable.")}
@@ -442,7 +443,7 @@ def pdf_key():
 
 
 # ============================================================ system
-@board('Menus', w=1760, h=1000, title='Menus · every command, with its shortcut', group='system')
+@board('Menus', w=1760, h=1040, title='Menus · every command, with its shortcut', group='system')
 def menus():
     f = menu([('New Design', 'Ctrl N'), ('Open Design…', 'Ctrl O'), ('Open recent', '', 'sub'), '-', ('Rename…', 'F2'), ('Save as…', 'Ctrl Shift S'), ('Revert to the version when opened…', ''), '-',
               ('Add data…', ''), ('Data library…', ''), ('Import GeoJSON…', ''), ('Export', '', 'sub hot'), '-', ('Settings…', 'Ctrl ,'), '-', ('Close Design', 'Ctrl W'), ('Quit Canopi', 'Ctrl Q')], 300, label='File')
@@ -450,8 +451,9 @@ def menus():
     e = menu([('Undo', 'Ctrl Z'), ('Redo', 'Ctrl Shift Z'), '-', ('Cut', 'Ctrl X'), ('Copy', 'Ctrl C'), ('Paste', 'Ctrl V'), ('Duplicate', 'Ctrl D'), ('Delete', 'Del'), '-',
               ('Select all', 'Ctrl A'), ('Select all of this species', 'Ctrl Shift A'), ('Deselect', 'Esc'), '-', ('Symbol and color…', ''), ('Species details', ''), ('Add to calendar…', ''), ('Set unit cost…', ''), '-', ('Group', 'Ctrl G'), ('Ungroup', 'Ctrl Shift G'), ('Arrange', '', 'sub'), ('Rotate…', 'Ctrl Alt R'), '-',
               ('Lock', 'Ctrl Shift L'), ('Unlock all', ''), ('Save as stamp…', '')], 290, label='Edit')
-    v = menu([('Zoom in', 'Ctrl +'), ('Zoom out', 'Ctrl −'), ('Fit to Design', 'Shift F'), ('Search a place…', 'Ctrl K'), '-',
-              ('Grid', 'Shift G', 'nochk'), ('Snap to grid', 'Shift S', 'chk'), ('Rulers', 'Shift R', 'nochk'), ('Labels', 'N', 'sub'), ('Tool names', '', 'chk'), '-',
+    v = menu([('Zoom in', 'Ctrl +'), ('Zoom out', 'Ctrl −'), ('Fit to Design', 'Shift F'), ('Zoom to selection', 'Shift 2'), ('Search a place…', 'Ctrl K'), '-',
+              ('Reset north', 'N'), ('Turn view left 15°', 'Shift ←'), ('Turn view right 15°', 'Shift →'), ('Pan', 'H'), '-',
+              ('Grid', 'Shift G', 'nochk'), ('Snap to grid', 'Shift S', 'chk'), ('Rulers', 'Shift R', 'nochk'), ('Labels', 'Shift L', 'sub'), ('Tool names', '', 'chk'), '-',
               ('Layers', 'Ctrl 1'), ('Plants in this Design', 'Ctrl 2'), ('Plant catalog', 'Ctrl 3'), ('Favorites and stamps', 'Ctrl 4'), ('Calendar', 'Ctrl 5'), ('Budget', 'Ctrl 6'), ('Consortium', 'Ctrl 7'), ('Design notebook', 'Ctrl 8'), '-',
               ('Background', '', 'sub'), ('Theme', '', 'sub')], 290, label='View')
     t = menu([('Select', 'V'), ('Pan', 'H'), '-', ('Place plants', 'P'), ('Plant a row', 'W'), ('Place a stamp', 'K'), '-', ('Polygon zone', 'Z'), ('Rectangle zone', 'R'), ('Ellipse zone', 'E'), ('Line zone', 'L'), '-', ('Text note', 'T'), ('Measure', 'M')], 240, label='Tools')
@@ -487,11 +489,16 @@ def save_states():
             f'<div style="padding-top: 90px; display: flex; flex-direction: column; gap: 28px;">{dlg}{dlg2}</div></div>')
 
 
-@board('Settings', title='Settings · map and imagery', group='system')
-def settings():
-    nav = ''.join(f'<button type="button" class="row{" sel" if on else ""}"{" aria-current=" + chr(34) + "page" + chr(34) if on else ""} style="border: 0; width: 100%; font: inherit; color: inherit; cursor: pointer; min-height: 38px;{" font-weight: 600;" if on else " background: transparent;"}">{icon(ic, "s18")}{t}</button>'
-                  for ic, t, on in [('sun', 'Appearance', False), ('globe', 'Map and imagery', True), ('plants', 'New Designs', False), ('keyboard', 'Keyboard', False), ('folder', 'Files and data', False), ('info', 'About', False)])
-    content = f'''
+SETTINGS_SECTIONS = [('sun', 'Appearance', 'appearance'), ('image', 'Map and imagery', 'map'), ('fit', 'Canvas', 'canvas'), ('plants', 'New Designs', 'new'),
+                     ('keyboard', 'Keyboard', 'keyboard'), ('folder-open', 'Files and data', 'files'), ('info', 'About', 'about')]
+
+
+def settings_content(section):
+    if section == 'canvas':
+        return f'''
+    <h3 class="disp" id="st-sec" style="font-size: 20px;">Canvas</h3>
+    {field("Pointing device", seg(["Mouse: the wheel zooms", "Trackpad: two fingers pan"], "Mouse: the wheel zooms", "Pointing device"), "Pinch and Ctrl + wheel always zoom. Shift + wheel pans.")}'''
+    return f'''
     <h3 class="disp" id="st-sec" style="font-size: 20px;">Map and imagery</h3>
     {field("Satellite imagery", seg(["Free imagery", "My Google key"], "My Google key", "Satellite imagery"), "The free imagery needs no account. A Google Maps Platform key gives sharper, more recent imagery through the Map Tiles API.")}
     <div class="field"><label class="lbl" for="gk">Google Maps API key</label><div style="display: flex; gap: 6px; align-items: center;"><span class="input" style="flex: 1 1 auto;"><input id="gk" type="password" value="AIzaSyD-canopi-demo-key-Q4" aria-describedby="gk-s"></span>{btn("Show", "", size="md", aria="Show API key", extra=' aria-pressed="false"')}{btn("Remove key", "ghost", size="md")}</div></div>
@@ -499,12 +506,21 @@ def settings():
     <div class="rule"></div>
     {field("Map style", dropdown("OpenFreeMap · Liberty", "Map style"))}
     <span class="hint">Whether new Designs open on satellite or on the map is set in New Designs.</span>'''
-    dlg = (f'<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="st-t" style="width: 840px; height: 580px; flex-direction: row; overflow: hidden;">'
-           f'<nav aria-label="Settings sections" style="width: 220px; background: var(--surface-2); border-right: 1px solid var(--line); padding: 20px 10px; display: flex; flex-direction: column; gap: 2px;">'
-           f'<h2 class="disp" id="st-t" style="margin: 0 8px 12px; font-size: 20px; line-height: 28px;">Settings</h2>{nav}</nav>'
-           f'<div style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; position: relative;"><div style="position: absolute; right: 10px; top: 10px;">{ib("close", "Close settings", size="sm")}</div>'
-           f'<div style="padding: 20px 28px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;">{content}</div></div></div>')
-    return site_map() + chrome() + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 140px; transform: translateX(-50%);">{dlg}</div>'
+
+
+def settings_dialog(section='map'):
+    nav = ''.join(f'<button type="button" class="row{" sel" if sid == section else ""}"{" aria-current=" + chr(34) + "page" + chr(34) if sid == section else ""} style="border: 0; width: 100%; font: inherit; color: inherit; cursor: pointer; min-height: 38px;{" font-weight: 600;" if sid == section else " background: transparent;"}">{icon(ic, "s18")}{t}</button>'
+                  for ic, t, sid in SETTINGS_SECTIONS)
+    return (f'<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="st-t" style="width: 840px; height: 580px; flex-direction: row; overflow: hidden;">'
+            f'<nav aria-label="Settings sections" style="width: 220px; background: var(--surface-2); border-right: 1px solid var(--line); padding: 20px 10px; display: flex; flex-direction: column; gap: 2px;">'
+            f'<h2 class="disp" id="st-t" style="margin: 0 8px 12px; font-size: 20px; line-height: 28px;">Settings</h2>{nav}</nav>'
+            f'<div style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; position: relative;"><div style="position: absolute; right: 10px; top: 10px;">{ib("close", "Close settings", size="sm")}</div>'
+            f'<div style="padding: 20px 28px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;">{settings_content(section)}</div></div></div>')
+
+
+@board('Settings', title='Settings · map and imagery', group='system')
+def settings():
+    return site_map() + chrome() + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 140px; transform: translateX(-50%);">{settings_dialog("map")}</div>'
 
 
 @board('ProblemReport', title='Report a problem', group='system')
@@ -518,19 +534,23 @@ def problem_report():
     return site_map() + chrome() + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 120px; transform: translateX(-50%);">{dlg}</div>'
 
 
-@board('Shortcuts', h=1010, title='Keyboard shortcuts', group='system')
+@board('Shortcuts', h=1240, title='Keyboard shortcuts · keys and gestures', group='system')
 def shortcuts():
-    groups = [('Tools (while the map has focus)', [('Select', 'V'), ('Pan', 'H · hold Space'), ('Place plants', 'P'), ('Plant a row', 'W'), ('Place a stamp', 'K'), ('Polygon · rectangle · ellipse · line zone', 'Z · R · E · L'), ('Text note', 'T'), ('Measure', 'M')]),
-              ('Edit', [('Undo · Redo', 'Ctrl Z · Ctrl Shift Z'), ('Cut · Copy · Paste', 'Ctrl X · Ctrl C · Ctrl V'), ('Duplicate', 'Ctrl D'), ('Delete', 'Del'), ('Select all', 'Ctrl A'), ('Select all of this species', 'Ctrl Shift A'), ('Group · Ungroup', 'Ctrl G · Ctrl Shift G'), ('Rotate…', 'Ctrl Alt R'), ('Lock', 'Ctrl Shift L'), ('Move by 10 cm · 1 m', 'Arrows · Shift Arrows'), ('Reorder in a list', 'Alt ↑ · Alt ↓')]),
-              ('View', [('Zoom in · out', 'Ctrl + · Ctrl −'), ('Fit to Design', 'Shift F'), ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'N'), ('Grid · Snap · Rulers', 'Shift G · Shift S · Shift R'),
+    groups = [('Tools (anywhere except text fields)', [('Select', 'V'), ('Pan', 'H'), ('Place plants', 'P'), ('Plant a row', 'W'), ('Place a stamp', 'K'), ('Polygon · rectangle · ellipse · line zone', 'Z · R · E · L'), ('Text note', 'T'), ('Measure', 'M')]),
+              ('Edit', [('Undo · Redo', 'Ctrl Z · Ctrl Shift Z'), ('Cut · Copy · Paste', 'Ctrl X · Ctrl C · Ctrl V'), ('Duplicate', 'Ctrl D'), ('Delete', 'Del'), ('Select all', 'Ctrl A'), ('Select all of this species', 'Ctrl Shift A'), ('Group · Ungroup', 'Ctrl G · Ctrl Shift G'), ('Rotate…', 'Ctrl Alt R'), ('Lock', 'Ctrl Shift L'),
+                        ('Nudge 10 cm on screen', 'Arrows'), ('Nudge 1 m', 'Ctrl Arrows'), ('Reorder in a list', 'Alt ↑ · Alt ↓')]),
+              ('View', [('Zoom in · out', '+ · − · Ctrl + · Ctrl −'), ('Fit the Design', 'Home · Shift F · Ctrl 0'), ('Zoom to selection', 'Shift 2'), ('Turn the view 15°', 'Shift ← · Shift →'), ('Reset north', 'N · Shift N · Shift ↑'),
+                        ('Search a place', 'Ctrl K'), ('Search in the open panel', 'Ctrl F'), ('Labels: none, codes, names', 'Shift L'), ('Grid · Snap · Rulers', 'Shift G · Shift S · Shift R'),
                         ('Layers · Plants · Catalog · Favorites', 'Ctrl 1 · 2 · 3 · 4'), ('Calendar · Budget · Consortium · Notebook', 'Ctrl 5 · 6 · 7 · 8')]),
+              ('Mouse, trackpad and pen', [('Pan the map', 'Right-drag · Middle-drag · Space + drag'), ('Turn the view; add Ctrl (Cmd on Mac) for 15° steps', 'Shift + right-drag · Shift + middle-drag'),
+                                           ('Click to reset north, drag to turn the view', 'Compass'), ('Open the menu', 'Right-click'), ('Zoom', 'Scroll wheel · Pinch · Ctrl + wheel'), ('Remove from the selection', 'Alt + click')]),
               ('File and help', [('New Design', 'Ctrl N'), ('Open Design', 'Ctrl O'), ('Rename', 'F2'), ('Save as', 'Ctrl Shift S'), ('Export planting plan', 'Ctrl P'), ('Settings', 'Ctrl ,'), ('Keyboard shortcuts', 'F1')])]
     cols = ''.join(f'<section style="display: flex; flex-direction: column; gap: 2px;"><h3 class="lbl" style="padding: 0 0 6px;">{g}</h3>'
                    + ''.join(f'<div style="display: flex; justify-content: space-between; gap: 12px; min-height: 30px; align-items: center; border-bottom: 1px solid var(--line);"><span>{a}</span><span style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">{"".join(kbd(x) for x in b.split(" · "))}</span></div>' for a, b in items)
                    + '</section>' for g, items in groups)
-    esc_order = ('<div class="card" style="padding: 10px 12px; font-size: 13.5px; color: var(--ink-2); line-height: 1.45;"><b style="font-weight: 600; color: var(--ink);">Esc</b> does one thing at a time: close a menu or dialog → cancel what you are drawing → return to Select → clear the selection.</div>')
+    esc_order = ('<div class="card" style="padding: 10px 12px; font-size: 13.5px; color: var(--ink-2); line-height: 1.45;"><b style="font-weight: 600; color: var(--ink);">Esc</b> does one thing at a time: close a menu or dialog, cancel what you are drawing, return to Select, clear the selection.</div>')
     dlg = dialog('Keyboard shortcuts', f'<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px;">{cols}</div>{esc_order}',
-                 f'<span class="small muted" style="flex: 1 1 auto;">Single-key shortcuts can be turned off in Settings › Keyboard. macOS shows ⌘ ⌥ ⇧.</span>{btn("Close")}', 900, extra=' max-height: 864px;')
+                 f'<span class="small muted" style="flex: 1 1 auto;">Tool keys work anywhere except text fields. Shift N works even when single-key shortcuts are off. macOS shows ⌘ ⌥ ⇧.</span>{btn("Close")}', 900, extra=' max-height: 1110px;')
     dlg = dlg.replace('<div class="dbody">', '<div class="dbody scroll" style="overflow-y: auto; min-height: 0;">', 1)
     return site_map() + chrome() + '<div class="scrim"></div>' + f'<div style="position: absolute; left: 50%; top: 72px; transform: translateX(-50%);">{dlg}</div>'
 
@@ -610,7 +630,7 @@ def web_phone():
   {ib("undo", "Undo", size="touch")}{ib("search", "Search a place", size="touch")}
 </header>
 <div class="float" role="toolbar" aria-label="Tools" style="position: absolute; left: 8px; top: 72px; display: flex; flex-direction: column; gap: 2px; padding: 4px;">{ib("select", "Select", True, "touch")}{ib("hand", "Pan", size="touch")}{ib("plant", "Place plants", size="touch")}{ib("polygon", "Polygon zone", size="touch")}{ib("more", "More tools", size="touch")}</div>
-<div class="float" role="group" aria-label="Zoom" style="position: absolute; right: 8px; top: 256px; display: flex; flex-direction: column; gap: 2px; padding: 4px;">{ib("plus", "Zoom in", size="touch")}{ib("minus", "Zoom out", size="touch")}</div>
+<div class="float" role="group" aria-label="Zoom" style="position: absolute; right: 8px; top: 256px; display: flex; flex-direction: column; gap: 2px; padding: 4px;">{ib("plus", "Zoom in", size="touch")}{ib("minus", "Zoom out", size="touch")}{ib("fit", "Fit to Design", size="touch")}{compass(0, size="touch")}</div>
 <span class="attrib" style="position: absolute; right: 8px; bottom: 400px;">© Google</span>
 <span class="float num" style="position: absolute; left: 8px; bottom: 404px; padding: 2px 8px; border-radius: 8px; font-size: 12.5px;">1:190</span>
 <section class="float" aria-label="Panels" style="position: absolute; left: 0; right: 0; bottom: 0; height: 392px; border-radius: 18px 18px 0 0; display: flex; flex-direction: column; padding: 4px 10px 0; padding-bottom: env(safe-area-inset-bottom);">

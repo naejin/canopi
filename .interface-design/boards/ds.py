@@ -70,6 +70,9 @@ a{color:#8A4E12}a:hover{color:#6E3D0C}
 .ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ic.s16{width:16px;height:16px}.ic.s18{width:18px;height:18px}
 .ic .f{fill:currentColor;stroke:none}
+.compass .ring{stroke:var(--ink-2)}.compass .nn{fill:var(--muted);stroke:var(--muted)}.compass .ns{fill:none;stroke:var(--muted)}
+.compass.turned .nn{fill:var(--accent);stroke:var(--accent)}.compass.turned .ns{stroke:var(--ink)}
+.compass.dragging{background:var(--accent-soft);cursor:grabbing}
 .th :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .th .mi:focus-visible,.th .seg:focus-visible,.th .row:focus-visible{outline-offset:-2px}
 .focus-demo{outline:2px solid var(--focus);outline-offset:2px}
@@ -296,6 +299,7 @@ IC = {
     'story': 'M3 4.5h6c.6 0 1 .4 1 1v11c0-.6-.4-1-1-1H3zM17 4.5h-6c-.6 0-1 .4-1 1v11c0-.6.4-1 1-1h6zM5 8h3M5 11h3M12 8h3',
     'play': 'M6.5 4.5l9 5.5-9 5.5z',
     'camera': 'M3 6.5h3l1.5-2h5l1.5 2h3v9H3zM10 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+    'compass': 'M18.2 10a8.2 8.2 0 1 1-16.4 0 8.2 8.2 0 0 1 16.4 0zM10 3.6L12.6 10H7.4zM7.4 10h5.2L10 16.4z',
 }
 
 
@@ -484,7 +488,7 @@ def topbar(name, status='Saved', status_kind='ok', web=False, search_value='', m
 </header>'''
 
 
-TOOLS = [('select', 'Select', 'V'), ('hand', 'Pan', 'H'), None,
+TOOLS = [('select', 'Select', 'V'), None,
          ('plant', 'Place plants', 'P'), ('row', 'Plant a row', 'W'), ('stamp', 'Place a stamp', 'K'), None,
          '#Zones', ('polygon', 'Polygon zone', 'Z'), ('rect', 'Rectangle zone', 'R'), ('ellipse', 'Ellipse zone', 'E'), ('line', 'Line zone', 'L'), None,
          ('text', 'Text note', 'T'), ('measure', 'Measure', 'M')]
@@ -547,13 +551,29 @@ def viewchip(grid=False, snap=True, rulers=False, bottom=12, names=('Grid', 'Sna
             f'{t(names[0], grid)}{t(names[1], snap)}{t(names[2], rulers)}</div>')
 
 
-def zoombar(scale='1:190', bar_label='5 m', bar_px=100, bottom=12, fit=True, attrib='© Google'):
+def compass_glyph(bearing=0):
+    """The compass needle: north half filled, south half outlined, turned by the view's bearing so it points to true north."""
+    return (f'<svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><circle class="ring" cx="10" cy="10" r="8.2"></circle>'
+            f'<g transform="rotate({-bearing:g} 10 10)"><path class="nn" d="M10 3.6L12.6 10H7.4z"></path><path class="ns" d="M7.4 10h5.2L10 16.4z"></path></g></svg>')
+
+
+def compass(bearing=0, size='sm', extra='', cls=''):
+    """Reset north: always visible, muted at north (still enabled: a drag turns the view), ochre north half when turned."""
+    turned = bearing % 360 != 0
+    desc = f'View turned {bearing:g}° from north' if turned else 'North is up'
+    c = ' '.join(x for x in ['ib', size, 'compass', 'turned' if turned else '', cls] if x)
+    return (f'<button type="button" class="{c}" aria-label="Reset north" aria-description="{esc(desc)}" aria-keyshortcuts="N Shift+N"{extra}>'
+            f'{compass_glyph(bearing)}</button>')
+
+
+def zoombar(scale='1:190', bar_label='5 m', bar_px=100, bottom=12, fit=True, attrib='© Google', bearing=0, show_compass=True):
     f = ib('fit', 'Fit to Design (Shift F)', size='sm') if fit else ''
     a = f'<span class="attrib">{esc(attrib)}</span>' if attrib else ''
+    cp = f'<div class="vrule" style="margin: 9px 2px;"></div>{compass(bearing)}' if show_compass else ''
     return f'''<div style="position: absolute; right: 12px; bottom: {bottom}px; display: flex; align-items: flex-end; gap: 8px;">{a}<div class="float" role="group" aria-label="Zoom" style="height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 12px; border-radius: 11px;">
   <span role="img" aria-label="Scale bar: {esc(bar_label)}" style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 12px;" class="num">{esc(bar_label)}</span><span style="width: {bar_px}px; height: 5px; border: 1.5px solid var(--ink-2); border-top: 0;"></span></span>
   <div class="vrule" style="margin: 9px 2px;"></div>
-  {ib("minus", "Zoom out (Ctrl −)", size="sm")}<button type="button" class="btn ghost sm num" style="min-width: 62px; font-weight: 600; color: var(--ink);" aria-haspopup="listbox" aria-label="Map scale {esc(scale)}. Choose a scale">{esc(scale)}</button>{ib("plus", "Zoom in (Ctrl +)", size="sm")}{f}
+  {ib("minus", "Zoom out (Ctrl −)", size="sm")}<button type="button" class="btn ghost sm num" style="min-width: 62px; font-weight: 600; color: var(--ink);" aria-haspopup="listbox" aria-label="Map scale {esc(scale)}. Choose a scale">{esc(scale)}</button>{ib("plus", "Zoom in (Ctrl +)", size="sm")}{f}{cp}
 </div></div>'''
 
 

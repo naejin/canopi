@@ -50,15 +50,14 @@ def cased(el):
 
 
 def selbox(x, y, w, h, rotate=True):
-    handles = ''.join(f'<rect x="{hx - 3.5}" y="{hy - 3.5}" width="7" height="7" rx="1.5" fill="#FFF8EC" stroke="#9C5A16" stroke-width="1.6"></rect>'
-                      for hx, hy in [(x, y), (x + w, y), (x, y + h), (x + w, y + h)])
+    """The selection box: 2 px ochre over a 5 px cream casing, no corner handles; one rotate handle above."""
     rot = ''
     if rotate:
         cx = x + w / 2
         rot = (f'<line x1="{cx}" y1="{y}" x2="{cx}" y2="{y - 22}" stroke="#9C5A16" stroke-width="2"></line>')
     svg = (f'<svg width="1440" height="900" style="position: absolute; inset: 0; overflow: visible;" aria-hidden="true">'
            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="3" fill="none" stroke="#FFF8EC" stroke-width="5"></rect>'
-           f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="3" fill="none" stroke="#9C5A16" stroke-width="2"></rect>{rot}{handles}</svg>')
+           f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="3" fill="none" stroke="#9C5A16" stroke-width="2"></rect>{rot}</svg>')
     if rotate:
         svg += (f'<button type="button" class="ib sm" aria-label="Rotate selection (drag, or Ctrl Alt R to type an angle)" style="position: absolute; left: {x + w / 2 - 14}px; top: {y - 50}px; width: 28px; height: 28px; border-radius: 14px; '
                 f'background: var(--surface); color: var(--accent-ink); border: 2px solid var(--accent); box-shadow: var(--shadow-sm);">{icon("rotate", "s16")}</button>')
@@ -73,9 +72,10 @@ def topchip(inner):
     return (f'<div class="float" style="position: absolute; left: 50%; transform: translateX(-50%); top: 72px; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 5px 0 14px; border-radius: 20px; font-size: 14px;">{inner}</div>')
 
 
-def chrome(active_tool='select', panel=None, name=ORCHARD, status='Saved', kind='ok', scale=SITE, labelled=False, hot=None, attrib='© Google', **tb):
+def chrome(active_tool='select', panel=None, name=ORCHARD, status='Saved', kind='ok', scale=SITE, labelled=False, hot=None, attrib='© Google',
+           bearing=0, grid=False, rulers=False, **tb):
     return (topbar(name, status, kind, hot=hot, **tb) + toolrail(active_tool, labelled=labelled) + panelrail(panel)
-            + viewchip() + zoombar(*scale, attrib=attrib))
+            + viewchip(grid=grid, rulers=rulers) + zoombar(*scale, attrib=attrib, bearing=bearing))
 
 
 SWATCHES = [('#AB5268', 'Raspberry'), ('#805878', 'Plum'), ('#B06045', 'Brick'), ('#B07A32', 'Ochre'), ('#887044', 'Bark'), ('#70814B', 'Olive'),
