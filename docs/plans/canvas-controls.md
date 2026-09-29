@@ -1,6 +1,6 @@
 # Canvas controls: right-drag pan, one selection model, touch
 
-Status: planned (2026-09-29), not started. Target 2.0.1 for phase 1, then 2.1. Epic bead canopi-f47t; phases are canopi-f47t.1 to .4.
+Status: draft input, not the plan of record (2026-09-29). The user reversed decision 3: the map will rotate like GeoLibre. The next planning session replaces this plan; its research and specs are input, not commitments. Epic bead canopi-f47t; phases canopi-f47t.1 to .4.
 
 ## Why
 
@@ -12,7 +12,7 @@ Today (code, not docs): MapLibre input is off on the design canvas (`maplibre/wo
 
 1. Right-drag pans in every tool. Left always selects or draws. Middle-drag and Space+drag keep panning; the Pan tool (H) stays for touch and trackpad users.
 2. A right press that moves at most 3 px before release opens the canvas menu, as today; beyond that it pans and no menu opens. Linux and macOS fire `contextmenu` on press, Windows on release; the copied gesture tracker handles both.
-3. North-up stays: no rotation or pitch. Left-drag never pans. Shift+drag is not box zoom.
+3. Reversed by the user on 2026-09-29: the map will rotate like GeoLibre (no decision yet on pitch). Still standing: left-drag never pans; Shift+drag is not box zoom.
 4. Every documented control rule is rewritten in the change that ships it (`.interface-design/patterns/canvas-workspace.md`, `docs/guides/map-workspace.md`, ADR 0010 line 19 on shortcut focus, the tool-card hints and the F1 dialog). Not appended.
 
 ## Phase 1 (2.0.1): right-drag pan and a pointing-device setting
@@ -58,7 +58,7 @@ Acceptance:
 
 ## Not doing
 
-Left-drag pan, rotation or pitch, Shift+drag box zoom, lasso select (revisit after phase 2), view history on `[` and `]` (those keys already rotate stamps and reorder).
+Left-drag pan, Shift+drag box zoom, lasso select (revisit after phase 2), view history on `[` and `]` (those keys already rotate stamps and reorder).
 
 ## Order of work
 
