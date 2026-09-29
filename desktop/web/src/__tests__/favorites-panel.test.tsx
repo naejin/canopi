@@ -689,6 +689,78 @@ describe('FavoritesPanel', () => {
     expect(visibleNames()[2]).toContain('Berry guild')
   })
 
+  it('keeps hidden Saved Stamps in their slots when reordering a searched list', async () => {
+    const baseStamp = stampLibrary.value.items[0]!
+    stampLibrary.value = {
+      ...stampLibrary.value,
+      items: [
+        { ...baseStamp, id: 'stamp-a', name: 'Oak', sort_order: 0 },
+        { ...baseStamp, id: 'stamp-b', name: 'Hazel ring', sort_order: 1 },
+        { ...baseStamp, id: 'stamp-c', name: 'Pine', sort_order: 2 },
+        { ...baseStamp, id: 'stamp-d', name: 'Hazel hedge', sort_order: 3 },
+        { ...baseStamp, id: 'stamp-e', name: 'Yew', sort_order: 4 },
+      ],
+    }
+
+    await act(async () => {
+      render(<FavoritesPanel />, container)
+      await flushEffects()
+    })
+    const input = container.querySelector<HTMLInputElement>('[aria-label="Search favorites and stamps"]')!
+    await act(async () => {
+      input.value = 'hazel'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await flushEffects()
+    })
+    const visibleIds = () => [...container.querySelectorAll<HTMLElement>('[data-saved-stamp-row]')]
+      .map((row) => row.dataset.savedStampRow)
+    expect(visibleIds()).toEqual(['stamp-b', 'stamp-d'])
+
+    // A click on a grip without moving must not rewrite the library.
+    const clickGrip = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-b"] [data-saved-stamp-grip]')!
+    installSavedStampRowRects(container)
+    preparePointerGrip(clickGrip)
+    await act(async () => {
+      clickGrip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 7, clientY: 120 }))
+      clickGrip.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7, clientY: 120 }))
+      await flushEffects()
+    })
+    expect(reorderStampMock).not.toHaveBeenCalled()
+
+    const sourceGrip = container.querySelector<HTMLElement>('[data-saved-stamp-row="stamp-d"] [data-saved-stamp-grip]')!
+    preparePointerGrip(sourceGrip)
+    await act(async () => {
+      sourceGrip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 8, clientY: 160 }))
+      sourceGrip.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 8, clientY: 110 }))
+      await flushEffects()
+    })
+    expect(visibleIds()).toEqual(['stamp-d', 'stamp-b'])
+    await act(async () => {
+      sourceGrip.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 8, clientY: 110 }))
+      await flushEffects()
+    })
+
+    expect(reorderStampMock).toHaveBeenCalledTimes(1)
+    expect(reorderStampMock).toHaveBeenCalledWith(['stamp-a', 'stamp-d', 'stamp-c', 'stamp-b', 'stamp-e'])
+
+    // Once the library reflects the saved order, the full list shows exactly that order.
+    await act(async () => {
+      stampLibrary.value = {
+        ...stampLibrary.value,
+        items: ['stamp-a', 'stamp-d', 'stamp-c', 'stamp-b', 'stamp-e'].map((id, index) => ({
+          ...stampLibrary.value.items.find((item) => item.id === id)!,
+          sort_order: index,
+        })),
+        revision: stampLibrary.value.revision + 1,
+      }
+      await flushEffects()
+      input.value = ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await flushEffects()
+    })
+    expect(visibleIds()).toEqual(['stamp-a', 'stamp-d', 'stamp-c', 'stamp-b', 'stamp-e'])
+  })
+
   it('reorders Saved Stamps after the hovered row when dragging through the lower half', async () => {
     const baseStamp = stampLibrary.value.items[0]!
     stampLibrary.value = {

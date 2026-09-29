@@ -70,6 +70,8 @@ interface SavedStampReorderSession {
   readonly sourceId: string
   direction: SavedStampReorderDirection | null
   lastClientY: number
+  /** The full library order when the gesture began; hidden (searched-out) stamps keep their slots. */
+  readonly baseIds: readonly string[]
   latestIds: readonly string[]
 }
 
@@ -192,11 +194,13 @@ export function FavoritesPanel() {
     clearPreviewTimer(previewTimerRef)
     setPreview(null)
 
-    const ids = orderedSavedStampItems.map((item) => item.id)
+    // Reorder over the full library order so a searched list never saves a partial order.
+    const ids = orderSavedStampsForPreview(savedStampItems, savedStampReorderPreviewIds).map((item) => item.id)
     beginReorder(event, {
       sourceId,
       direction: null,
       lastClientY: event.clientY,
+      baseIds: ids,
       latestIds: ids,
     })
     setSavedStampReorderPreviewIds(ids)
@@ -228,7 +232,10 @@ export function FavoritesPanel() {
     const direction = savedStampReorderDirectionForPointer(session, event.clientY)
     session.direction = direction
     session.lastClientY = event.clientY
-    session.latestIds = reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction)
+    session.latestIds = mergeVisibleStampOrder(
+      session.baseIds,
+      reorderSavedStampIdsForPointer(session.sourceId, event.clientY, direction),
+    )
     setSavedStampReorderPreviewIds((current) => sameIdOrder(current, session.latestIds) ? current : session.latestIds)
   }
 
@@ -546,6 +553,17 @@ function resolveSavedStampsFrameHeight(
 function measuredElementHeight(element: HTMLElement | null): number {
   const height = element?.getBoundingClientRect().height ?? 0
   return Number.isFinite(height) && height > 0 ? height : 0
+}
+
+/** Permutes only the visible ids inside the full order; hidden ids stay in their slots. */
+function mergeVisibleStampOrder(
+  fullIds: readonly string[],
+  visibleIds: readonly string[],
+): readonly string[] {
+  const visible = new Set(visibleIds)
+  const queue = visibleIds.filter((id) => fullIds.includes(id))
+  let next = 0
+  return fullIds.map((id) => (visible.has(id) ? queue[next++] ?? id : id))
 }
 
 function orderSavedStampsForPreview(
