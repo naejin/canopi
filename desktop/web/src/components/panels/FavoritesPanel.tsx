@@ -33,7 +33,6 @@ import plantDetailStyles from '../plant-detail/PlantDetail.module.css'
 import { currentCanvasQuerySurface, currentCanvasToolCommandSurface } from '../../canvas/session'
 import { resolvePlantSymbolId } from '../../canvas/runtime/scene'
 import {
-  beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
 import { navigateTo } from '../../app/shell/state'
@@ -51,6 +50,7 @@ import { ActionMenu } from '../shared/ActionMenu'
 import { ControlIcon } from '../shared/ControlIcon'
 import row from '../shared/species-row.module.css'
 import styles from './FavoritesPanel.module.css'
+import { placeSpeciesOnMap } from '../plant-db/place-species'
 
 const SAVED_STAMP_PREVIEW_DELAY_MS = 120
 const SAVED_STAMP_PREVIEW_GAP = 8
@@ -636,7 +636,7 @@ function FavoriteSpeciesRow({ plant, englishName, code, color, symbol, highlight
         type="button"
         className={styles.placeButton}
         aria-label={t('favorites.place', { name })}
-        onClick={() => beginPlantStampFromSpecies(plant, currentCanvasToolCommandSurface.value)}
+        onClick={() => placeSpeciesOnMap(plant, currentCanvasToolCommandSurface.value)}
       >{t('savedObjectStamps.place')}</button>
     </div>
   )

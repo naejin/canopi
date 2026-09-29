@@ -4,7 +4,6 @@ import { locale } from '../../app/settings/state'
 import { speciesCatalogWorkbench } from '../../app/plant-browser'
 import { currentCanvasToolCommandSurface } from '../../canvas/session'
 import {
-  beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../../canvas/plant-stamp-source'
 import type { SpeciesListItem } from '../../types/species'
@@ -16,6 +15,7 @@ import { secondaryCommonNameForDisplay } from './common-name-display'
 import type { CatalogDesignSpecies } from './design-species'
 import { catalogHabitSymbol } from './habit-symbol'
 import styles from './PlantDb.module.css'
+import { placeSpeciesOnMap } from './place-species'
 
 interface Props {
   plant: SpeciesListItem
@@ -90,7 +90,7 @@ export function PlantRow({ plant, inDesign, englishName, highlight }: Props) {
       <button
         type="button"
         className={styles.placeBtn}
-        onClick={() => beginPlantStampFromSpecies(plant, session)}
+        onClick={() => placeSpeciesOnMap(plant, session)}
         aria-label={t('plantDb.placeSpecies', { name })}
       >
         {t('plantDb.place')}

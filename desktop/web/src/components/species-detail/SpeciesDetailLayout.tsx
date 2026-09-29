@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { t } from '../../i18n'
 import { clearSpeciesDetailOnMap, selectSpeciesPlants, showSpeciesDetailOnMap, zoomToSpeciesPlants } from '../../app/plant-finder/map-matches'
 import { currentCanvasTool, currentCanvasToolCommandSurface } from '../../canvas/session'
-import { beginPlantStampFromSpecies, type PlantStampSourceInput } from '../../canvas/plant-stamp-source'
+import type { PlantStampSourceInput } from '../../canvas/plant-stamp-source'
 import { PlantSymbolGlyph } from '../canvas/PlantSymbolGlyph'
 import { useCatalogDesignSpecies } from '../plant-db/design-species'
 import { catalogHabitSymbol } from '../plant-db/habit-symbol'
@@ -12,6 +12,7 @@ import { ControlIcon } from '../shared/ControlIcon'
 import { closeDockPanel } from '../shared/DockPanelHeader'
 import { SpeciesCommonName } from '../shared/SpeciesIdentity'
 import styles from './SpeciesDetail.module.css'
+import { placeSpeciesOnMap } from '../plant-db/place-species'
 
 export interface SpeciesDetailIdentity {
   readonly canonicalName: string
@@ -123,7 +124,7 @@ export function SpeciesDetailLayout({ identity, favorite, onToggleFavorite, onBa
           className={styles.primary}
           disabled={place === null}
           aria-label={t('plantDb.placeSpecies', { name: title })}
-          onClick={() => { if (place) beginPlantStampFromSpecies(place, currentCanvasToolCommandSurface.value) }}
+          onClick={() => { if (place) placeSpeciesOnMap(place, currentCanvasToolCommandSurface.value) }}
         >
           {t('plantDb.place')}
         </button>

@@ -60,6 +60,17 @@ export function focusRegion(id: FocusRegionId): boolean {
   return document.activeElement === target
 }
 
+/**
+ * Focuses the map surface itself, never a control inside it, so canvas keys
+ * such as Esc reach the active tool (the canvas ignores keys from buttons).
+ */
+export function focusMapSurface(): boolean {
+  const element = regions.get('map')
+  if (!element || !showing(element)) return false
+  element.focus({ preventScroll: true })
+  return document.activeElement === element
+}
+
 /** Moves focus to the next (1) or previous (-1) showing region; false when there is none. */
 export function cycleFocusRegion(step: 1 | -1): boolean {
   const active = document.activeElement

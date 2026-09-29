@@ -3,7 +3,6 @@ import { speciesCatalogWorkbench } from '../app/plant-browser'
 import { useEnglishFallbackNames } from '../app/plant-finder/catalog-names'
 import { currentCanvasToolCommandSurface } from '../canvas/session'
 import {
-  beginPlantStampFromSpecies,
   writePlantStampDragData,
 } from '../canvas/plant-stamp-source'
 import type { SpeciesCatalogDetail, SpeciesCatalogDetailView } from '../app/plant-browser/workbench'
@@ -27,6 +26,7 @@ import { formatList, joinRecorded, type SpeciesFact } from '../components/specie
 import { SpeciesDetailLayout } from '../components/species-detail/SpeciesDetailLayout'
 import detailStyles from '../components/species-detail/SpeciesDetail.module.css'
 import styles from './WebSpeciesCatalogPanel.module.css'
+import { placeSpeciesOnMap } from '../components/plant-db/place-species'
 
 interface WebSpeciesCatalogPanelProps {
   readonly mode: 'catalog' | 'favorites'
@@ -216,7 +216,7 @@ function SpeciesRow({ item, englishName }: { readonly item: SpeciesListItem; rea
   }
   const handlePlace = (event: MouseEvent) => {
     event.stopPropagation()
-    beginPlantStampFromSpecies(item, commandSurface)
+    placeSpeciesOnMap(item, commandSurface)
   }
 
   return (
