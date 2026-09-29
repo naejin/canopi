@@ -651,6 +651,8 @@ mod tests {
     }
 
     /// A real child process appears in the live tree while it runs.
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_running_child_is_discovered_in_the_live_tree() {
         let Ok(mut child) = std::process::Command::new("sleep").arg("0.4").spawn() else {
@@ -808,6 +810,8 @@ mod tests {
         );
     }
 
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn sampling_reports_a_baseline_and_a_peak_of_the_live_tree() {
         let sampler = match Sampler::start() {
@@ -847,6 +851,18 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn other_platforms_report_the_measurement_as_unavailable_not_as_a_number() {
+        let measurement = Sampler::start().finish();
+        assert!(
+            matches!(measurement, TreeMeasurement::Unsupported(_)),
+            "no /proc means no sampled figure: {measurement:?}"
+        );
+    }
+
+    // Samples Linux /proc; other platforms report Unsupported (tested below).
+    #[cfg(target_os = "linux")]
     #[test]
     fn stopping_before_the_first_tick_invents_no_workload_evidence() {
         let sampler = match Sampler::start() {
