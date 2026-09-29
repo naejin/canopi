@@ -184,6 +184,63 @@ export function collectArchitecturePolicyViolations(
   return violations
 }
 
+/**
+ * Reports policy paths that name no source in `graph`, so a rule whose area
+ * was moved or deleted fails instead of passing silently: a glob `from`
+ * (`collectArchitecturePolicyViolations` already checks literal ones), and
+ * every `src/` entry of an import policy's `targets`, a `named-imports`
+ * `target` or an `allowedFrom`. Run it on the discovered graph (planted graphs
+ * name only the files they plant, so only this check's own tests plant one). Package specifiers, `#` aliases and
+ * other non-`src/` entries, `forbid-calls` callee text, `forbid-writes` target
+ * text, `exceptFrom`, `exceptTargets`, `allowTypeOnlyTargets` and
+ * `source-tombstones` (whose paths are meant to be absent) are not checked.
+ */
+export function collectPolicyPathDriftViolations(
+  graph: readonly TypeScriptSourceFact[],
+  policies: readonly ArchitecturePolicy[],
+): string[] {
+  const paths = graph.map((source) => source.path)
+  const violations: string[] = []
+  const check = (
+    policy: ArchitecturePolicy,
+    field: string,
+    patterns: readonly string[],
+    include: (pattern: string) => boolean,
+  ): void => {
+    for (const pattern of patterns) {
+      if (!include(pattern) || paths.some((path) => matchesPathPattern(path, pattern))) continue
+      violations.push(`[${policy.name}] ${field} matches no source: ${pattern}`)
+    }
+  }
+  const isGlob = (pattern: string) => pattern.includes('*')
+  const isSourcePath = (pattern: string) => pattern.startsWith('src/')
+
+  for (const policy of policies) {
+    if (policy.kind === 'source-tombstones') continue
+    if (policy.from) check(policy, 'from', policy.from, isGlob)
+
+    switch (policy.kind) {
+      case 'forbid-imports':
+      case 'forbid-transitive-imports':
+      case 'require-imports':
+        check(policy, 'targets', policy.targets, isSourcePath)
+        break
+      case 'confine-importers':
+        check(policy, 'targets', policy.targets, isSourcePath)
+        check(policy, 'allowedFrom', policy.allowedFrom, isSourcePath)
+        break
+      case 'named-imports':
+        check(policy, 'target', [policy.target], isSourcePath)
+        break
+      case 'confine-symbols':
+        check(policy, 'allowedFrom', policy.allowedFrom, isSourcePath)
+        break
+    }
+  }
+
+  return violations
+}
+
 function collectPolicyMissingSourceViolations(
   graph: readonly TypeScriptSourceFact[],
   policy: ArchitecturePolicy,

@@ -23,6 +23,8 @@ import type {
 import type { ScenePersistedState, SceneViewportState } from './scene'
 import type { PlantLabelMode } from './plant-display'
 import type { SceneRendererSnapshot } from './renderers/scene-types'
+import type { Modifiers } from './interaction-types'
+import type { WorldPoint } from './view/types'
 
 export interface CanvasRuntimeDocumentMetadata {
   name: string
@@ -263,6 +265,11 @@ export interface CanvasQuerySurface {
    * language (empty in English). Lists show them marked as English.
    */
   getEnglishFallbackNames(): ReadonlyMap<string, string>
+  /**
+   * Forwards ToolHost.subscribePointerWorld (§1.1a); the inspection lens reads it instead of its own map-host pointermove.
+   * Optional until 0B, which implements it (query-surface.ts, interaction-session.ts) and makes it required.
+   */
+  subscribePointerWorld?(listener: (point: WorldPoint | null) => void): () => void
 }
 
 export interface CanvasDocumentReplacementReceipt {
@@ -332,8 +339,33 @@ export interface CanvasDocumentSurface {
   destroy(): void
 }
 
+export type CanvasEscapeLayer = 'gesture' | 'nudge-series' | 'tool-transient' | 'tool' | 'selection'
+
+export interface CanvasKeyboardPort {
+  escapeLayers(): readonly CanvasEscapeLayer[]            // live canvas layers now
+  escape(layer: CanvasEscapeLayer): void
+  /** What the next Esc will do, for the tool-card hint (same source as behaviour). */
+  describeEscape(): CanvasEscapeLayer | null
+  command(c: CanvasKeyCommand): boolean                   // false when nothing consumed it
+  keyState(s: { readonly space: boolean; readonly mods: Modifiers }): void
+  readonly host: HTMLElement
+}
+
+/** The router reaches the live session's port here. 0B (Input) implements it in keyboard-port.ts, exposes it from
+ *  workspace-runtime-composition.ts and the test supports, and makes it required (the 0B shape: spec §1.6). */
 export interface CanvasRuntimeSurfaces {
   readonly commands: CanvasCommandSurface
   readonly queries: CanvasQuerySurface
   readonly documents: CanvasDocumentSurface
+  // Seams shape (seams commit until 0B): `readonly keyboard?: CanvasKeyboardPort`, optional so no object literal or test
+  // fake changes; CanvasQuerySurface.subscribePointerWorld (§1.1a) is likewise optional until 0B (plan §4 Seams, "Owns").
+  readonly keyboard?: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort (Keyboard, 0C)
 }
+
+export type CanvasKeyCommand =
+  | { kind: 'confirm' } | { kind: 'remove-last' } | { kind: 'edit-text' } | { kind: 'delete-handle' }
+  | { kind: 'rotate-held'; stepDeg: 15 | -15 }
+  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge, then panByPx on 'no-selection'
+  | { kind: 'rotate-view'; direction: 1 | -1 } | { kind: 'reset-north' }
+  | { kind: 'zoom-step'; direction: 1 | -1 }                                    // plain + / − with map focus
+  | { kind: 'context-menu' }                                                    // Menu key, Shift+F10

@@ -181,6 +181,16 @@ export interface CanvasRuntimeAppAdapter {
   readonly plantDisplay?: CanvasRuntimePlantDisplayAdapter
   readonly settings: CanvasRuntimeSettingsAdapter
   readonly translate: CanvasRuntimeTranslator
+  /** How ToolHostDeps.focus leaves the runtime. 0B: interaction-session.ts falls back to today's host focus when absent;
+   *  0C: app/canvas-runtime/app-adapter.ts passes the FocusOwner (Keyboard). */
+  readonly focus?: CanvasFocusPort
+}
+
+/** How a tool's focus request (ToolEffects.requestFocus) leaves the runtime. The FocusOwner implements it. */
+export interface CanvasFocusPort {
+  focusMap(reason: 'tool-requested' | 'text-entry-closed'): void
+  /** The tool card's field (the Plant a row spacing field), registered by ToolCard.tsx through FocusOwner.registerToolCardField. */
+  focusToolCardField(reason: 'tool-requested'): void
 }
 
 export function createDetachedCanvasRuntimeAppAdapter(): CanvasRuntimeAppAdapter {

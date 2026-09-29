@@ -1,5 +1,7 @@
 import type { SpeciesFocus } from '../species-key'
-import type { ScenePersistedState, SceneViewportState } from '../scene'
+import type { SceneDesignObjectTarget, ScenePersistedState, SceneViewportState } from '../scene'
+import type { DraftPresentation, SelectionPreview } from '../tools/draft'
+import type { ViewTransform } from '../view/types'
 import type { PlantNameLabel, SelectionLabel } from '../selection-labels'
 import type { SpeciesCacheEntry } from '../species-cache'
 import type { PlantLabelMode } from '../plant-display'
@@ -60,4 +62,23 @@ export interface SceneRendererInstance {
 export interface SceneRendererDefinition {
   readonly id: string
   initialize(context: SceneRendererContext): SceneRendererInstance | PromiseLike<SceneRendererInstance>
+}
+
+export interface SceneChangeSet {
+  readonly scene: boolean                                   // document revision
+  readonly selection: boolean
+  readonly hover: readonly SceneDesignObjectTarget[]        // old and new hover target only: a two-node restyle
+  readonly style: boolean                                   // theme, backdrop, plant display settings
+  readonly labels: boolean                                  // label admission recomputed (settled or band change)
+}
+
+export interface SceneRendererV2 {   // renamed SceneRenderer at the end of 0D2
+  readonly id: 'maplibre-pixi'
+  /** Data, selection, hover, style or label admission changed. Never called for a pan. No camera in the snapshot. */
+  syncScene(snapshot: SceneRendererSnapshot, changes: SceneChangeSet): void
+  /** The only per-frame entry: world-root matrix, visible set, billboard anchors, zoom-band re-key. */
+  setView(view: ViewTransform): void
+  setDraft(draft: DraftPresentation | null): void
+  setSelectionPreview(preview: SelectionPreview | null): void
+  dispose(): void | PromiseLike<void>
 }

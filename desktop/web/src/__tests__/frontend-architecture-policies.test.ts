@@ -9,6 +9,7 @@ import {
 } from './support/architecture/source-facts'
 import {
   collectArchitecturePolicyViolations,
+  collectPolicyPathDriftViolations,
   type ArchitecturePolicy,
 } from './support/architecture/policy-harness'
 
@@ -500,12 +501,6 @@ const FORBIDDEN_IMPORT_POLICIES = [
       'src/app/document-session/store.ts',
       'src/canvas/session.ts',
     ],
-  },
-  {
-    kind: 'forbid-imports',
-    name: 'Scene interaction does not depend on Planning Canvas',
-    from: ['src/canvas/runtime/scene-interaction.ts'],
-    targets: ['src/app/planning-canvas/**'],
   },
   {
     kind: 'forbid-imports',
@@ -1458,7 +1453,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'confine-symbols',
     name: 'Raw Design persistence capture stays in persistence',
-    from: ['src/app/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     names: ['captureForPersistence'],
     allowedFrom: ['src/app/document-session/persistence.ts', ...TEST_SOURCE_PATTERNS],
   },
@@ -1516,7 +1511,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-source-symbols',
     name: 'Retired Design mutation escape hatches stay absent',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     names: ['DocumentMutationOptions', 'markDesignEdited'],
   },
   {
@@ -1727,7 +1722,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-writes',
     name: 'Design mutation dirty-state bypass stays retired',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     exceptFrom: [...TEST_SOURCE_PATTERNS],
     properties: ['markDirty'],
     values: ['false'],
@@ -1747,7 +1742,7 @@ const SYMBOL_OWNERSHIP_POLICIES = [
   {
     kind: 'forbid-calls',
     name: 'Design mutation capability calls stay in store and Design Edit core',
-    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/state/**', 'src/web/**'],
+    from: ['src/app/**', 'src/canvas/**', 'src/components/**', 'src/ipc/**', 'src/web/**'],
     exceptFrom: [
       'src/app/document-session/store.ts',
       'src/app/design-edit/core.ts',
@@ -1823,6 +1818,25 @@ const WEB_EDITION_RUNTIME_GRAPH_POLICIES = [
   },
 ] satisfies readonly ArchitecturePolicy[]
 
+/** Checked on the runtime graph: type-only Scene query contracts do not enter either edition's runtime bundle. */
+const BROWSER_WORKSPACE_GRAPH_POLICIES = [
+  {
+    kind: 'forbid-transitive-imports',
+    name: 'Browser workspace and shared map contributions stay free of Desktop capabilities',
+    from: [
+      'src/web/browser-workspace-runtime.ts',
+      'src/web/browser-workspace-map-contribution-adapter.ts',
+      'src/app/canvas-map-surface/workspace-map-contributions.ts',
+    ],
+    targets: [
+      '@tauri-apps/**', 'src/ipc/**',
+      'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
+      'src/maplibre/raster-display/**',
+      'src/app/lidar/library-store.ts', 'src/app/lidar/display.ts',
+    ],
+  },
+] satisfies readonly ArchitecturePolicy[]
+
 /** Mirrors the `isWebEdition` branch of vite.config.ts `resolve.alias`. */
 const WEB_EDITION_ALIAS_TARGETS: Readonly<Record<string, string>> = {
   '#platform': 'src/platform/browser.ts',
@@ -1877,6 +1891,11 @@ const DESIGN_SESSION_TEST_FIXTURE_OWNER_SOURCE = {
 
 const DESIGN_SESSION_TEST_FIXTURE_ALLOWED_SOURCES =
   'src/app/document-session/store.ts, src/__tests__/**, src/**/*.test.ts, src/**/*.test.tsx'
+
+const PATH_DRIFT_LIVE_SOURCE = {
+  path: 'src/app/live/module.ts',
+  source: 'export const live = 1',
+} as const
 
 describe('declarative frontend architecture policies', () => {
   it('rejects platform imports from the neutral shell command catalog', () => {
@@ -2012,26 +2031,8 @@ describe('declarative frontend architecture policies', () => {
   })
 
   it('keeps the browser workspace graph free of Desktop runtime dependencies', () => {
-    // Type-only Scene query contracts do not enter either edition's runtime bundle.
-    const graph = discoveredSourceGraph()
-      .map((source) => ({ ...source, imports: source.imports.filter((edge) => !edge.typeOnly) }))
-    expect(collectArchitecturePolicyViolations(graph, [
-      {
-        kind: 'forbid-transitive-imports',
-        name: 'Browser workspace and shared map contributions stay free of Desktop capabilities',
-        from: [
-          'src/web/browser-workspace-runtime.ts',
-          'src/web/browser-workspace-map-contribution-adapter.ts',
-          'src/app/canvas-map-surface/workspace-map-contributions.ts',
-        ],
-        targets: [
-          '@tauri-apps/**', 'src/ipc/**',
-          'src/app/canvas-map-surface/desktop-workspace-map-contribution-adapter.ts',
-          'src/maplibre/raster-display/**',
-          'src/app/lidar/library-store.ts', 'src/app/lidar/display.ts',
-        ],
-      },
-    ])).toEqual([])
+    const graph = runtimeGraph(discoveredSourceGraph())
+    expect(collectArchitecturePolicyViolations(graph, BROWSER_WORKSPACE_GRAPH_POLICIES)).toEqual([])
   }, 20_000)
 
   it('keeps shared modules and the Web entry graph free of Desktop runtime dependencies', () => {
@@ -2114,6 +2115,132 @@ describe('declarative frontend architecture policies', () => {
     expect(paths.length).toBeGreaterThan(400)
     expect(collectArchitecturePolicyViolations(graph, FRONTEND_ARCHITECTURE_POLICIES)).toEqual([])
   }, 20_000)
+
+  it('names only existing sources in every policy list checked against the real graph', () => {
+    expect(collectPolicyPathDriftViolations(discoveredSourceGraph(), [
+      ...FRONTEND_ARCHITECTURE_POLICIES,
+      ...SHARED_RUNTIME_GRAPH_POLICIES,
+      ...WEB_EDITION_RUNTIME_GRAPH_POLICIES,
+      ...BROWSER_WORKSPACE_GRAPH_POLICIES,
+    ])).toEqual([])
+  }, 20_000)
+
+  it('rejects a policy glob from that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-source-symbols',
+        name: 'Planted glob from',
+        from: ['src/app/**', 'src/app/live/module.ts', 'src/state/**'],
+        names: ['live'],
+      },
+    ])).toEqual([
+      '[Planted glob from] from matches no source: src/state/**',
+    ])
+  })
+
+  it('rejects a src/ literal target that matches no source in every import kind', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+    const targets = ['src/app/live/module.ts', 'src/app/gone.ts']
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      { kind: 'forbid-imports', name: 'Planted forbid-imports', from: ['src/app/**'], targets },
+      { kind: 'forbid-transitive-imports', name: 'Planted forbid-transitive-imports', from: ['src/app/**'], targets },
+      { kind: 'require-imports', name: 'Planted require-imports', from: ['src/app/**'], targets },
+      { kind: 'confine-importers', name: 'Planted confine-importers', targets, allowedFrom: ['src/app/**'] },
+      {
+        kind: 'named-imports',
+        name: 'Planted named-imports',
+        from: ['src/app/**'],
+        target: 'src/app/gone.ts',
+        requiredNames: [],
+        allowedNames: [],
+      },
+    ])).toEqual([
+      '[Planted forbid-imports] targets matches no source: src/app/gone.ts',
+      '[Planted forbid-transitive-imports] targets matches no source: src/app/gone.ts',
+      '[Planted require-imports] targets matches no source: src/app/gone.ts',
+      '[Planted confine-importers] targets matches no source: src/app/gone.ts',
+      '[Planted named-imports] target matches no source: src/app/gone.ts',
+    ])
+  })
+
+  it('rejects a src/ glob target that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted glob target',
+        from: ['src/app/**'],
+        targets: ['src/app/live/**', 'src/app/planning-canvas/**'],
+      },
+    ])).toEqual([
+      '[Planted glob target] targets matches no source: src/app/planning-canvas/**',
+    ])
+  })
+
+  it('rejects a src/ allowedFrom entry that matches no source', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'confine-symbols',
+        name: 'Planted confine-symbols',
+        from: ['src/**'],
+        names: ['live'],
+        allowedFrom: ['src/app/live/module.ts', 'src/app/gone.ts'],
+      },
+      {
+        kind: 'confine-importers',
+        name: 'Planted confine-importers',
+        targets: ['src/app/live/module.ts'],
+        allowedFrom: ['src/app/live/**', 'src/app/gone/**'],
+      },
+    ])).toEqual([
+      '[Planted confine-symbols] allowedFrom matches no source: src/app/gone.ts',
+      '[Planted confine-importers] allowedFrom matches no source: src/app/gone/**',
+    ])
+  })
+
+  it('skips package specifiers, aliases, callee and write text, exceptions and tombstones in the path-drift check', () => {
+    const graph = createTypeScriptSourceGraph([PATH_DRIFT_LIVE_SOURCE])
+
+    expect(collectPolicyPathDriftViolations(graph, [
+      {
+        kind: 'forbid-imports',
+        name: 'Planted non-path targets and exceptions',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['maplibre-gl', '@tauri-apps/api/window', '@tauri-apps/**', '#platform', '**', 'ui-gallery/**'],
+        exceptTargets: ['src/gone.ts'],
+        allowTypeOnlyTargets: ['src/gone/**'],
+      },
+      {
+        kind: 'forbid-calls',
+        name: 'Planted callee text',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['maplibre.**', 'src/gone.fn'],
+      },
+      {
+        kind: 'forbid-writes',
+        name: 'Planted write text',
+        from: ['src/app/**'],
+        exceptFrom: ['src/gone/**'],
+        targets: ['src/gone.value'],
+      },
+      {
+        kind: 'source-tombstones',
+        name: 'Planted tombstones',
+        files: ['src/gone.ts'],
+        symbols: [{ from: ['src/gone/**'], names: ['gone'] }],
+      },
+      // A literal from is collectArchitecturePolicyViolations's missing-source check, not this one.
+      { kind: 'forbid-exports', name: 'Planted literal from', from: ['src/app/gone.ts'], names: ['gone'] },
+    ])).toEqual([])
+  })
 })
 
 describe('map error logging', () => {

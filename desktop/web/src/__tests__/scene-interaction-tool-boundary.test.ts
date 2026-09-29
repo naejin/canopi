@@ -21,6 +21,15 @@ function sourceUrl(path: string): URL {
   return new URL(path, import.meta.url)
 }
 
+/** The split Scene Interaction suites and their shared setup, read as one source. */
+function sceneInteractionSuitesSource(): string {
+  const suites = fsWithDirectoryRead.readdirSync(sourceUrl('./'), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^scene-interaction\.[^.]+\.test\.ts$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+  return [...suites, 'support/scene-interaction-setup.ts'].map(readSource).join('\n')
+}
+
 function importSpecifiers(source: string): string[] {
   return Array.from(
     source.matchAll(/(?:\bfrom\s+|^\s*import\s+)['"]([^'"]+)['"]/gm),
@@ -199,7 +208,7 @@ describe('Scene Interaction tool module boundaries', () => {
 
   it('keeps broad Scene Interaction tests on the user-equivalent event harness', () => {
     const guardedSources = [
-      readSource('scene-interaction.test.ts'),
+      sceneInteractionSuitesSource(),
       readSource('../canvas/runtime/scene-runtime.test.ts'),
     ]
 
@@ -426,7 +435,7 @@ describe('Scene Interaction tool module boundaries', () => {
   })
 
   it('keeps representative Plant Spacing behavior coverage in focused tool tests', () => {
-    const broadInteractionTestSource = readSource('scene-interaction.test.ts')
+    const broadInteractionTestSource = sceneInteractionSuitesSource()
 
     expect(sourceExists('plant-spacing-tool.test.ts')).toBe(true)
     const plantSpacingToolTestSource = readSource('plant-spacing-tool.test.ts')
