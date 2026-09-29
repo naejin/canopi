@@ -35,14 +35,22 @@ describe('the Desktop Plant catalog shows a species detail in place of the list'
     await act(async () => { workbench.selected.value = 'Corylus avellana' })
     expect(container.querySelector('[data-testid="species-detail"]')).not.toBeNull()
     expect(list().hidden).toBe(true)
-    expect(list().getAttribute('aria-hidden')).toBe('true')
+    expect(list().hasAttribute('inert')).toBe(true)
 
     await act(async () => { workbench.selected.value = null })
     expect(list().hidden).toBe(false)
   })
 
-  it('hides a hidden list in its own stylesheet, whatever order the stylesheets load in', () => {
-    const css = readFileSync('src/components/plant-db/PlantDb.module.css', 'utf8')
-    expect(css).toMatch(/\.main\[hidden\]\s*\{\s*display:\s*none;?\s*\}/)
+  it('keeps a hidden list laid out but invisible, in its own stylesheet, so Back finds its row', () => {
+    // display:none would collapse the virtualised list and drop the row Back returns to.
+    for (const sheet of ['../components/plant-db/PlantDb.module.css', '../web/WebSpeciesCatalogPanel.module.css']) {
+      const css = readFileSync(new URL(sheet, import.meta.url), 'utf8')
+      const hiddenRules = [...css.matchAll(/\.main\[hidden\]\s*\{([^}]*)\}/g)].map((match) => match[1]!)
+      expect(hiddenRules.length, sheet).toBeGreaterThan(0)
+      for (const rule of hiddenRules) {
+        expect(rule, sheet).toMatch(/visibility:\s*hidden/)
+        expect(rule, sheet).not.toMatch(/display:\s*none/)
+      }
+    }
   })
 })

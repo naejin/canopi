@@ -29,7 +29,6 @@ export function PlantDbPanel() {
         ref={mainRef}
         className={styles.main}
         hidden={selected !== null}
-        aria-hidden={selected !== null}
         inert={selected !== null}
       >
         <DockPanelHeader title={t('plantDb.title')} />

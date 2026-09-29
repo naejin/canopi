@@ -4,6 +4,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
   overflow: hidden;
   min-width: 0;
   background: var(--panel-gradient);
@@ -18,8 +19,9 @@
   position: relative;
 }
 
-/* The species detail replaces the list; the list stays mounted so Back keeps its search and scroll. */
-.main[hidden] { display: none; }
+/* The species detail replaces the list. The list stays laid out, only invisible,
+   so its virtualised rows stay mounted and Back returns focus to the row. */
+.main[hidden] { display: flex; visibility: hidden; position: absolute; inset: 0; }
 
 /* Finder, filters and active tokens above the rows. */
 .controls {
