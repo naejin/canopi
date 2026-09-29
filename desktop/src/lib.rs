@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn global_tauri_api_and_bridge_capability_exist_only_for_the_debug_bridge() {
-        let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let context: tauri::Context<tauri::Wry> = tauri::generate_context!(test = true);
         let dev_bridge = cfg!(all(debug_assertions, feature = "mcp-bridge"));
         assert_eq!(context.config().app.with_global_tauri, dev_bridge);
         let capabilities = context
