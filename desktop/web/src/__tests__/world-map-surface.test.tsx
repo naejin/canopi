@@ -324,6 +324,25 @@ describe('WorldMapSurface', () => {
   })
 
 
+  it('handles map errors itself so MapLibre never prints a failed official tile URL with the key', async () => {
+    await renderWorldMap(container, { templates: [], selectedId: null, onSelect: vi.fn() })
+    await vi.waitFor(() => expect(maps).toHaveLength(1))
+    // MapLibre prints an error event with no listener through console.error.
+    const listeners = [...(maps[0]!.listeners.get('error') ?? [])]
+    expect(listeners.length).toBeGreaterThan(0)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const url = 'https://tile.googleapis.com/v1/2dtiles/12/2048/1361?session=SESSIONTOKEN123&key=AIzaSECRETKEY'
+    const error = Object.assign(new Error(`AJAXError: Too Many Requests (429): ${url}`), { status: 429, url })
+    try {
+      for (const listener of listeners) listener({ type: 'error', error, sourceId: 'satellite' })
+      const printed = JSON.stringify(consoleError.mock.calls.map((call) => call.map(String)))
+      expect(printed).not.toContain('AIzaSECRETKEY')
+      expect(printed).not.toContain('SESSIONTOKEN123')
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('acceptance: movement refreshes official metadata through the mounted WorldMap caller', async () => {
     const requests: string[] = []
     acceptanceHttp.request.mockImplementation(async (input: { url: string }) => {

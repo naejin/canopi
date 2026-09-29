@@ -1,4 +1,5 @@
 import { createMapLibreEmptyStyle } from './config'
+import { logMapError } from './redact-credentials'
 import type {
   MapLibreApi,
   MapLibreHostViewState,
@@ -65,6 +66,12 @@ export function createWorldMapLibreMap(
     touchZoomRotate: false,
     ...(options.transformRequest ? { transformRequest: options.transformRequest } : {}),
   }) as unknown as WorldMapLibreMap
+
+  // MapLibre prints an error event nobody listens to on the console, and a
+  // failed official tile's message carries its URL with the Google key and
+  // session. Every World map error is passive (tiles, sources), so it is only
+  // logged, redacted.
+  map.on('error', (event) => logMapError('Passive MapLibre World map error:', event))
 
   try {
     const NavigationControl = (maplibre as WorldMapLibreApi).NavigationControl
