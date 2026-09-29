@@ -168,6 +168,30 @@ describe('Budget Item workbench', () => {
     expect(currentDesign.value).toBe(designBefore)
   })
 
+  it('keeps accepting typing in a still-focused field after Enter on the last row or Escape', async () => {
+    await act(async () => { render(<BudgetPanel />, container) })
+    const input = priceInput('Apple')
+    await act(async () => { input.focus() })
+    await type(input, '4.50')
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4.5)
+
+    // Focus stays in the last row's field; a correction must still be taken.
+    await type(priceInput('Apple'), '4.05')
+    expect(priceInput('Apple').value).toBe('4.05')
+    await act(async () => { priceInput('Apple').blur() })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(4.05)
+
+    await act(async () => { priceInput('Apple').focus() })
+    await type(priceInput('Apple'), '9')
+    await act(async () => { priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(priceInput('Apple').value).toBe('4.05')
+    await type(priceInput('Apple'), '6')
+    expect(priceInput('Apple').value).toBe('6')
+    await act(async () => { priceInput('Apple').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(currentDesign.value?.budget[0]?.unit_cost).toBe(6)
+  })
+
   it('rejects an invalid draft and lets Escape restore the saved price', async () => {
     await act(async () => { render(<BudgetPanel />, container) })
     const input = priceInput('Apple')

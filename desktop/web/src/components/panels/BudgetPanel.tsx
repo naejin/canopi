@@ -168,7 +168,12 @@ export function BudgetPanel() {
                         workbench.startPriceEdit(item.canonical)
                         event.currentTarget.select()
                       }}
-                      onInput={(event) => workbench.setEditPrice(event.currentTarget.value)}
+                      onInput={(event) => {
+                        // Enter on the last row and Escape end the edit but keep focus here;
+                        // typing again starts a fresh edit instead of being discarded.
+                        if (!editing) workbench.startPriceEdit(item.canonical)
+                        workbench.setEditPrice(event.currentTarget.value)
+                      }}
                       onBlur={() => workbench.commitPriceEdit(item.canonical)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
