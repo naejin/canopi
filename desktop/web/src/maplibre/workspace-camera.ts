@@ -154,14 +154,20 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
   refreshOrigin(): void {
     const active = this.active
     if (!active) return
-    this.syncPolicyToOrigin(active.attachment.readOrigin())
+    // A re-origin keeps the temporary focus; reprojectViewport moves it into
+    // the new plane. A Document load clears it through its own surface.
+    this.syncPolicyToOrigin(active.attachment.readOrigin(), { keepTemporaryFocus: true })
     this.publishAttachedFrame(active)
   }
 
-  private syncPolicyToOrigin(origin: { readonly lat: number }): void {
-    if (this.policy.referenceLatitudeDeg !== origin.lat) {
-      this.replacePolicy(createWorkspaceCameraPolicy(origin.lat))
-    }
+  private syncPolicyToOrigin(
+    origin: { readonly lat: number },
+    options: { readonly keepTemporaryFocus?: boolean } = {},
+  ): void {
+    if (this.policy.referenceLatitudeDeg === origin.lat) return
+    const policy = createWorkspaceCameraPolicy(origin.lat)
+    if (options.keepTemporaryFocus) this.applyPolicy(policy)
+    else this.replacePolicy(policy)
   }
 
   private subscribeFailure(
@@ -209,11 +215,13 @@ export class MapLibreWorkspaceCameraOwner extends CameraController
    * While attached, the map is the camera: a session-plane move changes only
    * how its unchanged view is expressed in metres, which the origin refresh
    * already republished. Transforming that frame again would double-apply the
-   * move and send the view back across the re-origin threshold.
+   * move and send the view back across the re-origin threshold. Only the
+   * temporary-focus bookmark, which the map does not hold, moves planes here.
    */
   override reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {
     const active = this.active
     if (!active) return super.reprojectViewport(transform)
+    this.reprojectTemporaryFocus(transform)
     return this.publishAttachedFrame(active)
   }
 

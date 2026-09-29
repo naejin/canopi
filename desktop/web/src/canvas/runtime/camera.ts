@@ -194,6 +194,15 @@ export class CameraController implements
 
   replacePolicy(policy: WorkspaceCameraPolicy): SceneViewportState {
     this.clearTemporaryFocus()
+    return this.applyPolicy(policy)
+  }
+
+  /**
+   * Swaps the policy without dropping a temporary focus. A re-origin changes
+   * the reference latitude but not the view the user may return to; the
+   * re-origin reprojects the bookmark instead.
+   */
+  protected applyPolicy(policy: WorkspaceCameraPolicy): SceneViewportState {
     const current = this._snapshot.peek()
     const scaleBounds = cameraScaleBoundsForPolicy(policy)
     const viewport = zoomCameraViewportToScale(
@@ -347,9 +356,14 @@ export class CameraController implements
   }
 
   reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {
+    this.reprojectTemporaryFocus(transform)
+    return this.setViewport(reprojectPlaneViewport(this._snapshot.peek().viewport, transform))
+  }
+
+  /** Moves the temporary-focus bookmark into the new session plane. */
+  protected reprojectTemporaryFocus(transform: SessionPlaneTransform): void {
     const bookmark = this.temporaryFocusBookmark
     this.temporaryFocusBookmark = bookmark && reprojectPlaneViewport(bookmark, transform)
-    return this.setViewport(reprojectPlaneViewport(this._snapshot.peek().viewport, transform))
   }
 
   clearTemporaryFocus(): void {

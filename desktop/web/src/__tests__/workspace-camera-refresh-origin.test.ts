@@ -115,6 +115,40 @@ describe('MapLibreWorkspaceCameraOwner.attachment.refreshOrigin', () => {
     expect(after.groundMetersPerCssPixel).not.toBeNull()
   })
 
+  it('keeps a temporary focus bookmark across a re-origin so the return lands on the original view', () => {
+    const owner = new MapLibreWorkspaceCameraOwner()
+    owner.initialize({ width: 400, height: 300 })
+    const firstPlane = createSessionPlane({ lon: 2.3522, lat: 48.8566 })
+    let plane = firstPlane
+    const map = new MercatorMap({ lng: 2.3522, lat: 48.8566 }, 16)
+    expect(owner.attachment.attach({
+      map: map as unknown as MapLibreWorkspaceCameraMap,
+      readOrigin: () => plane.origin,
+      maximumWorldExtentMeters: 50_000,
+    })).toBe(true)
+    const designView = centreGeo(owner, firstPlane)
+    const designZoom = map.zoom
+
+    // Coverage about 20 km away, as "View coverage" frames it.
+    expect(owner.focusTemporaryBounds(
+      { minX: 19_900, minY: -5_100, maxX: 20_100, maxY: -4_900 },
+      { paddingCssPx: 24 },
+    )).toBe(true)
+
+    // The settled frame re-origins at the new centre: the plane signal refreshes
+    // the camera origin, then the controller reprojects the viewport.
+    const nextPlane = createSessionPlane(centreGeo(owner, firstPlane))
+    plane = nextPlane
+    owner.attachment.refreshOrigin()
+    owner.reprojectViewport(firstPlane.transformTo(nextPlane))
+
+    expect(owner.returnFromTemporaryFocus()).toBe(true)
+    const returned = centreGeo(owner, nextPlane)
+    expect(returned.lon).toBeCloseTo(designView.lon, 7)
+    expect(returned.lat).toBeCloseTo(designView.lat, 7)
+    expect(map.zoom).toBeCloseTo(designZoom, 7)
+  })
+
   it('is inert without an attached map', () => {
     const owner = new MapLibreWorkspaceCameraOwner()
     owner.initialize({ width: 400, height: 300 })
