@@ -36,11 +36,18 @@ function selectionChip(page: Page) {
   return page.getByRole('group', { name: 'Selection' }).getByRole('status')
 }
 
-/** Centre of the selected zone's first control point, in page pixels. */
+/**
+ * Centre of the selected zone's first control point, in page pixels. Read in one pass in the
+ * page: the overlay rebuilds its handles on every refresh, and a handle found in one call could
+ * be replaced before a second call measures it.
+ */
 async function zoneCorner(page: Page): Promise<{ x: number, y: number }> {
-  const box = await page.getByRole('button', { name: 'Zone control point 1' }).boundingBox()
-  if (!box) throw new Error('no zone is selected: "Zone control point 1" is not shown')
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const [corner] = await page.getByRole('button', { name: 'Zone control point 1' }).evaluateAll((handles) => handles.map((handle) => {
+    const box = handle.getBoundingClientRect()
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }))
+  if (!corner) throw new Error('no zone is selected: "Zone control point 1" is not shown')
+  return corner
 }
 
 /** Selects the rectangle zone by its edge, reads its first corner, then clears the selection. */

@@ -3,7 +3,8 @@
 // Chromium and WebKit. The baselines were recorded on the pre-0A commit in the pinned image:
 // they are the phase-0 Web reference. Each step opens the fixture afresh, so a failure names
 // the one step that broke; DOM reads say what broke, screenshots say what it looks like.
-// Screenshots are taken on settled states only, never mid-drag (drafts are compared by eye).
+// Screenshots are taken on settled states only, never mid-drag (drafts are compared by eye)
+// and never while a timer is still due to change the page (an open nudge series).
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../support/offline'
@@ -43,17 +44,17 @@ function selection(page: Page) {
   return page.getByRole('group', { name: 'Selection' })
 }
 
-/** Centres of the selected zone's control points, in page pixels. */
+/**
+ * Centres of the selected zone's control points, in page pixels. The overlay rebuilds its
+ * handles on every refresh (a nudge series committing is one), so they are read in one pass
+ * in the page: a handle read on its own could be one a refresh has just replaced.
+ */
 async function zoneCorners(page: Page): Promise<Array<{ x: number, y: number }>> {
-  const handles = page.getByRole('button', { name: /^Zone control point \d+$/ })
-  const count = await handles.count()
-  if (count === 0) throw new Error('no zone is selected: no "Zone control point" is shown')
-  const corners: Array<{ x: number, y: number }> = []
-  for (let index = 0; index < count; index += 1) {
-    const box = await handles.nth(index).boundingBox()
-    if (!box) throw new Error(`zone control point ${index + 1} has no box`)
-    corners.push({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
-  }
+  const corners = await page.getByRole('button', { name: /^Zone control point \d+$/ }).evaluateAll((handles) => handles.map((handle) => {
+    const box = handle.getBoundingClientRect()
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }))
+  if (corners.length === 0) throw new Error('no zone is selected: no "Zone control point" is shown')
   return corners
 }
 
@@ -202,7 +203,7 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await expect(page).toHaveScreenshot('phase0-05e-esc-cleared.png')
 })
 
-test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m', async ({ page }) => {
+test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m; each pause commits one Design edit', async ({ page }) => {
   await openBaseFixture(page)
   await page.mouse.click(RECT_ZONE_EDGE.x, RECT_ZONE_EDGE.y)
   await expect(selection(page).getByRole('status')).toHaveText(RECT_ZONE_CHIP)
@@ -214,8 +215,13 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   const pxPerMetre = Math.sqrt(Math.abs((c2.x - c1.x) * (c4.y - c1.y)) / 112)
   await expect(page).toHaveScreenshot('phase0-06a-zone-selected.png')
 
+  // Arrow keys open a nudge series: the zone moves at once, Undo stays off while the series is
+  // open, and the series commits as one Design edit once the keys pause. Each step waits for
+  // that commit (a condition, not the pause's length) before measuring and taking a screenshot,
+  // so the next key starts a series of its own.
   await page.keyboard.press('ArrowRight')
   await expect.poll(async () => (await firstCorner(page)).x - c1.x, 'ArrowRight moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
+  await expect(tool(page, 'Undo'), 'the ArrowRight series commits as one Design edit after its pause').toBeEnabled()
   const nudged = await firstCorner(page)
   // Today's world axes: the camera is north-up, so east is +x on screen and y does not change.
   expectPx(nudged.x - c1.x, 0.1 * pxPerMetre, 'ArrowRight moves the zone 10 cm east')
@@ -224,9 +230,18 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
 
   await page.keyboard.press('Shift+ArrowRight')
   await expect.poll(async () => (await firstCorner(page)).x - nudged.x, 'Shift+ArrowRight moves the zone').toBeGreaterThan(LAYOUT_TOLERANCE_PX)
+  await expect(tool(page, 'Undo'), 'the Shift+ArrowRight series commits as one Design edit after its pause').toBeEnabled()
   const shifted = await firstCorner(page)
   expectPx(shifted.x - nudged.x, pxPerMetre, 'Shift+ArrowRight moves the zone 1 m east')
   expectPx(shifted.y - nudged.y, 0, 'Shift+ArrowRight does not move the zone north or south')
   await expect(selection(page).getByRole('status'), 'nudging keeps the zone selected').toHaveText(RECT_ZONE_CHIP)
   await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
+
+  await page.keyboard.press('Control+z')
+  await expect.poll(async () => (await firstCorner(page)).x - shifted.x, 'Ctrl+Z moves the zone back').toBeLessThan(-LAYOUT_TOLERANCE_PX)
+  const undone = await firstCorner(page)
+  expectPx(undone.x - nudged.x, 0, 'Ctrl+Z undoes the 1 m series alone: the zone is back 10 cm east of its start')
+  expectPx(undone.y - nudged.y, 0, 'Ctrl+Z does not move the zone north or south')
+  await expect(tool(page, 'Undo'), 'the 10 cm series is still an edit to undo').toBeEnabled()
+  await expect(tool(page, 'Redo'), 'the 1 m series can be redone').toBeEnabled()
 })
