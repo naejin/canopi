@@ -22,6 +22,7 @@ Scope:
 - Menu versus drag: port `context-menu-gesture.ts` into `canvas/runtime/interaction/` (attribution header naming GeoLibre, MIT, commit). The canvas `contextmenu` handler opens the menu only when the tracker says the press was a click. Keep the Menu key and Shift+F10.
 - Suppress the browser and WebKitGTK context menu on right-drag release. Check the three platforms' event order in tests with synthetic sequences (press, move, release, contextmenu before and after).
 - Settings › Canvas: replace "Scroll wheel: zoom or pan" with "Pointing device: Mouse or Trackpad" (same stored key is not required; this is device state, not Design data, so a settings migration is not needed, only a default). Mouse: wheel zooms, Shift+wheel pans. Trackpad: two-finger scroll pans, pinch (Ctrl+wheel) zooms. Default Mouse. Update `common-types/src/settings.rs`, generated settings, `SettingsDialog.tsx`, the wheel handler, all 11 locales.
+- Arming a tool from outside the map focuses the map in one place (the tool command surface or the runtime's tool switch), replacing the per-button `focusMapSurface` calls added for canopi-agjl (species Place buttons via `placeSpeciesOnMap`, the saved-stamp Place button, `ToolCard`'s chooser); merge `focusMapSurface` and `ToolCard`'s own `canvasRef.focus` into that one path. Found by the 2026-09-29 code review.
 - Hints: tool cards say "Right-drag, Space + drag or middle-drag pans"; drop "H pans" when single-key shortcuts are off.
 
 Acceptance:
