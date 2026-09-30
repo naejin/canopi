@@ -149,7 +149,12 @@ export class CameraController implements
 
   /** The Scene's plane once a runtime adopted this shim (followScenePlane). */
   private scenePlane: ReadonlySignal<SessionPlane | null> | null = null
-  private ownPlane: SessionPlane
+  /**
+   * The shim's own session plane: the bare shim's, on its policy's latitude, and the plane of a map the MapLibre shim attached
+   * itself. It is not the Scene's (INV-WR-07): once a runtime adopted this shim, the host builds its headless drivers on the
+   * Scene's plane instead.
+   */
+  protected ownPlane: SessionPlane
   private readonly _snapshot: Signal<CameraViewportSnapshot>
   private _policy: WorkspaceCameraPolicy
   /** Today's temporary-focus bookmark, in the plane terms reprojectViewport moves it in. */
@@ -175,7 +180,7 @@ export class CameraController implements
       timers: platformTimers(clock),
       policy,
       reducedMotion: NO_REDUCED_MOTION,
-      plane: () => this.plane,
+      plane: () => this.scenePlane?.peek() ?? this.ownPlane,
       screen: EMPTY_SCREEN,
       camera: UNPUBLISHED_CAMERA,
     })
@@ -194,18 +199,6 @@ export class CameraController implements
   }
 
   get policy(): WorkspaceCameraPolicy { return this._policy }
-
-  /**
-   * The session plane the host's headless drivers are built on: the Scene's once a runtime adopted this shim, else the shim's own
-   * (the bare shim's plane is not the Scene's, INV-WR-07).
-   */
-  protected get plane(): SessionPlane {
-    return this.scenePlane?.peek() ?? this.ownPlane
-  }
-
-  protected set plane(next: SessionPlane) {
-    this.ownPlane = next
-  }
 
   /** The Scene's plane when a runtime adopted this shim, else null. */
   protected get followedScenePlane(): SessionPlane | null {
@@ -340,9 +333,10 @@ export class CameraController implements
   }
 
   /**
-   * Detached, the placement moves into the new plane in plane terms (today's reprojectPlaneViewport), since this shim's plane is
-   * not the Scene's. Attached, the map is the camera: its frame was already re-expressed in the new plane when the attachment's
-   * origin was refreshed, so only the bookmark, which the map does not hold, moves here.
+   * Today's reprojectPlaneViewport. Detached, a re-origin is followPlane plus this 'place' move: the host has already taken the
+   * Scene's new plane with the placement kept, and the placement moves by the transform in plane terms, so the same ground stays
+   * on screen. Attached, the map is the camera: refreshOrigin re-expresses its frame in the new plane (planeChanged), so only the
+   * bookmark, which the map does not hold, moves here.
    */
   reprojectViewport(transform: SessionPlaneTransform): SceneViewportState {
     const bookmark = this.temporaryFocusBookmark

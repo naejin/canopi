@@ -93,27 +93,6 @@ export interface GeographicExtent {
 const MERCATOR_MAX_LATITUDE_DEG = 85.0511287798066
 
 /**
- * The ground a plane viewport shows edge to edge, or null when the screen is
- * empty or shows more than one world (across the antimeridian or the poles).
- */
-export function geographicExtentOf(
-  frame: {
-    readonly viewport: { readonly x: number; readonly y: number; readonly scale: number }
-    readonly screenSize: { readonly width: number; readonly height: number }
-  },
-  plane: SessionPlane,
-): GeographicExtent | null {
-  const { viewport, screenSize } = frame
-  if (!(screenSize.width > 0 && screenSize.height > 0 && viewport.scale > 0)) return null
-  const northWest = plane.toGeo({ x: -viewport.x / viewport.scale, y: -viewport.y / viewport.scale })
-  const southEast = plane.toGeo({
-    x: (screenSize.width - viewport.x) / viewport.scale,
-    y: (screenSize.height - viewport.y) / viewport.scale,
-  })
-  return extentOnOneWorld({ west: northWest.lon, south: southEast.lat, east: southEast.lon, north: northWest.lat })
-}
-
-/**
  * A lon/lat box as a saved extent, or null when it is not a box on one world (across the antimeridian or the poles, or empty):
  * the check ViewReadSurface.captureView's raw corner bounds pass before they are saved.
  */

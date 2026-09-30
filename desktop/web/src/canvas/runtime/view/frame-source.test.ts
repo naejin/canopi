@@ -1,7 +1,8 @@
 import { effect } from '@preact/signals'
 import { describe, expect, it } from 'vitest'
+import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
 import { createTestView } from '../../../__tests__/support/test-view'
-import { createSessionPlane, geographicExtentOf } from '../../session-plane'
+import { createSessionPlane } from '../../session-plane'
 import { createViewFrameSource, createViewReadSurface, SETTLE_MS } from './frame-source'
 import type { ViewFrame } from './types'
 
@@ -119,7 +120,7 @@ describe('view frame source', () => {
     const captured = surface.captureView()
     expect(captured.camera).toBe(view.view().camera)
     expect(captured.screen).toEqual({ width: 400, height: 300, devicePixelRatio: 1 })
-    expect(captured.extent).toEqual(geographicExtentOf({
+    expect(captured.extent).toEqual(planeViewportCornerBounds({
       viewport: { x: -130.5, y: 42.25, scale: 1.75 },
       screenSize: { width: 400, height: 300 },
     }, plane))

@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { cameraScaleBoundsForPolicy, createWorkspaceCameraPolicy } from '../../workspace-camera-policy'
-import { getAnnotationWorldBounds } from '../annotation-layout'
-import { getPlantWorldBounds } from '../plant-presentation'
 import { sceneExtentPoints } from '../scene-extent'
 import type { SceneAnnotationEntity, ScenePersistedState } from '../scene'
-import { getZoneWorldBounds } from '../zone-geometry'
 import { fitScene, fitTemporaryBounds, framingRect, type FitFrame } from './fit'
-import type { PlanarCamera, SceneBounds, ScreenInsets, TemporaryBoundsFocusOptions, WorldPoint } from './types'
+import type { PlanarCamera, SceneBounds, ScreenInsets, WorldPoint } from './types'
 
 function note(id: string, x: number, y: number, text: string, rotationDeg: number | null): SceneAnnotationEntity {
   return { kind: 'annotation', id, annotationType: 'text', locked: false, position: { x, y }, text, fontSize: 16, rotationDeg }
@@ -46,151 +42,40 @@ function scene(): ScenePersistedState {
   }
 }
 
-/** Corner points of every plant, zone and note footprint at a scale, from the helpers today's computeSceneBounds reads. */
-function extentPointsOf(design: ScenePersistedState, calls?: { count: number }) {
-  return (pixelsPerMetre: number): WorldPoint[] => {
-    if (calls) calls.count += 1
-    const points: WorldPoint[] = []
-    const corners = (box: { x: number; y: number; width: number; height: number }) => {
-      points.push({ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y }, { x: box.x + box.width, y: box.y + box.height }, { x: box.x, y: box.y + box.height })
-    }
-    for (const plant of design.plants) {
-      corners(getPlantWorldBounds(plant, { viewport: { x: 0, y: 0, scale: pixelsPerMetre }, speciesCache: new Map(), plants: design.plants }))
-    }
-    for (const zone of design.zones) {
-      const box = getZoneWorldBounds(zone)
-      if (box) corners(box)
-    }
-    for (const annotation of design.annotations) corners(getAnnotationWorldBounds(annotation, pixelsPerMetre))
-    return points
+/** The scene's extent (scene-extent.ts), counting the scales it is measured at. */
+function countedExtent(design: ScenePersistedState, calls: { count: number }) {
+  const extent = sceneExtentPoints(design)
+  return (pixelsPerMetre: number): readonly WorldPoint[] => {
+    calls.count += 1
+    return extent(pixelsPerMetre)
   }
 }
 
-interface Viewport { readonly x: number; readonly y: number; readonly scale: number }
+type Placement = readonly [x: number, y: number, scale: number]
 
-/** What today's CameraController snapshot held for a placement on a screen, and the fit frame built from it. */
-interface TodaySnapshot {
-  readonly viewport: Viewport
-  readonly screenSize: { readonly width: number; readonly height: number }
-  readonly scaleBounds: { readonly minimum: number; readonly maximum: number }
+/** Today's CameraController scale bounds (the default policy's), recorded at 52cbff10. */
+const TODAY_SCALE_BOUNDS = { min: 1.2790334061860095e-05, max: 1716.6895781438734 }
+
+/** The fit frame of today's CameraController placed at `placement` on a screen. */
+function fitFrame(width: number, height: number, placement: Placement, insets?: ScreenInsets): FitFrame {
+  const [x, y, scale] = placement
+  return { screen: { width, height }, insets, scaleBounds: TODAY_SCALE_BOUNDS, current: { x, y, scale, bearingDeg: 0 } }
 }
 
-/** Today's snapshot at a placement (its scale bounds were the policy's), and the fit frame built from it. */
-function todayAndFrame(width: number, height: number, placement: Viewport, insets?: ScreenInsets) {
-  const snapshot: TodaySnapshot = {
-    viewport: placement,
-    screenSize: { width, height },
-    scaleBounds: cameraScaleBoundsForPolicy(createWorkspaceCameraPolicy()),
-  }
-  const frame: FitFrame = {
-    screen: { width, height },
-    insets,
-    scaleBounds: { min: snapshot.scaleBounds.minimum, max: snapshot.scaleBounds.maximum },
-    current: { ...placement, bearingDeg: 0 },
-  }
-  return { snapshot, frame }
+function placed(placement: Placement | null): PlanarCamera | null {
+  if (!placement) return null
+  const [x, y, scale] = placement
+  return { x, y, scale, bearingDeg: 0 }
 }
 
-// The oracle: today's fitCameraViewport and fitTemporaryBoundsViewport (canvas/runtime/camera.ts:519-629 at 52cbff10), frozen here
-// when camera.ts became the legacy facade (0A-1d). Their scene bounds are computeSceneBounds's world-axis box of the footprints.
-
-const NO_INSETS: ScreenInsets = { top: 0, right: 0, bottom: 0, left: 0 }
-
-function todayClamp(scale: number, bounds: TodaySnapshot['scaleBounds']): number {
-  return Math.min(bounds.maximum, Math.max(bounds.minimum, scale))
-}
-
-function todayFramingRect(screen: TodaySnapshot['screenSize'], insets: ScreenInsets = NO_INSETS) {
-  const width = screen.width - insets.left - insets.right
-  const height = screen.height - insets.top - insets.bottom
-  if (![width, height].every(Number.isFinite) || width < 120 || height < 120) {
-    return { x: 0, y: 0, width: screen.width, height: screen.height }
-  }
-  return { x: insets.left, y: insets.top, width, height }
-}
-
-function todayBounds(points: readonly WorldPoint[]): SceneBounds | null {
+/** A world-axis box around points, as computeSceneBounds returned it. */
+function worldAxisBox(points: readonly WorldPoint[]): SceneBounds | null {
   if (points.length === 0) return null
   return {
     minX: Math.min(...points.map((point) => point.x)),
     minY: Math.min(...points.map((point) => point.y)),
     maxX: Math.max(...points.map((point) => point.x)),
     maxY: Math.max(...points.map((point) => point.y)),
-  }
-}
-
-function todayFitCameraViewport(
-  snapshot: TodaySnapshot,
-  design: ScenePersistedState,
-  emptySceneScale: number | undefined,
-  insets: ScreenInsets = NO_INSETS,
-): Viewport {
-  if (snapshot.screenSize.width <= 0 || snapshot.screenSize.height <= 0) return { ...snapshot.viewport }
-  const screen = todayFramingRect(snapshot.screenSize, insets)
-  let currentScale = snapshot.viewport.scale
-  let bounds: SceneBounds | null = null
-  let scale = currentScale
-  for (let i = 0; i < 20; i++) {
-    bounds = todayBounds(extentPointsOf(design)(currentScale))
-    if (!bounds) {
-      if (emptySceneScale === undefined || !(emptySceneScale > 0)) return { ...snapshot.viewport }
-      const emptyScale = todayClamp(emptySceneScale, snapshot.scaleBounds)
-      return { x: snapshot.screenSize.width / 2, y: snapshot.screenSize.height / 2, scale: emptyScale }
-    }
-    const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
-    const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
-    scale = todayClamp(Math.min(
-      (screen.width * (1 - 0.1 * 2)) / contentWidth,
-      (screen.height * (1 - 0.1 * 2)) / contentHeight,
-    ), snapshot.scaleBounds)
-    if (Math.abs(scale - currentScale) / Math.max(scale, currentScale) < 0.0001) break
-    currentScale = scale
-  }
-  const finalBounds = bounds!
-  const contentWidth = Math.max(finalBounds.maxX - finalBounds.minX, 1)
-  const contentHeight = Math.max(finalBounds.maxY - finalBounds.minY, 1)
-  return {
-    x: screen.x + (screen.width - contentWidth * scale) / 2 - finalBounds.minX * scale,
-    y: screen.y + (screen.height - contentHeight * scale) / 2 - finalBounds.minY * scale,
-    scale,
-  }
-}
-
-function todayFitTemporaryBoundsViewport(
-  snapshot: TodaySnapshot,
-  bounds: SceneBounds,
-  options: TemporaryBoundsFocusOptions,
-  insets: ScreenInsets = NO_INSETS,
-): Viewport | null {
-  const { width: screenWidth, height: screenHeight } = snapshot.screenSize
-  if (!Number.isFinite(screenWidth) || !Number.isFinite(screenHeight) || screenWidth <= 0 || screenHeight <= 0) return null
-  const frame = todayFramingRect(snapshot.screenSize, insets)
-  const { width, height } = frame
-  const { minX, minY, maxX, maxY } = bounds
-  const padding = options.paddingCssPx
-  const maximumScale = options.maximumScale ?? snapshot.scaleBounds.maximum
-  if (
-    ![width, height, minX, minY, maxX, maxY, padding, maximumScale].every(Number.isFinite)
-    || width <= 0
-    || height <= 0
-    || minX >= maxX
-    || minY >= maxY
-    || padding < 0
-    || maximumScale < snapshot.scaleBounds.minimum
-  ) return null
-  const availableWidth = width - padding * 2
-  const availableHeight = height - padding * 2
-  if (availableWidth <= 0 || availableHeight <= 0) return null
-  const scale = todayClamp(Math.min(
-    availableWidth / (maxX - minX),
-    availableHeight / (maxY - minY),
-    maximumScale,
-  ), snapshot.scaleBounds)
-  if (!Number.isFinite(scale) || scale > maximumScale) return null
-  return {
-    x: frame.x + width / 2 - ((minX + maxX) / 2) * scale,
-    y: frame.y + height / 2 - ((minY + maxY) / 2) * scale,
-    scale,
   }
 }
 
@@ -211,31 +96,120 @@ function screenOf(camera: PlanarCamera, point: WorldPoint): WorldPoint {
 
 describe('fit', () => {
   it('at bearing 0 the fit matches today\'s fitCameraViewport for plants, zones and notes', () => {
+    // Today's fitCameraViewport (canvas/runtime/camera.ts:520-565 at 52cbff10) on a 1000 × 800 CameraController placed at
+    // { x: 3, y: -7, scale }, recorded for each design, each insets case and each starting scale (0.05, 1, 14, 1000).
     const insetCases: Array<ScreenInsets | undefined> = [
       undefined,
       { top: 40, right: 300, bottom: 20, left: 60 },
       { top: 400, right: 0, bottom: 390, left: 0 }, // leaves under 120 px: the whole screen frames
     ]
-    const designs = [scene(), { ...scene(), plants: [] }, { ...scene(), zones: [], plants: [] }, { ...scene(), annotations: [] }]
-    for (const design of designs) {
-      for (const insets of insetCases) {
-        for (const scale of [0.05, 1, 14, 1000]) {
-          const { snapshot, frame } = todayAndFrame(1000, 800, { x: 3, y: -7, scale }, insets)
-          const today = todayFitCameraViewport(snapshot, design, undefined, insets)
+    const today: Record<string, readonly (readonly Placement[])[]> = {
+      'all': [
+        [ // no insets
+          [321.86648248855136, 199.13374905945437, 6.250768110439437],
+          [321.8664709782407, 199.1342536429958, 6.250768234888686],
+          [321.8664415146735, 199.13554525008448, 6.250768553448191],
+          [321.8664317945567, 199.13597135414284, 6.2507686585419],
+        ],
+        [ // chrome
+          [266.5616924815175, 255.70978937427267, 3.9943596443801033],
+          [266.56168933055824, 255.70993595044615, 3.994359678448213],
+          [266.5616682223009, 255.71091786259205, 3.9943599066702724],
+          [266.56165476343983, 255.71154394007777, 3.99436005218721],
+        ],
+        [ // too little
+          [321.86648248855136, 199.13374905945437, 6.250768110439437],
+          [321.8664709782407, 199.1342536429958, 6.250768234888686],
+          [321.8664415146735, 199.13554525008448, 6.250768553448191],
+          [321.8664317945567, 199.13597135414284, 6.2507686585419],
+        ],
+      ],
+      'no plants': [
+        [ // no insets
+          [271.47728966793363, 198.0146817718866, 6.304944763472309],
+          [271.476958405845, 198.01485284368036, 6.304953902997952],
+          [271.47188231986644, 198.017474257852, 6.305093952280857],
+          [271.47188231986644, 198.017474257852, 6.305093952280857],
+        ],
+        [ // chrome
+          [215.03031704518497, 244.20965236488703, 4.551515852259248],
+          [215.03031704518497, 244.20965236488703, 4.551515852259248],
+          [215.03031704518497, 244.20965236488703, 4.551515852259248],
+          [215.03031704518497, 244.20965236488703, 4.551515852259248],
+        ],
+        [ // too little
+          [271.47728966793363, 198.0146817718866, 6.304944763472309],
+          [271.476958405845, 198.01485284368036, 6.304953902997952],
+          [271.47188231986644, 198.017474257852, 6.305093952280857],
+          [271.47188231986644, 198.017474257852, 6.305093952280857],
+        ],
+      ],
+      'notes only': [
+        [ // no insets
+          [343.03594653398034, 179.26222820168357, 6.617481880112239],
+          [343.0360919207757, 179.26237245264457, 6.617491496842971],
+          [343.0384228560109, 179.26468517744837, 6.617645678496559],
+          [343.03976333604425, 179.2660151849813, 6.617734345665422],
+        ],
+        [ // chrome
+          [237.31291361701997, 210.67782562578083, 5.665645680850998],
+          [237.31351043413198, 210.67845462420772, 5.665675521706599],
+          [237.3163285609853, 210.6814247088816, 5.665816428049265],
+          [237.3150856468813, 210.68011477489944, 5.665754282344065],
+        ],
+        [ // too little
+          [343.03594653398034, 179.26222820168357, 6.617481880112239],
+          [343.0360919207757, 179.26237245264457, 6.617491496842971],
+          [343.0384228560109, 179.26468517744837, 6.617645678496559],
+          [343.03976333604425, 179.2660151849813, 6.617734345665422],
+        ],
+      ],
+      'no notes': [
+        [ // no insets
+          [321.86645173307244, 263.18171033061026, 6.250768442967064],
+          [321.8665106654679, 263.1816835030222, 6.250767805791174],
+          [321.8664415146735, 263.18171498229617, 6.250768553448191],
+          [321.8664317945567, 263.1817194071509, 6.2507686585419],
+        ],
+        [ // chrome
+          [266.5616937340155, 322.17810624585, 3.9943596308381206],
+          [266.5617640329073, 322.1780742439317, 3.9943588707678983],
+          [266.5616682223009, 322.1781178594585, 3.9943599066702724],
+          [266.56165476343983, 322.1781239862887, 3.99436005218721],
+        ],
+        [ // too little
+          [321.86645173307244, 263.18171033061026, 6.250768442967064],
+          [321.8665106654679, 263.1816835030222, 6.250767805791174],
+          [321.8664415146735, 263.18171498229617, 6.250768553448191],
+          [321.8664317945567, 263.1817194071509, 6.2507686585419],
+        ],
+      ],
+    }
+    const designs: Record<string, ScenePersistedState> = {
+      'all': scene(),
+      'no plants': { ...scene(), plants: [] },
+      'notes only': { ...scene(), zones: [], plants: [] },
+      'no notes': { ...scene(), annotations: [] },
+    }
+    for (const [name, design] of Object.entries(designs)) {
+      insetCases.forEach((insets, insetCase) => {
+        [0.05, 1, 14, 1000].forEach((scale, start) => {
+          const frame = fitFrame(1000, 800, [3, -7, scale], insets)
 
-          expect(fitScene(frame, { extentPoints: extentPointsOf(design) }, 0)).toEqual({ ...today, bearingDeg: 0 })
-        }
-      }
+          expect(fitScene(frame, { extentPoints: sceneExtentPoints(design) }, 0)).toEqual(placed(today[name]![insetCase]![start]!))
+        })
+      })
     }
 
+    // An empty scene: today's placement without an empty-scene scale, else that scale (clamped) about the screen centre.
     const empty = { ...scene(), plants: [], zones: [], annotations: [] }
-    const { snapshot, frame } = todayAndFrame(1000, 800, { x: 3, y: -7, scale: 2 })
-    for (const emptySceneScale of [undefined, 0, 25, 1e9]) {
-      const today = todayFitCameraViewport(snapshot, empty, emptySceneScale, undefined)
-      expect(fitScene(frame, { extentPoints: extentPointsOf(empty), emptySceneScale }, 0)).toEqual({ ...today, bearingDeg: 0 })
-    }
-    const unsized = todayAndFrame(0, 0, { x: 3, y: -7, scale: 2 })
-    expect(fitScene(unsized.frame, { extentPoints: extentPointsOf(scene()) }, 0)).toBe(unsized.frame.current)
+    const frame = fitFrame(1000, 800, [3, -7, 2])
+    const todayEmpty: readonly Placement[] = [[3, -7, 2], [3, -7, 2], [500, 400, 25], [500, 400, 1716.6895781438734]]
+    ;[undefined, 0, 25, 1e9].forEach((emptySceneScale, index) => {
+      expect(fitScene(frame, { extentPoints: sceneExtentPoints(empty), emptySceneScale }, 0)).toEqual(placed(todayEmpty[index]!))
+    })
+    const unsized = fitFrame(0, 0, [3, -7, 2])
+    expect(fitScene(unsized, { extentPoints: sceneExtentPoints(scene()) }, 0)).toBe(unsized.current)
   })
 
   it('screen-sized notes converge within 20 rounds', () => {
@@ -247,9 +221,9 @@ describe('fit', () => {
     }
     for (const bearingDeg of [0, 30]) {
       for (const start of [1e-3, 1, 1000]) {
-        const { frame } = todayAndFrame(1000, 800, { x: 0, y: 0, scale: start })
+        const frame = fitFrame(1000, 800, [0, 0, start])
         const calls = { count: 0 }
-        const extentPoints = extentPointsOf(notesOnly, calls)
+        const extentPoints = countedExtent(notesOnly, calls)
 
         const fitted = fitScene(frame, { extentPoints }, bearingDeg)
 
@@ -278,21 +252,35 @@ describe('fit', () => {
       { minX: 1, minY: 0, maxX: 1, maxY: 10 },
     ]
     const options = [{ paddingCssPx: 48 }, { paddingCssPx: 48, maximumScale: 2 }, { paddingCssPx: 201 }, { paddingCssPx: -1 }, { paddingCssPx: 0, maximumScale: 1e-9 }]
-    for (const insets of [undefined, { top: 10, right: 20, bottom: 30, left: 40 }]) {
-      const { snapshot, frame } = todayAndFrame(400, 300, { x: 10, y: 20, scale: 2 }, insets)
-      for (const box of boxes) {
-        for (const option of options) {
-          const today = todayFitTemporaryBoundsViewport(snapshot, box, option, insets)
-          expect(fitTemporaryBounds(frame, box, option, 0)).toEqual(today && { ...today, bearingDeg: 0 })
-        }
-      }
-    }
-    const unsized = todayAndFrame(0, 0, { x: 0, y: 0, scale: 1 })
-    expect(fitTemporaryBounds(unsized.frame, boxes[0]!, options[0]!, 0)).toBeNull()
+    // Today's fitTemporaryBoundsViewport (canvas/runtime/camera.ts:585-629 at 52cbff10) on a 400 × 300 CameraController placed
+    // at { x: 10, y: 20, scale: 2 }, recorded for each insets case, box and option; null where it refused.
+    const today: readonly (readonly (readonly (Placement | null)[])[])[] = [
+      [ // no insets
+        [[48, 74, 3.04], [100, 100, 2], null, null, null],
+        [[199.14165521092806, 149.14165521092806, 1716.6895781438734], [199.999, 149.999, 2], null, null, null],
+        [[276, -401, 76], [202, 135.5, 2], null, null, null],
+        [null, null, null, null, null],
+      ],
+      [ // chrome
+        [[88, 79, 2.44], [110, 90, 2], null, null, null],
+        [[209.14165521092806, 139.14165521092806, 1716.6895781438734], [209.999, 139.999, 2], null, null, null],
+        [[271, -302.25, 61], [212, 125.5, 2], null, null, null],
+        [null, null, null, null, null],
+      ],
+    ]
+    ;[undefined, { top: 10, right: 20, bottom: 30, left: 40 }].forEach((insets, insetCase) => {
+      const frame = fitFrame(400, 300, [10, 20, 2], insets)
+      boxes.forEach((box, boxIndex) => {
+        options.forEach((option, optionIndex) => {
+          expect(fitTemporaryBounds(frame, box, option, 0)).toEqual(placed(today[insetCase]![boxIndex]![optionIndex]!))
+        })
+      })
+    })
+    expect(fitTemporaryBounds(fitFrame(0, 0, [0, 0, 1]), boxes[0]!, options[0]!, 0)).toBeNull()
   })
 
   it('a turned fit frames the box\'s corners, not its world-axis box', () => {
-    const { frame } = todayAndFrame(400, 300, { x: 0, y: 0, scale: 1 })
+    const frame = fitFrame(400, 300, [0, 0, 1])
     const box = { minX: 0, minY: 0, maxX: 100, maxY: 20 }
 
     const turned = fitTemporaryBounds(frame, box, { paddingCssPx: 10 }, 90)!
@@ -347,7 +335,7 @@ describe('scene extent', () => {
 
   /** The world-axis box of the extent at a scale (1 px/m unless given, as computeSceneBounds defaulted). */
   function extentBox(design: ScenePersistedState, pixelsPerMetre = 1): SceneBounds | null {
-    return todayBounds(sceneExtentPoints(design)(pixelsPerMetre))
+    return worldAxisBox(sceneExtentPoints(design)(pixelsPerMetre))
   }
 
   it('uses the symbolic Placed Plant Visual Footprint for plant-only bounds', () => {

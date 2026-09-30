@@ -11,6 +11,7 @@ import { planarCameraOf } from '../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { createWorkspaceCameraPolicy } from '../canvas/workspace-camera-policy'
 import { createMapLibreCameraDriver } from './camera-driver'
+import { MapLibreWorkspaceCameraOwner } from './workspace-camera'
 import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
@@ -807,6 +808,40 @@ describe('MapLibre camera driver', () => {
 
 // Moved from __tests__/maplibre-camera.test.ts: a placement on the attached map keeps every plane point on the canvas pixel the
 // placement gives it (p × scale + { x, y }), through MapLibre's own Mercator camera.
+// The legacy MapLibre shim (maplibre/workspace-camera.ts, deleted with it at the end of 0D2) over this driver.
+describe('MapLibre workspace camera shim', () => {
+  it('an adopted shim moves the map it attached itself into the Scene\'s new plane', () => {
+    const scenePlane = signal<SessionPlane | null>(PLANE)
+    let origin = PLANE.origin
+    const camera = new MapLibreWorkspaceCameraOwner({ policy: createWorkspaceCameraPolicy(PLANE.origin.lat) })
+    const stopFollowing = camera.followScenePlane(scenePlane)
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    try {
+      expect(camera.attachment.attach({ map, readOrigin: () => origin })).toBe(true)
+      const before = camera.host.frames.viewFrame.peek()
+
+      // A re-origin: the Scene's plane moves, then the composition refreshes the attachment's origin.
+      const next = createSessionPlane(PLANE.toGeo({ x: 20_000, y: -5_000 }))
+      origin = next.origin
+      scenePlane.value = next
+      camera.attachment.refreshOrigin()
+
+      const after = camera.host.frames.viewFrame.peek()
+      expect(after.attached).toBe(true)
+      expect(after.view.planeRevision).toBe(before.view.planeRevision + 1)
+      expect(after.view.camera).toEqual(before.view.camera)
+      // The frame is expressed in the new plane: its origin is where the map shows the new plane's origin.
+      const originPx = after.view.worldToScreen({ x: 0, y: 0 })
+      const shown = map.unproject([originPx.x, originPx.y])
+      expect(shown.lng).toBeCloseTo(next.origin.lon, 9)
+      expect(shown.lat).toBeCloseTo(next.origin.lat, 9)
+    } finally {
+      stopFollowing()
+      camera.dispose()
+    }
+  })
+})
+
 describe('screen-lock validation', () => {
   const location = { lat: 48.8566, lon: 2.3522 }
   const plane = createSessionPlane(location)

@@ -14,7 +14,9 @@ export function createBrowserWorkspaceMapContributionAdapter(
       const plane = runtime.sessionPlane.value
       if (!plane) return null
       void runtime.revision.scene.value
-      // Coarse view signals only: a camera frame alone never re-reads the contributions (INV-ENT-22).
+      // Coarse view signals only: the contributions re-read when the camera settles or the mode changes, never on a camera frame
+      // alone (INV-ENT-22).
+      void runtime.view.settledCamera.value
       const overview = runtime.view.mode.value === 'overview'
       const panelTargets = readPanelTargetOverlaySnapshot()
       const anchor = { lat: plane.origin.lat, lon: plane.origin.lon }

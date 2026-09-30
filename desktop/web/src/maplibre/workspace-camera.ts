@@ -101,8 +101,8 @@ export class MapLibreWorkspaceCameraOwner extends CameraController {
     try {
       this.withOneSnapshot(() => {
         const placement = this.planar()
-        this.plane = createSessionPlane(attachment.readOrigin())
-        const driver = createMapLibreCameraDriver(attachment.map, this.plane, this.host.driverDeps)
+        this.ownPlane = createSessionPlane(attachment.readOrigin())
+        const driver = createMapLibreCameraDriver(attachment.map, this.ownPlane, this.host.driverDeps)
         this.host.attach(driver)
         if (this.host.current() === driver) driver.apply({ kind: 'place', planar: placement })
       })
@@ -137,9 +137,9 @@ export class MapLibreWorkspaceCameraOwner extends CameraController {
         this.driver().planeChanged(scenePlane!)
         return
       }
-      if (this.plane.origin.lat === origin.lat && this.plane.origin.lon === origin.lon) return
-      this.plane = createSessionPlane(origin)
-      this.driver().planeChanged(this.plane)
+      if (this.ownPlane.origin.lat === origin.lat && this.ownPlane.origin.lon === origin.lon) return
+      this.ownPlane = createSessionPlane(origin)
+      this.driver().planeChanged(this.ownPlane)
     })
   }
 

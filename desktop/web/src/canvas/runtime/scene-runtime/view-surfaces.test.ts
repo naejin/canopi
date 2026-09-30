@@ -9,7 +9,8 @@ vi.mock('../../../ipc/species', () => ({
 import { geoAt } from '../../../__tests__/support/geo-design'
 import { CURRENT_CANOPI_FILE_VERSION } from '../../../generated/canopi-design-format'
 import type { CanopiFile } from '../../../types/design'
-import { geographicExtentOf, geographicViewOf, type GeoPosition } from '../../session-plane'
+import { planeViewportCornerBounds } from '../../../__tests__/support/plane-viewport-corners'
+import { geographicViewOf, type GeoPosition } from '../../session-plane'
 import type { CameraController } from '../camera'
 import { SceneCanvasRuntime } from '../scene-runtime'
 
@@ -58,7 +59,7 @@ function legacyCamera(runtime: SceneCanvasRuntime): CameraController {
 function todaysCapture(runtime: SceneCanvasRuntime) {
   const frame = runtime.querySurface.viewport.peek()
   const plane = runtime.querySurface.sessionPlane.peek()!
-  return { view: geographicViewOf(frame, plane), extent: geographicExtentOf(frame, plane) }
+  return { view: geographicViewOf(frame, plane), extent: planeViewportCornerBounds(frame, plane) }
 }
 
 describe('the runtime view surfaces', () => {
