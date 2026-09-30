@@ -153,7 +153,8 @@ export interface SceneInteractionSession {
   redoTransientHistory(): boolean
   /** The canvas's key handling (spec §1.2a), fed by the DOM input source's legacy key sink until 0C. */
   readonly keyboard: CanvasKeyboardPort
-  /** ToolHost.subscribePointerWorld: the pointer's world point over the map, null when it leaves (the inspection lens). */
+  /** ToolHost.subscribePointerWorld: the pointer's world point over the map, null when it leaves (the inspection lens). The
+   *  session drops the point of a move made with any button held (its raw buttonMask), as today's lens skipped it. */
   subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
   dispose(): void
 }
@@ -512,7 +513,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   }
 
   subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void {
-    // Today's lens skipped every move made with a button held (a press off the map, or a right press, dragged across it).
+    // The held-button rule is the session's, not the host's: today's lens skipped every move made with a button held (a
+    // press off the map, or a right press, dragged across it; a pen's barrel or eraser too).
     return this._toolHost.subscribePointerWorld((point) => {
       if (point && this._buttonHeld) return
       listener(point)
@@ -553,7 +555,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   private _receive(input: RawInput): void {
     if (this._disposed) return
-    this._buttonHeld = input.kind === 'move' && input.buttons.size > 0
+    // Every bit the pointer reports, a pen's barrel or eraser that LEGACY ignores as a press included, as today's lens read it.
+    this._buttonHeld = input.kind === 'move' && input.buttonMask !== 0
     try {
       this._dispatch(input)
     } finally {

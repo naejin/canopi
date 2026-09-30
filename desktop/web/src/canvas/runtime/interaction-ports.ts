@@ -231,7 +231,8 @@ export interface ToolHost {
    *  affordance). A hover over owned chrome, a ruler or anything off the map publishes nothing, and a move over the text
    *  entry, a handle or the Unlock affordance emits no gesture before phase 2, so the lens keeps its point there, as today's
    *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
-   *  For the inspection lens and the status line. */
+   *  A hover made with a button held is published too: the interaction session's subscribePointerWorld drops it (its raw
+   *  buttonMask, as today's lens skipped a move with any button held). For the inspection lens and the status line. */
   subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
   dispose(): void
 }

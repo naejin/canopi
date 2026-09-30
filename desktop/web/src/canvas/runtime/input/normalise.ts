@@ -75,6 +75,7 @@ export function normalise(
         mods: modifiersOf(e),
         buttons: buttonRoles(e.buttons ?? 0, pointer, bindings),
         target: e.target,
+        buttonMask: e.buttons ?? 0,
       }
     }
     case 'pointerup': {

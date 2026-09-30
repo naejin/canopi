@@ -506,6 +506,10 @@ describe('the interaction session', () => {
     events.pointerMove({ x: 180, y: 160 }, { target: container, buttons: 2 })
     events.pointerUp({ x: 180, y: 160 }, { button: 2 })
     expect(points).toHaveLength(1)
+    // A pen hovering with its barrel or eraser held: LEGACY ignores both as presses, yet today's lens saw the button.
+    events.pointerMove({ x: 130, y: 130 }, { target: container, pointerType: 'pen', pointerId: 9, buttons: 2 })
+    events.pointerMove({ x: 135, y: 130 }, { target: container, pointerType: 'pen', pointerId: 9, buttons: 32 })
+    expect(points).toHaveLength(1)
     events.pointerMove({ x: 150, y: 150 }, { target: container, buttons: 0 })
     expect(points).toHaveLength(2)
 
