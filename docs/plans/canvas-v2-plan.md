@@ -188,9 +188,10 @@ Inventory rows have stable IDs by group: `INV-CAM` (camera and view transform), 
 | Today | Replacement |
 |---|---|
 | `__tests__/camera-controller.test.ts` | `view/navigation.test.ts`, `view/headless-driver.test.ts`, `view/fit.test.ts` |
-| `__tests__/maplibre-camera.test.ts` | `maplibre/camera-driver.test.ts` |
-| `__tests__/maplibre-workspace-camera.test.ts` | `maplibre/camera-driver.test.ts`, `view/navigation-policy.test.ts` |
-| `__tests__/workspace-camera-refresh-origin.test.ts` | `view/reorigin.test.ts`; its two "workspace runtime composition origin effect" tests, which test `workspace-runtime-composition.ts`, move to the new `app/canvas-map-surface/workspace-runtime-origin.test.ts` (names kept) |
+| `__tests__/maplibre-camera.test.ts` | `maplibre/camera-driver.test.ts`, its six "screen-lock validation" tests with their names kept |
+| `__tests__/maplibre-workspace-camera.test.ts` | `maplibre/camera-driver.test.ts`, `view/driver-host.test.ts`, `view/reorigin.test.ts`, `view/headless-driver.test.ts` |
+| `__tests__/workspace-camera-refresh-origin.test.ts` | `view/reorigin.test.ts`, `maplibre/camera-driver.test.ts`; its two "workspace runtime composition origin effect" tests, which test `workspace-runtime-composition.ts`, move to the new `app/canvas-map-surface/workspace-runtime-origin.test.ts` (names kept) |
+| `__tests__/projection.test.ts` | stays; its "viewportCenterGeo" and "viewportCornerGeoPoints" tests move to `view/view-transform.test.ts` (names kept), and "names the local Mercator projection" maps to the policy "Retired frontend seams stay deleted" |
 | `__tests__/v2-shared-camera-transform.test.ts` | unchanged in 0A: `maplibre/shared-scene-layer.ts` runs `deriveSharedMapSceneViewport` every render until 0D2, so the main agent deletes the test with `maplibre/scene-camera-transform.ts` at the end of 0D2, its five tests mapped to `view/view-transform.test.ts` and `view/camera-contract.test.ts` in the guard |
 | `__tests__/lidar-camera-navigation.test.ts` | same file on `createTestView` |
 | `__tests__/panel-target-map-projection.test.ts` | same file on `createTestView` (no longer imports `maplibre-camera.ts`) |
