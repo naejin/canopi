@@ -1054,7 +1054,8 @@ function clearToolSource(tool: ToolId): void {
 /**
  * The inputs today's handlers retried a pending cancellation on, and swallowed: a primary or middle press on the map host
  * (a Mac Ctrl click is button 0), a pointerup, a pointercancel, a wheel and a native contextmenu; keys retry in the keyboard
- * port. Moves, leaves, lost captures, blurs, other presses and ruler presses were never fenced, and neither was a wheel over
+ * port, and dragovers and drops on the legacy bridge until the host's drop route (0B-4), which must retry before admission.
+ * Moves, leaves, lost captures, blurs, other presses and ruler presses were never fenced, and neither was a wheel over
  * a handle, the note editor or the Unlock affordance (today's _onWheel returned before its retry). One accepted deviation: a
  * right-click inside the note editor's textarea now keeps its native menu, since the source drops a contextmenu over an
  * editable target before the session hears it; today's _onContextMenu retried, and swallowed, before that check.
