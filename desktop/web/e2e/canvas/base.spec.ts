@@ -1,10 +1,12 @@
 // The base scenario of the Web Edition browser checks (canvas v2 plan section 3.2): open the
 // base fixture through the file chooser, pan, zoom, Present, PDF. Every later phase runs it.
 // Real input only: page.mouse and page.keyboard (locator clicks are real mouse clicks too).
-// Screenshots are taken on settled states only, never mid-drag.
+// Screenshots are taken on settled states only, never mid-drag, and of the canvas only once it
+// has drawn the change the DOM checks saw (expectCanvasDrawn).
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
+import { designMap, expectCanvasDrawn } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -21,11 +23,12 @@ async function openBaseFixture(page: Page): Promise<void> {
     page.getByRole('button', { name: /Open a \.canopi file…/ }).first().click(),
   ])
   await chooser.setFiles(FIXTURE)
-  await expect(page.getByRole('application', { name: 'Design map' })).toBeVisible()
+  await expect(designMap(page)).toBeVisible()
   await expect(page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true')
   // The opening camera frames the Design.
   await expect(scaleChip(page)).toHaveText('1:240')
   await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expectCanvasDrawn(page)
 }
 
 function scaleChip(page: Page) {
@@ -76,6 +79,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
     await page.mouse.up({ button: 'middle' })
     await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
     await expect(scaleChip(page), 'a pan keeps the scale').toHaveText('1:240')
+    await expectCanvasDrawn(page)
     await expect(page).toHaveScreenshot('base-02-panned.png')
     const after = await rectZoneCornerAt(page, { x: RECT_ZONE_EDGE.x + 200, y: RECT_ZONE_EDGE.y })
     // Both engines lay boxes out in 1/64 px units, so the measure allows 1/16 px.
@@ -89,6 +93,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
     await expect(scaleChip(page)).not.toHaveText('1:240')
     const denominator = Number((await scaleChip(page).textContent())?.replace(/^1:/, '').replace(/[^\d]/g, ''))
     expect(denominator, 'wheel up zooms in (a smaller scale denominator)').toBeLessThan(240)
+    await expectCanvasDrawn(page)
     await expect(page).toHaveScreenshot('base-03-zoomed.png')
   })
 
@@ -101,6 +106,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
     await expect(presentation.getByRole('heading', { name: 'Overview' })).toBeVisible()
     await expect(presentation.getByRole('status')).toHaveText('Step 1 of 1: Overview')
     await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+    await expectCanvasDrawn(page)
     await expect(page).toHaveScreenshot('base-04-present.png')
     await presentation.getByRole('button', { name: 'Leave presentation' }).click()
     await expect(presentation).toBeHidden()
@@ -128,7 +134,7 @@ test('open, pan, zoom, Present and PDF', async ({ page }) => {
 
     await workspace.getByRole('button', { name: '← Back to the Design' }).click()
     await expect(workspace).toBeHidden()
-    await expect(page.getByRole('application', { name: 'Design map' })).toBeVisible()
+    await expect(designMap(page)).toBeVisible()
     await expect(page.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
   })
 })

@@ -19,13 +19,16 @@ export default defineConfig({
   // The same on a workstation as on the hosted runner (four cores); a spec file's tests run in order.
   workers: 2,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : [['list']],
-  // Measured in the pinned image limited to four cores (the hosted runner's size), the base
-  // scenario takes about 25 s, near Playwright's default 30 s; on two cores a screenshot can
-  // take more than the default 5 s to settle, and so can the PDF preview. These limits only
-  // bound how long a check waits; they never change what passes.
+  // Measured in the pinned image with tracing on (retain-on-failure records every run): at four
+  // cores (the hosted runner's size) the base scenario takes up to 40 s, above Playwright's
+  // default 30 s, and at two cores up to 125 s. A screenshot after a Design change waits for
+  // the canvas (e2e/support/canvas.ts) and matches its baseline on its first capture, but at two
+  // cores that one capture takes up to 6.5 s, opening the fixture up to 12 s and the PDF
+  // preview up to 10 s, more than the default 5 s. These limits only bound how long a check
+  // waits; they never change what passes.
   timeout: 180_000,
   expect: {
-    timeout: 20_000,
+    timeout: 15_000,
     toHaveScreenshot: {
       // Playwright's default comparison, not loosened: no pixel budget (maxDiffPixels 0) and
       // the default per-pixel colour threshold; the pinned image makes the pixels reproducible.

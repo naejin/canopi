@@ -4,9 +4,11 @@
 // they are the phase-0 Web reference. Each step opens the fixture afresh, so a failure names
 // the one step that broke; DOM reads say what broke, screenshots say what it looks like.
 // Screenshots are taken on settled states only, never mid-drag (drafts are compared by eye)
-// and never while a timer is still due to change the page (an open nudge series).
+// and never while a timer is still due to change the page (an open nudge series). Before each
+// one the canvas has drawn the change the DOM checks saw (expectCanvasDrawn).
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
+import { designMap, expectCanvasDrawn } from '../support/canvas'
 import { expect, test } from '../support/offline'
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/canvas-base.canopi', import.meta.url))
@@ -25,11 +27,12 @@ async function openBaseFixture(page: Page): Promise<void> {
     page.getByRole('button', { name: /Open a \.canopi file…/ }).first().click(),
   ])
   await chooser.setFiles(FIXTURE)
-  await expect(page.getByRole('application', { name: 'Design map' })).toBeVisible()
+  await expect(designMap(page)).toBeVisible()
   await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
   // The opening camera frames the Design.
   await expect(scaleChip(page)).toHaveText('1:240')
   await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expectCanvasDrawn(page)
 }
 
 function tool(page: Page, name: string) {
@@ -99,6 +102,7 @@ test('step 2: the wheel zooms, and zooming back restores the opening pixels', as
   await expect(scaleChip(page), 'wheel up changes the scale').not.toHaveText('1:240')
   const zoomed = Number((await scaleChip(page).textContent())?.replace(/^1:/, '').replace(/[^\d]/g, ''))
   expect(zoomed, 'wheel up zooms in (a smaller scale denominator)').toBeLessThan(240)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-02b-zoomed.png')
 
   await page.mouse.wheel(0, 300)
@@ -130,6 +134,7 @@ test('step 3: Space and a 200 px left drag pan the map 200 px; objects stay on t
   await expect(scaleChip(page), 'a pan keeps the scale').toHaveText('1:240')
   await expect(tool(page, 'Undo'), 'panning never edits the Design').toBeDisabled()
   await expect(selection(page), 'Space-drag pans; it does not marquee-select').toHaveCount(0)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-03-space-pan.png')
 
   await page.mouse.click(RECT_ZONE_EDGE.x + 200, RECT_ZONE_EDGE.y)
@@ -154,10 +159,12 @@ test('step 4: right-click on a plant opens the canvas menu with today\'s entries
   ])
   await expect(selection(page).getByRole('status'), 'the right-click selects the plant').toHaveText('Apple')
   await page.mouse.move(NEUTRAL.x, NEUTRAL.y)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-04a-context-menu.png')
 
   await page.keyboard.press('Escape')
   await expect(page.getByRole('menu'), 'Esc closes the canvas menu').toHaveCount(0)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-04b-menu-closed.png')
 })
 
@@ -173,6 +180,7 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await page.mouse.click(680, 420)
   await expect(tool(page, 'Undo'), 'placing a plant is one Design edit').toBeEnabled()
   await expect(selection(page).getByRole('status'), 'the placed plant is selected').toHaveText('Apple')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05a-plant-placed.png')
 
   await page.keyboard.press('Control+z')
@@ -180,6 +188,7 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await expect(tool(page, 'Redo')).toBeEnabled()
   await expect(selection(page), 'the removed plant is no longer selected').toHaveCount(0)
   await expect(tool(page, 'Place plants'), 'undo keeps the tool').toHaveAttribute('aria-pressed', 'true')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05b-plant-undone.png')
 
   await page.keyboard.press('r')
@@ -190,16 +199,19 @@ test('step 5: P places a plant, Ctrl+Z removes it; R draws a rectangle; Esc, Esc
   await page.mouse.up()
   await expect(selection(page).getByRole('status'), 'the drawn rectangle is selected').toHaveText('Rectangle zone · 192 m² · 56 m')
   await expect(tool(page, 'Rectangle zone'), 'the tool stays armed after a rectangle').toHaveAttribute('aria-pressed', 'true')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05c-rect-drawn.png')
 
   await page.keyboard.press('Escape')
   await expect(tool(page, 'Select'), 'the first Esc returns to Select').toHaveAttribute('aria-pressed', 'true')
   await expect(selection(page).getByRole('status'), 'the first Esc keeps the selection').toHaveText('Rectangle zone · 192 m² · 56 m')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05d-esc-select.png')
 
   await page.keyboard.press('Escape')
   await expect(selection(page), 'the second Esc clears the selection').toHaveCount(0)
   await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-05e-esc-cleared.png')
 })
 
@@ -213,6 +225,7 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   if (!c1 || !c2 || !c4) throw new Error('the rectangle zone shows fewer than four control points')
   // Pixels per metre from the zone itself: its handles span 14 m x 8 m (112 m², the chip).
   const pxPerMetre = Math.sqrt(Math.abs((c2.x - c1.x) * (c4.y - c1.y)) / 112)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06a-zone-selected.png')
 
   // Arrow keys open a nudge series: the zone moves at once, Undo stays off while the series is
@@ -226,6 +239,7 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   // Today's world axes: the camera is north-up, so east is +x on screen and y does not change.
   expectPx(nudged.x - c1.x, 0.1 * pxPerMetre, 'ArrowRight moves the zone 10 cm east')
   expectPx(nudged.y - c1.y, 0, 'ArrowRight does not move the zone north or south')
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06b-nudge-10cm.png')
 
   await page.keyboard.press('Shift+ArrowRight')
@@ -235,6 +249,7 @@ test('step 6: ArrowRight nudges a selected zone 10 cm east, Shift+ArrowRight 1 m
   expectPx(shifted.x - nudged.x, pxPerMetre, 'Shift+ArrowRight moves the zone 1 m east')
   expectPx(shifted.y - nudged.y, 0, 'Shift+ArrowRight does not move the zone north or south')
   await expect(selection(page).getByRole('status'), 'nudging keeps the zone selected').toHaveText(RECT_ZONE_CHIP)
+  await expectCanvasDrawn(page)
   await expect(page).toHaveScreenshot('phase0-06c-nudge-1m.png')
 
   await page.keyboard.press('Control+z')
