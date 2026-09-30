@@ -173,9 +173,9 @@ export interface ToolHost {
   /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
   activeToolDragSlopPx(): number | null
   /** Asked by the session before it routes the events today's handlers retried on (a primary or middle press on the map, a
-   *  pointerup, a pointercancel, a wheel, a native contextmenu, a key): true while a failed cancellation was pending and has
-   *  now been retried, so the event is quarantined (today's app-wide swallow). Moves, leaves, lost captures, blurs and ruler
-   *  presses are never fenced. */
+   *  pointerup, a pointercancel, a wheel not over a handle, the note editor or the Unlock affordance, a native contextmenu,
+   *  a key): true while a failed cancellation was pending and has now been retried, so the event is quarantined (today's
+   *  app-wide swallow). Moves, leaves, lost captures, blurs and ruler presses are never fenced. */
   retryPendingCancellation(): boolean
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it

@@ -712,6 +712,43 @@ describe('the interaction session', () => {
     }
   })
 
+  it('a wheel over a handle, the note editor or the Unlock affordance leaves a pending cancellation alone, as today', () => {
+    const { failing, retries } = pendingCancellation()
+    failing.value = false
+    const rotation = document.createElement('div')
+    rotation.setAttribute('data-rotation-handle', '')
+    const controlPoint = document.createElement('div')
+    controlPoint.setAttribute('data-control-point-overlay-handle', '0')
+    const entry = document.createElement('div')
+    entry.setAttribute('data-canvas-text-entry', '')
+    const unlock = document.createElement('button')
+    unlock.setAttribute('data-locked-object-affordance', '')
+    container.append(rotation, controlPoint, entry, unlock)
+    const outside = vi.fn()
+    container.addEventListener('wheel', outside)
+
+    try {
+      // Today's _onWheel returned before its retry over the note editor, the rotation handle, a control point and the
+      // Unlock affordance: the wheel is neither retried nor prevented, and reaches the app.
+      for (const target of [rotation, controlPoint, entry, unlock]) {
+        const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 4, clientX: 50, clientY: 50 })
+        target.dispatchEvent(wheel)
+        expect(wheel.defaultPrevented).toBe(false)
+      }
+      expect(retries()).toBe(0)
+      expect(outside).toHaveBeenCalledTimes(4)
+
+      // A wheel over the map retries it, and is swallowed.
+      const surface = events.wheel({ x: 50, y: 50 }, { deltaY: 4 })
+      expect(retries()).toBe(1)
+      expect(surface.defaultPrevented).toBe(true)
+      expect(outside).toHaveBeenCalledTimes(4)
+    } finally {
+      container.removeEventListener('wheel', outside)
+      for (const element of [rotation, controlPoint, entry, unlock]) element.remove()
+    }
+  })
+
   it('a window blur while a cancellation is pending goes on to the app, as today\'s blur handlers let it', () => {
     const { failing } = pendingCancellation()
     const blurs = vi.fn()
