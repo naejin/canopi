@@ -538,15 +538,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   /**
    * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
    * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
-   * affordance, with no other live press and no pending cancellation, also closes the menu and moves focus to the map,
-   * so an open text entry commits on its blur before the press reaches the tool; a click inside the entry keeps it open.
-   * The host knows only its own live press: a pan lives in the recogniser, which ignores a second pointer anyway.
+   * affordance, with no live press from another pointer and no pending cancellation, also closes the menu and moves focus
+   * to the map, so an open text entry commits on its blur before the press reaches the tool; a click inside the entry keeps
+   * it open. A press on the live press's own pointer (its up was lost) counts, as today's. The host knows only its own live
+   * press: a pan lives in the recogniser, which ignores a second pointer anyway.
    */
-  function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass): void {
+  function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void {
     if (disposed) return
     endNudgeSeries(true)
     // A bridged tool's presses are the bridge's.
-    if (!activeTool || button === 'secondary' || live || pendingCancellation) return
+    if (!activeTool || button === 'secondary' || pendingCancellation) return
+    if (live && live.id !== pointerId) return
     if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
     // Admission without resuming a pending edit: the press that follows resumes it, once, as today's one admission did.
     deps.admission.runWhenSettled(() => {
@@ -647,12 +649,32 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       deliverDrag(tool, gesture, g.kind)
       return NOTHING
     }
-    try {
-      deliverDrag(tool, gesture, 'drag-end')
-    } finally {
-      endLive({ screen: g.at, mods: g.mods, pointer: gesture.pointer })
+    return release(tool, () => {
+      try {
+        deliverDrag(tool, gesture, 'drag-end')
+      } finally {
+        endLive({ screen: g.at, mods: g.mods, pointer: gesture.pointer })
+      }
+    })
+  }
+
+  /**
+   * A tool's release: at once, or inside the scene's admission while the tool's settledRelease() answers true (Select's
+   * band: today's requiresSettledPointerUp). A refused settled release cancels the tool, as today's refused pointerup
+   * cancelled the transient interaction, and is quarantined.
+   */
+  function release(tool: CanvasTool, finish: () => void): GestureOutcome {
+    if (!tool.settledRelease?.()) {
+      finish()
+      return NOTHING
     }
-    return NOTHING
+    const admitted = deps.admission.runWhenSettled(() => {
+      finish()
+      return true
+    }, false, { resumePending: true })
+    if (admitted) return NOTHING
+    cancelTransientInteraction('tool-change')
+    return QUARANTINE
   }
 
   /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
@@ -677,21 +699,25 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const gesture = live
     if (!gesture || gesture.id !== g.id) return NOTHING
     if (retryPendingCancellation()) return QUARANTINE
-    live = null
     const tool = activeTool
-    try {
-      if (gesture.kind === 'ruler' || !tool) return NOTHING
-      const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
-      if (!point) return NOTHING
-      if (gesture.kind === 'handle') {
-        callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start! }))
-      } else {
-        callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
-      }
+    if (gesture.kind === 'ruler' || !tool) {
+      endLive()
       return NOTHING
-    } finally {
-      endLive(gesture.kind === 'ruler' ? null : { screen: g.at, mods: g.mods, pointer: g.pointer })
     }
+    return release(tool, () => {
+      live = null
+      try {
+        const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
+        if (!point) return
+        if (gesture.kind === 'handle') {
+          callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start! }))
+        } else {
+          callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
+        }
+      } finally {
+        endLive({ screen: g.at, mods: g.mods, pointer: g.pointer })
+      }
+    })
   }
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {

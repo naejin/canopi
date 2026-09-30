@@ -385,6 +385,61 @@ describe('ToolHost', () => {
       expect(h.host.hasLiveGesture()).toBe(false)
     })
 
+    it('a settled release runs inside the admission; a refused one cancels the tool and is quarantined', () => {
+      let busy = false
+      const admitted: string[] = []
+      let settled = true
+      const select = stubTool('select', { settledRelease: () => settled })
+      useStubTools(select)
+      const h = harness({
+        admission: {
+          revision: signal(0),
+          runWhenSettled: <T,>(operation: () => T, busyResult: T, options?: { resumePending?: boolean }) => {
+            admitted.push(`${busy ? 'refused' : 'admitted'}:${options?.resumePending ?? false}`)
+            return busy ? busyResult : operation()
+          },
+        },
+      })
+
+      // Select's band (today's requiresSettledPointerUp): its release waits for the scene, as the press did.
+      h.press({ x: 10, y: 10 })
+      h.move({ x: 60, y: 40 })
+      admitted.length = 0
+      expect(h.release({ x: 80, y: 60 })).toEqual({})
+      expect(admitted).toEqual(['admitted:true'])
+      expect(select.count('drag-end')).toBe(1)
+
+      // The scene is busy at the release: the tool is cancelled, as today's refused pointerup cancelled the transient.
+      h.press({ x: 10, y: 10 })
+      h.move({ x: 60, y: 40 })
+      busy = true
+      admitted.length = 0
+      expect(h.release({ x: 80, y: 60 })).toEqual({ quarantine: true })
+      expect(admitted).toEqual(['refused:true'])
+      expect(select.count('drag-end')).toBe(1)
+      expect(select.last('cancel')).toEqual({ kind: 'cancel', reason: 'tool-change' })
+      expect(select.calls.at(-1)).toBe('cancelTransient:tool-change')
+      expect(h.host.hasLiveGesture()).toBe(false)
+
+      // A settled tap too.
+      busy = false
+      h.press({ x: 10, y: 10 })
+      busy = true
+      expect(h.release()).toEqual({ quarantine: true })
+      expect(select.count('tap')).toBe(0)
+
+      // Any other release runs at once, busy or not (today's pointerup outside a band).
+      settled = false
+      busy = false
+      h.press({ x: 10, y: 10 })
+      h.move({ x: 60, y: 40 })
+      busy = true
+      admitted.length = 0
+      expect(h.release({ x: 80, y: 60 })).toEqual({})
+      expect(admitted).toEqual([])
+      expect(select.count('drag-end')).toBe(2)
+    })
+
     it('a press moves focus to the map, which commits the text entry on its blur', () => {
       const submitted: string[] = []
       const text: StubTool = stubTool('text', {
@@ -539,18 +594,23 @@ describe('ToolHost', () => {
       })
 
       // Another pointer's press is live: today's one pointer gesture at a time.
-      h.press({ x: 100, y: 100 })
+      h.press({ x: 100, y: 100 }, { pointerId: 3 })
       h.menu('selection', 'keyboard')
-      h.host.rawPress('primary', SURFACE)
+      h.host.rawPress('primary', SURFACE, 4)
       expect(h.menuOpen).toBe(true)
       expect(h.record.focus).toEqual(['map:tool-requested'])
+      // The live pointer pressed again, its up lost: today's _onPointerDown skipped only another pointer's press.
+      h.host.rawPress('primary', SURFACE, 3)
+      expect(h.menuOpen).toBe(false)
+      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
       h.release()
+      h.menu('selection', 'keyboard')
 
       // The scene is not settled.
       busy = true
       h.host.rawPress('middle', SURFACE)
       expect(h.menuOpen).toBe(true)
-      expect(h.record.focus).toEqual(['map:tool-requested'])
+      expect(h.record.focus).toEqual(['map:tool-requested', 'map:tool-requested'])
       busy = false
 
       // A failed cancellation waits for its retry.

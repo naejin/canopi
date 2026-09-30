@@ -333,6 +333,8 @@ export interface PressOptions {
   readonly target?: PressTarget
   readonly pointer?: PointerKind
   readonly clickCount?: number
+  /** Default: the next of the harness's own ids, from 1. */
+  readonly pointerId?: number
 }
 
 export interface ToolHarness {
@@ -584,12 +586,12 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     hover: (at, partial, target = { kind: 'surface' }) => route({ kind: 'hover', at, pointer: 'mouse', mods: mods(partial), target }),
     leave: () => route({ kind: 'hover-end' }),
     press(at, pressOptions = {}) {
-      const id = nextPointerId++
+      const id = pressOptions.pointerId ?? nextPointerId++
       const target = pressOptions.target ?? { kind: 'surface' }
       const pointer = pressOptions.pointer ?? 'mouse'
       const clickCount = pressOptions.clickCount ?? 1
       // The session reports the raw pointerdown before it routes what the recogniser made of it.
-      host.rawPress('primary', target)
+      host.rawPress('primary', target, id)
       const outcome = route({ kind: 'press', id, at, pointer, mods: mods(pressOptions.mods), clickCount, target })
       session = outcome.rejectSession ? null : { id, from: at, pointer, target, clickCount, last: at, dragged: false }
       return outcome
