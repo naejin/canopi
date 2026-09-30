@@ -411,6 +411,25 @@ describe('ToolHost', () => {
     })
   })
 
+  describe('translations', () => {
+    it('a language change rebuilds the tool\'s translated draft: sceneChanged, then the still pointer or viewChanged', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp' })
+
+      h.hover({ x: 100, y: 100 })
+      h.host.refreshTranslations()
+      expect(stamp.calls).toEqual(['activate', 'sceneChanged'])
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.last('hover')!.point.world).toEqual(h.world({ x: 100, y: 100 }))
+
+      h.leave()
+      h.host.refreshTranslations()
+      expect(stamp.calls).toEqual(['activate', 'sceneChanged', 'sceneChanged', 'viewChanged'])
+      expect(stamp.count('hover')).toBe(2)
+    })
+  })
+
   describe('the legacy bridge', () => {
     it('a bridged tool gets no hover, interceptor or re-emit from the host', () => {
       useStubTools(stubTool('polygon'))
@@ -769,6 +788,38 @@ describe('ToolHost', () => {
 
       h.menu('selection', 'keyboard')
       expect(h.record.menus.at(-1)).toEqual({ at: 'selection', source: 'keyboard', screen: null, hit: null })
+    })
+
+    it('a right-click during a nudge series commits the series and opens the menu', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
+      h.select(P1)
+
+      // Under LEGACY the secondary press never reaches the host: the menu request commits the series, as today's
+      // pointerdown did before the contextmenu arrived.
+      expect(h.arrow('ArrowRight')).toBe('handled')
+      expect(h.menu({ x: 300, y: 250 })).toEqual({})
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end'])
+      expect(h.history.canUndo.value).toBe(true)
+      expect(h.record.menus).toHaveLength(1)
+
+      expect(h.arrow('ArrowLeft')).toBe('handled')
+      expect(h.menu('selection', 'keyboard')).toEqual({})
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:-0.1,0', 'end'])
+      expect(h.record.menus).toHaveLength(2)
+      h.advance(1_000)
+      expect(h.record.nudges).toHaveLength(4)
+    })
+
+    it('disposing the host closes the canvas menu', () => {
+      useStubTools(stubTool('select'))
+      const h = harness()
+
+      h.menu({ x: 50, y: 50 })
+      expect(h.menuOpen).toBe(true)
+      h.host.dispose()
+      expect(h.menuOpen).toBe(false)
     })
 
     it('a menu during a Scene Edit is quarantined', () => {

@@ -801,11 +801,17 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (mode === 'overview') enterOverview()
     }
     const tool = activeTool
-    // The live drag or the last hover is re-emitted from its screen point, so a draft, a ghost or a preview stays on the
-    // ground under a still pointer (plan §1, exception 1). With the pointer off the map the tool rebuilds its
-    // scale-dependent draft instead, as today's refreshViewportDependent did on every camera change.
-    if (tool && !reemit(tool) && tool.viewChanged) callTool(() => tool.viewChanged!())
+    if (tool) refreshAtPointer(tool)
     flush()
+  }
+
+  /**
+   * The live drag or the last hover is re-emitted from its screen point, so a draft, a ghost or a preview stays on the
+   * ground under a still pointer (plan §1, exception 1). With the pointer off the map the tool rebuilds its
+   * scale-dependent draft instead, as today's refreshViewportDependent did on every camera change.
+   */
+  function refreshAtPointer(tool: CanvasTool): void {
+    if (!reemit(tool) && tool.viewChanged) callTool(() => tool.viewChanged!())
   }
 
   /** Re-emits the live drag or the last hover; false when nothing is under a still pointer on the map. */
@@ -988,6 +994,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
       if (disposed) return NOTHING
       if (retryPendingCancellation()) return QUARANTINE
+      // A menu commits the nudge series first, as today's pointerdown did for every button: under LEGACY a secondary
+      // press never reaches the host, and the series' open Scene Edit would quarantine the menu.
+      endNudgeSeries(true)
       if (!activeTool || frame().mode === 'overview') return NOTHING
       let duringEdit = false
       const admitted = deps.admission.runWhenSettled(() => {
@@ -1056,6 +1065,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       publishedGuidance = null
       publishedHandles = NO_HANDLES
       publishedActiveHandle = null
+      // Tools translate through ctx.translate when they build a draft or handles, and the scene's localised plant names
+      // changed: the tool rebuilds as after a scene change and at the still pointer as on a camera frame (today's
+      // refreshTranslations hooks refreshed the Place plants preview and the rotation handle).
+      const tool = activeTool
+      if (tool) {
+        if (tool.sceneChanged) callTool(() => tool.sceneChanged!())
+        refreshAtPointer(tool)
+      }
       flush()
     },
     subscribePointerWorld(listener) {
@@ -1073,6 +1090,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         () => cancelLive('tool-change'),
         () => tool?.cancelTransient('tool-change'),
         () => tool?.deactivate('dispose'),
+        // The host is the menu's only opener: an open menu would hold commands for a disposed runtime.
+        () => deps.menu.close(),
         () => {
           if (tool) clearPassiveHover()
         },

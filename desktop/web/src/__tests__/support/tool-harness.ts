@@ -341,6 +341,8 @@ export interface ToolHarness {
   readonly renderer: RecordingRenderer
   readonly chrome: ToolHarnessChrome
   readonly record: ToolHarnessRecord
+  /** True while the canvas menu the host opened through ToolHostDeps.menu is open. */
+  readonly menuOpen: boolean
   /** Settings › Canvas snapping, read by the host at each point. */
   snapping: SnapSettings
   /** The session's plane (ToolHostDeps.plane). */
@@ -545,6 +547,9 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
     renderer,
     chrome,
     record,
+    get menuOpen() {
+      return menuOpen
+    },
     get snapping() {
       return snapping
     },
