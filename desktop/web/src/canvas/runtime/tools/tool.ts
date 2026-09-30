@@ -77,10 +77,14 @@ export type SceneLayerKind = SceneLayerEntity['name']
  * A plant ghost is the plant's mark only: the Place plants mature-width ring, its label and the nearest-plant guide are ellipse, label and polyline shapes.
  * mark 'symbol' (default) draws the plant's symbol; 'dot' draws Plant a row's look: a filled disc in the plant's display colour with a 2 px
  * border of the same colour, radius half the plant's world AABB (today plant-spacing-overlay.ts:158-181; Plant a row emits its row ghosts
- * with 'dot' at opacity 0.35). Colours come from the scene's plant presentation, never a raw colour in the draft.
+ * with 'dot' at opacity 0.35). Colours come from the scene's plant presentation, never a raw colour in the draft. `sizeFrom` is the point
+ * whose plant presentation gives a 'dot' its radius: Plant a row passes its source plant's position, so every disc in the row has the
+ * source's size, as today (plant-spacing-tool.ts:423-427); without it the ghost's own position is used.
+ * Object and saved-stamp ghosts draw zones and plants at 0.62 and notes at 0.68 today: the tool emits the notes as a second 'objects'
+ * ghost at 0.68 (the draft layer multiplies by each note's own marker and text opacity).
  */
 export type GhostEntity =
-  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot' }
+  | { readonly kind: 'plant'; readonly plant: ScenePlantEntity; readonly mark?: 'symbol' | 'dot'; readonly sizeFrom?: WorldPoint }
   | { readonly kind: 'objects'; readonly anchor: WorldPoint; readonly rotationDeg: number; readonly template: SceneArrangementTemplate }  // stamp pick, saved stamp
 export interface TextEntryRequest {
   readonly anchor: WorldPoint
