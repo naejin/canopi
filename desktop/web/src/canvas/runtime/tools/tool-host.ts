@@ -2,9 +2,10 @@
 //
 // Owns the ToolHost (spec §1.4, ADR 0018), the only code that builds ToolGestures. It converts the recogniser's screen
 // gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid and
-// guide snapping, and runs the interceptors (admission, focus, handles, the inspection probe) before the tool. It owns the
-// passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and merges the
-// tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts; an armed tool
+// guide snapping, and runs the interceptors (admission, focus, handles, the inspection probe) before the tool. A drag starts
+// at the press's world point, and every camera frame re-emits the live drag or the last hover (plan §1, exception 1). It
+// owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and
+// merges the tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts; an armed tool
 // that is not listed runs through the session's legacy bridge (0B), and the host's shared duties switch on isRegistered
 // (spec §1.4, "The legacy bridge"). Drops stay on the bridge until 0B-4. The module re-exports createToolScene and builds
 // the context-menu port, so interaction-session.ts imports nothing else from tools/ (P5b).
@@ -73,13 +74,23 @@ interface LiveGesture {
   readonly id: number
   readonly kind: 'tool' | 'handle' | 'ruler'
   readonly pointer: PointerKind
-  /** Where and how the press happened; the drag start is converted from it at each event (today's screen-anchored start). */
-  readonly pressScreen: ScreenPoint
-  readonly pressMods: Modifiers
+  /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1).
+   *  Null for a ruler press, whose guide is placed from the release's screen point. */
+  start: ToolPoint | null
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
   readonly axis: 'h' | 'v' | null
+  /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
+  lastScreen: ScreenPoint
+  lastMods: Modifiers
   dragging: boolean
+}
+
+/** The last hover inside the map, re-emitted on a camera frame; null with the pointer off the map. */
+interface StillPointer {
+  readonly screen: ScreenPoint
+  readonly mods: Modifiers
+  readonly pointer: PointerKind
 }
 
 type CancelTransientReason = Parameters<CanvasTool['cancelTransient']>[0]
@@ -145,6 +156,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolGuidance: Parameters<ToolEffects['setGuidance']>[0] = null
   let toolCursor: string | null = null
   let live: LiveGesture | null = null
+  let lastHover: StillPointer | null = null
   let textEntryOpen = false
   let pendingCancellation = false
   let nudging = false
@@ -387,11 +399,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return deps.scene.hitAt(world)
   }
 
-  /** Today's screen-anchored drag start: the press point converted through the current frame. */
-  function startPoint(gesture: LiveGesture): ToolPoint | null {
-    return pointAt(gesture.pressScreen, gesture.pressMods, gesture.pointer, gesture.kind === 'handle')
-  }
-
   // ── Drafts, handles, guidance, cursor ────────────────────────────────────────────────────────────────────────────
 
   function publishDraft(): void {
@@ -507,15 +514,18 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     const tool = activeTool
     if (!tool) return NOTHING
     if (frame().mode === 'overview') {
+      lastHover = null
       clearPassiveHover()
       return NOTHING
     }
+    lastHover = insideScreen(g.at, frame().view.screen) ? { screen: g.at, mods: g.mods, pointer: g.pointer } : null
     deliverHover(tool, g.at, g.mods, g.pointer)
     return NOTHING
   }
 
   function hoverEnd(): GestureOutcome {
     publishPointer(null)
+    lastHover = null
     const tool = activeTool
     if (!tool) return NOTHING
     clearPassiveHover()
@@ -529,9 +539,11 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     endNudgeSeries(true)
     deps.menu.close()
     if (live) cancelLive('pointercancel')
+    // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
+    lastHover = null
     if (g.target.kind === 'ruler') {
       // Ruler presses create guides; today's ruler drag runs outside the scene's admission.
-      live = liveGesture(g, 'ruler', null)
+      live = liveGesture(g, 'ruler', null, null)
       return NOTHING
     }
     // Under LEGACY an overview press pans in the recogniser and never reaches the host; nothing here samples or edits.
@@ -555,7 +567,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!point) return true
     if (g.target.kind === 'handle') {
       const handle = g.target.id
-      live = liveGesture(g, 'handle', null)
+      live = liveGesture(g, 'handle', point, null)
       publishHandles()
       callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'start', handle, point, start: point }))
       return false
@@ -564,22 +576,28 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     // never samples (spec §3.8, fixture J10).
     if (currentId !== 'hand' && deps.inspect?.(point.world)) return true
     const hit = hitAt(point.world)
-    live = liveGesture(g, 'tool', hit)
+    live = liveGesture(g, 'tool', point, hit)
     callTool(() => tool.gesture({ kind: 'press', point, hit, clickCount: g.clickCount }))
     return false
   }
 
-  function liveGesture(g: Extract<Gesture, { kind: 'press' }>, kind: LiveGesture['kind'], startHit: HitTarget | null): LiveGesture {
+  function liveGesture(
+    g: Extract<Gesture, { kind: 'press' }>,
+    kind: LiveGesture['kind'],
+    start: ToolPoint | null,
+    startHit: HitTarget | null,
+  ): LiveGesture {
     const target: PressTarget = g.target
     return {
       id: g.id,
       kind,
       pointer: g.pointer,
-      pressScreen: g.at,
-      pressMods: g.mods,
+      start,
       startHit,
       handle: target.kind === 'handle' ? target.id : null,
       axis: target.kind === 'ruler' ? target.axis : null,
+      lastScreen: g.at,
+      lastMods: g.mods,
       dragging: false,
     }
   }
@@ -591,6 +609,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!gesture || gesture.id !== g.id) return NOTHING
     if (g.kind === 'drag-end' && retryPendingCancellation()) return QUARANTINE
     gesture.dragging = true
+    gesture.lastScreen = g.at
+    gesture.lastMods = g.mods
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
       if (g.kind !== 'drag-end') {
@@ -602,32 +622,34 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (gesture.axis && frame().view.northUp) deps.rulers?.createGuideAt(gesture.axis, g.at)
       return NOTHING
     }
-    const point = pointAt(g.at, g.mods, gesture.pointer, gesture.kind === 'handle')
-    const start = startPoint(gesture)
-    if (!point || !start) {
-      // No ground under the pointer: the drag is cancelled.
-      cancelLive('pointercancel')
-      return NOTHING
-    }
-    const deliver = (): void => {
-      if (gesture.kind === 'handle') {
-        const phase = g.kind === 'drag-end' ? 'end' : 'move'
-        callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
-      } else {
-        callTool(() => tool.gesture({ kind: g.kind, point, start, startHit: gesture.startHit }))
-      }
-    }
     if (g.kind !== 'drag-end') {
-      deliver()
+      deliverDrag(tool, gesture, g.kind)
       return NOTHING
     }
-    live = null
     try {
-      deliver()
+      deliverDrag(tool, gesture, 'drag-end')
     } finally {
       endLive()
     }
     return NOTHING
+  }
+
+  /** The drag at its last screen point, converted through the current frame; its start is the press's world point. */
+  function deliverDrag(tool: CanvasTool, gesture: LiveGesture, kind: 'drag-start' | 'drag-move' | 'drag-end'): void {
+    const point = pointAt(gesture.lastScreen, gesture.lastMods, gesture.pointer, gesture.kind === 'handle')
+    if (!point) {
+      // No ground under the pointer: the drag is cancelled.
+      cancelLive('pointercancel')
+      return
+    }
+    if (kind === 'drag-end') live = null
+    const start = gesture.start!
+    if (gesture.kind === 'handle') {
+      const phase = kind === 'drag-end' ? 'end' : 'move'
+      callTool(() => tool.gesture({ kind: 'handle-drag', phase, handle: gesture.handle!, point, start }))
+    } else {
+      callTool(() => tool.gesture({ kind, point, start, startHit: gesture.startHit }))
+    }
   }
 
   function tap(g: Extract<Gesture, { kind: 'tap' }>): GestureOutcome {
@@ -641,7 +663,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const point = pointAt(g.at, g.mods, g.pointer, gesture.kind === 'handle')
       if (!point) return NOTHING
       if (gesture.kind === 'handle') {
-        callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: point }))
+        callTool(() => tool.gesture({ kind: 'handle-drag', phase: 'end', handle: gesture.handle!, point, start: gesture.start! }))
       } else {
         callTool(() => tool.gesture({ kind: 'tap', point, hit: hitAt(point.world), clickCount: g.clickCount }))
       }
@@ -736,6 +758,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
 
   /** Entering overview drops what today's setOverviewMode(true) dropped: the text entry, the menu and every transient. */
   function enterOverview(): void {
+    lastHover = null
     if (!activeTool) return
     runCanvasRuntimeCleanups([
       () => closeTextEntry(),
@@ -756,6 +779,16 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       const moved = next.toPlane(previous.toGeo(point))
       return { x: moved.x, y: moved.y }
     }
+    const start = live?.start
+    if (live && start) {
+      live.start = {
+        ...start,
+        world: reproject(start.world),
+        free: reproject(start.free),
+        constrained: reproject(start.constrained),
+        snapped: reproject(start.snapped),
+      }
+    }
     const tool = activeTool
     if (tool?.planeChanged) callTool(() => tool.planeChanged!(reproject))
   }
@@ -768,9 +801,26 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       if (mode === 'overview') enterOverview()
     }
     const tool = activeTool
-    // Today every camera change refreshed the tool's scale-dependent draft (refreshViewportDependent).
-    if (tool?.viewChanged) callTool(() => tool.viewChanged!())
+    // The live drag or the last hover is re-emitted from its screen point, so a draft, a ghost or a preview stays on the
+    // ground under a still pointer (plan §1, exception 1). With the pointer off the map the tool rebuilds its
+    // scale-dependent draft instead, as today's refreshViewportDependent did on every camera change.
+    if (tool && !reemit(tool) && tool.viewChanged) callTool(() => tool.viewChanged!())
     flush()
+  }
+
+  /** Re-emits the live drag or the last hover; false when nothing is under a still pointer on the map. */
+  function reemit(tool: CanvasTool): boolean {
+    if (frame().mode !== 'site') return false
+    const gesture = live
+    if (gesture) {
+      if (gesture.kind === 'ruler' || !gesture.dragging) return false
+      deliverDrag(tool, gesture, 'drag-move')
+      return true
+    }
+    const still = lastHover
+    if (!still) return false
+    deliverHover(tool, still.screen, still.mods, still.pointer)
+    return true
   }
 
   // ── Menus ────────────────────────────────────────────────────────────────────────────────────────────────────────

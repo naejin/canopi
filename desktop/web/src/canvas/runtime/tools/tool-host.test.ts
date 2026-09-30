@@ -172,6 +172,78 @@ describe('ToolHost', () => {
     })
   })
 
+  describe('the view moving under a still pointer (plan §1, exception 1)', () => {
+    it('a drag start stays on the ground through a wheel zoom', () => {
+      const rectangle = stubTool('rectangle')
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+      const press = { x: 100, y: 100 }
+      const ground = h.world(press)
+
+      h.press(press)
+      h.move({ x: 160, y: 140 })
+      h.wheelZoom({ x: 300, y: 200 }, 2)
+      expect(h.world(press)).not.toEqual(ground)
+      h.move({ x: 170, y: 150 })
+      expect(rectangle.last('drag-move')!.start.world).toEqual(ground)
+      h.release({ x: 170, y: 150 })
+      expect(rectangle.last('drag-end')!.start.world).toEqual(ground)
+    })
+
+    it('re-emits the drag on a camera frame', () => {
+      const rectangle = stubTool('rectangle')
+      useStubTools(rectangle)
+      const h = harness({ tool: 'rectangle' })
+      const ground = h.world({ x: 100, y: 100 })
+
+      h.press({ x: 100, y: 100 })
+      h.move({ x: 160, y: 140 })
+      expect(rectangle.count('drag-move')).toBe(0)
+      h.wheelZoom({ x: 300, y: 200 }, 2)
+
+      expect(rectangle.count('drag-move')).toBe(1)
+      const reemitted = rectangle.last('drag-move')!
+      expect(reemitted.point.world).toEqual(h.world({ x: 160, y: 140 }))
+      expect(reemitted.start.world).toEqual(ground)
+      expect(rectangle.calls).not.toContain('viewChanged')
+    })
+
+    it('a hover is re-emitted on a camera frame, so a placement preview stays under a still pointer', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp', scene: { plants: [appleAt({ x: 50, y: 50 })] } })
+      const pointer = { x: 100, y: 100 }
+
+      h.hover(pointer)
+      expect(h.record.hovers.at(-1)).toBeNull()
+      // Zooming in about the corner brings the apple under the still pointer.
+      h.wheelZoom({ x: 0, y: 0 }, 2)
+
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.last('hover')!.point.world).toEqual(h.world(pointer))
+      expect(h.record.hovers.at(-1)).toEqual(P1)
+      expect(h.chrome.tooltip).toEqual({ target: P1, at: pointer })
+      // A re-emit is not a pointer move: the inspection lens keeps its point.
+      expect(h.record.pointerWorld).toHaveLength(1)
+      expect(stamp.calls).not.toContain('viewChanged')
+    })
+
+    it('a camera frame with the pointer off the map calls viewChanged', () => {
+      const polygon = stubTool('polygon')
+      useStubTools(polygon)
+      const h = harness({ tool: 'polygon' })
+
+      h.hover({ x: 50, y: 50 })
+      h.leave()
+      // A key or button zoom: nothing is under the pointer to re-emit.
+      h.view.navigation.zoomIn()
+      h.view.navigation.zoomOut()
+
+      expect(polygon.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
+      expect(polygon.count('hover')).toBe(1)
+    })
+  })
+
   describe('interceptors', () => {
     it('an active inspection claims the plain left press after handles and pan, before the tool', () => {
       const select = stubTool('select')
