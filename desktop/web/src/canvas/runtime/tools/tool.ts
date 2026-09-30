@@ -65,8 +65,12 @@ export type HitTarget =
  *  (selected or hovered) note, and object-locked objects, which the caller rejects itself (Select shows Unlock). */
 export interface HitFilter {
   readonly kinds?: readonly SceneDesignObjectTarget['kind'][]
-  readonly includeLocked?: boolean                 // true: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover)
-  readonly toleranceScreenPx?: number              // converted at the source's pixelsPerMetre in 0B
+  /** hitAt: also locked layers that are visible (today's hitTestVisibleTopLevel, the host's hover). hitInQuad: a phase-1
+   *  feature; the 0B façade throws a clear error (today's band select skips locked layers). */
+  readonly includeLocked?: boolean
+  /** A phase-1 feature (the zone-edge hits of "Turn view to this edge", spec §4.16), converted at the frame's pixelsPerMetre;
+   *  the 0B façade throws a clear error (today's hit tests carry their own tolerances). */
+  readonly toleranceScreenPx?: number
 }
 /** The selection read model: today's CanvasDesignObjectSelectionModel (canvas/runtime/runtime.ts:48), unchanged. */
 export type SelectionReadModel = CanvasDesignObjectSelectionModel

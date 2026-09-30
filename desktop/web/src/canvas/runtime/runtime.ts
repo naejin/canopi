@@ -348,7 +348,7 @@ export interface CanvasRuntimeSurfaces {
 export type CanvasKeyCommand =
   | { kind: 'confirm' } | { kind: 'remove-last' } | { kind: 'edit-text' } | { kind: 'delete-handle' }
   | { kind: 'rotate-held'; stepDeg: 15 | -15 }
-  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge, then panByPx on 'no-selection'
+  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge, then panByPx on 'pass' with nothing selected
   | { kind: 'rotate-view'; direction: 1 | -1 } | { kind: 'reset-north' }
   | { kind: 'zoom-step'; direction: 1 | -1 }                                    // plain + / − with map focus
   | { kind: 'context-menu' }                                                    // Menu key, Shift+F10

@@ -9,13 +9,15 @@ import type { Thresholds } from './thresholds'
 
 export type ButtonRole = 'primary' | 'secondary' | 'auxiliary'
 
-/** What was under the pointer at down, classified by the source from data attributes. */
+/** What was under the pointer at a down or a move (a hover carries it, §1.3), classified by the source from data attributes. */
 export type TargetClass =
   | { readonly kind: 'surface' }                                   // host or [data-canvas-surface]
   | { readonly kind: 'handle'; readonly id: ToolHandleId }         // [data-canvas-handle] in the handle layer
   | { readonly kind: 'ruler'; readonly axis: 'h' | 'v' }           // [data-canvas-ruler]
-  | { readonly kind: 'owned-chrome' }                              // compass, zoom group, attribution ([data-canvas-chrome]); any other button, input, select,
-                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set)
+  | { readonly kind: 'owned-chrome'; readonly lockedAffordance?: true }   // compass, zoom group, attribution ([data-canvas-chrome]); any other button, input, select,
+                                                                   // [contenteditable] or [data-preserve-overlays] in the host (the inspection lens's skip set);
+                                                                   // lockedAffordance: the Unlock affordance ([data-locked-object-affordance], classified in
+                                                                   // dom-input-source.ts), which keeps the hover in every phase (§2.2)
   | { readonly kind: 'owned-text' }                                // the text-entry host
   | { readonly kind: 'foreign' }
 

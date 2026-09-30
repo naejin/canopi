@@ -26,7 +26,7 @@ import { cursorForTool, isEditableTarget } from './interaction/pointer-utils'
 import { allowsNativeContextMenuTarget } from './input/dom-input-source'
 import {
   appendPlantStampSourceToDraft,
-} from './interaction/tool-actions'
+} from './tools/tool-actions'
 import { isSceneLayerOpenForCreation } from './interaction/layer-guards'
 import { hasPlantStampDragData, readPlantStampDropSource } from '../plant-stamp-source'
 import {
