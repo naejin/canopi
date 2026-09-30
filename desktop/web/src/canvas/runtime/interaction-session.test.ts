@@ -15,6 +15,7 @@ import {
 } from '../saved-object-stamp-source'
 import { setCanvasTool } from '../session-state'
 import type { CanvasFocusPort } from './app-adapter'
+import { createRulerOverlay, type RulerOverlay } from './chrome/rulers'
 import type { InputPlatform } from './input/platform'
 import type { ToolHost, ToolHostDeps } from './interaction-ports'
 import {
@@ -22,7 +23,7 @@ import {
   type SceneInteractionSession,
   type SceneInteractionSessionDeps,
 } from './interaction-session'
-import type { CameraController } from './camera'
+import type { CameraController, CameraViewportSnapshot } from './camera'
 import { SceneStore } from './scene'
 import type { DraftPresentation } from './tools/draft'
 import type { ToolSource } from './tools/tool'
@@ -52,6 +53,7 @@ let events: SceneInteractionEventHarness
 let camera: CameraController
 let store: SceneStore
 let sessions: SceneInteractionSession[]
+let mountedRulers: MountedRulers[]
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -60,6 +62,7 @@ beforeEach(() => {
   camera = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 1 } }).legacyCamera
   store = new SceneStore()
   sessions = []
+  mountedRulers = []
   clearPlantStampSource()
   clearSavedObjectStampSource()
 })
@@ -67,6 +70,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const session of sessions.splice(0).reverse()) session.dispose()
   builtHosts.length = 0
+  for (const rulers of mountedRulers.splice(0)) rulers.unmount()
   events.dispose()
   container.remove()
   useStubTools()
@@ -91,6 +95,57 @@ function createSession(overrides: Partial<SceneInteractionSessionDeps> = {}): { 
   const session = createSceneInteractionSession(deps)
   sessions.push(session)
   return { session, deps }
+}
+
+function rulerCamera(viewport: { readonly x?: number, readonly y?: number, readonly scale?: number, readonly revision?: number } = {}): CameraViewportSnapshot {
+  const scale = viewport.scale ?? 8
+  return {
+    viewport: { x: viewport.x ?? 12, y: viewport.y ?? 34, scale },
+    screenSize: { width: 400, height: 300 },
+    devicePixelRatio: 1,
+    referenceScale: 8,
+    scaleBounds: { minimum: 0.00001, maximum: 2000 },
+    overviewScaleThreshold: 0.1,
+    mode: scale < 0.1 ? 'overview' : 'site',
+    groundMetersPerCssPixel: null,
+    revision: viewport.revision ?? 1,
+  }
+}
+
+interface MountedRulers {
+  readonly host: HTMLElement
+  readonly overlay: RulerOverlay
+  readonly onGuideCreate: ReturnType<typeof vi.fn>
+  readonly horizontal: HTMLCanvasElement
+  readonly vertical: HTMLCanvasElement
+  show(camera: CameraViewportSnapshot, rulersVisible?: boolean): void
+  unmount(): void
+}
+
+/** Today's ruler overlay beside the map host (a sibling, as the workspace mounts it), showing the rulers at `camera`. */
+function mountRulers(camera = rulerCamera()): MountedRulers {
+  const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const onGuideCreate = vi.fn()
+  const overlay = createRulerOverlay(host, { onGuideCreate })
+  const part = (name: string) => host.querySelector<HTMLCanvasElement>(`[data-ruler-overlay-part="${name}"]`)!
+  const rulers: MountedRulers = {
+    host,
+    overlay,
+    onGuideCreate,
+    horizontal: part('horizontal'),
+    vertical: part('vertical'),
+    show: (next, rulersVisible = true) => overlay.update({ camera: next, chromeVisible: true, rulersVisible }),
+    unmount: () => {
+      overlay.destroy()
+      host.remove()
+      getContext.mockRestore()
+    },
+  }
+  rulers.show(camera)
+  mountedRulers.push(rulers)
+  return rulers
 }
 
 /** The microtask after a species pick (the plant source reaches the tool once the picker's own update is done). */
@@ -432,5 +487,147 @@ describe('the interaction session', () => {
     // North stays up under LEGACY: the view commands answer and leave the camera's bearing alone.
     expect(session.keyboard.command({ kind: 'reset-north' })).toBe(true)
     expect(session.keyboard.command({ kind: 'rotate-view', direction: 1 })).toBe(true)
+  })
+})
+
+describe('ruler drags through the session', () => {
+  it('a ruler drag lands one guide at its release, and none inside the ruler\'s gutter', () => {
+    createSession()
+    const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+
+    // The source takes the press beside the map: today's drag starts default-prevented, and it is no press on the map.
+    const down = events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    expect(down.defaultPrevented).toBe(true)
+    expect(rawPress).not.toHaveBeenCalled()
+    events.pointerUp({ x: 180, y: 100 })
+    events.pointerUp({ x: 180, y: 120 })
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerUp({ x: 180, y: 20 })
+    expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
+  })
+
+  it('a second ruler press replaces the first drag', () => {
+    createSession()
+    const rulers = mountRulers(rulerCamera({ x: 10, scale: 2 }))
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerDown({ x: 10, y: 100 }, { target: rulers.vertical })
+    events.pointerMove({ x: 200, y: 150 })
+    events.pointerUp({ x: 200, y: 150 })
+    events.pointerUp({ x: 220, y: 170 })
+
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('v', 95)
+  })
+
+  it('a ruler drag ends with its overlay: the exact cursor comes back and no guide lands', () => {
+    createSession()
+    const rulers = mountRulers()
+    rulers.host.style.cursor = 'crosshair'
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerMove({ x: 180, y: 50 })
+    expect(rulers.host.style.cursor).toBe('s-resize')
+
+    rulers.overlay.destroy()
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    expect(rulers.host.childElementCount).toBe(0)
+
+    events.pointerMove({ x: 200, y: 90 })
+    events.pointerUp({ x: 200, y: 90 })
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerUp({ x: 200, y: 90 })
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+  })
+
+  it('a window blur ends a ruler drag without a guide', () => {
+    createSession()
+    const rulers = mountRulers()
+    rulers.host.style.cursor = 'grab'
+
+    events.pointerDown({ x: 10, y: 100 }, { target: rulers.vertical })
+    events.pointerMove({ x: 80, y: 100 })
+    expect(rulers.host.style.cursor).toBe('e-resize')
+
+    events.windowBlur()
+    events.pointerUp({ x: 80, y: 100 })
+    expect(rulers.host.style.cursor).toBe('grab')
+    expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+  })
+
+  it('a ruler guide lands with the rulers\' camera at its release', () => {
+    createSession()
+    const rulers = mountRulers(rulerCamera({ y: 10, scale: 2 }))
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    rulers.show(rulerCamera({ y: 40, scale: 4, revision: 2 }))
+    events.pointerUp({ x: 180, y: 90 })
+
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 12.5)
+  })
+
+  it('a ruler drag started before the rulers hide lands no guide', () => {
+    createSession()
+    const rulers = mountRulers()
+    rulers.host.style.cursor = 'crosshair'
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerMove({ x: 180, y: 50 })
+    expect(rulers.host.style.cursor).toBe('s-resize')
+    rulers.show(rulerCamera(), false)
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    events.pointerMove({ x: 180, y: 70 })
+    // Shown again before the release: the drag began before the hide, so it still lands nothing.
+    rulers.show(rulerCamera())
+    events.pointerUp({ x: 180, y: 90 })
+
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+  })
+
+  it('a ruler drag across overview entry lands no guide, and the rulers hide', () => {
+    createSession()
+    const rulers = mountRulers()
+    rulers.host.style.cursor = 'crosshair'
+
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerMove({ x: 180, y: 50 })
+    expect(rulers.host.style.cursor).toBe('s-resize')
+    rulers.show(rulerCamera({ scale: 0.01 }))
+    events.pointerUp({ x: 180, y: 90 })
+
+    expect(rulers.horizontal.style.display).toBe('none')
+    expect(rulers.vertical.style.display).toBe('none')
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+  })
+
+  it('a registered tool\'s ruler drag goes through the host to the pressed ruler\'s overlay', () => {
+    const select = stubTool('select')
+    useStubTools(select)
+    createSession()
+    const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+
+    const down = events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerMove({ x: 180, y: 60 })
+    events.pointerUp({ x: 180, y: 100 })
+
+    expect(down.defaultPrevented).toBe(true)
+    expect(rawPress).not.toHaveBeenCalled()
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    // The host kept the drag to itself: the tool heard no press or drag.
+    expect(select.gestures.filter((gesture) => gesture.kind !== 'hover' && gesture.kind !== 'hover-end')).toEqual([])
+
+    // A press before the rulers hide lands nothing on the host's path either.
+    events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+    events.pointerMove({ x: 180, y: 60 })
+    rulers.show(rulerCamera({ y: 20, scale: 4 }), false)
+    rulers.show(rulerCamera({ y: 20, scale: 4 }))
+    events.pointerUp({ x: 180, y: 100 })
+    expect(rulers.onGuideCreate).toHaveBeenCalledOnce()
   })
 })

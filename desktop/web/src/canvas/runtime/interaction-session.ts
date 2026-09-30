@@ -10,7 +10,9 @@
 // host's frames, refreshMeasurements reaches ToolHost.sceneChanged(). It lends the host its 0B-2 chrome (the bridge's
 // tooltip, Unlock affordance and note editor), bridges the plant and saved-stamp read models to a registered tool, reads
 // the snapping settings per point, calls ToolHost.rawPress for every raw press on the map host and ToolHost.interrupted()
-// after a window blur, owns the navigation cursor, and passes on no draft while a story is presented.
+// after a window blur, owns the navigation cursor, and passes on no draft while a story is presented. Ruler presses reach
+// the source beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and hands the source and
+// the host a port forwarding to it; a bridged tool gets today's ruler drag from the session, a registered one the host's.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
@@ -18,6 +20,7 @@ import { clearSavedObjectStampSource, readSavedObjectStampSource } from '../save
 import type { SessionPlane } from '../session-plane'
 import { getCanvasTool, IDLE_CANVAS_TOOL_GUIDANCE } from '../session-state'
 import type { CanvasFocusPort, CanvasRuntimeTranslator } from './app-adapter'
+import { pressRuler, type RulerPress } from './chrome/rulers'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 import { CURRENT_BINDINGS } from './input/bindings'
 import { createDomInputSource, outcomeEffects } from './input/dom-input-source'
@@ -27,7 +30,7 @@ import { detectPlatform, type InputPlatform } from './input/platform'
 import type { AdapterEffect, RawInput, RecogniserConfig, RecogniserState } from './input/raw-input'
 import { initialRecogniserState, recognise } from './input/recognise'
 import { DEFAULT_THRESHOLDS } from './input/thresholds'
-import type { GestureOutcome, InputRouterDeps, ToolHost, ToolHostDeps } from './interaction-ports'
+import type { GestureOutcome, InputRouterDeps, RulerGuidePort, ToolHost, ToolHostDeps } from './interaction-ports'
 import type { Modifiers, ToolId } from './interaction-types'
 import { isSceneLayerOpenForCreation, type SceneCreationLayerName } from './interaction/layer-guards'
 import { createCanvasKeyboardPort } from './keyboard-port'
@@ -41,7 +44,7 @@ import {
 } from './scene-interaction'
 import { createContextMenuPort, createToolHost, createToolScene } from './tools/tool-host'
 import type { ViewNavigation } from './view/navigation'
-import type { ViewFrame, ViewFrameSource, WorldPoint } from './view/types'
+import type { ScreenPoint, ViewFrame, ViewFrameSource, WorldPoint } from './view/types'
 
 /** Attributes the session sets on the map host and restores when it ends. */
 const HOST_ATTRIBUTES = ['tabindex', 'role', 'aria-label', 'aria-describedby'] as const
@@ -147,6 +150,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
   private _draft: DraftPresentation | null = null
+  /** The ruler pressed now, and its pointer: the forwarding port's target, and a bridged tool's ruler drag. */
+  private _rulerPress: RulerPress | null = null
+  private _rulerPointer: number | null = null
+  /** The source's and the host's ruler port: whichever overlay's ruler was pressed last. */
+  private readonly _rulers: RulerGuidePort = {
+    createGuideAt: (axis, at) => this._rulerPress?.createGuideAt(axis, at),
+  }
   private _storyPresented = false
   /** Inside refreshMeasurements' ToolHost.sceneChanged(): the runtime is already redrawing. */
   private _refreshing = false
@@ -284,6 +294,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers: { ...timers, clock },
         hover: (target) => _deps.setHoveredTarget(target),
         inspect: _deps.tryInspectAt,
+        rulers: this._rulers,
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange?.(),
       }
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
@@ -326,6 +337,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
           keydown: (event) => this._port.keydown(event),
           keyup: (event) => this._port.keyup(event),
         },
+        rulers: this._rulers,
       })
       this._stopWatchingSources = own(this._watchToolSources(), (stop) => stop())
       this._storyObserver = own(this._observeStoryPresentation(), (observer) => observer?.disconnect())
@@ -448,6 +460,7 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     const tool = this._tool.peek()
     attempt(() => this._detachSource())
+    attempt(() => this._endRulerPress())
     attempt(() => this._storyObserver?.disconnect())
     attempt(() => this._stopWatchingSources())
     attempt(() => {
@@ -478,7 +491,9 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         this._toolHost.endNudgeSeries(true)
         return
       case 'down':
-        this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
+        // A ruler sits beside the map host: its press is no press on the map (today's host listener never heard it).
+        if (input.target.kind === 'ruler') this._pressRuler(input.id, event)
+        else this._toolHost.rawPress(input.role === 'auxiliary' ? 'middle' : input.role, input.target, input.id)
         break
       case 'wheel':
         this._syncPointingDevice()
@@ -486,8 +501,13 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
       default:
         break
     }
-    if (this._registered()) this._routeToHost(input)
-    else this._routeToBridge(input, event)
+    if (this._registered()) {
+      this._routeToHost(input)
+      // The host landed the guide (or not) at the ruler's release; the press is over.
+      if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
+    } else {
+      this._routeToBridge(input, event)
+    }
     if (input.kind === 'cancel' && input.id === 'all') this._interrupted()
   }
 
@@ -527,13 +547,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     const bridge = this._bridge
     switch (input.kind) {
       case 'down':
-        if (event) bridge.pointerDown(event as PointerEvent)
+        // Today's ruler drag starts default-prevented (no text selection) and never reaches the bridge.
+        if (input.target.kind === 'ruler') this._source.apply([{ kind: 'prevent-default' }])
+        else if (event) bridge.pointerDown(event as PointerEvent)
         break
       case 'move':
         if (event) bridge.pointerMove(event as PointerEvent)
+        if (input.id === this._rulerPointer) this._rulerPress?.drag()
         break
       case 'up':
         if (event) bridge.pointerUp(event as PointerEvent)
+        if (input.id === this._rulerPointer) this._releaseRuler(input.at)
         break
       case 'cancel':
         if (input.reason === 'blur') bridge.windowBlur()
@@ -580,8 +604,36 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     else this._bridge.drop(event as DragEvent)
   }
 
+  // ── Rulers ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** A press on a ruler: its overlay's port for this press, found from the element under the pointer (the drag starts). */
+  private _pressRuler(pointerId: number, event: Event | null): void {
+    this._endRulerPress()
+    this._rulerPress = pressRuler(event?.target ?? null)
+    this._rulerPointer = this._rulerPress ? pointerId : null
+  }
+
+  /** Today's ruler drag at its release: the cursor comes back, then the guide lands where the pointer let go. */
+  private _releaseRuler(at: ScreenPoint): void {
+    const press = this._rulerPress
+    this._rulerPress = null
+    this._rulerPointer = null
+    if (!press) return
+    press.end()
+    press.createGuideAt(press.axis, at)
+  }
+
+  private _endRulerPress(): void {
+    const press = this._rulerPress
+    this._rulerPress = null
+    this._rulerPointer = null
+    press?.end()
+  }
+
   /** After a window blur has reached the recogniser (Space released, live sessions ended) and the armed tool's path. */
   private _interrupted(): void {
+    // Today's ruler drag ends on a blur without a guide.
+    this._endRulerPress()
     this._spaceHeld = false
     this._port.releaseKeys()
     if (this._registered()) {
