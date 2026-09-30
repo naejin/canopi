@@ -594,7 +594,15 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
 
   /** A registered tool's input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
   private _routeToHost(input: RawInput): void {
-    if (this._toolHost.retryPendingCancellation()) {
+    let retried: boolean
+    try {
+      retried = this._toolHost.retryPendingCancellation()
+    } catch (error) {
+      // Today's retry quarantined the event before it retried, whatever the event.
+      this._source.apply(QUARANTINE)
+      throw error
+    }
+    if (retried) {
       // Today's app-wide swallow while a failed cancellation is pending; the retry ended every live gesture.
       const fenced = recognise(this._recogniser, { kind: 'escape', t: input.t }, this._config)
       this._recogniser = fenced.state

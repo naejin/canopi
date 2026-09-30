@@ -370,6 +370,75 @@ describe('createDomInputSource', () => {
     dispose()
   })
 
+  it('a sink that throws on any other event rethrows and leaves the event to the app, as today', () => {
+    const failure = new Error('sink failed')
+    const dispose = createDomInputSource(deps()).attach(() => {
+      throw failure
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+    const heard: string[] = []
+    const removals: Array<() => void> = []
+    const listen = (target: EventTarget, type: string): void => {
+      const listener = (event: Event): void => { heard.push(`${type}:${event.defaultPrevented}`) }
+      target.addEventListener(type, listener)
+      removals.push(() => target.removeEventListener(type, listener))
+    }
+    listen(panel, 'pointermove')
+    listen(panel, 'pointercancel')
+    listen(host, 'pointerleave')
+    listen(host, 'wheel')
+    listen(window, 'blur')
+
+    let errors: unknown[] = []
+    try {
+      errors = captureWindowErrors(() => {
+        events.pointerMove({ x: 10, y: 10 }, { target: panel })
+        events.pointerCancel({ x: 10, y: 10 }, { target: panel })
+        events.pointerLeave({ x: 10, y: 10 })
+        events.wheel({ x: 10, y: 10 }, { deltaY: 4 })
+        events.windowBlur()
+      })
+    } finally {
+      for (const remove of removals) remove()
+      panel.remove()
+      dispose()
+    }
+
+    // Today only a press on the map, a release, the context menu, dragover and drop were quarantined when they failed.
+    expect(errors).toEqual([failure, failure, failure, failure, failure])
+    expect(heard).toEqual(['pointermove:false', 'pointercancel:false', 'pointerleave:false', 'wheel:false', 'blur:false'])
+  })
+
+  it('a sink that throws on a release, a menu, a dragover or a drop quarantines it, then rethrows', () => {
+    const failure = new Error('sink failed')
+    const dispose = createDomInputSource(deps()).attach(() => {
+      throw failure
+    })
+    const downstream = vi.fn()
+    for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.addEventListener(type, downstream)
+
+    const handled: Event[] = []
+    let errors: unknown[] = []
+    try {
+      errors = captureWindowErrors(() => {
+        handled.push(events.pointerUp({ x: 10, y: 10 }))
+        for (const type of ['contextmenu', 'dragover', 'drop']) {
+          const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })
+          host.dispatchEvent(event)
+          handled.push(event)
+        }
+      })
+    } finally {
+      for (const type of ['pointerup', 'contextmenu', 'dragover', 'drop']) window.removeEventListener(type, downstream)
+      dispose()
+    }
+
+    expect(errors).toEqual([failure, failure, failure, failure])
+    expect(handled.map((event) => event.defaultPrevented)).toEqual([true, true, true, true])
+    expect(downstream).not.toHaveBeenCalled()
+  })
+
   it('pointerleave becomes leave and focusout becomes focus-out', () => {
     const dispose = attachRecording(createDomInputSource(deps()))
     const inside = document.createElement('button')

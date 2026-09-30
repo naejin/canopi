@@ -59,8 +59,9 @@ export interface DomInputSourceDeps {
   readonly rulers?: RulerGuidePort
 }
 export interface DomInputSource {
-  /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each). A throwing
-   *  sink quarantines the event, then rethrows (today). */
+  /** Installs the listeners; returns the disposer that removes every listener it added (tested: exactly once each). A sink
+   *  that throws on a press on the map, a release, a contextmenu, a dragover or a drop quarantines that event, then rethrows;
+   *  on any other event it rethrows and the event goes on (today's handlers quarantined only around their admitted work). */
   attach(sink: (input: RawInput) => void): () => void
   /** Applies effects to the event being handled: the recogniser's, and a GestureOutcome's as 'prevent-default',
    *  'stop-propagation' and 'drop-effect'. */

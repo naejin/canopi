@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { stubTool, useStubTools } from '../../__tests__/support/tool-harness'
-import { createInteractionDeps, makePlant, plantTarget } from '../../__tests__/support/scene-interaction-setup'
+import { stubTool, useStubTools, type StubTool } from '../../__tests__/support/tool-harness'
+import { captureWindowErrors, createInteractionDeps, makePlant, plantTarget } from '../../__tests__/support/scene-interaction-setup'
 import {
   createSceneInteractionEventHarness,
   type SceneInteractionEventHarness,
@@ -25,6 +25,7 @@ import {
 } from './interaction-session'
 import type { CameraController, CameraViewportSnapshot } from './camera'
 import { SceneStore } from './scene'
+import type { SceneEditTransaction } from './scene-runtime/transactions'
 import type { DraftPresentation } from './tools/draft'
 import type { ToolSource } from './tools/tool'
 import type { WorldPoint } from './view/types'
@@ -544,6 +545,85 @@ describe('the interaction session', () => {
     events.lostPointerCapture(40)
     expect(store.persisted.plants[0]?.position).toEqual(released)
     expect(onSceneEditCommit).toHaveBeenCalledOnce()
+  })
+
+  it('a hover that throws leaves the move to the rest of the app, under a bridged and a registered tool', () => {
+    store.updatePersisted((draft) => {
+      draft.plants = [makePlant('plant-1', 'Malus domestica', { x: 100, y: 100 })]
+    })
+    let broken = false
+    const { session } = createSession({
+      setHoveredTarget: () => {
+        if (broken) throw new Error('hover failed')
+      },
+    })
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+    const panelMoves = vi.fn()
+    panel.addEventListener('pointermove', panelMoves)
+    /** A hover over the plant (its restyle throws), then a move over a panel beside the map. */
+    const failingHover = (x: number): unknown[] => {
+      broken = true
+      try {
+        return captureWindowErrors(() => {
+          events.pointerMove({ x, y: 100 }, { buttons: 0 })
+          events.pointerMove({ x, y: 100 }, { target: panel, buttons: 0 })
+        })
+      } finally {
+        broken = false
+      }
+    }
+
+    try {
+      // Today's pointermove had no quarantine: a failing hover never stopped the app's other pointer listeners.
+      expect(failingHover(100)).toHaveLength(2)
+      expect(panelMoves).toHaveBeenCalledOnce()
+
+      useStubTools(stubTool('rectangle'))
+      session.setTool('rectangle')
+      expect(failingHover(101)).toHaveLength(2)
+      expect(panelMoves).toHaveBeenCalledTimes(2)
+    } finally {
+      panel.remove()
+    }
+  })
+
+  it('a retried cancellation that fails again still quarantines the event it was retried for, as today', () => {
+    let failures = 2
+    let edit: SceneEditTransaction | null = null
+    const rectangle: StubTool = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+        return 'pass'
+      },
+      cancelTransient: () => {
+        if (failures > 0) {
+          failures -= 1
+          throw new Error('cancel failed')
+        }
+        edit?.abort()
+        edit = null
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    events.pointerDown({ x: 20, y: 20 })
+    // The blur's cancellation fails with the press's Scene Edit open: it is left pending.
+    expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+
+    // Today's retry quarantined the event before it retried, so a wheel whose retry fails again moves nothing.
+    const outside = vi.fn()
+    container.addEventListener('wheel', outside)
+    let wheel: WheelEvent | null = null
+    expect(captureWindowErrors(() => { wheel = events.wheel({ x: 50, y: 50 }, { deltaY: 4 }) })).toHaveLength(1)
+    expect(wheel!.defaultPrevented).toBe(true)
+    expect(outside).not.toHaveBeenCalled()
+    // The next retry succeeds, and its event is quarantined too.
+    wheel = events.wheel({ x: 50, y: 50 }, { deltaY: 4 })
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(outside).not.toHaveBeenCalled()
+    container.removeEventListener('wheel', outside)
   })
 
   it('a session built with a stamp tool armed hands the tool its pick', () => {

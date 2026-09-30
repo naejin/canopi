@@ -4,7 +4,9 @@
 // window pointer, blur and (0B only, `legacyKeys`) key listeners, and the ruler presses at document capture. It turns
 // each event into host-relative, classified fields for `normalise`, hands the raw input to the sink, and applies the
 // effects the sink sends back to the event being handled: prevent-default, stop-propagation, pointer capture, the drop
-// effect. It is the one module of input/ that touches the browser (policy P7); the input core stays pure.
+// effect. A sink that throws on a press on the map, a release, a context menu, a dragover or a drop quarantines that event
+// first, as today's handlers did around their admitted work; any other event's error leaves the event to the app. It is
+// the one module of input/ that touches the browser (policy P7); the input core stays pure.
 
 import { hasPlantStampDragData, readPlantStampDropSource } from '../../plant-stamp-source'
 import {
@@ -84,13 +86,18 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   let sink: ((input: RawInput) => void) | null = null
   let tickTimer: number | null = null
 
-  function deliver(event: Event, rect: HostRect | null, input: RawInput | null): void {
+  /**
+   * Hands one input to the sink while its event is the one being handled. `onError` is today's rule for a failure: a press
+   * on the map, a release, a context menu, a dragover and a drop were quarantined (their handlers ran admitted work that
+   * quarantined on error), while a failing hover, cancel, wheel, blur or focus change left the event to the rest of the app.
+   */
+  function deliver(event: Event, rect: HostRect | null, input: RawInput | null, onError: 'quarantine' | 'rethrow' = 'rethrow'): void {
     if (!input || !sink) return
     handling.push({ event, rect })
     try {
       sink(input)
     } catch (error) {
-      quarantine(event)
+      if (onError === 'quarantine') quarantine(event)
       throw error
     } finally {
       handling.pop()
@@ -109,13 +116,14 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
 
   const onPointerDown = (event: PointerEvent): void => {
     const rect = host.getBoundingClientRect()
-    deliver(event, rect, pointerInput(event, 'pointerdown', rect))
+    deliver(event, rect, pointerInput(event, 'pointerdown', rect), 'quarantine')
   }
   const onRulerPointerDown = (event: PointerEvent): void => {
     // Presses inside the map are the host listener's; the rulers sit beside it.
     if (event.target instanceof Node && host.contains(event.target)) return
     if (classifyTarget(event.target, host).kind !== 'ruler') return
     const rect = host.getBoundingClientRect()
+    // Today's ruler drag had no quarantine: a failure left its press to the app.
     deliver(event, rect, pointerInput(event, 'pointerdown', rect))
   }
   const onPointerMove = (event: PointerEvent): void => {
@@ -124,7 +132,7 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
   }
   const onPointerUp = (event: PointerEvent): void => {
     const rect = sessionRect(event.pointerId)
-    deliver(event, rect, pointerInput(event, 'pointerup', rect))
+    deliver(event, rect, pointerInput(event, 'pointerup', rect), 'quarantine')
   }
   const onPointerCancel = (event: PointerEvent): void => {
     deliver(event, null, pointerInput(event, 'pointercancel', NO_RECT))
@@ -166,12 +174,13 @@ export function createDomInputSource(deps: DomInputSourceDeps): DomInputSource {
       // The keyboard menu opened from keydown; its own contextmenu follows within the echo window.
       fromKeyboard: lastKeyboardMenuAt !== null && event.timeStamp - lastKeyboardMenuAt < DEFAULT_THRESHOLDS.menuEchoMs,
     }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect), 'quarantine')
   }
   const dragHandler = (type: 'dragover' | 'dragleave' | 'drop') => (event: DragEvent): void => {
     const rect = type === 'dragleave' ? NO_RECT : host.getBoundingClientRect()
     const like: DomEventLike = { ...domEventLike(event, type, rect, classifyTarget(event.target, host)), dropPayload: dropPayloadOf(event, type) }
-    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect))
+    const onError = type === 'dragleave' ? 'rethrow' : 'quarantine'
+    deliver(event, rect, normalise(like, deps.platform, deps.bindings(), { physicalCtrl: deps.keys.physicalCtrl() }, rect), onError)
   }
   const onDragOver = dragHandler('dragover')
   const onDragLeave = dragHandler('dragleave')
