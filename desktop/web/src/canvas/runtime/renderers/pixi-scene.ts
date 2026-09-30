@@ -50,6 +50,8 @@ import {
   type CanvasInteractionVisualState,
 } from '../scene-visuals'
 import type { SceneRendererHoverState, SceneRendererSnapshot } from './scene-types'
+import { createDraftLayer, type DraftScenePainters } from './draft-layer'
+import type { DraftPresentation, SelectionPreview } from '../tools/draft'
 import { getEllipticalZonePolygon, getRectangularZoneCorners } from '../zone-geometry'
 import type { PlantSymbolId, SceneAnnotationEntity, SceneMeasurementGuideEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
 import { isSceneObjectGroupMemberTarget } from '../scene'
@@ -168,13 +170,16 @@ function samePlantSelection(left: ReadonlySet<string>, right: ReadonlySet<string
 /**
  * Retained botanical presentation. The MapLibre custom layer owns the stage,
  * the shared WebGL context and frame submission; this graph only syncs scene
- * content into it.
+ * content into it, and the active tool's draft over it (`draft-layer.ts`).
  */
 export interface PixiScenePresentation {
   dispose(): void
   resize(width: number, height: number): void
   renderScene(snapshot: SceneRendererSnapshot): void
   setViewport(viewport: SceneRendererSnapshot['viewport']): void
+  setDraft(draft: DraftPresentation | null): void
+  /** A renderer transform of the selection while it is dragged; drawn from phase R, ignored until then. */
+  setSelectionPreview(preview: SelectionPreview | null): void
 }
 
 export interface PixiScenePresentationOptions {
@@ -211,6 +216,14 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
   stage.addChild(selectionLabelLayer)
 
   const presentation = new SceneViewportPresentation()
+  // Drafts draw over plants, notes and labels, as the DOM previews did over the canvas.
+  const draftLayer = createDraftLayer({
+    createText,
+    viewSize,
+    painters: createDraftScenePainters(() => presentation.current?.snapshot ?? null),
+  })
+  stage.addChild(draftLayer.world)
+  stage.addChild(draftLayer.screen)
   const zoneGraphicsById = new Map<string, Graphics>()
   const measurementGuideGraphicsById = new Map<string, Graphics>()
   const measurementGuideLabelById = new Map<string, Text>()
@@ -232,6 +245,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
 
   return {
     dispose() {
+      draftLayer.dispose()
       presentation.dispose()
       for (const graphics of plantGraphicsById.values()) {
         graphics.removeFromParent()
@@ -249,6 +263,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       viewSize.width = width
       viewSize.height = height
       plantLayers.resize(width, height)
+      draftLayer.resize(width, height)
     },
     renderScene(nextSnapshot) {
       const { plantNameLabels } = presentation.setScene(nextSnapshot)
@@ -291,6 +306,7 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, nextSnapshot)
       world.position.set(nextSnapshot.viewport.x, nextSnapshot.viewport.y)
       world.scale.set(nextSnapshot.viewport.scale)
+      draftLayer.place(nextSnapshot.viewport, nextSnapshot.viewport.scale)
     },
     setViewport(viewport) {
       const current = presentation.setViewport(viewport)
@@ -335,6 +351,64 @@ export function createPixiScenePresentation(options: PixiScenePresentationOption
       syncSelectionLabels(createText, selectionLabelLayer, selectionLabelBySpecies, snapshot)
       world.position.set(viewport.x, viewport.y)
       world.scale.set(viewport.scale)
+      draftLayer.place(viewport, viewport.scale)
+    },
+    setDraft(draft) {
+      draftLayer.setDraft(draft)
+    },
+    setSelectionPreview() {},
+  }
+}
+
+/**
+ * The scene's own drawing code, lent to the draft layer so a placement ghost
+ * looks like the object a click would create: zones in world units, plant
+ * marks and note text at the local origin in CSS px. Plants are presented
+ * with the last scene snapshot's plant context.
+ */
+export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapshot | null): DraftScenePainters {
+  return {
+    paint: (color) => ({ color: toPixiColor(color, 0), alpha: cssColorAlpha(color) }),
+    screenPxToWorldPx,
+    drawZoneGhost(graphics, zone, viewportScale) {
+      // Today's ghost: the zone's fill at a fifth and its stroke, with round ends and no casing.
+      const visual = resolveZoneVisual(zone)
+      if (!traceZonePath(graphics, zone)) return false
+      if (zone.zoneType !== 'line') graphics.fill({ color: toPixiColor(visual.fill, 0), alpha: 0.2 * cssColorAlpha(visual.fill) })
+      graphics.stroke({
+        color: toPixiColor(visual.stroke, 0),
+        alpha: cssColorAlpha(visual.stroke),
+        width: screenPxToWorldPx(ZONE_STROKE_PX, viewportScale),
+        cap: 'round',
+        join: 'round',
+      })
+      return true
+    },
+    drawPlantGhost(graphics, plant, mark, viewportScale) {
+      const snapshot = getSnapshot()
+      if (!snapshot) return false
+      const [entry] = buildPlantPresentationEntries([plant], {
+        plants: snapshot.scene.plants,
+        viewport: { x: 0, y: 0, scale: viewportScale },
+        speciesCache: snapshot.speciesCache,
+        plantSpeciesSymbols: snapshot.scene.plantSpeciesSymbols,
+        localizedCommonNames: snapshot.localizedCommonNames,
+      }, new Set())
+      if (!entry) return false
+      // Plant a row's look: a disc in the display colour, its border the same colour.
+      if (mark === 'dot') graphics.circle(0, 0, entry.radiusScreenPx).fill({ color: toPixiColor(entry.color, 0) })
+      else drawPlantGlyph(graphics.context, entry)
+      return true
+    },
+    drawNoteGhost(text, marker, annotation, viewportScale) {
+      if (annotation.annotationType !== 'text') return null
+      const { textFrame, textOpacity, markerOpacity, markerPaths, markerStrokePx } =
+        getAnnotationPresentation(annotation, { x: 0, y: 0, scale: viewportScale })
+      styleAnnotationText(text, annotation, textFrame.lineHeightPx)
+      // Today's ghost marker has no halo.
+      traceAnnotationMarker(marker, markerPaths, { x: 0, y: 0 })
+      marker.stroke({ color: toPixiColor(getAnnotationTextColor(), 0), width: markerStrokePx })
+      return { textOpacity, markerOpacity }
     },
   }
 }
@@ -1105,16 +1179,21 @@ function drawAnnotationText(
   annotation: SceneAnnotationEntity,
   viewport: SceneRendererSnapshot['viewport'],
 ): void {
+  styleAnnotationText(text, annotation, getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx)
+  const origin = worldToScreen(annotation.position, viewport)
+  text.position.set(origin.x, origin.y)
+}
+
+/** A note's text, style and angle; the caller places it at the note's screen point. */
+function styleAnnotationText(text: Text, annotation: SceneAnnotationEntity, lineHeightPx: number): void {
   text.text = annotation.text
   setTextStyle(text, {
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
     fontSize: annotation.fontSize,
-    lineHeight: getAnnotationPresentation(annotation, viewport).textFrame.lineHeightPx,
+    lineHeight: lineHeightPx,
     fill: getAnnotationTextColor(),
     stroke: labelHaloStroke(annotation.fontSize),
   })
-  const origin = worldToScreen(annotation.position, viewport)
-  text.position.set(origin.x, origin.y)
   text.rotation = ((annotation.rotationDeg ?? 0) * Math.PI) / 180
   text.anchor.set(0, 0)
 }
@@ -1131,20 +1210,10 @@ function drawAnnotationDecoration(
   const origin = worldToScreen(annotation.position, viewport)
   graphics.clear()
   if (markerOpacity > 0) {
-    const traceMarker = () => {
-      for (const path of markerPaths) {
-        path.forEach((point, index) => {
-          const x = origin.x + point.x
-          const y = origin.y + point.y
-          if (index === 0) graphics.moveTo(x, y)
-          else graphics.lineTo(x, y)
-        })
-      }
-    }
-    traceMarker()
+    traceAnnotationMarker(graphics, markerPaths, origin)
     graphics.stroke({ color: toPixiColor(getMapBackdropInk().halo, 0),
       width: markerStrokePx + OVERLAY_CASING_EXTRA_PX, alpha: markerOpacity, cap: 'round', join: 'round' })
-    traceMarker()
+    traceAnnotationMarker(graphics, markerPaths, origin)
     graphics.stroke({ color: toPixiColor(getAnnotationTextColor(), 0),
       width: markerStrokePx, alpha: markerOpacity })
   }
@@ -1154,6 +1223,21 @@ function drawAnnotationDecoration(
     const outline = casedStroke(getCanvasInteractionStrokeVisual(state), 1)
     drawClosedZonePath(graphics, corners).stroke(outline.casing)
     drawClosedZonePath(graphics, corners).stroke(outline.stroke)
+  }
+}
+
+function traceAnnotationMarker(
+  graphics: Graphics,
+  markerPaths: readonly (readonly ScenePoint[])[],
+  origin: ScenePoint,
+): void {
+  for (const path of markerPaths) {
+    path.forEach((point, index) => {
+      const x = origin.x + point.x
+      const y = origin.y + point.y
+      if (index === 0) graphics.moveTo(x, y)
+      else graphics.lineTo(x, y)
+    })
   }
 }
 

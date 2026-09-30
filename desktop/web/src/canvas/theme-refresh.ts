@@ -26,6 +26,13 @@ type CanvasColorName =
   | 'interaction-casing'
   | 'locked-object-stroke'
   | 'locked-layer-stroke'
+  | 'selection-fill'
+  | 'chip-surface'
+  | 'chip-surface-muted'
+  | 'chip-border'
+  | 'chip-text'
+  | 'chip-primary'
+  | 'chip-shadow'
 
 /** CSS variable read for each canvas colour. Most follow `--canvas-{key}`. */
 export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } = {
@@ -41,6 +48,15 @@ export const CANVAS_COLOR_CSS_VARS: { readonly [K in CanvasColorName]: string } 
   'interaction-casing': '--canvas-interaction-casing',
   'locked-object-stroke': '--canvas-locked-object-stroke',
   'locked-layer-stroke': '--canvas-locked-layer-stroke',
+  'selection-fill': '--canvas-selection',
+  // Draft labels are today's UI chips drawn in Pixi, so they read the UI
+  // tokens the DOM chips use; `chip-shadow` holds the whole `--shadow-sm`.
+  'chip-surface': '--color-surface',
+  'chip-surface-muted': '--color-surface-muted',
+  'chip-border': '--color-border-strong',
+  'chip-text': '--color-text',
+  'chip-primary': '--color-primary',
+  'chip-shadow': '--shadow-sm',
 }
 
 // Light-theme values from `styles/global.css`, used until the first refresh.
@@ -57,6 +73,13 @@ const _colors: { [K in CanvasColorName]: string } = {
   'interaction-casing': '#FFF8EC',
   'locked-object-stroke': 'rgba(100, 90, 76, 0.86)',
   'locked-layer-stroke': 'rgba(168, 51, 42, 0.88)',
+  'selection-fill': 'rgba(156, 90, 22, 0.14)',
+  'chip-surface': '#FBF8F2',
+  'chip-surface-muted': 'rgba(251, 248, 242, 0.82)',
+  'chip-border': 'rgba(58, 46, 28, 0.55)',
+  'chip-text': '#27231D',
+  'chip-primary': '#9C5A16',
+  'chip-shadow': '0 2px 8px rgba(30, 22, 10, 0.12)',
 }
 
 // The light and dark `--canvas-zone-fill` values: a zone storing one of them
