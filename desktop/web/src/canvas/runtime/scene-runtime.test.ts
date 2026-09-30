@@ -507,6 +507,31 @@ describe('scene canvas runtime', () => {
     runtime.destroy()
   })
 
+  it('marks the Design map aria-busy until a scene change is drawn, never for a camera frame', async () => {
+    const camera = new CameraController()
+    const runtime = new SceneCanvasRuntime({ camera })
+    const { container, renderer } = await initRuntimeWithStubbedRenderer(runtime)
+    const busyWhenDrawn: Array<string | null> = []
+    renderer.renderScene.mockImplementation(() => { busyWhenDrawn.push(container.getAttribute('aria-busy')) })
+    expect(container.getAttribute('aria-busy'), 'the opening render draws in the next frame').toBe('true')
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
+
+    runtime.documentSurface.loadDocument(makeFile())
+    expect(container.getAttribute('aria-busy')).toBe('true')
+    await vi.waitFor(() => expect(container.hasAttribute('aria-busy')).toBe(false))
+    expect(busyWhenDrawn, 'busy until the renderer drew the loaded Design').toEqual(['true'])
+
+    camera.panBy({ x: 12, y: -8 })
+    expect(container.hasAttribute('aria-busy'), 'a camera frame moves the drawing, it does not redraw it').toBe(false)
+    await vi.waitFor(() => expect(renderer.setViewport).toHaveBeenCalledWith(camera.viewport))
+    expect(container.hasAttribute('aria-busy')).toBe(false)
+
+    runtime.documentSurface.loadDocument(fileWithOnlyPlants('plant-1'))
+    expect(container.getAttribute('aria-busy')).toBe('true')
+    runtime.destroy()
+    expect(container.hasAttribute('aria-busy'), 'a destroyed runtime leaves the host as it found it').toBe(false)
+  })
+
   it('rolls back effects acquired before a later subscription fails', () => {
     const disposeTheme = vi.fn()
     const disposeLocale = vi.fn(() => {

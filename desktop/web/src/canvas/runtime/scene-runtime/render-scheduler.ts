@@ -1,3 +1,4 @@
+import { signal, type ReadonlySignal } from '@preact/signals'
 import type {
   SceneRendererDefinition,
   SceneRendererInstance,
@@ -41,11 +42,22 @@ export class SceneRuntimeRenderScheduler {
   private _renderEpoch = 0
   private _frame: number | null = null
   private _pendingKind: 'scene' | 'viewport' | null = null
+  /** The epoch of the latest scene render, until it has drawn or failed; a newer epoch fences it. */
+  private _sceneRenderEpoch: number | null = null
+  private readonly _scenePending = signal(false)
 
   constructor(private readonly _options: SceneRuntimeRenderSchedulerOptions) {}
 
   get container(): HTMLElement | null {
     return this._container
+  }
+
+  /**
+   * True from a scene invalidation until the frame that draws it has run, the render
+   * failed, or unmount fenced it. Camera-only frames never set it.
+   */
+  get scenePending(): ReadonlySignal<boolean> {
+    return this._scenePending
   }
 
   async initialize(container: HTMLElement): Promise<void> {
@@ -79,6 +91,7 @@ export class SceneRuntimeRenderScheduler {
     // Fence an in-flight preparation immediately, even though drawing waits for a frame.
     if (kind === 'scene') this._renderEpoch += 1
     if (this._pendingKind !== 'scene') this._pendingKind = kind
+    this._publishScenePending()
     if (this._frame !== null) return
     this._frame = requestAnimationFrame(() => {
       const pending = this._pendingKind
@@ -95,12 +108,22 @@ export class SceneRuntimeRenderScheduler {
 
     this._cancelFrame()
     const renderEpoch = ++this._renderEpoch
-    const prepared = await this._options.prepareSceneRender()
-    if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
-    const snapshot = prepared.publish()
-    if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
-    renderer.renderScene(snapshot)
-    this._options.renderChrome()
+    this._sceneRenderEpoch = renderEpoch
+    this._publishScenePending()
+    try {
+      const prepared = await this._options.prepareSceneRender()
+      if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
+      const snapshot = prepared.publish()
+      if (renderEpoch !== this._renderEpoch || renderer !== this._renderer) return
+      renderer.renderScene(snapshot)
+      this._options.renderChrome()
+    } catch (error) {
+      this._settleSceneRender(renderEpoch)
+      throw error
+    }
+    // The renderer asked MapLibre for a repaint, which draws the snapshot in the next
+    // animation frame; a frame callback requested after it runs once that drawing is done.
+    requestAnimationFrame(() => this._settleSceneRender(renderEpoch))
   }
 
   async renderViewport(): Promise<void> {
@@ -127,6 +150,7 @@ export class SceneRuntimeRenderScheduler {
     this._mounting = false
     const renderer = this._renderer
     this._renderer = null
+    this._publishScenePending()
     if (renderer) await disposeRenderer(renderer)
   }
 
@@ -138,6 +162,17 @@ export class SceneRuntimeRenderScheduler {
     if (this._frame !== null) cancelAnimationFrame(this._frame)
     this._frame = null
     this._pendingKind = null
+  }
+
+  private _settleSceneRender(renderEpoch: number): void {
+    if (this._sceneRenderEpoch !== renderEpoch) return
+    this._sceneRenderEpoch = null
+    this._publishScenePending()
+  }
+
+  /** A scene invalidation waits for its frame, or the latest scene render has not drawn yet. */
+  private _publishScenePending(): void {
+    this._scenePending.value = this._pendingKind === 'scene' || this._sceneRenderEpoch === this._renderEpoch
   }
 
   private _runDetached(operation: Promise<void>, failureMessage: string): void {

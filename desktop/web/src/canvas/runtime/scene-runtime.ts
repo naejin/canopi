@@ -1,3 +1,4 @@
+import { effect, type ReadonlySignal } from '@preact/signals'
 import { setCanvasSelection, setCanvasToolGuidance } from '../session-state'
 import { refreshCanvasColorCache } from '../theme-refresh'
 import { setCanvasMapBackdrop } from './scene-visuals'
@@ -158,6 +159,7 @@ export class SceneCanvasRuntime {
   async init(container: HTMLElement): Promise<void> {
     try {
       refreshCanvasColorCache(container)
+      this._disposeEffects.push(markBusyWhileScenePending(container, this._rendering.scenePending))
       await this._rendering.initialize(container)
       this._cameraNavigation.initialize({
         width: Math.max(1, container.clientWidth),
@@ -417,4 +419,17 @@ export class SceneCanvasRuntime {
       targets.indexScene(scene),
     )
   }
+}
+
+/**
+ * The Design map is aria-busy from a Design change until the renderer has drawn it, so
+ * assistive technology and the Web browser checks can wait for the drawing; the DOM (chips,
+ * tools, Undo) changes at once. Camera frames never mark it.
+ */
+function markBusyWhileScenePending(host: HTMLElement, scenePending: ReadonlySignal<boolean>): () => void {
+  return effect(() => {
+    if (!scenePending.value) return
+    host.setAttribute('aria-busy', 'true')
+    return () => host.removeAttribute('aria-busy')
+  })
 }
