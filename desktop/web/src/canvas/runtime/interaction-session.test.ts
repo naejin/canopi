@@ -739,6 +739,43 @@ describe('ruler drags through the session', () => {
     expect(rulers.onGuideCreate).toHaveBeenCalledTimes(2)
   })
 
+  it('a ruler guide lands at its release even when the tool\'s release fails, as today\'s separate mouseup did', () => {
+    let broken = false
+    const { session } = createSession({
+      setHoveredTarget: () => {
+        if (broken) throw new Error('release failed')
+      },
+    })
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    rulers.host.style.cursor = 'crosshair'
+    const failingRelease = (): unknown[] => {
+      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+      events.pointerMove({ x: 180, y: 60 })
+      broken = true
+      try {
+        return captureWindowErrors(() => { events.pointerUp({ x: 180, y: 100 }) })
+      } finally {
+        broken = false
+      }
+    }
+
+    expect(failingRelease()).toHaveLength(1)
+    expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    expect(rulers.host.style.cursor).toBe('crosshair')
+
+    // A registered tool's release that fails still ends the rulers' drag.
+    useStubTools(stubTool('select'))
+    session.dispose()
+    createSession({
+      setHoveredTarget: () => {
+        if (broken) throw new Error('release failed')
+      },
+    })
+    expect(failingRelease()).toHaveLength(1)
+    expect(rulers.onGuideCreate).toHaveBeenCalledTimes(2)
+    expect(rulers.host.style.cursor).toBe('crosshair')
+  })
+
   it('a second ruler press replaces the first drag', () => {
     createSession()
     const rulers = mountRulers(rulerCamera({ x: 10, scale: 2 }))

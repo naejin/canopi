@@ -586,10 +586,14 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         break
     }
     if (this._registered()) {
-      this._routeToHost(input)
-      // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release.
-      if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
-      if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
+      try {
+        this._routeToHost(input)
+      } finally {
+        // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release, and
+        // the drag ends even when the release failed, as today's ruler mouseup did.
+        if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
+        if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
+      }
     } else {
       this._routeToBridge(input, event)
     }
@@ -649,8 +653,12 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         if (input.id === this._rulerPointer) this._rulerPress?.drag()
         break
       case 'up':
-        if (event) bridge.pointerUp(event as PointerEvent)
-        if (input.id === this._rulerPointer) this._releaseRuler(input.at)
+        try {
+          if (event) bridge.pointerUp(event as PointerEvent)
+        } finally {
+          // Today's ruler heard its own mouseup: the guide lands even when the tool's release fails.
+          if (input.id === this._rulerPointer) this._releaseRuler(input.at)
+        }
         break
       case 'cancel':
         if (input.reason === 'blur') bridge.windowBlur()
