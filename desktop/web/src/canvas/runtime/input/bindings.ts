@@ -25,6 +25,9 @@ export interface Bindings {
   readonly penBarrel: 'ignore' | 'secondary'
   readonly trackpadGestures: boolean                       // WebKit gesture* rotate and scale
   readonly dragSlopPx: Readonly<Record<PointerKind, number>>
+  /** A button-less move over owned chrome, the text entry or a handle (§2.2 "Hover"): 'legacy' keeps today's split, 'end' ends
+   *  the hover; the Unlock affordance keeps it under both. */
+  readonly ownedHover: 'legacy' | 'end'
 }
 
 /** Help rows for F1 and tool cards, generated from the bindings (never hand-written). */
@@ -46,6 +49,7 @@ export const LEGACY_BINDINGS: Bindings = Object.freeze({
   penBarrel: 'ignore',
   trackpadGestures: false,
   dragSlopPx: Object.freeze({ mouse: 0, pen: 0, touch: 0 }),
+  ownedHover: 'legacy',
 })
 
 /** The one constant each phase changes. */

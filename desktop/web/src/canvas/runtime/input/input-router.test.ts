@@ -17,7 +17,7 @@ const NAVIGATION_GESTURES: readonly Gesture[] = [
 ]
 
 const EDITING_GESTURES: readonly Gesture[] = [
-  { kind: 'hover', at: { x: 1, y: 2 }, pointer: 'mouse', mods: MODS },
+  { kind: 'hover', at: { x: 1, y: 2 }, pointer: 'mouse', mods: MODS, target: { kind: 'surface' } },
   { kind: 'hover-end' },
   { kind: 'press', id: 1, at: { x: 1, y: 2 }, pointer: 'mouse', mods: MODS, clickCount: 1, target: { kind: 'surface' } },
   { kind: 'tap', id: 1, at: { x: 1, y: 2 }, pointer: 'mouse', mods: MODS, clickCount: 1, target: { kind: 'surface' } },

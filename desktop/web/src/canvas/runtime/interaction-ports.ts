@@ -7,7 +7,7 @@ import type { CanvasFocusPort } from './app-adapter'
 import type { Bindings } from './input/bindings'
 import type { Gesture, MenuSource } from './input/gestures'
 import type { InputPlatform } from './input/platform'
-import type { AdapterEffect, RawInput } from './input/raw-input'
+import type { AdapterEffect, RawInput, TargetClass } from './input/raw-input'
 import type { ToolHandleId, ToolId } from './interaction-types'
 import type { PlantPresentationContext } from './plant-presentation'
 import type { SpeciesCacheEntry } from './presentation-data'
@@ -93,7 +93,9 @@ export interface InputRouterDeps {
   readonly toolHost: ToolHost
 }
 export interface InputRouter {
-  /** Routes one gesture: navigation → ViewNavigation, menu-request → ToolHost.menuAt (the host is the only menu opener), editing and drops → ToolHost. Computes no geometry. */
+  /** Routes one gesture: navigation → ViewNavigation, menu-request → ToolHost.menuAt (the host is the only menu opener), editing and drops → ToolHost.
+   *  A pan from a pointer source (middle, Space, the Pan tool's and overview drags; not a wheel) also hands its `at` to
+   *  ToolHost.notePointer, so the host's resting pointer moves with the pointer. Computes no geometry. */
   route(g: Gesture): GestureOutcome
 }
 
@@ -113,6 +115,10 @@ export interface ToolHostDeps {
   readonly chrome: {
     setHandles(h: readonly ToolHandle[], active: ToolHandleId | null): void; setCursor(c: string): void
     requestTextEntry(r: TextEntryRequest, submit: (text: string) => 'close' | 'keep'): void; closeTextEntry(): void
+    /** Today's hasActiveEditor(), read live wherever the host needs the entry's state (handles hidden while it is open, the
+     *  'text-entry-closed' focus reason on the next press); the host keeps no flag of its own. Until D1's 0B-3 the session's
+     *  adapter answers for the bridge's note editor. Esc in the entry stays the entry's own element handler. */
+    isTextEntryOpen(): boolean
     setTooltip(t: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void   // chrome/hover-tooltip.ts
     /** chrome/locked-affordance.ts; its factory takes onUnlock, wired by interaction-session.ts. */
     setLockedAffordance(a: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null): void
@@ -173,6 +179,20 @@ export interface ToolHost {
   /** Asked by the session before it routes any source or key event: true while a failed cancellation was pending and has now
    *  been retried, so the event is quarantined (today's app-wide swallow). */
   retryPendingCancellation(): boolean
+  /**
+   * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
+   * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
+   * button. For an admitted primary or middle press outside the text entry ('owned-text') and the Unlock affordance, with no
+   * other live session and no pending cancellation, it also closes the canvas menu and focuses the map (so an open text
+   * entry commits on its blur): today's _onPointerDown conditions.
+   */
+  rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass): void
+  /**
+   * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
+   * pointer and emits nothing; the next camera frame re-emits at the updated point, so a ghost stays under the pointer (today
+   * it keeps its world point). Wheel and key pans leave the resting pointer where it is. null: no pointer rests on the map.
+   */
+  notePointer(screen: ScreenPoint | null): void
   /** Scene or selection changed outside a tool call (select all, undo, menu commands, nudges): refresh handles and decorations. */
   sceneChanged(): void
   // Esc chain queries (CanvasKeyboardPort reads these)
@@ -205,10 +225,12 @@ export interface ToolHost {
   }
   prepareForDocumentReplacement(): void                         // deactivate('document-replaced') and drop live sessions
   refreshTranslations(): void                                   // re-publishes guidance and handle labels
-  /** Every hover inside the map, before the overview and hover-suppression filters; null on hover-end (the pointer left the
-   *  map; from phase 2 also a move over owned chrome, the text entry or a handle). Until then a move over the text entry,
-   *  a handle or the Unlock affordance emits no gesture, so nothing is published and the lens keeps its point, as today's
-   *  lens skips those moves (spec §2.2 "Hover"). For the inspection lens and the status line. */
+  /** Every hover whose target is the map (`surface`), before the overview and hover-suppression filters; null on hover-end
+   *  (the pointer left the map; from phase 2 also a move over owned chrome, the text entry or a handle, never the Unlock
+   *  affordance). A hover over owned chrome, a ruler or anything off the map publishes nothing, and a move over the text
+   *  entry, a handle or the Unlock affordance emits no gesture before phase 2, so the lens keeps its point there, as today's
+   *  lens skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays] (spec §1.4 "Hover", §2.2 "Hover").
+   *  For the inspection lens and the status line. */
   subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
   dispose(): void
 }
