@@ -630,6 +630,30 @@ describe('the interaction session', () => {
     container.removeEventListener('wheel', outside)
   })
 
+  it('a wheel whose zoom or pan fails under a registered tool is still default-prevented, as today', () => {
+    useStubTools(stubTool('rectangle'))
+    let broken = false
+    const { session } = createSession({
+      render: (kind) => {
+        if (broken && kind === 'viewport') throw new Error('render failed')
+      },
+    })
+    session.setTool('rectangle')
+
+    broken = true
+    try {
+      // Today's _onWheel prevented the wheel before it moved the camera: a failing zoom never let the page zoom.
+      let zoom: WheelEvent | null = null
+      expect(captureWindowErrors(() => { zoom = events.wheel({ x: 50, y: 50 }, { deltaY: -40, ctrlKey: true }) })).toHaveLength(1)
+      expect(zoom!.defaultPrevented).toBe(true)
+      let pan: WheelEvent | null = null
+      expect(captureWindowErrors(() => { pan = events.wheel({ x: 50, y: 50 }, { deltaY: 40, shiftKey: true }) })).toHaveLength(1)
+      expect(pan!.defaultPrevented).toBe(true)
+    } finally {
+      broken = false
+    }
+  })
+
   it('a session built with a stamp tool armed hands the tool its pick', () => {
     const sources: (ToolSource | null)[] = []
     const record = {

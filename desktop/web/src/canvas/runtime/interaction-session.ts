@@ -619,14 +619,19 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
+    const wheel = input.kind === 'wheel'
+    if (wheel) {
+      // Today's _onWheel prevented a wheel the map takes, and closed the canvas menu, before it moved the camera: a zoom
+      // or pan that fails still keeps the page from zooming or scrolling.
+      this._source.apply(result.effects)
+      if (result.effects.length > 0) this._menu.close()
+    }
     let outcome: GestureOutcome = {}
     for (const gesture of result.gestures) {
       this._followNavigation(gesture)
       outcome = mergeOutcomes(outcome, this._router.route(gesture))
     }
-    // A wheel the map takes closes the canvas menu (today's).
-    if (input.kind === 'wheel' && result.effects.length > 0) this._menu.close()
-    this._source.apply(outcomeEffects(result.effects, outcome))
+    this._source.apply(outcomeEffects(wheel ? [] : result.effects, outcome))
     if (outcome.rejectSession && input.kind === 'down') {
       const rejected = recognise(this._recogniser, { kind: 'reject', t: input.t, id: input.id }, this._config)
       this._recogniser = rejected.state
