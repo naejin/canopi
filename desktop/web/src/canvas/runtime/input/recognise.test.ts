@@ -512,8 +512,8 @@ describe('recognise: sessions', () => {
   it('a move with buttons and no session is a hover', () => {
     const result = run(seq('stray buttons', WINDOWS, [move(50, 60, { buttons: 1 }), move(55, 60, { buttons: 2 })]))
     expect(result.gestures).toEqual([
-      { kind: 'hover', at: { x: 50, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false } },
-      { kind: 'hover', at: { x: 55, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false } },
+      { kind: 'hover', at: { x: 50, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false }, target: { kind: 'surface' } },
+      { kind: 'hover', at: { x: 55, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false }, target: { kind: 'surface' } },
     ])
   })
 

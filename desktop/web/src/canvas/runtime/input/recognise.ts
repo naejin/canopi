@@ -201,7 +201,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     const overOwned = input.target.kind === 'owned-chrome' || input.target.kind === 'owned-text' || input.target.kind === 'handle'
     step.gestures.push(overOwned
       ? { kind: 'hover-end' }
-      : { kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods })
+      : { kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods, target: input.target })
     return
   }
 
