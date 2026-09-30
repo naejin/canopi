@@ -30,7 +30,10 @@ const FRAME_PHASES: readonly FramePhase[] = ['tools', 'overlays']
 export interface ViewFramePublisher extends ViewFrameSource {
   /** True while publish runs, listeners and effects included: a driver queues the moves made then. */
   readonly dispatching: boolean
-  /** Sets viewFrame, runs the 'tools' and then the 'overlays' listeners synchronously, and restarts the settle timer. */
+  /**
+   * Sets viewFrame, runs the 'tools' and then the 'overlays' listeners synchronously, and restarts the settle timer. A frame published
+   * while listeners run (a move made on a frame the driver host relays itself, at a swap) is dispatched after them, in order.
+   */
   publish(frame: ViewFrame): void
   /** Stops the settle timer; later publishes are ignored. */
   dispose(): void
@@ -45,6 +48,7 @@ export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps)
   let settleTimer: number | null = null
   let dispatching = false
   let disposed = false
+  const deferred: ViewFrame[] = []
 
   const settle = (): void => {
     settleTimer = null
@@ -66,22 +70,31 @@ export function createViewFrameSource(initial: ViewFrame, deps: FrameSourceDeps)
     },
     publish(frame) {
       if (disposed) return
-      if (settleTimer !== null) deps.timers.clear(settleTimer)
-      settleTimer = deps.timers.set(deps.clock() + SETTLE_MS, settle)
+      if (dispatching) {
+        deferred.push(frame)
+        return
+      }
       dispatching = true
       try {
-        viewFrame.value = frame
-        for (const phase of FRAME_PHASES) {
-          for (const listener of listeners[phase]) listener.run(frame)
+        for (let next: ViewFrame | undefined = frame; next && !disposed; next = deferred.shift()) {
+          if (settleTimer !== null) deps.timers.clear(settleTimer)
+          settleTimer = deps.timers.set(deps.clock() + SETTLE_MS, settle)
+          viewFrame.value = next
+          for (const phase of FRAME_PHASES) {
+            for (const listener of listeners[phase]) listener.run(next)
+          }
         }
       } finally {
         dispatching = false
+        // A listener that threw ends the dispatch: the frames it left waiting are not dispatched out of order later.
+        deferred.length = 0
       }
     },
     dispose() {
       disposed = true
       if (settleTimer !== null) deps.timers.clear(settleTimer)
       settleTimer = null
+      deferred.length = 0
       listeners.tools = []
       listeners.overlays = []
     },

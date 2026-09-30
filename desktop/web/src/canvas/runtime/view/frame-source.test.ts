@@ -33,6 +33,35 @@ describe('view frame source', () => {
     view.dispose()
   })
 
+  it('a frame published while listeners run reaches every listener after the frame being dispatched', () => {
+    const view = createTestView()
+    const initial = view.frames.viewFrame.peek()
+    const frames = createViewFrameSource(initial, { clock: () => 0, timers: { set: () => 0, clear: () => {} } })
+    const first = { ...initial, revision: 1 } as ViewFrame
+    const second = { ...initial, revision: 2 } as ViewFrame
+    const seen: Array<readonly [string, number]> = []
+    frames.onViewFrame('tools', (frame) => {
+      seen.push(['tools', frame.revision])
+      if (frame !== first) return
+      frames.publish(second)
+      seen.push(['viewFrame after the publish', frames.viewFrame.peek().revision])
+    })
+    frames.onViewFrame('overlays', (frame) => seen.push([`overlays, dispatching ${frames.dispatching}`, frame.revision]))
+
+    frames.publish(first)
+
+    expect(seen).toEqual([
+      ['tools', 1],
+      ['viewFrame after the publish', 1],
+      ['overlays, dispatching true', 1],
+      ['tools', 2],
+      ['overlays, dispatching true', 2],
+    ])
+    expect(frames.viewFrame.peek()).toBe(second)
+    expect(frames.dispatching).toBe(false)
+    view.dispose()
+  })
+
   it('the read surface signals change only with their own values', () => {
     const view = createTestView({ screen: { width: 400, height: 300 }, viewport: { x: 0, y: 0, scale: 2 } })
     const surface = createViewReadSurface(view.frames, () => createSessionPlane({ lon: 0, lat: 0 }))

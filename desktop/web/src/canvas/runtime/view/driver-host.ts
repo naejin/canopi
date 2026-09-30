@@ -103,7 +103,8 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
 
   /**
    * Swaps the live driver: `prepare` brings the new one to the last frame's camera unrelayed, then the host publishes one frame. An
-   * attached driver that fails meanwhile is never relayed: the host detaches at the camera it had.
+   * attached driver that fails meanwhile is never relayed: the host detaches at the camera it had. The new driver is not dispatching
+   * that frame, so a move a listener makes on it reaches the driver at once; the frame source dispatches the move's frame after it.
    */
   function swapTo(driver: CameraDriver, nextAttached: boolean, prepare: () => void): void {
     release()

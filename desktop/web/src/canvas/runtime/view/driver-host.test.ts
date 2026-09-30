@@ -195,4 +195,50 @@ describe('camera driver host', () => {
     expect(planarCameraOf(view.view()).x).toBe(11)
     view.dispose()
   })
+
+  it('moves made on the attach and detach frames are queued until every listener ran', () => {
+    const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    const view = createTestView({ plane, viewport: { x: 40, y: -25, scale: 3 } })
+    const seen: Array<readonly [string, number]> = []
+    const published: ViewFrame[] = []
+    let moveOnAttached: boolean | null = null
+    view.frames.onViewFrame('tools', (frame) => {
+      seen.push(['tools', frame.revision])
+      if (frame.attached !== moveOnAttached) return
+      moveOnAttached = null
+      view.navigation.panByPx({ x: 10, y: 0 })
+      // Still the frame being dispatched.
+      seen.push(['after the move', view.frames.viewFrame.peek().revision])
+    })
+    view.frames.onViewFrame('overlays', (frame) => {
+      seen.push(['overlays', frame.revision])
+      published.push(frame)
+    })
+
+    moveOnAttached = true
+    view.host.attach(standInDriver(plane))
+    moveOnAttached = false
+    view.host.detach()
+
+    expect(seen).toEqual([
+      ['tools', 1],
+      ['after the move', 1],
+      ['overlays', 1],
+      ['tools', 2],
+      ['overlays', 2],
+      ['tools', 3],
+      ['after the move', 3],
+      ['overlays', 3],
+      ['tools', 4],
+      ['overlays', 4],
+    ])
+    expect(published.map((frame) => frame.attached)).toEqual([true, true, false, false])
+    const x = published.map((frame) => planarCameraOf(frame.view).x)
+    expect(x[1]! - x[0]!).toBeCloseTo(10, 9)
+    // The detached driver starts from the attached camera through lon/lat.
+    expect(x[2]!).toBeCloseTo(x[1]!, 6)
+    expect(x[3]! - x[2]!).toBeCloseTo(10, 9)
+    expect(view.frames.viewFrame.peek()).toBe(published[3])
+    view.dispose()
+  })
 })
