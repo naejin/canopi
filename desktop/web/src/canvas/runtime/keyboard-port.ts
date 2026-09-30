@@ -392,6 +392,27 @@ export function createCanvasKeyboardPort(deps: CanvasKeyboardPortDeps): LegacyCa
   }
 }
 
+/**
+ * The runtime surfaces' keyboard port (spec §1.2a): the surfaces exist before runtime.init creates the interaction session,
+ * so this port reaches the live session's port once there is one and consumes nothing before or after. Its host is the
+ * live port's, or else the map host the composition holds.
+ */
+export function createForwardingCanvasKeyboardPort(
+  current: () => CanvasKeyboardPort | null,
+  host: HTMLElement,
+): CanvasKeyboardPort {
+  return {
+    get host() {
+      return current()?.host ?? host
+    },
+    escapeLayers: () => current()?.escapeLayers() ?? [],
+    escape: (layer) => current()?.escape(layer),
+    describeEscape: () => current()?.describeEscape() ?? null,
+    command: (c) => current()?.command(c) ?? false,
+    keyState: (state) => current()?.keyState(state),
+  }
+}
+
 /** Today's app-wide swallow while a failed cancellation is pending. */
 function quarantine(event: KeyboardEvent): void {
   if (event.cancelable) event.preventDefault()

@@ -15,6 +15,7 @@ import { selectedObjectIds } from '../canvas/session-state'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
+  createTestCanvasKeyboardPort,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
 
@@ -95,6 +96,7 @@ describe('Selection chip', () => {
       commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection } }),
       queries,
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
   })
 
@@ -231,6 +233,7 @@ describe('Selection chip', () => {
       commands: createTestCanvasCommandSurface({ sceneEdits: { selectSameSpecies, clearSelection, renameZone } }),
       queries,
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
     await act(() => render(<><SelectionChip /><RenameZoneDialog /></>, container))
     await select([{ kind: 'zone', id: 'zone-z04' }, { kind: 'zone', id: RECT_ID }])

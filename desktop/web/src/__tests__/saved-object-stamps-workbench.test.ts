@@ -333,6 +333,7 @@ describe('Saved Object Stamp Workbench', () => {
       queries: query,
       commands: {} as never,
       documents: {} as never,
+      keyboard: {} as never,
     })
     const workbench = createSavedObjectStampWorkbench({
       getSavedObjectStamps: async () => [],

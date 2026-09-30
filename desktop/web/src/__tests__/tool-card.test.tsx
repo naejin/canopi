@@ -22,6 +22,7 @@ import {
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
+  createTestCanvasKeyboardPort,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
@@ -75,6 +76,7 @@ describe('Tool card', () => {
       commands: createTestCanvasCommandSurface(),
       queries: createTestCanvasQuerySurface(),
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
     await act(() => render(<ToolCard canvasRef={{ current: null }} />, container))
   })
@@ -141,6 +143,7 @@ describe('Tool card', () => {
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ englishFallbackNames: new Map([['Malus domestica', 'Apple']]) }),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
     })
     selectPlantStampSource({ ...APPLE, common_name: null })
@@ -159,6 +162,7 @@ describe('Tool card', () => {
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ localizedNames: new Map([['Malus domestica', 'Pommier']]) }),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
     })
     selectPlantStampSource(APPLE)
@@ -178,6 +182,7 @@ describe('Tool card', () => {
           },
         }),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
     })
     selectPlantStampSource(APPLE)
@@ -281,6 +286,7 @@ describe('Tool card', () => {
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
       await act(() => render(<ToolCard canvasRef={{ current: map }} stampChooser={StampChooser} />, container))
       await choose('object-stamp', { stamp: { kind: 'plant', name: 'Apple', plants: 1, species: 1 }, stampRotationDeg: 0 })
@@ -311,6 +317,7 @@ describe('Tool card', () => {
         commands: createTestCanvasCommandSurface({ tools: { setTool } }),
         queries: createTestCanvasQuerySurface(),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
       await act(() => render(<ToolCard canvasRef={{ current: null }} stampChooser={StampChooser} />, container))
       await choose('object-stamp')
@@ -379,6 +386,7 @@ describe('Tool card', () => {
           commands: createTestCanvasCommandSurface({ tools: { plantRowSpacing: spacing } }),
           queries: createTestCanvasQuerySurface(),
           documents: createTestCanvasDocumentSurface(),
+          keyboard: createTestCanvasKeyboardPort(),
         })
       })
     })
@@ -491,6 +499,7 @@ describe('Tool card', () => {
         commands: createTestCanvasCommandSurface(),
         queries: createTestCanvasQuerySurface({ viewport: { x: 0, y: 0, scale: 0.01 } }),
         documents: createTestCanvasDocumentSurface(),
+        keyboard: createTestCanvasKeyboardPort(),
       })
     })
     expect(card()).toBeNull()

@@ -10,6 +10,7 @@ import {
   setCurrentCanvasSession,
 } from '../canvas/session'
 import { SceneCanvasRuntime } from '../canvas/runtime/scene-runtime'
+import { createForwardingCanvasKeyboardPort } from '../canvas/runtime/keyboard-port'
 import {
   createDefaultScenePersistedState,
   createSceneGeoFrame,
@@ -78,6 +79,7 @@ function createQuerySurface() {
     getSettledDesignObjects: () => null,
     getLocalizedCommonNames: () => new Map<string, string | null>(),
     getEnglishFallbackNames: () => new Map<string, string>(),
+    subscribePointerWorld: () => () => {},
   } satisfies CanvasQuerySurface
 }
 
@@ -188,6 +190,7 @@ function createCanvasRuntimeSurfaces(runtime: SceneCanvasRuntime): CanvasRuntime
     commands: runtime.commandSurface,
     queries: runtime.querySurface,
     documents: runtime.documentSurface,
+    keyboard: createForwardingCanvasKeyboardPort(() => runtime.keyboardPort, document.createElement('div')),
   }
 }
 

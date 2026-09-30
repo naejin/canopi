@@ -2,7 +2,12 @@ import { signal } from '@preact/signals'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GestureOutcome, ToolHost } from './interaction-ports'
 import type { ToolId } from './interaction-types'
-import { createCanvasKeyboardPort, type LegacyKeyBridge, type LegacyKeySession } from './keyboard-port'
+import {
+  createCanvasKeyboardPort,
+  createForwardingCanvasKeyboardPort,
+  type LegacyKeyBridge,
+  type LegacyKeySession,
+} from './keyboard-port'
 import type { ToolCommand, ToolReply } from './tools/tool'
 import type { ViewFrameSource } from './view/types'
 
@@ -362,5 +367,31 @@ describe('createCanvasKeyboardPort', () => {
     key(f.port, { key: 'Control', ctrlKey: true })
     f.port.releaseKeys()
     expect(f.port.physicalCtrl()).toBe(false)
+  })
+})
+
+describe('createForwardingCanvasKeyboardPort', () => {
+  it('reaches the live session\'s port once there is one and consumes nothing without it', () => {
+    let live: ReturnType<typeof createCanvasKeyboardPort> | null = null
+    const port = createForwardingCanvasKeyboardPort(() => live, host)
+
+    expect(port.host).toBe(host)
+    expect(port.command({ kind: 'confirm' })).toBe(false)
+    expect(port.escapeLayers()).toEqual([])
+    expect(port.describeEscape()).toBeNull()
+    port.keyState({ space: true, mods: { shift: false, ctrl: false, alt: false, meta: false } })
+
+    const f = fixture({ tool: 'polygon', reply: () => 'handled' })
+    live = f.port
+    expect(port.command({ kind: 'confirm' })).toBe(true)
+    expect(f.toolHost.command).toHaveBeenCalledWith({ kind: 'confirm' })
+    expect(port.escapeLayers()).toEqual(['tool'])
+    port.escape('tool')
+    expect(f.legacy.requestTool).toHaveBeenCalledWith('select')
+    port.keyState({ space: true, mods: { shift: false, ctrl: false, alt: false, meta: false } })
+    expect(f.legacy.keyState).toHaveBeenCalledTimes(1)
+
+    live = null
+    expect(port.command({ kind: 'confirm' })).toBe(false)
   })
 })

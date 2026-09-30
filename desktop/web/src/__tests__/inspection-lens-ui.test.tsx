@@ -6,6 +6,7 @@ import type { CanvasInspectionHandle } from '../canvas/inspection'
 import { setCurrentCanvasSession } from '../canvas/session'
 import { InspectionLens } from '../components/canvas/InspectionLens'
 import { createTestCanvasDocumentSurface, createTestCanvasRuntimeSurfaces } from './support/canvas-runtime-surfaces'
+import { createTestCanvasQuerySurface } from './support/canvas-query-surface'
 
 const root = document.createElement('div')
 afterEach(() => { render(null, root); setCurrentCanvasSession(null); root.remove() })
@@ -22,7 +23,9 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   document.body.appendChild(host)
   host.getBoundingClientRect = () => new DOMRect(40, 60, 800, 600)
   const attachInspectionTo = vi.fn(() => view)
-  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ documents: createTestCanvasDocumentSurface({ attachInspectionTo }) }))
+  // The interaction session publishes the pointer's world point over the map (ToolHost.subscribePointerWorld).
+  const queries = createTestCanvasQuerySurface()
+  setCurrentCanvasSession(createTestCanvasRuntimeSurfaces({ queries, documents: createTestCanvasDocumentSurface({ attachInspectionTo }) }))
   await act(async () => render(<InspectionLens canvasRef={{ current: host }} />, root))
   const launcher = root.querySelector<HTMLButtonElement>('button[aria-expanded]')
   expect(launcher).not.toBeNull()
@@ -30,13 +33,12 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(root.textContent).toContain('Menthe verte')
   expect(root.textContent).not.toContain('Hold view')
   expect(root.textContent).not.toContain('Follow pointer')
-  await act(async () => { host.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 140, clientY: 160 })) })
-  expect(view.inspectAtScreenPoint).toHaveBeenLastCalledWith({ x: 100, y: 100 })
-  const canvasControl = document.createElement('button')
-  host.appendChild(canvasControl)
-  canvasControl.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 200 }))
-  host.dispatchEvent(new MouseEvent('pointermove', { buttons: 1, clientX: 200 }))
-  expect(view.inspectAtScreenPoint).toHaveBeenCalledTimes(1)
+  await act(async () => { queries.emitPointerWorld({ x: 100, y: 100 }) })
+  expect(view.inspectAtWorldPoint).toHaveBeenLastCalledWith({ x: 100, y: 100 })
+  // Leaving the map (or moving over the canvas's own buttons, which publish nothing) keeps the lens where it is.
+  queries.emitPointerWorld(null)
+  expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
+  expect(view.inspectAtScreenPoint).not.toHaveBeenCalled()
   expect(view.panBy).not.toHaveBeenCalled()
   expect(view.centerOnCanvas).not.toHaveBeenCalled()
   expect(host.querySelector('[data-inspection-source] rect')?.getAttribute('width')).toBe('43')
@@ -50,6 +52,9 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   }
   await act(async () => { pointer(frame, 'pointerdown', 100); pointer(document, 'pointermove', 80) })
   expect(view.panBy).toHaveBeenLastCalledWith({ x: 2, y: 0 })
+  // While the lens's own view is dragged, the map pointer does not move it.
+  queries.emitPointerWorld({ x: 7, y: 7 })
+  expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
   const calls = vi.mocked(view.panBy).mock.calls.length
   await act(async () => { window.dispatchEvent(new Event('blur')); pointer(document, 'pointermove', 60) })
   expect(view.panBy).toHaveBeenCalledTimes(calls)
@@ -83,8 +88,8 @@ it('opens the optional lens, identifies plants and releases the view on Escape',
   expect(view.panBy).toHaveBeenCalledTimes(calls)
   expect(view.dispose).toHaveBeenCalledTimes(1)
   expect(host.querySelector('[data-inspection-source]')).toBeNull()
-  host.dispatchEvent(new MouseEvent('pointermove', { clientX: 200 }))
-  expect(view.inspectAtScreenPoint).toHaveBeenCalledTimes(1)
+  queries.emitPointerWorld({ x: 200, y: 0 })
+  expect(view.inspectAtWorldPoint).toHaveBeenCalledTimes(1)
   host.remove()
   expect(root.querySelector('button[aria-expanded="false"]')).not.toBeNull()
   expect(document.activeElement).toBe(launcher)

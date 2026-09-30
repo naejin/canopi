@@ -20,6 +20,7 @@ import { createDefaultScenePersistedState } from '../canvas/runtime/scene'
 import { createSessionPlane, type SessionPlane } from '../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './support/geo-design'
 import { createTestViewReadSurface } from './support/canvas-query-surface'
+import { createTestCanvasKeyboardPort } from './support/canvas-runtime-surfaces'
 import { createBrowserAppDataStore, type BrowserStorageAdapter } from '../web/browser-app-data'
 import { createBrowserDesignSessionController, type BrowserDesignFileAdapter } from '../web/browser-design-session'
 import { WebCanvasWorkspace } from '../web/WebCanvasWorkspace'
@@ -861,6 +862,7 @@ function fakeRuntimeComposition(
       commands: fakeCommandSurface(),
       queries: fakeQuerySurface(),
       documents,
+      keyboard: createTestCanvasKeyboardPort(),
     } satisfies CanvasRuntimeSurfaces,
     start: vi.fn(async () => outcome),
     dispose: vi.fn(),
@@ -999,6 +1001,7 @@ function fakeQuerySurface(): CanvasQuerySurface {
     getSettledDesignObjects: vi.fn(() => null),
     getLocalizedCommonNames: vi.fn(() => new Map()),
     getEnglishFallbackNames: vi.fn(() => new Map()),
+    subscribePointerWorld: () => () => {},
   }
 }
 

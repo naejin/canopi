@@ -6,9 +6,11 @@ import type { SceneRuntimePanelTargetAdapter } from '../../canvas/runtime/scene-
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
 } from '../../canvas/runtime/runtime'
+import { createForwardingCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 import {
   SceneCanvasRuntime,
   type SceneCanvasRuntimeOptions,
@@ -83,6 +85,8 @@ interface WorkspaceCompositionRuntime extends WorkspaceActivationRuntime {
   readonly commandSurface: CanvasCommandSurface
   readonly querySurface: CanvasQuerySurface
   readonly documentSurface: CanvasDocumentSurface
+  /** The live interaction session's keyboard port, once init created it (null before and after). */
+  readonly keyboardPort?: CanvasKeyboardPort | null
 }
 
 interface WorkspaceCompositionLifecycle extends WorkspaceGenerationLifecycle {
@@ -169,6 +173,8 @@ export function createWorkspaceRuntimeComposition(
     commands: runtime.commandSurface,
     queries: runtime.querySurface,
     documents,
+    // A forwarding port: the surfaces exist before runtime.init creates the session (spec §1.2a).
+    keyboard: createForwardingCanvasKeyboardPort(() => runtime.keyboardPort ?? null, options.container),
   }
   let startResult: Promise<WorkspaceRuntimeStartOutcome> | null = null
   let cancelledStartResult: Promise<WorkspaceRuntimeStartOutcome> | null = null

@@ -89,24 +89,22 @@ function InspectionPanel({ id, documents, queries, canvasRef, onClose }: {
       document.addEventListener('pointercancel', end)
       window.addEventListener('blur', stop)
     }
-    const host = canvasRef.current
-    const inspectPointer = (event: PointerEvent) => {
-      if (drag || event.buttons !== 0 || !host) return
-      if (event.target instanceof Element && event.target.closest('button, input, select, textarea, [contenteditable="true"], [data-preserve-overlays="true"]')) return
-      const bounds = host.getBoundingClientRect()
-      view.inspectAtScreenPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
-    }
-    host?.addEventListener('pointermove', inspectPointer, true)
+    // The pointer's world point over the map (the interaction session's hovers, not over the canvas's own buttons and
+    // fields); the lens keeps its point when the pointer leaves or presses.
+    const stopInspecting = queries.subscribePointerWorld((point) => {
+      if (drag || !point) return
+      view.inspectAtWorldPoint(point)
+    })
     frame?.addEventListener('pointerdown', start)
     frame?.addEventListener('lostpointercapture', end)
     return () => {
       stop()
-      host?.removeEventListener('pointermove', inspectPointer, true)
+      stopInspecting()
       frame?.removeEventListener('pointerdown', start)
       frame?.removeEventListener('lostpointercapture', end)
       handle.value = null; view.dispose()
     }
-  }, [documents, canvasRef])
+  }, [documents, queries])
   const state = handle.value?.state.value
   const expandLabel = t(expanded ? 'canvas.inspection.compact' : 'canvas.inspection.expand')
   const viewport = queries.viewport.value.viewport
