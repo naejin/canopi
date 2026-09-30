@@ -8,7 +8,9 @@
 // It implements today's input (LEGACY_BINDINGS, spec §2.2 and the LEGACY columns of §5): one pointer session at a time;
 // the right button inert and the native contextmenu opening the menu at once (except in overview and for a keyboard
 // menu's echo); a middle drag, a Space press, overview and the Pan tool pan (a primary press on a handle drags the handle
-// first); wheels zoom or pan by the pointing-device setting; no touch gestures, pen barrel or trackpad gesture events.
+// first), a pointer pan carrying the pointer's point and a Pan-tool press ending with cancel('navigate') after its drag;
+// a button-less move over the text entry, a handle or the Unlock affordance emits nothing; wheels zoom or pan by the
+// pointing-device setting; no touch gestures, pen barrel or trackpad gesture events.
 // The other binding values arrive with their constants: the trackpad gestures and Shift+middle rotation in phase 1, the
 // secondary drag, the nested sub-session and the menu on release in phase 2, touch gestures and the long press in phase 3.
 
@@ -32,7 +34,8 @@ export interface PointerSession {
   readonly pressTarget: PressTarget
   /** The pan's source while `mode` is 'pan'. */
   readonly navigation: NavigationSource | null
-  /** True when a `press` reached the host, so a release within slop owes it a `tap` (the Pan tool's press and tap). */
+  /** True when a `press` reached the host, which owes it one end: a `tap` within slop, else `cancel('navigate')` for a pan
+   *  (the Pan tool's press). */
   readonly pressed: boolean
   /** The platform's pointerdown `detail`, as delivered (never counted here under LEGACY). */
   readonly clickCount: number
@@ -189,19 +192,14 @@ function down(step: Step, input: RawOf<'down'>, config: RecogniserConfig): void 
     pressed,
   })
   if (pressed) step.gestures.push(pressOf(input, pressTarget))
-  if (navigation) step.gestures.push({ kind: 'pan', phase: 'start', deltaPx: ZERO, source: navigation })
+  if (navigation) step.gestures.push({ kind: 'pan', phase: 'start', deltaPx: ZERO, source: navigation, at: input.at })
 }
 
 function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void {
   const session = step.state.sessions.get(input.id)
   if (!session) {
     if (step.state.sessions.size > 0) return
-    // No session: a hover wherever the pointer is (buttons or not); over the canvas's own chrome, the note editor or a
-    // handle the passive hover ends. Off the map it stays a hover: the tool's hover runs and the host clears its own.
-    const overOwned = input.target.kind === 'owned-chrome' || input.target.kind === 'owned-text' || input.target.kind === 'handle'
-    step.gestures.push(overOwned
-      ? { kind: 'hover-end' }
-      : { kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods, target: input.target })
+    hover(step, input, config)
     return
   }
 
@@ -211,7 +209,7 @@ function move(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void 
     const deltaPx = { x: input.at.x - session.last.x, y: input.at.y - session.last.y }
     putSession(step, { ...session, last: input.at, slopPassed })
     if ((deltaPx.x !== 0 || deltaPx.y !== 0) && session.navigation) {
-      step.gestures.push({ kind: 'pan', phase: 'move', deltaPx, source: session.navigation })
+      step.gestures.push({ kind: 'pan', phase: 'move', deltaPx, source: session.navigation, at: input.at })
     }
     return
   }
@@ -247,8 +245,9 @@ function up(step: Step, input: RawOf<'up'>): void {
   }
   dropSession(step, session)
   if (session.mode === 'pan') {
-    if (session.navigation) step.gestures.push({ kind: 'pan', phase: 'end', deltaPx: ZERO, source: session.navigation })
-    if (session.pressed && !session.slopPassed) step.gestures.push(tapOf(session, input))
+    if (session.navigation) step.gestures.push(panEndOf(session))
+    // A Pan-tool press the host saw ends once: a tap after a still click, or cancel('navigate') after its drag panned.
+    if (session.pressed) step.gestures.push(session.slopPassed ? { kind: 'cancel', reason: 'navigate' } : tapOf(session, input))
     return
   }
   if (session.mode === 'pending') {
@@ -329,6 +328,25 @@ function wheel(step: Step, input: RawOf<'wheel'>): void {
   step.gestures.push({ kind: 'pan', phase: 'move', deltaPx: withoutNegativeZero(deltaPx), source: 'wheel' })
 }
 
+/**
+ * A move with no live session (buttons or not) is a hover wherever the pointer is: off the map the tool's hover still
+ * runs and the host clears its own. Over the canvas's own things the bindings decide (spec §2.2 "Hover"): under 'legacy'
+ * the text entry and a handle emit nothing (today's early return keeps the passive hover, the tooltip, the Unlock
+ * affordance and the Place plants preview) while the map's other buttons and fields hover what is beneath them; under
+ * 'end' all three end the hover. The Unlock affordance keeps the hover under both.
+ */
+function hover(step: Step, input: RawOf<'move'>, config: RecogniserConfig): void {
+  const { target } = input
+  if (target.kind === 'owned-chrome' && target.lockedAffordance) return
+  const owned = target.kind === 'owned-text' || target.kind === 'handle'
+  if (config.bindings.ownedHover === 'end' && (owned || target.kind === 'owned-chrome')) {
+    step.gestures.push({ kind: 'hover-end' })
+    return
+  }
+  if (owned) return
+  step.gestures.push({ kind: 'hover', at: input.at, pointer: input.pointer, mods: input.mods, target })
+}
+
 function nativeContextMenu(step: Step, input: RawOf<'native-contextmenu'>): void {
   // The note editor and anything outside the map keep the native menu (copy and paste).
   if (input.target.kind === 'owned-text' || input.target.kind === 'foreign' || input.target.kind === 'ruler') return
@@ -355,6 +373,11 @@ function pressOf(input: RawOf<'down'>, target: PressTarget): Gesture {
   return { kind: 'press', id: input.id, at: input.at, pointer: input.pointer, mods: input.mods, clickCount: input.detail, target }
 }
 
+/** A pointer pan's end, where the pointer last was: the router moves the host's resting pointer there. */
+function panEndOf(session: PointerSession): Gesture {
+  return { kind: 'pan', phase: 'end', deltaPx: ZERO, source: session.navigation!, at: session.last }
+}
+
 function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
   return {
     kind: 'tap',
@@ -370,9 +393,7 @@ function tapOf(session: PointerSession, input: RawOf<'up'>): Gesture {
 /** Ends a session without completing it: a pan ends where it is, then the host hears the cancel. */
 function endSession(step: Step, session: PointerSession, reason: CancelReason): void {
   dropSession(step, session)
-  if (session.mode === 'pan' && session.navigation) {
-    step.gestures.push({ kind: 'pan', phase: 'end', deltaPx: ZERO, source: session.navigation })
-  }
+  if (session.mode === 'pan' && session.navigation) step.gestures.push(panEndOf(session))
   step.gestures.push({ kind: 'cancel', reason })
 }
 

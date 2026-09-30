@@ -3,6 +3,7 @@ import { setCanvasTool } from '../../canvas/session-state'
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
   CanvasRuntimeSurfaces,
 } from '../../canvas/runtime/runtime'
@@ -16,16 +17,31 @@ interface TestCanvasRuntimeSurfaceOptions {
   readonly commands?: CanvasCommandSurface
   readonly queries?: CanvasQuerySurface
   readonly documents?: CanvasDocumentSurface
+  readonly keyboard?: CanvasKeyboardPort
 }
 
 export function createTestCanvasRuntimeSurfaces({
   commands = createTestCanvasCommandSurface(),
   queries = createTestCanvasQuerySurface(),
   documents = createTestCanvasDocumentSurface(),
+  keyboard = createTestCanvasKeyboardPort(),
 }: TestCanvasRuntimeSurfaceOptions = {}): CanvasRuntimeSurfaces {
   // A spread fake keeps its original `view`: it follows the fake's replaced `viewport` and `sessionPlane` from here.
   bindTestViewToSurface(queries)
-  return { commands, queries, documents }
+  return { commands, queries, documents, keyboard }
+}
+
+/** A keyboard port that consumes nothing: the runtime surfaces' port before an interaction session exists. */
+export function createTestCanvasKeyboardPort(overrides: Partial<CanvasKeyboardPort> = {}): CanvasKeyboardPort {
+  return {
+    host: document.createElement('div'),
+    escapeLayers: () => [],
+    escape: () => {},
+    describeEscape: () => null,
+    command: () => false,
+    keyState: () => {},
+    ...overrides,
+  }
 }
 
 export function createTestCanvasCommandSurface(

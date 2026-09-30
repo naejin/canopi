@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
+import { pressRuler } from '../canvas/runtime/chrome/rulers'
 import { SceneRuntimeChromeCoordinator } from '../canvas/runtime/scene-runtime/chrome-coordinator'
 
 function cameraSnapshot(): CameraViewportSnapshot {
@@ -76,13 +77,15 @@ describe('SceneRuntimeChromeCoordinator', () => {
       guides: [],
     })
 
-    firstHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]')
-      ?.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
+    // The DOM input source's ruler port: the pressed ruler's guide port, dragged, then handed the release in camera
+    // screen px (client 180, 150 on the map host at 100, 50).
+    const firstPress = pressRuler(firstHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="horizontal"]'))
+    firstPress?.drag()
     expect(firstHost.style.cursor).toBe('s-resize')
 
     coordinator.attach(secondHost, secondGuideCreate)
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
+    firstPress?.end()
+    firstPress?.createGuideAt('h', { x: 80, y: 100 })
 
     expect(firstHost.style.cursor).toBe('crosshair')
     expect(firstHost.childElementCount).toBe(0)
@@ -95,9 +98,9 @@ describe('SceneRuntimeChromeCoordinator', () => {
       guidesVisible: true,
       guides: [],
     })
-    secondHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="vertical"]')
-      ?.dispatchEvent(new MouseEvent('mousedown', { clientX: 110, clientY: 100 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 200, clientY: 150 }))
+    const secondPress = pressRuler(secondHost.querySelector<HTMLCanvasElement>('[data-ruler-overlay-part="vertical"]'))
+    secondPress?.end()
+    secondPress?.createGuideAt('v', { x: 100, y: 100 })
 
     expect(secondGuideCreate).toHaveBeenCalledWith('v', 45)
     coordinator.destroy()

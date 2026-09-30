@@ -249,10 +249,10 @@ export interface CanvasQuerySurface {
    */
   getEnglishFallbackNames(): ReadonlyMap<string, string>
   /**
-   * Forwards ToolHost.subscribePointerWorld (§1.1a); the inspection lens reads it instead of its own map-host pointermove.
-   * Optional until 0B, which implements it (query-surface.ts, interaction-session.ts) and makes it required.
+   * Forwards ToolHost.subscribePointerWorld (§1.1a): the pointer's world point over the map, null when it leaves. The
+   * inspection lens reads it instead of its own map-host pointermove. Before the interaction session exists it hears nothing.
    */
-  subscribePointerWorld?(listener: (point: WorldPoint | null) => void): () => void
+  subscribePointerWorld(listener: (point: WorldPoint | null) => void): () => void
 }
 
 export interface CanvasDocumentReplacementReceipt {
@@ -334,21 +334,19 @@ export interface CanvasKeyboardPort {
   readonly host: HTMLElement
 }
 
-/** The router reaches the live session's port here. 0B (Input) implements it in keyboard-port.ts, exposes it from
- *  workspace-runtime-composition.ts and the test supports, and makes it required (the 0B shape: spec §1.6). */
+/** The router reaches the live session's port here: keyboard-port.ts implements it, and workspace-runtime-composition.ts
+ *  exposes a forwarding port that reaches the session's once it exists (spec §1.2a, §1.6). */
 export interface CanvasRuntimeSurfaces {
   readonly commands: CanvasCommandSurface
   readonly queries: CanvasQuerySurface
   readonly documents: CanvasDocumentSurface
-  // Seams shape (seams commit until 0B): `readonly keyboard?: CanvasKeyboardPort`, optional so no object literal or test
-  // fake changes; CanvasQuerySurface.subscribePointerWorld (§1.1a) is likewise optional until 0B (plan §4 Seams, "Owns").
-  readonly keyboard?: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort (Keyboard, 0C)
+  readonly keyboard: CanvasKeyboardPort          // canvas/session.ts exports currentCanvasKeyboardPort (Keyboard, 0C)
 }
 
 export type CanvasKeyCommand =
   | { kind: 'confirm' } | { kind: 'remove-last' } | { kind: 'edit-text' } | { kind: 'delete-handle' }
   | { kind: 'rotate-held'; stepDeg: 15 | -15 }
-  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge, then panByPx on 'pass' with nothing selected
+  | { kind: 'arrow'; dir: 'up' | 'down' | 'left' | 'right'; large: boolean }   // keyboard-port.ts: ToolHost.nudge; 'handled' and 'refused' take it, on 'pass' panByPx with nothing selected
   | { kind: 'rotate-view'; direction: 1 | -1 } | { kind: 'reset-north' }
   | { kind: 'zoom-step'; direction: 1 | -1 }                                    // plain + / − with map focus
   | { kind: 'context-menu' }                                                    // Menu key, Shift+F10

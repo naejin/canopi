@@ -27,6 +27,11 @@ import { getDesignObjectSelectionModel } from './scene-runtime/selection'
 import type { SettledSceneReader } from './scene-runtime/transactions'
 import { createViewReadSurface } from './view/frame-source'
 import type { ViewReadSurface } from './view/read-surface'
+import type { WorldPoint } from './view/types'
+
+type PointerWorldListener = (point: WorldPoint | null) => void
+/** The interaction session's ToolHost.subscribePointerWorld. */
+export type PointerWorldSource = (listener: PointerWorldListener) => () => void
 
 interface SceneCanvasQuerySurfaceOptions {
   readonly revision: CanvasQueryRevision
@@ -56,8 +61,18 @@ export function createSceneCanvasQuerySurface(
   return new SceneCanvasQueryRole(options)
 }
 
+/**
+ * The query surface outlives interaction sessions (the map can unmount and mount again): subscribePointerWorld listeners
+ * stay with the surface, and scene-runtime.ts binds the live session's ToolHost here (null when it ends).
+ */
+export function bindQuerySurfacePointerWorld(surface: CanvasQuerySurface, source: PointerWorldSource | null): void {
+  if (surface instanceof SceneCanvasQueryRole) surface.bindPointerWorld(source)
+}
+
 class SceneCanvasQueryRole implements CanvasQuerySurface {
   readonly view: ViewReadSurface
+  private readonly pointerWorldListeners = new Set<PointerWorldListener>()
+  private stopPointerWorld: (() => void) | null = null
   private readonly readViewScale: () => number
 
   constructor(private readonly options: SceneCanvasQuerySurfaceOptions) {
@@ -65,6 +80,20 @@ class SceneCanvasQueryRole implements CanvasQuerySurface {
     // The frames place the Scene's metres; their ground is read on the Scene's plane.
     this.view = createViewReadSurface(frames, () => options.sceneStore.sessionPlane)
     this.readViewScale = options.readViewScale ?? (() => frames.viewFrame.peek().view.pixelsPerMetre)
+  }
+
+  subscribePointerWorld(listener: PointerWorldListener): () => void {
+    this.pointerWorldListeners.add(listener)
+    return () => {
+      this.pointerWorldListeners.delete(listener)
+    }
+  }
+
+  bindPointerWorld(source: PointerWorldSource | null): void {
+    this.stopPointerWorld?.()
+    this.stopPointerWorld = source?.((point) => {
+      for (const listener of [...this.pointerWorldListeners]) listener(point)
+    }) ?? null
   }
 
   get revision(): CanvasQueryRevision { return this.options.revision }

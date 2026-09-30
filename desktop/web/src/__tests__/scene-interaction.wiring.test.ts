@@ -13,7 +13,7 @@ import {
   createSceneInteractionSession,
   type SceneInteractionSession,
   type SceneInteractionSessionDeps,
-} from '../canvas/runtime/scene-interaction'
+} from '../canvas/runtime/interaction-session'
 import type { SettledSceneReader } from '../canvas/runtime/scene-runtime/transactions'
 import {
   createSceneInteractionEventHarness,
@@ -207,48 +207,6 @@ describe('SceneInteractionSession', () => {
     expect(dataTransfer.dropEffect).toBe('none')
     expect(container.querySelector('[data-saved-object-stamp-ghost]')).toBeNull()
     session.dispose()
-  })
-
-  it('installs and removes pointer-cancellation and focus-loss listeners exactly once', () => {
-    events.dispose()
-    events = createSceneInteractionEventHarness(container, { trackListeners: true })
-    const deps = createInteractionDeps(container, store, camera)
-    const session = createTestSession(deps)
-
-    for (const eventName of [
-      'pointerdown',
-      'pointerleave',
-      'lostpointercapture',
-      'contextmenu',
-      'wheel',
-      'dragover',
-      'dragleave',
-      'drop',
-    ]) {
-      expect(events.listenerLog?.containerAdds(eventName)).toHaveLength(1)
-    }
-    for (const eventName of ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'blur']) {
-      expect(events.listenerLog?.windowAdds(eventName)).toHaveLength(1)
-    }
-
-    session.dispose()
-    session.dispose()
-
-    for (const eventName of [
-      'pointerdown',
-      'pointerleave',
-      'lostpointercapture',
-      'contextmenu',
-      'wheel',
-      'dragover',
-      'dragleave',
-      'drop',
-    ]) {
-      expect(events.listenerLog?.containerRemoves(eventName)).toHaveLength(1)
-    }
-    for (const eventName of ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'keyup', 'blur']) {
-      expect(events.listenerLog?.windowRemoves(eventName)).toHaveLength(1)
-    }
   })
 
   it('continues Session teardown after one owned resource fails', () => {

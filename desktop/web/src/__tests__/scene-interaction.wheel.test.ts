@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CameraController } from '../canvas/runtime/camera'
 import { SceneStore } from '../canvas/runtime/scene'
-import type { SceneInteractionSessionDeps } from '../canvas/runtime/scene-interaction'
+import type { SceneInteractionSessionDeps } from '../canvas/runtime/interaction-session'
 import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
 import {
   contextMenuHost,

@@ -9,7 +9,7 @@ import { SceneStore } from '../canvas/runtime/scene'
 import type {
   SceneInteractionSession,
   SceneInteractionSessionDeps,
-} from '../canvas/runtime/scene-interaction'
+} from '../canvas/runtime/interaction-session'
 import type { SceneInteractionEventHarness } from './support/scene-interaction-events'
 import {
   contextMenuHost,

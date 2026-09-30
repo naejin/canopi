@@ -25,14 +25,42 @@ export interface RulerOverlayOptions {
 }
 
 /**
- * Draws the rulers and creates the guides dragged out of them. `createGuideAt` is the RulerGuidePort
- * (interaction-ports.ts) that the DOM input source and the ToolHost take: today's gutter, origin and visibility checks.
+ * Draws the rulers and creates the guides dragged out of them. The overlay listens to nothing (policy P6): the DOM input
+ * source takes ruler presses, and `pressRuler` finds the pressed ruler's overlay. `createGuideAt` is today's gutter, origin
+ * and visibility checks.
  */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
   refreshTheme(): void
   createGuideAt(axis: RulerAxis, at: ScreenPoint): void
   destroy(): void
+}
+
+/**
+ * One press on a ruler: its overlay's guide port for that press, the RulerGuidePort (interaction-ports.ts) the session
+ * forwards the input pipeline's to. A press made before the rulers hide, go to overview or are destroyed lands no guide.
+ */
+export interface RulerPress {
+  readonly axis: RulerAxis
+  /** The guide released at `at`, in CSS px of the camera's screen (the map host), unless the rulers hid since the press. */
+  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
+  /** The pointer moved during the drag: today's resize cursor on the overlay, until the drag ends. */
+  drag(): void
+  /** The drag is over: the overlay's cursor comes back. Idempotent; the overlay ends it itself when the rulers hide. */
+  end(): void
+}
+
+/** Each ruler canvas's overlay, so a press found by the DOM input source reaches the overlay that drew that ruler. */
+const OVERLAY_OF_RULER = new WeakMap<Element, HtmlRulerOverlay>()
+
+/** A press on the ruler under `target` (the element the pointer went down on), or null when it is no live overlay's ruler. */
+export function pressRuler(target: EventTarget | null): RulerPress | null {
+  const element = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null)
+  const ruler = element?.closest('[data-canvas-ruler]') ?? null
+  const overlay = ruler ? OVERLAY_OF_RULER.get(ruler) : undefined
+  const axis = ruler?.getAttribute('data-canvas-ruler')
+  if (!overlay || (axis !== 'h' && axis !== 'v')) return null
+  return overlay.press(axis)
 }
 
 interface RulerPalette {
@@ -62,16 +90,12 @@ class HtmlRulerOverlay implements RulerOverlay {
   private readonly _corner = document.createElement('div')
   private _snapshot: RulerOverlaySnapshot | null = null
   private _palette = DEFAULT_PALETTE
-  private _cancelActiveDrag: (() => void) | null = null
+  /** The press whose drag cursor shows; a new press, a hide or destroy ends it (today's active drag). */
+  private _activePress: RulerPress | null = null
+  /** Bumped each time the rulers hide and at destroy: a press made before lands no guide. */
+  private _hides = 0
+  private _shown = false
   private _destroyed = false
-
-  private readonly _onHorizontalMouseDown = (event: MouseEvent): void => {
-    this._startDrag('h', event)
-  }
-
-  private readonly _onVerticalMouseDown = (event: MouseEvent): void => {
-    this._startDrag('v', event)
-  }
 
   constructor(
     private readonly _container: HTMLElement,
@@ -82,15 +106,14 @@ class HtmlRulerOverlay implements RulerOverlay {
       this._container.appendChild(this._horizontalCanvas)
       this._container.appendChild(this._verticalCanvas)
       this._container.appendChild(this._corner)
-      this._horizontalCanvas.addEventListener('mousedown', this._onHorizontalMouseDown)
-      this._verticalCanvas.addEventListener('mousedown', this._onVerticalMouseDown)
       this.refreshTheme()
     } catch (error) {
-      this._removeRootListeners()
       this._removeParts()
       this._destroyed = true
       throw error
     }
+    OVERLAY_OF_RULER.set(this._horizontalCanvas, this)
+    OVERLAY_OF_RULER.set(this._verticalCanvas, this)
   }
 
   update(snapshot: RulerOverlaySnapshot): void {
@@ -98,14 +121,17 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._snapshot = snapshot
 
     const siteMode = snapshot.camera.mode === 'site'
-    const rulerDisplay = snapshot.chromeVisible && snapshot.rulersVisible && siteMode ? 'block' : 'none'
+    const shown = snapshot.chromeVisible && snapshot.rulersVisible && siteMode
+    const rulerDisplay = shown ? 'block' : 'none'
     this._horizontalCanvas.style.display = rulerDisplay
     this._verticalCanvas.style.display = rulerDisplay
     this._corner.style.display = rulerDisplay
 
-    if (!snapshot.chromeVisible || !snapshot.rulersVisible || !siteMode) {
-      this._cancelActiveDrag?.()
+    if (!shown) {
+      if (this._shown) this._hides += 1
+      this._activePress?.end()
     }
+    this._shown = shown
     if (!snapshot.chromeVisible) return
 
     if (siteMode) {
@@ -121,13 +147,13 @@ class HtmlRulerOverlay implements RulerOverlay {
   }
 
   /**
-   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden or
-   * inside the ruler's own gutter; otherwise a guide at that world coordinate of the latest camera.
+   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden or in
+   * overview, or inside the ruler's own gutter; otherwise a guide at that world coordinate of the latest camera.
    */
   createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
     if (this._destroyed) return
     const snapshot = this._snapshot
-    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible) return
+    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible || snapshot.camera.mode !== 'site') return
     const origin = this._overlayOrigin()
     const screenX = at.x
     const screenY = at.y
@@ -140,18 +166,46 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
   }
 
+  /** Today's drag start: the previous drag ends, and this one remembers the cursor to give back. */
+  press(axis: RulerAxis): RulerPress | null {
+    if (this._destroyed) return null
+    this._activePress?.end()
+    const hides = this._hides
+    const previousCursor = this._container.style.cursor
+    let active = true
+    const press: RulerPress = {
+      axis,
+      createGuideAt: (guideAxis, at) => {
+        if (this._hides === hides) this.createGuideAt(guideAxis, at)
+      },
+      drag: () => {
+        if (active) this._container.style.cursor = axis === 'h' ? 's-resize' : 'e-resize'
+      },
+      end: () => {
+        if (!active) return
+        active = false
+        this._container.style.cursor = previousCursor
+        if (this._activePress === press) this._activePress = null
+      },
+    }
+    this._activePress = press
+    return press
+  }
+
   destroy(): void {
     if (this._destroyed) return
     this._destroyed = true
-    this._cancelActiveDrag?.()
-    this._removeRootListeners()
+    this._hides += 1
+    this._activePress?.end()
+    OVERLAY_OF_RULER.delete(this._horizontalCanvas)
+    OVERLAY_OF_RULER.delete(this._verticalCanvas)
     this._removeParts()
     this._snapshot = null
   }
 
   private _configureParts(): void {
     this._horizontalCanvas.dataset.rulerOverlayPart = 'horizontal'
-    // The DOM input source classifies a press here as a ruler target (spec §1.2).
+    // The DOM input source classifies a press here as a ruler target (spec §1.2), and pressRuler finds this overlay.
     this._horizontalCanvas.dataset.canvasRuler = 'h'
     this._horizontalCanvas.style.cssText = `
       position: absolute;
@@ -196,65 +250,12 @@ class HtmlRulerOverlay implements RulerOverlay {
     `
   }
 
-  private _startDrag(axis: RulerAxis, event: MouseEvent): void {
-    if (this._destroyed) return
-    event.preventDefault()
-    this._cancelActiveDrag?.()
-
-    const ownerDocument = this._container.ownerDocument
-    const ownerWindow = ownerDocument.defaultView ?? window
-    const previousCursor = this._container.style.cursor
-    let active = true
-
-    const cancel = (): void => {
-      if (!active) return
-      active = false
-      ownerDocument.removeEventListener('mousemove', onMouseMove)
-      ownerDocument.removeEventListener('mouseup', onMouseUp)
-      ownerWindow.removeEventListener('blur', onBlur)
-      this._container.style.cursor = previousCursor
-      if (this._cancelActiveDrag === cancel) this._cancelActiveDrag = null
-    }
-
-    const onMouseMove = (): void => {
-      if (!active) return
-      this._container.style.cursor = axis === 'h' ? 's-resize' : 'e-resize'
-    }
-
-    const onMouseUp = (upEvent: MouseEvent): void => {
-      cancel()
-      if (this._destroyed) return
-      const rect = this._container.getBoundingClientRect()
-      const origin = this._overlayOrigin()
-      this.createGuideAt(axis, { x: upEvent.clientX - rect.left + origin.x, y: upEvent.clientY - rect.top + origin.y })
-    }
-
-    const onBlur = (): void => {
-      cancel()
-    }
-
-    this._cancelActiveDrag = cancel
-    try {
-      ownerDocument.addEventListener('mousemove', onMouseMove)
-      ownerDocument.addEventListener('mouseup', onMouseUp)
-      ownerWindow.addEventListener('blur', onBlur)
-    } catch (error) {
-      cancel()
-      throw error
-    }
-  }
-
   /**
    * Where the overlay sits inside the canvas, in camera screen pixels: the
    * workspace insets it below the floating title bar.
    */
   private _overlayOrigin(): RulerOverlayOrigin {
     return { x: this._container.offsetLeft, y: this._container.offsetTop }
-  }
-
-  private _removeRootListeners(): void {
-    this._horizontalCanvas.removeEventListener('mousedown', this._onHorizontalMouseDown)
-    this._verticalCanvas.removeEventListener('mousedown', this._onVerticalMouseDown)
   }
 
   private _removeParts(): void {

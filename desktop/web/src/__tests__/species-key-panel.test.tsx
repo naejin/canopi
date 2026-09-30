@@ -7,6 +7,7 @@ import { SpeciesFocusChip } from '../components/canvas/SpeciesFocusChip'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
+  createTestCanvasKeyboardPort,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
 import { makeSpeciesListItem } from './support/species-catalog-workbench'
@@ -101,6 +102,7 @@ describe('Plants in this Design', () => {
       commands,
       queries,
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
   })
 
@@ -296,6 +298,7 @@ describe('Plants in this Design', () => {
       commands,
       queries: createTestCanvasQuerySurface(),
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
     await act(() => render(<SpeciesKeyPanel />, container))
     expect(container.textContent).toContain('No plants yet.')
@@ -423,7 +426,7 @@ describe('Plants in this Design', () => {
     replaceCurrentDesignState(emptyDesign(), null, 'Display')
     readPlanningViewState().plantsDisplayOpen.value = true
     queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 70, inView: 282 }) }
-    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface(), keyboard: createTestCanvasKeyboardPort() })
     await act(() => render(<SpeciesKeyPanel />, container))
     expect(container.textContent).toContain('Names shown for 70 of 282 plants in view')
     await act(() => radioNamed(container.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Labels"]')!, 'Codes').click())
@@ -440,7 +443,7 @@ describe('Plants in this Design', () => {
     let coverage = { labelled: 0, inView: 282 }
     queries = { ...queries, getPlantLabelCoverage: () => coverage }
     commands = { ...commands, viewport: { ...commands.viewport, zoomIn, zoomBy } }
-    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+    setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface(), keyboard: createTestCanvasKeyboardPort() })
     await act(() => render(<SpeciesKeyPanel />, container))
 
     expect(container.textContent).toContain('Names shown for 0 of 282 plants in view')
@@ -472,7 +475,7 @@ describe('Plants in this Design', () => {
     try {
       replaceCurrentDesignState(emptyDesign(), null, 'Display')
       queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 70, inView: 282 }) }
-      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface(), keyboard: createTestCanvasKeyboardPort() })
       await act(() => render(<PlantLabelsChip />, container))
       expect(container.querySelector('[data-plant-labels-chip]')).toBeNull()
       await act(() => setPlantLabels('codes'))
@@ -482,7 +485,7 @@ describe('Plants in this Design', () => {
 
       // With none labelled at this zoom, the chip offers to zoom in.
       queries = { ...queries, getPlantLabelCoverage: () => ({ labelled: 0, inView: 282 }) }
-      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface() })
+      setCanvasRuntimeSurfaces({ commands, queries, documents: createTestCanvasDocumentSurface(), keyboard: createTestCanvasKeyboardPort() })
       await act(() => setPlantLabels('names'))
       expect(container.querySelector('[data-plant-labels-chip]')?.textContent)
         .toBe('Names shown for 0 of 282 plants in viewZoom in to see names')

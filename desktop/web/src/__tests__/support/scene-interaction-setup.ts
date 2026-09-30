@@ -19,6 +19,7 @@ import { setCanvasRuntimeSurfaces } from '../../canvas/session'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
+  createTestCanvasKeyboardPort,
 } from './canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface } from './canvas-query-surface'
 import { snapToGridEnabled, snapToGuidesEnabled } from '../../app/canvas-settings/signals'
@@ -758,6 +759,7 @@ export function installSceneInteractionFixture(
       }),
       queries: createTestCanvasQuerySurface(),
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
     toolCardHost = document.createElement('div')
     document.body.appendChild(toolCardHost)

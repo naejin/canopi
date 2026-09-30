@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_BINDINGS } from './bindings'
+import { LEGACY_BINDINGS, type Bindings } from './bindings'
 import type { Gesture } from './gestures'
 import {
   FOREIGN,
@@ -8,6 +8,8 @@ import {
   OWNED_TEXT,
   ROTATE_HANDLE,
   SEQUENCES,
+  SURFACE,
+  UNLOCK_AFFORDANCE,
   WINDOWS,
   blur,
   configure,
@@ -21,10 +23,13 @@ import {
   runSequence,
   seq,
   up,
+  wheel,
   type Sequence,
 } from './__fixtures__/sequences'
 
 const run = (sequence: Sequence) => runSequence(sequence, LEGACY_BINDINGS)
+/** LEGACY with phase 2's hover rule: a button-less move over owned chrome, the text entry or a handle ends the hover. */
+const OWNED_HOVER_ENDS: Bindings = { ...LEGACY_BINDINGS, ownedHover: 'end' }
 
 /** Gesture kinds, pans with their phase. */
 function kinds(gestures: readonly Gesture[]): string[] {
@@ -441,9 +446,9 @@ describe('recognise under LEGACY_BINDINGS: 5.7 middle button and Space', () => {
   it('G9 Shift+middle-drag: a pan under LEGACY', () => {
     const result = run(SEQUENCES.G9)
     expect(pansOf(result.gestures)).toEqual([
-      { kind: 'pan', phase: 'start', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag' },
-      { kind: 'pan', phase: 'move', deltaPx: { x: 20, y: 0 }, source: 'auxiliary-drag' },
-      { kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag' },
+      { kind: 'pan', phase: 'start', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 100, y: 100 } },
+      { kind: 'pan', phase: 'move', deltaPx: { x: 20, y: 0 }, source: 'auxiliary-drag', at: { x: 120, y: 100 } },
+      { kind: 'pan', phase: 'end', deltaPx: { x: 0, y: 0 }, source: 'auxiliary-drag', at: { x: 120, y: 100 } },
     ])
   })
 
@@ -458,8 +463,10 @@ describe('recognise under LEGACY_BINDINGS: 5.9 precedence', () => {
     expectNoNavigation(select.gestures)
     expect(kinds(select.gestures)).toEqual(['press', 'drag-start', 'drag-move', 'drag-move', 'drag-end'])
     const hand = run(SEQUENCES.J1_HAND)
-    expect(kinds(hand.gestures)).toEqual(['press', 'pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end'])
+    // The Pan tool's press reaches the host; after its drag panned, the press ends with cancel('navigate').
+    expect(kinds(hand.gestures)).toEqual(['press', 'pan:start', 'pan:move', 'pan:move', 'pan:move', 'pan:end', 'cancel'])
     expect(pansOf(hand.gestures)[0]!.source).toBe('primary-drag')
+    expect(hand.gestures.at(-1)).toEqual({ kind: 'cancel', reason: 'navigate' })
   })
 
   it('J2 Shift+drag is not box zoom: an additive band', () => {
@@ -517,15 +524,64 @@ describe('recognise: sessions', () => {
     ])
   })
 
-  it('a move over owned chrome ends the hover', () => {
+  it('under LEGACY a move over the text entry, a handle or the Unlock affordance keeps the hover', () => {
+    // Today's early return (scene-interaction.ts _handlePointerMove): the passive hover, the tooltip, the Unlock affordance
+    // and the Place plants preview stay as they were.
     const result = run(seq('owned targets', WINDOWS, [
+      move(50, 60),
+      move(54, 60, { target: OWNED_TEXT }),
+      move(56, 60, { target: ROTATE_HANDLE }),
+      move(57, 60, { target: UNLOCK_AFFORDANCE }),
+      move(58, 60, { target: FOREIGN }),
+    ]))
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([['hover'], [], [], [], ['hover']])
+  })
+
+  it('under LEGACY a move over a map button is a hover', () => {
+    // Today's hover runs over the map's other buttons and fields and hit-tests what is beneath them.
+    const result = run(seq('map button', WINDOWS, [move(52, 60, { target: OWNED_CHROME })]))
+    expect(result.gestures).toEqual([
+      { kind: 'hover', at: { x: 52, y: 60 }, pointer: 'mouse', mods: { shift: false, ctrl: false, alt: false, meta: false }, target: OWNED_CHROME },
+    ])
+  })
+
+  it('a hover carries the target class it saw', () => {
+    const result = run(seq('hover targets', WINDOWS, [
+      move(50, 60),
+      move(52, 60, { target: OWNED_CHROME }),
+      move(54, 60, { target: HORIZONTAL_RULER }),
+      move(56, 60, { target: FOREIGN }),
+    ]))
+    expect(result.gestures.map((gesture) => gesture.kind === 'hover' ? gesture.target : null)).toEqual([
+      SURFACE, OWNED_CHROME, HORIZONTAL_RULER, FOREIGN,
+    ])
+  })
+
+  it('with ownedHover end a move over owned chrome, the text entry or a handle ends the hover; the Unlock affordance keeps it', () => {
+    const result = runSequence(seq('owned targets, phase 2', WINDOWS, [
       move(50, 60),
       move(52, 60, { target: OWNED_CHROME }),
       move(54, 60, { target: OWNED_TEXT }),
       move(56, 60, { target: ROTATE_HANDLE }),
+      move(57, 60, { target: UNLOCK_AFFORDANCE }),
       move(58, 60, { target: FOREIGN }),
-    ]))
-    expect(kinds(result.gestures)).toEqual(['hover', 'hover-end', 'hover-end', 'hover-end', 'hover'])
+    ]), OWNED_HOVER_ENDS)
+    expect(result.steps.map((step) => kinds(step.gestures))).toEqual([
+      ['hover'], ['hover-end'], ['hover-end'], ['hover-end'], [], ['hover'],
+    ])
+  })
+
+  it('a pointer-source pan carries the pointer\'s point and a wheel pan does not', () => {
+    const space = run(SEQUENCES.G3)
+    const points = pansOf(space.gestures).map((pan) => pan.at)
+    expect(points[0]).toEqual({ x: 100, y: 100 })
+    expect(points.every((point) => point !== undefined)).toBe(true)
+    expect(points.at(-1)).toEqual(points.at(-2))
+    const fenced = run(seq('escape pan', WINDOWS, [down(100, 100, { button: 1 }), move(110, 100, { buttons: 4 }), escape()]))
+    expect(pansOf(fenced.gestures).at(-1)).toMatchObject({ phase: 'end', at: { x: 110, y: 100 } })
+    const wheeled = run(seq('wheel pan', WINDOWS, [wheel(100, 100, { dx: 10, dy: 20 })], { pointingDevice: 'trackpad' }))
+    expect(pansOf(wheeled.gestures)).toHaveLength(1)
+    expect(pansOf(wheeled.gestures)[0]).not.toHaveProperty('at')
   })
 
   it('pointerleave ends the hover', () => {

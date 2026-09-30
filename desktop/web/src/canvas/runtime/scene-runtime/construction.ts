@@ -58,7 +58,8 @@ import {
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import { getRevealedAnnotationId } from '../annotation-layout'
 import { sceneExtentPoints, selectionExtentPoints } from '../scene-extent'
-import { createViewNavigation } from '../view/navigation'
+import { createViewNavigation, type ViewNavigation } from '../view/navigation'
+import type { ViewFrameSource } from '../view/types'
 
 type RuntimeInvalidationKind = 'scene' | 'viewport' | 'chrome'
 
@@ -104,6 +105,9 @@ export interface SceneRuntimeConstruction {
   readonly sceneSession: SceneSessionWriter
   readonly camera: WorkspaceCameraFrameReader
   readonly cameraNavigation: WorkspaceCameraNavigation
+  /** The camera driver host's frames and the navigation over it, which the interaction session hands its ToolHost (0B). */
+  readonly frames: ViewFrameSource
+  readonly viewNavigation: ViewNavigation
   readonly sceneRevision: Signal<number>
   readonly plantNamesQueryRevision: Signal<number>
   readonly transientHistoryRevision: Signal<number>
@@ -357,6 +361,8 @@ export function createSceneRuntimeConstruction(
     sceneSession: sceneStore,
     camera,
     cameraNavigation,
+    frames: cameraHost.frames,
+    viewNavigation,
     sceneRevision,
     plantNamesQueryRevision,
     transientHistoryRevision,

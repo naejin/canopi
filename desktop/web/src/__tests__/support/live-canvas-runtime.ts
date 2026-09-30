@@ -1,5 +1,6 @@
 import { SceneCanvasRuntime, type SceneCanvasRuntimeOptions } from '../../canvas/runtime/scene-runtime'
 import type { CanvasRuntimeSurfaces } from '../../canvas/runtime/runtime'
+import { createForwardingCanvasKeyboardPort } from '../../canvas/runtime/keyboard-port'
 
 export type TestCanvasRuntimeHostOptions = SceneCanvasRuntimeOptions
 
@@ -23,6 +24,8 @@ export function createLiveTestCanvasRuntimeHost(
       commands: runtime.commandSurface,
       queries: runtime.querySurface,
       documents: runtime.documentSurface,
+      // Before init there is no map host yet: the port answers with a detached one and consumes nothing.
+      keyboard: createForwardingCanvasKeyboardPort(() => runtime.keyboardPort, document.createElement('div')),
     },
     init: (container) => runtime.init(container),
     destroy: async () => {

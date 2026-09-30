@@ -1,8 +1,9 @@
 // canvas/runtime/input/input-router.ts
 //
 // Owns where a recognised gesture goes: navigation (pan, zoom, rotate) to ViewNavigation, and everything else (hovers,
-// presses, drags, drops, cancels, menu requests) to the ToolHost, the only opener of the canvas menu. It computes no
-// geometry, and answers the host's GestureOutcome so the DOM source can apply it to the event being handled.
+// presses, drags, drops, cancels, menu requests) to the ToolHost, the only opener of the canvas menu; a pointer pan's point
+// also goes to ToolHost.notePointer. It computes no geometry, and answers the host's GestureOutcome so the DOM source can
+// apply it to the event being handled.
 
 import type { GestureOutcome, InputRouter, InputRouterDeps } from '../interaction-ports'
 import type { RotationSession } from '../view/read-surface'
@@ -19,6 +20,9 @@ export function createInputRouter(deps: InputRouterDeps): InputRouter {
       switch (g.kind) {
         case 'pan':
           if (g.deltaPx.x !== 0 || g.deltaPx.y !== 0) deps.navigation.panByPx(g.deltaPx)
+          // A pointer pan moves the host's resting pointer with it (it emits nothing; the next camera frame re-emits there).
+          // A wheel pan carries no point: the pointer stays where it rests.
+          if (g.at && g.source !== 'wheel') deps.toolHost.notePointer(g.at)
           return NOTHING
         case 'zoom':
           deps.navigation.zoomAroundPx(g.anchorPx, g.factor)

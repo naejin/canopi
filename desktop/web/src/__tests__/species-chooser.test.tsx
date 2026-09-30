@@ -24,6 +24,7 @@ import { speciesTarget } from '../target'
 import {
   createTestCanvasCommandSurface,
   createTestCanvasDocumentSurface,
+  createTestCanvasKeyboardPort,
 } from './support/canvas-runtime-surfaces'
 import { createTestCanvasQuerySurface, type TestCanvasQuerySurface } from './support/canvas-query-surface'
 
@@ -100,6 +101,7 @@ describe('Place plants species chooser', () => {
       commands: createTestCanvasCommandSurface(),
       queries,
       documents: createTestCanvasDocumentSurface(),
+      keyboard: createTestCanvasKeyboardPort(),
     })
     favorites.view!.value = {
       items: [favorite('Rubus idaeus', 'Raspberry', 1.5), favorite('Ficus carica', 'Fig', 4)],

@@ -225,5 +225,37 @@
   },
   "src/__tests__/projection.test.ts > canonical projection identity > names the local Mercator projection": {
     "policy": "Retired frontend seams stay deleted"
+  },
+  "src/__tests__/scene-interaction.test.ts > SceneInteractionSession > installs and removes pointer-cancellation and focus-loss listeners exactly once": {
+    "file": "src/canvas/runtime/input/dom-input-source.test.ts",
+    "name": "createDomInputSource > installs and removes each listener exactly once"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > cancels an active drag and restores the exact cursor when destroyed": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a ruler drag ends with its overlay: the exact cursor comes back and no guide lands"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > cancels the previous drag when another ruler drag starts": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a second ruler press replaces the first drag"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > publishes once outside the ruler and cancels inside the ruler gutter": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a ruler drag lands one guide at its release, and none inside the ruler's gutter"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > cancels an active drag on window blur without publishing": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a window blur ends a ruler drag without a guide"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > converts a guide with the latest camera snapshot during a drag": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a ruler guide lands with the rulers' camera at its release"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > cancels an active drag when rulers become hidden": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a ruler drag started before the rulers hide lands no guide"
+  },
+  "src/__tests__/rulers.test.ts > RulerOverlay > cancels ruler creation and hides local chrome on overview entry": {
+    "file": "src/canvas/runtime/interaction-session.test.ts",
+    "name": "ruler drags through the session > a ruler drag across overview entry lands no guide, and the rulers hide"
   }
 }

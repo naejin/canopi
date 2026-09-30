@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRulerOverlay } from '../canvas/runtime/chrome/rulers'
+import { createRulerOverlay, pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 
 type RulerPart = 'horizontal' | 'vertical' | 'corner'
@@ -97,86 +97,6 @@ describe('RulerOverlay', () => {
     overlay.destroy()
   })
 
-  it('cancels an active drag and restores the exact cursor when destroyed', () => {
-    const host = document.createElement('div')
-    host.style.cursor = 'crosshair'
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot(),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-    const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
-
-    horizontal.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
-    expect(host.style.cursor).toBe('s-resize')
-
-    overlay.destroy()
-
-    expect(host.style.cursor).toBe('crosshair')
-    expect(host.childElementCount).toBe(0)
-
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 140 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 200, clientY: 140 }))
-    horizontal.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    expect(onGuideCreate).not.toHaveBeenCalled()
-  })
-
-  it('cancels the previous drag when another ruler drag starts', () => {
-    const host = document.createElement('div')
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot({ x: 10, scale: 2 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-
-    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 180, clientY: 60 }),
-    )
-    findPart<HTMLCanvasElement>(host, 'vertical').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 110, clientY: 100 }),
-    )
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 150 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 200, clientY: 150 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 220, clientY: 170 }))
-
-    expect(onGuideCreate).toHaveBeenCalledOnce()
-    expect(onGuideCreate).toHaveBeenCalledWith('v', 45)
-    overlay.destroy()
-  })
-
-  it('publishes once outside the ruler and cancels inside the ruler gutter', () => {
-    const host = document.createElement('div')
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot({ y: 20, scale: 4 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-    const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
-
-    horizontal.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 170 }))
-
-    expect(onGuideCreate).toHaveBeenCalledOnce()
-    expect(onGuideCreate).toHaveBeenCalledWith('h', 20)
-
-    horizontal.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 70 }))
-
-    expect(onGuideCreate).toHaveBeenCalledOnce()
-    overlay.destroy()
-  })
-
   it('creates a guide at a camera screen point past the gutter, and none inside it or while hidden', () => {
     const host = document.createElement('div')
     const onGuideCreate = vi.fn()
@@ -201,109 +121,112 @@ describe('RulerOverlay', () => {
     expect(onGuideCreate).toHaveBeenCalledTimes(2)
   })
 
-  it('cancels an active drag on window blur without publishing', () => {
+  it('refuses a guide in overview', () => {
     const host = document.createElement('div')
-    host.style.cursor = 'grab'
-    setHostRect(host)
     const onGuideCreate = vi.fn()
     const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot(),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
 
-    findPart<HTMLCanvasElement>(host, 'vertical').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 110, clientY: 100 }),
-    )
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
+    overlay.update({ camera: cameraSnapshot({ scale: 0.01 }), chromeVisible: true, rulersVisible: true })
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).not.toHaveBeenCalled()
+
+    overlay.update({ camera: cameraSnapshot({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    overlay.destroy()
+  })
+
+  it('a pressed ruler finds its own overlay\'s guide port', () => {
+    const first = document.createElement('div')
+    const second = document.createElement('div')
+    const firstGuide = vi.fn()
+    const secondGuide = vi.fn()
+    const firstOverlay = createRulerOverlay(first, { onGuideCreate: firstGuide })
+    const secondOverlay = createRulerOverlay(second, { onGuideCreate: secondGuide })
+    firstOverlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    secondOverlay.update({ camera: cameraSnapshot({ x: 10, y: 20, scale: 2 }), chromeVisible: true, rulersVisible: true })
+
+    const vertical = pressRuler(findPart<HTMLCanvasElement>(second, 'vertical'))
+    expect(vertical?.axis).toBe('v')
+    vertical?.createGuideAt('v', { x: 100, y: 80 })
+    expect(secondGuide).toHaveBeenCalledExactlyOnceWith('v', 45)
+    expect(firstGuide).not.toHaveBeenCalled()
+
+    expect(pressRuler(findPart<HTMLDivElement>(first, 'corner'))).toBeNull()
+    expect(pressRuler(first)).toBeNull()
+    expect(pressRuler(null)).toBeNull()
+    const horizontal = findPart<HTMLCanvasElement>(first, 'horizontal')
+    firstOverlay.destroy()
+    expect(pressRuler(horizontal)).toBeNull()
+    secondOverlay.destroy()
+  })
+
+  it('a ruler pressed before the rulers hide lands no guide, even once they show again', () => {
+    const host = document.createElement('div')
+    const onGuideCreate = vi.fn()
+    const overlay = createRulerOverlay(host, { onGuideCreate })
+    const visible = { camera: cameraSnapshot({ y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true }
+    overlay.update(visible)
+    const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
+
+    for (const hidden of [
+      { ...visible, rulersVisible: false },
+      { ...visible, chromeVisible: false },
+      { ...visible, camera: cameraSnapshot({ scale: 0.01 }) },
+    ]) {
+      const press = pressRuler(horizontal)
+      overlay.update(hidden)
+      overlay.update(visible)
+      press?.createGuideAt('h', { x: 80, y: 100 })
+    }
+    expect(onGuideCreate).not.toHaveBeenCalled()
+
+    // A press after the rulers came back lands, and so does one across an update that keeps them shown.
+    const press = pressRuler(horizontal)
+    overlay.update({ ...visible, camera: cameraSnapshot({ y: 40, scale: 4, revision: 2 }) })
+    press?.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 15)
+
+    const beforeDestroy = pressRuler(horizontal)
+    overlay.destroy()
+    beforeDestroy?.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).toHaveBeenCalledOnce()
+  })
+
+  it('a press\'s drag cursor comes back when it ends, when the next press starts, and when the rulers hide or go', () => {
+    const host = document.createElement('div')
+    host.style.cursor = 'crosshair'
+    const overlay = createRulerOverlay(host, { onGuideCreate: vi.fn() })
+    const visible = { camera: cameraSnapshot(), chromeVisible: true, rulersVisible: true }
+    overlay.update(visible)
+    const horizontal = findPart<HTMLCanvasElement>(host, 'horizontal')
+    const vertical = findPart<HTMLCanvasElement>(host, 'vertical')
+
+    const first = pressRuler(horizontal)
+    first?.drag()
+    expect(host.style.cursor).toBe('s-resize')
+    first?.end()
+    first?.end()
+    expect(host.style.cursor).toBe('crosshair')
+    first?.drag()
+    expect(host.style.cursor).toBe('crosshair')
+
+    pressRuler(horizontal)?.drag()
+    const next = pressRuler(vertical)
+    expect(host.style.cursor).toBe('crosshair')
+    next?.drag()
     expect(host.style.cursor).toBe('e-resize')
 
-    window.dispatchEvent(new Event('blur'))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 100 }))
-
-    expect(host.style.cursor).toBe('grab')
-    expect(onGuideCreate).not.toHaveBeenCalled()
-    overlay.destroy()
-  })
-
-  it('converts a guide with the latest camera snapshot during a drag', () => {
-    const host = document.createElement('div')
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot({ y: 10, scale: 2, revision: 1 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-
-    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 180, clientY: 60 }),
-    )
-    overlay.update({
-      camera: cameraSnapshot({ y: 40, scale: 4, revision: 2 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 140 }))
-
-    expect(onGuideCreate).toHaveBeenCalledWith('h', 12.5)
-    overlay.destroy()
-  })
-
-  it('cancels an active drag when rulers become hidden', () => {
-    const host = document.createElement('div')
-    host.style.cursor = 'crosshair'
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({
-      camera: cameraSnapshot(),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-
-    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 180, clientY: 60 }),
-    )
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
-    overlay.update({
-      camera: cameraSnapshot(),
-      chromeVisible: true,
-      rulersVisible: false,
-    })
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 140 }))
-
+    overlay.update({ ...visible, rulersVisible: false })
     expect(host.style.cursor).toBe('crosshair')
-    expect(onGuideCreate).not.toHaveBeenCalled()
-    overlay.destroy()
-  })
-
-  it('cancels ruler creation and hides local chrome on overview entry', () => {
-    const host = document.createElement('div')
-    host.style.cursor = 'crosshair'
-    setHostRect(host)
-    const onGuideCreate = vi.fn()
-    const overlay = createRulerOverlay(host, { onGuideCreate })
-    overlay.update({ camera: cameraSnapshot(), chromeVisible: true, rulersVisible: true })
-    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(
-      new MouseEvent('mousedown', { clientX: 180, clientY: 60 }),
-    )
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 180, clientY: 100 }))
-
-    overlay.update({
-      camera: cameraSnapshot({ scale: 0.01 }),
-      chromeVisible: true,
-      rulersVisible: true,
-    })
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 140 }))
-
-    expect(findPart<HTMLCanvasElement>(host, 'horizontal').style.display).toBe('none')
-    expect(findPart<HTMLCanvasElement>(host, 'vertical').style.display).toBe('none')
+    next?.drag()
     expect(host.style.cursor).toBe('crosshair')
-    expect(onGuideCreate).not.toHaveBeenCalled()
+
+    overlay.update(visible)
+    pressRuler(horizontal)?.drag()
     overlay.destroy()
+    expect(host.style.cursor).toBe('crosshair')
+    expect(host.childElementCount).toBe(0)
   })
 
   it('draws rulers from the overlay inset so ticks and guides stay on camera coordinates', () => {
@@ -323,8 +246,10 @@ describe('RulerOverlay', () => {
     const drawnYs = vi.mocked(context.moveTo).mock.calls.map(([, y]) => y)
     expect(drawnYs).toContain(100 - 64 - 24)
 
-    findPart<HTMLCanvasElement>(host, 'horizontal').dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 120 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
+    // A guide released at camera y 100 (the map host's screen) lands at world 10; the gutter ends below the inset.
+    const press = pressRuler(findPart<HTMLCanvasElement>(host, 'horizontal'))
+    press?.createGuideAt('h', { x: 80, y: 64 + 24 })
+    press?.createGuideAt('h', { x: 80, y: 100 })
     expect(onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 10)
     overlay.destroy()
   })

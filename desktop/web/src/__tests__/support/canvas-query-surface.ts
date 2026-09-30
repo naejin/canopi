@@ -16,7 +16,7 @@ import type {
 import type { PlacedPlant } from '../../types/design'
 import { createViewReadSurface } from '../../canvas/runtime/view/frame-source'
 import type { ViewReadSurface } from '../../canvas/runtime/view/read-surface'
-import type { ViewFrame, ViewFrameSource } from '../../canvas/runtime/view/types'
+import type { ViewFrame, ViewFrameSource, WorldPoint } from '../../canvas/runtime/view/types'
 import { buildViewTransformFromPlane } from '../../canvas/runtime/view/view-transform'
 import { createSessionPlane, type SessionPlane } from '../../canvas/session-plane'
 import { TEST_GEO_ORIGIN } from './geo-design'
@@ -42,6 +42,8 @@ export type TestCanvasQuerySurface = CanvasQuerySurface & {
   setLocalizedNames(names: ReadonlyMap<string, string | null>): void
   setEnglishFallbackNames(names: ReadonlyMap<string, string>): void
   setSelection(selection: SceneDesignObjectSelection): void
+  /** Publishes the pointer's world point to subscribePointerWorld, as the interaction session's ToolHost does. */
+  emitPointerWorld(point: WorldPoint | null): void
 }
 
 export function createTestCanvasQuerySurface({
@@ -78,6 +80,7 @@ export function createTestCanvasQuerySurface({
   let currentEnglishFallbackNames = englishFallbackNames
   let currentSelection = selection.map((target) => ({ ...target }))
   let settled = true
+  const pointerWorldListeners = new Set<(point: WorldPoint | null) => void>()
 
   return {
     revision,
@@ -170,6 +173,15 @@ export function createTestCanvasQuerySurface({
     },
     setSelection: (nextSelection) => {
       currentSelection = nextSelection.map((target) => ({ ...target }))
+    },
+    subscribePointerWorld: (listener) => {
+      pointerWorldListeners.add(listener)
+      return () => {
+        pointerWorldListeners.delete(listener)
+      }
+    },
+    emitPointerWorld: (point) => {
+      for (const listener of [...pointerWorldListeners]) listener(point)
     },
   }
 }

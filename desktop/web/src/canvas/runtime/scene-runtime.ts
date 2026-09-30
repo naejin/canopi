@@ -7,7 +7,7 @@ import { createUuid } from '../../utils/ids'
 import {
   createSceneInteractionSession,
   type SceneInteractionSession,
-} from './scene-interaction'
+} from './interaction-session'
 import {
   resetTransientRuntimeState,
   syncCanvasSignalsFromScene,
@@ -29,8 +29,10 @@ import {
 import type {
   CanvasCommandSurface,
   CanvasDocumentSurface,
+  CanvasKeyboardPort,
   CanvasQuerySurface,
 } from './runtime'
+import { bindQuerySurfacePointerWorld } from './query-surface'
 import { targets, speciesTarget } from '../../target'
 import { runCanvasRuntimeCleanups, throwCanvasRuntimeCleanupErrors } from './cleanup'
 
@@ -59,6 +61,7 @@ export class SceneCanvasRuntime {
       disposeInteraction: () => {
         const interaction = this._interaction
         this._interaction = null
+        bindQuerySurfacePointerWorld(this._querySurface, null)
         try {
           interaction?.dispose()
         } finally {
@@ -218,7 +221,17 @@ export class SceneCanvasRuntime {
         setHoveredTarget: (target) => {
           this._setHoveredTarget(target)
         },
+        frames: this._construction.frames,
+        viewNavigation: this._construction.viewNavigation,
+        renderer: {
+          setDraft: (draft) => this._rendering.setDraft(draft),
+          setSelectionPreview: (preview) => this._rendering.setSelectionPreview(preview),
+        },
+        ...(this._appAdapter.focus ? { focus: this._appAdapter.focus } : {}),
+        sceneRevision: this._sceneRevision,
       })
+      const interaction = this._interaction
+      bindQuerySurfacePointerWorld(this._querySurface, (listener) => interaction.subscribePointerWorld(listener))
       this._interaction.setOverviewMode(this._camera.snapshot.peek().mode === 'overview')
       await this._rendering.renderScene()
     } catch (error) {
@@ -244,6 +257,11 @@ export class SceneCanvasRuntime {
     return this._querySurface
   }
 
+  /** The live interaction session's key handling, null before init and after the map unmounts (the surfaces forward to it). */
+  get keyboardPort(): CanvasKeyboardPort | null {
+    return this._interaction?.keyboard ?? null
+  }
+
   /**
    * Internal workspace-lifecycle control, excluded from CanvasRuntimeSurfaces.
    * The map became unavailable: release the renderer and the interaction
@@ -253,6 +271,7 @@ export class SceneCanvasRuntime {
   async unmountRenderer(): Promise<void> {
     const interaction = this._interaction
     this._interaction = null
+    bindQuerySurfacePointerWorld(this._querySurface, null)
     try {
       interaction?.dispose()
     } finally {

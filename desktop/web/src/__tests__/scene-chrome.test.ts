@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SceneChromeOverlay } from '../canvas/runtime/scene-chrome'
+import { pressRuler } from '../canvas/runtime/chrome/rulers'
 import type { CameraViewportSnapshot } from '../canvas/runtime/camera'
 
 function cameraSnapshot(overrides: {
@@ -221,8 +222,9 @@ describe('SceneChromeOverlay', () => {
     const horizontal = container.querySelector<HTMLCanvasElement>(
       '[data-ruler-overlay-part="horizontal"]',
     )
-    horizontal?.dispatchEvent(new MouseEvent('mousedown', { clientX: 180, clientY: 60 }))
-    document.dispatchEvent(new MouseEvent('mouseup', { clientX: 180, clientY: 150 }))
+    // The DOM input source's ruler port: the pressed ruler's guide port, handed the release in camera screen px
+    // (client 180, 150 on the map host at 100, 50).
+    pressRuler(horizontal)?.createGuideAt('h', { x: 80, y: 100 })
 
     expect(onGuideCreate).toHaveBeenCalledWith('h', 20)
     overlay.destroy()
