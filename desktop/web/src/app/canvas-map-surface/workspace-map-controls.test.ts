@@ -180,17 +180,18 @@ function createControls(options: {
   load?: () => Promise<MapLibreApi>
   webgl2?: WebGL2RenderingContext | null
   canCreateWebGL2Context?: () => boolean
+  setScreen?: ConstructorParameters<typeof WorkspaceMapControls>[0]['setScreen']
 } = {}) {
   const maps: FakeMap[] = []
-  const observers: Array<{ observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }> = []
+  const observers: Array<{ observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; callback: ResizeObserverCallback }> = []
   const api = createApi(
     maps,
     options.webgl2 === undefined ? {} as WebGL2RenderingContext : options.webgl2,
   )
   const surface = createMapLibreSurfaceAdapter<FakeMap>({
     loadMapLibre: options.load ?? (async () => api),
-    createResizeObserver: () => {
-      const observer = { observe: vi.fn(), disconnect: vi.fn() }
+    createResizeObserver: (callback) => {
+      const observer = { observe: vi.fn(), disconnect: vi.fn(), callback }
       observers.push(observer)
       return observer
     },
@@ -199,14 +200,16 @@ function createControls(options: {
     initialCenter: { lat: 48.86, lon: 2.35 },
     background: options.background ?? satelliteOn(),
   }
+  const container = document.createElement('div')
   const controls = new TestWorkspaceMapControls({
-    container: document.createElement('div'),
+    container,
     surface,
     contributions: options.contributions,
     ...(options.logError ? { logError: options.logError } : {}),
     canCreateWebGL2Context: options.canCreateWebGL2Context ?? (() => true),
+    ...(options.setScreen ? { setScreen: options.setScreen } : {}),
   }, snapshot)
-  return { controls, maps, observers }
+  return { controls, maps, observers, container }
 }
 
 class TestWorkspaceMapControls extends WorkspaceMapControls {
@@ -257,6 +260,23 @@ function serializedCalls(calls: unknown[][]): string {
 }
 
 describe('WorkspaceMapControls', () => {
+  it('hands the map container size to the camera instead of resizing the map', async () => {
+    const setScreen = vi.fn()
+    const { controls, maps, observers, container } = createControls({ setScreen })
+    Object.defineProperties(container, { clientWidth: { value: 640 }, clientHeight: { value: 480 } })
+    const acquisition = controls.createMap(new AbortController().signal)
+    const map = await waitForMap(maps)
+    map.emit('style.load')
+    const admitted = await acquisition
+    try {
+      observers[0]!.callback([], {} as ResizeObserver)
+
+      expect(setScreen).toHaveBeenCalledTimes(1)
+      expect(setScreen).toHaveBeenCalledWith({ width: 640, height: 480, devicePixelRatio: window.devicePixelRatio })
+      expect(map.resize).not.toHaveBeenCalled()
+    } finally { controls.releaseMap(admitted) }
+  })
+
   it('acceptance: repeated Satellite hide/show releases mount-owned movement listeners', async () => {
     const { controls, maps } = createControls()
     const acquisition = controls.createMap(new AbortController().signal)

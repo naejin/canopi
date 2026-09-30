@@ -34,16 +34,36 @@ interface MapLibreGetResourceResponse<T = ArrayBuffer> {
   data: T
 }
 
+/** MapLibre's LngLat as the transform constrain receives and returns it. */
+export interface MapLibreLngLat {
+  readonly lng: number
+  readonly lat: number
+}
+
+/**
+ * MapLibre's TransformConstrainFunction: called with each candidate centre and zoom (also on intermediate states, such as a new
+ * zoom at the old centre), it returns the camera the map keeps. It never sees the bearing.
+ */
+export type MapLibreTransformConstrain = (lngLat: MapLibreLngLat, zoom: number) => { center: MapLibreLngLat; zoom: number }
+
 export interface MapLibreMapInstance {
-  jumpTo(options: { center: [number, number]; zoom: number; bearing: number }): void
+  jumpTo(options: { center: [number, number]; zoom: number; bearing: number; pitch?: number }): void
   // Animated camera move; honours the platform reduced-motion preference.
   flyTo?(options: { center: [number, number]; zoom: number; bearing: number }): void
+  /** Stops a running flight where it is. */
+  stop?(): void
   resize(): void
   remove(): void
   on(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   off(type: 'load' | 'style.load' | 'error' | 'sourcedata' | 'idle' | 'move' | 'moveend' | 'resize' | 'webglcontextlost' | 'webglcontextrestored', listener: (event?: unknown) => void): void
   project?(lnglat: [number, number]): { x: number; y: number }
+  /** CSS px relative to the canvas' top-left corner → the ground under it. */
+  unproject?(point: [number, number]): MapLibreLngLat
   getPitch?(): number
+  /** Degrees in (−180, 180]. */
+  getBearing?(): number
+  /** Replaces MapLibre's whole default constrain (zoom range and the world hold); null restores it. */
+  setTransformConstrain?(constrain: MapLibreTransformConstrain | null): void
   getZoom?(): number
   getMinZoom?(): number
   getMaxZoom?(): number

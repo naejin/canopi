@@ -101,13 +101,22 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     }
   }
 
-  /** Swaps the live driver: `prepare` brings the new one to the last frame's camera unrelayed, then the host publishes one frame. */
+  /**
+   * Swaps the live driver: `prepare` brings the new one to the last frame's camera unrelayed, then the host publishes one frame. An
+   * attached driver that fails meanwhile is never relayed: the host detaches at the camera it had.
+   */
   function swapTo(driver: CameraDriver, nextAttached: boolean, prepare: () => void): void {
     release()
+    release = () => {}
     live.dispose()
     live = driver
     attached = nextAttached
     prepare()
+    const reported = driver.failure.peek()
+    if (reported) {
+      fail(reported)
+      return
+    }
     release = connect(driver)
     relay(driver, driver.frames.viewFrame.peek())
   }
@@ -138,14 +147,20 @@ export function createCameraDriverHost(options: CameraDriverHostOptions): Camera
     current: () => live,
     attach(driver) {
       if (disposed) return
+      const refused = driver.failure.peek()
+      if (refused) {
+        // Built failed (a map it cannot drive): it never takes the camera.
+        driver.dispose()
+        if (attached) detachTo()
+        failure.value = refused
+        return
+      }
       const last = frames.viewFrame.peek()
       failure.value = null
       swapTo(driver, true, () => {
         driver.setInsets(last.insets)
         driver.apply({ kind: 'set', target: last.view.camera, animation: 'none' })
       })
-      const reported = driver.failure.peek()
-      if (reported) fail(reported)
     },
     detach() {
       if (disposed || !attached) return

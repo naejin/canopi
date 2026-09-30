@@ -95,6 +95,41 @@ describe('camera driver host', () => {
     view.dispose()
   })
 
+  it('a driver that fails when it is built or while taking the camera is never relayed', () => {
+    const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
+    const view = createTestView({ plane, viewport: { x: 40, y: -25, scale: 3 } })
+    const published = recordFrames(view)
+    const headless = view.host.current()
+    const before = view.frames.viewFrame.peek()
+    const refusal: CameraDriverFailure = { reason: 'map-error', message: 'The map cannot be driven without getBearing.' }
+
+    // Built failed (a map it cannot drive): it never takes the camera, and the frame does not move.
+    const refused = standInDriver(plane)
+    view.host.attach({ ...refused, failure: signal<CameraDriverFailure | null>(refusal) })
+    expect(view.host.failure.value).toEqual(refusal)
+    expect(view.host.current()).toBe(headless)
+    expect(view.frames.viewFrame.peek()).toBe(before)
+    expect(published).toHaveLength(0)
+
+    // Failing while it is handed the camera: its frame is never published; the host detaches at the camera it had.
+    const failing = standInDriver(plane)
+    const failure = signal<CameraDriverFailure | null>(null)
+    view.host.attach({
+      ...failing,
+      failure,
+      apply(move) {
+        failing.apply(move)
+        failure.value = { reason: 'map-error', message: 'The map reported a pitched camera.' }
+      },
+    })
+    expect(view.host.failure.value).toEqual({ reason: 'map-error', message: 'The map reported a pitched camera.' })
+    expect(published).toHaveLength(1)
+    expect(published[0]!.attached).toBe(false)
+    expect(published[0]!.view.camera.center.lon).toBeCloseTo(before.view.camera.center.lon, 9)
+    expect(published[0]!.view.camera.zoom).toBeCloseTo(before.view.camera.zoom, 9)
+    view.dispose()
+  })
+
   it('revisions and plane revisions stay monotonic across swaps', () => {
     const plane = createSessionPlane({ lon: 2.35, lat: 48.85 })
     const view = createTestView({ plane })

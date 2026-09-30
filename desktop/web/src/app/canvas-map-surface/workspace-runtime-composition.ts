@@ -125,6 +125,10 @@ export function createWorkspaceRuntimeComposition(
   })
   const controls = dependencies.createControls({
     container: options.container,
+    // The map container's resizes reach the camera, the map's one resize owner.
+    setScreen: (screen) => {
+      camera.resize(screen)
+    },
     contributions: {
       loadTerrainSupport: options.mapContributions.loadTerrainSupport,
       createRasterDisplay: options.mapContributions.createRasterDisplay,

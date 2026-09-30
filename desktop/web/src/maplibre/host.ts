@@ -18,6 +18,12 @@ interface MapLibreHostResizeObserver {
   disconnect(): void
 }
 
+/** The container's CSS size, as MapLibre reads it (clientWidth, clientHeight). */
+export interface MapLibreHostSize {
+  readonly width: number
+  readonly height: number
+}
+
 export interface MapLibreHostContext {
   readonly key: string
   readonly map: MapLibreMapInstance
@@ -35,7 +41,11 @@ export interface MapLibreHostRequest {
   ): MapLibreMapInstance
   captureViewState?(context: MapLibreHostContext): MapLibreHostViewState | null
   onCreate?(context: MapLibreHostContext): void
-  onResize?(context: MapLibreHostContext): void
+  /**
+   * The request's own resize owner (spec §1.1 "Resize"): the host reports the container's new size and never resizes a map itself.
+   * The workspace request hands the size to its camera driver; the World map, which has no driver, resizes its map.
+   */
+  onResize?(context: MapLibreHostContext, size: MapLibreHostSize): void
   onDestroy?(context: MapLibreHostContext): void
   onCreateError?(error: unknown): void
 }
@@ -113,9 +123,9 @@ class ImperativeMapLibreHost implements MapLibreHost {
 
   resize(): void {
     const context = this.mapContext
-    if (!context?.isCurrent()) return
-    context.map.resize()
-    context.request.onResize?.(context)
+    const container = this.container
+    if (!context?.isCurrent() || !container) return
+    context.request.onResize?.(context, { width: container.clientWidth, height: container.clientHeight })
   }
 
   clearMap(): void {

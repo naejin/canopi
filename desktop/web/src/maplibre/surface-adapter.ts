@@ -4,6 +4,7 @@ import {
   type MapLibreHost,
   type MapLibreHostContext,
   type MapLibreHostDeps,
+  type MapLibreHostSize,
   type MapLibreHostViewState,
 } from './host'
 import type { MapLibreApi, MapLibreMapInstance } from './loader'
@@ -42,7 +43,8 @@ interface MapLibreSurfaceRequest<TMap extends MapLibreMapInstance> {
   ): TMap
   captureViewState?(context: MapLibreSurfaceContext<TMap>): MapLibreHostViewState | null
   onCreate?(context: MapLibreSurfaceContext<TMap>): void
-  onResize?(context: MapLibreSurfaceContext<TMap>): void
+  /** The request's own resize owner: the host never resizes a map (see MapLibreHostRequest.onResize). */
+  onResize?(context: MapLibreSurfaceContext<TMap>, size: MapLibreHostSize): void
   onDestroy?(context: MapLibreSurfaceContext<TMap>): void
   onCreateError?(error: unknown): void
 }
@@ -106,7 +108,7 @@ class HostedMapLibreSurfaceAdapter<TMap extends MapLibreMapInstance>
         request.onCreate?.(this.contextFromHost(context))
       },
       onResize: request.onResize
-        ? (context) => request.onResize!(this.contextFromHost(context))
+        ? (context, size) => request.onResize!(this.contextFromHost(context), size)
         : undefined,
       onDestroy: (context) => {
         const surfaceContext = this.contextFromHost(context)
