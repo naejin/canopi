@@ -517,7 +517,12 @@ describe('ToolHost', () => {
       const createGuideAt = vi.fn()
       const h = harness({ rulers: { createGuideAt } })
 
-      h.drag({ x: 5, y: 0 }, { x: 5, y: 90 }, { target: { kind: 'ruler', axis: 'h' } })
+      h.press({ x: 5, y: 0 }, { target: { kind: 'ruler', axis: 'h' } })
+      h.move({ x: 5, y: 40 })
+      h.move({ x: 5, y: 60 })
+      // Today's drag cursor was the rulers' own: the map keeps the tool's.
+      expect(h.chrome.cursor).toBe('default')
+      h.release({ x: 5, y: 90 })
       expect(createGuideAt).toHaveBeenCalledWith('h', { x: 5, y: 90 })
       expect(select.gestures).toEqual([])
       expect(h.chrome.cursor).toBe('default')

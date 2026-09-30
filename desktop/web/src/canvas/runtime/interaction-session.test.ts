@@ -837,10 +837,17 @@ describe('ruler drags through the session', () => {
     createSession()
     const rawPress = vi.spyOn(builtHosts.at(-1)!, 'rawPress')
     const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    rulers.host.style.cursor = 'crosshair'
+    const toolCursor = container.style.cursor
 
     const down = events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
     events.pointerMove({ x: 180, y: 60 })
+    // Today's drag cursor went on the rulers' overlay, never on the map, which kept the tool's.
+    expect(rulers.host.style.cursor).toBe('s-resize')
+    expect(container.style.cursor).toBe(toolCursor)
     events.pointerUp({ x: 180, y: 100 })
+    expect(rulers.host.style.cursor).toBe('crosshair')
+    expect(container.style.cursor).toBe(toolCursor)
 
     expect(down.defaultPrevented).toBe(true)
     expect(rawPress).not.toHaveBeenCalled()

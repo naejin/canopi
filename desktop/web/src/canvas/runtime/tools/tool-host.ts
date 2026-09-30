@@ -636,10 +636,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.lastMods = g.mods
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
-      if (g.kind !== 'drag-end') {
-        if (gesture.kind === 'ruler') deps.chrome.setCursor(gesture.axis === 'h' ? 's-resize' : 'e-resize')
-        return NOTHING
-      }
+      // A ruler drag's cursor is the rulers' own (the session's RulerPress): the map keeps the tool's, as today.
+      if (g.kind !== 'drag-end') return NOTHING
       endLive()
       // A guide dragged out of a ruler lands at the release, only while north is up.
       if (gesture.axis && frame().view.northUp) deps.rulers?.createGuideAt(gesture.axis, g.at)

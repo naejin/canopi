@@ -584,7 +584,8 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     }
     if (this._registered()) {
       this._routeToHost(input)
-      // The host landed the guide (or not) at the ruler's release; the press is over.
+      // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release.
+      if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
       if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
     } else {
       this._routeToBridge(input, event)
