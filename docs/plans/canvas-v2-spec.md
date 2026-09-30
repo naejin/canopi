@@ -279,8 +279,9 @@ export interface CameraDriverDeps {
   /** One animation-frame callback; returns its canceller. Tests step it by hand. */
   readonly scheduleFrame: (cb: (nowMs: number) => void) => () => void
   readonly policy: () => NavigationPolicy
-  /** The frame source's settle timer. The MapLibre driver (outside view/) defaults to window timers; the headless driver takes them injected. */
-  readonly timers?: { readonly setTimeout: (cb: () => void, ms: number) => unknown; readonly clearTimeout: (handle: unknown) => void }
+  /** The frame source's settle timers, in its shape (a due time on `clock`, a numeric id). The MapLibre driver (outside view/) adapts
+   *  the window's timers to it by default; the headless driver takes them injected. */
+  readonly timers?: FrameSourceDeps['timers']
 }
 
 export interface CameraDriverFailure { readonly reason: 'map-lost' | 'agreement' | 'map-error'; readonly message: string }

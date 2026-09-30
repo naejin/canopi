@@ -17,7 +17,7 @@ import type { MapLibreLngLat, MapLibreTransformConstrain } from './loader'
 const PLANE = createSessionPlane({ lon: 2.35, lat: 48.85 })
 const POLICY = createNavigationPolicy(createWorkspaceCameraPolicy(PLANE.origin.lat), signal(false))
 /** Settle timers that never run, in place of the window's. */
-const NO_TIMERS: CameraDriverDeps['timers'] = { setTimeout: () => 0, clearTimeout: () => {} }
+const NO_TIMERS: CameraDriverDeps['timers'] = { set: () => 0, clear: () => {} }
 
 /** MapLibre's LngLat class: the constrain must hand back the class it was given. */
 class FakeLngLat implements MapLibreLngLat {
@@ -284,27 +284,28 @@ describe('MapLibre camera driver', () => {
   })
 
   it('settles its frames on the timers of its deps', () => {
-    const pending = new Map<number, { readonly run: () => void; readonly ms: number }>()
-    let nextHandle = 1
+    const pending = new Map<number, { readonly run: () => void; readonly atMs: number }>()
+    let nextId = 1
     const timers: CameraDriverDeps['timers'] = {
-      setTimeout: (run, ms) => {
-        const handle = nextHandle++
-        pending.set(handle, { run, ms })
-        return handle
+      set: (atMs, run) => {
+        const id = nextId++
+        pending.set(id, { run, atMs })
+        return id
       },
-      clearTimeout: (handle) => { pending.delete(handle as number) },
+      clear: (id) => { pending.delete(id) },
     }
     const time = createManualFrames()
     const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
     const driver = createMapLibreCameraDriver(map, PLANE, { clock: time.clock, scheduleFrame: time.scheduleFrame, policy: () => POLICY, timers })
     drivers.push(driver)
     const unsettled = driver.frames.settledViewFrame.peek()
+    time.advance(40)
 
     driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
     driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
 
-    // Each frame restarts the one 150 ms settle timer.
-    expect([...pending.values()].map((timer) => timer.ms)).toEqual([150])
+    // Each frame restarts the one settle timer, due 150 ms after it on the deps' clock.
+    expect([...pending.values()].map((timer) => timer.atMs)).toEqual([190])
     expect(driver.frames.settledViewFrame.peek()).toBe(unsettled)
     const [handle, timer] = [...pending][0]!
     pending.delete(handle)
@@ -315,6 +316,26 @@ describe('MapLibre camera driver', () => {
     expect(pending.size).toBe(1)
     driver.dispose()
     expect(pending.size).toBe(0)
+  })
+
+  it('settles its frames on the window timers when its deps carry none', () => {
+    vi.useFakeTimers()
+    const time = createManualFrames()
+    const map = new ConsistentMap({ center: PLANE.origin, zoom: 18 })
+    const driver = createMapLibreCameraDriver(map, PLANE, { clock: time.clock, scheduleFrame: time.scheduleFrame, policy: () => POLICY })
+    try {
+      time.advance(40)
+      driver.apply({ kind: 'pan-by', deltaPx: { x: 10, y: 0 } })
+
+      // Due at 190 ms on the deps' clock, which reads 40: the window waits the 150 ms between.
+      vi.advanceTimersByTime(149)
+      expect(driver.frames.settledViewFrame.peek()).not.toBe(driver.frames.viewFrame.peek())
+      vi.advanceTimersByTime(1)
+      expect(driver.frames.settledViewFrame.peek()).toBe(driver.frames.viewFrame.peek())
+    } finally {
+      driver.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('a pan of +10 px moves the ground 10 px right', () => {

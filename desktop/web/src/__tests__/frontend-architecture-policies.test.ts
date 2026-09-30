@@ -1867,6 +1867,19 @@ const CANVAS_V2_POLICIES = [
     ],
     allowTypeOnlyTargets: ['src/canvas/runtime/scene/types.ts'],
   },
+  {
+    // Clocks, timers, animation frames and reduced motion reach view/ injected (CameraDriverDeps, FrameSourceDeps,
+    // ViewNavigationDeps). The rule matches every identifier, member names included, so an injected shape names its
+    // members set and clear, never setTimeout and clearTimeout; comments are not identifiers.
+    kind: 'confine-symbols',
+    name: 'P4 the view module reaches no DOM, timer, clock or media query',
+    from: ['src/canvas/runtime/view/**'],
+    names: [
+      'window', 'document', 'requestAnimationFrame', 'performance', 'matchMedia', 'setTimeout', 'clearTimeout',
+      'setInterval', 'Date', 'queueMicrotask', 'navigator',
+    ],
+    allowedFrom: [...TEST_SOURCE_PATTERNS],
+  },
 ] satisfies readonly ArchitecturePolicy[]
 
 const FRONTEND_ARCHITECTURE_POLICIES = [
@@ -2353,6 +2366,8 @@ const P1_MAP_RECEIVERS = '[P1 only the camera driver stops, pans, zooms, resizes
 const P1_MAP_TYPE = '[P1 the camera driver imports the MapLibre map type]'
 const P2 = '[P2 only the agreement probe projects through MapLibre]'
 const P4_IMPORTS = '[P4 the view module imports only its pure dependencies]'
+const P4_GLOBALS = '[P4 the view module reaches no DOM, timer, clock or media query]'
+const TEST_SOURCES = TEST_SOURCE_PATTERNS.join(', ')
 
 const PLANTED_MAP_LOADER = plantedSource('src/maplibre/loader.ts', ['export interface MapLibreMapInstance { stop(): void }'])
 const PLANTED_CAMERA_DRIVER = plantedSource('src/maplibre/camera-driver.ts', [
@@ -2483,6 +2498,39 @@ describe('canvas v2 policies', () => {
       `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:3:1 imports src/canvas/runtime/scene/types.ts via "../scene/types" (static)`,
       `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:4:1 imports src/canvas/runtime/scene/index.ts via "../scene" (static)`,
       `${P4_IMPORTS} src/canvas/runtime/view/planted.ts:5:1 imports pixi.js via "pixi.js" (static)`,
+    ])
+  })
+
+  it('P4 rejects DOM, timer and clock globals in view modules and allows them in tests and outside view/', () => {
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/frame-source.ts', [
+        '// The settle timer is injected: no setTimeout, requestAnimationFrame or Date here.',
+        'export function settle(deps: { timers: { set(atMs: number, cb: () => void): number } }, clock: () => number) {',
+        '  return deps.timers.set(clock() + 150, () => {})',
+        '}',
+      ]),
+      plantedSource('src/canvas/runtime/view/planted-frame.ts', [
+        'export const cancel = requestAnimationFrame(() => {})',
+      ]),
+      plantedSource('src/canvas/runtime/view/planted-timer.ts', [
+        'export const handle = setTimeout(() => {}, Date.now() % 150)',
+      ]),
+      plantedSource('src/canvas/runtime/view/planted-deps.ts', [
+        'export interface Deps { readonly timers: { setTimeout(cb: () => void, ms: number): unknown } }',
+      ]),
+      plantedSource('src/canvas/runtime/view/planted.test.ts', [
+        'requestAnimationFrame(() => {}); setTimeout(() => {}, 0); window.matchMedia(navigator.userAgent)',
+      ]),
+      plantedSource('src/maplibre/camera-driver.ts', [
+        'export const timers = { set: (atMs: number, run: () => void) => window.setTimeout(run, atMs - performance.now()) }',
+      ]),
+    ])
+
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual([
+      `${P4_GLOBALS} src/canvas/runtime/view/planted-frame.ts contains confined symbol requestAnimationFrame; allowed sources: ${TEST_SOURCES}`,
+      `${P4_GLOBALS} src/canvas/runtime/view/planted-timer.ts contains confined symbol setTimeout; allowed sources: ${TEST_SOURCES}`,
+      `${P4_GLOBALS} src/canvas/runtime/view/planted-timer.ts contains confined symbol Date; allowed sources: ${TEST_SOURCES}`,
+      `${P4_GLOBALS} src/canvas/runtime/view/planted-deps.ts contains confined symbol setTimeout; allowed sources: ${TEST_SOURCES}`,
     ])
   })
 })
