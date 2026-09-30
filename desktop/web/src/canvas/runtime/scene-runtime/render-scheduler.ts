@@ -5,6 +5,7 @@ import type {
   SceneRendererSnapshot,
 } from '../renderers/scene-types'
 import type { SceneViewportState } from '../scene'
+import type { DraftPresentation, SelectionPreview } from '../tools/draft'
 
 export type SceneRuntimeRenderKind = 'scene' | 'viewport' | 'chrome'
 
@@ -131,6 +132,18 @@ export class SceneRuntimeRenderScheduler {
     if (!renderer) return
     renderer.setViewport(this._options.getViewport())
     this._options.renderChrome()
+  }
+
+  /**
+   * The ToolHost's renderer sink: a tool draft goes straight to the mounted renderer, which draws it on the map's next
+   * frame without a scene render. With nothing mounted there is nothing to draw on.
+   */
+  setDraft(draft: DraftPresentation | null): void {
+    this._renderer?.setDraft?.(draft)
+  }
+
+  setSelectionPreview(preview: SelectionPreview | null): void {
+    this._renderer?.setSelectionPreview?.(preview)
   }
 
   /** MapLibre owns the drawing surface size; a resize is a camera-only update. */
