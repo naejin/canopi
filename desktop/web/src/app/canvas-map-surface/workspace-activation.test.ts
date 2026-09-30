@@ -291,7 +291,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       readOrigin,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
     const snapshot: WorkspaceActivationSnapshot = {
       ...createActivationSnapshot({
         initialCenter: { lat: 10, lon: 20 },
@@ -318,11 +318,15 @@ describe('WorkspaceActivationCoordinator', () => {
       readOrigin,
       maximumWorldExtentMeters: 4000,
     }))
-    expect(attach).toHaveBeenCalledWith(expect.objectContaining({
-      map,
-      readOrigin,
-      maximumWorldExtentMeters: 4000,
-    }))
+    // The map's driver took the runtime's camera, in the plane of the live origin.
+    expect(attach).toHaveBeenCalledOnce()
+    expect(camera.host.current()).toBe(attach.mock.calls[0]![0])
+    const attached = camera.host.frames.viewFrame.peek()
+    expect(attached.attached).toBe(true)
+    const originPx = attached.view.worldToScreen({ x: 0, y: 0 })
+    const origin = map.unproject([originPx.x, originPx.y])
+    expect(origin.lng).toBeCloseTo(20, 6)
+    expect(origin.lat).toBeCloseTo(10, 6)
     expect(camera.policy.referenceLatitudeDeg).toBe(10)
   })
 
@@ -480,7 +484,7 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: composed.composition,
       installStyleRestorer,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
 
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
     expect(restore).not.toBeNull()
@@ -650,7 +654,7 @@ describe('WorkspaceActivationCoordinator', () => {
       installStyleRestorer: () => disposeStyleRestorer,
       watchFailure: () => unwatchFailure,
     })
-    const attach = vi.spyOn(camera.attachment, 'attach')
+    const attach = vi.spyOn(camera.host, 'attach')
     const snapshotA = createActivationSnapshot({
       initialCenter: { lat: 1, lon: 2 },
       background: background({ opacity: 0.2 }),
@@ -671,11 +675,11 @@ describe('WorkspaceActivationCoordinator', () => {
       readOrigin,
       maximumWorldExtentMeters: 4321,
     }))
-    expect(attach).toHaveBeenLastCalledWith(expect.objectContaining({
-      map: secondMap,
-      readOrigin,
-      maximumWorldExtentMeters: 4321,
-    }))
+    // B's map drives the camera now; A's driver released A's map.
+    expect(attach).toHaveBeenCalledTimes(2)
+    expect(camera.host.current()).toBe(attach.mock.calls[1]![0])
+    expect(camera.host.frames.viewFrame.peek().attached).toBe(true)
+    expect(secondMap.jumpTo).toHaveBeenCalled()
     expect(events).toEqual([
       'style-restorer',
       'failure-watcher',
@@ -824,19 +828,24 @@ describe('WorkspaceActivationCoordinator', () => {
       composition: createComposition({ initialize: async () => { throw new Error('Pixi init failed') } }).composition,
     })],
     ['camera attachment is rejected', () => {
+      // A pitched read-back fails the map's camera driver ('map-error'); it never takes the camera.
       const map = new FakeMap()
       vi.spyOn(map, 'getPitch').mockReturnValue(1)
       return { map }
     }],
-  ])('reports the map unavailable without mounting a renderer when %s', async (_reason, setup) => {
+  ])('reports the map unavailable without mounting a renderer when %s', async (reason, setup) => {
     const configured = setup()
-    const { coordinator, runtime, map } = createCoordinator(configured)
+    const { coordinator, runtime, map, camera } = createCoordinator(configured)
 
     await expect(coordinator.activate()).resolves.toBe('map-unavailable')
 
     expect(map.remove).toHaveBeenCalledOnce()
     expect(runtime.init).not.toHaveBeenCalled()
     expect(runtime.unmountRenderer).not.toHaveBeenCalled()
+    if (reason === 'camera attachment is rejected') {
+      expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
+      expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
+    }
   })
 
   it('reports the map unavailable when map acquisition rejects before a map is admitted', async () => {
@@ -887,11 +896,14 @@ describe('WorkspaceActivationCoordinator', () => {
   })
 
   it('observes a later camera projection failure and unmounts the renderer', async () => {
-    const { coordinator, runtime, map } = createCoordinator()
+    const { coordinator, runtime, map, camera } = createCoordinator()
     await expect(coordinator.activate()).resolves.toBe('shared-ready')
 
+    // A pitched read-back fails the driver: the host takes the camera back and reports it.
     map.pitch = 1
     map.emit('move')
+    expect(camera.host.failure.peek()).toMatchObject({ reason: 'map-error' })
+    expect(camera.host.frames.viewFrame.peek().attached).toBe(false)
 
     await vi.waitFor(() => expect(runtime.unmountRenderer).toHaveBeenCalledOnce())
     expect(runtime.unmountRenderer).toHaveBeenCalledOnce()
@@ -996,18 +1008,17 @@ describe('WorkspaceActivationCoordinator', () => {
         : undefined,
     })
     coordinator = created
-    const subscribeFailure = vi.spyOn(camera.attachment, 'subscribeFailure')
+    const subscribeFailure = vi.spyOn(camera.host.failure, 'subscribe')
     if (boundary === 'camera failure subscription') {
       subscribeFailure.mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
         return subscriptionDisposer
       })
     }
-    const detach = vi.spyOn(camera.attachment, 'detach')
+    const detach = vi.spyOn(camera.host, 'detach')
     if (boundary === 'camera attachment') {
-      vi.spyOn(camera.attachment, 'attach').mockImplementation(() => {
+      vi.spyOn(camera.host, 'attach').mockImplementation(() => {
         coordinator.requestGenerationDisconnect()
-        return true
       })
     }
 
