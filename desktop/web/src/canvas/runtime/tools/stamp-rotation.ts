@@ -1,35 +1,15 @@
+// canvas/runtime/tools/stamp-rotation.ts  (pure)
+//
+// Owns the held angle of the Object and saved stamps and how a stamp's objects turn about its anchor. `[` and `]` reach
+// the stamp tools as rotate-held commands of ±15° from the keyboard port, which keeps today's key gating (spec §1.2a).
+
 import type { SceneArrangementTemplate } from '../scene-runtime/arrangement-placement'
 import {
   rotateAnnotationAbout,
   rotatePlantAbout,
   rotateZoneAbout,
 } from '../scene-runtime/selection-rotation'
-import type { SceneAnnotationEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene'
-import { isEditableTarget } from './pointer-utils'
-
-/** `[` and `]` turn a held stamp by this much; positive is clockwise on the map. */
-const STAMP_ROTATION_STEP_DEG = 15
-
-export interface StampRotationKeys {
-  /** The map host: with single-key shortcuts off, the keys work only while it has focus. */
-  readonly container: HTMLElement
-  /** Settings › Keyboard › Single-key shortcuts. */
-  readonly readSingleKeyShortcuts: () => boolean
-}
-
-/**
- * The turn `[` (anticlockwise) or `]` (clockwise) asks for, or null. Like other
- * single-key shortcuts they never act in a text field or with Ctrl, Cmd or Alt;
- * with single-key shortcuts off they still work while the map has focus, as
- * the arrow keys do.
- */
-export function stampRotationStep(event: KeyboardEvent, keys: StampRotationKeys): number | null {
-  if (event.key !== '[' && event.key !== ']') return null
-  if (event.ctrlKey || event.metaKey || event.altKey || isEditableTarget(event.target)) return null
-  const onMap = event.target instanceof Node && keys.container.contains(event.target)
-  if (!onMap && !keys.readSingleKeyShortcuts()) return null
-  return event.key === ']' ? STAMP_ROTATION_STEP_DEG : -STAMP_ROTATION_STEP_DEG
-}
+import type { SceneAnnotationEntity, ScenePlantEntity, ScenePoint, SceneZoneEntity } from '../scene/types'
 
 /** The stamp's angle after a step, kept in 0–345°. */
 export function turnStampRotation(current: number, step: number): number {
