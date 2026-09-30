@@ -99,7 +99,7 @@ describe('canvas icon-only buttons', () => {
     const view: CanvasInspectionHandle = {
       state: signal({ point: { x: 0, y: 0 }, scale: 10, zoomPercent: 700, previewAvailable: true,
         frame: { width: 430, height: 390 }, plants: [] }),
-      inspectAtScreenPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(),
+      inspectAtScreenPoint: vi.fn(), inspectAtWorldPoint: vi.fn(), centerOnCanvas: vi.fn(), panBy: vi.fn(), zoomBy: vi.fn(),
       highlightPlant: vi.fn(), focusPlant: vi.fn(), dispose: vi.fn(),
     }
     const queries = createTestCanvasQuerySurface()

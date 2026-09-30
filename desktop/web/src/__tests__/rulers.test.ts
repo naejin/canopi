@@ -177,6 +177,30 @@ describe('RulerOverlay', () => {
     overlay.destroy()
   })
 
+  it('creates a guide at a camera screen point past the gutter, and none inside it or while hidden', () => {
+    const host = document.createElement('div')
+    const onGuideCreate = vi.fn()
+    const overlay = createRulerOverlay(host, { onGuideCreate })
+
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).not.toHaveBeenCalled()
+
+    overlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: true })
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    overlay.createGuideAt('v', { x: 52, y: 10 })
+    overlay.createGuideAt('h', { x: 80, y: 24 })
+    overlay.createGuideAt('v', { x: 24, y: 80 })
+    expect(onGuideCreate.mock.calls).toEqual([['h', 20], ['v', 10]])
+    expect(findPart<HTMLCanvasElement>(host, 'horizontal').dataset.canvasRuler).toBe('h')
+    expect(findPart<HTMLCanvasElement>(host, 'vertical').dataset.canvasRuler).toBe('v')
+
+    overlay.update({ camera: cameraSnapshot({ x: 12, y: 20, scale: 4 }), chromeVisible: true, rulersVisible: false })
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    overlay.destroy()
+    overlay.createGuideAt('h', { x: 80, y: 100 })
+    expect(onGuideCreate).toHaveBeenCalledTimes(2)
+  })
+
   it('cancels an active drag on window blur without publishing', () => {
     const host = document.createElement('div')
     host.style.cursor = 'grab'
