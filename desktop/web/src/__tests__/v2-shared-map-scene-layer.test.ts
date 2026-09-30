@@ -6,6 +6,9 @@ import {
   type SharedMapSceneMap,
   type SharedPixiRenderer,
 } from '../maplibre/shared-scene-layer'
+import { createSharedMapSceneRendererComposition } from '../maplibre/shared-scene-renderer'
+import { SceneRuntimeRenderScheduler } from '../canvas/runtime/scene-runtime/render-scheduler'
+import type { DraftPresentation, SelectionPreview } from '../canvas/runtime/tools/draft'
 import { createTestSceneRendererSnapshot } from './support/scene-renderer-snapshot'
 
 function createCanvas(): HTMLCanvasElement {
@@ -293,5 +296,51 @@ describe('createSharedMapSceneLayer', () => {
       lastFailure: 'presentation failed',
     })
     await adapter.dispose({ mapWillBeRemoved: true })
+  })
+
+  it('a tool draft set on the mounted renderer reaches the Pixi draft layer', async () => {
+    const composition = createSharedMapSceneRendererComposition()
+    const presentation = {
+      dispose: vi.fn(), resize: vi.fn(), renderScene: vi.fn(), setViewport: vi.fn(),
+      setDraft: vi.fn(), setSelectionPreview: vi.fn(),
+    }
+    const canvas = createCanvas()
+    const map = createMap(canvas)
+    const gl = {} as WebGL2RenderingContext
+    const layer = composition.createLayer({
+      id: 'v2-scene', readOrigin: () => ({ lat: 0, lon: 0 }), createRenderer: () => createRenderer(),
+      createStage: () => ({ destroy: vi.fn() }) as never,
+      createPresentation: () => presentation,
+    })
+    const scheduler = new SceneRuntimeRenderScheduler({
+      getRenderer: () => composition.renderer,
+      getViewport: () => ({ x: 0, y: 0, scale: 1 }),
+      prepareSceneRender: async () => ({ publish: () => createTestSceneRendererSnapshot() }),
+      renderChrome: vi.fn(),
+    })
+    await scheduler.initialize(document.createElement('div'))
+    const draft: DraftPresentation = {
+      shapes: [{ kind: 'polyline', points: [{ x: 0, y: 0 }, { x: 4, y: 3 }], style: { token: 'draft', widthPx: 2 } }],
+    }
+    const preview: SelectionPreview = { translate: { x: 1, y: 0 }, rotateDeg: 0, pivot: { x: 0, y: 0 } }
+
+    // Set while the layer is still initializing: the presentation takes it when it exists.
+    scheduler.setDraft(draft)
+    await layer.initialize(map, gl)
+    expect(presentation.setDraft).toHaveBeenCalledExactlyOnceWith(draft)
+
+    layer.layer.onAdd!(map as never, gl)
+    const repaints = vi.mocked(map.triggerRepaint).mock.calls.length
+    scheduler.setSelectionPreview(preview)
+    scheduler.setDraft(null)
+    expect(presentation.setSelectionPreview).toHaveBeenCalledExactlyOnceWith(preview)
+    expect(presentation.setDraft).toHaveBeenLastCalledWith(null)
+    expect(vi.mocked(map.triggerRepaint).mock.calls.length).toBe(repaints + 2)
+
+    // Unmounted, the scheduler has nothing to draw on.
+    await scheduler.unmount()
+    scheduler.setDraft(draft)
+    expect(presentation.setDraft).toHaveBeenCalledTimes(2)
+    await layer.dispose({ mapWillBeRemoved: true })
   })
 })

@@ -151,15 +151,21 @@ export class SceneCanvasInspectionOwner {
       throw error
     }
     this.views.add(owned)
+    /** A plane point, as the ToolHost publishes the pointer (subscribePointerWorld): no screen conversion here. */
+    function inspectAtWorldPoint(world: InspectionPoint): void {
+      if (released || !Number.isFinite(world.x) || !Number.isFinite(world.y)) return
+      if (point?.x === world.x && point.y === world.y) return
+      setPoint({ x: world.x, y: world.y })
+      schedule()
+    }
     return {
       state,
       inspectAtScreenPoint: (screenPoint) => {
         if (released || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return
         const next = groundAt(screenPoint)
-        if (!next || (point?.x === next.x && point.y === next.y)) return
-        setPoint(next)
-        schedule()
+        if (next) inspectAtWorldPoint(next)
       },
+      inspectAtWorldPoint,
       centerOnCanvas: () => { if (!released) { setPoint(canvasCenter()); schedule() } },
       panBy: (delta) => {
         if (released || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return

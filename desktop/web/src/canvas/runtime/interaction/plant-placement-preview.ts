@@ -6,7 +6,7 @@ import type { ScenePersistedState, ScenePlantEntity, ScenePoint } from '../scene
 import { formatMetricDistance } from '../zone-measurements'
 import { appendDistanceGuide } from './plant-drag-distance-overlay'
 import { appendPlantSymbolGhost } from './saved-object-stamp-tool'
-import { plantEntityFromStampSource } from './tool-actions'
+import { plantEntityFromStampSource } from '../tools/tool-actions'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 /** Previews draw the real symbol size at 85% opacity. */

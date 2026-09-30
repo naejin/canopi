@@ -33,6 +33,33 @@ describe('Inspection Lens ownership', () => {
     expect(view.state.value).toBeNull()
   })
 
+  it('inspectAtWorldPoint samples the world point', () => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const camera = new CameraController()
+    camera.initialize({ width: 800, height: 600 })
+    camera.setViewport({ x: 100, y: 50, scale: 10 })
+    const owner = new SceneCanvasInspectionOwner({ camera, revision: { scene: signal(0), plantNames: signal(0) },
+      getSnapshot: () => createTestSceneRendererSnapshot(), setHoveredTarget() {} })
+    const view = owner.mount(document.createElement('div'))
+
+    view.inspectAtWorldPoint({ x: 15, y: 13 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: 15, y: 13 })
+    // The same ground as the screen point that projects to it; no camera read of its own.
+    view.inspectAtWorldPoint({ x: -4.5, y: 2.25 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: -4.5, y: 2.25 })
+    view.inspectAtWorldPoint({ x: Number.POSITIVE_INFINITY, y: 0 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value!.point).toEqual({ x: -4.5, y: 2.25 })
+    expect(camera.snapshot.peek().viewport).toEqual({ x: 100, y: 50, scale: 10 })
+    owner.dispose()
+    view.inspectAtWorldPoint({ x: 1, y: 1 })
+    vi.advanceTimersByTime(20)
+    expect(view.state.value).toBeNull()
+  })
+
   it('keeps its inspected location when the main camera moves', () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)

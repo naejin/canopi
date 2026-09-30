@@ -5,7 +5,7 @@ import {
 import { matchShellCommandShortcut } from '../../app/shell-commands'
 import { singleKeyShortcuts } from '../../app/settings/state'
 import { getCurrentCanvasCommandSurface } from '../../canvas/session'
-import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
+import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
 import { matchesShortcut } from '../../app/shell-commands/shortcut-text'
 import {
   DESKTOP_SHELL_COMMAND_CATALOG,

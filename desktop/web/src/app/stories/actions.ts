@@ -22,7 +22,7 @@ import {
 import { currentDesign, designSessionStore } from '../document-session/store'
 import { canShowSavedViews, captureCurrentView, goToSavedView } from '../saved-views/current-view'
 import { modalLayerOpen } from '../shell/modal-layer'
-import { isEditableTarget } from '../../canvas/runtime/interaction/pointer-utils'
+import { isEditableTarget } from '../../canvas/runtime/input/editable-target'
 
 // The Stories panel's action layer. Stories and their steps are Design Edit
 // data (app/design-edit/stories.ts); each step shows a saved view, so adding

@@ -18,20 +18,8 @@ export function hasAdditiveModifier(event: Pick<MouseEvent, 'shiftKey' | 'ctrlKe
   return Boolean(event.shiftKey || event.ctrlKey || event.metaKey)
 }
 
-export function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
-}
-
-export function allowsNativeContextMenuTarget(target: EventTarget | null): boolean {
-  const element = target instanceof HTMLElement
-    ? target
-    : (target instanceof Node ? target.parentElement : null)
-  if (!element) return false
-  if (isEditableTarget(element)) return true
-  return element.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"], dialog') !== null
-}
+// The legacy tool modules still read DOM key targets until their streams port them (plan §4 0B).
+export { isEditableTarget } from '../input/editable-target'
 
 /** Shift while drawing: the point along the nearest 45° direction from `origin`. */
 export function constrainPointTo45Degrees(origin: ScenePoint, point: ScenePoint): ScenePoint {

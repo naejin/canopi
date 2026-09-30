@@ -123,8 +123,8 @@ describe('Scene Interaction tool module boundaries', () => {
     expect(documentSource.indexOf('this._prepareForDocumentReplacement()'))
       .toBeGreaterThan(documentSource.indexOf('this._authority.replaceDocument(file, {'))
 
-    const toolActionsSource = readSource('../canvas/runtime/interaction/tool-actions.ts')
-    const dragOpsSource = readSource('../canvas/runtime/interaction/drag-ops.ts')
+    const toolActionsSource = readSource('../canvas/runtime/tools/tool-actions.ts')
+    const dragOpsSource = readSource('../canvas/runtime/scene-runtime/drag-state.ts')
     expect(toolActionsSource).not.toContain('appendRectangleZone(store')
     expect(toolActionsSource).not.toContain('appendTextAnnotation(\n  store')
     expect(dragOpsSource).not.toContain('applySceneDragDelta(\n  store')

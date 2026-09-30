@@ -27,7 +27,7 @@ import {
   appendLineZoneToDraft,
   appendPolygonZoneToDraft,
   appendRectangleZoneToDraft,
-} from './tool-actions'
+} from '../tools/tool-actions'
 import { getRectangularZoneCorners } from '../zone-geometry'
 import { constrainPointTo45Degrees, isEditableTarget } from './pointer-utils'
 import type { SceneToolAdapter } from './tool-adapter'

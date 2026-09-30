@@ -55,6 +55,12 @@ export interface SceneRendererInstance {
   renderScene(snapshot: SceneRendererSnapshot): void
   // Camera-only update. Must not assume the runtime will provide a fresh scene snapshot.
   setViewport(viewport: SceneViewportState): void
+  /**
+   * Tool drafts and the selection preview (the ToolHost's renderer sink), for the Pixi draft layer. Optional in 0B because
+   * test fakes build this interface as a literal; SceneRenderer (end of 0D2) requires both.
+   */
+  setDraft?(draft: DraftPresentation | null): void
+  setSelectionPreview?(preview: SelectionPreview | null): void
   dispose(): void | PromiseLike<void>
 }
 

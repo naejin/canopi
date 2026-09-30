@@ -9,7 +9,7 @@ import { hideInteractionPreview, showInteractionPreview } from './overlay-ui'
 import { createZoneMeasurementOverlay } from './zone-measurement-overlay'
 import { isSceneLayerOpenForCreation } from './layer-guards'
 import type { SceneToolAdapter } from './tool-adapter'
-import { appendMeasurementGuideToDraft } from './tool-actions'
+import { appendMeasurementGuideToDraft } from '../tools/tool-actions'
 
 interface ActiveMeasurementGuideDraft {
   readonly startWorld: ScenePoint

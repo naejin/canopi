@@ -1,4 +1,5 @@
 import type { CameraViewportSnapshot } from '../camera'
+import type { ScreenPoint } from '../view/types'
 import { NICE_DISTANCES } from '../../grid'
 import { CANVAS_CHROME_FONT_FAMILY } from '../../chrome-fonts'
 import { getCanvasColor } from '../../theme-refresh'
@@ -23,9 +24,14 @@ export interface RulerOverlayOptions {
   readonly onGuideCreate: (axis: RulerAxis, worldPosition: number) => void
 }
 
+/**
+ * Draws the rulers and creates the guides dragged out of them. `createGuideAt` is the RulerGuidePort
+ * (interaction-ports.ts) that the DOM input source and the ToolHost take: today's gutter, origin and visibility checks.
+ */
 export interface RulerOverlay {
   update(snapshot: RulerOverlaySnapshot): void
   refreshTheme(): void
+  createGuideAt(axis: RulerAxis, at: ScreenPoint): void
   destroy(): void
 }
 
@@ -114,6 +120,26 @@ class HtmlRulerOverlay implements RulerOverlay {
     this._palette = readRulerPalette(this._container)
   }
 
+  /**
+   * A guide released at `at`, in CSS px of the camera's screen (the map host): nothing while the rulers are hidden or
+   * inside the ruler's own gutter; otherwise a guide at that world coordinate of the latest camera.
+   */
+  createGuideAt(axis: RulerAxis, at: ScreenPoint): void {
+    if (this._destroyed) return
+    const snapshot = this._snapshot
+    if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible) return
+    const origin = this._overlayOrigin()
+    const screenX = at.x
+    const screenY = at.y
+    if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
+    if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
+
+    const viewport = snapshot.camera.viewport
+    const screenPosition = axis === 'h' ? screenY : screenX
+    const viewportOffset = axis === 'h' ? viewport.y : viewport.x
+    this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
+  }
+
   destroy(): void {
     if (this._destroyed) return
     this._destroyed = true
@@ -125,6 +151,8 @@ class HtmlRulerOverlay implements RulerOverlay {
 
   private _configureParts(): void {
     this._horizontalCanvas.dataset.rulerOverlayPart = 'horizontal'
+    // The DOM input source classifies a press here as a ruler target (spec §1.2).
+    this._horizontalCanvas.dataset.canvasRuler = 'h'
     this._horizontalCanvas.style.cssText = `
       position: absolute;
       top: 0;
@@ -138,6 +166,7 @@ class HtmlRulerOverlay implements RulerOverlay {
     `
 
     this._verticalCanvas.dataset.rulerOverlayPart = 'vertical'
+    this._verticalCanvas.dataset.canvasRuler = 'v'
     this._verticalCanvas.style.cssText = `
       position: absolute;
       top: ${RULER_SIZE}px;
@@ -195,20 +224,9 @@ class HtmlRulerOverlay implements RulerOverlay {
     const onMouseUp = (upEvent: MouseEvent): void => {
       cancel()
       if (this._destroyed) return
-
-      const snapshot = this._snapshot
-      if (!snapshot || !snapshot.chromeVisible || !snapshot.rulersVisible) return
       const rect = this._container.getBoundingClientRect()
       const origin = this._overlayOrigin()
-      const screenX = upEvent.clientX - rect.left + origin.x
-      const screenY = upEvent.clientY - rect.top + origin.y
-      if (axis === 'h' && screenY <= origin.y + RULER_SIZE) return
-      if (axis === 'v' && screenX <= origin.x + RULER_SIZE) return
-
-      const viewport = snapshot.camera.viewport
-      const screenPosition = axis === 'h' ? screenY : screenX
-      const viewportOffset = axis === 'h' ? viewport.y : viewport.x
-      this._options.onGuideCreate(axis, (screenPosition - viewportOffset) / viewport.scale)
+      this.createGuideAt(axis, { x: upEvent.clientX - rect.left + origin.x, y: upEvent.clientY - rect.top + origin.y })
     }
 
     const onBlur = (): void => {
