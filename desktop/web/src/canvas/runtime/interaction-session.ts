@@ -11,8 +11,8 @@
 // tooltip, Unlock affordance and note editor), bridges the plant and saved-stamp read models to a registered tool, reads
 // the snapping settings per point, calls ToolHost.rawPress for every raw press on the map host and ToolHost.interrupted()
 // after a window blur, owns the navigation cursor, and passes on no draft while a story is presented. Ruler presses reach
-// the source beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and hands the source and
-// the host a port forwarding to it; a bridged tool gets today's ruler drag from the session, a registered one the host's.
+// the source beside the map: the session finds the pressed ruler's overlay (chrome/rulers.ts) and runs today's ruler drag
+// under any tool (its cursor, its end on a blur, its guide at the release), whatever the tool's path does with the input.
 
 import { computed, effect, signal, type ReadonlySignal } from '@preact/signals'
 import { readPlantStampSource, clearPlantStampSource } from '../plant-stamp-source'
@@ -213,10 +213,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
   private _navigationCursor: 'grab' | 'grabbing' | null = null
   private _toolCursor: string | null = null
   private _draft: DraftPresentation | null = null
-  /** The ruler pressed now, and its pointer: the forwarding port's target, and a bridged tool's ruler drag. */
+  /** The ruler pressed now, and its pointer: the forwarding port's target, and today's ruler drag. */
   private _rulerPress: RulerPress | null = null
   private _rulerPointer: number | null = null
-  /** The source's and the host's ruler port: whichever overlay's ruler was pressed last. */
+  /** The source's ruler port: whichever overlay's ruler was pressed last. */
   private readonly _rulers: RulerGuidePort = {
     createGuideAt: (axis, at) => this._rulerPress?.createGuideAt(axis, at),
   }
@@ -359,7 +359,6 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         timers: { ...timers, clock },
         hover: (target) => _deps.setHoveredTarget(target),
         inspect: _deps.tryInspectAt,
-        rulers: this._rulers,
         transientHistoryChanged: () => _deps.notifyTransientHistoryChange?.(),
       }
       this._toolHost = own(createToolHost(hostDeps), (host) => host.dispose())
@@ -600,37 +599,39 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     ], 'Scene Interaction window blur failed')
   }
 
+  /**
+   * The armed tool's path, then today's ruler drag, which heard its own mousemove and mouseup: the drag cursor follows the
+   * pointer and the guide lands at the release whatever the tool did with the event (a failure, or a pending
+   * cancellation's swallow).
+   */
   private _route(input: RawInput, event: Event | null): void {
-    if (!this._registered()) {
-      this._routeToBridge(input, event)
-      return
-    }
     try {
-      this._routeToHost(input)
+      if (this._registered()) this._routeToHost(input)
+      else this._routeToBridge(input, event)
     } finally {
-      // The rulers show the drag cursor, as for a bridged tool; the host landed the guide (or not) at the release, and
-      // the drag ends even when the release failed, as today's ruler mouseup did.
       if (input.kind === 'move' && input.id === this._rulerPointer) this._rulerPress?.drag()
-      if (input.kind === 'up' && input.id === this._rulerPointer) this._endRulerPress()
+      if (input.kind === 'up' && input.id === this._rulerPointer) this._releaseRuler(input.at)
     }
   }
 
   /** A registered tool's input: recognised, routed, and the recogniser's and the host's effects applied to the event. */
   private _routeToHost(input: RawInput): void {
-    let retried: boolean
-    try {
-      retried = this._toolHost.retryPendingCancellation()
-    } catch (error) {
-      // Today's retry quarantined the event before it retried, whatever the event.
-      this._source.apply(QUARANTINE)
-      throw error
-    }
-    if (retried) {
-      // Today's app-wide swallow while a failed cancellation is pending; the retry ended every live gesture.
-      const fenced = recognise(this._recogniser, { kind: 'escape', t: input.t }, this._config)
-      this._recogniser = fenced.state
-      this._source.apply([...QUARANTINE, ...fenced.effects.filter((effect) => effect.kind === 'release-capture')])
-      return
+    if (retriesPendingCancellation(input)) {
+      let retried: boolean
+      try {
+        retried = this._toolHost.retryPendingCancellation()
+      } catch (error) {
+        // Today's retry quarantined the event before it retried.
+        this._source.apply(QUARANTINE)
+        throw error
+      }
+      if (retried) {
+        // Today's app-wide swallow while a failed cancellation is pending; the retry ended every live gesture.
+        const fenced = recognise(this._recogniser, { kind: 'escape', t: input.t }, this._config)
+        this._recogniser = fenced.state
+        this._source.apply([...QUARANTINE, ...fenced.effects.filter((effect) => effect.kind === 'release-capture')])
+        return
+      }
     }
     const result = recognise(this._recogniser, input, this._config)
     this._recogniser = result.state
@@ -669,20 +670,10 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
         else if (event) bridge.pointerDown(event as PointerEvent)
         break
       case 'move':
-        try {
-          if (event) bridge.pointerMove(event as PointerEvent)
-        } finally {
-          // Today's ruler heard its own mousemove: the drag cursor follows even when the tool's move fails.
-          if (input.id === this._rulerPointer) this._rulerPress?.drag()
-        }
+        if (event) bridge.pointerMove(event as PointerEvent)
         break
       case 'up':
-        try {
-          if (event) bridge.pointerUp(event as PointerEvent)
-        } finally {
-          // Today's ruler heard its own mouseup: the guide lands even when the tool's release fails.
-          if (input.id === this._rulerPointer) this._releaseRuler(input.at)
-        }
+        if (event) bridge.pointerUp(event as PointerEvent)
         break
       case 'cancel':
         if (input.reason === 'blur') bridge.windowBlur()
@@ -741,14 +732,17 @@ class DefaultSceneInteractionSession implements SceneInteractionSession {
     this._rulerPointer = this._rulerPress ? pointerId : null
   }
 
-  /** Today's ruler drag at its release: the cursor comes back, then the guide lands where the pointer let go. */
+  /**
+   * Today's ruler drag at its release: the cursor comes back, then the guide lands where the pointer let go, only while
+   * north is up (spec §4.6), under a bridged or a registered tool alike.
+   */
   private _releaseRuler(at: ScreenPoint): void {
     const press = this._rulerPress
     this._rulerPress = null
     this._rulerPointer = null
     if (!press) return
     press.end()
-    press.createGuideAt(press.axis, at)
+    if (this._frames.viewFrame.peek().view.northUp) press.createGuideAt(press.axis, at)
   }
 
   private _endRulerPress(): void {
@@ -1059,6 +1053,22 @@ function toolSourceFor(tool: ToolId): ToolSource | null {
 function clearToolSource(tool: ToolId): void {
   if (tool === 'plant-stamp') clearPlantStampSource()
   else if (tool === 'saved-object-stamp') clearSavedObjectStampSource()
+}
+
+/**
+ * The inputs today's handlers retried a pending cancellation on, and swallowed: a primary or middle press on the map host
+ * (a Mac Ctrl click is button 0), a pointerup, a pointercancel, a wheel and a native contextmenu; keys retry in the keyboard
+ * port. Moves, leaves, lost captures, blurs, other presses and ruler presses were never fenced.
+ */
+function retriesPendingCancellation(input: RawInput): boolean {
+  switch (input.kind) {
+    case 'down': return input.target.kind !== 'ruler' && (input.role !== 'secondary' || input.ctrlConsumed)
+    case 'up':
+    case 'wheel':
+    case 'native-contextmenu': return true
+    case 'cancel': return input.reason === 'pointercancel'
+    default: return false
+  }
 }
 
 function mergeOutcomes(a: GestureOutcome, b: GestureOutcome): GestureOutcome {

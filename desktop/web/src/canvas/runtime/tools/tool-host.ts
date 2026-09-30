@@ -78,11 +78,10 @@ interface LiveGesture {
   readonly kind: 'tool' | 'handle' | 'ruler'
   readonly pointer: PointerKind
   /** The press as a world point, converted once at the press, so the drag start stays on the ground (plan §1, exception 1).
-   *  Null for a ruler press, whose guide is placed from the release's screen point. */
+   *  Null for a ruler press, whose drag and guide are the interaction session's. */
   start: ToolPoint | null
   readonly startHit: HitTarget | null
   readonly handle: ToolHandleId | null
-  readonly axis: 'h' | 'v' | null
   /** Where the pointer last was, re-emitted on a camera frame while the drag is live. */
   lastScreen: ScreenPoint
   lastMods: Modifiers
@@ -559,13 +558,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function press(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
-    if (retryPendingCancellation()) return REFUSED_PRESS
+    // Today's ruler drag listened beside the map: a pending cancellation never fenced its press.
+    if (g.target.kind !== 'ruler' && retryPendingCancellation()) return REFUSED_PRESS
     if (!activeTool) return NOTHING
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
     if (g.target.kind === 'ruler') {
-      // Ruler presses create guides; today's ruler drag runs outside the scene's admission.
+      // The session runs the ruler drag and lands its guide, outside the scene's admission as today; the tool hears none of it.
       live = liveGesture(g, 'ruler', null, null)
       return NOTHING
     }
@@ -618,7 +618,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       start,
       startHit,
       handle: target.kind === 'handle' ? target.id : null,
-      axis: target.kind === 'ruler' ? target.axis : null,
       lastScreen: g.at,
       lastMods: g.mods,
       dragging: false,
@@ -636,15 +635,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     gesture.lastMods = g.mods
     const tool = activeTool
     if (gesture.kind === 'ruler' || !tool) {
-      // A ruler drag's cursor is the rulers' own (the session's RulerPress): the map keeps the tool's, as today.
-      if (g.kind !== 'drag-end') return NOTHING
-      try {
-        endLive()
-      } finally {
-        // A guide dragged out of a ruler lands at the release, only while north is up, even when the release's own
-        // cleanup failed (today's ruler heard its own mouseup).
-        if (gesture.axis && frame().view.northUp) deps.rulers?.createGuideAt(gesture.axis, g.at)
-      }
+      // A ruler drag's cursor and guide are the session's (its RulerPress): the map keeps the tool's cursor, as today.
+      if (g.kind === 'drag-end') endLive()
       return NOTHING
     }
     if (g.kind !== 'drag-end') {
@@ -723,7 +715,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function cancel(g: Extract<Gesture, { kind: 'cancel' }>): GestureOutcome {
-    if (retryPendingCancellation()) return QUARANTINE
+    // Today's pointercancel retried a pending cancellation and was swallowed; a blur or a lost capture ran the cancellation
+    // and went on to the app.
+    if (retryPendingCancellation()) return g.reason === 'blur' || g.reason === 'lost-capture' ? NOTHING : QUARANTINE
     if (!live) return NOTHING
     guardCancellation(() => {
       cancelLive(g.reason)

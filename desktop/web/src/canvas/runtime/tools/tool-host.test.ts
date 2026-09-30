@@ -511,21 +511,76 @@ describe('ToolHost', () => {
       expect(h.record.focus.at(-1)).toBe('map:tool-requested')
     })
 
-    it('a ruler drag creates a guide at its release while north is up', () => {
-      const select = stubTool('select')
-      useStubTools(select)
-      const createGuideAt = vi.fn()
-      const h = harness({ rulers: { createGuideAt } })
+    it('a ruler drag reaches no tool, leaves the map\'s cursor alone and is never fenced by a pending cancellation', () => {
+      let failing = true
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failing) throw new Error('cancel failed')
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness()
+      h.arm('rectangle')
+      h.press({ x: 10, y: 10 })
+      expect(() => h.blur()).toThrow('cancel failed')
+      failing = false
+      const pressesBefore = rectangle.count('press')
+      const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
+      const cursor = h.chrome.cursor
 
-      h.press({ x: 5, y: 0 }, { target: { kind: 'ruler', axis: 'h' } })
+      // The session runs the drag and lands its guide (today's ruler listened beside the map).
+      expect(h.press({ x: 5, y: 0 }, { target: { kind: 'ruler', axis: 'h' } })).toEqual({})
+      expect(h.host.hasLiveGesture()).toBe(true)
       h.move({ x: 5, y: 40 })
       h.move({ x: 5, y: 60 })
+      expect(retries()).toBe(0)
       // Today's drag cursor was the rulers' own: the map keeps the tool's.
-      expect(h.chrome.cursor).toBe('default')
-      h.release({ x: 5, y: 90 })
-      expect(createGuideAt).toHaveBeenCalledWith('h', { x: 5, y: 90 })
-      expect(select.gestures).toEqual([])
-      expect(h.chrome.cursor).toBe('default')
+      expect(h.chrome.cursor).toBe(cursor)
+      // Its release is a pointerup, which today's handler retried and swallowed.
+      expect(h.release({ x: 5, y: 90 })).toEqual({ quarantine: true })
+      expect(retries()).toBe(1)
+      expect(h.host.hasLiveGesture()).toBe(false)
+      expect(rectangle.count('press')).toBe(pressesBefore)
+      expect(rectangle.count('drag-start')).toBe(0)
+      expect(h.chrome.cursor).toBe(cursor)
+    })
+
+    it('a blur or a lost capture that retries a pending cancellation goes on to the app; a pointercancel is swallowed', () => {
+      let failing = true
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failing) throw new Error('cancel failed')
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(rectangle)
+      const h = harness()
+      h.arm('rectangle')
+      const pendingWith = (reason: 'blur' | 'lost-capture' | 'pointercancel') => {
+        failing = true
+        h.press({ x: 10, y: 10 })
+        expect(() => h.blur()).toThrow('cancel failed')
+        failing = false
+        return h.host.gesture({ kind: 'cancel', reason })
+      }
+
+      expect(pendingWith('blur')).toEqual({})
+      expect(pendingWith('lost-capture')).toEqual({})
+      expect(pendingWith('pointercancel')).toEqual({ quarantine: true })
+      expect(h.host.retryPendingCancellation()).toBe(false)
     })
   })
 

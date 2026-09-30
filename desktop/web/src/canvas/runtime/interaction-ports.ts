@@ -143,8 +143,6 @@ export interface ToolHostDeps {
   readonly hover: (target: SceneDesignObjectTarget | null) => void
   /** The raster inspection probe (CanvasRuntimeAppAdapter.tryInspectAt, passed by scene-runtime.ts); true claims the press. INV-ENT-24. */
   readonly inspect?: (world: WorldPoint) => boolean
-  /** The same port as DomInputSourceDeps.rulers: the host creates the guide at a ruler-target drag-end, only while north is up. */
-  readonly rulers?: RulerGuidePort
   /** Today's notifyTransientHistoryChange: the runtime's transientHistory revision (Edit › Undo during a draft). */
   readonly transientHistoryChanged: () => void
 }
@@ -177,8 +175,10 @@ export interface ToolHost {
   isRegistered(id: ToolId): boolean
   /** The active tool's dragSlopPx, sent in the recogniser's configure on every tool change. */
   activeToolDragSlopPx(): number | null
-  /** Asked by the session before it routes any source or key event: true while a failed cancellation was pending and has now
-   *  been retried, so the event is quarantined (today's app-wide swallow). */
+  /** Asked by the session before it routes the events today's handlers retried on (a primary or middle press on the map, a
+   *  pointerup, a pointercancel, a wheel, a native contextmenu, a key): true while a failed cancellation was pending and has
+   *  now been retried, so the event is quarantined (today's app-wide swallow). Moves, leaves, lost captures, blurs and ruler
+   *  presses are never fenced. */
   retryPendingCancellation(): boolean
   /**
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it

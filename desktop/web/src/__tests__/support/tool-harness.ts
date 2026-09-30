@@ -541,12 +541,29 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
 
   const mods = (partial: Partial<Modifiers> = {}): Modifiers => ({ ...NO_MODIFIERS, ...partial })
 
-  /** The session's routing: a failed cancellation is retried (and the event quarantined) before anything is routed. */
+  /**
+   * The session's routing: a failed cancellation is retried (and the event quarantined) before the gesture of an event
+   * today's handlers retried on is routed (a press on the map, a release, a pointercancel, a wheel, a menu); hovers, drags,
+   * blurs, lost captures and ruler presses go straight on (interaction-session.ts, retriesPendingCancellation).
+   */
   function route(g: Gesture): GestureOutcome {
-    if (host.retryPendingCancellation()) {
+    if (retriedOn(g) && host.retryPendingCancellation()) {
       return g.kind === 'press' ? { quarantine: true, rejectSession: true } : { quarantine: true }
     }
     return router.route(g)
+  }
+
+  function retriedOn(g: Gesture): boolean {
+    switch (g.kind) {
+      case 'press': return g.target.kind !== 'ruler'
+      case 'tap':
+      case 'drag-end':
+      case 'menu-request':
+      case 'zoom': return true
+      case 'pan': return g.source === 'wheel'
+      case 'cancel': return g.reason === 'pointercancel'
+      default: return false
+    }
   }
 
   const harness: ToolHarness = {

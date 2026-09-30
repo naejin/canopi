@@ -654,6 +654,88 @@ describe('the interaction session', () => {
     }
   })
 
+  /** A registered Rectangle whose press opens a Scene Edit, left with a pending cancellation by a blur whose cancel fails. */
+  function pendingCancellation(): { readonly rectangle: StubTool, readonly failing: { value: boolean }, readonly retries: () => number } {
+    const failing = { value: true }
+    let edit: SceneEditTransaction | null = null
+    const rectangle: StubTool = stubTool('rectangle', {
+      gesture: (gesture) => {
+        if (gesture.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+        return 'pass'
+      },
+      cancelTransient: () => {
+        if (failing.value) throw new Error('cancel failed')
+        edit?.abort()
+        edit = null
+      },
+    })
+    useStubTools(rectangle)
+    const { session } = createSession()
+    session.setTool('rectangle')
+    events.pointerDown({ x: 20, y: 20 }, { pointerId: 3 })
+    expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+    const retries = (): number => rectangle.calls.filter((call) => call === 'cancelTransient:tool-change').length
+    return { rectangle, failing, retries }
+  }
+
+  it('a pending cancellation is retried only on the events today\'s handlers retried on; hovers and ruler drags go on', () => {
+    const { failing, retries } = pendingCancellation()
+    failing.value = false
+    const panel = document.createElement('div')
+    document.body.appendChild(panel)
+    const panelMoves = vi.fn()
+    panel.addEventListener('pointermove', panelMoves)
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    const rulerPresses = vi.fn()
+    rulers.horizontal.addEventListener('pointerdown', rulerPresses)
+
+    try {
+      // Today's pointermove and pointerleave never retried: a hover over a panel, or leaving the map, reaches the app.
+      events.pointerMove({ x: 10, y: 10 }, { target: panel, buttons: 0, pointerId: 30 })
+      events.pointerMove({ x: 60, y: 60 }, { buttons: 0, pointerId: 30 })
+      events.pointerLeave({ x: 60, y: 60 }, { pointerId: 30 })
+      expect(panelMoves).toHaveBeenCalledOnce()
+      expect(retries()).toBe(0)
+
+      // Today's ruler listened beside the map: its press is never fenced, and its release, which today's pointerup retried
+      // and swallowed, still lands the guide (its own mouseup).
+      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal, pointerId: 40 })
+      expect(rulerPresses).toHaveBeenCalledOnce()
+      events.pointerMove({ x: 180, y: 60 }, { pointerId: 40, buttons: 1 })
+      expect(retries()).toBe(0)
+      const release = events.pointerUp({ x: 180, y: 100 }, { pointerId: 40 })
+      expect(retries()).toBe(1)
+      expect(release.defaultPrevented).toBe(true)
+      expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    } finally {
+      panel.remove()
+    }
+  })
+
+  it('a window blur while a cancellation is pending goes on to the app, as today\'s blur handlers let it', () => {
+    const { failing } = pendingCancellation()
+    const blurs = vi.fn()
+    window.addEventListener('blur', blurs)
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+
+    try {
+      // The interruption's own cancellation fails again: its error is the blur's only one.
+      expect(captureWindowErrors(() => { events.windowBlur() })).toHaveLength(1)
+      expect(blurs).toHaveBeenCalledOnce()
+
+      // A blur that ends a ruler drag retries the cancellation for the drag's host press, and is not swallowed either.
+      failing.value = false
+      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal, pointerId: 40 })
+      events.pointerMove({ x: 180, y: 60 }, { pointerId: 40, buttons: 1 })
+      events.windowBlur()
+      expect(blurs).toHaveBeenCalledTimes(2)
+      events.pointerUp({ x: 180, y: 100 }, { pointerId: 40 })
+      expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('blur', blurs)
+    }
+  })
+
   it('a session built with a stamp tool armed hands the tool its pick', () => {
     const sources: (ToolSource | null)[] = []
     const record = {
@@ -880,6 +962,34 @@ describe('ruler drags through the session', () => {
     useStubTools(stubTool('select'))
     createSession(failingHover)
     failingDrag()
+  })
+
+  it('a ruler guide lands only while north is up, under a bridged and a registered tool', () => {
+    const rotated = createTestView({ screen: { width: 400, height: 300 }, camera: { bearingDeg: 30 } })
+    const rulers = mountRulers(rulerCamera({ y: 20, scale: 4 }))
+    const drag = (): void => {
+      events.pointerDown({ x: 180, y: 10 }, { target: rulers.horizontal })
+      events.pointerMove({ x: 180, y: 60 })
+      events.pointerUp({ x: 180, y: 100 })
+    }
+
+    try {
+      createSession({ frames: rotated.frames }).session
+      drag()
+      sessions.pop()!.dispose()
+      useStubTools(stubTool('select'))
+      createSession({ frames: rotated.frames })
+      drag()
+      expect(rulers.onGuideCreate).not.toHaveBeenCalled()
+      sessions.pop()!.dispose()
+
+      // North up, the same drag lands its guide.
+      createSession()
+      drag()
+      expect(rulers.onGuideCreate).toHaveBeenCalledExactlyOnceWith('h', 20)
+    } finally {
+      rotated.dispose()
+    }
   })
 
   it('a ruler guide lands with the rulers\' camera at its release', () => {
