@@ -250,7 +250,7 @@ export function createDraftLayer(options: DraftLayerOptions): DraftLayer {
       fontSize: visual.fontSizePx,
       fontWeight: visual.fontWeight,
       fill: painters.paint(visual.color),
-      ...(visual.lineHeightPx === null ? {} : { lineHeight: visual.lineHeightPx }),
+      lineHeight: visual.lineHeightPx,
     })
     const inset = { x: visual.borderWidthPx + visual.paddingPx.x, y: visual.borderWidthPx + visual.paddingPx.y }
     const width = text.width + 2 * inset.x

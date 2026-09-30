@@ -6,6 +6,7 @@ import { getCanvasColor } from '../theme-refresh'
 import { getCanvasInteractionStrokeVisual, getDraftLabelVisual, getDraftVisual } from './scene-visuals'
 
 const GLOBAL_CSS = readFileSync('src/styles/global.css', 'utf8')
+const MAPLIBRE_CSS = readFileSync('node_modules/maplibre-gl/dist/maplibre-gl.css', 'utf8')
 const DOCUMENT_LANG = document.documentElement.lang
 
 /** `--text-xs` in px from the first global.css block that `opener` starts. */
@@ -78,6 +79,19 @@ describe('scene visuals', () => {
         expect(getDraftLabelVisual(tone).fontSizePx, `${lang} ${tone}`).toBe(size)
       }
       expect(getDraftLabelVisual('measure').lineHeightPx, lang).toBeCloseTo(size * 1.2)
+    }
+  })
+
+  it('gives hint chips the line box they inherit from the map container', () => {
+    // Today's hint chips set no line-height, so they take the one in `.maplibregl-map`'s font shorthand (maplibre-gl.css),
+    // the class MapLibre puts on the container they sit in, whatever the font size.
+    const inherited = Number.parseFloat(MAPLIBRE_CSS.match(/\.maplibregl-map\{font:[\d.]+px\/([\d.]+)px/)![1]!)
+    expect(inherited).toBe(20)
+    for (const lang of ['en', 'zh']) {
+      document.documentElement.lang = lang
+      for (const tone of ['hint', 'hint-primary', 'warning'] as const) {
+        expect(getDraftLabelVisual(tone).lineHeightPx, `${lang} ${tone}`).toBe(inherited)
+      }
     }
   })
 })

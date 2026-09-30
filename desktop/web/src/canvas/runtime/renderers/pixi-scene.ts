@@ -58,6 +58,8 @@ import { isSceneObjectGroupMemberTarget } from '../scene'
 
 const ZONE_STROKE_PX = 2
 const MEASUREMENT_GUIDE_STROKE_PX = 1.5
+/** Plant a row's disc: today's 2 px border-box border keeps it at least 4 px across (plant-spacing-overlay.ts). */
+const DOT_GHOST_MIN_RADIUS_PX = 2
 const graphicsKeys = new WeakMap<Graphics, string>()
 
 type PixiSceneWorkName = 'plantObjects' | 'plantCull' | 'plantEntries' | 'plantLayout' | 'plantDraw'
@@ -397,8 +399,8 @@ export function createDraftScenePainters(getSnapshot: () => SceneRendererSnapsho
         localizedCommonNames: snapshot.localizedCommonNames,
       }, new Set())
       if (!entry) return false
-      // Plant a row's look: a disc in the display colour, its border the same colour.
-      if (mark === 'dot') graphics.circle(0, 0, entry.radiusScreenPx).fill({ color: toPixiColor(entry.color, 0) })
+      // Plant a row's look: a disc in the display colour, its 2 px border the same colour, so never under 2 px in radius.
+      if (mark === 'dot') graphics.circle(0, 0, Math.max(entry.radiusScreenPx, DOT_GHOST_MIN_RADIUS_PX)).fill({ color: toPixiColor(entry.color, 0) })
       else drawPlantGlyph(graphics.context, entry)
       return true
     },

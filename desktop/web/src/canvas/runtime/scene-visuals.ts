@@ -126,8 +126,8 @@ export interface DraftLabelVisual {
   readonly fontFamily: string
   readonly fontWeight: '400' | '600'
   readonly fontSizePx: number
-  /** Null keeps the font's normal line height. */
-  readonly lineHeightPx: number | null
+  /** The text's line box; the chip's height is this plus padding and border. */
+  readonly lineHeightPx: number
   readonly paddingPx: { readonly x: number; readonly y: number }
   readonly color: string
   readonly background: string
@@ -144,6 +144,9 @@ const DRAFT_LABEL_CJK_FONT_SIZE_PX = 13
 const CJK_LANGUAGE = /^(zh|ja|ko)(-|$)/i
 const DRAFT_LABEL_RADIUS_PX = 5
 const DRAFT_LABEL_GAP_PX = 4
+// Today's hint chips set no line-height and sit in the map container, so they inherit the 20 px of
+// `.maplibregl-map { font: 12px/20px … }` (maplibre-gl.css) at every font size.
+const DRAFT_LABEL_HINT_LINE_HEIGHT_PX = 20
 
 /** `--text-xs` in the page language, which utils/theme.ts keeps on the root element. */
 function draftLabelFontSizePx(): number {
@@ -185,7 +188,7 @@ export function getDraftLabelVisual(tone: DraftLabelTone): DraftLabelVisual {
     placement: 'above',
     fontFamily: CANVAS_CHROME_FONT_FAMILY,
     fontWeight: '600',
-    lineHeightPx: null,
+    lineHeightPx: DRAFT_LABEL_HINT_LINE_HEIGHT_PX,
     paddingPx: tone === 'hint-primary' ? { x: 8, y: 4 } : { x: 6, y: 2 },
     color: getCanvasColor(tone === 'hint-primary' ? 'chip-primary' : 'chip-text'),
     background: getCanvasColor('chip-surface'),

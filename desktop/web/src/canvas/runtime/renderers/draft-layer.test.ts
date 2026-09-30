@@ -324,13 +324,35 @@ describe('draft layer', () => {
     expect(pathSteps(fills[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3)).toEqual([0, 0, radiusAt(source)])
   })
 
+  it('a dot ghost is never smaller than its 2 px border', () => {
+    // Today's disc is a border-box div with a 2 px border (plant-spacing-overlay.ts), which CSS never draws under 4 px across.
+    const source = createPlant({ id: 'source', position: { x: 0, y: 0 } })
+    const neighbour = createPlant({ id: 'neighbour', position: { x: 0.1, y: 0 } })
+    const snapshot = createTestSceneRendererSnapshot({ scene: { plants: [source, neighbour] } })
+    const layer = mountLayer(snapshot)
+    const ghost = { ...source, id: 'row-ghost', position: { x: 10, y: 0 } }
+    layer.setDraft({ shapes: [{ kind: 'ghost', entity: { kind: 'plant', plant: ghost, mark: 'dot', sizeFrom: source.position }, opacity: 0.35 }] })
+    layer.place({ x: 10, y: 20 }, 30)
+
+    const presented = buildPlantPresentationEntries([source], {
+      plants: snapshot.scene.plants, viewport: { x: 0, y: 0, scale: 30 }, speciesCache: snapshot.speciesCache,
+    }, new Set())[0]!.radiusScreenPx
+    expect(presented).toBeLessThan(2)
+
+    const [dot, ...rest] = layer.screen.children
+    expect(rest).toEqual([])
+    const fills = paintInstructions(dot as Graphics, 'fill')
+    expect(fills).toHaveLength(1)
+    expect(pathSteps(fills[0]!).find((step) => step.action === 'circle')?.data.slice(0, 3)).toEqual([0, 0, 2])
+  })
+
   it('each label tone draws its chip style', () => {
     const cases = [
-      { tone: 'measure', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '600', text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },
-      { tone: 'measure-quiet', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '400', text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },
-      { tone: 'hint', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
-      { tone: 'hint-primary', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', text: 'chip-primary', background: 'chip-surface', placement: 'above', padding: { x: 8, y: 4 } },
-      { tone: 'warning', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
+      { tone: 'measure', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '600', lineHeight: 15, text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },
+      { tone: 'measure-quiet', font: CANVAS_CHROME_MONO_FONT_FAMILY, weight: '400', lineHeight: 15, text: 'chip-text', background: 'chip-surface-muted', placement: 'centre', padding: { x: 5, y: 2 } },
+      { tone: 'hint', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
+      { tone: 'hint-primary', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-primary', background: 'chip-surface', placement: 'above', padding: { x: 8, y: 4 } },
+      { tone: 'warning', font: CANVAS_CHROME_FONT_FAMILY, weight: '600', lineHeight: 20, text: 'chip-text', background: 'chip-surface', placement: 'above', padding: { x: 6, y: 2 } },
     ] as const
     for (const expected of cases) {
       const layer = mountLayer()
@@ -343,6 +365,8 @@ describe('draft layer', () => {
       expect(text.style.fontFamily, expected.tone).toBe(expected.font)
       expect(text.style.fontWeight, expected.tone).toBe(expected.weight)
       expect(text.style.fontSize, expected.tone).toBe(12.5)
+      // Measurements set line-height 1.2; hints inherit the map container's 20 px.
+      expect(text.style.lineHeight, expected.tone).toBeCloseTo(expected.lineHeight)
       expect(text.style.fill, expected.tone).toMatchObject({ color: pixiColor(getCanvasColor(expected.text)) })
 
       // The 1 px border box around the padded text, centred on the point or bottom-centre 4 px above it.
@@ -391,7 +415,10 @@ describe('draft layer', () => {
         shapes: (['measure', 'hint'] as const).map((tone) => ({ kind: 'label', anchor: { x: 0, y: 0 }, offsetPx: { x: 0, y: 0 }, text: '4.2 m', tone })),
       })
       layer.place({ x: 200, y: 100 }, 1)
-      for (const chip of layer.screen.children) expect(((chip as Container).children[1] as Text).style.fontSize, lang).toBe(size)
+      const [measure, hint] = layer.screen.children.map((chip) => (chip as Container).children[1] as Text)
+      expect([measure!.style.fontSize, hint!.style.fontSize], lang).toEqual([size, size])
+      expect(measure!.style.lineHeight, lang).toBeCloseTo(size * 1.2)
+      expect(hint!.style.lineHeight, lang).toBe(20)
     }
   })
 
