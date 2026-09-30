@@ -242,16 +242,16 @@ export class CameraController implements
    * re-origin reprojects the bookmark instead.
    */
   protected applyPolicy(policy: WorkspaceCameraPolicy): SceneViewportState {
-    return this.withOneSnapshot(() => {
+    this.withOneSnapshot(() => {
       this._policy = policy
       // The host clamps the scale to the new bounds about the screen centre, as today's applyPolicy did.
       this.host.replacePolicy(policy)
-      return this.viewport
     })
+    return this.viewport
   }
 
   initialize(screen: CameraScreenMetrics): SceneViewportState {
-    return this.withOneSnapshot(() => {
+    this.withOneSnapshot(() => {
       this.clearTemporaryFocus()
       // An attached map keeps its own screen: its resize hook reports it (today's owner read the map canvas here).
       if (!this.frameNow().attached) this.driver().setScreen(normalizeScreenMetrics(screen))
@@ -264,8 +264,8 @@ export class CameraController implements
         scale,
         bearingDeg: view.camera.bearingDeg,
       }))
-      return this.viewport
     })
+    return this.viewport
   }
 
   resize(screen: CameraScreenMetrics): SceneViewportState {
@@ -372,11 +372,14 @@ export class CameraController implements
     return run()
   }
 
-  /** Publishes one snapshot for every frame `run` makes, as today's owner published one frame per operation. */
-  protected withOneSnapshot<T>(run: () => T): T {
+  /**
+   * Publishes one snapshot for every frame `run` makes, as today's owner published one frame per operation. The snapshot is published
+   * when `run` returns, so a snapshot read (`viewport`, `screenSize`) is current only after this call.
+   */
+  protected withOneSnapshot(run: () => void): void {
     this.deferredSnapshot += 1
     try {
-      return run()
+      run()
     } finally {
       this.deferredSnapshot -= 1
       if (this.deferredSnapshot === 0) this.publishSnapshot(this.frameNow())
