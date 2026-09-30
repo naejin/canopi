@@ -11,6 +11,7 @@ import { createSessionPlane, type GeoPosition, type SessionPlane } from '../../c
 import { LEGACY_BINDINGS } from '../../canvas/runtime/input/bindings'
 import type { Gesture, MenuSource, PressTarget } from '../../canvas/runtime/input/gestures'
 import { createInputRouter } from '../../canvas/runtime/input/input-router'
+import type { TargetClass } from '../../canvas/runtime/input/raw-input'
 import type {
   ContextMenuPort,
   GestureOutcome,
@@ -184,7 +185,8 @@ export function createToolSceneSource(store: SceneStore, options: ToolSceneSourc
 //
 // createToolHarness runs gesture scripts through a real createToolHost, with the input router in front of it and a
 // recording ToolHostDeps behind it. The scripts send what the LEGACY recogniser emits (slop 0: any movement after a press
-// is a drag) and do what interaction-session.ts does around it: they ask retryPendingCancellation before routing, end a
+// is a drag) and do what interaction-session.ts does around it: they report each raw press (a primary press, and the
+// right press before a mouse menu) through rawPress before routing, ask retryPendingCancellation before routing, end a
 // session the host rejected, end the nudge series on focus-out and call interrupted after a blur. Tools come from
 // tools/registry.ts, which a test replaces through vi.mock('…/tools/registry', () => ({ TOOL_REGISTRY: {} })) and fills
 // with useStubTools.
@@ -322,6 +324,7 @@ export interface ToolHarnessChrome {
   readonly cursor: string
   readonly tooltip: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
   readonly lockedAffordance: { readonly target: SceneDesignObjectTarget; readonly at: ScreenPoint } | null
+  /** The open text entry, which ToolHostDeps.chrome.isTextEntryOpen reports; it commits on the map's focus (its blur). */
   readonly textEntry: { readonly request: TextEntryRequest; readonly submit: (text: string) => 'close' | 'keep' } | null
 }
 
@@ -352,7 +355,8 @@ export interface ToolHarness {
   /** Arms a tool as the session does: its tool signal, then ToolHost.setTool. */
   arm(id: ToolId, source?: ToolSource | null): void
   select(...targets: SceneDesignObjectTarget[]): void
-  hover(at: ScreenPoint, mods?: Partial<Modifiers>): GestureOutcome
+  /** A hover over `target` (default the map's surface), as the recogniser classified it. */
+  hover(at: ScreenPoint, mods?: Partial<Modifiers>, target?: TargetClass): GestureOutcome
   leave(): GestureOutcome
   press(at: ScreenPoint, options?: PressOptions): GestureOutcome
   /** A move: drag-start, then drag-move while a press is live; a hover otherwise. */
@@ -375,6 +379,10 @@ export interface ToolHarness {
   advance(ms: number): void
   /** Edit › Undo on the scene's history (not the transient history). */
   undo(): boolean
+  /** A text entry the host did not open (until D1's 0B-3, the bridge's note editor): the chrome reports it open. */
+  openTextEntry(): void
+  /** Esc in the text entry: its own element handler closes it without a submit. */
+  escapeTextEntry(): void
   dispose(): void
 }
 
@@ -454,6 +462,7 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       closeTextEntry() {
         chrome.textEntry = null
       },
+      isTextEntryOpen: () => chrome.textEntry !== null,
       setTooltip(tooltip) {
         chrome.tooltip = tooltip
       },
@@ -572,13 +581,15 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       store.setSelection(targets)
       host.sceneChanged()
     },
-    hover: (at, partial) => route({ kind: 'hover', at, pointer: 'mouse', mods: mods(partial) }),
+    hover: (at, partial, target = { kind: 'surface' }) => route({ kind: 'hover', at, pointer: 'mouse', mods: mods(partial), target }),
     leave: () => route({ kind: 'hover-end' }),
     press(at, pressOptions = {}) {
       const id = nextPointerId++
       const target = pressOptions.target ?? { kind: 'surface' }
       const pointer = pressOptions.pointer ?? 'mouse'
       const clickCount = pressOptions.clickCount ?? 1
+      // The session reports the raw pointerdown before it routes what the recogniser made of it.
+      host.rawPress('primary', target)
       const outcome = route({ kind: 'press', id, at, pointer, mods: mods(pressOptions.mods), clickCount, target })
       session = outcome.rejectSession ? null : { id, from: at, pointer, target, clickCount, last: at, dragged: false }
       return outcome
@@ -619,7 +630,11 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       return route({ kind: 'cancel', reason })
     },
     wheelZoom: (at, factor) => route({ kind: 'zoom', anchorPx: at, factor, source: 'wheel' }),
-    menu: (at, source = 'mouse') => route({ kind: 'menu-request', at, source }),
+    menu(at, source = 'mouse') {
+      // A mouse menu follows its right press, which the session reports as a raw press.
+      if (source === 'mouse') host.rawPress('secondary', { kind: 'surface' })
+      return route({ kind: 'menu-request', at, source })
+    },
     arrow: (key, large = false) => host.nudge(ARROW_DIRECTIONS[key], large),
     focusOut() {
       host.endNudgeSeries(true)
@@ -638,6 +653,15 @@ export function createToolHarness(options: ToolHarnessOptions = {}): ToolHarness
       timers.runDue()
     },
     undo: () => coordinator.undo(),
+    openTextEntry() {
+      chrome.textEntry = {
+        request: { anchor: { x: 0, y: 0 }, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'edit' },
+        submit: () => 'close',
+      }
+    },
+    escapeTextEntry() {
+      chrome.textEntry = null
+    },
     dispose() {
       host.dispose()
       view.dispose()

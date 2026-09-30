@@ -20,7 +20,7 @@ import type { SceneDesignObjectTarget } from '../scene/design-object-targets'
 import type { SceneEditCoordinator, SceneEditTransaction } from '../scene-runtime/transactions'
 import type { WorldPoint } from '../view/types'
 import { constrainPointTo45Degrees } from './constraints'
-import type { DraftPresentation, DraftShape } from './draft'
+import type { DraftPresentation, DraftShape, ToolHandle } from './draft'
 import { measureLabelShapes, selectedZoneMeasurementLabels } from './measure-labels'
 import type { ToolReply } from './tool'
 import { createContextMenuPort, createToolScene } from './tool-host'
@@ -274,6 +274,44 @@ describe('ToolHost', () => {
       expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
     })
 
+    it('a pointer pan moves the resting pointer without emitting', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp' })
+      const ghost = h.world({ x: 100, y: 100 })
+
+      h.hover({ x: 100, y: 100 })
+      // A middle drag: the router notes where the pointer is, then the ground follows it.
+      h.host.notePointer({ x: 150, y: 120 })
+      expect(stamp.count('hover')).toBe(1)
+      expect(h.record.hovers).toHaveLength(1)
+      expect(h.record.pointerWorld).toHaveLength(1)
+      h.view.navigation.panByPx({ x: 50, y: 20 })
+
+      // The camera frame re-emits under the moved pointer, so the ghost keeps its world point, as today.
+      expect(stamp.count('hover')).toBe(2)
+      const reemitted = stamp.last('hover')!.point.world
+      expect(reemitted.x).toBeCloseTo(ghost.x, 6)
+      expect(reemitted.y).toBeCloseTo(ghost.y, 6)
+      expect(h.record.pointerWorld).toHaveLength(1)
+      expect(stamp.calls).not.toContain('viewChanged')
+
+      // Past the map's edge nothing is re-emitted; back on the map it is again.
+      h.host.notePointer({ x: 450, y: 120 })
+      h.view.navigation.panByPx({ x: 300, y: 0 })
+      expect(stamp.count('hover')).toBe(2)
+      expect(stamp.calls).toEqual(['activate', 'viewChanged'])
+      h.host.notePointer({ x: 150, y: 120 })
+      h.view.navigation.panByPx({ x: -300, y: 0 })
+      expect(stamp.count('hover')).toBe(3)
+
+      // null: no pointer rests on the map.
+      h.host.notePointer(null)
+      h.view.navigation.panByPx({ x: 10, y: 0 })
+      expect(stamp.count('hover')).toBe(3)
+      expect(stamp.calls.filter((call) => call === 'viewChanged')).toHaveLength(2)
+    })
+
     it('a camera frame with the pointer off the map calls viewChanged', () => {
       const polygon = stubTool('polygon')
       useStubTools(polygon)
@@ -374,6 +412,50 @@ describe('ToolHost', () => {
       expect(h.chrome.textEntry).toBeNull()
     })
 
+    it('the host reads the text entry\'s state live', () => {
+      const handle: ToolHandle = { id: 'rotate' as ToolHandleId, anchor: { x: 10, y: 10 }, hitRadiusPx: 10, glyph: 'rotate', label: 'Rotate' }
+      const select = stubTool('select', { activate: (ctx) => ctx.effects.setHandles([handle]) })
+      const text: StubTool = stubTool('text', {
+        gesture: (g) => {
+          if (g.kind === 'tap') {
+            text.ctx().effects.requestTextEntry(
+              { anchor: g.point.snapped, rotationDeg: 0, initialText: '', placeholderKey: 'canvas.note', mode: 'create' },
+              () => 'close',
+            )
+          }
+          return 'pass'
+        },
+      })
+      useStubTools(select, text)
+      const h = harness()
+      expect(h.chrome.handles).toEqual([handle])
+
+      // An entry the host did not open (until 0B-3, the bridge's note editor): Select's handles hide while it is open,
+      h.openTextEntry()
+      h.host.sceneChanged()
+      expect(h.chrome.handles).toEqual([])
+      // a menu takes focus first, so the entry commits on its blur and the handles return,
+      h.menu({ x: 300, y: 250 })
+      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(h.chrome.handles).toEqual([handle])
+      // and so does the next press, a middle one too.
+      h.openTextEntry()
+      h.host.sceneChanged()
+      h.host.rawPress('middle', { kind: 'surface' })
+      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:text-entry-closed'])
+      expect(h.chrome.textEntry).toBeNull()
+      expect(h.chrome.handles).toEqual([handle])
+
+      // An entry the tool opened and Esc closed in its own element handler: the next press finds it closed.
+      h.arm('text')
+      h.click({ x: 40, y: 40 })
+      expect(h.chrome.textEntry).not.toBeNull()
+      h.escapeTextEntry()
+      h.click({ x: 90, y: 90 })
+      expect(h.record.focus.at(-1)).toBe('map:tool-requested')
+    })
+
     it('a ruler drag creates a guide at its release while north is up', () => {
       const select = stubTool('select')
       useStubTools(select)
@@ -384,6 +466,103 @@ describe('ToolHost', () => {
       expect(createGuideAt).toHaveBeenCalledWith('h', { x: 5, y: 90 })
       expect(select.gestures).toEqual([])
       expect(h.chrome.cursor).toBe('default')
+    })
+  })
+
+  describe('raw presses', () => {
+    const SURFACE = { kind: 'surface' } as const
+
+    it('every raw press commits the nudge series; primary and middle close the menu and focus the map', () => {
+      useStubTools(stubTool('select'))
+      const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
+      h.select(P1)
+      h.menu({ x: 300, y: 250 })
+
+      // A right press commits the series and leaves the menu and the focus alone.
+      h.arrow('ArrowRight')
+      h.host.rawPress('secondary', SURFACE)
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end'])
+      expect(h.menuOpen).toBe(true)
+      expect(h.record.focus).toEqual([])
+
+      // A press inside the text entry or on the Unlock affordance commits the series and keeps the entry open.
+      h.openTextEntry()
+      h.arrow('ArrowRight')
+      h.host.rawPress('primary', { kind: 'owned-text' })
+      h.arrow('ArrowRight')
+      h.host.rawPress('middle', { kind: 'owned-chrome', lockedAffordance: true })
+      expect(h.record.nudges).toEqual(['nudge:0.1,0', 'end', 'nudge:0.1,0', 'end', 'nudge:0.1,0', 'end'])
+      expect(h.menuOpen).toBe(true)
+      expect(h.record.focus).toEqual([])
+      expect(h.chrome.textEntry).not.toBeNull()
+
+      // A middle press anywhere else, a map button included: the menu closes and the map takes focus, so the entry commits.
+      h.arrow('ArrowRight')
+      h.host.rawPress('middle', { kind: 'owned-chrome' })
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.menuOpen).toBe(false)
+      expect(h.record.focus).toEqual(['map:text-entry-closed'])
+      expect(h.chrome.textEntry).toBeNull()
+
+      // A primary press: the same, once; the press it becomes moves focus no further.
+      h.menu({ x: 300, y: 250 })
+      h.arrow('ArrowRight')
+      h.click({ x: 200, y: 150 })
+      expect(h.host.hasNudgeSeries()).toBe(false)
+      expect(h.menuOpen).toBe(false)
+      expect(h.record.focus).toEqual(['map:text-entry-closed', 'map:tool-requested'])
+      expect(h.history.canUndo.value).toBe(true)
+    })
+
+    it('a raw press moves nothing during another live press, a busy scene or a pending cancellation', () => {
+      let busy = false
+      let failures = 1
+      let edit: SceneEditTransaction | null = null
+      const rectangle: StubTool = stubTool('rectangle', {
+        gesture: (g) => {
+          if (g.kind === 'press') edit = rectangle.ctx().effects.edits.begin('interaction-rectangle')
+          return 'pass'
+        },
+        cancelTransient: () => {
+          if (failures > 0) {
+            failures -= 1
+            throw new Error('cancel failed')
+          }
+          edit?.abort()
+          edit = null
+        },
+      })
+      useStubTools(stubTool('select'), rectangle)
+      const h = harness({
+        admission: { revision: signal(0), runWhenSettled: <T,>(operation: () => T, busyResult: T) => (busy ? busyResult : operation()) },
+      })
+
+      // Another pointer's press is live: today's one pointer gesture at a time.
+      h.press({ x: 100, y: 100 })
+      h.menu('selection', 'keyboard')
+      h.host.rawPress('primary', SURFACE)
+      expect(h.menuOpen).toBe(true)
+      expect(h.record.focus).toEqual(['map:tool-requested'])
+      h.release()
+
+      // The scene is not settled.
+      busy = true
+      h.host.rawPress('middle', SURFACE)
+      expect(h.menuOpen).toBe(true)
+      expect(h.record.focus).toEqual(['map:tool-requested'])
+      busy = false
+
+      // A failed cancellation waits for its retry.
+      h.arm('rectangle')
+      h.press({ x: 10, y: 10 })
+      expect(() => h.blur()).toThrow('cancel failed')
+      const focus = h.record.focus.length
+      h.host.rawPress('primary', SURFACE)
+      expect(h.record.focus).toHaveLength(focus)
+      expect(h.host.retryPendingCancellation()).toBe(true)
+      h.host.rawPress('primary', SURFACE)
+      expect(h.record.focus).toHaveLength(focus + 1)
     })
   })
 
@@ -404,6 +583,32 @@ describe('ToolHost', () => {
 
       overview.leave()
       expect(overview.record.pointerWorld.at(-1)).toBeNull()
+    })
+
+    it('the lens is fed only over the map', () => {
+      const stamp = stubTool('plant-stamp')
+      useStubTools(stamp)
+      const h = harness({ tool: 'plant-stamp' })
+
+      h.hover({ x: 50, y: 50 })
+      // Over a map button, a ruler or off the map, the lens keeps its point, as today's skips buttons, inputs, textareas,
+      // contenteditable and [data-preserve-overlays] and hears no move off the host.
+      h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
+      h.hover({ x: 70, y: 0 }, {}, { kind: 'ruler', axis: 'h' })
+      h.hover({ x: 80, y: 80 }, {}, { kind: 'foreign' })
+      expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 })])
+      // Only the lens is fed by target: the tool hears every hover, as today.
+      expect(stamp.count('hover')).toBe(4)
+
+      h.hover({ x: 90, y: 90 })
+      h.leave()
+      expect(h.record.pointerWorld).toEqual([h.world({ x: 50, y: 50 }), h.world({ x: 90, y: 90 }), null])
+
+      // A bridged tool's moves reach the lens by the same rule.
+      h.arm('select')
+      h.hover({ x: 60, y: 60 }, {}, { kind: 'owned-chrome' })
+      h.hover({ x: 20, y: 30 })
+      expect(h.record.pointerWorld.slice(3)).toEqual([h.world({ x: 20, y: 30 })])
     })
 
     it('a handled hover skips the host\'s hover', () => {
@@ -856,8 +1061,8 @@ describe('ToolHost', () => {
       const h = harness({ scene: { plants: [appleAt({ x: 10, y: 10 })] } })
       h.select(P1)
 
-      // Under LEGACY the secondary press never reaches the host: the menu request commits the series, as today's
-      // pointerdown did before the contextmenu arrived.
+      // The right press commits the series before its menu arrives (rawPress); a keyboard menu, with no press, commits it
+      // itself, as today's key did.
       expect(h.arrow('ArrowRight')).toBe('handled')
       expect(h.menu({ x: 300, y: 250 })).toEqual({})
       expect(h.host.hasNudgeSeries()).toBe(false)

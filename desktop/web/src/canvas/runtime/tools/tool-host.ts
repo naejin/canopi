@@ -2,8 +2,10 @@
 //
 // Owns the ToolHost (spec §1.4, ADR 0018), the only code that builds ToolGestures. It converts the recogniser's screen
 // gestures to world points at event time, resolves modifiers (§2.3), applies the active tool's constraint and the grid and
-// guide snapping, and runs the interceptors (admission, focus, handles, the inspection probe) before the tool. A drag starts
-// at the press's world point, and every camera frame re-emits the live drag or the last hover (plan §1, exception 1). It
+// guide snapping, and runs the interceptors (admission, handles, the inspection probe) before the tool; every raw press
+// first commits the nudge series and, as today's pointerdown, closes the menu and moves focus to the map. A drag starts
+// at the press's world point, and every camera frame re-emits the live drag or the resting pointer, which a pointer pan
+// moves (plan §1, exception 1). The text entry's state is the chrome's, read live. It
 // owns the passive hover, the selection decorations, the arrow-nudge series, transient history and the Esc queries, and
 // merges the tool's draft with its decorations for the renderer. Tools are plain objects listed in tools/registry.ts; an armed tool
 // that is not listed runs through the session's legacy bridge (0B), and the host's shared duties switch on isRegistered
@@ -13,6 +15,7 @@
 import { signal } from '@preact/signals'
 import { runCanvasRuntimeCleanups } from '../cleanup'
 import type { Gesture, MenuSource, PressTarget } from '../input/gestures'
+import type { TargetClass } from '../input/raw-input'
 import { createCanvasContextMenu } from '../interaction/canvas-context-menu'
 import type { ContextMenuPort, GestureOutcome, ToolHost, ToolHostDeps } from '../interaction-ports'
 import type { CancelReason, Modifiers, PointerKind, ToolHandleId, ToolId } from '../interaction-types'
@@ -86,8 +89,9 @@ interface LiveGesture {
   dragging: boolean
 }
 
-/** Where the pointer rests on the map: the last hover, or where a press was released. Re-emitted on a camera frame; null
- *  with the pointer off the map or its place unknown (after a window blur, a document replacement or a bridged tool). */
+/** Where the pointer rests on the map: the last hover, or where a press was released, moved by a pointer pan (notePointer).
+ *  Re-emitted on a camera frame while it is on the map; null with the pointer off the map or its place unknown (after a
+ *  window blur, a document replacement or a bridged tool). */
 interface StillPointer {
   readonly screen: ScreenPoint
   readonly mods: Modifiers
@@ -158,7 +162,6 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   let toolCursor: string | null = null
   let live: LiveGesture | null = null
   let lastHover: StillPointer | null = null
-  let textEntryOpen = false
   let pendingCancellation = false
   let nudging = false
   let nudgeTimer: number | null = null
@@ -262,13 +265,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
         if (owns()) requestTool(id)
       },
       requestTextEntry(request, submit) {
-        if (!owns()) return
-        textEntryOpen = true
-        deps.chrome.requestTextEntry(request, (text) => {
-          const result = submit(text)
-          if (result === 'close') textEntryOpen = false
-          return result
-        })
+        if (owns()) deps.chrome.requestTextEntry(request, submit)
       },
       closeTextEntry() {
         if (owns()) closeTextEntry()
@@ -445,7 +442,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (currentId !== 'select') return toolHandles
     const affordancesShown = frame().mode === 'site'
       && !pendingCancellation
-      && !textEntryOpen
+      && !deps.chrome.isTextEntryOpen()
       && (!hasActiveSceneEdit() || live?.kind === 'handle')
     return affordancesShown ? toolHandles : NO_HANDLES
   }
@@ -510,8 +507,12 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   // ── Gestures ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   function hover(g: Extract<Gesture, { kind: 'hover' }>): GestureOutcome {
-    const world = frame().view.screenToWorld(g.at)
-    if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
+    // The lens hears only moves over the map: not over the canvas's own chrome or a ruler, nor off the map (today's lens
+    // skips buttons, inputs, textareas, contenteditable and [data-preserve-overlays], and hears no move off the host).
+    if (g.target.kind === 'surface') {
+      const world = frame().view.screenToWorld(g.at)
+      if (world && insideScreen(g.at, frame().view.screen)) publishPointer(world)
+    }
     const tool = activeTool
     if (!tool) return NOTHING
     if (frame().mode === 'overview') {
@@ -534,11 +535,30 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return NOTHING
   }
 
+  /**
+   * Every raw pointerdown on the map host, reported by the session before it routes the press (today's _onPointerDown):
+   * any button commits the nudge series. An admitted primary or middle press outside the text entry and the Unlock
+   * affordance, with no other live press and no pending cancellation, also closes the menu and moves focus to the map,
+   * so an open text entry commits on its blur before the press reaches the tool; a click inside the entry keeps it open.
+   * The host knows only its own live press: a pan lives in the recogniser, which ignores a second pointer anyway.
+   */
+  function rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass): void {
+    if (disposed) return
+    endNudgeSeries(true)
+    // A bridged tool's presses are the bridge's.
+    if (!activeTool || button === 'secondary' || live || pendingCancellation) return
+    if (target.kind === 'owned-text' || (target.kind === 'owned-chrome' && target.lockedAffordance)) return
+    // Admission without resuming a pending edit: the press that follows resumes it, once, as today's one admission did.
+    deps.admission.runWhenSettled(() => {
+      deps.menu.close()
+      focusMap()
+      return true
+    }, false)
+  }
+
   function press(g: Extract<Gesture, { kind: 'press' }>): GestureOutcome {
     if (retryPendingCancellation()) return REFUSED_PRESS
     if (!activeTool) return NOTHING
-    endNudgeSeries(true)
-    deps.menu.close()
     if (live) cancelLive('pointercancel')
     // The pointer is pressed now: a frame re-emits its drag, not the hover before it.
     lastHover = null
@@ -558,9 +578,9 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     return claimed ? CLAIMED_PRESS : NOTHING
   }
 
-  /** Today's _pointerDownWhenSettled, in order: focus (the text entry commits on its blur), handles, the probe, the tool. */
+  /** Today's _pointerDownWhenSettled, in order: handles, the probe, the tool. Focus moved at the raw press (rawPress), so
+   *  an open text entry has committed on its blur. */
   function pressWhenSettled(g: Extract<Gesture, { kind: 'press' }>): boolean {
-    focusMap()
     const tool = activeTool
     if (!tool) return false
     const handleDrag = g.target.kind === 'handle'
@@ -758,13 +778,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
   }
 
   function focusMap(): void {
-    deps.focus.focusMap(textEntryOpen ? 'text-entry-closed' : 'tool-requested')
+    const entryOpen = deps.chrome.isTextEntryOpen()
+    deps.focus.focusMap(entryOpen ? 'text-entry-closed' : 'tool-requested')
+    // The entry commits on its blur: Select's handles, hidden while it was open, follow at once.
+    if (entryOpen) flush()
   }
 
   function closeTextEntry(): void {
-    if (!textEntryOpen) return
-    textEntryOpen = false
-    deps.chrome.closeTextEntry()
+    if (deps.chrome.isTextEntryOpen()) deps.chrome.closeTextEntry()
   }
 
   /** Entering overview drops what today's setOverviewMode(true) dropped: the text entry, the menu and every transient. */
@@ -825,7 +846,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     if (!reemit(tool) && tool.viewChanged) callTool(() => tool.viewChanged!())
   }
 
-  /** Re-emits the live drag or the last hover; false when nothing is under a still pointer on the map. */
+  /** Re-emits the live drag or the resting pointer; false when nothing is under a still pointer on the map. */
   function reemit(tool: CanvasTool): boolean {
     if (frame().mode !== 'site') return false
     const gesture = live
@@ -835,7 +856,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
       return true
     }
     const still = lastHover
-    if (!still) return false
+    // A pointer pan may have carried the resting pointer past the map's edge.
+    if (!still || !insideScreen(still.screen, frame().view.screen)) return false
     deliverHover(tool, still.screen, still.mods, still.pointer)
     return true
   }
@@ -1007,8 +1029,8 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     menuAt(at: ScreenPoint | 'selection', source: MenuSource): GestureOutcome {
       if (disposed) return NOTHING
       if (retryPendingCancellation()) return QUARANTINE
-      // A menu commits the nudge series first, as today's pointerdown did for every button: under LEGACY a secondary
-      // press never reaches the host, and the series' open Scene Edit would quarantine the menu.
+      // A menu commits the nudge series first, or its open Scene Edit would quarantine the menu: a mouse menu's right
+      // press has already committed it (rawPress); a keyboard menu has no press, and today its key committed the series.
       endNudgeSeries(true)
       if (!activeTool || frame().mode === 'overview') return NOTHING
       let duringEdit = false
@@ -1018,7 +1040,7 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
           duringEdit = true
           return true
         }
-        if (textEntryOpen) focusMap()
+        if (deps.chrome.isTextEntryOpen()) focusMap()
         if (at === 'selection') deps.menu.open({ at, source, screen: null, hit: null })
         else openMenuAt(at, source)
         return true
@@ -1036,6 +1058,14 @@ export function createToolHost(deps: ToolHostDeps): ToolHost {
     isRegistered,
     activeToolDragSlopPx: () => activeTool?.dragSlopPx ?? null,
     retryPendingCancellation,
+    rawPress,
+    notePointer(screen: ScreenPoint | null): void {
+      if (disposed) return
+      // Emits nothing: the next camera frame re-emits at the moved point, where the ground followed the pointer, so a
+      // ghost keeps its world point under it (today's). A pan with nothing resting on the map starts nothing.
+      if (!screen) lastHover = null
+      else if (lastHover) lastHover = { ...lastHover, screen }
+    },
     sceneChanged(): void {
       if (!disposed) notifySceneChanged()
     },
