@@ -288,7 +288,7 @@ describe('canvas runtime surfaces', () => {
   it('keeps computed command availability on the observational settled-read role', () => {
     const commandSurfaceSource = readPackageSource('../canvas/runtime/command-surface.ts')
     const mutationsSource = readPackageSource('../canvas/runtime/scene-runtime/mutations.ts')
-    const interactionSource = readPackageSource('../canvas/runtime/scene-interaction.ts')
+    const sessionSource = readPackageSource('../canvas/runtime/interaction-session.ts')
     const canUndoSource = commandSurfaceSource.slice(
       commandSurfaceSource.indexOf('const canUndo = computed'),
       commandSurfaceSource.indexOf('const canRedo = computed'),
@@ -307,8 +307,7 @@ describe('canvas runtime surfaces', () => {
     }
     expect(mutationsSource).toContain('settledReader: SettledSceneReader')
     expect(mutationsSource).toContain('this._settledReader.readWhenSettled(')
-    expect(interactionSource).toContain('settledReader: SettledSceneReader')
-    expect(interactionSource).toContain('this._deps.settledReader.readWhenSettled(')
+    expect(sessionSource).toContain('settledReader: SettledSceneReader')
   })
 
   it('keeps command mutation behavior inside the command role module', () => {

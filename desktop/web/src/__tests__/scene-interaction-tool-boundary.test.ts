@@ -218,16 +218,9 @@ describe('Scene Interaction tool module boundaries', () => {
     }
   })
 
-  it('keeps Scene Interaction listener and lifecycle ownership in the Session', () => {
+  it('keeps transient cancellation and teardown in the legacy bridge', () => {
     const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
 
-    expect(interactionSource).toContain('createSceneInteractionSession')
-    expect(interactionSource).toContain("addEventListener('pointerdown'")
-    expect(interactionSource).toContain("removeEventListener('pointerdown'")
-    expect(interactionSource).toContain("addEventListener('pointercancel'")
-    expect(interactionSource).toContain("removeEventListener('pointercancel'")
-    expect(interactionSource).toContain("addEventListener('blur'")
-    expect(interactionSource).toContain("removeEventListener('blur'")
     expect(interactionSource).toContain('_cancelTransientInteraction')
     expect(interactionSource).toContain('_cancelPendingInteractionHostFocus')
     expect(interactionSource).toContain('prepareForDocumentReplacement')
@@ -238,22 +231,22 @@ describe('Scene Interaction tool module boundaries', () => {
   })
 
   it('keeps the public Scene Interaction seam limited to Session construction and lifecycle', () => {
-    const interactionSource = readSource('../canvas/runtime/scene-interaction.ts')
+    const sessionSource = readSource('../canvas/runtime/interaction-session.ts')
     const exportedNames = Array.from(
-      interactionSource.matchAll(
+      sessionSource.matchAll(
         /^export\s+(?:(?:abstract|async|declare)\s+)*(?:interface|type|class|function|const|let|var|enum|namespace)\s+(\w+)/gm,
       ),
       (match) => match[1],
     )
 
-    expect(Array.from(interactionSource.matchAll(/^export\b/gm))).toHaveLength(3)
+    expect(Array.from(sessionSource.matchAll(/^export\b/gm))).toHaveLength(3)
     expect(exportedNames).toEqual([
       'SceneInteractionSessionDeps',
       'SceneInteractionSession',
       'createSceneInteractionSession',
     ])
-    expect(interactionSource).not.toMatch(/^export\s+(?:default|\*|(?:type\s+)?\{)/m)
-    expect(interactionSource).not.toContain('SceneInteractionFrameHandlers')
+    expect(sessionSource).not.toMatch(/^export\s+(?:default|\*|(?:type\s+)?\{)/m)
+    expect(sessionSource).not.toContain('SceneInteractionFrameHandlers')
   })
 
   it('prevents canvas runtime modules from acquiring a second host-listener or pointer-session owner', () => {

@@ -257,5 +257,9 @@
   "src/__tests__/rulers.test.ts > RulerOverlay > cancels ruler creation and hides local chrome on overview entry": {
     "file": "src/canvas/runtime/interaction-session.test.ts",
     "name": "ruler drags through the session > a ruler drag across overview entry lands no guide, and the rulers hide"
+  },
+  "src/__tests__/scene-interaction-tool-boundary.test.ts > Scene Interaction tool module boundaries > keeps Scene Interaction listener and lifecycle ownership in the Session": {
+    "file": "src/canvas/runtime/input/dom-input-source.test.ts",
+    "name": "createDomInputSource > installs and removes each listener exactly once"
   }
 }
