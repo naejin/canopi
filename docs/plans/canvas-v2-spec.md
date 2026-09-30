@@ -900,10 +900,10 @@ export interface ToolHost {
    * Presses the host never sees as gestures: the session calls it for every raw pointerdown on the map host before routing it
    * (from the source's raw input, not a gesture; the down's role, 'auxiliary' as 'middle'). Commits the nudge series for any
    * button. For an admitted primary or middle press outside the text entry ('owned-text') and the Unlock affordance, with no
-   * other live session and no pending cancellation, it also closes the canvas menu and focuses the map (so an open text
+   * live press from another pointer id and no pending cancellation, it also closes the canvas menu and focuses the map (so an open text
    * entry commits on its blur): today's _onPointerDown conditions.
    */
-  rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass): void
+  rawPress(button: 'primary' | 'secondary' | 'middle', target: TargetClass, pointerId?: number): void
   /**
    * Where the pointer is during a pointer-source pan (the router, from the pan's `at`): updates the host's stored resting
    * pointer and emits nothing; the next camera frame re-emits at the updated point, so a ghost stays under the pointer (today
@@ -1201,6 +1201,8 @@ export interface ToolContext {
 export interface CanvasTool {
   readonly id: ToolId
   readonly dragSlopPx?: number                    // per-tool threshold (Plant a row: 4), sent through `configure` on every tool change
+  /** True while the tool's next release must be admitted by the scene (Select's band: today's requiresSettledPointerUp). */
+  settledRelease?(): boolean
   readonly preservesTransientOnNavigate?: boolean // polygon draft survives pans
   readonly clampsToView?: boolean                 // the host clamps the screen point to the view before converting (Plant a row)
   /**
@@ -1293,8 +1295,8 @@ Tools never see screen coordinates in gestures; `ScreenPoint` appears only in `o
 
 The `ToolHost` (`tools/tool-host.ts`, interface in `interaction-ports.ts`) is the only code that builds `ToolGesture`s. Its duties, in order:
 
-- **Admission.** Presses, menus, drops and commands run inside `deps.admission.runWhenSettled` (dragover inside `deps.settled.readWhenSettled`); a refused press answers `{ quarantine, rejectSession }`, a refused menu or drop `{ quarantine }` (a contextmenu during a Scene Edit too), as today. `retryPendingCancellation()` retries a failed cancellation before any other event. The one quarantine outside the host is the recogniser's: in overview a pointerup with no live session, anywhere in the app (0B until F, §1.2).
-- **Raw presses** (`rawPress(button, target)`): the session calls it for every raw pointerdown on the map host before routing it, including the presses the host never sees as gestures (secondary, middle, Space and overview presses, presses on owned chrome), with the down's target class. The host commits the nudge series for any button. Under today's `_onPointerDown` conditions (an admitted primary or middle press, not in the text entry and not on the Unlock affordance, no other live session, no pending cancellation) it also closes the canvas menu and focuses the map through `deps.focus` (`'text-entry-closed'` while `chrome.isTextEntryOpen()`, else `'tool-requested'`), so an open text entry commits on its blur; a click inside an open note keeps it open, as today.
+- **Admission.** Presses, menus, drops and commands, and the releases of a tool whose `settledRelease()` answers true (Select's band, as today's `requiresSettledPointerUp`), run inside `deps.admission.runWhenSettled` (dragover inside `deps.settled.readWhenSettled`); a refused press answers `{ quarantine, rejectSession }`, a refused settled release cancels the tool and answers `{ quarantine }`, a refused menu or drop `{ quarantine }` (a contextmenu during a Scene Edit too), as today. `retryPendingCancellation()` retries a failed cancellation before any other event. The one quarantine outside the host is the recogniser's: in overview a pointerup with no live session, anywhere in the app (0B until F, §1.2).
+- **Raw presses** (`rawPress(button, target, pointerId)`): the session calls it for every raw pointerdown on the map host before routing it, including the presses the host never sees as gestures (secondary, middle, Space and overview presses, presses on owned chrome), with the down's target class. The host commits the nudge series for any button. Under today's `_onPointerDown` conditions (an admitted primary or middle press, not in the text entry and not on the Unlock affordance, no live press from another pointer id, no pending cancellation) it also closes the canvas menu and focuses the map through `deps.focus` (`'text-entry-closed'` while `chrome.isTextEntryOpen()`, else `'tool-requested'`), so an open text entry commits on its blur; a click inside an open note keeps it open, as today.
 - **World conversion** at event time (a null `screenToWorld` drops hovers and cancels drags); for a tool with `clampsToView` the screen point is clamped to the view first.
 - **Constraint and snapping** once: the active tool's `constraint()` and the grid and guide snap (`tools/snapping.ts` at `frame.view.pixelsPerMetre`, with `deps.snapping()` read at each point) in the order of §2.3, keyed by tool id under LEGACY (`'polygon'` snaps, then constrains; `'plant-spacing'` constrains the raw point), filling `ToolPoint.free`, `.constrained` and `.snapped`. `ToolContext.snap` exposes the same snapping; `place-at` arrives snapped and is dropped in overview.
 - **Hits.** A handle target becomes `handle-drag` (the host marks it active through `chrome.setHandles`); a ruler target sets the ruler cursor and, at its `drag-end`, calls `deps.rulers.createGuideAt` only while north is up.
