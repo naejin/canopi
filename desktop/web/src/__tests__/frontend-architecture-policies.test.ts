@@ -2533,6 +2533,34 @@ describe('canvas v2 policies', () => {
       `${P4_GLOBALS} src/canvas/runtime/view/planted-deps.ts contains confined symbol setTimeout; allowed sources: ${TEST_SOURCES}`,
     ])
   })
+
+  it('P4 confines each of the eleven globals the plan names', () => {
+    // One view/ module reaching every global of plan §5 P4: dropping any name from the rule drops its line here.
+    const graph = createTypeScriptSourceGraph([
+      plantedSource('src/canvas/runtime/view/planted-globals.ts', [
+        'export function planted(run: () => void) {',
+        "  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches",
+        '  const started = performance.now() + Date.now()',
+        '  const frame = requestAnimationFrame(run)',
+        '  clearTimeout(setTimeout(run, 0))',
+        '  setInterval(run, 16)',
+        '  queueMicrotask(run)',
+        "  document.title = `${reduce} ${started} ${frame} ${navigator.language}`",
+        '}',
+      ]),
+    ])
+
+    const confined = [
+      'window', 'document', 'requestAnimationFrame', 'performance', 'matchMedia', 'setTimeout', 'clearTimeout',
+      'setInterval', 'Date', 'queueMicrotask', 'navigator',
+    ]
+    expect(collectArchitecturePolicyViolations(graph, canvasV2Policies('P4'))).toEqual(
+      confined.map(
+        (name) =>
+          `${P4_GLOBALS} src/canvas/runtime/view/planted-globals.ts contains confined symbol ${name}; allowed sources: ${TEST_SOURCES}`,
+      ),
+    )
+  })
 })
 
 describe('map error logging', () => {
